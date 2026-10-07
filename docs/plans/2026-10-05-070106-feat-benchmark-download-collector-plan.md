@@ -17,21 +17,484 @@ ollija:
 
 ## Plain-English Summary
 
-Compare post volume, benchmark scores, HF downloads and OpenRouter token usage using products we identify and a taxonomy we control. Product relationships store typed parent/child links using HF's vocabulary. Named product groups, such as M-family, have explicit membership; they are not compulsory levels between brands and products. Django queries interpret successor chains and groups while company ownership and brand membership remain separate.
+Compare post volume, benchmark scores, HF downloads and OpenRouter/OpenCode usage using products we identify and a taxonomy we control. Product relationships store typed parent/child links using HF's vocabulary. Named product groups, such as M-family, have explicit membership; they are not compulsory levels between brands and products. Django queries interpret successor chains and groups while company ownership and brand membership remain separate.
 
 The proposal contains fifteen new tables: eight shared source/metric tables and seven taxonomy/history/attribution tables. Reuse the existing accounts table and its company, brand and person links; do not create source_entities or source_accounts. Put the descriptive source_type directly on data_sources rather than creating data_source_types. The three product tables are product_relationships, product_groups and product_group_memberships. They replace the fixed product_families tier and product-level links in the old generic relationship proposal. The subject registry supports company, brand, group and product attribution, plus source-qualified account measurements for followers. Account measurement subjects do not infer product mentions.
 
 Measurements have two primary kinds: state at an effective time, and flow over an interval. Cumulative downloads are flow since the provider's counting origin. There is no third cumulative kind, cumulative boolean or duplicate origin column. Window mode, duration, source timezone and actual datapoint bounds are separate. Unknown times remain unknown.
 
-Arena, HF and OpenRouter remain the first collection choices; AA and Vercel remain disabled candidates informed by the saved probes. Provider identities map to our products and reviewed product types. X and HF are the initial account-bearing sources. An account belongs to one source; YouTube and Instagram can use that same structure later. OpenRouter/Arena product listings remain identifiers in the crosswalk, without invented accounts. HF organizations migrate into accounts with phased hf_orgs compatibility. Publisher-wide coverage remains a filter, not a product group.
+Arena, HF, OpenRouter and OpenCode are the four selected peer sources; AA and Vercel remain disabled candidates informed by the saved probes. OpenCode publishes daily UTC totals refreshed hourly. We will collect its hourly revisions, preserve current-day partial totals and later corrections, and serve completed-day comparisons separately. These refreshes do not establish exact hourly usage. Provider identities map to our products and reviewed product types. X and HF are the initial account-bearing sources. An account belongs to one source; YouTube and Instagram can use that same structure later. OpenRouter/Arena/OpenCode product listings remain identifiers in the crosswalk, without invented accounts. HF organizations migrate into accounts with phased hf_orgs compatibility. Publisher-wide coverage remains a filter, not a product group.
 
-The October 6 Pulse exercise adds a production comparison contract: each line has its own explicit subject scope, source configuration and baseline. DeepSeek brand posts can therefore appear alongside V4.1 Flash downloads, tokens, Arena score and Arena rank without claiming every post mentions Flash. Percent change is calculated from a fixed starting value; missing launch-day measurements stay missing, and a later baseline is labeled. Historical imports retain their archive provenance and original snapshot dates.
+The October 6 Pulse exercise adds a production comparison contract: each line has its own explicit subject scope, source configuration and baseline. DeepSeek brand posts can therefore appear alongside V4.1 Flash downloads, tokens, Arena score and Arena rank without claiming every post mentions Flash. The retained launch-baseline diagnostic preset calculates change from a fixed starting value; missing launch-day measurements stay missing, and a later baseline is labeled. The newly selected combined view instead uses the reference-week means described below. Historical imports retain their archive provenance and original snapshot dates.
 
-Implementation uses the isolated feature worktree and PostgreSQL database on fuchitalee; the October 7 delivery request additionally authorizes deployment and verification on Render staging. It remains independent of G1–G5 and includes historical imports, a database-backed Pulse response and UI, an offline report using the same series, and collection operations with separately authorized activation. This task does not deploy to production. Verification must reproduce the five-line comparison, preserve exact raw values and coverage, and prove unchanged legacy counting on isolated PostgreSQL. Account abstraction requires a staged primary-key/foreign-key migration and source-qualified lookups, including the migration-only global handle index; this is not a column rename. Existing unset product types and unconfirmed mappings remain setup work; illustrative M-series links are not verified HF observations.
+Implementation uses the isolated feature worktree and PostgreSQL database on fuchitalee; the October 7 delivery request additionally authorizes deployment and verification on Render staging. It remains independent of G1–G5 and includes historical imports, a database-backed Pulse response and UI, an offline report using the same series, and collection operations with separately authorized activation. This task does not deploy to production. Verification must reproduce the selected combined chart and Arena panel while preserving diagnostic comparisons, exact raw values, coverage and legacy counting on isolated PostgreSQL. Account abstraction requires a staged primary-key/foreign-key migration and source-qualified lookups, including the migration-only global handle index; this is not a column rename. Existing unset product types and unconfirmed mappings remain setup work; illustrative M-series links are not verified HF observations.
 
-The latest October 7 amendment adds an explicitly labeled predecessor-to-successor Arena rank history, while retaining exact-model views and measurements. It also requires source-use enforcement and honest historical inputs for G3. Collector deployment, public forecasts and trading integration receive separate sign-offs; G3 prediction accuracy and trading compliance remain its own work. No new table is proposed by this amendment.
+The October 7 predecessor amendment adds an explicitly labeled predecessor-to-successor Arena rank history, while retaining exact-model views and measurements. It also requires source-use enforcement and honest historical inputs for G3. Collector deployment, public forecasts and trading integration receive separate sign-offs; G3 prediction accuracy and trading compliance remain its own work. No new table is proposed by that amendment or the selected-chart addition.
 
 The earlier October 7 review adds three required fixes before renewed tested-and-ready sign-off: portable source/license attribution, acceptance of valid OpenRouter responses without an `other` bucket, and removal of per-author account queries. Dataset-specific permission records will use existing metadata. Public release additionally needs a documented HF/X permission basis; AA and unreviewed archives remain disabled. These release conditions do not prevent isolated verification, and this amendment authorizes plan edits only.
+
+The owner has now selected one combined release-response chart as the default G5 Pulse presentation: brand posts, exact-product OpenRouter tokens and net change in the selected HF rolling-download counter. Each line shows percentage change from its own average over the same first complete post-release week, with optional three-day smoothing. Zero represents that reference average, not the launch-day value. Arena score, confidence bands and reported battle counts share its date selection in a linked panel; rank remains supporting context. This October 7 selection replaces the earlier unresolved default-chart proposal, while preserving old comparison contracts and diagnostic views. These chart additions are planned and are not yet implemented in the staging application.
+
+The latest naming decision renames the definition table from `source_metrics` to `metrics`. A metric still belongs to one data source and retains its unit, numeric type, version and state/flow semantics. This is a migration of the existing table, not another table or a change in recorded measurements. The schema below uses the proposed name; implementation and deployed databases still use the old name until U24 is executed and verified under a later authorized run.
+
+## October 7 amendment — OpenCode as a fourth peer source
+
+**R42–R45 / KD27 (session-settled: user-directed):** add OpenCode alongside
+OpenRouter, Arena and HF, with equal standing in registry, persistence,
+identity review, history, operations, queries and serving. OpenCode is a selected
+source, not a disabled research candidate or an OpenRouter subcategory. This
+request amends the plan only; U25–U27 remain pending. It does not start a
+collector, change a running poll or deploy anything. Existing staging evidence
+applies to its recorded revision and does not establish OpenCode readiness.
+
+### R42 — shared storage, scope and exact identifiers
+
+- Add `data_sources.id=opencode`, `name=OpenCode`,
+  `source_type=model_adoption`, `website_url=https://opencode.ai`, an explicit
+  local adapter/version and exact-ID normalizer. Use the same shared tables as
+  the other selected sources; there is no OpenCode table, account table or
+  hourly-value table. The fifteen-table inventory remains unchanged, including
+  R41's pending definition-table rename to `metrics`.
+- Freeze the provider scope as **OpenCode-hosted Go + free-model usage**.
+  Public exports do not separately expose free-only totals or all usage through
+  external providers in the OpenCode client. Keep OpenCode and OpenRouter series
+  separate; do not add their totals or treat them as deduplicated people,
+  requests or global market share. Verify and version the reported-token
+  accounting before quantitative cross-provider comparisons; preserve cached
+  token scope and do not add reasoning twice to an overlapping output count.
+- Initial numeric collection uses model `usage.daily` fields `tokens`,
+  `uniqueUsers` and `sessions`. Reuse `metric_types.token_usage`; add
+  `active_users` and `session_count` registry rows for the latter two. Definitions
+  in `metrics` use integer/count-valued calendar-day flow, UTC, amount=1,
+  unit=day and calendar duration basis. Mark user/session counts approximate in
+  definition metadata and the serving response; distinct counts cannot be
+  summed across models or days and described as unique users/sessions.
+- Retain `costUsd`, pricing, cache ratios, retention, country summaries and
+  benchmark metadata in bounded source evidence when present. They are available
+  for later reviewed definitions, not automatically admitted numeric metrics.
+  This addition does not widen the existing currency contract or replace Arena
+  with provider-card benchmark figures. Tokens are required; missing optional
+  user/session fields remain unavailable, never zero.
+- Map the literal model ID, e.g. `deepseek/deepseek-v4.1-flash`, to our product in
+  `source_subject_mappings`. Preserve its API path
+  `/data/deepseek/deepseek-v4-1-flash.json`, lab slug and reported model metadata
+  separately. A URL slug's punctuation, provider alias, family label or linked
+  HF repo is matching evidence, not automatic identity confirmation. Lab IDs
+  can map to company subjects when reviewed; neither lab nor model listings
+  create OpenCode accounts. Do not use family/brand matches to assign exact
+  product usage, or create canonical products from every catalog entry.
+
+### R43 — hourly acquisition, daily windows and immutable revisions
+
+Public endpoint contract, verified read-only on October 7:
+
+| Endpoint | Use in this collector | Observed shape |
+| --- | --- | --- |
+| `https://opencode.ai/data/index.json` | Discovery/coverage and platform diagnostics | `updatedAt` ISO-8601 UTC string; leaderboard, daily tokens/users and aggregate summaries. Home chart values are rounded and smaller models are grouped into Other. |
+| `https://opencode.ai/data/{lab}.json` | Selected-lab catalog and identity evidence | `lab`, `models`, `usage`, `daily`; direct lab totals are not reconstructed from a potentially incomplete mapped-product cohort. |
+| `https://opencode.ai/data/{lab}/{model}.json` | Primary exact-product daily measurements | `model.id` and `usage.daily[]`; `date` is YYYY-MM-DD, tokens/users/sessions are JSON integers, `costUsd` a JSON number, and `updatedAt` an ISO-8601 UTC string. |
+| `https://opencode.ai/data/llms.txt` and its linked sitemap | Bounded route discovery/documentation | Published endpoint templates and catalog links; not hourly usage measurements. |
+
+All three JSON probes returned HTTP 200 without credentials. Documented refresh
+is hourly; days/weeks use UTC. On October 7 the daily exports contain 56 dates,
+August 13–October 7, including a partial current day. Preserve that as observed
+coverage, not a promised permanent retention floor or a historical-query API.
+Per-endpoint `updatedAt` values differ; an index response is not proof of the
+model endpoint's revision. The provider advertises no verified request quota or
+availability guarantee in the checked export documentation.
+
+**Cadence and bounds:** set reviewed OpenCode `poll_seconds=3600`, independently
+of HF/OpenRouter/Arena. Initial proposed retrieval and publication freshness
+thresholds are 7200 seconds each; report the actual last successful retrieval
+and the latest endpoint update separately. Proposed physical budgets per
+bounded batch are 100 requests, 120 seconds and 16 MiB, including discovery,
+redirects and any bounded retries. Partition a larger reviewed selection into
+explicit batches; a partially collected cohort cannot be called complete.
+Keep stable UTC-hour batch IDs, existing source/contract locks, retry/backoff
+limits and interrupted-run recovery. Collection remains default-off until the
+separately selected activation. Reuse the existing hosting/scheduler route
+after inspection; do not modify `run_cycle`, its cron or the HF timing worker,
+or create a second harvester/beat scheduler. Never query a provider from Pulse.
+
+**Storage:** use `metric_collection_runs` for attempts, endpoint revision/hash,
+coverage and errors; `metric_observations` for each product/date row and its
+endpoint/row evidence; `metric_values` for each numeric measurement. Preserve
+the endpoint's `updatedAt` in observation/run metadata as a source export
+revision timestamp, separately from our `observed_at`, native usage date and
+effective flow window. It is not a proved event watermark or the exact end of
+the current-day count. A multi-endpoint run keeps per-endpoint revisions; do not
+overwrite them with one maximum timestamp and claim an atomic publication.
+
+For completed UTC-day reports, store `[date 00:00Z, next date 00:00Z)` and the
+native `period_label_date`. For the current day at that endpoint's revision,
+retain `period_status=partial`, proven midnight `window_start_at`,
+`window_end_at=NULL`, `temporal_status=date_only` and the native date. Nominal
+next-midnight belongs only in metadata until a completed-day report exists;
+neither retrieval time nor `updatedAt` becomes an invented exact flow end.
+Unknown or invalid `updatedAt`, future-dated rows, duplicate dates, invalid IDs
+and nonfinite/noninteger/negative counts cannot produce a complete admitted
+snapshot. A closed calendar day is a reported completed day, not a promise of
+immutable finalization; later revisions remain possible.
+
+Preserve each changed partial/completed row as a new immutable observation;
+never overwrite an earlier value or sum hourly snapshots of the same daily
+total. Hash normalized model/date, admitted values, period status and semantic
+context independently of retrieval/export timestamps. Keep endpoint/body hashes
+in run evidence. Compare row/context hashes across the returned historical window to
+detect corrections, including decreases and corrections older than seven days.
+An unchanged row need not duplicate values: the run retains its successful
+check, endpoint revision and coverage with references to retained observations.
+Replay of the same endpoint revision/body is idempotent. A changed body at the
+same `updatedAt` is a distinct revision and visible source anomaly; an older
+export received later cannot replace the newer selected revision. Same-time
+conflicting bodies need deterministic conflict handling and an explicit flag.
+Absence, rolled-off history and failed fetches do not create zero usage or
+delete retained observations.
+
+**Serving:** expose both the latest completed daily series and an explicitly
+requested current-day provisional series, with period status, exact raw counts,
+source update/retrieval times, selected observation IDs and coverage. Default
+daily normalized/reference-week comparisons use completed days only. Retain
+earlier intraday snapshots for inspection and cutoff-aware G3 inputs. A
+difference between snapshots may be labeled a change in the reported daily
+total; it is not exact hourly tokens, new users or sessions. The 56-day history
+has no retroactive hourly snapshots; hourly revision history starts when our
+collector starts retaining it.
+
+### R44 — capture available history and retain it locally
+
+At initial collection, ingest every returned historical daily row for the
+reviewed tracked-product cohort, including a separately marked current-day
+partial row. Use model-level exports rather than rounded home charts. Report
+actual first/last dates, unmapped IDs, zeroes, unavailable subjects, partial
+days, endpoint hashes and capture/import timestamps. The existing OpenRouter
+all-model/all-available-history selection remains unchanged; OpenCode initially
+follows tracked-brand/product scope, with Google's existing Gemma/Gemini
+selection rule. Catalog discovery does not expand collection to every model.
+
+Each later hourly fetch reconciles the full returned window for those selected
+products and appends changed rows while retaining older imported history after
+it leaves the upstream export. Downloading again cannot recover missed hourly
+revisions or days already rolled off. A model not in the export is unavailable,
+not a zero-valued top-50 omission. No OpenRouter top-50 ceiling is imposed on
+OpenCode; actual endpoint availability is measured per selected product.
+
+Initial history acquisition/import and parser/series checks occur in the
+isolated database before readiness, then validated evidence can be replayed to
+an authorized deployment without copying local primary keys blindly. Preserve
+R22/R33 historical and cutoff provenance: a daily row fetched today does not
+prove that value was available at an earlier forecast cutoff. Operational
+replays select only revisions observed by that cutoff; historical exports
+without contemporaneous availability evidence remain retrospective inputs.
+
+### R45 — peer serving, permissions and completion
+
+OpenCode uses the same collection/status/history/SQL/ORM/series/export contracts
+as the other three providers. R37's selected default chart stays three lines:
+posts, OpenRouter tokens and HF net-download-counter change. Add a separately
+identified provider selection/preset that substitutes OpenCode tokens for the
+usage line, recalculates and pins the common completed reference week, and
+labels Go + free scope. Do not silently rewrite existing frozen contracts,
+replace the default, add an automatic fourth line, combine token providers or
+change the linked Arena panel. Diagnostic queries may compare the two usage
+providers with their own provenance and units.
+
+Apply existing R25/R32 collection, retention, internal-use, public-display,
+export and forecast-use decisions to OpenCode as a peer. The checked export
+documentation requests citation to OpenCode Data with its update time, but a
+dedicated data redistribution license was not established by these probes.
+Record the actual use basis and unresolved public/export conditions; public
+endpoint access and the repository's software license do not settle data rights.
+This amendment contacts no provider and changes no existing source policy.
+
+### U25–U27 — implementation and regression proof
+
+| Unit | Implementation boundary | Required verification |
+| --- | --- | --- |
+| U25 — OpenCode identity, adapter and definitions (R42) | Extend `core/benchmark_metric_identity.py`, source registry/allowlists and CLI selections in `scripts/benchmark_download_collector/{sources,collect,__main__}.py`, `monitor/management/commands/{configure_benchmark_collection,collect_benchmark_metrics}.py`, and the native-row/number admission in `core/benchmark_metric_store.py`. Add reviewed source configuration/mappings and three numeric definitions, not tables. | Provider-shaped sanitized fixtures; live shape/ID match; tokens beyond JavaScript exact-integer range; approximate counts; absent optional metrics; host/redirect/budget admission; dot/hyphen paths, lab aliases, wrong product and no invented account. PostgreSQL writes must preserve existing HF/OR/Arena definitions/contracts/measurements. |
+| U26 — history and hourly revisions (R43–R44) | Extend the existing history/acquisition/import boundary, `core/benchmark_metric_history.py`, `core/benchmark_metric_operations.py`, shared writer and due/health commands under `monitor/management/commands/`. Persist per-endpoint revision/period-status metadata using existing JSON columns. Review the current completed-day-only operations path before adding source-specific current-day collection. | Actual PostgreSQL round-trip of first 56-day capture, changed/unchanged hourly polls, idempotent replay, failed/partial cohort, older/same-time-conflicting revision, UTC midnight rollover, delayed publication, incomplete current-day end, next-day completed report, revised historical decrease, rolled-off dates, exact zero versus absence, locks/bounded retries/interrupted recovery and distinct retrieval/publication freshness. No snapshot summing, invented hourly data or regressions in the other sources' daily cadences. |
+| U27 — queries, provider selection and cutoff proof (R45) | Extend `core/benchmark_metric_series.py`, `core/benchmark_metric_report.py`, `core/benchmark_forecast_inputs.py`, Pulse view/template/static modules and shared offline/export output. Add a new reviewed OpenCode comparison preset/provider option; keep old contracts immutable and both token sources separately queryable. | PostgreSQL → SQL/ORM → actual response/report/export/browser evidence for DeepSeek and another mapped tracked product; hourly partial snapshots versus completed daily series; pinned observation revisions and reference dates; late correction; no future revision in cutoff replay; missing product/day/baseline; raw integers, attribution/scope/approximation labels, mobile/legend controls and unchanged default three-line/Arena behavior. Reuse and extend existing benchmark source/identity/persistence/history/operations/forecast/series/report/Pulse tests. |
+
+U25 precedes U26 and U27; U27 uses the pending U22/U23 chart boundary. U24's
+rename can be implemented independently but must be reconciled before claiming
+the whole amended candidate ready. The next readiness run must satisfy all
+pending units, not reuse pre-OpenCode staging receipts as proof. Document the
+exact candidate revision, isolated database, import coverage, source-use
+decisions and hourly activation/disable procedure in the existing plan and
+`scripts/benchmark_download_collector/README.md` after implementation.
+
+Sources: [OpenCode export documentation](https://opencode.ai/data/llms.txt),
+[home JSON](https://opencode.ai/data/index.json),
+[DeepSeek lab JSON](https://opencode.ai/data/deepseek.json),
+[DeepSeek Flash model JSON](https://opencode.ai/data/deepseek/deepseek-v4-1-flash.json)
+and [official aggregation implementation](https://github.com/anomalyco/opencode/blob/ecc4916b5a9608c30e6dd58a67f2137b594407ca/packages/stats/core/src/domain/inference.ts).
+These probes establish endpoint shape/availability and inform the proposed
+contract; they are not collection, scheduler or deployment completion evidence.
+
+## October 7 amendment — rename the definition table to metrics
+
+**R41 / KD26 (session-settled: user-directed):** rename PostgreSQL
+`source_metrics` to `metrics`. Each row remains one immutable provider-specific
+metric definition/version, linked to `data_sources` and `metric_types`.
+`metric_values` contains actual numbers; `metric_observations` supplies model,
+publication and collection context. The definition table is not a simple join
+table. Preserve all existing columns, IDs, definition versions, constraints,
+indexes, relationships, source semantics and saved collection contracts.
+The fifteen-table count stays unchanged.
+
+### U24 — preserve existing data while renaming the table
+
+- **Scope:** change `SourceMetric.Meta.db_table` in `core/models.py` to
+  `metrics`, with a new Django migration using
+  `migrations.AlterModelTable(name="sourcemetric", table="metrics")`.
+  Django 5.2.16 is installed in the feature environment; the operation changes
+  the model's table name in both migration state and the database.
+  [Django operation contract](https://docs.djangoproject.com/en/5.2/ref/migration-operations/#altermodeltable).
+  Retain the Python model name `SourceMetric`, existing ORM imports,
+  `MetricValue.source_metric` and its physical `source_metric_id` column for this
+  table-only change. No model/field/permission rename is included.
+- **Dependency:** inspect the actual combined migration graph and coordinate
+  with other schema owners before allocating the new migration filename.
+  Staging was verified with `0069_merge_20261007_0550`; the feature-only graph
+  differs, so do not assume its latest file is the deployment dependency.
+  Never edit applied `0067_shared_metrics` or rewrite its old `db_table` option.
+  Fresh installs run the existing create operation and then the new rename;
+  populated installs rename the existing relation. Reject a conflicting existing
+  `metrics` relation instead of dropping/replacing it.
+- **References:** update current-schema allowlists, refresh policy/inventory,
+  raw SQL and exact-table assertions discovered by `rg '\bsource_metrics\b'`.
+  Current code inspection finds the live definition in `core/models.py` and
+  two table-set assertions in `tests/staging_refresh/test_policy.py`, plus
+  table entries in `config/staging_refresh.yaml`. Update that policy's table
+  entries to `metrics`; retain `source_metrics_id_seq` entries because this
+  table-only rename preserves the existing sequence name. Verify the actual
+  sequence relation/default after migration rather than guessing its name.
+  Keep historical migration files, source receipts, accepted immutable contract
+  snapshots and dated schema evidence unchanged. Update maintained diagrams
+  and the current schema reference after implementation, distinguishing them
+  from the dated pre-rename review images linked below.
+- **Migration review:** generated SQL must rename the existing table; reject
+  drop/create/copy operations or unexpected column, FK, content-type or semantic
+  changes. A physical rename must preserve table identity, row IDs, sequences,
+  uniqueness/checks and the `metric_values.source_metric_id` references.
+  Recheck any discovered database views or raw-SQL consumers. Do not mint a new
+  metric definition/version or reimport provider history merely to change a
+  physical table name.
+- **Deployment coordination:** the old application revision still queries
+  `source_metrics`; it cannot run unchanged against the renamed table. Before
+  any authorized delivery, identify benchmark readers/writers and arrange a
+  bounded feature pause while the migration and affected runtimes are moved
+  together. Use the existing migration executor/lock discipline and reviewed
+  backup/rollback requirements. Preserve unrelated services and data. Do not
+  assume a rolling deployment is automatically compatible or introduce a
+  compatibility table/view without a demonstrated requirement.
+- **Regression net:** on isolated PostgreSQL, test both fresh migration and
+  forward migration from a populated pre-rename database. Compare table OID,
+  definition IDs/row hashes, metric-value IDs/counts and zero orphan links;
+  verify existing uniqueness/FK checks, ORM reads/writes, collection replay,
+  historical series, Pulse/offline/export and staging-refresh table policy.
+  Rehearse reversing **only this rename** with matching old code, then applying
+  it again without data loss; do not reverse the independent Account migration.
+  Run schema drift and `makemigrations --check --dry-run` after implementation.
+- **Exit:** database and migration state both name the relation `metrics`,
+  relevant queries/tests pass at the candidate revision, existing measurements
+  and immutable contracts remain unchanged, and no extra definition table exists.
+  Execute U24 before renewed readiness of the complete amended candidate;
+  U22–U23 remain the separately scoped chart work. This amendment only records
+  the migration; it does not create a migration file, run it, or deploy.
+
+## October 7 amendment — selected combined chart and Arena evaluation history
+
+Owner direction: add the discussed Arena analysis and **lock in the combined
+chart**. This is a documentation amendment for the next implementation run.
+The October 7 staging deployment remains verified for its recorded revision;
+U22–U23 below are pending. No implementation, collection, deployment or
+recurring activation is authorized by this amendment turn.
+
+### R37 / KD24 — selected combined release-response chart
+
+The accepted default is the local G5 combined prototype
+`normalized-response.html`, using **one chart, exactly three lines, and one
+linear percentage axis**:
+
+| Line | Raw input / subject | Displayed meaning |
+| --- | --- | --- |
+| Brand posts | Distinct collected posts for the explicitly selected brand, per completed UTC day | Relative change in collected brand discussion; this does not assert that every post mentions the selected release. |
+| OpenRouter tokens | Completed UTC-day reported tokens for the exact mapped product/variant | Relative change in reported OpenRouter usage, retaining its historical top-50 coverage limits. |
+| HF net download change | Difference between selected rolling-30-day download observations on consecutive snapshot dates, for the same reviewed repository cohort | Relative change in the **net change of the rolling counter**; this is not the number of new downloads that day. |
+
+Resolve the raw series, coverage and source revisions first. Select the earliest
+seven consecutive completed dates **strictly after the reviewed launch date**
+on which all three raw inputs are available. HF differences also require the
+preceding date's actual observation. All three lines use that same reference
+range, but have separate raw reference means. Missing input on any date prevents
+that seven-date candidate from becoming the reference; search only within the
+preset's frozen, declared reference-search range, not arbitrary lifetime history.
+Freeze and return the resolved reference dates/means with the contract hash and
+input revision. An accepted correction produces a separately identified revised
+response; view controls never silently redefine the reference.
+
+For line `s`, compute `100 * (displayed_value_s / raw_reference_mean_s - 1)`.
+Default displayed values are trailing three-day arithmetic means; the daily
+toggle uses unsmoothed raw values. Both use the same unsmoothed reference means.
+Three-day means require three consecutive valid inputs and never cross a gap.
+A missing reference means normalization is unavailable; zero or negative means
+also make the affected percentage line unavailable, with raw values retained.
+Preserve negative HF differences and percentages below -100 when real inputs
+produce them. Do not sum daily percentages, accumulate daily counts, force the
+launch point to zero, clip extremes, or redefine the denominator on legend,
+smoothing or visible-range changes.
+
+Use a reviewed release marker, shaded reference week, a visible zero reference,
+source-specific legend toggles, shared hover/day inspection, calendar/relative
+day labels, raw value and reference-mean inspection, and source/evidence export.
+Default context is 14 calendar days before release through day +28, bounded by
+available evidence; retain an all-available/range control within the existing
+366-day serving cap. Successor HF/OR data remains absent before it exists.
+Reference dependencies may be outside the visible range and remain disclosed.
+Display copy is **Change from reference-week average (%)**, not cumulative
+growth since release. Preserve the maintained G5 layout, Human/Agent geometry,
+mobile behavior and other page sections.
+
+KD24 is owner-selected and supersedes KD15's unresolved default visual design,
+R7's five-line default and the launch-day baseline default **for this new view**.
+The existing five-/seven-line, raw, compressed and launch-baseline comparisons
+remain diagnostic alternatives with their original definitions. Never rewrite
+an immutable comparison contract or silently change a saved chart's arithmetic.
+
+### R38 — HF transform and reproducible comparison metadata
+
+Use actual adjacent-date HF observations from a fixed cohort and the existing
+direct/archive precedence policy. Require both snapshots complete and expose
+both observation/value IDs, raw counts, snapshot dates, timing precision and
+cutoff uncertainty. A missed date, carried-forward value, changed cohort or
+incompatible definition creates a gap; do not spread a multi-day difference
+across missing days. A decrease can reflect older downloads leaving the rolling
+window or a source correction. Explain that interpretation in source details.
+An unchanged **observed** snapshot may yield zero; absence is never zero.
+
+Store the new preset and its transform/normalization/reference-search policies
+in existing `MetricCollectionContract.methodology.comparison_presets`, creating
+a new immutable contract for the approved preset. Native observations stay in
+the existing shared fact tables. Return raw input values, derived differences,
+displayed means/percentages, reference means/dates, smoothing inputs, coverage,
+source timing, selected configuration, evidence and attribution in the shared
+series/JSON/offline contract. Use exact integer/decimal arithmetic before display
+rounding. No new metric fact, proxy table, chart table or schema migration is
+required for these derived views.
+
+### R39 / KD25 — Arena score, uncertainty and participation together
+
+Add a linked Arena panel on the same requested dates and shared inspection
+control. Its primary track shows **raw Arena score with its published confidence
+band**; a second aligned track shows **reported battle count**. Show raw rank
+and publication date in inspection/context, with an optional rank view. Arena
+does not become a fourth line on the normalized percentage axis: rating offsets
+are arbitrary and rank is ordinal, so their percentage changes do not express
+changes in model quality.
+
+For each actual selected `text` / `overall`, no-style-control publication, expose
+the same row's `rating`, `rating_lower`, `rating_upper`, `variance`, `vote_count`
+and `rank` when available. Existing definitions store votes as integer state in
+`battles`, scores/bounds as floating-point state in `arena_points`, and variance
+as optional floating-point state in `arena_points_squared`. Use the existing
+measurement/observation/value and mapping tables; a missing optional field is
+unavailable, not zero or a reason to discard the score.
+
+For a future numeric Arena field `xyz`, add a versioned definition row to
+`metrics` under the existing Arena source, with its actual unit, numeric
+type, state/flow and time semantics. Reuse an applicable `metric_types` row or
+add a semantic type row if necessary. Each measured `xyz` number is a row in
+`metric_values`, linked through `metric_observations` to the provider model,
+publication, mapping and collection evidence. Another publication adds rows,
+not a table or column. A new field can require adapter/contract validation
+changes and a new immutable contract; this does not require a schema migration
+when the existing numeric storage and subject/time semantics fit.
+
+Reported battles describe comparisons included by Arena, not unique people,
+unrestricted model usage, or necessarily a monotonic lifetime counter. Preserve
+decreases. Do not label differences between snapshots as exact daily new battles.
+Score and battle-count tracks identify actual publication points; if a step is
+held between publications, distinguish that display state from a new daily
+measurement. Do not smooth, interpolate, or carry confidence bounds backward.
+Apply the existing complete-publication omission and failed-fetch rules.
+
+The selected quality track remains exact-model. R31's reviewed predecessor rank
+history is an explicitly labeled optional alternative, with its existing switch
+rules; do not extend predecessor substitution to score or battle counts in this
+amendment. Keep variant/configuration identity visible and preserve dataset
+attribution in the panel and exports.
+
+### R40 — interpretation and time comparability
+
+Help readers distinguish these patterns without claiming causation:
+
+- More reported battles, stable score and a narrower confidence band are
+  consistent with a more precise estimate supporting the early assessment.
+- More battles and a lower score warrant inspecting later evaluations and
+  their uncertainty; this alone does not establish that model quality declined.
+- A worse rank with a stable score can reflect competitor additions or movement.
+  Rank alone does not establish less favorable feedback.
+
+Score-history comparisons must retain methodology, configuration and anchoring
+evidence. Arena explicitly fixes a reference model's score to compare periods in
+its [score-history analysis](https://arena.ai/blog/opendata-july2025#score-changes).
+Verify that the selected publications share a compatible score anchor/scale;
+if evidence is unavailable or changes, mark comparison uncertain or break the
+segment and suppress cross-segment score-change conclusions. Dataset revision
+alone does not prove a common anchor. Preserve raw publications for inspection.
+
+Arena publication dates can have unknown timezone/date-only precision. They
+share a labeled calendar axis with UTC daily posts/tokens and HF snapshot dates;
+the display does not establish identical cutoff instants. Preserve collection,
+publication and effective times separately. Align only at supported precision.
+Co-moving lines are exploratory evidence, not a causal or prediction claim;
+this amendment adds no correlation coefficient, quality classifier or G3 forecast.
+
+### U22–U23 — next implementation and verification
+
+| Unit | Concrete changes | Required proof |
+| --- | --- | --- |
+| U22 — selected combined chart (R37–R38) | Extend `core/benchmark_metric_identity.py` comparison validation, `core/benchmark_metric_series.py`, `core/benchmark_metric_report.py`, `monitor/benchmark_views.py`, `monitor/templates/monitor/benchmark_pulse.html`, `monitor/static/benchmark-pulse.{js,css}` and the shared offline/export boundary. Create the approved preset in a new contract; old contracts and source facts remain unchanged. Keep reads bounded to display, declared reference-search dates and required adjacent/smoothing dependencies; never call providers from a chart request. | Isolated PostgreSQL → actual response → browser checks in existing series, Pulse view/report tests and `scripts/benchmark_download_collector/verify_pulse_browser.py`: independently calculated raw/reference/three-day/percentage values; earliest common complete week; reference fixed across controls; late correction/revision; absent/nonpositive baseline; HF negative/zero/missing/cohort changes and no multi-day allocation; top-50/partial-day gaps; integers beyond JavaScript exact range; shared hover/export, mobile and Human/Agent geometry. Preserve legacy arithmetic/counting and contract responses. |
+| U23 — Arena evaluation panel (R39–R40) | Reuse the same series/report/view/static modules plus existing source/run metadata for anchor/methodology comparability; add aligned score/confidence and reported-battle tracks with actual publication markers and rank context. Consume stored Arena values rather than new collection or tables. | Prove fields come from the same row/publication and exact variant/configuration; missing optional fields; confidence bounds; decreasing battle counts; sparse publications/carry-forward/omission/fetch failure; unknown timezone; compatible, unknown and changed score anchors; no score percentages or new-battle inference; predecessor rank alternative unchanged. Browser inspection/export must reproduce all actual points and clearly separate real publications from held display states. |
+
+Before calling this addition ready, run affected compatibility, PostgreSQL,
+report/export and browser checks and review the actual change. Local static
+prototype checks support the selected design only; they do not prove U22–U23's
+database-backed implementation or authorization for production.
+
+### Accepted prototype evidence and research
+
+The saved staging inputs were exported read-only from runtime `1375d1c0`,
+contract `53fda009-28a4-4106-a91f-bd42ff7cb33e`, on
+`2026-10-07T08:58:32.076918Z`. The combined prototype's 25 browser checks passed,
+with no JavaScript exceptions. Retained local evidence:
+`/Users/fuchitalee/development/pushin-weight-v2/.context/g5-staging-charts-20261007/`
+(`README.md`, `normalized-verification.json`, `screens/normalized-response.*`,
+and saved comparison JSON). Use sanitized maintained fixtures for regression;
+ignored prototype files are not a durable CI dependency.
+
+- DeepSeek reference September 11–17: daily posts mean `1990.7142857142858`,
+  tokens mean `1691696064097`, HF net-counter-change mean `55807.28571428572`.
+- GLM reference August 28–September 3: daily posts mean `697.1428571428571`,
+  tokens mean `1706922672005`, HF net-counter-change mean `73981.14285714286`.
+- The reviewed DeepSeek window contains only three actual Flash Arena
+  publications (September 25/30 and October 2); GLM has eight. Held daily values
+  do not increase those sample counts. Posts currently end October 3 in this
+  staging export; incomplete later dates remain absent.
+
+Official research checked October 7: Arena's
+[text leaderboard](https://arena.ai/leaderboard/text) puts votes, score,
+confidence range, rank and rank spread together and lists pairwise win-rate and
+battle-count plots; [the data deep dive](https://arena.ai/blog/opendata-july2025)
+charts anchored score histories and analyzes evaluation-context effects;
+[ranking methodology](https://arena.ai/blog/ranking-method) explains raw rank and
+uncertainty. These are related analyses. This bounded search did not locate the
+specific per-model score/battle-count maturation timeline joined to HF/OR/post
+history proposed here. HF's [download methodology](https://huggingface.co/docs/hub/en/models-download-stats)
+also establishes why its file-request counts should not be described as unique
+downloaders. Pairwise battle-level analysis and other Arena categories remain
+outside this first chart pass.
 
 ## October 7 amendment — engagement and complete available history
 
@@ -349,6 +812,12 @@ Objective: users can compare post attention with benchmark performance and adopt
 
 ## Delivery Exceptions
 
+**Latest owner execution selection — October 7, 22:06 JST:** LFG this updated plan through testing and deployment/verification on Render staging. Execute pending U22–U27, including the selected combined chart and Arena panel, populated/fresh `metrics` rename, and OpenCode history/hourly revision-aware collection and serving. This supersedes amendment-only restrictions for this run. Preserve the existing staged route, other sessions' integrated code and staging data, existing immutable comparison contracts and the HF timing worker. Bounded source-data import and staging migration/runtime coordination are authorized; production deployment/migration and recurring collection activation remain excluded. Verify a recoverable staging backup before the rename and exact candidate SHA plus feature behavior after deployment.
+
+**Latest owner direction — OpenCode source amendment (October 7):** add OpenCode as a fourth peer source and prepare hourly revision-aware collection in R42–R45/KD27/U25–U27. This request updates the plan and shared coordination only. Preserve the prior explicit staging selection, all current runtimes and the HF timing worker; no implementation, DB import/migration, recurring activation or delivery starts in this amendment turn. OpenCode readiness remains pending alongside U22–U24.
+
+**Latest owner direction — table naming and chart amendments (October 7):** record the `source_metrics` → `metrics` migration (R41/U24) and retain the accepted combined G5 chart/Arena analysis (R37–R40/U22–U23). This turn edits documentation only. Existing staging verification stays scoped to `1375d1c0`; the rename and new chart/panel units are pending and must not be described as deployed or tested-and-ready. Preserve historical explicit staging authority without triggering another delivery. Production and recurring activation remain excluded.
+
 **Latest owner selection — October 7 staging delivery:** LFG through deployment and verification on Render staging. Complete R31–R36/U19–U21 and remaining history/review work, publish the reviewed candidate, reconcile existing G1/G2 staging code and all inbound Account relationships, rehearse migration against the actual staging schema, preserve staging data and verify the deployed revision and feature. Staging code/configuration/migration and bounded source-data import are authorized; production deployment, production migrations and recurring collection activation remain excluded. This supersedes earlier tested-and-ready-only and amendment-turn restrictions for this run. The live production backup remains a future production prerequisite; take a separate recoverable staging backup before staging migration. Do not refresh or overwrite another session’s staging data.
 
 **Latest owner direction — G3 review/proxy amendment:** update this existing plan now and report concise changes. Prepare R31–R36/U19–U21 for the next run; do not begin that implementation/review rerun in this amendment turn. The existing tested-and-ready endpoint persists, with no production authorization. Preserve already-running bounded acquisition and the hourly timing probe. Later activation follows the separate release decisions above.
@@ -370,17 +839,17 @@ Convenience brand assignments mix companies, product lines and individual releas
 
 ### Requirements
 
-Stable requirement IDs are retained; R18 captures provider-neutral accounts, R19–R24 the Pulse adjustments, R25 portable attribution, R26–R30 engagement/history/configuration, and R31–R36 predecessor ranking and G3 data-use/forecast/trading review. The latest amendment above governs conflicts with historical planning prose.
+Stable requirement IDs are retained; R18 captures provider-neutral accounts, R19–R24 the Pulse adjustments, R25 portable attribution, R26–R30 engagement/history/configuration, R31–R36 predecessor ranking and G3 data-use/forecast/trading review, R37–R40 the accepted combined chart and Arena evaluation history, R41 the metrics table rename, and R42–R45 OpenCode peer collection and hourly revisions. The latest amendment above governs conflicts with historical planning prose.
 
 | ID | Required outcome |
 | --- | --- |
 | R1 | Own and version our canonical taxonomy; preserve existing company/brand keys and Product.product_key. Support closed models without an HF repository. Collection never mutates the catalog; any prerequisite catalog corrections use a separate, explicitly reviewed manifest. |
-| R2 | Link exact provider identifiers to reviewed canonical subjects with evidence. HF/Arena/OR model rows must resolve to product subjects; explicitly lab-scoped datasets may resolve to company subjects. Reject unknown targets, duplicate source IDs, wrong ownership and changed model variants. Unmatched observations remain stored and visibly unresolved. |
+| R2 | Link exact provider identifiers to reviewed canonical subjects with evidence. HF/Arena/OR/OpenCode model rows must resolve to product subjects; explicitly lab-scoped datasets may resolve to company subjects. Reject unknown targets, duplicate source IDs, wrong ownership and changed model variants. Unmatched observations remain stored and visibly unresolved. |
 | R3 | Collect Arena overall text ratings without style control, uncertainty, votes and publication date from the official public dataset. Reject incomplete/malformed publications. |
 | R4 | Collect rolling 30-day and optional all-time HF download counts for explicitly selected official LLM repositories. Retain per-repository observation time; never infer daily download counts. |
 | R5 | Collect completed UTC-day OpenRouter rankings: exact model_permaslug, total_tokens, meta.as_of and the other bucket when present. This is token usage on a partially reported platform, not downloads. |
 | R6 | Store typed observations, raw evidence, source outcomes and immutable versions of selections/mappings in PostgreSQL. Preserve revisions and failures. Repeated polls must not be summed. |
-| R7 | Serve a Pulse comparison with five independently selectable lines: posts, HF rolling downloads, OpenRouter tokens, Arena score and Arena rank. Offer fixed-baseline percentage change and raw values with source units, configuration, dates, coverage and missing/failure states. Keep the offline diagnostic report on the same series service and include the Arena rank panel. |
+| R7 | Default Pulse to R37's accepted combined three-line release-response chart, with R39's linked Arena panel. Preserve the five-/seven-line and launch-baseline comparisons as diagnostic alternatives; keep source units, configuration, dates, coverage and missing/failure states. Shared database serving, offline reports and exports must reproduce the same selected view and arithmetic. |
 | R8 | Arena score for a selected company/brand/group scope is the maximum reviewed mapped rating within a complete publication. Retain its winning model and uncertainty. Hold until the next observed publication; absence in a later publication becomes N/A. No carry across configuration or collection-contract changes. |
 | R9 | Daily HF selected-scope total uses the latest complete observation of exactly its selected repository cohort. Incomplete cohorts produce N/A with counts. No observation means a gap; no selected repo means N/A. |
 | R10 | OpenRouter selected-scope total sums distinct mapped reported rows once per date, from one latest complete source revision. Describe it as reported usage, with unresolved coverage. Absence from top 50 is not zero total usage. Never allocate other to brands. |
@@ -399,11 +868,20 @@ Stable requirement IDs are retained; R18 captures provider-neutral accounts, R19
 | R23 | Preserve source configuration and coverage in each displayed point: Arena category/style-control/Max variant, OR reported top-50 coverage and completed UTC days, HF fixed selected cohort and unknown rolling cutoff, and partial post days. Missing, partial, carried-forward and observed zero are distinct states. |
 | R24 | Plan database-backed Pulse serving, reviewed source-specific collection cadences, freshness/failure visibility and an activation/rollback procedure. Keep all activation disabled until separately authorized; the prototype and offline report are not production completion evidence. |
 | R25 | Preserve provider/dataset attribution, applicable license and source revision in the shared series response, Pulse, offline report and downloaded data. Public display and machine-readable export have separately recorded permission decisions. Community archives have their own publisher/license records; provider API access or a key does not establish redistribution rights. Unknown rights prevent public activation of affected output until resolved; isolated fixture verification remains possible. |
+| R37 | Use one combined three-line percentage chart for posts, OR tokens and HF net-counter change, normalized to separate raw means over one common first complete post-release week, with default trailing-three-day means and fixed references across controls. |
+| R38 | Preserve adjacent observed HF snapshot inputs, exact arithmetic, fixed cohort, signed changes, reference dependencies and reproducible transform metadata; a rolling-counter difference is not daily new downloads. |
+| R39 | Add a linked Arena score/confidence and reported-battle-count panel, with rank context and actual publication markers. Reuse existing state measurements; never normalize rating/rank as quality percentages or infer daily new battles. |
+| R40 | Retain score anchoring/methodology comparability, date precision and uncertainty. Separate exploratory co-movement from causal/quality/forecast claims; no new inference engine is included. |
+| R41 | Rename the existing source_metrics definition table to metrics with an additive, data-preserving Django table-rename migration; preserve columns, IDs, FK relationships, semantics and immutable contracts. |
+| R42 | Add OpenCode as a fourth peer source with reviewed product/lab identities and daily tokens, approximate users and sessions in the existing shared tables; preserve hosted Go + free scope. |
+| R43 | Collect OpenCode hourly with per-endpoint revisions, immutable changed-row observations, partial/current-day handling, independent UTC windows and distinct retrieval/publication freshness; never sum daily snapshots or invent hourly usage. |
+| R44 | Import all currently available OpenCode daily history for reviewed tracked products, reconcile the full returned window hourly, retain rolled-off history and preserve cutoff-safe provenance. |
+| R45 | Serve/query/export OpenCode as a peer through a new optional usage-provider preset with separate use decisions; preserve the selected default chart and prove persistence, hourly lifecycle, browser and cutoff behavior. |
 
 ### Settled decisions
 
 - **KD1 (session-settled: user-directed) — corrected storage; Governs R1, R6:** isolation means the feature worktree and disabled activation. Primary PostgreSQL persistence is required. The earlier file-only storage decision was an agent interpretation, not an owner selection.
-- **KD2 (session-settled: user-approved) — sources; Governs R3, R4, R5:** Arena first, HF downloads and OpenRouter usage. AA is an authenticated, probed benchmark candidate; Vercel is a probed usage-share candidate. Both remain disabled pending selection. Terminal-Bench/DeepSWE remain deferred.
+- **KD2 (session-settled: user-approved) — sources; Governs R3, R4, R5:** Arena first, HF downloads and OpenRouter usage; KD27 additionally selects OpenCode as a fourth peer. AA is an authenticated, probed benchmark candidate; Vercel is a probed usage-share candidate. Both remain disabled pending selection. Terminal-Bench/DeepSWE remain deferred.
 - **KD3 (session-settled: user-directed) — taxonomy; Governs R1, R2:** Our proprietary taxonomy is authoritative, informed by HF and other providers. Stable identities and reviewed relationships belong to us; HF namespaces/repositories and provider creators are external evidence, not compulsory company/brand/group levels.
 - **KD4 — technical choice; Governs R4, R5, R7:** retain native timestamps and provide an honest daily comparison first. Frequent polling can detect HF/Arena changes sooner but cannot turn OR daily totals into minute usage or HF rolling totals into daily downloads.
 - **KD5 (session-settled: user-directed) — Google exclusion; Governs R1, R2, R4:** Google collection defaults to Gemma/Gemini families only, with explicit model selections. Other Google families are excluded unless the owner adds one. Do not delete excluded canonical products.
@@ -413,10 +891,14 @@ Stable requirement IDs are retained; R18 captures provider-neutral accounts, R19
 - **KD9 (session-settled: user-directed) — timezone vigilance; Governs R16:** unknown precision/zone is preserved rather than manufactured; display timezone does not redefine source windows.
 - **KD10 (session-settled: user-directed) — product graph and groups; Governs R14/R17:** product_relationships stores HF-style typed parent/child facts; product_groups and product_group_memberships store deliberate grouping independently. Family/series labels are interpretations, not required entity tiers. No publisher-wide group rule: publisher coverage is already a filter.
 - **KD11 (session-settled: user-directed) — grouping automation; Governs R14:** a reviewed rule can include a root product and follow accepted new_version links transitively. Preserve rule versions, evidence paths and manual exclusions; missing edges stay unresolved. Technical derivatives are not automatically successors or lab-owned offerings.
-- **KD12 (session-settled: user-directed) — naming and external identities; Governs R2/R13:** use metric table names (metric_types, source_metrics and metric_* fact/processing tables), separate semantic metric types from units, and reuse accounts for HF publishers and source_subject_mappings for external product/lab identifiers; no universal external-entity table. Product.type remains our reviewed classification, not a direct HF enum.
+- **KD12 (session-settled: user-directed) — naming and external identities; Governs R2/R13:** use metric table names (metric_types, metrics and metric_* fact/processing tables), separate semantic metric types from units, and reuse accounts for HF publishers and source_subject_mappings for external product/lab identifiers; no universal external-entity table. Product.type remains our reviewed classification, not a direct HF enum. KD26 supplies the table-only naming migration.
 - **KD13 (session-settled: user-directed) — account reuse; Governs R18:** accounts belong to one data source. Reuse existing account-to-company/brand/person relationships; abstract X assumptions before accepting HF accounts. A model listing, benchmark row or provider creator label is not an account.
 - **KD14 (session-settled: user-directed) — comparison scope and arithmetic; Governs R19/R20/R23:** the exact-model Flash comparison starts at its launch date and uses all DeepSeek brand posts, exact Flash HF/OR identifiers and separate Arena score/rank. R31/KD22 adds a separate pre-launch predecessor-ranking view without changing this preset. A rolling-download change of 10 → 11 → 13 displays 0%, 10%, 30%. Arena's later published baseline must remain explicit.
-- **KD15 — technical proposal informed by the prototype; Governs R21/R22/R24:** reuse the fifteen tables and their versioned JSON contracts for sourced comparison anchors, archive provenance and per-line definitions. Add historical import and production serving/operations units. The compressed percentage view demonstrated five-line visibility but is not yet an owner-approved final design.
+- **KD15 — technical proposal informed by the prototype; Governs R21/R22/R24:** reuse the fifteen tables and their versioned JSON contracts for sourced comparison anchors, archive provenance and per-line definitions. Add historical import and production serving/operations units. The compressed percentage view demonstrated five-line visibility; KD24/R37 now selects the combined linear chart as the default and preserves compressed views as diagnostic alternatives.
+- **KD24 (session-settled: user-directed) — combined chart; Governs R7/R37/R38:** one default chart with three normalized release-response lines, shared reference dates, separate raw means and default trailing-three-day smoothing. Zero is the reference-week mean. Existing launch-baseline presets remain separate.
+- **KD25 (session-settled: user-accepted proposal) — Arena analysis; Governs R39/R40:** linked raw score/confidence and reported-battle tracks on the shared date selection, rank as context, exact variant/publication evidence and explicit score comparability. No new tables, score/battle proxy substitution or automatic quality inference.
+- **KD26 (session-settled: user-directed) — definition table naming; Governs R41:** metrics replaces source_metrics as the SQL table name through U24; preserve its source FK, Python model/field names and every measured value. No additional table or semantic change.
+- **KD27 (session-settled: user-directed) — OpenCode peer source; Governs R42–R45:** OpenCode joins HF/OpenRouter/Arena as a selected source in the shared schema. Collect hourly revisions of daily UTC totals, mark partial days and retain corrections/history. New definitions, mappings, adapter and source-aware serving require no new tables. R37's three-line default is preserved; a new provider preset can select OpenCode tokens.
 - No automatic fuzzy matching, bulk catalog reclassification or benchmark methodology blending. Scheduling and production activation are planned in U15, but are not executed or authorized by this planning revision.
 
 ## Planning Contract
@@ -546,7 +1028,7 @@ DeepInfra/Fireworks/Together scale research is context, not a selected measureme
 | source_entities for accounts and product listings | Existing accounts for accounts; source_subject_mappings for external product/lab IDs | Reuse company/brand/person account links; avoid a duplicate entity registry |
 | data_source_types lookup | data_sources.source_type column | Three descriptive categories need no independent table |
 | X-only account key/handle uniqueness | Internal account UUID and provider-scoped identifiers/handles | Prevent collisions when HF and later social platforms share account storage |
-| Earlier metric table names | Retain metric_types, source_metrics and metric_* processing/fact tables | Owner reverted the measurement rename; unit remains a separate field |
+| Earlier metric table names | Retain metric_types and metric_* processing/fact tables; rename source_metrics to metrics through U24 | Owner retains metric terminology and now selects the shorter definition-table name; unit remains a separate field |
 | state, flow and cumulative counter | state or flow; all-time activity uses since_origin | Cumulative activity is interval flow; no redundant boolean/origin field |
 
 ### Colored relationship image
@@ -569,7 +1051,7 @@ DeepInfra/Fireworks/Together scale research is context, not a selected measureme
 | --- | --- | --- |
 | data_sources | A named data origin with descriptive source_type | Amended |
 | metric_types | What is measured, such as downloads or benchmark_score | Retained; semantic family, not a unit |
-| source_metrics | One immutable source/measurement/semantics version | Amended: two kinds and independent window fields |
+| metrics | One immutable source/measurement/semantics version | Renames existing source_metrics via U24; two kinds and independent window fields |
 | metric_collection_contracts | One frozen mapping/definition/taxonomy/report policy | Retained |
 | source_subject_mappings | One reviewed provider product/lab ID→canonical subject in a contract | Amended: direct source/identifier and optional publisher account |
 | metric_collection_runs | One bounded fetch and outcome | Retained |
@@ -595,7 +1077,7 @@ flowchart TD
   H[HF metadata and declared successor links] --> T
   T --> G[Apply reviewed group rule + explicit overrides]
   G --> V[Freeze taxonomy version + memberships + rule evidence]
-  S[HF / OpenRouter / Arena identities and native categories] --> I[Existing accounts + reviewed product/lab mappings]
+  S[HF / OpenRouter / Arena / OpenCode identities and native categories] --> I[Existing accounts + reviewed product/lab mappings]
   V --> C[Freeze collection contract]
   I --> C
   D[Source registries + metric definitions + time contract] --> C
@@ -635,7 +1117,7 @@ flowchart TD
   AC --> PO
   AC --> HO
   DS --> PRL
-  DS --> MD[source_metrics]
+  DS --> MD[metrics]
   MF[metric_types] --> MD
   TV --> CC[metric_collection_contracts]
   CC --> MP[source_subject_mappings]
@@ -760,7 +1242,7 @@ Columns: id UUID PK; post_id TEXT NOT NULL FK→posts.tweet_id; subject_id UUID 
 
 ### Existing accounts — provider-neutral identity, not a new table
 
-One account is one platform identity, independently of its company, brand or person associations. X and HF are the initial sources with account rows. Future YouTube channels and Instagram accounts can use the same structure after their identifier contracts are verified. OpenRouter/Arena product entries, AA creator labels and Vercel lab labels are not accounts merely because a provider lists them. No synthetic account is required to collect a model score or usage value.
+One account is one platform identity, independently of its company, brand or person associations. X and HF are the initial sources with account rows. Future YouTube channels and Instagram accounts can use the same structure after their identifier contracts are verified. OpenRouter/Arena/OpenCode product entries, AA creator labels and Vercel lab labels are not accounts merely because a provider lists them. No synthetic account is required to collect a model score or usage value.
 
 Proposed additions/changes to Account (SQL table accounts):
 
@@ -797,6 +1279,7 @@ Columns: `id VARCHAR(32) PK`; `source_type VARCHAR(32) NOT NULL`; `name VARCHAR(
 | --- | --- | --- |
 | hf | model_adoption | Selected first pass; initially disabled until reviewed setup/activation |
 | openrouter | model_adoption | Selected first pass; initially disabled until reviewed setup/activation |
+| opencode | model_adoption | Selected fourth peer; hourly revision-aware collection planned in R42–R45/U25–U27, not implemented or activated |
 | arena | benchmark | Selected first pass; source remains Arena although hosted on HF |
 | artificial_analysis | benchmark | Authenticated probe completed; disabled candidate |
 | vercel_ai_gateway | model_adoption | Public usage-share probe completed; disabled candidate |
@@ -806,9 +1289,12 @@ Arena and AA visibly share source_type=benchmark. Vercel share and OR absolute t
 
 #### 2. metric_types — semantic metric types
 
-Columns: `id VARCHAR(32) PK`, `name VARCHAR(128) NOT NULL`, `description TEXT NOT NULL`. Seed downloads, token_usage, token_share, benchmark_score, vote_count, rank, score_variance and post_volume. Remove value_kind from this family registry: a fractional rank or decimal measure from a future provider must not silently inherit another provider's representation. Value kind belongs to each immutable source definition. Prices/exact fractional currency and nonnumeric content are outside this numeric first pass.
+Columns: `id VARCHAR(32) PK`, `name VARCHAR(128) NOT NULL`, `description TEXT NOT NULL`. Seed downloads, token_usage, token_share, benchmark_score, vote_count, rank, score_variance and post_volume; R42 adds active_users and session_count rows for OpenCode. Remove value_kind from this family registry: a fractional rank or decimal measure from a future provider must not silently inherit another provider's representation. Value kind belongs to each immutable source definition. Prices/exact fractional currency and nonnumeric content are outside this numeric first pass.
 
-#### 3. source_metrics — immutable source-specific definitions
+#### 3. metrics — immutable source-specific definitions
+
+Proposed SQL name `metrics`; current physical name is `source_metrics` until
+U24's table-rename migration. Django model remains `SourceMetric`.
 
 | Column | SQL type / nullability | Meaning |
 | --- | --- | --- |
@@ -838,6 +1324,9 @@ UNIQUE(source,metric_key,version), index(metric_type,source). CHECK version>0, p
 | HF downloads → downloads | downloads / integer | flow / count | rolling; amount=30, unit=day, duration_basis=unknown; timezone and exact bounds unknown |
 | HF downloadsAllTime → downloads_all_time | downloads / integer | flow / count | since_origin; actual counting origin and effective end unknown |
 | OR total_tokens → total_tokens | token_usage / integer | flow / count | calendar; amount=1, unit=day, duration_basis=calendar; UTC midnight alignment; exact day bounds |
+| OpenCode usage.daily.tokens → tokens | token_usage / integer | flow / count | UTC calendar day; completed day exact bounds; partial day retains proven start/date with unknown effective end, per R43 |
+| OpenCode usage.daily.uniqueUsers → unique_users | active_users / integer, approximate distinct count | flow / count | Same daily contract as tokens; distinct users within source scope, not additive across products/days |
+| OpenCode usage.daily.sessions → sessions | session_count / integer, approximate distinct count | flow / count | Same daily contract as tokens; preserve source session definition and nonadditive distinct-count scope |
 | Arena rating / rating_lower / rating_upper | benchmark_score / float | state / score | window none; publication date precision, effective instant unknown |
 | Arena vote_count | vote_count / integer | state / count | Reported sample battles at publication; sample inclusion/history unproven; not daily votes or an established since-origin flow |
 | Arena rank / variance | rank integer / score_variance float | state / rank or variance | window none; publication date precision |
@@ -846,7 +1335,7 @@ UNIQUE(source,metric_key,version), index(metric_type,source). CHECK version>0, p
 | Vercel share_percent (candidate) | token_share / float | flow / ratio | Provider daily period; timezone/alignment not yet verified, cannot activate definition |
 | X distinct posts (serving definition) | post_volume / integer | flow / count | Requested UTC event window; existing native events, derived query only |
 
-Nine active metric definitions are the two HF fields, one OR field and six Arena fields. AA/Vercel/X rows above illustrate mapping and serving semantics; they are not active collection definitions. Arena vote_count is the reported battle sample size, not unique voters. Its sample inclusion/history does not establish a since-origin accumulation window; classify it as a count-valued state, with no daily differencing. A documented future accumulation contract would require a new definition version. Lower/upper require same observation/methodology as rating. Fraction scales may be 0–1 while an index is on another scale; unit/version and quantity_form prevent automatic blending.
+The original base cohort contained nine definitions: two HF download fields, one OR field and six Arena fields. R26 adds HF likes/followers; R42 plans three OpenCode definitions through the same tables. OpenCode definitions are not yet implemented or activated. AA/Vercel/X rows above illustrate mapping and serving semantics; they are not active collection definitions. Arena vote_count is the reported battle sample size, not unique voters. Its sample inclusion/history does not establish a since-origin accumulation window; classify it as a count-valued state, with no daily differencing. A documented future accumulation contract would require a new definition version. Lower/upper require same observation/methodology as rating. Fraction scales may be 0–1 while an index is on another scale; unit/version and quantity_form prevent automatic blending.
 
 #### 4. metric_collection_contracts — frozen configuration
 
@@ -858,7 +1347,7 @@ Columns: id UUID PK; contract_id UUID NOT NULL FK→metric_collection_contracts;
 
 UNIQUE(contract,source,source_subject_kind,identifier_scope,normalized_identifier); indexes(contract,subject), (source,normalized_identifier), (publisher_account_key). CHECK nonempty identifiers and supported kinds. No source_entity FK. Writer checks contract/source agreement, canonical target kind, selected variants and Google scope. Mappings are immutable: literal ID, normalizer version, aliases, product identity and observed publisher evidence remain frozen even if an account changes its handle later. Each measurement identifier resolves to one subject in a contract. Several aliases may identify a product, but the usage mapping uses the actual dataset identifier and counts it once.
 
-HF repository scope retains model/dataset/space; the initial download cohort is model. OpenRouter/Arena model IDs and future AA model/creator UUIDs are identifiers here, not fabricated accounts. Explicitly lab-scoped rows can map directly to company subjects. The same canonical company can have accounts on X/HF and a separate lab identifier on another source; these are different relationships. API route, canonical slug and usage ID remain distinct metadata where necessary. HF casefold follows the existing verified convention; other providers retain exact case unless verified. Unmapped rows remain in metric_observations with their literal identity and no accepted mapping. Adding a source never requires adding a model-listing table.
+HF repository scope retains model/dataset/space; the initial download cohort is model. OpenRouter/Arena/OpenCode model IDs and future AA model/creator UUIDs are identifiers here, not fabricated accounts. OpenCode literal model ID, lab ID and endpoint path remain separate metadata per R42. Explicitly lab-scoped rows can map directly to company subjects. The same canonical company can have accounts on X/HF and a separate lab identifier on another source; these are different relationships. API route, canonical slug and usage ID remain distinct metadata where necessary. HF casefold follows the existing verified convention; other providers retain exact case unless verified. Unmapped rows remain in metric_observations with their literal identity and no accepted mapping. Adding a source never requires adding a model-listing table.
 
 The optional publisher_account_key is populated only for an evidenced account on that mapping's source (currently HF). Cross-source publisher hints are evidence or separate mappings, not an account on the wrong source. Account→company/brand/person facts use existing relationship tables; do not duplicate account ownership mappings here. For HF, a repository→publisher account link identifies who publishes it, not ownership of its model ancestry. An account's other brand associations cannot classify every repository under that brand. Product.type stays our reviewed classification; native task/descriptors remain metadata, with no category bridge.
 
@@ -882,7 +1371,7 @@ UNIQUE(run,observation_key), indexes(mapping,observed_at), (run,published_date).
 | --- | --- | --- |
 | id | BIGINT identity PK | Datapoint |
 | observation_id | BIGINT FK→metric_observations NOT NULL | Retrieved source row |
-| source_metric_id | BIGINT FK→source_metrics NOT NULL | Kind, unit, quantity and window/version contract |
+| source_metric_id | BIGINT FK→metrics NOT NULL | Kind, unit, quantity and window/version contract; existing column name retained |
 | integer_value | NUMERIC(30,0) NULL | Exact integer downloads/tokens/battles/rank |
 | float_value | DOUBLE PRECISION NULL | Binary64 score/interval/variance/share |
 | temporal_status | VARCHAR(16) NOT NULL | exact, date_only or unknown interval/instant precision |
@@ -929,6 +1418,10 @@ These rules add no tables. Native values remain in metric_values; chart percenta
 For Parquet or other binary archives, keep bounded selected raw rows in the existing JSONB raw_payload envelope, the original artifact hash and its immutable retrieval coordinates. If the implementation retains binary evidence separately, use an owned artifact location with a sanitized reference; never insert signed URLs or depend on an agent's ignored prototype directory. Distinguish the hash of the binary artifact from the hash of the JSON envelope. Import only a reviewed provider/dataset/range allowlist, with bounded bytes, rows and time; no arbitrary legacy-file ingestion.
 
 **Baseline and plotting rules:**
+
+**Latest default:** R37–R40 govern the newly selected combined release-response
+view and linked Arena panel. The following launch-baseline arithmetic remains
+the contract for existing diagnostic/exact-model presets, not the new default.
 
 - Resolve each raw series before calculating `100 * (value_t / baseline_value - 1)`. The first valid baseline is exactly 0%; this describes change in the measured level, not a running sum of daily activity or percentages. HF remains rolling-30-day downloads; post/token values remain counts for each UTC day.
 - R31 adds a separate release-history rank preset with pre-launch range, fixed first-available rank baseline and explicit predecessor/successor segments. The following launch baseline remains the default for exact-model presets and the other lines.
@@ -1129,6 +1622,8 @@ flowchart TD
 
 ### U8 — definition-aware series and report
 
+**Selected-chart follow-up:** U22–U23 extend this shared computation with R37–R40. Keep old preset arithmetic unchanged; the accepted default uses reference-week normalization and a separate Arena evaluation panel.
+
 **October 7 follow-up:** A1 adds portable attribution (R25); A4 adds bounded-history retrieval verification. See [required adjustments](#october-7-review-follow-up--required-adjustments).
 
 **Goal:** join shared numeric datapoints to explicit canonical subject scopes and existing post volume, retaining a legacy-compatible brand query.
@@ -1245,6 +1740,8 @@ HFOrg compatibility is additive: nullable unique hf_orgs.account_key and a separ
 
 ### U14 — database-backed Pulse comparison endpoint and UI
 
+**Selected-chart follow-up:** U22–U23 define the accepted default and its actual PostgreSQL/browser proof. The existing five-/seven-line implementation below is retained as a diagnostic alternative; its staging evidence does not establish the new default/panel is implemented.
+
 **October 7 follow-up:** A1 carries attribution through UI and exports (R25). See [required adjustments](#october-7-review-follow-up--required-adjustments).
 
 **Goal:** make the prototype comparison reproducible from PostgreSQL through the current G5 Pulse surface.
@@ -1269,7 +1766,7 @@ HFOrg compatibility is additive: nullable unique hf_orgs.account_key and a separ
 **Dependencies:** U7/U13/U14; U9 must pass before any authorized activation.
 **Files:** existing collection/configuration commands, a proposed dedicated metric-collection management command if needed, owned scheduling configuration only after runtime discovery, tests/test_benchmark_download_operations.py and scripts/benchmark_download_collector/README.md. Preserve run_cycle and its existing harvesting schedule.
 
-**Approach:** put source-specific polling intervals, completion lag, overlap/reconciliation range, request/byte/time budgets and freshness thresholds in reviewed source_configuration. Provisional starting schedule for later review: daily HF snapshots; daily OR completed-day collection with a bounded recent-day revision recheck; daily Arena publication checks. Allow more frequent HF/Arena polls when approved without implying finer native measurement windows. Before activation, validate these values against current endpoint limits and observed publication timing; no cadence or cost guarantee follows from the prototype. Specify one execution owner and independent locks so manual imports and scheduled collection cannot race; do not add a second harvester or Celery beat. Use existing hosting/scheduler capabilities if appropriate after inspection; a new service is not assumed necessary.
+**Approach:** put source-specific polling intervals, completion lag, overlap/reconciliation range, request/byte/time budgets and freshness thresholds in reviewed source_configuration. Provisional starting schedule for later review: daily HF snapshots; daily OR completed-day collection with a bounded recent-day revision recheck; daily Arena publication checks; hourly OpenCode collection of current-day partial and completed-day revisions under R43. OpenCode must not inherit the other providers' 24-hour poll/default completed-day-only path: compare every returned selected daily row for corrections and preserve endpoint update freshness separately. Allow more frequent HF/Arena polls when approved without implying finer native measurement windows. Before activation, validate these values against current endpoint limits and observed publication timing; no cadence or cost guarantee follows from the prototype. Specify one execution owner and independent locks so manual imports and scheduled collection cannot race; do not add a second harvester or Celery beat. Use existing hosting/scheduler capabilities if appropriate after inspection; a new service is not assumed necessary.
 
 Track last successful retrieval, latest effective/publication date, missing/partial runs and delayed source updates separately. Unknown timing is not fresh exact data. Test retries, lock contention, interrupted-run recovery, repeated successful polls and bounded revision replacement with fixture transports. Expose failure and staleness in the operations report and Pulse response. Disabling collection/UI must preserve all imported observations and current X harvesting.
 
@@ -1347,6 +1844,25 @@ Owner requested a 48-hour poll, then explicitly changed frequency to **hourly**.
 
 ## Verification Contract
 
+**Latest OpenCode amendment:** the next authorized implementation run must
+complete R42–R45/U25–U27 against isolated PostgreSQL, with reviewed real-data
+history coverage and source/identity/partial-day/revision/UTC-rollover/freshness
+fixtures. Exercise SQL/ORM, actual shared serving/report/export and browser
+provider selection, plus cutoff-safe revision reads. Extend the existing
+regression net; do not treat pre-OpenCode staging results as this proof.
+
+**Latest chart amendment:** the next authorized implementation run must satisfy
+R37–R40/U22–U23 through the shared PostgreSQL → response → Pulse/offline/export
+path. Include the described regression net for unchanged contracts/counting and
+bounded reads, new transforms/reference arithmetic and Arena publication/anchor
+semantics. Recorded staging/static-prototype evidence remains scoped to its
+revision; do not claim new database-backed behavior from those receipts.
+
+**Latest naming amendment:** also complete R41/U24's populated/fresh/reverse
+rename proof and current-schema consumer checks. Physical table naming changes
+must preserve values, references and immutable contracts; applied migration
+history remains unchanged. No live migration is executed by this plan edit.
+
 During implementation, not during this planning revision:
 
 The next run must include U19–U21 and prove the full PostgreSQL → series → Pulse/offline/export path for predecessor segments and permission enforcement, plus cutoff-aware G3 input tests. Re-run affected regression/browser checks at the new revision; do not reuse the 0e328c7a receipts as evidence for behavior added by this amendment. Frozen old exact-model contracts must still produce the same responses. Record review answers separately for storage, charts/forecasts and exchange/trading.
@@ -1362,6 +1878,26 @@ The next run must include U19–U21 and prove the full PostgreSQL → series →
 9. Complete A1–A3 regression checks in existing test modules and browser verification; evaluate A4 separately. Record the new exact revision, commands, query counts, export attribution evidence and remaining A5 permission conditions. The earlier 58/223-test successes do not cover these pending fixes; unavailable external review is not a passed check.
 
 ## Definition of Done
+
+**Latest OpenCode addition:** R42–R45/U25–U27 are pending. Completion requires a
+reviewed fourth peer registry source and mappings, real available daily history
+in the isolated database, three typed usage definitions, hourly-capable
+revision-aware commands/health, correct partial/completed-day queries and the
+new provider preset/export/browser proof. Default-off operation and unresolved
+public-use decisions remain visible under existing release rules. This plan
+edit does not start collection or establish deployment/activation readiness.
+
+**Latest selected-chart addition:** R37–R40/U22–U23 are pending. Completion for
+this addition requires the accepted three-line chart and linked Arena panel
+working from the isolated database with their arithmetic, missingness,
+publication/anchor checks and browser/export proof. This amendment changes no
+table or live deployment; later delivery remains a separately selected action.
+
+**Latest definition-table naming addition:** R41/U24 is pending. Readiness of
+the complete amended candidate includes the verified table rename, unchanged
+measurements/relationships/contracts and coordinated runtime compatibility.
+The existing staging database still uses `source_metrics` until that migration
+is implemented and separately delivered.
 
 **Latest October 7 additions:** R31–R36/U19–U21 and the separate collector, public-output and exchange/trading release decisions above govern the next rerun. Verify the predecessor-ranking view, enforced source-use policy and cutoff-aware input contract; retain unresolved G3-owned forecast/trade gates as disabled and pending. The A1–A5 readiness boundary is also part of completion. Reopen tested-and-ready sign-off for the three confirmed fixes; retain historical receipts as scoped evidence. Public licensing/permission conditions remain separately visible until resolved.
 
@@ -1398,6 +1934,15 @@ The authorized Render staging endpoint is complete at code revision `1375d1c0efa
 Before any separately authorized production release: reconcile newer main migrations and Account references; take and verify the live-production backup; select one migration runner and allow for the observed 26-minute account migration; plan the bulk history import using its measured staging duration (about 52 minutes for the batched replay). Parallel service builds exceeded the 900-second migration-lock wait on the first web attempt; the final deployment succeeded after the migration finished. Public-output/forecast/trading rights remain separate release decisions. The hourly HF cutoff poll is independent and still auto-stops October 9.
 
 Post-deployment documentation is committed separately on the feature branch. It changes no runtime input; staging remains on the exact verified code revision above. The staging-only worktree and recoverable backup are retained.
+
+
+## October 7 — G5 staging-data chart review
+
+Owner requested the needed charts using staging only, in the G5 prototype and shown in Chrome on allenwlee. Created an isolated copy of the latest maintained G5 screen at `/Users/fuchitalee/development/pushin-weight-v2/.context/g5-staging-charts-20261007/`; the original :58011 prototype is preserved. Read-only export of four DeepSeek/GLM launch/context comparisons came from `pushinweight_staging` at runtime1375d1c0, contract53fda009-28a4-4106-a91f-bd42ff7cb33e, 2026-10-07T08:58:32.076918Z. No provider API calls or database writes were performed.
+
+Release charts offer compressed/linear fixed-baseline percentage change and raw values, daily inspection, source/evidence download, model-switch markers and the reviewed predecessor rank. Six lines have observations; account followers explicitly have none in these windows. Posts stop October3, and unavailable days remain gaps. HF downloads remain rolling30day totals. Arena is no-style-control; raw score uses a zoomed scale and raw rank places better rank toward the top. Existing Brands/other G5 examples are preserved and remain older saved examples, separate from the new staging-only Release charts.
+
+155 browser assertions pass with no JavaScript errors; first/middle/last raw readings are checked across four datasets and all seven fields, plus controls, predecessor/missingness, attribution and mobile layout. Evidence and operation notes are in the prototype README and browser-verification.json. Local preview binds only the authenticated Tailscale interface and permits the two owner hosts. This is local prototype verification, not an additional staging/production deployment or production UI assurance claim.
 
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
