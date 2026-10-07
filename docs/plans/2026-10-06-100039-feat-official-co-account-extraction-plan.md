@@ -11,6 +11,8 @@ ollija:
   workflow: plan
   delivery_target: production
   delivery_selected_by_user: true
+  delivery_route: direct
+  delivery_route_selected_by_user: true
 ---
 
 # Official Company Account Extraction - Plan
@@ -468,16 +470,17 @@ seven new discovery tables. The repair excludes and scrubs these operational
 tables, including encrypted credentials and list intents, while preserving
 copied canonical company/brand account links. The repaired staff CI command
 passed locally: 302 tests, including 176 required PostgreSQL tests with zero
-skips/errors. Hosted checks must pass on the
-repaired head before delivery. Detailed receipts remain in the
+skips/errors. Both hosted workflows passed on repaired head `afdbc240`:
+discovery 191 tests / 158 required PostgreSQL and staff/staging 302 tests /
+176 required PostgreSQL, with zero required skips/errors. Detailed receipts remain in the
 [implementation verification](../analysis/2026-10-07-061500-official-company-implementation-verification.md).
 
 Runtime renewal still requires the owner's identification of the app issuing
 the saved access/refresh token pair. Both existing local OAuth client pairs
 are present and differ; no guessed-client or alternate-app refresh is permitted.
-Shared staging retains the separate G2 candidate. Its occupancy and the current
-branch history require resolving the selected delivery route without replacing
-another session's resources.
+Shared staging retains the separate G2 candidate. The owner selected direct
+production delivery on 2026-10-07, preserving those resources and omitting
+staging delivery for this feature.
 
 Initial decisions currently run sequentially in bounded operator batches. The
 final 11-case evaluation averaged 4.4185 seconds per request. Applying that small
@@ -499,7 +502,7 @@ For the current request, completion requires the intended revision observed in p
 
 ## Delivery Exceptions
 
-Owner selected LFG through production activation plus verified collection on 2026-10-06. This supersedes earlier planning-only and separately-authorized-activation wording for this feature. Use the repository's staged delivery route unless the owner selects an alternative; the earlier direct-route exception applied to the separate Jev repair and is not imported here. Production pause/resume and unrelated taxonomy implementation are excluded. Local X list access is proven, but runtime provisioning/refresh and new account registration remain required work.
+Owner selected LFG through production activation plus verified collection on 2026-10-06. This supersedes earlier planning-only and separately-authorized-activation wording for this feature. On 2026-10-07 the owner explicitly selected direct production delivery for this feature; omit staging delivery and preserve G2's staging resources. Production pause/resume and unrelated taxonomy implementation are excluded. Local X list access is proven, but runtime provisioning/refresh and new account registration remain required work. Missing issuing-client identification blocks credential renewal and list activation, not deployment of the disabled implementation.
 
 ---
 
@@ -531,20 +534,16 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - Workflow: `plan`
 - Delivery target: `production`
 - Owner selection recorded: `true`
-- Delivery route: `staged`
+- Delivery route: `direct`
 
 1. Complete implementation and the plan's verification contract.
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+4. On the owner-selected direct route, fetch the remote production lane: `git fetch origin refs/heads/main`.
+5. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+6. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+7. After step 6 succeeds, perform worktree cleanup as the final filesystem action:
     - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/official-co-account-extraction` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
     - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/official-co-account-extraction` without `--force`.
     - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
