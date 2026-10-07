@@ -84,6 +84,16 @@ def asset_payload(edition, cfg, pictures=None):
 
 
 def edition_payload(edition, cfg, *, pictures=None):
+    sources = list(
+        {
+            source.get("id") or source["url"]: {
+                "url": source["url"],
+                "label": source.get("author_handle") or "X",
+            }
+            for source in edition.evidence.get("sources", [])
+            if source.get("url", "").startswith("https://x.com/")
+        }.values()
+    )
     return {
         "id": str(edition.pk),
         "story_id": str(edition.story_id),
@@ -99,11 +109,8 @@ def edition_payload(edition, cfg, *, pictures=None):
         + urlencode(
             {"track": edition.track, "lang": edition.locale, "edition": str(edition.pk)}
         ),
-        "sources": [
-            {"url": source["url"], "label": source.get("author_handle") or "X"}
-            for source in edition.evidence.get("sources", [])
-            if source.get("url", "").startswith("https://x.com/")
-        ],
+        "source_count": len(sources),
+        "sources": sources,
         "chart_support": edition.selection.get("chart_support", "unavailable"),
         "asset": asset_payload(edition, cfg, pictures),
     }

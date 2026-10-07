@@ -302,3 +302,9 @@ msgstr "以前の記事"
 
 msgid "Available chart data does not support this development."
 msgstr "この動向を裏付けるデータは、現在のチャートにはありません。"
+
+#: monitor/templates/monitor/editorial/story.html
+#, python-format
+msgid "%(count)s post"
+msgid_plural "%(count)s posts"
+msgstr[0] "%(count)s 件の投稿"

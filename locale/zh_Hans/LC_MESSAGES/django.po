@@ -12,6 +12,7 @@ msgstr ""
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: zh_CN <zh_CN@example.com>\n"
 "Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -228,3 +229,9 @@ msgstr "更早的报道"
 
 msgid "Available chart data does not support this development."
 msgstr "现有图表数据未能支持这一动态。"
+
+#: monitor/templates/monitor/editorial/story.html
+#, python-format
+msgid "%(count)s post"
+msgid_plural "%(count)s posts"
+msgstr[0] "%(count)s 条帖子"

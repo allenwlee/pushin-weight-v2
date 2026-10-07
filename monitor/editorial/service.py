@@ -13,6 +13,7 @@ from core.models import (
 )
 
 from .config import load_editorial_config
+from .context import story_packet
 from .contracts import digest
 from .evidence import build_packet
 from .media import start_derivative
@@ -50,11 +51,13 @@ def find_story(event):
 
 
 def event_sources(event, packet):
-    return [
-        p
-        for p in packet["posts"] + packet.get("context", [])
-        if p["id"] in event.post_ids
-    ]
+    return list(
+        {
+            p["id"]: p
+            for p in packet["posts"] + packet.get("context", [])
+            if p["id"] in event.post_ids
+        }.values()
+    )
 
 
 def unchanged(event, story, track):
@@ -109,7 +112,15 @@ def publish_edition(row, event, packet, track, voice, copy, model, cfg):
             or set(prior.evidence.get("post_ids", [])) == set(event.post_ids)
         ):
             return None
-        sources = event_sources(event, packet)
+        sources = event_sources(copy, packet)
+        if {p["id"] for p in sources} != set(copy.post_ids):
+            raise ValueError("missing cited post attribution")
+        if any(not p.get("url") for p in sources):
+            raise ValueError("cited post URL missing")
+        attribution = {
+            "post_count": len(sources),
+            "posts": [{"id": p["id"], "url": p["url"]} for p in sources],
+        }
         fingerprint = digest({"sources": sources, "summary": event.summary})
         revision = (
             story.editions.filter(track=track, locale=voice.locale).aggregate(
@@ -133,9 +144,18 @@ def publish_edition(row, event, packet, track, voice, copy, model, cfg):
             model=model,
             evidence={
                 "post_ids": event.post_ids,
+                "cited_post_ids": [p["id"] for p in sources],
+                "attribution": attribution,
                 "sources": sources,
+                "story_context": packet.get("story_context", {}),
                 "cutoff": packet["cutoff"],
                 "coverage": packet.get("coverage", {}),
+                "source_check": [
+                    claim.model_dump(mode="json") for claim in copy.source_check
+                ],
+                "supported_copy": copy.supported_copy.model_dump()
+                if copy.supported_copy
+                else None,
             },
             selection=event.model_dump(mode="json"),
         )
@@ -224,6 +244,14 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                     event, hero.edition if hero else None, row.cutoff, cfg
                 ):
                     continue
+                saved_contexts = packet.setdefault("story_packets", {})
+                if event.key not in saved_contexts:
+                    saved_contexts[event.key] = story_packet(event, packet, cfg)
+                    with transaction.atomic():
+                        current = require_fence(row)
+                        current.packet = packet
+                        current.save(update_fields=["packet"])
+                contextual_packet = saved_contexts[event.key]
                 accepted = False
                 for binding, profile in cfg.voices.items():
                     if not binding.startswith(track + ":"):
@@ -235,20 +263,22 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                     voice = load_voice(profile)
                     if (voice.track, voice.locale) != (track, locale):
                         raise ValueError("voice binding mismatch")
-                    request = writer_request(event, packet, voice, fresh)
+                    request = writer_request(event, contextual_packet, voice, fresh)
                     stage = (
                         f"writer:{track}:{locale}:{digest([event.key, voice.digest])}"
                     )
                     try:
                         response = call(row, stage, fresh.routes[track], request, fresh)
-                        copy = validate_copy(response["data"], event, locale)
+                        copy = validate_copy(
+                            response["data"], event, locale, packet=contextual_packet
+                        )
                         fresh = policy_reader()
                         if not fresh.enabled:
                             raise BudgetHeld("disabled before publication")
                         edition = publish_edition(
                             row,
                             event,
-                            packet,
+                            contextual_packet,
                             track,
                             voice,
                             copy,

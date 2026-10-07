@@ -43,6 +43,312 @@ The implementation contract below governs this run. The dated experiment and
 brainstorm records later in this same file remain evidence, not active commands
 or permission to repeat old paid experiments.
 
+## October 7 LFG continuation
+
+Owner invokes “lfg” after the amended-plan readiness result. Continue through
+review, eligible fixes, commit/push, staging and verified production under the
+existing staged route and $5/day ceiling. Preserve the live-quality rerun
+waiver and direct OpenAI secret source. Existing uncommitted G2 implementation,
+regression tests and supporting task reports from this session are offered as
+the change set; unrelated historical experiment artifacts remain excluded.
+
+## October 7 launch-route decision (current)
+
+The owner says “1. let's skip this. 2. launch config should use openai key in
+env.secrets”. Item 1 waives the proposed fresh Ajax/Chonk live-quality rerun and
+its dependent new experiment-budget decision. Do not run it or recreate it as
+an acceptance gate. Earlier live quality failures remain historical evidence;
+this waiver does not turn them into passing results. Software regression checks
+remain in scope.
+
+Item 2 selects direct OpenAI for production Chatter: `gpt-6-sol`, medium
+reasoning, image input, 4,096 completion tokens, and `OPENAI_API_KEY` sourced
+from `/Users/fuchitalee/.env.secrets`. Use the literal assignment (optional
+`export`, optional quotes); never execute/source the file, log its contents,
+or fall back to another provider key. During delivery, provision that exact
+value in the intended editorial worker's Render environment before activation.
+The runtime continues to read the process environment; no host-specific secret
+file is shipped or automatically loaded. The launch profile sends direct Chat
+Completions with `max_completion_tokens`, `reasoning_effort: medium` and
+`service_tier: default`, without OpenRouter routing parameters. Editor/Pulse
+remain direct DeepInfra 0731. Existing spending limits remain unchanged.
+
+A read-only authenticated model lookup returned HTTP 200 and model ID
+`gpt-6-sol`; no completion was generated. Implementation/offline verification
+is one additional local pass after the seven context/attribution passes. This
+bounded configuration change does not itself deploy or activate generation.
+The earlier manual Codex CLI route remains historical experiment evidence.
+
+Verification: **123 G2 tests passed**, including 56 required PostgreSQL tests,
+zero skips/errors, in 22.11 seconds. The actual launch-profile service test
+captures direct OpenAI host/key/body alongside both unchanged DeepInfra calls;
+additional tests cover images, incorrect/missing credentials and the bounded
+HTTPS transport. Targeted Ruff checks passed. Receipt:
+`.local/g2-context-verification-20261007/openai-route-tests.txt`.
+No additional live-quality iteration or model-generation spend occurred.
+
+## October 7 Chatter context diagnosis
+
+The owner suggests that surrounding context may be misapplied or that database
+context is insufficient. Read-only checks confirm a delivery gap for Ajax:
+**49 pre-cutoff keyword matches in both databases → two in the editor packet →
+one in the writer request.** All seven-day context was absent from the frozen
+packet. Context is selected by broad brand/recency, discarded first at the byte
+cap, and never expanded for a chosen story before writing. Three images arrived,
+but the source-check contract offers only text references.
+
+Recommended next repair: story-specific retrieval with preserved context space
+and image evidence references, then a controlled same-story/voice comparison.
+Do not infer database insufficiency or model-voice failure from the impoverished
+request. Existing source and numeric guards remain relevant; context does not
+prove disputed claims. No paid calls or runtime changes in this diagnosis.
+
+[Full context diagnosis](../analysis/2026-10-07-135538-g2-chatter-context-diagnosis.md).
+
+## October 7 source-contract repair
+
+Owner: “make those changes” and identify further current-headline safeguards to
+reuse. Initial implementation is local. The owner subsequently requests running
+the live tests and iterating on failures, keeping counts and major changes.
+Preserve the earlier local changes; no deployment in this test pass.
+
+- Move model brand choices into source-owned support objects. Each complete
+  strict-schema alternative binds one post, one source field (original/quote/
+  parent), its allowed brands and its exact span IDs. Derive event brand keys
+  from these validated choices in code. Grouped/multi-brand stories remain valid.
+- Repeat the same checks locally before restoring canonical IDs. Keep the
+  existing stored-brand boundary and reject unknown/mixed-source associations.
+- Give the writer selected original evidence and code-owned identifiers only;
+  withhold editor summary, reasons, claims and inferred subject labels.
+- Require supported headline/byline/article before final copy and exact equality
+  on validation. Preserve independent locale voices, images, 65,536 output
+  allowance, current provider choices and the combined $5/day reservation ledger.
+- Separate bounded schema overhead from evidence size; do not drop frozen
+  sources to make the stronger request fit. Avoid duplicate schemas in factual
+  prompt text, and test the actual 105-post wire request's size/reservation.
+- Regressions: previous GLM/wrong-source and Kolibri/Qwen failures, permitted
+  grouped brands, wrong-source spans/quoted-speaker mixing, changed final copy,
+  no draft leakage, actual provider-to-persisted-edition path and existing G2/
+  headline tests. Rejected output must not write an edition or trigger retries.
+
+Additional reuse candidates, grounded in the existing headline implementation:
+
+- **Implemented:** complete brand/source alternatives (`_bound_headline_format`),
+  source-only final writing (`build_per_brand_critic_request`, ledger-only branch),
+  and final-copy/audit agreement (`_validate_source_audit`). Shared closed-object
+  construction now lives in `x_monitor/structured_output.py`; the headline path
+  retains the same schema behavior.
+- **Next if relevance fails:** adapt `_weaken_short_alias_matches` and
+  `_ranked_headline_evidence_ids`. They distinguish substantive product evidence
+  from incidental mentions, ambiguous aliases and brief reaction-only clusters.
+  G2 needs source-owned subject relevance rather than importing the old per-brand
+  eligibility restriction wholesale; human-interest/untracked subjects remain valid.
+- **Next if relationship claims fail:** adapt the existing explicit checks for
+  invented links between posts (`_unsupported_unverified_post_link`) and bind
+  source-author/quoted-speaker identities to each claim. The current field-bound
+  passages prevent a quote from borrowing original-text spans, but do not prove
+  the actor named in prose is the right person.
+- **Next if numbers fail:** adapt `_validate_measurements` value/unit/scope checks
+  for chart claims. Source-reported benchmark figures still require source review;
+  code-owned corpus measurements and a poster's claims must stay distinct.
+
+Do not copy all older per-brand prompts, ranking requirements or translation
+policy. These candidates become fixes only when a failure justifies their scope.
+
+### Authorized iteration loop (October 7, 12:05 JST)
+
+Use the same frozen 105-post evidence and production-path builders/validators.
+At most **three live iterations**, **three calls per iteration**, and **$1.50 total
+staging-day reservations**, whichever ceiling comes first. Each iteration is a
+fresh uniquely claimed assessment; never resend an ambiguous or completed stage.
+Preserve 65,536 factual output caps and the Sol Codex CLI route. No collection,
+OpenRouter calls, new media generation or public/scheduled activation.
+
+Acceptance: editor ownership validation passes, one Chatter and one Pulse edition
+complete, and review against their exact sources finds no brand/source mix-up,
+invented developer launch, speaker transfer, unsupported numbers or independent
+confirmation. Chatter's wordplay must make sense for its story; Pulse explains
+the actual development. Inspect all worthy editor proposals for the same factual
+errors. This is the agent's review, not owner acceptance. Keep original responses,
+requests, file hashes, usage, diagnostics and selected source evidence.
+
+On a failure: identify the cause, borrow a relevant existing-headline safeguard
+where appropriate, add a regression and rerun affected offline checks before the
+next live iteration. Stop on success or the ceiling and report remaining defects.
+
+| Iteration | Result | Major changes |
+| --- | --- | --- |
+| Offline preparation | 119 tests passed, including 25 PostgreSQL tests; final changed-code subset rerunning. Two initial test-fixture mistakes corrected. | Source-bound brand/field/span alternatives; code-derived event brands; no editor prose in writer input; supported-copy equality; separate schema budget. |
+| Live 1 | Failed after one completed editor call (97.27s; 37,639 input / 7,292 output / zero reasoning tokens; estimated $0.00535635; reservation $0.151222). All 20 proposals used `chart_support=not_supported` with no chart evidence and `change=unchanged` with no existing stories. Local validation held the batch; no writers. Brand/source ownership passed. Semantic review also found same-account independence claims and report/announcement confusion. | First full test of source bindings and independent writer contract. Raw provider response retained. |
+| Live 2 | Pipeline complete: two staging editions persisted after three successful calls. Editor 47.56s, Sol Chatter 35.76s, Pulse 20.31s. Quality not yet accepted: editor still claims independent reports and leaves numeric audits empty; Pulse uses a source credit as byline. Total staging-day reservations $0.847951 / five calls. | Bind absent charts to unavailable/empty facts, absent stories to new/null, and absent people to empty IDs. Limit the prompted shortlist to six substantive developments; group same-event reports; explicitly distinguish reporting speaker/status and require ownership of numeric claims. |
+| Live 3 | Failed after one editor call (48.21s). Five posts listed, only two checked; held with source_support_outside_cited_posts. Number audits also remain empty. Writers not called. Preserved iteration 2 editions. | Derive audit actor from original/quote/parent identity in code; give code-owned repeated-author groups and unverified independence status; reject the observed multiple-independent-reports claim and numeric prose with an all-empty number audit; require a substantive supporting byline. |
+
+### Bounded-loop outcome — not quality-qualified
+
+**Three live iterations / five model calls.** The three-iteration ceiling is
+exhausted; no fourth call is authorized by this loop. Final staging-day ledger
+is $0.999359 / six text calls, including a pre-existing $0.144390 / one call.
+This loop added $0.854969 reservations. No new media, public activation or deploy.
+
+After iteration 3, the local contract now derives source IDs directly from
+validated support, eliminating the independently generated list that disagreed.
+This final adjustment is offline-only. A copy of the captured response passes
+that derivation after removing the obsolete field, then correctly fails the
+numeric audit guard. The original receipt remains untouched.
+
+Final G2 verification: **82 passed / 24 PostgreSQL tests**, zero skipped; scoped
+Ruff and whitespace checks pass. The earlier 49 unchanged-scope headline/adapter
+checks remain applicable, for 131 distinct tests across the work. Final frozen
+wire is 201,437 bytes; schema 63,794. Factual output limits remain 65,536.
+
+Remaining work: improve numeric evidence ownership before another bounded model
+trial. Existing `_validate_measurements` is a pattern for code-owned chart facts,
+but source-reported figures need a specific source/owner/meaning contract. Do
+not call the final candidate successful or deploy based on iteration 2 alone.
+Historical next step, superseded by the October 7 owner waiver: no fresh live-quality allowance or rerun is required.
+
+[Full iteration log, changes, sample output and verification](../analysis/2026-10-07-122329-g2-source-contract-iterations.md)
+([machine-readable receipts](../analysis/2026-10-07-122329-g2-source-contract-iterations.json)).
+
+## October 6 authorized live baseline replay
+
+The owner says “go” after the bounded live editor → Sol Chatter / DeepInfra Pulse
+recommendation. Run one fresh trial against the same corrected 105-post packet
+(digest `0eb40ba4dd0f2737cbd87918b588586c006371c7c2bfe1a9e62672488a596705`),
+with at most three text sends and no retry after ambiguity. Check the current
+staging ledger; retain the prior $1.50 staging-day/assessment subcap inside the
+$5/day combined limit. Production activation, deployment, new X collection and
+paid image/video generation are excluded. Save selected text, raw successful
+responses, request/code/schema identities, usage and timing in a fresh artifact
+scope. Manual Sol retains its disclosed CLI output-cap/charge-attestation limits.
+
+Acceptance is one completed editor decision, every selected writer completed,
+source validation and saved readable outputs, plus an explicit editorial quality
+assessment. A rejected/empty editorial selection is a result, not an automatic
+retry. The single run exhausts this trial; report any remaining failure plainly.
+Preserve global generation/public flags and all older ambiguous reservations.
+
+Live replay preflight passed at 17:14 JST. Scope:
+`operator-baseline-live-20261006-171318`; machine-local artifacts:
+`.local/g2-baseline-live-20261006-171318/`. Frozen cutoff remains
+`2026-10-04T01:00:40.731920+00:00`, with 105/2,497 sampled posts and no
+context/people/chart records. Worker remains live at integration `f9276520`;
+global generation/public flags are false. Existing reservations: $0.579566,
+four text calls. Three-call trial is bounded by $1.50 staging-day/assessment
+reservations, a 20-minute whole-test deadline and a manual 21-minute lease.
+The 149,340-byte editor request fits its 150,000-byte cap; exact wire hash is
+`3a659799e91d9ed49cf61c1887011c415d73a4e2b4ea5cc22125a12c88f2d8ab`.
+Archive plus per-file patch identities are saved in `preflight.json` and checked
+again before sending. Includes the modified shared DeepInfra adapter.
+
+Review rubric for the single attempt: source/actor/number ownership and status
+must hold; Chatter's wordplay must be recognizable and tied to the story;
+Pulse must explain the actual development without inventing launch timing or
+an unsupported company/product description. Evaluate selection and output
+quality separately from transport/schema success. Owner acceptance remains
+separate from the agent's source/quality review. No iterative rewrite call.
+
+### Live replay result — held at selection, no writers
+
+[Full replay report](../analysis/2026-10-06-171909-g2-baseline-live-writing-result.md) and its adjacent parsed
+JSON capture the result. Editor returned HTTP 200/priority in 61.69 seconds,
+42,499 input / 4,760 completion tokens, zero reported reasoning and $0.00511011
+provider-estimated cost. The call remains reserved at $0.146109; October 6 UTC
+total is $0.725675 across five text calls, zero media.
+
+Ten proposed events were returned. The Kolibri event named `qwen` alongside
+`mistral`, but its cited source's stored brand list contains only `mistral`.
+Qwen is genuinely mentioned in its text; this is a mismatch between model
+content tagging and the per-source stored-brand contract. The unbound brand
+schema/prompt allowed it; `validate_decisions` rejected the entire batch.
+Nine events pass structural validation individually. No selection was patched,
+no candidate discarded to force a pass, and no writer or picture stage ran.
+The source review also found independence, announcement/availability and quoted-
+speaker attribution overstatements. Exact examples and remaining actions are
+in the report. Successful transport is not completed writing or quality acceptance.
+
+One send exhausted this trial's single-attempt design; no retry or deployment.
+The next work is the per-source brand contract and observed editorial grounding
+issues, with offline regression evidence before a separately scoped replay.
+The operator saved exact requests and parsed output, but not the raw HTTP body;
+retain that additional artifact in a future runner. Global flags remain off;
+source/media counts unchanged. Previous reservations and local edits preserved.
+
+## October 6 bounded baseline alignment
+
+The owner said “go” after the resumed session recommended factual-request and
+diagnostics alignment followed by offline checks. This pass ends at local
+implementation and verification; historical delivery metadata remains context,
+not a new paid-replay or deployment instruction. Preserve existing local repairs.
+
+Reuse the DeepInfra adapter's locked headline settings and response validation
+with G2-specific editor/writer schemas: reasoning none, priority, strict schema,
+top_p .95, seed 42, temperature .2 for selection and 0 for Pulse. Preserve the
+65,536 output allowance, G2 evidence/voice/image semantics, Sol choice, combined
+$5/day ledger and no resend after ambiguity. Use a 300-second factual socket
+wait without extending the assessment lease; lease expiry continues to prevent
+publication. Add safe request identity/timing and provider-usage diagnostics.
+
+Regression net: capture actual editor/Pulse wire payloads; test schema closure
+and packet-bound source IDs; reject unexpected thinking, tier/model mismatch,
+missing/invalid usage, malformed or truncated replies; retain diagnostics and
+reservations on timeout without resend. Re-run existing DeepInfra/headline and
+G2 selection/writing/config regressions. Report missing PostgreSQL checks as
+unperformed, not passed. No live provider or production action belongs here.
+
+### Alignment completion and verification
+
+Completed locally on October 6, on `bacbb4337d62b3b97bed3f37956ad225993f0790`
+plus the preserved pre-existing repairs and this uncommitted pass. No provider
+request, commit, push, Render mutation or paid replay occurred.
+
+- Added `editorial_editor_v1` / `editorial_writer_v1` in the shared DeepInfra
+  adapter, reusing headline settings and receipt/parser validation with G2's
+  own closed, source-bound schema. Pulse uses temperature 0; selection uses .2.
+- Launch editor/Pulse now explicitly disable reasoning, request priority and
+  strict JSON schema, and wait up to 300 seconds per socket operation. The
+  65,536 allowance and existing conservative reservation rates remain intact.
+- Saved success/failure metadata includes request SHA-256, profile, elapsed
+  seconds, timeout, whitelisted usage/cost, tier and request ID. Timeout,
+  connection failure, incomplete read and transport response-cap rejection keep
+  safe diagnostics. No HTTP status or network phase is invented when unavailable.
+- PostgreSQL tests prove a failed factual send remains fully reserved and
+  ambiguous, and a second invocation cannot send again. Existing source/voice,
+  picture, public reader, shared-budget and no-stale-publication tests pass.
+- Updated the focused editorial reference. Existing headline reference drift
+  remains outside this bounded pass. The README's existing reference link needs
+  no change. Production Chatter transport and live writing quality remain open.
+
+Verification used local PostgreSQL **17.9**, separate Django-created test
+databases, fake providers, and `.venv-g2`; no shared environment repair.
+**187 distinct selected tests passed**, including **50 required PostgreSQL tests**,
+with zero skips/errors. First selection: 145 passes/22 PostgreSQL; additional
+G2 regressions: 38 passes/28 PostgreSQL. After the final transport-cap handling
+change, all 40 affected provider/persistence/end-to-end tests passed (17
+PostgreSQL), including four new transport-failure cases. Scoped Ruff and
+`git diff --check` pass. This is offline software verification, not a new live
+writing/latency/billing result or a claim that the whole repository suite ran.
+
+Reproducible combined selection (local test-only database name, no credential):
+
+```sh
+DATABASE_URL=postgresql://localhost/g2_baseline_verify_20261006 \
+STAFF_COLLECTION_NETWORK_ENABLED=false .venv-g2/bin/python -m pytest -q \
+  tests/test_editorial*.py tests/test_deepinfra.py \
+  tests/test_deepinfra_factory_routing.py tests/test_headline_finance_generation.py \
+  tests/test_headline_0731_regressions.py tests/test_llm_config.py \
+  --basetemp=/Users/fuchitalee/.cache/pushinweight-g2-baseline-verify
+```
+
+Current official [structured-output docs](https://docs.deepinfra.com/chat/structured-outputs)
+confirm the `json_schema` format. The [0731 model page](https://deepinfra.com/deepseek-ai/DeepSeek-V4-Flash-0731)
+shows priority input/output rates of $0.09/$0.27 per million on this inspection;
+the unchanged G2 reservation rates of $0.10/$2 remain conservative for that
+snapshot. These web reads made no inference request.
+
+Next separate step: a freshly scoped live replay if requested, preserving the
+frozen evidence and ambiguous prior reservations. No automatic retry is queued.
+
 ## October 5 implementation result
 
 Implementation and review are delivered in [PR #51](https://github.com/allenwlee/pushin-weight-v2/pull/51),
@@ -138,6 +444,12 @@ The existing staged branch route applies; no force push or new scheduler.
 - Routes: OpenRouter `deepseek/deepseek-v4-flash-0731`/medium for editor and
   factual Pulse; `openai/gpt-6-sol`/medium, with actual image attachments, for
   Chatter. This uses the accepted writer range and planned factual routing.
+  Editor/Pulse request **65,536 total output tokens**, the established project
+  DeepSeek ceiling; Chatter retains its independent 4,096-token allowance.
+  The route validator accepts allowances up to 65,536. These are request limits,
+  not the model/provider's maximum capability. The ledger reserves the full
+  allowance: factual output alone reserves $0.131072/call at $2/M, plus input.
+  The combined $5/day cap remains unchanged.
   The editor/Pulse routes are text-only; an image-essential writer request is
   held unless its route supports vision. Do not claim those routes inspect URLs.
 - All content kinds can select pictures: atomic/current headline use source
@@ -232,6 +544,351 @@ The full affected regression suite including both changes passes 186 tests,
 checks pass. Live staging's login endpoint returns 200; story/API requests
 redirect to its existing login wall (302), not accepted public story pages.
 
+**Final bounded staging trial, October 5 at 22:04 JST:** both staging web and
+headline worker are observed live at `bacbb4337d62b3b97bed3f37956ad225993f0790`;
+both PR checks passed for that revision. The separate historical interval at
+`2026-10-04T01:00:40.731920+00:00`, source cycle
+`operator-final-staging-trial`, held with zero editions. The new diagnostics
+establish HTTP 200, the exact configured model, `finish_reason=length`,
+36,985 prompt tokens and 8,192 completion tokens. The failure code is
+`incomplete_model_response`. It reached the obsolete G2-specific request cap,
+not a provider capability limit. The current corrected editor/Pulse allowance
+is **65,536**; the token counts above remain historical observations. This
+does not identify how many tokens were reasoning versus final JSON, and it
+does not prove the original trial had the same cause.
+
+The ledger retains all three calls: $0.029484 for the original uncertain
+editor response, $0.001166 for the completed protocol probe and $0.029484 for
+this truncated response, totaling **$0.060134 reserved** on October 5 UTC.
+There were no writer or media calls. Receipt:
+`.local/g2-bacbb433-final-staging-trial.json` (machine-local on fuchitalee).
+Global staging generation and public reading remain disabled; production has
+not been promoted or activated. The frozen experiment is exhausted; do not
+resend either ambiguous stage or add another paid quality retry to it.
+
+**October 6 owner correction:** the output ceiling was raised long ago; amend
+G2 to use the current limit. The existing project DeepSeek helper in
+`x_monitor/translator.py` caps requests at 65,536, supported by the August 5
+learning `docs/solutions/runtime-errors/translator-max-tokens-8192-cap-truncation.md`.
+The new G2 profile had independently reintroduced an 8K cap. Correct the
+editor/Pulse profile allowance to **65,536** and the route validator's upper
+bound to match. Preserve Chatter's independently configured 4,096 allowance,
+model routes, effort, evidence and prompts. This correction does not rewrite
+saved usage or retrospectively change a deployed test's request.
+
+Regression net: call the real `run_editorial` with the selected launch profile
+and a fake provider transport; capture the editor/Chatter/Pulse requests and
+prove their allowances are 65,536 / 4,096 / 65,536. Assert both factual ledger
+receipts reserve the full output allowance before sending and the combined
+daily ledger remains within $5. The test failed first with actual captured
+allowances 8,192 / 4,096 / 8,192. No fresh paid model call is part of this
+correction, and the old trial remains exhausted. A separately bounded live
+completion check is still needed before claiming accepted headline quality.
+OpenRouter documents that reasoning consumes the total `max_tokens` ceiling:
+[Reasoning tokens](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens).
+
+**Correction verification, October 6:** 26 affected configuration, orchestration,
+writer, persistence and end-to-end tests passed, including 17 required PostgreSQL
+tests with zero skips/errors. The new real-call-chain pin passes with both
+factual reservations present before the fake transport sends. Scoped Ruff and
+whitespace checks pass. This is a local correction; staging's last observed
+`bacbb433` request profile remains the earlier deployed code. G1's active R2
+staging work is preserved; no branch promotion, service mutation or paid call
+ran for this bounded correction.
+
+### October 6 owner-authorized real writing rerun
+
+The owner explicitly says "rerun it" after clarification that the correction
+was tested with fake model responses. This authorizes **one fresh live writing
+trial**, superseding the earlier exhausted-trial stop for this bounded rerun.
+Keep the combined $5/day cap and lower $1.50 staging reservation ceiling.
+At most three text stages in the replacement assessment (editor, Chatter and
+Pulse), plus the one interrupted original send: at most four physical paid sends
+for this operational recovery. No quality retries, new collection, generated-
+video jobs or service configuration changes. All reservations, including the
+interrupted send, remain under the original $1.50 staging / $5 combined day cap.
+
+Staging now runs G1-only `2fd51098` and has no G2 module. Preserve G1's active
+storage/deployment ownership. Execute an isolated one-off CLI source bundle from
+the already tested G2/R2 integration `f9276520`, with only the current
+`monitor/editorial/config.py` and `config/editorial-english-launch.yaml` output-
+allowance corrections applied. This is not a deployment or exact-live-revision
+claim. Record the archive and patch hashes in the receipt. Existing staging
+environment credentials stay in the worker process and are never transferred
+to the bundle or printed.
+
+Preflight the actual database identity, G2 table presence, original-post counts,
+existing frozen packet and current UTC-day ledger before any paid send. Replay
+the prior `operator-final-staging-trial` packet and cutoff exactly, under a new
+operator-specific assessment scope so neither ambiguous stage can resend.
+Use the real `run_editorial`, provider transport, validation, ledger and edition
+publication; inject the saved packet and new assessment scope only for this
+manual replay. Process-local configuration enables generation, keeps public
+reading off, lowers per-assessment sends/dollars to three/$1.50 and uses
+selection-only pictures. Preserve the same model, effort, prompts and evidence.
+
+Set an 840-second whole-trial deadline, below the 15-minute assessment lease,
+and save phase timings, accepted editions, selection reasons, source references,
+safe token diagnostics and full reservations. Success means actual accepted
+Chatter and Pulse headline/byline/article output. A partial or held result is
+reported as such; no taste-driven rerun. Global generation remains off. This
+trial does not prove scheduled activation, browser serving or video quality.
+
+Preflight passed: staging DB `pushinweight_staging`, 290,672 original posts,
+35 staff media records and zero October 6 UTC reservations. The saved packet
+contains 105 of 2,497 eligible posts; its hash is
+`aaf369082ea15956799ebc9305064f690c76fa7cedb780207a67a2ab269eb31f`.
+The caller is `.local/g2_65k_rerun.py`; preflight and execution receipts are
+machine-local under `.local/g2-65k-rerun-*`. No secrets enter the bundle.
+
+
+The first real editor send was interrupted by G1's staging redeployment. Render
+records show old deployment `dep-db26pqbtqb8s73c9e2s0` deactivated and replacement
+`dep-db26rnbtqb8s73c9l19g` (`f9276520`) live at 03:42:38 UTC. Assessment 5,
+`operator-65k-writing-rerun-20261006`, has one sent editor call with no saved
+response; retain its entire $0.144172 reservation. This is an environment
+interruption, not observed model rejection. Reconcile only that guarded row
+and call as complete-held / ambiguous, with the deployment reason preserved.
+
+Execute one operational replacement from authoritative fuchitalee against the
+same staging database so worker deployments cannot terminate it. The CLI uses
+staging provider/storage credentials and a TLS database connection forwarded
+through the existing Render SSH access, only in process memory; no credentials
+are saved or printed. External database access is disabled (empty allowlist);
+a direct connection
+failed before any paid send. Existing SSH forwarding passed a read-only staging
+identity query, preserving database access restrictions. Local CLI web auth
+is unused; staging service auth and environment remain untouched. Keep the same
+bundle, patches, frozen packet, models and output limits under new scope
+`operator-65k-writing-recovery-20261006`. Caller:
+`.local/g2_65k_local_recovery.py`. No further paid replacement if this attempt
+returns held/partial. Scheduled activation and deployment remain unproven.
+
+**Observed rerun result, October 6 13:01 JST:** replacement assessment completed
+held with zero editions. The real editor returned HTTP 200 / exact configured
+model / finish `stop` after 537.44 seconds, with 36,886 input and 20,243 output
+(19,643 reasoning) tokens. The current output allowance was honored; selection
+fails evidence validation (`unknown brand`). Its GLM proposal cites a supplied
+Qwen/Kolibri post; two other proposals cite IDs absent from the packet. Neither
+Chatter nor Pulse writer ran. Offline replay of the same validator confirms the
+reason with no additional paid send; keep all source/brand guards intact.
+
+October 6 UTC reservations are $0.288344 for two editor sends, zero media calls,
+including the interrupted request. No further quality retry is authorized by
+this bounded test. [Rerun report](../analysis/2026-10-06-130158-g2-65k-live-writing-rerun.md)
+contains diagnostics and rejected proposals clearly marked unvalidated.
+Post/media counts remain 290,672 / 35. Global generation/public reading remain
+off, and production delivery is unfinished. Scheduled timing is also unproven:
+`refresh_editorial` allows 11-minute soft / 12-minute hard limits, while selection
+alone took almost nine minutes. Compact grounded input/stronger source binding
+and total runtime need resolution before paid activation, rather than another
+cap increase or relaxed checks.
+
+After G2 added the exact integration storage dependencies to its own local
+runtime, all 26 affected regression tests passed again: 17 required PostgreSQL
+tests executed, zero skips/errors. Ruff and scoped whitespace checks pass.
+
+**October 6 browser review:** owner requests the three blocked proposals,
+the actual evidence and why they failed. [HTML review](../analysis/2026-10-06-140957-g2-blocked-proposals-review.html)
+shows each exact model proposal/cited ID beside matching original and supplied
+parent/quote text, with an explicit distinction between the first live stopping
+error and two additional absent-source defects from offline review. Other
+supplied posts tagged GLM (16), MiniMax (13), DeepSeek (46) are expandable and
+marked not cited. All 105 supplied posts are searchable/filterable. The full
+packet readback confirms **zero context posts, people, prior stories, headline
+leads and chart-context groups**; seven-day context was configured, not included.
+The editor was text-only: image URL strings were supplied, not image pixels.
+
+This is a new standalone diagnostic artifact, not a product UI change.
+No provider/X calls, DB mutation or deployment. Artifact/server remain on
+fuchitalee; only the existing Chrome browser on allenwlee was opened. Preview:
+`http://100.102.74.50:54315/g2-blocked-proposals`. Remote access returned the
+expected page, and Chrome window 1388455095 returned its expected title
+and URL. Browser verification: three proposals, 105 pool rows, exact-ID search
+returns one, MiniMax filter returns 13, reset returns 105, desktop/mobile
+390px layout has no horizontal overflow; screenshots visually reviewed. All
+source strings are HTML-escaped; no unrelated artifact paths are served.
+
+**October 6 attribution audit, diagnosis-only:** owner asks whether evidence
+labels, request packaging and the editor prompt explain the bad selection.
+[Audit report](../analysis/2026-10-06-141811-g2-editor-evidence-prompt-audit.md)
+records an offline real-request JSON roundtrip with the exact frozen packet:
+105 unique source IDs, all `id`/`evidence_id` pairs consistent, 129,975 reconstructed
+wire bytes. No transport truncation or source-label loss is reproduced. The
+user prompt contains the packet plus output schema; the system message contains
+the editorial rules. Provider internals were not captured; this is code-path
+reconstruction with the unchanged integration functions.
+
+The important correction: matching news content exists in uncited supplied
+posts, so absent cited IDs do not mean the entire story was invented. GLM details
+match `2106383170857791527` (FlashX platform availability, not supplied proof of a
+new developer launch); MiniMax features match `2106338457794548071` (promotional
+M3 platform availability); DeepSeek/Huawei headline matches
+`2106337859162476579`. The response misbound or corrupted references and inflated
+two availability posts into model launches. These are manual diagnostic matches,
+not an automatic repair or approved editorial judgments.
+
+Confirmed interface/prompt gaps: no field-specific source semantics, quoted or
+reply-parent source IDs/authors, source roles or brand relevance; freely generated
+opaque IDs/brand strings; JSON-object mode with schema in prompt text only; no
+editor no-memory rule or required source excerpt; ambiguous reject-both sentence.
+Current semantic guard does not entail summaries: an intentionally false summary
+with an allowed ID/brand passes structural validation in an offline counterexample.
+Context trimming is not counted per section; 23 media-bearing rows and three
+selected image URLs become zero attached image parts with editor vision off.
+Keep reference checks intact. Recommended repair is short allowed source refs,
+field/provenance labels, exact supporting excerpts and precise release-versus-
+availability instructions within the same editor call. Strict provider schema
+support must be verified on the selected endpoint before relying on it. These
+changes are recommendations, not implemented or live validated. The report
+separates confirmed defects from inferred causes of model behavior.
+
+A concrete quote-label projection defect is also reproduced:
+`post_evidence` ignores `Post.is_quote` and substitutes presence of a quoted-post
+foreign key. Raw `is_quote=True` with no locally stored quoted-post relationship
+becomes false despite preserved quote text. Eight actual packet rows have this
+contradiction. The DB contract explicitly permits a missing quoted-post FK when
+not harvested. Fixing that label is a direct code repair; its contribution to
+this model response remains unproven. Six existing selection/writing tests pass,
+including one required PostgreSQL test with zero skips/errors, but omit this case.
+
+**October 6 owner correction — existing headline prompt is the starting point:**
+Checked the configured 0731 final writer, not just an older generic editor
+constant: `headline-critic-finance-source-audit-source-ledger-only-v56-ja`,
+request profile `headline_critic_v6`. The existing code matches the local
+`origin/main` baseline. An offline build through the real request functions
+confirms its assembled prompt, exact source spans, and strict JSON schema with
+packet-specific citation choices. Existing source-check contracts require
+actor/action/target, owned spans, disagreements, number ownership and supported
+copy before final text. G2 imported evidence projection helpers but omitted this
+structured grounding contract from its new selector and writers. Carry these
+learned safeguards forward in shared grounding code; do not invent another
+independent prompt or copy the complete 17,267-character baseline verbatim.
+
+The [audit's baseline comparison](../analysis/2026-10-06-141811-g2-editor-evidence-prompt-audit.md#existing-headline-baseline--owner-directed-starting-point)
+separates reusable safeguards from brand/window-specific policy. Keep multi-post
+G2 stories with claim-specific source ownership, independent locale generation,
+track voices and editor-in-chief judgment. V56 is not the one-lead-post `v56l`
+variant. Reuse its grounding within the current calls rather than automatically
+adding a critic call; retain the combined $5/day cap. Existing source-span code
+does not cover G2's quoted/parent fields; explicit provenance and the reproduced
+quote flag repair remain necessary. No existing headline prompt version or
+runtime behavior changed. Thirteen focused baseline contract tests pass, three
+required PostgreSQL tests executed, zero skips/errors. All 105 original source
+texts also roundtrip exactly through the existing helper into 216 spans. These
+checks establish code contracts, not improved live model judgments; no paid
+calls were made.
+
+**October 6 owner-authorized full test:** Owner says “ok test it now” after the
+diagnosis-only disclosure. Apply the shared grounding/provenance repair locally
+and execute one complete editorial replay using the same 105 posts. No new source
+collection or forced acceptance. Both track writers run only for selected worthy
+events. Keep the earlier trial's picture-selection mode (no paid derivative),
+global generation/public flags off and production unchanged. This bounded test
+renews one live-attempt grant, not unlimited quality retries. Staging daily and
+assessment reservation caps remain $1.50 within the combined $5/day cap; maximum
+three text calls (editor, one Chatter, one Pulse). Manual whole-test deadline is
+20 minutes; report whether total time fits the scheduled 11/12-minute limits.
+
+Repair extracts the existing source-reading rules into a shared constant without
+changing existing headline prompt bytes. Selection and writers use source-first
+actor/action/target/status/number checks, code-owned short labels, exact field-owned
+passages and attribution. Persist actual canonical source IDs after decoding and
+validate passage ownership. The schema supplied in prompt binds allowed labels;
+the OpenRouter request still uses JSON-object mode, so provider-enforced strict
+schema support is not claimed. Raw quote/reply flags and available identities
+are preserved. Eight frozen quote flags change after checking the stored raw
+metadata; all original source/quote/parent text, dates, media, rows and ordering
+remain frozen. No seven-day context is invented. The metadata-corrected packet
+hash is `0eb40ba4dd0f2737cbd87918b588586c006371c7c2bfe1a9e62672488a596705`;
+original hash remains `aaf369082ea15956799ebc9305064f690c76fa7cedb780207a67a2ab269eb31f`.
+Preflight: wire 144,425 bytes against 150,000 cap; existing day reservations
+$0.288344 / two text calls. Scope `operator-grounded-editorial-test-20261006`.
+The local staging replay runs on fuchitalee with Render credentials held only in
+process memory and the existing SSH/TLS database connection, preserving deployment.
+
+Regression tests reproduced the quote-flag bug and missing shared prompt contract
+before repair. Full G2 plus related headline regression run: 153 passed, 47 required
+PostgreSQL tests executed, zero skips/errors. The subsequent OpenRouter request
+failed after 611.71 seconds with `IncompleteRead`, before any usable provider
+response; zero decisions, writers, editions or media. Its ambiguous reservation
+$0.145617 is retained, bringing the UTC-day total to $0.433961 / three calls.
+This transport failure supplies no evidence about live prompt quality.
+
+**Owner provider correction, October 6:** “why using openrouter? should use
+deepinfra key.” Editor and Pulse now use direct DeepInfra,
+`deepseek-ai/DeepSeek-V4-Flash-0731`, the OpenAI-compatible chat endpoint and
+`DEEPINFRA_API_KEY`; keep medium reasoning and 65,536 output allowance.
+Do not repeat the OpenRouter attempt or pursue its streaming recovery. The
+replacement harness `.local/g2_deepinfra_local_test.py` reads the existing project
+DeepInfra credential from the staging harvester's Render environment into process
+memory only. It loads no OpenRouter key and rejects OpenRouter routes before a
+provider call. The headline worker currently lacks that credential; no service
+configuration or deployment was changed by this correction.
+
+Unpaid DeepInfra preflight passed: identical corrected frozen packet, 144,306
+wire bytes / 150,000 cap, scope `operator-deepinfra-grounded-test-20261006`,
+$1.50 staging daily/assessment caps within $5/day, at most three text calls.
+Thirteen affected configuration/full-chain/transport tests pass, including five
+required PostgreSQL tests; the full-chain fixture verifies both factual calls use
+the direct endpoint, exact DeepInfra credential and no OpenRouter request fields.
+Owner answers “sol”: keep GPT-6 Sol medium through a fresh Codex CLI session for
+this manual rerun; editor and Pulse remain direct DeepInfra. The manual adapter
+`.local/g2_codex_writer.py` supplies only the selected event/evidence and actual
+source-image bytes, uses strict final JSON shape, disables tools/web, suppresses
+project instructions and user config, and checks source ownership through the
+same downstream validators. No earlier headline results are supplied. Its custom
+OpenAI provider disables HTTP/stream retries. Offline adapter smoke checks verify
+isolated arguments/environment, schema, source-ID restoration and usage checks;
+offline CLI configuration validation also passes. No provider credential is
+passed into the CLI process; saved local Codex authentication is used.
+
+The adapter reserves an additional 32,768 input tokens for CLI instructions,
+plus bounded evidence/images and the 4,096 output allowance. Codex CLI does not
+expose the application's API output-cap control; observed output/input usage must
+fit the reservation after completion. Actual CLI charge and served model are
+not independently reported: its receipt records requested model/effort and
+API-rate-equivalent usage. This is a bounded manual quality experiment, not proof
+of an enforceable production Chatter API cost cap or production route readiness.
+
+Manual DeepInfra requests use the existing headline's 300-second socket timeout,
+rather than the production G2 caller's 90 seconds. The uniquely scoped manual
+assessment receives a 21-minute lease for its existing 20-minute whole-test
+deadline; production claim leases remain 15 minutes. Record these differences
+when comparing the scheduled 11/12-minute limits. The replacement attempt ended at the first editor call: `TimeoutError` after
+302.94 seconds, with no usable provider receipt or decisions. Sol/Pulse/picture
+selection were not reached. One ambiguous reservation $0.145605 is retained;
+October 6 UTC total $0.579566 / four text calls, zero media calls. Source/media
+counts unchanged (290,672 / 35); zero OpenRouter requests. No deployed
+configuration or global activation change. [Result report](../analysis/2026-10-06-152744-g2-deepinfra-sol-grounded-replay.md).
+
+This bounded replacement is exhausted; no additional paid send. Existing 0731
+headline profiles disable reasoning, use priority service and packet-bound strict
+schemas; G2 still requests medium reasoning / JSON-object mode. Excess reasoning
+is a plausible latency cause, not established by a timeout without usage.
+Safe transport-phase timing and factual request-profile alignment are the next
+correction before a new paid comparison. Preserve the corrected 65,536 allowance,
+source validation and owner-selected Sol. Live grounding, writers/pictures and
+scheduled completion remain unproven.
+
+No model/X calls or DB/service writes in this diagnosis. The prompt-caused
+improvement cannot be claimed without a later bounded comparison against this
+frozen packet. Existing mocked-provider tests protect code invariants, not live
+prompt adherence. Related PR remains #51; no separate grounding fix found.
+
+G1's final R2 readiness is now published under the authoritative root's
+`.context/g1-r2-release-20261006/README.md`: production web/worker `3269a6ef`,
+restored G2 staging `f9276520`, 35 images / 20,060,954 bytes per bucket, matching
+hashes, cross-service access and restart checks, both durability flags true.
+G2 source image/video delivery and denial checks passed on that integration
+with rollback-only fixtures and no provider calls. G2 consumes those settings;
+no further shared storage provisioning is required here. Broader reviewed-role
+coverage remains separate. G1 removed its completed worktree during the local
+CLI recovery, so G2 uses its own `.venv-g2` with the integration's exact locked
+`django-storages==1.14.6` and `boto3==1.43.108` dependencies added; no additional
+paid send occurred during this runtime repair. Preserve the G2 checkout and
+experiment corpus; scheduled/public production activation remains incomplete.
+
 **Verification/rollback:** Reuse the completed migration/regression/browser
 proof where its inputs are unchanged. Check new config controls and affected
 provider/request suites; then real staging calls and saved headline/byline/asset
@@ -241,6 +898,224 @@ production assessment and served edition/asset within the spend cap. Rollback
 first selects the default disabled profile, retaining all rows and media; do
 not reverse/drop editorial tables. Health/login and prior headline paths must
 continue to work. Keep current failures and unperformed checks explicit.
+
+## Existing headline baseline learned — October 6
+
+**Owner clarification:** “just make sure u learn everything from headline code,
+including thinking etc.” This step audits and records the configured execution
+path. It does not copy the pipeline, add calls, change G2 settings, or run another
+paid trial. The earlier full-pipeline/call-count question is retired. Preserve
+the broader delivery contract while completing this documentation-only step.
+
+The source baseline is the authoritative root at `33f20b97`; G2's comparison
+checkout is `bacbb4337d62b3b97bed3f37956ad225993f0790` plus its existing uncommitted
+grounding/provider repairs. This is a code/configuration audit, not a fresh
+inspection of deployed environment overrides. `docs/reference/headline-trend-narratives.md`
+contains older provider, prompt, timeout and batch descriptions; resolve those
+questions from the code below. Historical compatibility paths are not the
+configured V56 pipeline.
+
+### Provider and thinking contract
+
+The configured model is `deepseek-ai/DeepSeek-V4-Flash-0731`, using direct
+`https://api.deepinfra.com/v1/openai/chat/completions` and only the
+`DEEPINFRA_API_KEY` credential. No OpenRouter route or fallback belongs in this
+headline path.
+
+| Stage | Selected prompt | Request profile | Thinking | Temperature | Output allowance |
+| --- | --- | --- | --- | --- | --- |
+| Rank | `headline-rank-0731-v3` | `headline_rank_v2` | `reasoning_effort: none` | 0.2 | 7,000 |
+| Editor | `headline-editor-finance-v9-ja` | `headline_editor_v4` | `reasoning_effort: none` | 0.2 | 8,000 |
+| Final source writer, stored as critic | `headline-critic-finance-source-audit-source-ledger-only-v56-ja` | `headline_critic_v6` | `reasoning_effort: none` | 0 | 8,000 |
+
+All three use `top_p: 0.95`, `seed: 42`, `service_tier: priority`, strict
+`json_schema` responses and a 300-second socket timeout. These are application
+settings, not assertions about the provider's maximum capacity. **Do not replace
+G2's owner-corrected 65,536-token allowance with these smaller task allowances.**
+The internal request contains `thinking: {type: disabled}`; the actual DeepInfra
+request uses the selected profile's `reasoning_effort: none`. Inspect the final
+wire request, not just the internal request or a generic DeepSeek profile.
+
+`x_monitor/deepinfra.py` locks profile options and validates returned model,
+priority tier, request ID, nonnegative token counts and finite estimated cost.
+Reported reasoning tokens must be zero or absent; a positive count is rejected.
+One nonempty completion with `finish_reason: stop` is required. Truncated output
+is not a usable result. The provider class's retryable-error name does not cause
+a retry: the headline orchestration sends once. The authoritative-root client
+uses `http.client` and reads the whole response; G2's existing branch routes
+through its bounded shared `provider_http.py`. Neither path's socket timeout
+alone establishes a whole-assessment deadline or explains which network phase
+stalled.
+
+### Evidence, prompt and validation lessons
+
+- **Freeze the evidence:** `trend_narrative_candidates.py` reads an immutable
+  snapshot in a read-only, repeatable database transaction. Dossiers retain
+  collection and enrichment coverage, source roles, original text, translations,
+  duplicate/source clusters and time scope. Missing enrichment means unknown.
+  The active compact dossier can be narrative-eligible from usable raw evidence;
+  legacy minimum-post/author fields must not be mistaken for its eligibility rule.
+- **Bound and label the selection:** evidence allocation balances first-party
+  and other sources, deduplicates text/source clusters and reserves recent
+  evidence for the one-day window. Adaptive policy has a 32-source ranking
+  reservoir, floor 4, lead ceiling 48, comparison ceiling 12, 1,000-character
+  excerpts and 128-KiB provider packet bound. These are bounded examples, not a
+  representative census of the entire discussion. Oversized batches can split.
+- **Project only the intended fields:** `trend_narrative_packet.py` strips
+  private bookkeeping, interns fact scopes, suppresses unavailable comparisons
+  and derives exact source spans with stable IDs. Official/staff identity is
+  reviewed affiliation evidence; a keyword match or nearby person's name is
+  insufficient. Ordinary authors remain opaque in this existing pipeline.
+  Its projected evidence is text; it does not fetch links, research the web or
+  attach image bytes. G2's image-dependent stories still need their own actual
+  image evidence.
+- **Separate measurements from source assertions:** `trend_narrative_facts.py`
+  calculates counts, rates and phases in code. Facts include units, denominator,
+  interval and coverage. Prior-period change, recent movement and matched
+  historical activity are different. Incomplete buckets cannot establish
+  cooling; missing comparable collection history cannot establish a record or
+  normal baseline. A source's benchmark number is an attributed source claim,
+  not our corpus measurement. Selected examples cannot establish topic prevalence,
+  adoption, purchase intent or causation.
+- **Understand the actual V56 final call:** rank orders every brand; editor
+  proposes source-grounded copy. The configured ledger-only critic receives
+  source passages and optional editor-selected source IDs, **not the editor's
+  prose**. It writes a source check first: actor/action/target, relevance, owned
+  spans, conflicts and number ownership. It then writes supported English lines
+  and copies them exactly into the final narrative. `decision=repair` is its
+  ordinary supported output even though no draft was supplied. This is not a
+  retry-until-approved loop.
+- **Protect brand and claim ownership:** V56 filters final evidence to strong
+  identity-linked source choices when available, removes uncitable corpus
+  snippets, weakens ambiguous short-alias matches, and keeps each proposition
+  tied to one source. Different posts do not automatically share an author,
+  thread, test or benchmark operator. A group's ranking is not an individual
+  member's ranking. A report release is not a weights release; availability is
+  not necessarily a new launch; plans are not completed actions. Preserve
+  allegation direction, conditions, uncertainty, product variants and event
+  dates. Embedded source instructions are data to disregard.
+- **Make errors structurally difficult:** editor/final schemas bind packet hash,
+  batch, brand, evidence IDs, fact IDs, measurements and source spans to this
+  request. Source/proposition fields precede visible prose. Validators enforce
+  exact manifest coverage, owned citations, copied values/units/scopes, section
+  references, nonempty locale fields and length bounds. The final English must
+  equal its supported ledger lines. Specific deterministic corrections also
+  normalize attribution and remove unverified post/test relationships. A valid
+  ID or schema still does not prove that prose is semantically supported.
+- **Keep learned locale details:** original-language meaning controls a
+  conflicting translation. The code handles Chinese 折 discounts, AI tokens
+  versus crypto tokens, qualifiers attached to the correct number, and equal
+  attribution/uncertainty across locales. The existing final prompt translates
+  its accepted English lines into ZH/JA. G2 must preserve its different owner
+  requirement: independently crafted voices from original evidence, with atomic
+  commentary remaining source-faithful. Do not copy English-pivot instructions.
+
+Active implementations: `monitor/trend_narrative_generation.py` request builders,
+V56 prompt assembly and validators; `x_monitor/deepinfra.py` profile/schema
+binding and receipt validation. G2 already extracted the applicable finance
+writing rules into `monitor/headline_grounding.py`; source-first lessons should
+be shared through modules, not independent scripts. V56's mandatory narrow
+brand narratives and one-source-per-proposition contract require deliberate
+adaptation to G2's newsworthy multi-post stories, not automatic transplantation.
+
+### Cost, queue and publication lessons
+
+`trend_narrative_tasks.py`, `trend_narrative_lifecycle.py`,
+`trend_narrative_dispatch.py`, `trend_narrative_queue.py`,
+`trend_narrative_demand.py` and `trend_narrative_projection.py` establish:
+
+- The current batch size is **two brands**. The ordinary graph is one rank
+  plus one editor and one final call per batch: `1 + 2 * number_of_batches`.
+  Fifty eligible brands normally plan 51 calls; packet splitting can increase
+  that requirement and must still obey the cap. The legacy `call_cap: 4` is not
+  this graph's cap. Optional risk routing can bypass the critic for valid,
+  low-risk drafts, with a deterministic 5% audit sample. Null YAML activation
+  controls permit environment overrides; this audit does not assert they are on.
+- The configured per-run bounds are 51 calls, 2,000,000 input tokens, 420,000
+  output tokens and $0.30, with worker concurrency 3. The stored pricing snapshot
+  is `deepinfra-priority-0731-2026-09-24`; these are not freshly verified prices.
+  Budgeting constructs the actual provider request, including schema, estimates
+  input bytes/4 and reserves the full output allowance. Completed usage replaces
+  estimates; uncertain work retains its reservation. This existing per-run
+  budget does not replace G2's combined $5/day ledger.
+- A durable reservation and owner/fence check precede a send. A sent timeout or
+  expired sent lease becomes terminal ambiguity and is never automatically
+  resent. Worker tasks have no automatic provider retries. Missing editor body
+  prevents a critic call; a received malformed body can still lead to a
+  source-based final call. An invalid final response holds the affected batch.
+- Queue work follows committed harvest completion and coalesces to the latest
+  eligible envelope on the dedicated headline queue. Serving, enqueueing and
+  provider calls have separate controls. Current expiry is 1,800 seconds and
+  claim lease 900 seconds. Optional demand shaping combines active demand,
+  material-input fingerprints and explicit operator refresh; unchanged material
+  can be suppressed. It is not Chatter's age-depreciating hero decision.
+- One-day/week/month/year windows currently refresh every 60/1,440/10,080/43,200
+  minutes, with stale thresholds twice those intervals. G2 keeps its own
+  15-minute editorial assessment. No new scheduler follows from this audit.
+- A visible run advances atomically only after every manifest brand has a
+  terminal outcome. An older run cannot displace a newer cutoff. Held outcomes
+  can retain last-good copy explicitly marked stale; no-content and unavailable
+  data remain distinct. The existing public projection displays up to two
+  brands and exposes copy/freshness rather than private evidence/audit payloads.
+  That presentation is not G2's hero/history layout.
+
+### Repeatable verification and honest success record
+
+The saved [DeepInfra/Sol replay](../analysis/2026-10-06-152744-g2-deepinfra-sol-grounded-replay.md)
+is still a failed editor transport, not successful G2 writing. No new model call
+ran for this audit. A plausible reasoning-overhead explanation remains a
+hypothesis; the failed call returned no usage or phase timing.
+
+For the no-provider regression baseline, run from this G2 worktree:
+
+```sh
+.venv-g2/bin/python -m pytest -q \
+  tests/test_deepinfra.py \
+  tests/test_headline_finance_generation.py \
+  tests/test_headline_0731_regressions.py \
+  tests/test_llm_config.py \
+  -m 'not requires_postgres' \
+  --basetemp=/Users/fuchitalee/.cache/pushinweight-g2-headline-learning
+```
+
+The audit run passed 90 offline tests. Three database tests were deliberately
+excluded, not passed. Both commands returned exit 1: the first selection skipped
+the database tests, and the explicit offline selection deselected them, but the
+repository's required-PostgreSQL check still marked verification incomplete.
+This is a 90-test offline pass, not a green complete-suite result.
+The shared `.venv` lacked Pillow during startup; use the already prepared
+`.venv-g2`, without modifying the shared environment. These checks cover actual
+request construction, schema/source regressions and pinned YAML settings. They
+do not establish fresh live quality, database lifecycle health or deployment.
+
+For a later authorized paid comparison, use the existing evaluation design in
+`monitor/trend_narrative_evaluation.py`: freeze evidence/cutoff and code, record
+resolved prompt/profile/voice/schema versions and final wire request hashes,
+preflight the actual call graph and spend ceiling, then save request/response,
+usage, latency, validation outcome and human editorial verdict separately.
+Record requested versus observed model/provider/reasoning and any omitted usage.
+Use the saved 105-post packet for a controlled G2 comparison; preserve the
+original and corrected packet hashes in the replay report. Use a fresh trial
+scope/result directory and never reopen an ambiguous prior call. The current
+`.local/g2_deepinfra_local_test.py` is a scoped operator harness with fixed trial
+identities, not a blindly rerunnable production command. Do not invoke it unchanged.
+
+Only label a future run a **G2 writing success** after the editor completes,
+expected selected writers complete, source checks pass, headlines/bylines are
+saved for inspection, human quality review is recorded, and measured usage stays
+within its budget. Picture generation and scheduled/public operation need their
+own evidence. A transport return, offline test pass or valid JSON alone is not
+that outcome.
+
+Comparison hashes of the inspected G2 working files (including pre-existing
+local changes; not a claim these hashes are committed):
+
+| File | SHA-256 |
+| --- | --- |
+| `config.yaml` | `560944f757745a7a171242672d8b1a39cff5dbc4fa020b7edcc67c45b3cd3f14` |
+| `x_monitor/deepinfra.py` | `dff832889d915015fbf14f86785541e47c36982d906e2b1c62a83b00a87c705c` |
+| `monitor/trend_narrative_generation.py` | `ac50a1a21594942f78ff67df2a76535fa884573b6e8aee196d9217be4b2db49d` |
+| `monitor/headline_grounding.py` | `cf62d25d2a5b628c67e33467e335241aea8024668b1d5926405093c9a025e5c4` |
 
 ## Goal Capsule
 
@@ -545,6 +1420,18 @@ provenance; no worthy challenger; six-hour aging; reassessment never resets age;
 future evidence excluded by creation and fetch cutoff; partial coverage reported;
 invalid response held. Image-dependent publication requires inspected visual
 evidence or a configured vision-capable route; a text-only URL is not visual proof.
+**October 7 collector extension (G2-R50/R51):** Reuse `context.story_packet` after
+selection for both tracks. Discovery is 240,000 bytes; story sources are 96,000
+bytes/24 added posts/180 days. Distinctive source names, exact multiword phrases,
+one bounded bridge expansion and direct parent/quote links recover background.
+Shared brands and recency rank relevant material, never establish the link alone.
+Record alias source/field/offsets, candidate/omission counts and timeouts. A
+concurrent pg_trgm index on original and quoted text supports bounded lookup;
+no table/column addition. Cover Chonk→Chaton, Ajax, linked unnamed teasers,
+other-version/name collisions, date/fetch cutoffs and monthly sampling. Broader
+official-team nomination for unlinked unnamed teasers remains planned; shared
+author alone cannot supply the missing story connection. Initial discovery
+recall remains separate from selected-story recall.
 **Verification:** Saved owner-case fixture reconciliation plus deterministic
 selection tests; separate fixture judgments from live model-quality claims.
 
@@ -563,6 +1450,11 @@ actual `context.source` key. Preserve current headline interface.
 profile; picture fields optional when off; invented source/candidate IDs rejected;
 locale mismatch and overlong output held; uncrafted voice explicit; zero retries
 after ambiguous send; original synthesis call chain still works.
+**October 7 input/attribution extension:** Supply frozen selected anchors plus
+eligible context; require at least one anchor citation. Derive cited posts from
+validated support, save distinct count/every URL under edition evidence, and
+retain retrieved IDs separately. The writer cannot promote all retrieved posts
+to source count. Image claim references stay a separate design question.
 **Verification:** Writer/provider tests plus synthesis and current-headline regression nets.
 
 ### U5. Reusable picture selector and derivative lifecycle
@@ -598,6 +1490,11 @@ queue args; legacy path unchanged; dry run never enqueues; broker failure doesn'
 change harvest result; duplicate/resumed jobs cannot overspend or double-publish;
 all content-type bindings exercise the same callable picture service, including
 atomic commentary and current headline adapters; legacy activation cannot gate G2.
+**October 7 shared collector:** `story_packet` resolves manual anchor IDs absent
+from discovery under the same creation/fetch cutoff, then uses the same lookup.
+The automatic service saves that bundle before writer calls and reuses it for
+both tracks/locales. No additional model, X-provider call or scheduler is added.
+Manual scripts should invoke this callable rather than reproduce topic queries.
 **Verification:** Orchestration/call-chain tests and existing harvest dispatch tests.
 
 ### U7. Story readers, share links and reusable presentation component
@@ -628,6 +1525,13 @@ existing reference owns the changed literal prompt, `CONCEPTS.md`, this plan.
 selection/task → publication → reader with actual database records and captured
 provider requests. Document enable/disable, supported routes, reservations,
 unknown outcomes, local replay and the G1/G3/G5 integration contracts.
+**October 7 regression extension:** Actual service→writer→edition checks must
+show Chonk context reaches both track requests while only cited posts enter
+attribution. Run a local indexed saved-Ajax/Mistral replay with a larger synthetic
+background corpus; inspect query plans and distinguish this from live-database
+or live-model qualification. Browser tests exercise exact count/all URLs through
+the actual story route in English, Chinese and Japanese. GLM-like fixtures retain
+uncertain weekend wording; no actual GLM delay has been researched or asserted.
 **Tests:** Full fresh story, unchanged second assessment, replacement after aging,
 same-event Pulse/Chatter distinct copy, disabled binding, public shared old story,
 locale/profile swap, media failure, exhausted budget and concurrent stale worker.
@@ -878,6 +1782,18 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 <!-- END OLLIJA DELIVERY GUIDE -->
 
 ## Delivery Exceptions
+
+October 7 owner exception: skip the proposed fresh live-quality rerun and its
+new experiment-budget gate. Retain previous quality failures as limitations,
+not blocking rerun requirements. Production Chatter now uses direct OpenAI and
+the exact `OPENAI_API_KEY` from fuchitalee's `~/.env.secrets`; provision it only
+on the intended editorial runtime during delivery. This supersedes older
+unresolved-production-route and pending-live-allowance instructions below.
+
+
+The October 6 resumed session authorizes the bounded baseline alignment and
+offline verification described near the top of this plan. This pass does not
+execute the historical production endpoint or a paid replay.
 
 The owner explicitly requested copying the two result files to
 `allenwlee:~/Downloads/agents/`. This authorizes those review copies on that host;
@@ -3246,3 +4162,177 @@ disabled modes; selection without generation; late attachment to existing text;
 disable-during-queue behavior; saved-asset reuse on re-enable; source preservation;
 and unrelated type/track behavior unchanged. This clarification changes the
 design documents only; no application implementation, model call or layout edit.
+
+
+## October 7 owner-requested Mistral Chatter sample — fork
+
+Session `g2-fork-mistral-20261007` owns a single headline/supporting-line sample
+for source `2107457414387622310`, using the latest Chatter request builder,
+`chatter-en-v1` and the existing manual GPT-6 Sol/medium adapter. The owner
+explicitly selects this release; no editor-selection call is needed. Production
+lookup confirmed the official Mistral post, tagged `mistral`, announcing Mistral
+Large 4 (“Le Chonk”), API availability at announcement and planned end-of-October
+open weights. It was posted October 6 at 22:06:16 JST and collected at
+22:15:39 JST. All benchmark superiority statements remain Mistral's claims.
+
+Freeze current generator files before use, preserving the active
+`g2-source-contract-20261007` session's code ownership. Artifacts live in
+`.local/g2-mistral-release-20261007-1156/`; save exact request, model output,
+code/prompt/schema identities, timing, usage and validation. One Sol send, no
+ambiguous retry, no Pulse/editor/media calls. Reuse the staging reservation
+ledger and provider guard, with a $0.50 sample ceiling and existing $1.50
+staging-day subcap inside the $5 combined limit. Manual CLI output-token and
+actual-charge limitations remain disclosed. Stored video metadata is retained;
+the photo-only generator projection supplies no video pixels.
+
+Endpoint is the reviewable sample in this conversation. Production reads only;
+only isolated staging assessment/call/budget records may be written. No story
+publication, source reclassification, new X collection, shared code edits,
+commit/push, service/global-flag change or deployment. Existing delivery
+metadata and the parent session's broader work are preserved.
+
+### Mistral sample completion — 2026-10-07T12:01:06+09:00
+
+[Saved readable sample](../analysis/2026-10-07-120106-g2-mistral-large-4-chatter-sample.md): **LE CHONK WEIGHS IN**.
+Supporting line: Mistral AI announces its 1-trillion-parameter Large 4 model for API use, with open weights planned for the end of October.
+
+One GPT-6 Sol/medium writer returned in 29.04s; current normalization
+and copy validation passed. 20,037 input / 1,276 output tokens;
+$0.14439 retained reservation, October 7 UTC staging total
+$0.144390 / 1 text call. API/open-weights timing and
+attributed benchmark claims passed agent source review; owner quality acceptance
+is pending. No editor-selection test, Pulse/media/X call, publication or delivery.
+Other G2 code ownership and existing delivery scope remain preserved. This fork's
+requested sample is complete; any next sample or main G2 work is separately scoped.
+
+
+## October 7 owner-corrected Mistral context rerun
+
+The owner says “use complete current method after selection.” The earlier
+writer-only, single-source sample did not satisfy the expected context path.
+Keep that artifact unchanged. Resume `g2-fork-mistral-20261007` for one complete
+post-selection evidence/writing sample, using the current source/provenance,
+voice, schema, image and budget controls. The release remains owner-selected;
+no competing-story ranking, Pulse/media generation or publication is requested.
+
+Database inspection confirms Le Chaton Fat reactions. The ordinary global
+hourly sampler misses those reactions and the primary announcement in the
+inspected sample. Preserve its actual bounded packet and coverage; carry the
+owner-selected announcement and release-specific reaction sources into the
+post-selection writer packet via an explicit read-only operator supplement.
+This addresses the sample; it does not change or certify automatic sampler
+recall. Reuse `post_evidence`/source projection and current `writer_request`
+and manual Sol adapter/normalization/validation. Keep announcement, reported
+meme history, opinions, attached photos and uninspected video distinct.
+
+Artifacts: `.local/g2-mistral-context-20261007-133733`. One fresh Sol/medium call, no retry;
+maximum $0.50 sample reservation within the retained $1.50 staging-day subcap
+and $5 combined limit. Read current ledger before send. Production reads only;
+write only isolated staging assessment/call/budget records. No shared code,
+collection, deployment, flags or source-classification changes. Save actual
+source membership, excluded context, image delivery, response, timing, usage
+and source checks before closing this sample.
+
+### Contextual Mistral rerun completion — 2026-10-07T13:42:27+09:00
+
+[Contextual result](../analysis/2026-10-07-134227-g2-mistral-contextual-chatter-sample.md): **CAT’S OUT OF THE BAG — WEIGHTS AREN’T**.
+Supporting line: Mistral says its trillion-parameter Large 4 is available by API, with the model weights due at the end of October.
+
+One current Sol/medium writer call passed source/copy checks in
+26.6s, 55,135 input / 1,411 output tokens;
+$0.483555 retained reservation and UTC-day staging total
+$1.482914 / 7 calls. Actual delivered context: 50
+release-related sources, including 39 Chaton references and seven older context
+posts, plus three photos. The final copy cites Mistral's official announcement
+and DeepChatBot's reported fictional-model backstory. Owner quality review pending.
+
+Sampler limitation is demonstrated separately: reproducing the current broad
+query/trim rules yielded 64 recent posts out of 3,806, zero older
+context and zero Chaton references, excluding the owner-selected announcement.
+This run therefore used an explicit operator selected-story supplement; it
+does not qualify automatic recall or claim an unmodified scheduler execution.
+Preserve ordinary and contextual packets, and keep the automatic sampling
+repair as a separate implementation decision. No shared code or production
+mutation, publication, Pulse/media generation, X-provider call or deployment.
+Earlier single-source result preserved; this fork's requested contextual
+headline sample is complete.
+
+## October 7 relevance, packet limits and exact attribution
+
+Owner requests a reasonable byte cap, relevance alongside shared brands and recency,
+months-old story/meme recovery through recurring distinctive names, and exact post
+count plus every supporting URL. The cloned-session collector brief is integrated below; preserve its source-grounded Chonk example. This continuation owns local code and verification, without
+new paid experiments or deployment.
+
+Implementation: raise editor evidence budget from 120,000 to 240,000 UTF-8 bytes;
+keep a separate 96,000-byte selected-story evidence budget and at most 24 context
+posts. Query recent shared-brand/name candidates, use relevant repeated distinctive
+names for a bounded 180-day backward lookup, preserve time cutoff/fetch cutoff,
+rank relevance before brand and recency, and reserve a few historical slots.
+Persist exact used-post attribution in EditorialEdition.evidence (existing JSON),
+separate from selected anchors and retrieved candidates. Image reference means a
+pointer to supplied image evidence, not an automatically generated description;
+image claim support remains a separate decision, not silently implemented here.
+
+Regression net: related months-old posts retained; unrelated shared-brand/name
+collisions excluded; post/fetch cutoff and size limits enforced; no invented
+context citations; source count deduplicates IDs and includes every cited URL;
+existing edition and headline behavior remains covered. Run local PostgreSQL
+and offline contract tests, record iteration/major changes and actual retrieval
+limits. No claim of improved live model quality without a new live run.
+
+### Fork design intake — shared collector and release timelines, October 7
+
+The pending cloned-session addition is now available: [shared story evidence
+collector design](../brainstorms/2026-10-07-141532-g2-story-evidence-collector-design.md)
+and [main-G2 handoff](/tmp/compound-engineering-501/ce-handoff/pushin-weight-v2-aff2eb3769a9/2026-10-07-141824-g2-story-evidence-collector-handoff.md).
+The handoff is temporary, machine-local on fuchitalee; the brief remains in
+this worktree. Owner requires the operator supplement to become normal
+sampler behavior and supplied a GLM 5.2 weekend-tease/later-launch example.
+The actual GLM chronology was not verified in this design fork.
+
+Agent proposal for main G2 integration: discovery and selected-story scopes
+share evidence projection and policy; manual anchor resolution and automated
+selection invoke the same story collector. Recover direct relationships,
+distinctive phrases and source-grounded bridge aliases, plus linked
+expectation/update/actual-launch history when a teaser lacks the final model
+name. Bound queries/expansion/history, protect relevant context, and keep
+anchors, writer input and validated cited support distinct. Same-brand/author
+alone is not a release link. An exact delay needs supported date precision;
+a weekend tease must not become an invented firm deadline.
+
+Reconcile this contract with the active context-attribution implementation
+in place. Integration points: U3 gathering/grouping, U4 writer input, U6 manual
+entry points, U8 call-chain regression net and existing edition-evidence JSON.
+The brief adds Mistral alias discovery without operator Chaton seeds, Ajax
+history/contradictions, GLM unnamed-teaser chronology, manual/global-anchor
+parity, unrelated-release negatives, protected context under limits and exact
+used-source attribution. Initial discovery recall remains a separate check.
+
+This fork completed the design and handoff only; main-session unit integration
+and implementation verification remain pending. Existing code edits and
+claims preserved. No new paid call, collection, database mutation, publication,
+commit/push or deployment; no new runtime or model-quality qualification.
+
+
+### Context-attribution completion — October 7
+
+Seven local implementation passes completed; [results, iteration log and limits](../analysis/2026-10-07-144000-g2-context-attribution-results.md).
+Final suite: **118 passed / 56 required PostgreSQL / zero skips or errors**;
+separate indexed saved-source replay: **1 passed / 1 required PostgreSQL**.
+Ajax/Mistral recall took 61/50ms on 99 saved real posts plus 20,000 synthetic
+background rows, with normal query plans using the new index. Actual Mistral
+backstory post reaches the writer; identified token-address promotions do not.
+Months-old recall uses dated fixtures, not a claimed recovered June corpus.
+
+Source count/all URLs persist in existing edition JSON and render on the actual
+story route in English, Chinese and Japanese. Database shape changes only by
+one pg_trgm search index/extension migration; no tables or columns added and no
+live migration. Manual and automatic callers share the collector; expanded
+bundles freeze before writing and are reused across tracks/locales.
+
+Fork integration is complete in U3/U4/U6/U8. Broader nomination of unnamed,
+unlinked same-team teasers remains planned, not certified. Image-claim references
+remain separate. Initial discovery coverage and live numeric/semantic quality
+still need their own qualification. No new paid/model/X call, publication or
+deployment in this continuation; earlier live-loop receipts remain unchanged.

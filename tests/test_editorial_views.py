@@ -250,3 +250,18 @@ def test_remote_asset_rejects_missing_unsigned_or_unbounded_links(
     remote = RemoteMedia(link, exists=present)
     url, _, _ = picture_asset(monkeypatch, remote, "source")
     assert client.get(url, secure=True).status_code == 404
+
+
+def test_source_attribution_deduplicates_posts_without_inventing_independence():
+    from monitor.editorial.readers import edition_payload
+
+    sources = [
+        {"id": "1", "url": "https://x.com/i/status/1", "author_handle": "same"},
+        {"id": "2", "url": "https://x.com/i/status/2", "author_handle": "same"},
+    ]
+    item = edition_payload(
+        edition(evidence={"sources": sources + [sources[0]]}), EditorialConfig()
+    )
+    assert item["source_count"] == 2
+    assert len(item["sources"]) == 2
+    assert {s["label"] for s in item["sources"]} == {"same"}

@@ -35,8 +35,9 @@ from datetime import datetime, timedelta
 from typing import Any, ClassVar, Literal
 from urllib.parse import urlparse
 
-from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.indexes import GinIndex, OpClass
 from django.db import IntegrityError, models, transaction
+from django.db.models.functions import Upper
 from django.utils import timezone
 
 # ============================================================================
@@ -1506,6 +1507,11 @@ class Post(models.Model):
     class Meta:
         db_table = "posts"
         indexes = [
+            GinIndex(
+                OpClass(Upper("text"), name="gin_trgm_ops"),
+                OpClass(Upper("quoted_text"), name="gin_trgm_ops"),
+                name="idx_posts_editorial_context",
+            ),
             models.Index(fields=["author"], name="idx_posts_author_id"),
             models.Index(fields=["created_at"], name="idx_posts_created_at"),
             models.Index(

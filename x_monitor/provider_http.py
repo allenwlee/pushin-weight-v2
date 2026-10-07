@@ -4,7 +4,9 @@ import http.client
 import json
 from urllib.parse import urlsplit
 
-ALLOWED_HOSTS = frozenset({"api.deepinfra.com", "openrouter.ai", "api.minimax.io"})
+ALLOWED_HOSTS = frozenset(
+    {"api.deepinfra.com", "openrouter.ai", "api.minimax.io", "api.openai.com"}
+)
 
 
 def https_request(

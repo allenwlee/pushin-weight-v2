@@ -56,7 +56,11 @@ def test_launch_profile_has_one_combined_ceiling_and_independent_picture_modes(
     monkeypatch.setenv("EDITORIAL_CONFIG_PATH", "config/editorial-english-launch.yaml")
     cfg = load_editorial_config()
     assert cfg.enabled and cfg.public_enabled and cfg.daily_usd == 5
-    assert cfg.routes["chatter"].model == "openai/gpt-6-sol"
+    assert cfg.routes["chatter"].model == "gpt-6-sol"
+    assert (
+        cfg.routes["chatter"].endpoint == "https://api.openai.com/v1/chat/completions"
+    )
+    assert cfg.routes["chatter"].key_env == "OPENAI_API_KEY"
     assert cfg.routes["chatter"].vision
     assert cfg.picture_mode("atomic") == "select_only"
     assert cfg.picture_mode("chatter") == cfg.picture_mode("pulse") == "derive"
