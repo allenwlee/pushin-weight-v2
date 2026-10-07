@@ -7,16 +7,19 @@ from core.official_company_admin import _account_url
 from core.official_company_requalification import cohort_report
 
 TABS = {"newly": "newly_qualified", "awaiting": "retry_pending", "pending": "pending"}
+OTHER_CATEGORIES = {"previous": "qualified", "uncertain": "uncertain", "rejected": "rejected",
+                    "failed": "failed", "excluded": "excluded"}
 
 
 def frozen_run_report(*, tab="newly", page=1, query=""):
-    tab = tab if tab in TABS else "newly"
+    categories = {**TABS, **OTHER_CATEGORIES}
+    tab = tab if tab in categories else "newly"
     query = str(query or "").strip()[:100]
     report = cohort_report(include_members=True)
     if report is None:
         return {"summary": None, "tab": tab, "query": query, "rows": [], "page": None}
     members = report.pop("members")
-    selected = [row for row in members if row["bucket"] == TABS[tab]]
+    selected = [row for row in members if row["bucket"] == categories[tab]]
     # Search only the frozen selection; neither a handle search nor a query
     # parameter can expand the page into the moving discovery inventory.
     if query:

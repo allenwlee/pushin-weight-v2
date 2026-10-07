@@ -60,8 +60,10 @@ earlier positive baseline. **Newly qualifying** lists new positive findings,
 excluding companies that had already passed before the rerun. **Awaiting** lists
 temporary evaluation failures waiting for retry, with the recorded error and
 next retry time. **Pending** lists accounts without their first rerun result,
-including requests currently in flight. Other outcomes remain in the progress
-summary. Each tab supports account/company search and pages of 50; tab counts
+including requests currently in flight. Click **Previously qualifying**,
+**Uncertain**, **Rejected**, **Failed evaluations** or **Excluded** to inspect
+the corresponding frozen accounts and their recorded details. Each category
+supports account/company search and pages of 50; category counts
 remain totals for the frozen cohort when search narrows the table. Refresh the
 page to read current progress. The page does not evaluate or approve accounts,
 change their queue state, or alter list membership.

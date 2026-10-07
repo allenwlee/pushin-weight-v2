@@ -5964,6 +5964,16 @@ _REQUALIFICATION_COPY = {
 
 _FROZEN_RUN_COPY = {
     "en": {
+        "previous_category": 'Previously qualifying',
+        "uncertain_category": 'Uncertain',
+        "rejected_category": 'Rejected',
+        "failed_category": 'Failed evaluations',
+        "excluded_category": 'Excluded',
+        "previous_note": 'Companies that passed before the frozen run and qualify again under the new rule.',
+        "uncertain_note": 'Completed evaluations without enough evidence to settle qualification.',
+        "rejected_note": 'Completed evaluations that do not meet the qualification rule.',
+        "failed_note": 'Evaluations with a terminal error and no valid new-rule decision.',
+        "excluded_note": 'Frozen accounts excluded from rerun evaluation, for example because evidence changed or an account was already settled.',
         "title": "Frozen account run", "admin": "Admin", "scope": "Only accounts in this frozen cohort.",
         "frozen_at": "Frozen at", "updated": "Updated", "progress": "Run progress",
         "newly": "Newly qualifying", "awaiting": "Awaiting", "pending": "Pending",
@@ -5980,6 +5990,16 @@ _FROZEN_RUN_COPY = {
         "previous": "Previous", "next": "Next", "other": "Other results", "refresh": "Refresh",
     },
     "zh_hans": {
+        "previous_category": '之前已符合条件',
+        "uncertain_category": '不确定',
+        "rejected_category": '未通过',
+        "failed_category": '评估失败',
+        "excluded_category": '不参与重评',
+        "previous_note": '在固定扫描前已通过，并再次符合新规则的公司。',
+        "uncertain_note": '评估已完成，但证据不足以确定是否符合条件。',
+        "rejected_note": '评估已完成，不符合资格规则。',
+        "failed_note": '评估出现终止错误，尚无有效的新规则判定。',
+        "excluded_note": '未参与本次重评的固定账号，例如证据已更改或身份已经确认。',
         "title": "固定账号扫描", "admin": "管理", "scope": "仅显示此固定批次内的账号。",
         "frozen_at": "固定时间", "updated": "更新时间", "progress": "扫描进度",
         "newly": "新符合条件", "awaiting": "等待中", "pending": "待处理",
@@ -5996,6 +6016,16 @@ _FROZEN_RUN_COPY = {
         "previous": "上一页", "next": "下一页", "other": "其他结果", "refresh": "刷新",
     },
     "ja": {
+        "previous_category": '以前から適格',
+        "uncertain_category": '不確定',
+        "rejected_category": '不適格',
+        "failed_category": '評価失敗',
+        "excluded_category": '再評価対象外',
+        "previous_note": '固定前に適格で、新基準でも再び適格と判定された会社です。',
+        "uncertain_note": '評価は完了しましたが、適格性を確定する根拠が不足しています。',
+        "rejected_note": '評価が完了し、適格基準を満たさないと判定された対象です。',
+        "failed_note": '終端エラーで有効な新基準の判定が得られなかった評価です。',
+        "excluded_note": '根拠の変更や確定済みの状態などにより再評価から除外された固定対象です。',
         "title": "固定アカウントの再評価", "admin": "管理", "scope": "固定した対象内のアカウントのみを表示します。",
         "frozen_at": "固定日時", "updated": "更新日時", "progress": "再評価の進捗",
         "newly": "新規適格", "awaiting": "待機中", "pending": "未処理",
@@ -6143,7 +6173,7 @@ def _product_review_context(
 def frozen_account_run(request: HttpRequest) -> HttpResponse:
     if not _can_review_products(request):
         return HttpResponseForbidden("Admin requires owner or staff access.")
-    from core.official_company_requalification_admin import TABS, frozen_run_report
+    from core.official_company_requalification_admin import OTHER_CATEGORIES, TABS, frozen_run_report
 
     locale = _resolve_locale(request)
     copy_locale = "zh_hans" if locale in {"zh_cn", "zh-CN"} else locale
@@ -6171,9 +6201,13 @@ def frozen_account_run(request: HttpRequest) -> HttpResponse:
         "refresh_url": page_url(report["tab"], current.number if current else 1),
         "frozen_tabs": [{"key": key, "label": copy[key], "count": summary[bucket],
                          "url": page_url(key)} for key, bucket in TABS.items()] if summary else [],
+        "frozen_categories": [{"key": key, "label": copy[key + "_category"],
+                               "count": summary[bucket] - (summary["newly_qualified"] if key == "previous" else 0),
+                               "url": page_url(key)} for key, bucket in OTHER_CATEGORIES.items()] if summary else [],
         "frozen_metrics": [{"key": key, "label": copy[key], "value": summary[key]}
                            for key in ("population", "completed", "qualified")] if summary else [],
-        "section_title": copy[report["tab"]], "section_note": copy[report["tab"] + "_note"],
+        "section_title": copy.get(report["tab"] + "_category", copy[report["tab"]]),
+        "section_note": copy[report["tab"] + "_note"],
         "previous_url": page_url(report["tab"], current.previous_page_number()) if current and current.has_previous() else "",
         "next_url": page_url(report["tab"], current.next_page_number()) if current and current.has_next() else "",
         "refreshed_at": django_timezone.now(),

@@ -424,7 +424,7 @@ def test_frozen_run_is_read_only_and_limits_tabs_to_frozen_results(owner_client)
     assert cohort_report() == {key: value for key, value in detailed.items() if key not in {'members', 'frozen_at'}}
     snapshots = list(OfficialCompanyAccountState.objects.order_by('pk').values())
     cursor = OfficialCompanyScan.objects.get().cursor
-    for tab, expected in [("newly", [fresh]), ("awaiting", [retry]), ("pending", [waiting, stale])]:
+    for tab, expected in [("newly", [fresh]), ("awaiting", [retry]), ("pending", [waiting, stale]), ("previous", [prior]), ("rejected", [rejected]), ("uncertain", []), ("failed", []), ("excluded", [])]:
         response = owner_client.get('/admin/official-accounts/frozen-run', {'tab': tab, 'account_id': outside.account_id, 'locale': 'en'})
         report = response.context['frozen_run']
         assert [row['state_id'] for row in report['rows']] == [s.pk for s in expected]

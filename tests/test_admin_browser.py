@@ -32,10 +32,10 @@ class AdminBrowserTests(StaticLiveServerTestCase):
         from core.official_company_requalification import initialize_cohort
         from tests.test_official_company_requalification import manifest, state
 
-        fresh, awaiting, pending, previous, outside = [state(97801 + n) for n in range(5)]
+        fresh, awaiting, pending, previous, outside, uncertain, rejected, failed, excluded = [state(97801 + n) for n in range(9)]
         previous.decision = {"outcome": "accepted"}
         previous.save()
-        initialize_cohort(manifest([fresh, awaiting, pending, previous]))
+        initialize_cohort(manifest([fresh, awaiting, pending, previous, uncertain, rejected, failed, excluded]))
         for s in [fresh, previous, outside]:
             OfficialCompanyAttempt.objects.create(
                 state=s, evidence_hash=s.evidence_hash, claim_token=f"frozen-browser-{s.pk}",
@@ -52,6 +52,27 @@ class AdminBrowserTests(StaticLiveServerTestCase):
             status="failed", error_code="TimeoutError", model="test-model",
             policy_version=POLICY_VERSION, reserved_usd=0,
         )
+        for s, outcome in [(uncertain, "review_needed"), (rejected, "rejected")]:
+            OfficialCompanyAttempt.objects.create(
+                state=s, evidence_hash=s.evidence_hash, claim_token=f"frozen-other-{s.pk}",
+                status="completed", model="test-model", policy_version=POLICY_VERSION, reserved_usd=0,
+                decision={"outcome": outcome, "rationale": "Insufficient development evidence."},
+            )
+        failed.status = "review_needed"
+        failed.save()
+        OfficialCompanyAttempt.objects.create(
+            state=failed, evidence_hash=failed.evidence_hash, claim_token="frozen-terminal",
+            status="failed", error_code="ValueError", model="test-model",
+            policy_version=POLICY_VERSION, reserved_usd=0,
+        )
+        import json
+
+        from core.models import OfficialCompanyScan
+        scan = OfficialCompanyScan.objects.get()
+        cursor = json.loads(scan.cursor)
+        cursor["excluded"][str(excluded.pk)] = "changed_evidence"
+        scan.cursor = json.dumps(cursor)
+        scan.save()
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -67,6 +88,14 @@ class AdminBrowserTests(StaticLiveServerTestCase):
                         self.assertEqual(page.locator('[data-frozen-account]').count(), 1)
                         self.assertTrue(page.locator(f'[data-frozen-account="{expected.account_id}"]').is_visible())
                         self.assertIn("locale=" + locale, page.url)
+                    for category, expected in [("previous", previous), ("uncertain", uncertain), ("rejected", rejected), ("failed", failed), ("excluded", excluded)]:
+                        page.locator(f'[data-frozen-category="{category}"]').click()
+                        self.assertEqual(page.locator('[data-frozen-category][aria-current="page"]').get_attribute('data-frozen-category'), category)
+                        self.assertEqual(page.locator('[data-frozen-account]').count(), 1)
+                        self.assertTrue(page.locator(f'[data-frozen-account="{expected.account_id}"]').is_visible())
+                        self.assertIn("locale=" + locale, page.url)
+                        if category == "failed":
+                            self.assertTrue(page.get_by_text("ValueError", exact=True).is_visible())
                     page.set_viewport_size({"width": 390, "height": 844})
                     self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
                     page.screenshot(path=str(Path(__file__).resolve().parents[1] / f".pytest-tmp/frozen-run-{locale}.png"), full_page=True)
