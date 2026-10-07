@@ -39,6 +39,9 @@ def test_unknown_add_is_verified_before_retry_and_persists_membership():
     sync_intents(cfg=cfg, client=client)
     intent.refresh_from_db()
     assert intent.status == "verify_needed"
+    requested_at = intent.add_requested_at
+    assert requested_at is not None
+    assert intent.add_acknowledged_at is None
     intent.next_attempt_at = None
     intent.save()
     client.reset_mock()
@@ -47,7 +50,54 @@ def test_unknown_add_is_verified_before_retry_and_persists_membership():
     assert not client.add.called
     intent.refresh_from_db()
     assert intent.status == "confirmed"
+    assert intent.add_requested_at == requested_at
+    assert intent.add_acknowledged_at is None
     assert TwitterListMembership.objects.get(account=intent.account).active
+
+
+def test_preexisting_membership_is_not_recorded_as_an_add():
+    intent, cfg = setup_intent()
+    client = Mock()
+    client.members.return_value = ({"987654"}, True)
+    sync_intents(cfg=cfg, client=client)
+    intent.refresh_from_db()
+    assert intent.status == "confirmed"
+    assert intent.add_requested_at is None
+    assert intent.add_acknowledged_at is None
+    client.add.assert_not_called()
+
+
+def test_add_acknowledgement_survives_a_superseding_claim():
+    intent, cfg = setup_intent()
+    client = Mock()
+    client.members.return_value = (set(), True)
+
+    def supersede(_identifier):
+        intent.refresh_from_db()
+        assert intent.add_requested_at is not None
+        intent.claim_token = "newer-claim"
+        intent.save(update_fields=["claim_token"])
+
+    client.add.side_effect = supersede
+    result = sync_intents(cfg=cfg, client=client)
+    intent.refresh_from_db()
+    assert result["confirmed"] == 0
+    assert intent.claim_token == "newer-claim"
+    assert intent.add_acknowledged_at is not None
+
+
+def test_acknowledged_add_is_not_repeated_or_retimestamped():
+    intent, cfg = setup_intent()
+    client = Mock()
+    client.members.return_value = (set(), True)
+    sync_intents(cfg=cfg, client=client)
+    intent.refresh_from_db()
+    stamps = (intent.add_requested_at, intent.add_acknowledged_at)
+    assert all(stamps)
+    sync_intents(cfg=cfg, client=client)
+    intent.refresh_from_db()
+    assert stamps == (intent.add_requested_at, intent.add_acknowledged_at)
+    client.add.assert_called_once_with("987654")
 
 
 def test_incomplete_read_does_not_establish_absence_or_trigger_add():
@@ -144,7 +194,9 @@ def test_list_read_reaches_fourth_page_before_confirming_absence():
             response.json.return_value = {"data": {"id": "17456158"}}
             return response
         if not url.endswith("/members"):
-            response.json.return_value = {"data": {"owner_id": "17456158", "private": True}}
+            response.json.return_value = {
+                "data": {"owner_id": "17456158", "private": True}
+            }
             return response
         requests.append(kwargs["params"].get("pagination_token"))
         page = len(requests)
@@ -155,8 +207,10 @@ def test_list_read_reaches_fourth_page_before_confirming_absence():
         return response
 
     client = XOwnerListClient(
-        access_token="test-token", list_id="2067062923525275922",
-        owner_id="17456158", request=transport,
+        access_token="test-token",
+        list_id="2067062923525275922",
+        owner_id="17456158",
+        request=transport,
     )
     client.preflight()
     members, complete = client.members()

@@ -78,6 +78,7 @@ Useful organization evidence is already stored, but the person-oriented affiliat
 - R11. Bound database scanning, provider calls, concurrency, elapsed time, and spend before dispatch; disabled and dry-run modes perform no provider calls or application writes.
 - R12. Verify both unseen positive organizations and misleading negative accounts, with production-call-chain regression coverage rather than fixture-specific handle branches.
 - R13. Preserve current brand-based behavior while isolating provider-qualified account identity and attribution queries in shared functions. Coordinate overlapping account/schema work with the benchmark branch before edits and recheck migration ordering before integration; do not implement its proposed taxonomy or account migration incidentally.
+- R14 (owner addition, 2026-10-07). Add a read-only record of X accounts added to Call A's private list to the owner-selected `/admin` page (the existing product-review inbox). Show stable account identity, handle, organization, timestamps and synchronization outcome. Distinguish an acknowledged add, an uncertain request later confirmed by membership, and an account already present before synchronization; a `confirmed` intent alone does not prove that this extractor added the account. Preserve existing access restrictions and exclude credentials. Locate the intended page before editing a dashboard or creating another page.
 
 ### Acceptance Examples
 
@@ -87,6 +88,7 @@ Useful organization evidence is already stored, but the person-oriented affiliat
 - AE4. Covers R6, R8: repeated posts and a handle rename for one stable author ID reuse the registration; reuse of an old handle by another ID cannot inherit it.
 - AE5. Covers R7–R8: registration commits, the add request times out, and a later confirmed membership read completes the same queued operation without another registration.
 - AE6. Covers R1, R8, R11: scan interruption resumes without losing accounts, and exhausted budget or deadline defers work with no hidden provider attempt.
+- AE7. Covers R14: the admin record distinguishes actual add acknowledgement, timeout followed by membership readback, and pre-existing membership; duplicate processing does not invent another addition. Verify the actual selected route in a browser with populated and empty data and access-denial coverage.
 
 ### Scope Boundaries
 
@@ -462,6 +464,48 @@ Verification commands use the repository's local test wrapper and a dedicated is
 
 ## Current delivery evidence and prerequisites
 
+### October 7 deployment and admin-page follow-up
+
+PR #53 is merged at `1497027164a59ada378bc2b528df85e7d7a950b7`.
+Production web and harvest were observed live at this revision. Discovery,
+registration and list synchronization remain disabled; full-scan evaluation
+and subsequent collection proof have not occurred. Runtime encrypted owner
+provisioning and live token renewal succeeded. A new process read the encrypted
+pair at credential revision 2, and the runtime adapter verified owner `17456158`
+and private list `2067062923525275922`. The rotated database pair is authoritative;
+do not reprovision using the now-stale operator token pair.
+
+The owner confirmed `/product-review/` is the intended page and requested its
+canonical route become `/admin`, retaining product proposal review and adding
+official-account discovery detail. Preserve old GET links with redirects and
+legacy detail POST handling so an already-open approval form remains usable.
+Use `/admin/products/<proposal_id>/` for proposal details. Keep the current
+owner/staff permission check on both console and details.
+
+### U7. Owner admin console and truthful account-add history
+
+- Add a shared read-only query in `core/official_company_admin.py`: aggregate
+  discovery/registration/list totals, bounded initial-scan coverage and paginated
+  account states. Show organization, model types, rationale/citations, status,
+  model/policy, update time and Call A queue outcome; no credential-table reads.
+- Add nullable first-add request and provider-acknowledgement timestamps to the
+  existing `OfficialCompanyListIntent`, migration0069 descending from0068.
+  Preserve first timestamps across retries/evidence updates. Persist the request
+  before POST and acknowledgement after successful POST, including if a newer
+  claim supersedes the work during network IO. Distinguish already-present,
+  acknowledged, and requested-then-observed membership. Do not retroactively
+  infer old additions or repeat a live add merely to create an audit record.
+- This branch owns additive discovery state; benchmark still owns Account UUID
+  conversion. No new Account references or taxonomy edits. Recheck migration
+  leaves before direct production integration.
+- Verify route/view/template/browser with a deterministic staff login, empty and
+  populated PostgreSQL fixtures, EN/zh_hans/JA, mobile overflow, product approval,
+  old URL redirects, denial for ordinary/anonymous users, pagination and escaping.
+  Pin pre-existing-member and timeout readback differences in real sync tests.
+- Snapshot before this follow-up: production states=0, attempts=0,
+  registrations=0, list intents=0 and scans=0. Earlier manual Reflection add is
+  separate evidence. Full-scan activation remains outstanding.
+
 Review candidate: [PR #53](https://github.com/allenwlee/pushin-weight-v2/pull/53).
 Local feature/regression/Ollija validation passed 227 tests, including 158 required
 PostgreSQL tests with zero skips/errors. The discovery CI passed on `e6989e15`;
@@ -479,8 +523,8 @@ On 2026-10-07 the owner identified **top-gun** (app `33020022`) as the issuer of
 the saved access/refresh token pair. Runtime provisioning must pair those tokens
 with `TOPGUN_TWITTER_OAUTH2_CLIENT_ID` and `TOPGUN_TWITTER_OAUTH2_CLIENT_SECRET`,
 mapped to the project-specific runtime names. Do not use the separate
-openclaw-cross-post client. Live encrypted provisioning and renewal remain
-verification work; identification is not proof that renewal has succeeded.
+openclaw-cross-post client. Live encrypted provisioning and renewal subsequently
+passed, as recorded above; issuer identification alone was not used as renewal proof.
 Shared staging retains the separate G2 candidate. The owner selected direct
 production delivery on 2026-10-07, preserving those resources and omitting
 staging delivery for this feature.

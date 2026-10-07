@@ -7396,6 +7396,8 @@ class OfficialCompanyListIntent(models.Model):
     attempts = models.PositiveIntegerField(default=0)
     last_error = models.CharField(max_length=128, blank=True, default="")
     confirmed_at = models.DateTimeField(null=True)
+    add_requested_at = models.DateTimeField(null=True, blank=True)
+    add_acknowledged_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

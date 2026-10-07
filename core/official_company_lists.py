@@ -10,7 +10,8 @@ from datetime import timedelta
 
 import requests
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import F, Q, Value
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from core.models import OfficialCompanyListIntent
@@ -273,17 +274,26 @@ def sync_intents(*, cfg, client, deadline=None):
                 continue
             # Recheck after network reads; contradictory evidence or suppression
             # arriving while preflight ran must prevent this outbound write.
-            current = OfficialCompanyListIntent.objects.select_related("state").get(
-                pk=claim.pk
+            requested = OfficialCompanyListIntent.objects.filter(
+                pk=claim.pk,
+                claim_token=claim.claim_token,
+                state__status="registered",
+                state__evidence_hash=claim.evidence_hash,
+                evidence_hash=claim.evidence_hash,
+            ).update(
+                add_requested_at=Coalesce("add_requested_at", Value(timezone.now()))
             )
-            if (
-                current.claim_token != claim.claim_token
-                or current.state.status != "registered"
-                or current.state.evidence_hash != claim.evidence_hash
-            ):
+            if not requested:
                 continue
             result["writes"] += 1
             client.add(identifier)
+            # A completed provider add is history even when new evidence has
+            # superseded this claim during network IO. Completion stays fenced.
+            OfficialCompanyListIntent.objects.filter(pk=claim.pk).update(
+                add_acknowledged_at=Coalesce(
+                    "add_acknowledged_at", Value(timezone.now())
+                )
+            )
             result["confirmed"] += int(_complete(claim, "confirmed"))
         except Exception as exc:  # noqa: BLE001
             auth = isinstance(exc, XListError) and exc.auth

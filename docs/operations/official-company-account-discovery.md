@@ -18,6 +18,25 @@ The initial inventory is a separate resumable operator job. Enumeration and mode
 
 ## Inspection and explicit actions
 
+Owners and staff can inspect discovery at `/admin`. The console preserves the
+product-review inbox and shows official-account identities, organizations,
+model types, decision rationale/citations, registration state and Call A list
+outcome. Account rows are paginated in groups of 50. Initial scan enumeration
+and completed account evaluation are different observations.
+
+The add counter counts accounts with an acknowledged provider add. A membership
+read confirming an already-present account does not increment it. A timed-out
+request followed by positive membership readback is shown separately because
+membership alone cannot establish which writer added the account. First-request
+and first-acknowledgement times are retained across retries and evidence changes.
+No credential data is read or rendered by this console. Historical records
+without add timestamps do not establish an extractor addition.
+
+Old `/product-review/` and proposal GET links redirect to the corresponding admin
+routes. Previously opened proposal forms can still submit to their old URLs,
+with the existing permission and CSRF checks. New proposal links use
+`/admin/products/<proposal_id>/` and retain the chosen display language.
+
 All commands return JSON. `inspect` and `--dry-run` do not call providers or write application records. Mutating operations use the same PostgreSQL harvest writer lock and return `writer_busy` without waiting when another writer owns it. Do not pause the cron to make a manual batch run.
 
 ```bash
