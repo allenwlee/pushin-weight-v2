@@ -183,6 +183,18 @@ class HFMetadataClient:
                         delay = self._retry_delay(
                             response.headers.get("retry-after"), delay
                         )
+                        if response.status_code == 429:
+                            # HF advertises reset seconds in RateLimit, often
+                            # without Retry-After. Respect both when present.
+                            resets = re.findall(
+                                r"(?:^|;)\s*t=(\d+)",
+                                response.headers.get("ratelimit", ""),
+                            )
+                            if resets:
+                                delay = max(delay, max(map(int, resets)) + 1)
+                            envelope["rate_limit"] = response.headers.get(
+                                "ratelimit", ""
+                            )
                         # Retain bounded error evidence too. An HTML error page
                         # is an HTTP failure, not a JSON-success parsing failure.
                         body = bytearray()
@@ -306,10 +318,45 @@ class HFMetadataClient:
             return MetadataResponse("malformed")
         result = self._get(
             f"/models/{repo_id}",
-            [("expand", "downloads"), ("expand", "downloadsAllTime")],
+            [
+                ("expand", "downloads"),
+                ("expand", "downloadsAllTime"),
+                ("expand", "likes"),
+            ],
         )
         if result.outcome == "ok":
-            result.outcome = self._identity_outcome(result.payload, repo_id=repo_id) or "ok"
+            result.outcome = (
+                self._identity_outcome(result.payload, repo_id=repo_id) or "ok"
+            )
+        return result
+
+    def account_counts(self, identifier: str, account_kind: str) -> MetadataResponse:
+        if not NAMESPACE.fullmatch(identifier) or account_kind not in {
+            "organization",
+            "individual",
+        }:
+            return MetadataResponse("malformed")
+        path_kind = "organizations" if account_kind == "organization" else "users"
+        result = self._get(f"/{path_kind}/{identifier}/overview", [])
+        if result.outcome == "ok":
+            payload = result.payload
+            if (
+                not isinstance(payload, dict)
+                or type(payload.get("numFollowers")) is not int
+                or payload["numFollowers"] < 0
+            ):
+                result.outcome = "malformed"
+            else:
+                name = (
+                    payload.get("name")
+                    or payload.get("user")
+                    or payload.get("organization")
+                )
+                if (
+                    not isinstance(name, str)
+                    or name.casefold() != identifier.casefold()
+                ):
+                    result.outcome = "identity_mismatch"
         return result
 
     def model_group(self, repo_id: str, group: str) -> MetadataResponse:

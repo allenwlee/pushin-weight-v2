@@ -67,3 +67,42 @@ def test_hash_mismatch_fails_before_any_write():
     with pytest.raises(ValueError, match="hash"):
         import_history(data, apply=True)
     assert not MetricValue.objects.exists()
+
+
+def test_history_validation_rejects_invalid_observation_without_writing():
+    from core.benchmark_metric_history import import_history
+
+    data = manifest(configured())
+    snapshot = data["snapshots"][0]
+    snapshot["payload"]["rows"][0]["raw"]["downloads"] = -1
+    snapshot["raw_artifact_sha256"] = digest(snapshot["payload"])
+    with pytest.raises(ValueError, match="invalid observation"):
+        import_history(data)
+    assert not MetricValue.objects.exists()
+
+
+def test_arena_history_keeps_publication_when_selected_cohort_is_empty():
+    from core.benchmark_metric_history import import_history
+    from tests.test_benchmark_download_persistence import provider_contract
+
+    contract = provider_contract("arena", ["rating"])
+    data = manifest(contract)
+    data.update(
+        source="arena",
+        dataset_id="lmarena-ai/leaderboard-dataset",
+        archive_publisher="lmarena-ai",
+    )
+    for snapshot in data["snapshots"]:
+        payload = {
+            "status": "ok",
+            "config": "text_style_control",
+            "rows": [],
+            "coverage": "publication_window",
+            "publication_dates": [snapshot["date"]],
+        }
+        snapshot.update(payload=payload, raw_artifact_sha256=digest(payload))
+    run = import_history(data, apply=True)
+    assert run.status == "partial"
+    assert run.raw_payload["coverage"] == "publication_window"
+    assert run.source_metadata["publication_dates"] == ["2026-09-10", "2026-09-11"]
+    assert not run.observations.exists()

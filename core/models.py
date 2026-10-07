@@ -7413,15 +7413,17 @@ class MeasurementSubject(models.Model):
     brand = models.OneToOneField(Brand,null=True,on_delete=models.PROTECT,related_name='measurement_subject')
     product_group = models.OneToOneField(ProductGroup,null=True,on_delete=models.PROTECT,related_name='subject')
     product = models.OneToOneField(Product,to_field='product_key',db_column='product_key',null=True,on_delete=models.PROTECT,related_name='measurement_subject')
+    account = models.OneToOneField(Account, null=True, on_delete=models.PROTECT, related_name='measurement_subject')
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
         db_table = 'measurement_subjects'
         constraints=[models.CheckConstraint(condition=(
-            models.Q(subject_kind='company',company__isnull=False,brand__isnull=True,product_group__isnull=True,product__isnull=True)|
-            models.Q(subject_kind='brand',company__isnull=True,brand__isnull=False,product_group__isnull=True,product__isnull=True)|
-            models.Q(subject_kind='product_group',company__isnull=True,brand__isnull=True,product_group__isnull=False,product__isnull=True)|
-            models.Q(subject_kind='product',company__isnull=True,brand__isnull=True,product_group__isnull=True,product__isnull=False)
+            models.Q(account__isnull=True,subject_kind='company',company__isnull=False,brand__isnull=True,product_group__isnull=True,product__isnull=True)|
+            models.Q(account__isnull=True,subject_kind='brand',company__isnull=True,brand__isnull=False,product_group__isnull=True,product__isnull=True)|
+            models.Q(account__isnull=True,subject_kind='product_group',company__isnull=True,brand__isnull=True,product_group__isnull=False,product__isnull=True)|
+            models.Q(account__isnull=True,subject_kind='product',company__isnull=True,brand__isnull=True,product_group__isnull=True,product__isnull=False)
+            |models.Q(subject_kind='account',account__isnull=False,company__isnull=True,brand__isnull=True,product_group__isnull=True,product__isnull=True)
         ),name='ck_measurement_subject_target')]
 
 
@@ -7661,7 +7663,7 @@ class SourceSubjectMapping(models.Model):
             ),
             models.CheckConstraint(
                 condition=models.Q(
-                    source_subject_kind__in=["repository", "model", "lab"]
+                    source_subject_kind__in=["repository", "model", "lab", "account"]
                 ),
                 name="ck_mapping_subject_kind",
             ),
@@ -7772,13 +7774,13 @@ class MetricObservation(models.Model):
             ),
             models.CheckConstraint(
                 condition=models.Q(
-                    source_subject_kind__in=["model", "repository", "lab", "aggregate"]
+                    source_subject_kind__in=["model", "repository", "lab", "account", "aggregate"]
                 ),
                 name="ck_observation_kind",
             ),
             models.CheckConstraint(
                 condition=models.Q(
-                    source_subject_kind__in=["model", "repository", "lab"]
+                    source_subject_kind__in=["model", "repository", "lab", "account"]
                 )
                 | models.Q(mapping__isnull=True),
                 name="ck_observation_aggregate",

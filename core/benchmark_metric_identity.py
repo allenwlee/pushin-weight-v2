@@ -65,6 +65,8 @@ METRIC_TYPES = [
     "rank",
     "score_variance",
     "post_volume",
+    "likes",
+    "followers",
 ]
 
 
@@ -73,6 +75,8 @@ def definition_rows():
     for source, key, kind, quantity, unit, representation in [
         ("hf", "downloads", "flow", "count", "downloads", "integer"),
         ("hf", "downloads_all_time", "flow", "count", "downloads", "integer"),
+        ("hf", "likes", "state", "count", "likes", "integer"),
+        ("hf", "followers", "state", "count", "followers", "integer"),
         ("openrouter", "total_tokens", "flow", "count", "tokens", "integer"),
         ("arena", "rating", "state", "score", "arena_points", "float"),
         ("arena", "rating_lower", "state", "score", "arena_points", "float"),
@@ -87,6 +91,8 @@ def definition_rows():
             "total_tokens": "token_usage",
             "vote_count": "vote_count",
             "rank": "rank",
+            "likes": "likes",
+            "followers": "followers",
             "variance": "score_variance",
         }.get(key, "benchmark_score")
         row = {
@@ -109,7 +115,7 @@ def definition_rows():
             "window_duration_basis": "none",
             "window_alignment": None,
             "source_timezone": "unknown",
-            "required": key not in {"variance", "rank"},
+            "required": key not in {"variance", "rank", "likes", "followers"},
             "definition_metadata": {
                 "wire_field": "downloadsAllTime"
                 if key == "downloads_all_time"
@@ -136,6 +142,17 @@ def definition_rows():
                 source_timezone="UTC",
             )
         rows.append(row)
+    # Early official Arena publications lack uncertainty/votes. Version this
+    # relaxation so already-reviewed v1 definitions remain byte-for-byte intact.
+    for row in list(rows):
+        if row["source_id"] == "arena" and row["metric_key"] in {
+            "rating_lower",
+            "rating_upper",
+            "vote_count",
+        }:
+            rows.append({**copy.deepcopy(row), "version": 2, "required": False})
+        if row["source_id"] == "hf" and row["metric_key"] == "downloads_all_time":
+            rows.append({**copy.deepcopy(row), "version": 2, "required": False})
     return rows
 
 
@@ -152,6 +169,15 @@ def register_definitions():
                 "identifier_normalizer": normalizer,
             },
         )
+        if created or not source.metadata:
+            from core.benchmark_attribution import DEFAULTS
+
+            source.metadata = {
+                "attribution": DEFAULTS.get(
+                    key, {"public_display": "unresolved", "data_export": "unresolved"}
+                )
+            }
+            source.save(update_fields=["metadata"])
         if not created:
             require(source.source_type == kind, "source category changed")
             # Complete the registry-only U10/U12 records without enabling polling.
@@ -212,6 +238,12 @@ def prepare_collection(spec):
         from core.benchmark_metric_operations import validate_operations
 
         validate_operations(settings)
+        if source_key == "arena":
+            require(
+                settings.get("config", "text_style_control")
+                in {"text", "text_style_control"},
+                "unsupported Arena configuration",
+            )
         if source_key == "openrouter":
             require(
                 settings["completed_day_lag"] >= 1,
@@ -239,6 +271,9 @@ def prepare_collection(spec):
         settings["definitions"] = sorted(definitions, key=lambda row: row["metric_key"])
         settings["adapter_key"] = source.adapter_key
         settings["identifier_normalizer"] = source.identifier_normalizer
+        settings.setdefault(
+            "attribution", copy.deepcopy(source.metadata.get("attribution", {}))
+        )
     mappings = []
     seen = set()
     require(
@@ -259,14 +294,15 @@ def prepare_collection(spec):
             subject_key in taxonomy.snapshot["subjects"],
             "subject outside pinned taxonomy",
         )
-        subject = MeasurementSubject.objects.select_related("product__hf_org").get(
-            pk=subject_key
-        )
+        subject = MeasurementSubject.objects.select_related(
+            "product__hf_org", "account"
+        ).get(pk=subject_key)
         kind = row["source_subject_kind"]
         scope = row.get("identifier_scope", "")
         require(
             (kind in {"model", "repository"} and subject.subject_kind == "product")
-            or (kind == "lab" and subject.subject_kind == "company"),
+            or (kind == "lab" and subject.subject_kind == "company")
+            or (kind == "account" and subject.subject_kind == "account"),
             "source/target kind mismatch",
         )
         normalized = literal.casefold() if source == "hf" else literal
@@ -274,6 +310,21 @@ def prepare_collection(spec):
         require(identity not in seen, "duplicate source identifier or usage alias")
         seen.add(identity)
         publisher = row.get("publisher_account_key")
+        if subject.subject_kind == "account":
+            account = subject.account
+            frozen = taxonomy.snapshot["subjects"][subject_key]
+            require(
+                source == "hf" and account.data_source_id == source,
+                "account source mismatch",
+            )
+            require(
+                normalized == account.normalized_identifier
+                and frozen["normalized_identifier"] == normalized
+                and frozen["data_source"] == source
+                and frozen["account_kind"] == account.account_kind
+                and scope == account.account_kind,
+                "account identity mismatch",
+            )
         if subject.subject_kind == "product":
             product = subject.product
             require(
@@ -335,7 +386,9 @@ def prepare_collection(spec):
             "publisher_account_key": str(publisher) if publisher else None,
             "evidence_url": validate_evidence_url(row["evidence_url"]),
             "identifier_metadata": copy.deepcopy(row.get("identifier_metadata", {})),
-            "identity_snapshot": copy.deepcopy(taxonomy.snapshot["subjects"][subject_key]),
+            "identity_snapshot": copy.deepcopy(
+                taxonomy.snapshot["subjects"][subject_key]
+            ),
         }
         accepted["mapping_hash"] = digest(accepted)
         mappings.append(accepted)

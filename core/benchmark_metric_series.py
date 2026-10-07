@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from django.db.models import Count
+from django.db.models import Count, Max, Q
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
@@ -164,8 +164,11 @@ def _point(value, definition, day):
         "raw_value": str(value.integer_value)
         if value.integer_value is not None
         else value.float_value,
-        "coverage": "observed",
-        "observed": True,
+        "coverage": "reconstructed"
+        if metadata.get("history_basis") == "reconstructed_current_relationships"
+        else "observed",
+        "observed": metadata.get("history_basis")
+        != "reconstructed_current_relationships",
         "source_date": day,
         "measurement_kind": definition.measurement_kind,
         "temporal_status": value.temporal_status,
@@ -186,6 +189,12 @@ def _point(value, definition, day):
         },
         "dimensions": observation.dimensions,
         "secondary_source": metadata.get("secondary_source", False),
+        "history_basis": metadata.get(
+            "history_basis",
+            "archived_snapshot"
+            if metadata.get("archive_snapshot_date")
+            else "observed_snapshot",
+        ),
         "observed_at": observation.observed_at.isoformat(),
         "evidence": [
             {
@@ -233,8 +242,58 @@ def metric_points(contract, line, days):
         aggregation != "best_score" or source == "arena",
         "best-score selection is Arena-only",
     )
+    history_basis = line.get("history_basis", "snapshots")
+    require(
+        history_basis in {"snapshots", "reconstructed_current_relationships"},
+        "invalid history basis",
+    )
+    queryset = MetricValue.objects.all()
+    if history_basis == "reconstructed_current_relationships":
+        queryset = queryset.filter(
+            observation__source_metadata__history_basis=history_basis
+        )
+    else:
+        queryset = queryset.filter(
+            Q(observation__source_metadata__history_basis__isnull=True)
+            | ~Q(
+                observation__source_metadata__history_basis="reconstructed_current_relationships"
+            )
+        )
+    lower, upper = days[0], days[-1]
+    if source == "arena":
+        prior = MetricObservation.objects.filter(
+            run__contract=contract,
+            run__source_id="arena",
+            run__status__in=["success", "partial"],
+            published_date__lt=lower,
+            status="ok",
+        ).aggregate(day=Max("published_date"))["day"]
+        queryset = queryset.filter(as_of_date__range=(prior or lower, upper))
+    elif source == "hf":
+        begin = datetime.combine(native_date(lower), datetime.min.time(), UTC)
+        stop = datetime.combine(
+            native_date(upper) + timedelta(days=1), datetime.min.time(), UTC
+        )
+        queryset = queryset.filter(
+            Q(
+                observation__source_metadata__archive_snapshot_date__gte=lower,
+                observation__source_metadata__archive_snapshot_date__lte=upper,
+            )
+            | Q(
+                observation__source_metadata__reconstruction_date__gte=lower,
+                observation__source_metadata__reconstruction_date__lte=upper,
+            )
+            | Q(
+                observation__source_metadata__archive_snapshot_date__isnull=True,
+                observation__source_metadata__reconstruction_date__isnull=True,
+                observation__observed_at__gte=begin,
+                observation__observed_at__lt=stop,
+            )
+        )
+    else:
+        queryset = queryset.filter(period_label_date__range=(lower, upper))
     values = list(
-        MetricValue.objects.filter(
+        queryset.filter(
             source_metric=definition,
             observation__mapping_id__in=mapping_ids,
             observation__run__contract=contract,
@@ -242,6 +301,7 @@ def metric_points(contract, line, days):
             observation__status="ok",
         )
         .select_related("observation__run")
+        .defer("observation__run__raw_payload", "observation__run__request_params")
         .prefetch_related("observation__values__source_metric")
         .order_by("observation__run__completed_at", "id")[:100001]
     )
@@ -262,6 +322,7 @@ def metric_points(contract, line, days):
         if source == "hf":
             day = (
                 observation.source_metadata.get("archive_snapshot_date")
+                or observation.source_metadata.get("reconstruction_date")
                 or observation.observed_at.astimezone(UTC).date().isoformat()
             )
         elif definition.measurement_kind == "state":
@@ -357,13 +418,43 @@ def metric_points(contract, line, days):
         selected_revision[day] = revisions[(day, run_id)]
     complete_publications = {}
     if source == "arena":
-        publications = MetricObservation.objects.filter(
-            run__contract=contract,
-            run__source_id=source,
-            run__status__in=["success", "partial"],
-            status="ok",
-            source_metadata__publication_complete=True,
-        ).select_related("run")
+        # A scoped archive may contain no tracked models at a publication.
+        # Keep that publication as absence evidence without inventing a row.
+        publication_runs = list(
+            MetricCollectionRun.objects.filter(
+                contract=contract,
+                source_id=source,
+                status__in=["success", "partial"],
+                source_metadata__publication_end__gte=str(prior or lower),
+                source_metadata__publication_start__lte=upper,
+            ).only("source_metadata", "source_as_of", "completed_at")[:1001]
+        )
+        require(len(publication_runs) <= 1000, "publication run budget exceeded")
+        for run in publication_runs:
+            revision = (
+                0,
+                run.source_as_of or run.completed_at,
+                run.completed_at,
+                str(run.pk),
+            )
+            for day in run.source_metadata.get("publication_dates", []):
+                if str(
+                    prior or lower
+                ) <= day <= upper and revision > complete_publications.get(day, (0,)):
+                    complete_publications[day] = revision
+        publications = (
+            MetricObservation.objects.filter(
+                run__contract=contract,
+                run__source_id=source,
+                run__status__in=["success", "partial"],
+                status="ok",
+                source_metadata__publication_complete=True,
+                published_date__gte=prior or lower,
+                published_date__lte=upper,
+            )
+            .select_related("run")
+            .only("published_date", "run__source_as_of", "run__completed_at")
+        )
         for observation in publications:
             day = observation.published_date.isoformat()
             run = observation.run
@@ -389,10 +480,15 @@ def metric_points(contract, line, days):
                 run__source_id=source,
                 run__status__in=["success", "partial"],
                 status="ok",
+                dimensions__date__gte=lower,
+                dimensions__date__lte=upper,
             ).values_list("dimensions__date", flat=True)
         )
     points = []
-    prior = max((d for d in selected.keys() | complete_publications.keys() if d < days[0]), default=None)
+    prior = max(
+        (d for d in selected.keys() | complete_publications.keys() if d < days[0]),
+        default=None,
+    )
     last = selected.get(prior)
     for day in days:
         if day in selected:
@@ -470,6 +566,14 @@ def build_comparison(contract, preset_key, start_date=None, end_date=None):
                 "scope": line.get("post_policy") or line.get("aggregation", "single"),
                 "mapping_ids": mapping_ids,
                 "metric_key": line["metric_key"],
+                "history_basis": line.get("history_basis", "snapshots"),
+                "source_configuration": {
+                    "config": contract.source_configuration.get(line["source"], {}).get(
+                        "config", "text_style_control"
+                    )
+                    if line["source"] == "arena"
+                    else None
+                },
                 "definition_id": definition.pk if definition else None,
                 "definition_version": definition.version if definition else 1,
                 "unit": definition.unit if definition else "posts",
@@ -489,8 +593,11 @@ def build_comparison(contract, preset_key, start_date=None, end_date=None):
             }
         )
     latest = {}
-    for run in MetricCollectionRun.objects.filter(contract=contract).order_by(
-        "started_at"
+    for run in (
+        MetricCollectionRun.objects.filter(contract=contract)
+        .order_by("source_id", "-started_at", "-id")
+        .distinct("source_id")
+        .only("source_id", "status", "started_at", "completed_at", "error_code")
     ):
         latest[run.source_id] = {
             "status": run.status,
@@ -498,9 +605,11 @@ def build_comparison(contract, preset_key, start_date=None, end_date=None):
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,
             "error_code": run.error_code,
         }
+    from core.benchmark_attribution import comparison_attributions
     from core.benchmark_metric_operations import collection_health
 
     return {
+        "attributions": comparison_attributions(contract, lines),
         "schema_version": 1,
         "contract_id": str(contract.pk),
         "contract_hash": contract.contract_hash,

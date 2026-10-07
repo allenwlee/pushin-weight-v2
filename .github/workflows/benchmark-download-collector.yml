@@ -5,6 +5,9 @@ on:
     paths:
       - 'scripts/benchmark_download_collector/**'
       - 'monitor/management/commands/export_benchmark_inputs.py'
+      - 'monitor/management/commands/backfill_hf_*.py'
+      - 'monitor/management/commands/backfill_*history.py'
+      - 'monitor/management/commands/import_hf_backfill.py'
       - 'core/hf_metadata_client.py'
       - 'core/account_identity.py'
       - 'core/intelligence_readers.py'
@@ -12,7 +15,7 @@ on:
       - 'tests/test_load_seed_account_observation.py'
       - 'tests/test_intelligence_readers.py'
       - 'core/apps.py'
-      - 'core/benchmark_metric*.py'
+      - 'core/benchmark*.py'
       - 'core/measurement*.py'
       - 'monitor/benchmark_views.py'
       - 'monitor/urls.py'
@@ -28,7 +31,7 @@ on:
       - 'tests/conftest.py'
       - 'core/models.py'
       - 'core/migrations/**'
-      - 'tests/test_benchmark_download*.py'
+      - 'tests/test_benchmark*.py'
       - 'tests/test_hf_metadata_client.py'
       - 'tests/test_product_identity.py'
       - 'pyproject.toml'
@@ -71,13 +74,15 @@ jobs:
         run: >-
           python -m ruff check scripts/benchmark_download_collector
           monitor/management/commands/export_benchmark_inputs.py
-          tests/test_benchmark_download*.py core/hf_metadata_client.py
-          core/benchmark_metric*.py core/measurement*.py monitor/benchmark_views.py
-          monitor/management/commands/*benchmark*.py monitor/management/commands/configure_measurement_taxonomy.py
+          tests/test_benchmark*.py core/hf_metadata_client.py
+          core/benchmark*.py core/measurement*.py monitor/benchmark_views.py
+          monitor/management/commands/*benchmark*.py
+          monitor/management/commands/backfill_hf_*.py monitor/management/commands/backfill_*history.py
+          monitor/management/commands/import_hf_backfill.py monitor/management/commands/configure_measurement_taxonomy.py
           tests/test_benchmark_pulse_views.py tests/test_measurement*.py
       - name: Offline collector and PostgreSQL regression net
         run: >-
-          python -m pytest -q tests/test_benchmark_download*.py
+          python -m pytest -q tests/test_benchmark*.py
           tests/test_hf_metadata_client.py tests/test_product_identity.py
           tests/test_benchmark_pulse_views.py tests/test_measurement*.py
           tests/test_account_source_identity.py tests/test_hf_catalog_persistence.py

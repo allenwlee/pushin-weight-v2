@@ -112,5 +112,8 @@ def report_from_comparison(comparison):
             ],
         },
         "openrouter_as_of": sorted(source_dates),
+        "arena_config": selected.get("arena", {})
+        .get("source_configuration", {})
+        .get("config"),
         "database_comparison": comparison,
     }

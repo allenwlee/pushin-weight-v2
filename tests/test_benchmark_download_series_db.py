@@ -72,7 +72,14 @@ def test_percentage_is_change_from_fixed_baseline_with_missing_day_preserved():
         },
         apply=True,
     )
-    result = build_comparison(contract, "fixture", "2026-09-10", "2026-09-13")
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    with CaptureQueriesContext(connection) as queries:
+        result = build_comparison(contract, "fixture", "2026-09-10", "2026-09-13")
+    assert not any('"raw_payload"' in q["sql"] for q in queries), (
+        "Serving must not load source envelopes"
+    )
     line = result["lines"][0]
     assert [p["percent_change"] for p in line["points"]] == [0.0, None, 10.0, 30.0]
     assert line["points"][1]["coverage"] == "missing"
@@ -99,7 +106,10 @@ def test_missing_launch_and_zero_baselines_are_explicit():
     assert baseline["status"] == "baseline_zero"
 
 
-def test_arena_stops_carrying_after_complete_publication_drops_selected_product():
+@pytest.mark.parametrize("empty_cohort", [False, True])
+def test_arena_stops_carrying_after_complete_publication_drops_selected_product(
+    empty_cohort,
+):
     from core.benchmark_metric_series import metric_points
     from core.benchmark_metric_store import persist_source
     from tests.test_benchmark_download_persistence import provider_contract
@@ -141,7 +151,14 @@ def test_arena_stops_carrying_after_complete_publication_drops_selected_product(
                     "model_name": "other/model",
                     "leaderboard_publish_date": "2026-09-27",
                 }
-            ],
+            ]
+            if not empty_cohort
+            else [],
+        },
+        source_metadata={
+            "publication_dates": ["2026-09-27"],
+            "publication_start": "2026-09-27",
+            "publication_end": "2026-09-27",
         },
     )
     line = {
@@ -156,3 +173,30 @@ def test_arena_stops_carrying_after_complete_publication_drops_selected_product(
     )
     assert [p["raw_value"] for p in points] == [1400.0, 1400.0, None, None]
     assert points[1]["coverage"] == "carried_forward"
+
+
+def test_archive_credit_survives_offscreen_baseline():
+    from core.benchmark_attribution import comparison_attributions
+
+    contract = configure_collection(setup_spec()[1])
+    credits = comparison_attributions(
+        contract,
+        [
+            {
+                "source": "hf",
+                "points": [],
+                "baseline": {
+                    "evidence": [
+                        {
+                            "archive": {
+                                "dataset_id": "cfahlgren1/hub-stats",
+                                "immutable_revision": "a" * 40,
+                            }
+                        }
+                    ]
+                },
+            }
+        ],
+    )
+    assert credits[0]["publisher"] == "cfahlgren1"
+    assert credits[0]["license_url"] == "https://www.apache.org/licenses/LICENSE-2.0"

@@ -247,7 +247,7 @@ overwriting an existing report.
 
    Arena defaults to the official latest Parquet file (a compressed data table),
    with bounded public HF/CDN redirects and a saved content digest. It selects
-   only overall `text_style_control` rows and retains today's publication even
+   only overall `text` rows (no style control) and retains today's publication even
    when OpenRouter's requested window ends yesterday. Earlier days stay empty until a
    publication is available. Optional `--arena-history` requests dated publications
    through HF's filtered dataset API, with 30 days of carry-in and a default
@@ -301,7 +301,7 @@ The tool cannot automatically discover undisclosed upstream methodology changes.
 
 ## Sources and attribution
 
-- [Official Arena leaderboard dataset](https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset), CC BY 4.0. The report labels its overall style-controlled text scores.
+- [Official Arena leaderboard dataset](https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset), CC BY 4.0. New collection uses overall text scores without style control. Existing style-controlled contracts remain separate.
 - [Hugging Face download semantics](https://huggingface.co/docs/hub/models-download-stats). Collection reuses the existing bounded public HF metadata client.
 - [OpenRouter daily dataset](https://openrouter.ai/docs/api/api-reference/datasets/daily-token-totals-for-top-50-models), CC BY 4.0. The report includes the required source and `as_of` attribution. Documented limits are 30 requests/minute per key and 500/day per account; this collector makes one request per selected date range, excluding retries.
 
@@ -324,3 +324,43 @@ redirects, large token counts, missingness, replay, and HTML escaping.
 
 The database integration described above is implemented alongside the offline
 report. Production activation and automated scheduling remain separate work.
+
+
+## Historical backfills and HF engagement
+
+HF repository likes and account followers use the existing shared state-measurement
+storage. Observed totals can decrease. Timestamp-based reconstructions describe
+relationships still present when fetched; they omit later removals and are stored
+with `history_basis=reconstructed_current_relationships`. Queries use observed or
+archived snapshots unless a line explicitly selects that reconstruction basis.
+
+Manual collection commands accept an explicit output directory and bounded requests,
+bytes and elapsed time. Nothing schedules them automatically. Use an explicitly
+selected isolated `DATABASE_URL` during review; the commands do not select a safe
+database for you.
+
+- `backfill_openrouter_history --contract UUID --output DIR --apply`: retrieve all
+  reported historical daily cohorts, including unmapped models and optional `other`.
+  `--start-date` defaults to the probed source floor, 2025-01-01; `--end-date`
+  defaults to yesterday UTC. Cached, hashed chunks replay without credentials.
+- `backfill_arena_history --contract UUID --organization NAME --output DIR --apply`:
+  repeat `--organization` for reviewed tracked organizations. The pinned contract
+  selects `text` or legacy `text_style_control`. Full-publication dates survive
+  organization filtering, including publications with no matching rows.
+- `backfill_hf_engagement COHORT.json --output DIR`: acquire current counters and
+  reconstructed engagement. The cohort has `accounts` and `repositories` arrays;
+  each entry supplies `identifier` and `kind` (`organization`, `individual`, or
+  `repository`). Individual follower/liker profiles are not saved.
+- `backfill_hf_archive COHORT.json --output DIR`: select tracked repositories from
+  daily `cfahlgren1/hub-stats` revisions. Only numeric counters and repository
+  identifiers are retained. These are community snapshots, not HF's daily-download
+  ledger. Revision timestamps do not establish HF's counter cutoff.
+- `import_hf_backfill DIR --kind archive|engagement --contract UUID --apply`:
+  validate checkpoints and import through the same shared writer. Omit `--apply`
+  to validate only. Importing an unfinished acquisition requires explicit
+  `--allow-incomplete`; the receipt still reports incomplete acquisition.
+
+Each directory has `coverage.json`; source gaps are not zeros. Resume acquisition
+with the same cohort/directory. Replaying successful imports is idempotent.
+HF likes/followers and no-style-control Arena require a new reviewed contract;
+existing frozen definitions and historical contracts are preserved.

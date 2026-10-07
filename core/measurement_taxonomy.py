@@ -10,6 +10,7 @@ from collections import defaultdict
 from django.db import transaction
 
 from core.models import (
+    Account,
     Brand,
     Company,
     DataSource,
@@ -54,7 +55,12 @@ def prepare_taxonomy(spec):
     }
     for row in spec.get("subjects", []):
         kind, key = row["kind"], str(row["key"])
-        model = {"brand": Brand, "company": Company, "product": Product}.get(kind)
+        model = {
+            "brand": Brand,
+            "company": Company,
+            "product": Product,
+            "account": Account,
+        }.get(kind)
         require(model is not None, "unsupported subject kind")
         obj = model.objects.get(
             **({"product_key": key} if kind == "product" else {"pk": key})
@@ -73,6 +79,12 @@ def prepare_taxonomy(spec):
             "key": key,
             "label": label,
         }
+        if kind == "account":
+            snapshot["subjects"][str(subject_id(kind, key))].update(
+                data_source=obj.data_source_id,
+                normalized_identifier=obj.normalized_identifier,
+                account_kind=obj.account_kind,
+            )
     graph = defaultdict(set)
     edge_kinds = defaultdict(set)
     for edge in snapshot["relationships"]:

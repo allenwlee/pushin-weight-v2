@@ -4,7 +4,7 @@
   const root = document.querySelector('#pulse');
   if (!root) return;
   const $ = id => document.getElementById(id);
-  const colors = ['#4485c6', '#ba921d', '#9169c3', '#30978e', '#d78449'];
+  const colors = ['#4485c6', '#ba921d', '#9169c3', '#30978e', '#d78449', '#b75b78', '#60777f'];
   const ns = 'http://www.w3.org/2000/svg';
   let data, days, current = 0, mode = 'compressed';
   const visible = new Set();
@@ -38,7 +38,7 @@
   };
   const pointValue = p => p && (mode === 'raw' ? (p.raw_value === null ? null : Number(p.raw_value)) : p.percent_change);
   const active = () => data.lines.filter(line => mode === 'raw' ? line.key === $('raw-series').value : visible.has(line.key));
-  const coverageText = p => ({carried_forward:`Last published ${p.source_date}`, partial:'Partial day', missing:'No observation', not_reported_top50:'Not reported in available top-50 usage data', observed:'Observed'})[p.coverage] || p.coverage;
+  const coverageText = p => ({carried_forward:`Last published ${p.source_date}`, partial:'Partial day', missing:'No observation', not_reported_top50:'Not reported in available top-50 usage data', observed:'Observed', reconstructed:'Reconstructed; surviving relationships only'})[p.coverage] || p.coverage;
   function readout() {
     $('day-label').textContent = labelDate(days[current]);
     $('readout-date').textContent = `${labelDate(days[current])}, ${days[current].slice(0,4)} · UTC`;
@@ -55,6 +55,7 @@
       html('small', row, b.date ? `Baseline ${labelDate(b.date)}: ${fmt(b.value, true)}${b.status === 'later_baseline' ? ' · later than launch' : ''}` : 'Launch baseline unavailable');
       if (b.status === 'baseline_zero') html('small', row, 'Zero baseline: percentage change is undefined');
       if (p.related_values && line.metric_key === 'rating') html('small', row, `Interval ${fmt(p.related_values.rating_lower, true)}–${fmt(p.related_values.rating_upper, true)} · ${fmt(p.related_values.vote_count, true)} votes`);
+      if (p.history_basis === 'reconstructed_current_relationships') html('small', row, 'Reconstructed from current relationships; removed likes/follows are excluded.');
       if (p.secondary_source) html('small', row, 'Historical community archive');
       if (line.direction === 'lower_is_better') html('small', row, 'Lower rank is better; positive % means a higher rank number.');
     }
@@ -133,10 +134,16 @@
       const p=html('p',$('source-details'));
       const link=html('a',p,label);link.href=url;link.target='_blank';link.rel='noopener noreferrer';
     }
+    for (const credit of data.attributions || []) {
+      const p=html('p', $('source-details'), credit.notice + ' ');
+      const link=html('a',p,credit.publisher);link.href=credit.url;link.target='_blank';link.rel='noopener noreferrer';
+      if (credit.license_url) { const license=html('a',p,' · '+credit.license);license.href=credit.license_url;license.target='_blank';license.rel='noopener noreferrer'; }
+      if (credit.revision) html('small',p,' Revision '+credit.revision);
+    }
     for (const line of data.lines) {
       const row=html('section',$('source-details'),undefined,'source-entry');
       html('h3',row,line.label);
-      html('p',row,`Scope: ${line.subject.label || line.subject.key} · ${line.scope}. ${line.measurement_kind==='state'?'State at publication':'Flow over a window'} · ${line.unit}.`);
+      html('p',row,`Scope: ${line.subject.label || line.subject.key} · ${line.scope}. ${line.measurement_kind==='state'?'State at observation or publication':'Flow over a window'} · ${line.unit}.`);
       html('p',row,`Window: ${line.window_mode}${line.window_amount?' · '+line.window_amount:''}${line.window_unit?' '+line.window_unit:''}. Baseline: ${line.baseline.date || 'unavailable'} (${line.baseline.status.replaceAll('_',' ')}).`);
       const observed=line.points.filter(p=>p.observed);
       const sample=observed.at(-1);
@@ -149,9 +156,9 @@
           if (e.archive) html('p',row,`Archive evidence: ${JSON.stringify(e.archive)}`);
         }
       }
-      if (line.source==='hf') html('p',row,'HF downloads are a rolling 30-day count. Historical community snapshots may have unknown cutoff time and timezone; they are not daily download totals.');
+      if (line.source==='hf' && line.metric_key==='downloads') html('p',row,'HF downloads are a rolling 30-day count. Historical community snapshots may have unknown cutoff time and timezone; they are not daily download totals.');
       if (line.source==='openrouter') html('p',row,'Usage covers OpenRouter only. A model missing from its available top-50 rows is not assigned zero.');
-      if (line.source==='arena') html('p',row,'Overall text, style-controlled leaderboard. Published states carry forward between observations; score intervals and votes are retained in the evidence.');
+      if (line.source==='arena') html('p',row,`Overall text, ${line.source_configuration?.config==='text'?'no style control':'style-controlled'}. Published states carry forward between observations; score intervals and votes are retained in the evidence.`);
       const status=data.collection_status[line.source];
       if(status) html('p',row,`Last collection: ${status.status}; ${status.completed_at || status.last_attempt_at}.`);
       const health=data.collection_health?.[line.source];

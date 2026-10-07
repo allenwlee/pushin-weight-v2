@@ -214,3 +214,16 @@ def test_sync_command_dry_run_never_calls_provider(monkeypatch):
         stdout=stdout,
     )
     assert "dry run" in stdout.getvalue()
+
+
+def test_cycle_author_context_queries_are_constant(django_assert_num_queries):
+    from monitor.cycle import CycleRunner
+
+    items = []
+    for number in range(20):
+        account = Account.objects.create(author_id=str(10000 + number), handle=f'author{number}')
+        TwitterListMembership.objects.create(list_id=42, account=account, active=True, source='call_a')
+        items.append({'author_id': account.author_id})
+    with django_assert_num_queries(2):
+        CycleRunner._prepare_call_a_roles(object(), items, list_id=42)
+    assert all(item['_author_membership_source'] == 'call_a' for item in items)

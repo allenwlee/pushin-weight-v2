@@ -219,5 +219,9 @@ def build_report(snapshots, start_date, end_date):
         "statuses": statuses,
         "unresolved": {k: sorted(v) for k, v in unresolved.items()},
         "openrouter_as_of": sorted(or_as_of),
+        "arena_config": {
+            "arena-overall-text-v1": "text",
+            "arena-overall-text-style-control-v1": "text_style_control",
+        }.get(next(iter(score_contracts), None)),
         "contract": frozen,
     }

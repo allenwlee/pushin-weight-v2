@@ -3,7 +3,7 @@
 Usage: python -m scripts.benchmark_download_collector.verify_pulse_browser
   --url http://localhost:PORT/benchmarks/CONTRACT/deepseek/?end=2026-10-06
   --output .local/pulse-browser --session benchmark-review
-Requires the retained real-data comparison with five lines and a later Arena baseline.
+Requires a retained real-data comparison and a later Arena baseline.
 """
 
 import argparse
@@ -19,6 +19,8 @@ def main():
     parser.add_argument("--url", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--session", required=True)
+    parser.add_argument("--expected-lines", type=int, default=5)
+    parser.add_argument("--engagement", action="store_true")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
     receipt = []
@@ -37,7 +39,7 @@ def main():
     def check(expression):
         browser(
             "eval",
-            f'if (!({expression})) throw new Error("Pulse assertion failed"); true',
+            f'(async () => {{ if (!({expression})) throw new Error("Pulse assertion failed"); return true; }})()',
         )
 
     def screenshot(name):
@@ -51,23 +53,35 @@ def main():
         browser("set", "viewport", "1440", "1080")
         browser("open", args.url)
         browser("wait", "#legend button")
-        check('document.querySelectorAll("path.series").length === 5')
-        check('document.querySelectorAll("#legend button").length === 5')
+        check(
+            f'document.querySelectorAll("path.series").length === {args.expected_lines}'
+        )
+        check(
+            f'document.querySelectorAll("#legend button").length === {args.expected_lines}'
+        )
         check(
             'document.querySelector("#readout").innerText.includes("later than launch")'
         )
         check(
             'document.querySelector("#pulse-chart").getBoundingClientRect().height > 300'
         )
+        check(
+            f'new Set([...document.querySelectorAll("path.series")].map(p=>p.getAttribute("stroke"))).size === {args.expected_lines}'
+        )
         screenshot("desktop.png")
-        for key in ["posts", "downloads", "tokens", "score", "rank"]:
+        keys = ["posts", "downloads", "tokens", "score", "rank"]
+        if args.engagement:
+            keys += ["hf_likes", "hf_followers"]
+        for key in keys:
             selector = f'#legend button[data-line="{key}"]'
             browser("click", selector)
             check(
-                f'document.querySelector({json.dumps(selector)}).getAttribute("aria-pressed") === "false" && document.querySelectorAll("path.series").length === 4'
+                f'document.querySelector({json.dumps(selector)}).getAttribute("aria-pressed") === "false" && document.querySelectorAll("path.series").length === {args.expected_lines - 1}'
             )
             browser("click", selector)
-            check('document.querySelectorAll("path.series").length === 5')
+            check(
+                f'document.querySelectorAll("path.series").length === {args.expected_lines}'
+            )
         browser("focus", "#day")
         browser("press", "Home")
         check('document.querySelector("#day").value === "0"')
@@ -93,6 +107,16 @@ def main():
         check(
             'document.querySelector("#source-details").innerText.includes("CC BY 4.0")'
         )
+        if args.engagement:
+            check(
+                'document.querySelector("#source-details").innerText.includes("no style control")'
+            )
+            check(
+                'document.querySelector("#source-details").innerText.includes("Apache-2.0")'
+            )
+            check(
+                'await fetch(document.querySelector("#download-data").href).then(r=>r.json()).then(d=>d.attributions.some(a=>a.license_text && a.license_text.includes("TERMS AND CONDITIONS")))'
+            )
         browser("press", "Escape")
         check('!document.querySelector("#sources").open')
         browser("select", "#scale", "compressed")
@@ -105,7 +129,9 @@ def main():
         browser("set", "viewport", "1440", "1080")
         browser("open", args.url.replace("/deepseek/", "/glm/"))
         browser("wait", "#legend button")
-        check('document.querySelectorAll("path.series").length === 5')
+        check(
+            f'document.querySelectorAll("path.series").length === {args.expected_lines}'
+        )
         check('document.querySelector("h1").innerText === "GLM 5.3 Flash"')
         screenshot("glm.png")
         browser("errors")

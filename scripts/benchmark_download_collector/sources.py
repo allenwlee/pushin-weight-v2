@@ -18,9 +18,9 @@ from .identity import count, day, days, require, timestamp
 
 ARENA_URL = "https://datasets-server.huggingface.co/filter"
 ARENA_DATASET = "lmarena-ai/leaderboard-dataset"
-ARENA_CONFIG = "text_style_control"
-ARENA_CONTRACT = "arena-overall-text-style-control-v1"
-ARENA_LATEST = "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset/resolve/main/text_style_control/latest-00000-of-00001.parquet"
+ARENA_CONFIG = "text"
+ARENA_CONTRACT = "arena-overall-text-v1"
+ARENA_LATEST = "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset/resolve/main/text/latest-00000-of-00001.parquet"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/datasets/rankings-daily"
 SOURCE_URLS = {
     "arena": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
@@ -139,8 +139,12 @@ class Budget:
             self.sleep(delay)
         raise SourceError("request_error")
 
-    def arena_asset(self):
-        url = ARENA_LATEST
+    def arena_asset(self, config=ARENA_CONFIG, split="latest"):
+        require(
+            config in {"text", "text_style_control"} and split in {"latest", "full"},
+            "unsupported Arena configuration",
+        )
+        url = f"https://huggingface.co/datasets/{ARENA_DATASET}/resolve/main/{config}/{split}-00000-of-00001.parquet"
         for _ in range(4):
             value = self.get(url, {}, asset=True)
             if isinstance(value, bytes):
@@ -148,7 +152,7 @@ class Budget:
             url = value["redirect"]
         raise SourceError("arena_redirect_cap")
 
-    def hf_counts(self, repo_id):
+    def hf_counts(self, repo_id, account_kind=None):
         self.check()
         client = HFMetadataClient(
             self.client,
@@ -158,11 +162,15 @@ class Budget:
             clock=self.clock,
             sleep=self.sleep,
         )
-        result = client.download_counts(repo_id)
+        result = (
+            client.account_counts(repo_id, account_kind)
+            if account_kind
+            else client.download_counts(repo_id)
+        )
         self.remaining -= len(result.attempts)
         if result.outcome != "ok":
             raise SourceError(result.outcome)
-        count(result.payload.get("downloads"))
+        count(result.payload.get("numFollowers" if account_kind else "downloads"))
         all_time = result.payload.get("downloadsAllTime")
         if all_time is not None:
             count(all_time)
@@ -198,14 +206,14 @@ def validate_arena_row(row, start_date, end_date):
     return published, model
 
 
-def arena_latest(budget):
+def arena_latest(budget, *, config=ARENA_CONFIG):
     """The official latest artifact avoids the Dataset Viewer's cold search index."""
     try:
         import pyarrow as pa
         import pyarrow.parquet as pq
     except ImportError as exc:
         raise SourceError("install_benchmark_extra_for_arena") from exc
-    content = budget.arena_asset()
+    content = budget.arena_asset(config=config)
     try:
         parquet = pq.ParquetFile(
             pa.BufferReader(content),
@@ -251,23 +259,26 @@ def arena_latest(budget):
     return {
         "status": "ok",
         "rows": rows,
-        "config": ARENA_CONFIG,
-        "score_contract": ARENA_CONTRACT,
+        "config": config,
+        "score_contract": f"arena-overall-{config}-v1",
         "as_of": published,
         "coverage": "latest_publication_only",
-        "artifact_url": ARENA_LATEST,
+        "artifact_url": f"https://huggingface.co/datasets/{ARENA_DATASET}/resolve/main/{config}/latest-00000-of-00001.parquet",
         "artifact_sha256": hashlib.sha256(content).hexdigest(),
         "start_date": published,
         "end_date": published,
     }
 
 
-def arena(budget, start_date, end_date, *, max_pages=50, history=False):
+def arena(
+    budget, start_date, end_date, *, max_pages=50, history=False, config=ARENA_CONFIG
+):
     """Read complete publications, including at most 30 days of carry-in history."""
     require(type(max_pages) is int and max_pages > 0, "max_pages must be positive")
     days(start_date, end_date)
+    require(config in {"text", "text_style_control"}, "unsupported Arena configuration")
     if not history:
-        return arena_latest(budget)
+        return arena_latest(budget, config=config)
     start = (day(start_date) - timedelta(days=30)).isoformat()
     where = f"\"category\"='overall' AND \"leaderboard_publish_date\">='{start}' AND \"leaderboard_publish_date\"<='{end_date}'"
     rows, total, revision = [], None, None
@@ -277,7 +288,7 @@ def arena(budget, start_date, end_date, *, max_pages=50, history=False):
             ARENA_URL,
             {
                 "dataset": ARENA_DATASET,
-                "config": ARENA_CONFIG,
+                "config": config,
                 "split": "full",
                 "where": where,
                 "offset": len(rows),
@@ -312,8 +323,8 @@ def arena(budget, start_date, end_date, *, max_pages=50, history=False):
                 "status": "ok",
                 "rows": rows,
                 "revision": revision,
-                "config": ARENA_CONFIG,
-                "score_contract": ARENA_CONTRACT,
+                "config": config,
+                "score_contract": f"arena-overall-{config}-v1",
                 "start_date": start,
                 "end_date": end_date,
                 "as_of": max(
@@ -329,11 +340,27 @@ def hf(budget, products):
     for product in products:
         row = {
             "product_key": product["product_key"],
-            "repo_id": product["repo_id"],
+            **(
+                {
+                    "account_identifier": product["account_identifier"],
+                    "account_kind": product["account_kind"],
+                }
+                if "account_identifier" in product
+                else {"repo_id": product["repo_id"]}
+            ),
             "observed_at": datetime.now(UTC).isoformat(),
         }
         try:
-            row.update(status="ok", raw=budget.hf_counts(product["repo_id"]))
+            row.update(
+                status="ok",
+                raw=(
+                    budget.hf_counts(
+                        product["account_identifier"], product["account_kind"]
+                    )
+                    if "account_identifier" in product
+                    else budget.hf_counts(product["repo_id"])
+                ),
+            )
         except (ValueError, TypeError, KeyError) as exc:
             row.update(status="error", error=safe_error(exc))
         row["observed_at"] = datetime.now(UTC).isoformat()
@@ -400,9 +427,9 @@ def openrouter(budget, start_date, end_date, *, key, today=None):
         if model == "other":
             other.add(row["date"])
     require(
-        all(n <= 51 for n in day_counts.values()), "openrouter_unexpected_population"
+        all(n - int(day in other) <= 50 for day, n in day_counts.items()),
+        "openrouter_unexpected_population",
     )
-    require(set(day_counts) == other, "openrouter_missing_other_bucket")
     # Empty/missing dates are retained as missing data, never filled with zero.
     return {
         "status": "ok",

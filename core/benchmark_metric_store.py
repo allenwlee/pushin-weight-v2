@@ -223,16 +223,18 @@ def native_rows(source, payload):
             if row["model_permaslug"] == "other":
                 others.add(row["date"])
         require(
-            all(n <= 51 for n in counts.values()) and set(counts) == others,
+            all(n - int(day in others) <= 50 for day, n in counts.items()),
             "incomplete OpenRouter source population",
         )
     for row in rows:
         metadata = dict(row.get("_source_metadata", {}))
         if source == "hf":
             out = {
-                "source_identifier": row["repo_id"],
-                "source_subject_kind": "repository",
-                "identifier_scope": "model",
+                "source_identifier": row.get("account_identifier") or row["repo_id"],
+                "source_subject_kind": "account"
+                if "account_identifier" in row
+                else "repository",
+                "identifier_scope": row.get("account_kind", "model"),
                 "source_metadata": metadata,
                 "dimensions": {},
                 "metrics": {},
@@ -244,9 +246,28 @@ def native_rows(source, payload):
                 for wire, key in [
                     ("downloads", "downloads"),
                     ("downloadsAllTime", "downloads_all_time"),
+                    ("likes", "likes"),
+                    ("numFollowers", "followers"),
                 ]:
                     if wire in raw:
                         out["metrics"][key] = {"value": raw[wire]}
+                if (
+                    metadata.get("history_basis")
+                    == "reconstructed_current_relationships"
+                ):
+                    require(
+                        set(out["metrics"]) <= {"likes", "followers"},
+                        "reconstruction only supports engagement",
+                    )
+                    require(
+                        metadata.get("includes_removed_relationships") is False,
+                        "reconstruction removal coverage required",
+                    )
+                    day = native_date(metadata["reconstruction_date"])
+                    for point in out["metrics"].values():
+                        point.update(
+                            temporal_status="date_only", as_of_date=day.isoformat()
+                        )
             if row.get("observed_at"):
                 out["observed_at"] = row["observed_at"]
         elif source == "openrouter":
@@ -277,7 +298,9 @@ def native_rows(source, payload):
             day = row["leaderboard_publish_date"]
             require(row["category"] == "overall", "Arena category mismatch")
             config = payload.get("config")
-            require(config == "text_style_control", "Arena configuration mismatch")
+            require(
+                config in {"text", "text_style_control"}, "Arena configuration mismatch"
+            )
             out = {
                 "source_identifier": row["model_name"],
                 "source_subject_kind": "model",
@@ -302,10 +325,10 @@ def native_rows(source, payload):
                     if row.get(key) is not None
                 },
             }
-            require(
-                row["rating_lower"] <= row["rating"] <= row["rating_upper"],
-                "Arena interval mismatch",
-            )
+            if row.get("rating_lower") is not None:
+                require(row["rating_lower"] <= row["rating"], "Arena interval mismatch")
+            if row.get("rating_upper") is not None:
+                require(row["rating"] <= row["rating_upper"], "Arena interval mismatch")
         else:
             raise ValueError("unsupported native adapter")
         yield out
@@ -327,6 +350,11 @@ def collection_lock(contract, source):
 
 def prepare_rows(contract, source, payload, *, adapter=None):
     settings = contract.source_configuration[source]
+    if source == "arena":
+        require(
+            payload.get("config") == settings.get("config", "text_style_control"),
+            "Arena contract configuration mismatch",
+        )
     definitions = {
         obj.metric_key: obj
         for obj in SourceMetric.objects.filter(
@@ -372,6 +400,8 @@ def prepare_rows(contract, source, payload, *, adapter=None):
                 row.get("published_at"),
                 row.get("published_date"),
                 metadata.get("archive_snapshot_date"),
+                metadata.get("reconstruction_date"),
+                metadata.get("history_basis"),
                 metadata.get("immutable_revision"),
             ]
         )
@@ -413,8 +443,16 @@ def prepare_rows(contract, source, payload, *, adapter=None):
         values = []
         try:
             if observation["status"] == "ok":
+                applicable_required = required
+                if source == "hf" and (
+                    kind == "account"
+                    or metadata.get("history_basis")
+                    == "reconstructed_current_relationships"
+                ):
+                    applicable_required = required - {"downloads", "downloads_all_time"}
                 require(
-                    required <= row.get("metrics", {}).keys(), "required metric absent"
+                    applicable_required <= row.get("metrics", {}).keys(),
+                    "required metric absent",
                 )
                 for metric, point in row.get("metrics", {}).items():
                     if metric not in definitions:
@@ -507,6 +545,29 @@ def persist_source(
             run.observed_at = now
             run.request_params = request_params or {}
             run.source_metadata = source_metadata or {}
+            if source == "arena" and run.source_metadata.get("publication_dates"):
+                dates = run.source_metadata["publication_dates"]
+                require(
+                    isinstance(dates, list) and len(dates) <= 366,
+                    "publication date budget",
+                )
+                dates = sorted({native_date(d).isoformat() for d in dates})
+                require(
+                    payload.get("coverage")
+                    in {"publication_window", "latest_publication_only"},
+                    "unverified publication context",
+                )
+                require(
+                    all(
+                        r["leaderboard_publish_date"] in dates for r in payload["rows"]
+                    ),
+                    "publication context excludes rows",
+                )
+                run.source_metadata = {
+                    **run.source_metadata,
+                    "publication_start": dates[0],
+                    "publication_end": dates[-1],
+                }
             run.request_count = payload.get("request_count", 0)
             require(
                 type(run.request_count) is int and run.request_count >= 0,
@@ -524,11 +585,21 @@ def persist_source(
         with transaction.atomic():
             successful = set()
             errors = False
-            for data, values in prepared:
-                observation = MetricObservation.objects.create(run=run, **data)
-                MetricValue.objects.bulk_create(
-                    [MetricValue(observation=observation, **value) for value in values]
-                )
+            observations = MetricObservation.objects.bulk_create(
+                [MetricObservation(run=run, **data) for data, _ in prepared],
+                batch_size=1000,
+            )
+            MetricValue.objects.bulk_create(
+                [
+                    MetricValue(observation=observation, **value)
+                    for observation, (_, values) in zip(
+                        observations, prepared, strict=True
+                    )
+                    for value in values
+                ],
+                batch_size=1000,
+            )
+            for observation, (_, values) in zip(observations, prepared, strict=True):
                 errors |= observation.status == "error"
                 if observation.mapping_id and values:
                     successful.add(observation.mapping_id)
@@ -537,7 +608,13 @@ def persist_source(
                 "success"
                 if not errors and run.success_count == run.selected_count
                 else "partial"
-                if successful or (prepared and not errors)
+                if successful
+                or (prepared and not errors)
+                or (
+                    source == "arena"
+                    and run.source_metadata.get("publication_dates")
+                    and not errors
+                )
                 else "failed"
             )
             run.completed_at = timezone.now()

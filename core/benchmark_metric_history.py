@@ -48,6 +48,8 @@ def prepare_history(manifest):
     rows = []
     revisions = []
     as_of = []
+    publication_dates = set()
+    complete_publication_context = True
     for snap in snapshots:
         day = native_date(snap["date"])
         require(start <= day <= end, "snapshot outside history range")
@@ -80,9 +82,35 @@ def prepare_history(manifest):
                 as_of.append(payload["as_of"])
         if source == "arena":
             require(
-                payload.get("config") == "text_style_control",
+                payload.get("config")
+                == contract.source_configuration[source].get(
+                    "config", "text_style_control"
+                ),
                 "Arena history configuration mismatch",
             )
+            dates = payload.get("publication_dates")
+            if dates is None or payload.get("coverage") not in {
+                "publication_window",
+                "latest_publication_only",
+            }:
+                complete_publication_context = False
+            else:
+                require(
+                    isinstance(dates, list) and len(dates) <= 366,
+                    "publication date budget",
+                )
+                dates = {native_date(d).isoformat() for d in dates}
+                require(
+                    all(start <= native_date(d) <= end for d in dates),
+                    "Arena publication outside range",
+                )
+                require(
+                    all(
+                        r["leaderboard_publish_date"] in dates for r in payload["rows"]
+                    ),
+                    "publication context excludes rows",
+                )
+                publication_dates.update(dates)
         for row in payload["rows"]:
             item = copy.deepcopy(row)
             # Import time belongs to this run; the archive's timestamp is provenance.
@@ -136,7 +164,9 @@ def prepare_history(manifest):
     require(len(rows) <= 25000, "historical row budget exceeded")
     payload = {"status": "ok", "rows": rows}
     if source == "arena":
-        payload["config"] = "text_style_control"
+        payload["config"] = contract.source_configuration[source].get(
+            "config", "text_style_control"
+        )
     if source == "openrouter":
         require(len(snapshots) == 1, "one complete OpenRouter revision per import")
         payload.update(meta={"version": "v1"}, as_of=max(as_of) if as_of else None)
@@ -155,6 +185,9 @@ def prepare_history(manifest):
         },
         "secondary_source": source == "hf",
     }
+    if source == "arena" and complete_publication_context and publication_dates:
+        payload["coverage"] = "publication_window"
+        metadata["publication_dates"] = sorted(publication_dates)
     key = digest([contract.contract_hash, source, metadata, digest(payload)])
     return contract, source, key, payload, metadata
 
@@ -165,6 +198,10 @@ def import_history(manifest, *, apply=False):
         from core.benchmark_metric_store import prepare_rows
 
         prepared = prepare_rows(contract, source, payload)
+        require(
+            all(row["status"] != "error" for row, _ in prepared),
+            "history contains invalid observation",
+        )
         return {
             "applied": False,
             "ingestion_key": key,

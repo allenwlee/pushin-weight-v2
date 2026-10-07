@@ -96,7 +96,7 @@ class Command(BaseCommand):
                         selected = [
                             {
                                 "product_key": str(m.subject.product_id),
-                                "repo_id": m.external_identifier,
+                                **({"account_identifier": m.external_identifier, "account_kind": m.identifier_scope} if m.source_subject_kind == "account" else {"repo_id": m.external_identifier}),
                             }
                             for m in contract.mappings.filter(
                                 source_id="hf"
@@ -112,7 +112,8 @@ class Command(BaseCommand):
                         )
                     else:
                         result = sources.arena(
-                            budget, params["start_date"], params["end_date"]
+                            budget, params["start_date"], params["end_date"],
+                            config=contract.source_configuration[source].get("config", "text_style_control"),
                         )
                     result["request_count"] = options["max_requests"] - budget.remaining
                     return result

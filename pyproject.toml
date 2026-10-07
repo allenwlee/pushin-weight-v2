@@ -61,3 +61,6 @@ dev = [
     "hypothesis>=6.138,<7",
     "playwright>=1.62.0",
 ]
+
+[tool.setuptools.package-data]
+core = ["benchmark_licenses/*.txt"]

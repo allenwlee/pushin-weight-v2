@@ -185,7 +185,7 @@ def resolve_call_a_author_contexts(
             list_id=list_id,
             active=True,
             account__author_id__in=author_ids,
-        )
+        ).select_related("account")
     }
     edges_by_author: dict[str, list[BrandAccount]] = {}
     for edge in BrandAccount.objects.filter(account__data_source_id="x").filter(

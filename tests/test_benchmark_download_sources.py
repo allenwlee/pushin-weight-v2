@@ -98,7 +98,7 @@ def test_arena_paginates_exactly_and_accepts_official_float64_votes():
     result = arena(budget(respond), "2026-10-01", "2026-10-02", history=True)
     assert len(result["rows"]) == 101
     assert [r.url.params["offset"] for r in requests] == ["0", "100"]
-    assert requests[0].url.params["config"] == "text_style_control"
+    assert requests[0].url.params["config"] == "text"
     assert "\"category\"='overall'" in requests[0].url.params["where"]
 
 
@@ -207,6 +207,7 @@ def test_hf_narrow_counter_read_keeps_all_time_optional_and_identity_exact():
         assert request.url.params.get_list("expand") == [
             "downloads",
             "downloadsAllTime",
+            "likes",
         ]
         return httpx.Response(200, json={"id": "maker/Alpha-1", "downloads": 0})
 
@@ -233,7 +234,6 @@ def test_openrouter_keeps_variants_exact_and_large_token_strings():
     [
         "missing_key",
         "duplicate",
-        "missing_other",
         "negative",
         "wrong_date",
         "version",
@@ -244,8 +244,6 @@ def test_openrouter_rejects_untrustworthy_totals(problem):
     payload = deepcopy(or_payload())
     if problem == "duplicate":
         payload["data"].append(payload["data"][0])
-    elif problem == "missing_other":
-        payload["data"].pop()
     elif problem == "negative":
         payload["data"][0]["total_tokens"] = "-10"
     elif problem == "wrong_date":
@@ -341,3 +339,10 @@ def test_latest_file_retains_publication_after_openrouter_window():
     )
     assert result["rows"] == [arena_row()]
     assert result["as_of"] == "2026-10-01"
+
+
+def test_openrouter_accepts_small_population_without_other():
+    payload = deepcopy(or_payload())
+    payload["data"] = [r for r in payload["data"] if r["model_permaslug"] != "other"]
+    result = openrouter(budget(lambda _: httpx.Response(200, json=payload)), "2026-10-01", "2026-10-01", key="test")
+    assert result["rows"] == payload["data"]

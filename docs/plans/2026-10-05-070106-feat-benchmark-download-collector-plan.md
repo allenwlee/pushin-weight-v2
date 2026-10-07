@@ -16,7 +16,7 @@ ollija:
 
 Compare post volume, benchmark scores, HF downloads and OpenRouter token usage using products we identify and a taxonomy we control. Product relationships store typed parent/child links using HF's vocabulary. Named product groups, such as M-family, have explicit membership; they are not compulsory levels between brands and products. Django queries interpret successor chains and groups while company ownership and brand membership remain separate.
 
-The proposal contains fifteen new tables: eight shared source/metric tables and seven taxonomy/history/attribution tables. Reuse the existing accounts table and its company, brand and person links; do not create source_entities or source_accounts. Put the descriptive source_type directly on data_sources rather than creating data_source_types. The three product tables are product_relationships, product_groups and product_group_memberships. They replace the fixed product_families tier and product-level links in the old generic relationship proposal. The subject registry still supports direct company, brand, group and product mentions.
+The proposal contains fifteen new tables: eight shared source/metric tables and seven taxonomy/history/attribution tables. Reuse the existing accounts table and its company, brand and person links; do not create source_entities or source_accounts. Put the descriptive source_type directly on data_sources rather than creating data_source_types. The three product tables are product_relationships, product_groups and product_group_memberships. They replace the fixed product_families tier and product-level links in the old generic relationship proposal. The subject registry supports company, brand, group and product attribution, plus source-qualified account measurements for followers. Account measurement subjects do not infer product mentions.
 
 Measurements have two primary kinds: state at an effective time, and flow over an interval. Cumulative downloads are flow since the provider's counting origin. There is no third cumulative kind, cumulative boolean or duplicate origin column. Window mode, duration, source timezone and actual datapoint bounds are separate. Unknown times remain unknown.
 
@@ -26,11 +26,132 @@ The October 6 Pulse exercise adds a production comparison contract: each line ha
 
 Implementation now runs in the isolated feature worktree and PostgreSQL database on fuchitalee. It remains independent of G1–G5 and includes historical imports, a database-backed Pulse response and UI, an offline report using the same series, and collection operations with separately authorized activation. Production remains unchanged. Verification must reproduce the five-line comparison, preserve exact raw values and coverage, and prove unchanged legacy counting on isolated PostgreSQL. Account abstraction requires a staged primary-key/foreign-key migration and source-qualified lookups, including the migration-only global handle index; this is not a column rename. Existing unset product types and unconfirmed mappings remain setup work; illustrative M-series links are not verified HF observations.
 
+The October 7 review adds three required fixes before renewed tested-and-ready sign-off: portable source/license attribution, acceptance of valid OpenRouter responses without an `other` bucket, and removal of per-author account queries. Dataset-specific permission records will use existing metadata. Public release additionally needs a documented HF/X permission basis; AA and unreviewed archives remain disabled. These release conditions do not prevent isolated verification, and this amendment authorizes plan edits only.
+
+## October 7 amendment — engagement and complete available history
+
+This amendment supersedes earlier planning-only statements for the work below. The owner authorizes implementation, bounded source collection, isolated PostgreSQL imports, verification and a reviewed PR through **tested and ready**. Production writes, migration, deployment and recurring activation remain excluded. Preserve the temporary hourly HF timing worker unchanged. The live production backup has not been taken; it remains a verified pre-deployment prerequisite.
+
+### Settled scope
+
+- **R26 / KD16 — HF engagement:** collect current integer repository `likes` and account `numFollowers` as state measurements with no flow window. Preserve decreases, UTC observation time and unknown effective time. Reuse existing Account and shared metric tables; add an account target to MeasurementSubject and account crosswalk validation. Repository likes retain exact repository attribution.
+- **R27 / KD17 — history provenance:** distinguish `observed_snapshot`, `archived_snapshot` and `reconstructed_current_relationships`. HF `likedAt`/`followedAt` can reconstruct arrival dates of relationships still present at retrieval, not the true past total including subsequently removed relationships. Keep reconstructions separate from snapshot series and label baseline, export and chart evidence. Do not retain follower/liker profile data when aggregate daily counts and provenance suffice. Archive revision/selection hash, retrieval timestamp, date precision and unknown timezone remain explicit.
+- **R28 / KD18 — OpenRouter history:** perform one logical initial backfill for the entire available completed-day history, retaining **all reported models on every day**, including untracked/unmapped models and the optional `other` aggregate. This is the union of changing historical top-50 cohorts, not today's top 50. Keep raw source rows even when no canonical mapping exists; do not fabricate products. Use provider-required date chunks if one HTTP request cannot cover the interval, checkpoint each chunk and never describe a partial run as complete. Preserve endpoint floor/ceiling and missing days in coverage; no invented zeroes or allocation of `other`.
+- **R29 / KD19 — HF/Arena history:** collect accessible history only for tracked brands and their evidenced repositories/accounts/provider identifiers. Preserve the existing Google exclusion except reviewed Gemma/Gemini products. Retain unresolved candidates as coverage gaps, not automatic canonical matches. Arena keeps publication dates, exact variants and the overall `text` configuration without style control (R30). HF archive scope includes downloads and likes; follower/like reconstructions are separately labeled.
+- **KD20 — deferred:** explicit time-bounded proxy attribution is a potential future TODO only. Do not implement proxy rules, proxy tables or inferred release attribution in this run.
+
+KD16–KD20 are session-settled, user-directed: the rejected alternatives are separate source-entity/history tables, indistinguishable reconstructed history, brand-filtered OR collection, provider-wide HF/Arena collection, and immediate proxy implementation respectively. They preserve existing identity decisions, truthful history and the owner's collection scope.
+
+**R30 / KD21 — Arena without style control (latest owner direction):** use the official dataset configuration `text`, category `overall`, corresponding to `https://arena.ai/leaderboard/text/overall-no-style-control`, for new historical collection and comparison contracts. G3's saved `kalshi-arena-series.json` and a fresh read of Kalshi KXLLM1 both identify this settlement source; this is evidence for that series, not a universal Kalshi eligibility rule. Supersedes R3/R8/R23 and U17 references to style-controlled selection for new work. Preserve old `text_style_control` observations and immutable contracts exactly; support reading them separately. Pin configuration in new contracts, observations, imports, UI/export labels and tests; reject an incoming configuration differing from its contract. Never relabel or blend old scores. No new table is needed. Add tests proving both configurations remain separate and mismatched imports fail. Proxy attribution stays deferred.
+
+### Execution and verification additions
+
+**U16 — HF engagement and account measurement support (R26–R27).** Extend `core/models.py` with nullable one-to-one Account target and exactly-one-target constraint; extend source-mapping kind constraint. Add a new migration after this branch's 0067 without editing released migrations. Update `core/measurement_taxonomy.py`, `core/benchmark_metric_identity.py`, `core/benchmark_metric_store.py`, bounded HF client/collector and `core/benchmark_metric_series.py`. Freeze source-qualified account identity in reviewed taxonomy; reject cross-source and mismatched account handles. Add optional likes/followers definitions so existing download-only contracts remain valid. Mixed repository/account HF rows must request and validate metrics applicable to that entity. Reuse existing observation/value tables; Account.followers_count is at most a latest-value cache, never the history authority. Permit account series without allowing account subjects to become inferred post/product attribution.
+
+Proof: real PostgreSQL constraint and forward migration tests; positive repo likes/account followers; wrong-source/wrong-account rejection; unchanged download-only contracts; count decreases, zero, missing values, UTC timestamps; idempotent replay and state-history queries. Preserve old contract snapshots. UI/export must identify historical reconstruction explicitly and never silently combine it with observed snapshots.
+
+**U17 — resumable historical collection (R22, R27–R29).** Add bounded acquisition and coverage tooling under `scripts/benchmark_download_collector/`, calling existing shared history writer and management commands. Separate source acquisition from canonical identity review. Save raw/selected artifacts and a manifest on fuchitalee; cap physical requests, redirects, bytes, pages and elapsed time; resume by verified hashes, retain errors and report incomplete status nonzero. Read secrets by exact variable without executing secret files; never save keys or signed URLs. For OR determine its exposed earliest completed date and retrieve every requested chunk/all returned models once. For HF select tracked-brand repo/account cohort, inspect available archive revisions and preserve explicit gaps. For Arena collect all available scoped publications with complete-publication context sufficient to detect model removal. Existing 366-day per-manifest and row limits may be retained by partitioning; do not silently truncate all-history acquisition to one year.
+
+Proof: chunk boundaries, historical cohort turnover, unmapped models and optional other, duplicate rejection, resume/no duplicate writes, partial failures, archive selection/hash and missing dates, reconstructed-versus-observed separation. Produce a real-data coverage report per provider and entity with requested/returned interval, row count, unresolved mappings and missing dates. Before sign-off import collected evidence into the isolated database and exercise SQL/ORM and Pulse consumers. Inaccessible upstream history is a documented source limitation, not a successful imported interval.
+
+**U18 — review fixes and readiness.** Complete existing A1–A5 required fixes, including portable attribution, valid OR no-other responses and constant-query account lookup. Bound historical serving to requested range plus baseline/prior Arena publication. Run targeted PostgreSQL, compatibility, exporter and browser checks, review actual diff, and update PR50/evidence. Existing unchanged checks may be reused only within their recorded scope; new account/history behavior requires new proof. No production readiness claim before this amendment's evidence exists.
+
+### Deployment placement
+
+1. Before deployment: acquire source history, validate mappings/provenance, import into isolated PostgreSQL, inspect coverage and charts. Preserve reusable manifests/artifacts and explicit unresolved source limitations.
+2. After later owner deployment approval: take and verify live production backup (a few hours earlier is acceptable), reconcile the actual production migration graph and inbound Account FKs, apply reviewed schema, then replay validated history into production using source-qualified identities rather than copying local primary keys blindly.
+3. Catch up the interval since acquisition, verify production counts/date ranges, then activate authorized recurring collection. Replays must be idempotent. Neither the isolated database nor its restore rehearsal is the required live backup.
+
+## October 7 execution checkpoint — 11:45 JST
+
+Endpoint remains **tested and ready**, not production. Work is still in progress;
+this amendment has not been signed off or pushed. No live backup has been taken.
+
+- U16 code/migration and shared account measurement support are implemented in the
+  isolated worktree. Migration `0068_account_measurement_subject` is applied only
+  to the retained local PostgreSQL database. Existing production/G2 migration
+  numbers have advanced independently; reconciliation is a release prerequisite.
+- New review contract: `371b87c8-03c0-4d1b-b44c-55b522625c5b`, Arena `text`/overall.
+  Older style-controlled and intermediate contracts remain unchanged.
+- OpenRouter: all 32,742 returned rows imported for 2025-01-01–2026-10-06.
+  Source response omits 2025-06-15 and 2025-07-15; these remain gaps.
+- Arena: 21,224 tracked-organization rows imported across 247 publication dates,
+  2023-05-08–2026-10-02. Complete publication dates survive cohort filtering.
+- HF engagement: scoped to 24 confirmed accounts plus 1,578 repositories under
+  tracked enabled brands. Acquisition is running; one repository currently returns
+  401 (`nvidia/Nemotron-3-Diarization-preview`). No private access is attempted.
+  849 completed checkpoints have already imported 367,713 current/reconstructed
+  observations. Reconstructed relationships remain separate from observed stock.
+- HF daily archive: enumerated 685 model revisions, 2024-07-29–2026-10-06.
+  Acquisition continues, with 30 checkpoints / 46,775 selected repository rows
+  imported so far. Do not equate this partial import with complete history.
+  Four archive workers share 150,000 physical requests, 32 GiB and a four-hour
+  execution ceiling; public HF/CDN redirects are bounded, rate-limit resets are
+  respected, signed resolver URLs are excluded from saved diagnostic logs.
+  The worker saves checkpoints and stops at its ceiling; it has no restart loop.
+- The 48-hour hourly HF counter-cutoff probe remains separate and unchanged.
+- Verification: 241 tests passed, including 135 required PostgreSQL tests with
+  zero skips/errors. Additional real-browser checks cover DeepSeek/GLM,
+  seven distinct line colors, keyboard/day/scale controls, mobile layout,
+  no-style-control labels and portable JSON attribution including Apache license
+  text. The offline report labels the configuration in English and Chinese.
+  Browser receipts and raw data remain in `.local/benchmark-history-20261007/`.
+- A4 serving fix now bounds measurements by range and fetches only brief run
+  fields; it does not load saved raw source envelopes. Real seven-line comparison
+  measured ~0.15 seconds locally after the fix (the earlier path took ~26 seconds).
+- Remaining: finish/check HF acquisition and replay remaining checkpoints;
+  inspect per-source gaps and mapped/unmapped counts; complete final simplification,
+  code review and required health check; commit/update PR50 and decide CI. Any
+  source-unavailable interval must remain explicitly unavailable.
+- Gert research completed separately: public current-ranking endpoints verified;
+  historical feed/MCP not found, supported collection/republication unresolved.
+  No Gert integration. See `docs/analysis/2026-10-07-gert-rankings-research.md`.
+- New-repository minute monitoring was discussed only: HF account-scoped webhooks
+  with periodic polling are a candidate. No webhook, endpoint, scheduler or monitor
+  is implemented or activated by that discussion.
+
+## October 7 execution checkpoint — 11:58 JST
+
+- HF engagement acquisition finished: 1,601/1,602 entities; the single NVIDIA
+  401 remains explicitly unavailable. All successful files replayed into the
+  isolated contract: 738,814 current/reconstructed observations. No profile
+  records retained, no historical reconstruction blended into observed stock.
+- HF archive acquisition continues (54/685 publications at 11:56 JST). The latest
+  completed import covered 46 publications / 70,556 selected repository rows.
+  DeepSeek download and repo-like values now exist for all 27 dates from
+  2026-09-10 through 2026-10-06. Arena still starts September 25; observed account
+  follower history is unavailable before collection began.
+- A one-shot local continuation waits for the existing archive process to exit,
+  then imports its verified available checkpoints and writes a coverage report.
+  It never restarts collection, calls providers, changes Git, or accesses
+  production. It has a four-hour wait ceiling and 30-minute import ceiling.
+  State: `.local/benchmark-history-20261007/finish-archive.json`; acquisition,
+  import and coverage receipts remain in that same task-owned directory.
+- Replay validation now rejects invalid HF observations and mismatched checkpoint
+  identity; generic Arena history preserves verified empty publication context.
+  Tests failed before each fix, then passed. CI-equivalent local run: 243 passed,
+  137 PostgreSQL-required, zero skips/errors. Subsequent checkpoint/history delta:
+  seven PostgreSQL tests passed. Lint, schema drift and whitespace checks pass.
+- The required immediate production health check was read-only and failed on
+  pre-existing live facts: latest 20 posts have 0 complete, 9 fresh-pending and
+  11 unhealthy (missing commentary, one also missing language). Translation:
+  13/13 non-zh-Hans posts have Chinese text; commentary EN and zh-CN each 4/20;
+  detected language 14/20. This undeployed branch cannot explain that result.
+  Exact IDs, reason codes and read-only evidence are retained in
+  `.local/benchmark-history-20261007/production-health.json`. No cron/provider
+  action or repair was performed. This check is not recorded as passing.
+- Database coverage report distinguishes mapped and unmapped source observations
+  and pending archive publications from missing upstream publication dates.
+  Remaining endpoint: finish acquisition/replay inspection, final simplify/review,
+  PR50 update and hosted CI. No renewed tested-and-ready sign-off yet.
+
 ## Goal Capsule
 
 Objective: users can compare post attention with benchmark performance and adoption, knowing which entities, units and periods each point actually represents. Means: the owner-controlled taxonomy and shared metric schema below (KD3, KD6–KD15; KTD1–KTD6), delivered in the existing isolated feature worktree. Preserve U1–U4 as historical baseline; execute future units in dependency order, not numeric order. Current endpoint is the owner-authorized tested-and-ready implementation in the isolated database, with reviewable PR and decided CI. Managed delivery remains on-request; production migration, deployment and activation require the later owner decision described in Delivery Exceptions.
 
 ## Delivery Exceptions
+
+**October 7 review follow-up:** the owner asks to incorporate the code/compliance review into this existing plan. This turn changes documentation only; it does not apply the fixes, contact providers, collect data, publish exports, or select a release. Preserve the underlying tested-and-ready implementation endpoint and on-request delivery. The previous test receipts remain valid for their recorded scope, but the three confirmed findings below must be resolved and verified before renewed sign-off. Unresolved public-use rights are release conditions, not a demand to halt existing production harvesting or delete historical data.
 
 **Active LFG authorization — tested and ready (October 6):** the owner now authorizes implementing this plan through local verification and review, with a persistent isolated PostgreSQL database containing relevant real catalog/account/post records and imported historical HF/OpenRouter/Arena data. Provide working SQL/Django queries, repeatable collection commands and a database-backed local Pulse chart, plus the second-product/configuration and tracked-brand coverage checks. Retain the development database and browser preview for owner review. Production migration, deployment, source scheduling and UI activation remain excluded until a later owner decision. Production reads needed for the bounded development copy are read-only; never load development data into production. The LFG review/commit/PR workflow may prepare a reviewable candidate; an open PR is not permission to merge or deploy. Earlier planning-only endpoint prose is superseded by this instruction. Current `delivery_target: on-request` records the absence of managed staging/production selection.
 
@@ -47,7 +168,7 @@ Convenience brand assignments mix companies, product lines and individual releas
 
 ### Requirements
 
-Stable requirement IDs are retained; R18 captures provider-neutral accounts and R19–R24 capture the Pulse prototype adjustments.
+Stable requirement IDs are retained; R18 captures provider-neutral accounts, R19–R24 capture the Pulse prototype adjustments, and R25 captures portable attribution and source-specific public-use permission.
 
 | ID | Required outcome |
 | --- | --- |
@@ -75,6 +196,7 @@ Stable requirement IDs are retained; R18 captures provider-neutral accounts and 
 | R22 | Import bounded historical measurements through the shared writer with archive publisher, immutable revision, payload hash, native snapshot date/time, actual retrieval/import time and coverage. Community archives remain visibly secondary evidence. Historical replay and revised snapshots are idempotent/revision-aware, not summed. |
 | R23 | Preserve source configuration and coverage in each displayed point: Arena category/style-control/Max variant, OR reported top-50 coverage and completed UTC days, HF fixed selected cohort and unknown rolling cutoff, and partial post days. Missing, partial, carried-forward and observed zero are distinct states. |
 | R24 | Plan database-backed Pulse serving, reviewed source-specific collection cadences, freshness/failure visibility and an activation/rollback procedure. Keep all activation disabled until separately authorized; the prototype and offline report are not production completion evidence. |
+| R25 | Preserve provider/dataset attribution, applicable license and source revision in the shared series response, Pulse, offline report and downloaded data. Public display and machine-readable export have separately recorded permission decisions. Community archives have their own publisher/license records; provider API access or a key does not establish redistribution rights. Unknown rights prevent public activation of affected output until resolved; isolated fixture verification remains possible. |
 
 ### Settled decisions
 
@@ -255,7 +377,7 @@ DeepInfra/Fireworks/Together scale research is context, not a selected measureme
 | product_groups | One stable named group, such as M-family | Replaces product_families |
 | product_relationships | One accepted typed product parent→child claim in a taxonomy version | Added |
 | product_group_memberships | One inclusion or exclusion decision for a product/group/version | Added |
-| measurement_subjects | One stable typed pointer to company, brand, group or product | Amended |
+| measurement_subjects | One stable typed pointer to company, brand, group, product or account | Amended |
 | subject_relationships | One reviewed business affiliation, excluding product lineage/group membership | Narrowed |
 | post_subject_attributions | One evidence-backed direct post→subject assertion | Unchanged |
 
@@ -301,6 +423,7 @@ flowchart TD
   TV --> SR[subject_relationships business only]
   SU --> SR
   DS[data_sources with source_type] --> AC[accounts generalized]
+  AC -->|account follower measurements| SU
   AC --> CA[companies_accounts existing]
   CO --> CA
   AC --> BA[brands_accounts existing]
@@ -423,7 +546,7 @@ UNIQUE(version,group,product); indexes(version,group,status), (version,product,s
 
 #### measurement_subjects — explicit typed targets
 
-Columns: id UUID PK; subject_kind VARCHAR(16) NOT NULL (company, brand, product_group or product); company_id VARCHAR(64) NULL FK→companies.nickname; brand_id VARCHAR(64) NULL FK→brands.nickname; product_group_id UUID NULL FK→product_groups.id; product_key UUID NULL FK→products.product_key; created_at TIMESTAMPTZ NOT NULL. CHECK exactly one kind-matched nonnull FK; each target is individually UNIQUE. No unrestricted type/arbitrary_id reference. Existing product UUIDs remain unchanged.
+Columns: id UUID PK; subject_kind VARCHAR(16) NOT NULL (company, brand, product_group, product or account); company_id VARCHAR(64) NULL FK→companies.nickname; brand_id VARCHAR(64) NULL FK→brands.nickname; product_group_id UUID NULL FK→product_groups.id; product_key UUID NULL FK→products.product_key; account_id UUID NULL FK→accounts.account_key; created_at TIMESTAMPTZ NOT NULL. CHECK exactly one kind-matched nonnull FK; each target is individually UNIQUE. No unrestricted type/arbitrary_id reference. Existing product UUIDs remain unchanged.
 
 #### subject_relationships — business affiliations only
 
@@ -466,7 +589,7 @@ Migration sequence: add source registry and nullable generic account fields whil
 
 #### 1. data_sources — named origins
 
-Columns: `id VARCHAR(32) PK`; `source_type VARCHAR(32) NOT NULL`; `name VARCHAR(128)`, `website_url VARCHAR(2048)`, `identifier_normalizer VARCHAR(32)`, `created_at TIMESTAMPTZ` all NOT NULL; `adapter_key VARCHAR(64) NULL`; `enabled BOOLEAN NOT NULL DEFAULT false`. Index(source_type). CHECK source_type IN (benchmark, model_adoption, social); this descriptive category does not restrict the metric types a provider can supply. Arena and AA share benchmark. CHECK enabled requires nonempty adapter_key; writer also checks supported local adapter. Fixed host allowlists live in adapters, not arbitrary registry URLs. No credential values or lookup expressions are stored.
+Columns: `id VARCHAR(32) PK`; `source_type VARCHAR(32) NOT NULL`; `name VARCHAR(128)`, `website_url VARCHAR(2048)`, `identifier_normalizer VARCHAR(32)`, `created_at TIMESTAMPTZ` all NOT NULL; `adapter_key VARCHAR(64) NULL`; `enabled BOOLEAN NOT NULL DEFAULT false`; `metadata JSONB NOT NULL` (already implemented, Django default `dict`). Index(source_type). CHECK source_type IN (benchmark, model_adoption, social); this descriptive category does not restrict the metric types a provider can supply. Arena and AA share benchmark. CHECK enabled requires nonempty adapter_key; writer also checks supported local adapter. Fixed host allowlists live in adapters, not arbitrary registry URLs. No credential values or lookup expressions are stored.
 
 | Source | Primary category | Proposed collection status |
 | --- | --- | --- |
@@ -751,8 +874,10 @@ flowchart TD
 
 ### U6 — registry definitions and reviewed source cohort
 
+**October 7 follow-up:** A1/A5 add dataset-specific permission metadata and reviewed public-display/export decisions (R25). See [required adjustments](#october-7-review-follow-up--required-adjustments).
+
 **Goal:** make source/type relationships and canonical mappings usable through explicit reviewed configuration.
-**Requirements:** R1/R2/R4/R13; KD3/KD5/KD6; KTD2.
+**Requirements:** R1/R2/R4/R13/R25; KD3/KD5/KD6; KTD2.
 **Dependencies:** U5.
 **Files:** core/benchmark_metric_identity.py; core/measurement_taxonomy.py; monitor/management/commands/configure_benchmark_collection.py; tests/test_benchmark_download_db_identity.py; core/hf_catalog.py and HF onboarding/export readers only for separately reviewed identity compatibility; tests/test_hf_metadata_client.py and existing catalog/export tests. Actual catalog-reader cutover/legacy retirement is deferred; this unit establishes shadow mappings and the compatibility manifest.
 
@@ -772,6 +897,8 @@ flowchart TD
 **Verification:** reviewed source mappings define relational cohorts and pass ownership/version checks without bulk catalog typing.
 
 ### U7 — shared observation/value collection
+
+**October 7 follow-up:** A2 corrects optional OpenRouter aggregate validation at both input boundaries. See [required adjustments](#october-7-review-follow-up--required-adjustments).
 
 **Goal:** persist all three selected providers through the same typed storage writer.
 **Requirements:** R3–R6/R12/R13/R15/R16; KTD3–KTD5.
@@ -799,8 +926,10 @@ flowchart TD
 
 ### U8 — definition-aware series and report
 
+**October 7 follow-up:** A1 adds portable attribution (R25); A4 adds bounded-history retrieval verification. See [required adjustments](#october-7-review-follow-up--required-adjustments).
+
 **Goal:** join shared numeric datapoints to explicit canonical subject scopes and existing post volume, retaining a legacy-compatible brand query.
-**Requirements:** R7–R11/R13/R14/R15/R16/R19–R23; KTD5/KTD6.
+**Requirements:** R7–R11/R13/R14/R15/R16/R19–R23/R25; KTD5/KTD6.
 **Dependencies:** U7/U13.
 **Files:** core/benchmark_metric_series.py; monitor/management/commands/render_benchmark_report.py; scripts/benchmark_download_collector/{series,report}.py and report.html only if necessary; tests/test_benchmark_download_db_series.py.
 
@@ -823,8 +952,10 @@ flowchart TD
 
 ### U9 — regression net and operating handoff
 
+**October 7 follow-up:** A1–A5 are additional sign-off criteria; R25 is included in this unit. See [required adjustments](#october-7-review-follow-up--required-adjustments).
+
 **Goal:** demonstrate the extension point and document actual database workflow.
-**Requirements:** R1–R24.
+**Requirements:** R1–R25.
 **Dependencies:** U5–U8/U10–U15 (disabled candidate; precedes any authorized activation).
 **Files:** scripts/benchmark_download_collector/README.md; .github/workflows/benchmark-download-collector.yml; tests named in U5–U8/U10–U15; this plan/shared index.
 
@@ -871,6 +1002,8 @@ flowchart TD
 
 ### U12 — generalize existing accounts and preserve every caller
 
+**October 7 follow-up:** A3 adds the constant-query regression; A4 covers combined-branch migration verification. See [required adjustments](#october-7-review-follow-up--required-adjustments).
+
 **Goal:** support X/HF accounts in the existing table with source-qualified identities and existing company/brand/person relationships; prepare the same account contract for future YouTube/Instagram without collecting them.
 **Requirements:** R17/R18; KD13.
 **Dependencies:** U10; precedes U5 and any HF account insertion. Keep stable earlier unit IDs.
@@ -894,8 +1027,10 @@ HFOrg compatibility is additive: nullable unique hf_orgs.account_key and a separ
 
 ### U13 — historical measurement import and archival provenance
 
+**October 7 follow-up:** A1/A5 add pinned archive license evidence and dataset-specific admission conditions (R25). See [required adjustments](#october-7-review-follow-up--required-adjustments).
+
 **Goal:** populate supported historical dates without presenting imported snapshots as measurements newly taken today or as official history when supplied by a community publisher.
-**Requirements:** R4–R6/R12/R16/R22/R23.
+**Requirements:** R4–R6/R12/R16/R22/R23/R25.
 **Dependencies:** U7; precedes U8.
 **Files:** proposed core/benchmark_metric_history.py; monitor/management/commands/import_benchmark_history.py; tests/test_benchmark_download_history.py; bounded sanitized fixtures under tests/fixtures/benchmark_download_collector/. Reuse U7's validated persistence writer and existing source parsers; confirm current module names before implementing.
 
@@ -907,8 +1042,10 @@ HFOrg compatibility is additive: nullable unique hf_orgs.account_key and a separ
 
 ### U14 — database-backed Pulse comparison endpoint and UI
 
+**October 7 follow-up:** A1 carries attribution through UI and exports (R25). See [required adjustments](#october-7-review-follow-up--required-adjustments).
+
 **Goal:** make the prototype comparison reproducible from PostgreSQL through the current G5 Pulse surface.
-**Requirements:** R7–R11/R19–R23.
+**Requirements:** R7–R11/R19–R23/R25.
 **Dependencies:** U8/U11; coordinate with the G5 owner before touching maintained shared UI files.
 **Files:** core/benchmark_metric_series.py; the current Pulse view/URL/template/static modules discovered at implementation start; proposed tests/test_benchmark_pulse_response.py and browser fixtures. Record exact discovered paths in this unit before editing; do not assume the ignored prototype directory is a maintained application entry point.
 
@@ -922,8 +1059,10 @@ HFOrg compatibility is additive: nullable unique hf_orgs.account_key and a separ
 
 ### U15 — collection cadence, freshness and controlled activation
 
+**October 7 follow-up:** A4/A5 distinguish initial operating limits and public-use conditions from local test readiness (R25). See [required adjustments](#october-7-review-follow-up--required-adjustments).
+
 **Goal:** prepare reliable ongoing collection and an explicit path from a disabled candidate to an observed production feature.
-**Requirements:** R5/R6/R12/R16/R23/R24.
+**Requirements:** R5/R6/R12/R16/R23/R24/R25.
 **Dependencies:** U7/U13/U14; U9 must pass before any authorized activation.
 **Files:** existing collection/configuration commands, a proposed dedicated metric-collection management command if needed, owned scheduling configuration only after runtime discovery, tests/test_benchmark_download_operations.py and scripts/benchmark_download_collector/README.md. Preserve run_cycle and its existing harvesting schedule.
 
@@ -937,6 +1076,72 @@ Track last successful retrieval, latest effective/publication date, missing/part
 
 **Verification:** isolated fixture checks prove operation semantics; production completion additionally requires observed real scheduled persistence and a live database-backed five-line comparison on the authorized deployed revision. Neither a cron declaration, static screenshot nor completed offline import alone proves activation.
 
+## October 7 review follow-up — required adjustments
+
+Evidence: [code and provider-use review](../reviews/2026-10-07-064100-benchmark-code-and-data-compliance.md), reviewed head `a3cbfe0933dfd122990b7cb024bed75a5087e236`. The review's three findings are confirmed; its scalability and integration concerns are separately tracked below. Retain U1–U15 and the fifteen-table design; amend those units rather than create another workstream or provider-specific tables. All items below are pending implementation/verification unless explicitly marked as existing evidence.
+
+### A1 — portable attribution and dataset-specific permission (review #1; U6/U8/U13/U14/U15)
+
+**Files:** `core/benchmark_metric_identity.py`, `core/benchmark_metric_history.py`, `core/benchmark_metric_series.py`, `core/benchmark_metric_report.py`, `monitor/static/benchmark-pulse.js`, `scripts/benchmark_download_collector/report.html`; tests `test_benchmark_download_history.py`, `test_benchmark_download_series_db.py`, `test_benchmark_download_database_report.py`, `test_benchmark_pulse_views.py` and the existing browser verifier.
+
+**Storage:** reuse `DataSource.metadata` for provider-level policy defaults and `MetricCollectionContract.source_configuration` for the reviewed source/dataset policy snapshot. Preserve the applicable policy/version alongside immutable run/archive evidence in `MetricCollectionRun.source_metadata` and per-observation metadata when sources differ within a run. Registry edits must not silently rewrite historical license/provenance. No new table is required. Importing old evidence without license metadata must retain an explicit unresolved status; any later correction must identify its evidence and review date rather than fabricate past approval.
+
+**Proposed metadata contract:** `attribution_version`, provider ID, dataset ID/publisher when applicable, canonical source URL, license ID/URL, checked-at timestamp, terms URL/version or evidence reference, and distinct `public_display` / `data_export` decisions (`permitted`, `conditional`, `unresolved`, `prohibited`) with conditions. Include a written-permission reference only when one exists; keep private agreements/credentials out of public payloads. Source-as-of, immutable revision/hash and transformation notes come from the actual contributing observations, not the chart-generation timestamp. A changed legal assessment does not become automatic collection or publication authorization.
+
+**Serving:** derive an `attributions` collection from every dataset contributing displayed values **or their baselines**, not only the latest point. Emit the public citation/license fields in the shared JSON; render the same entries in Pulse and offline HTML and retain them in JSON downloads. Preserve OpenRouter's prescribed citation using its actual `meta.as_of`, attach CC BY license links, and credit the HF archive even when the final observation is direct. Carry applicable Apache license/NOTICE material in the download or accompanying bundle; do not assume a short license identifier alone satisfies redistribution requirements. Source-specific conditions determine whether a chart or numeric export can be publicly served; do not globally relabel all HF data with one license. The browser-facing public `series/` endpoint itself redistributes numbers, so hiding the download button is not sufficient when machine-readable reuse is unresolved. Keep the affected public route disabled or obtain the needed rights; do not weaken authentication or silently change the agreed chart scope.
+
+**Regression net:** mixed archived/direct HF observations show both sources; a baseline outside the displayed date range retains attribution; multiple Arena/OR revisions retain correct provenance; JSON downloaded without the page still contains usable citations/license references; both HTML consumers link to licenses; unresolved public-export rights cannot accidentally expose numeric downloads when a page is enabled. Fixture-only local preview remains explicitly distinguishable from public activation. Preserve the current graph's units, exact values and five-line behavior.
+
+### A2 — optional OpenRouter other bucket (review #2; U2/U7/U9)
+
+**Files:** `scripts/benchmark_download_collector/sources.py`, `core/benchmark_metric_store.py`; `tests/test_benchmark_download_sources.py` and `tests/test_benchmark_download_persistence.py`.
+
+Allow one to fifty distinct real model rows on a day without `other`, as permitted by the provider contract. When present, admit at most one aggregate row plus at most fifty real models. Keep exact integer-string validation, date bounds, duplicate detection and source-population bounds; never allocate `other` to a product or equate an absent model with zero. Apply the same rule at transport and historical/native storage boundaries.
+
+**Regression net:** valid days with one/fifty real rows and no aggregate; valid fifty plus aggregate; duplicate aggregate/model rejected; fifty-one real rows rejected even without aggregate; missing dates/models remain unavailable. Existing malformed-payload safeguards continue to pass. The review's mocked counterexample must succeed at both boundaries after the fix.
+
+### A3 — account lookup cost (review #3; U12/U9)
+
+**Files:** `monitor/list_membership.py`; `tests/test_list_membership_reconciliation.py` (or an existing focused account test module). Load the harvester-change skill before implementation because this caller participates in Call A.
+
+Fetch membership accounts with `select_related("account")` or an equivalent joined native-ID query; preserve source-qualified identity, roles and returned contexts. Do not change harvesting policy, credentials or schedule. The review measured twenty authors causing twenty-two SQL queries.
+
+**Regression net:** compare one-author and twenty-author batches and require a constant two-query lookup for nonempty fixtures through `resolve_call_a_author_contexts`; assert the same canonical contexts, unsupported/missing-role behavior, and X/HF collision isolation. Run affected list/account tests on isolated PostgreSQL. Query count is the measured defect; do not claim a production latency improvement without measurement.
+
+### A4 — bounded history reads and integration risk (U8/U9/U12/U15)
+
+Before higher-frequency or wider-cohort activation, reproduce the lifetime-history cap in `core/benchmark_metric_series.py`: the present query loads matching lifetime values before date filtering and fails above 100,000 rows. Scope retrieval to the requested dates plus the fixed-baseline dependencies, required prior Arena state and intervening publication/omission evidence. Preserve deterministic revision selection and per-point attribution; do not delete retained history or silently truncate old values to meet a budget. Add a PostgreSQL boundary case proving a short requested window still works with more than 100,000 older values matching the selected metric/mappings but outside the requested window. This is a newly required readiness check derived from a source-inspected residual risk, not an already measured production failure; resolve or record an explicit bounded initial-cadence limitation before sign-off.
+
+Before combining with G2/official-company changes, re-inventory inbound Account foreign keys and the actual migration leaf, including PR #53 if integrated. Re-run the changed migration/compatibility checks on the combined revision. Preserve one migration executor and measure lock/disk/transaction headroom on a representative populated database; a loop inside an atomic migration does not commit each batch. Keep the existing live-backup/restore-based rollback requirement in U15; no additional production action is authorized here.
+
+### A5 — source-specific public-release decisions (U6/U13/U15)
+
+Use the dated review and its primary-source links as evidence, rechecking applicable terms when the source/route/export changes or before activation. Record the actual contract if it differs from public terms. These are conditions on this feature's new public output; they do not authorize provider outreach or change existing X collection.
+
+| Source / dataset | Public-release action |
+| --- | --- |
+| Arena official HF leaderboard dataset | Use its CC BY dataset route; complete credit/license/change notices. Do not replace it with website scraping or confuse row-level model licenses with the dataset license. |
+| OpenRouter Data API | Preserve required citation, actual response metadata and CC BY notice in numeric exports. Selected chart output remains scoped; a future wholesale data/API offering requires another use review. |
+| HF direct counters | Document the applicable permission basis for cached commercial charts and numeric exports; current review found no explicit blanket redistribution grant. Treat this as unresolved, not a proven prohibition. |
+| `cfahlgren1/hub-stats` | Preserve the archive's Apache-2.0 license and applicable notices, publisher, pinned revision and secondary-source label. Its declaration does not settle rights beyond those the publisher can grant. |
+| `hfmlsoc/hub_weekly_snapshots` | Currently allowlisted but unused in inspected runs. Exclude it from public output until ODbL attribution/derivative-database obligations and extraction scope have been reviewed. |
+| X via TwitterAPI.io | Document upstream authorization and our rights to store and publicly publish derived brand counts/downloads; obtain vendor confirmation or other adequate evidence. Aggregate counts alone do not settle collection rights. |
+| Artificial Analysis | Remain disabled until applicable agreement/written consent covers a comparison-focused product, mixed-source display, required branding, machine-readable export and retention. A key or paid tier alone is insufficient. |
+| Future providers | Review collection/storage, display, export, attribution, retention and agreement precedence before admission; reuse the same metadata contract. |
+
+**Readiness boundary:** “tested and ready” requires A1–A3 fixes and regression evidence on the new exact revision, A4's test or explicitly documented initial limitation, and reviewed permission records with unresolved release conditions visibly recorded. It does not require pretending HF/X questions are settled. Public activation additionally requires the relevant permission decisions to be resolved, owner release authorization and U15's verified live backup. AA and unresolved optional archives remain disabled; permission uncertainty must not silently remove required lines or redefine the approved product scope.
+
+## Authorized HF hourly timing experiment — October 7
+
+Owner requested a 48-hour poll, then explicitly changed frequency to **hourly**. A temporary public-metadata worker is running on fuchitalee in tmux session `pw-hf-refresh-48h-20261007`, independently of this chat. Source: three fixed repositories (`deepseek-ai/DeepSeek-V4.1-Flash`, `zai-org/GLM-5.3-Flash`, `Qwen/Qwen3-8B`); fields `downloads` and optional `downloadsAllTime`. No production database, existing collector or release activation is involved.
+
+- Start: `2026-10-07T01:18:17.652544+00:00`; automatic stop: `2026-10-09T01:18:17.652544+00:00` (October 09, 10:18 JST). No recurring schedule/restart; fixed 48-hour wall-clock deadline.
+- Bound: 48 hourly rounds, at most 144 HTTP requests, no retries/credentials/redirect following; 64 KiB per response. The first round succeeded for all three repos. No measurements are invented for failures or unavailable fields.
+- Artifacts: `.local/hf-refresh-poll-20261007/README.md`, `manifest.json`, `status.json`, `observations.jsonl`, `summary.json`; `RESULTS.md` is written on completion. These are retained local experimental evidence, not production numeric observations or durable CI fixtures.
+- Early stop: create `.local/hf-refresh-poll-20261007/STOP` in this worktree; the worker exits within about a minute between requests. Preserve results. Host reboot interrupts the run; check process and file timestamps rather than trusting a stale running status.
+- Analysis: compare every observed UTC change interval across both days and repositories. Sampling is approximately one hour; cache headers are retrieval evidence, never effective measurement timestamps. No change, multiple changes, polling gaps or a change during the final unsampled hour can leave the result inconclusive. The final hourly sample is one hour before the deadline. Matching observations support a refresh-cadence hypothesis, not proof that the 30-day window cuts off in that timezone; keep HF effective timezone unknown until stronger evidence establishes it.
+- Follow-up: read final summary after the deadline and record whether two comparable daily updates occurred; do not automatically extend, increase frequency, change the source timezone or contact HF. Current isolated implementation and separate public-release permission conditions remain unchanged.
+
 ## Verification Contract
 
 During implementation, not during this planning revision:
@@ -949,14 +1154,19 @@ During implementation, not during this planning revision:
 6. Use saved live probes as parser fixtures. A later live collection smoke test requires explicit selected contract and bounded network budget; do not repeat production taxonomy reads or source probes just to satisfy a routine checklist.
 7. Browser-check the generated report when changed and U14's actual database-backed Pulse route, including all five lines, raw/percentage modes, large-value visibility, later Arena baseline and missing/partial days. Run relevant G5 regression checks for touched maintained surfaces; existing harvesting behavior remains protected and unchanged. Prototype screenshots alone do not satisfy this check.
 8. Inline schema/data-integrity/code review under AGENTS; carry actual coverage and unresolved risks. Git/release actions follow the user's then-current requested endpoint, not the historical LFG or generated guide.
+9. Complete A1–A3 regression checks in existing test modules and browser verification; evaluate A4 separately. Record the new exact revision, commands, query counts, export attribution evidence and remaining A5 permission conditions. The earlier 58/223-test successes do not cover these pending fixes; unavailable external review is not a passed check.
 
 ## Definition of Done
+
+**October 7 additions:** the A1–A5 readiness boundary above is part of completion. Reopen tested-and-ready sign-off for the three confirmed fixes; retain historical receipts as scoped evidence. Public licensing/permission conditions remain separately visible until resolved.
 
 After separately selected implementation: the fifteen-new-table migration set and staged U12 existing-account changes apply cleanly on fresh and populated isolated PostgreSQL; a reviewed contract links typed measurements to stable subject identities and frozen rollup relationships; collection and bounded historical import persist provenance, successes/failures/revisions without secret leakage or duplicate counting; the actual Pulse response and UI reproduce five scoped lines with correct baselines, raw values, date precision and coverage; U9 regression/browser checks pass and operating instructions cover disabled scheduling plus activation/rollback. Without separately selected release/activation authority, the endpoint is a tested disabled candidate. When production activation is selected, completion additionally requires U15's observed scheduled persistence and live served comparison.
 
 For this planning request: preserve the existing crosswalk, Google exclusions, fifteen-table schema, account design and affected-table inventory; add R19–R24, the per-line comparison/history contract, U13–U15 and updated dependency flowchart/verification in this canonical plan. Existing table-relationship images remain valid because no table or relationship changes. Prior review copies/images are historical snapshots; this amendment does not refresh or deliver them to allenwlee. Application code, production catalog and database schema remain unchanged.
 
 ## Planning evidence and review
+
+- October 7: [fresh code/compliance review](../reviews/2026-10-07-064100-benchmark-code-and-data-compliance.md) identifies three confirmed fixes at `a3cbfe09`; 58 existing focused tests pass, while targeted parser and account-query counterexamples expose gaps. A1–A5 amend existing units and supersede any earlier implication that no review work remains. Independent Claude/Grok review produced no usable result. This amendment changes no table relationships; existing schema images need no regeneration.
 
 - October 5 provider response fixtures and the read-only catalog receipt remain in the source-probe appendix. Catalog crosswalks still have zero approved mappings; no product classification or relationship was accepted by this document update.
 - Saved AA/Vercel summaries remain derived session evidence whose raw bodies were not retained. Documentation research is distinct from executing collectors or inspecting weights.

@@ -275,6 +275,7 @@
           >
         </p>
         <p id="or-credit"></p>
+        <div id="source-credits"></div>
         <p id="token-note"></p>
         <p id="generated"></p>
       </footer>
@@ -381,6 +382,21 @@
         },
       };
       let lang = "en";
+      if (data.arena_config === "text") {
+        words.en.arenaNote = "Best mapped model · overall text rating, no style control · held between publications";
+        words.zh.arenaNote = "已匹配模型中的最高分 · 不含风格控制的整体文本评分 · 发布间隔内保持不变";
+      }
+      for (const credit of data.database_comparison?.attributions || []) {
+        const paragraph = document.createElement("p");
+        paragraph.textContent = credit.notice + (credit.revision ? " Revision " + credit.revision : "");
+        if (credit.license_url) {
+          const link = document.createElement("a");
+          link.href = credit.license_url;
+          link.textContent = " · " + credit.license;
+          paragraph.append(link);
+        }
+        $("source-credits").append(paragraph);
+      }
       const labels = {
         posts: ["posts", "postNote", "#266e65"],
         arena: ["arena", "arenaNote", "#516bb0"],
