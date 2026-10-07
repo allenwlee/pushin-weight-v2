@@ -12,6 +12,8 @@
   const visible = new Set();
   const svg = $('pulse-chart');
   const box = {left: 83, right: 872, top: 45, bottom: 385};
+  const arenaBox = {left: 83, right: 872};
+  const chartWidth = target => responseView ? Math.max(300, Math.min(900, target.parentElement.clientWidth)) : 900;
   const fmt = (value, raw = false) => {
     if (value === null || value === undefined) return t('Not available');
     if (raw && typeof value === 'string' && /^-?\d+$/.test(value)) return BigInt(value).toLocaleString('en-US');
@@ -74,6 +76,9 @@
     }
   }
   function draw() {
+    const width=chartWidth(svg);
+    svg.setAttribute('viewBox',`0 0 ${width} 440`);
+    box.left=width<500?70:83;box.right=width-28;
     svg.querySelectorAll(':scope > :not(title):not(desc)').forEach(node => node.remove());
     const lines = active();
     const values = lines.flatMap(line => line.points.map(pointValue)).filter(v => v !== null && Number.isFinite(v));
@@ -97,7 +102,7 @@
       element('text',{x:box.left-12,y:cy+4,'text-anchor':'end'},tick(v));
     }
     element('line',{x1:box.left,y1:y(0),x2:box.right,y2:y(0),class:'zero'});
-    element('text',{x:box.left,y:18}, mode === 'raw' ? `${lines[0]?.unit || 'Value'} · original scale` : (responseView ? t(data.normalization_label) : 'Change from baseline (%)'));
+    element('text',{x:width<500?10:box.left,y:18}, mode === 'raw' ? `${lines[0]?.unit || 'Value'} · original scale` : (responseView ? t(data.normalization_label) : 'Change from baseline (%)'));
     if (responseView && data.reference.dates.length) {
       const first = Math.max(0, (Date.parse(data.reference.dates[0])-Date.parse(days[0]))/86400000);
       const last = Math.min(days.length-1, (Date.parse(data.reference.dates.at(-1))-Date.parse(days[0]))/86400000);
@@ -106,7 +111,8 @@
         svg.insertBefore(band,svg.querySelector('line.grid'));
       }
     }
-    const tickIndices = new Set(Array.from({length:6},(_,i)=>Math.round(i*(days.length-1)/5)));
+    const dateTicks=width<500?4:6;
+    const tickIndices = new Set(Array.from({length:dateTicks},(_,i)=>Math.round(i*(days.length-1)/(dateTicks-1))));
     for (const i of tickIndices) element('text',{x:x(i),y:box.bottom+27,'text-anchor':'middle'},axisDate(days[i]));
     const baselines = new Map();
     for (const line of lines) {
@@ -150,7 +156,7 @@
       element('path',{d:path,stroke:color,class:'series','data-series':line.key});
       if (proxyPath) element('path',{d:proxyPath,stroke:color,fill:'none','stroke-width':2,'stroke-dasharray':'6 4',class:'series-proxy','data-series':line.key});
     }
-    if (!values.length) element('text',{x:470,y:210,'text-anchor':'middle'},'No values available for this view');
+    if (!values.length) element('text',{x:responseView?width/2:470,y:210,'text-anchor':'middle'},'No values available for this view');
     $('chart-title').textContent = `${data.title} · ${mode==='raw'?'raw measurements':responseView?data.normalization_label:'change from baseline'}`;
     $('scale-explanation').textContent = mode==='compressed'
       ? 'Compressed scale: equal spacing represents larger percentage steps farther from zero. Labels and readouts show the actual change.'
@@ -161,19 +167,22 @@
   function drawArena() {
     const panel=data.arena_panel, target=$('arena-chart');
     if (!panel || !target) return;
+    const width=chartWidth(target);
+    target.setAttribute('viewBox',`0 0 ${width} 340`);
+    arenaBox.left=width<500?70:83;arenaBox.right=width-28;
     target.querySelectorAll(':scope > :not(title)').forEach(node=>node.remove());
     const add=(tag,attrs={},text)=>{const node=document.createElementNS(ns,tag);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,String(value));if(text!==undefined)node.textContent=text;target.append(node);return node;};
-    const x=i=>box.left+i/Math.max(1,days.length-1)*(box.right-box.left);
+    const x=i=>arenaBox.left+i/Math.max(1,days.length-1)*(arenaBox.right-arenaBox.left);
     const rank=$('arena-measurement').value==='rank';
     for (const [field,top,bottom,color,label] of [[rank?'rank':'score',35,165,'#30978e',t(rank?'Rank · lower is better':'Arena score')],['battles',210,292,'#ba921d',t('Reported battles')]]) {
       const numeric=panel.points.flatMap(p=>field==='score'?[p.score,p.lower,p.upper]:[p[field]]).filter(v=>v!==null&&v!==undefined).map(Number);
       let low=Math.min(...numeric),high=Math.max(...numeric);
-      if (!numeric.length) {add('text',{x:box.left,y:top+30},`${label} · Not available`);continue;}
+      if (!numeric.length) {add('text',{x:arenaBox.left,y:top+30},`${label} · Not available`);continue;}
       if (low===high) {low-=1;high+=1;}
       const padding=(high-low)*.1; low-=padding;high+=padding;
       const y=v=>rank&&field==='rank'?top+(Number(v)-low)/(high-low)*(bottom-top):bottom-(Number(v)-low)/(high-low)*(bottom-top);
-      add('text',{x:box.left,y:top-12},label);
-      for (let i=0;i<3;i++) {const value=low+(high-low)*i/2;const cy=y(value);add('line',{x1:box.left,x2:box.right,y1:cy,y2:cy,class:'grid'});add('text',{x:box.left-10,y:cy+4,'text-anchor':'end'},new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(value));}
+      add('text',{x:arenaBox.left,y:top-12},label);
+      for (let i=0;i<3;i++) {const value=low+(high-low)*i/2;const cy=y(value);add('line',{x1:arenaBox.left,x2:arenaBox.right,y1:cy,y2:cy,class:'grid'});add('text',{x:arenaBox.left-10,y:cy+4,'text-anchor':'end'},new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(value));}
       let path='',previous=null;
       panel.points.forEach((point,i)=>{
         const value=point[field];
@@ -190,7 +199,8 @@
       add('path',{d:path,fill:'none',stroke:color,'stroke-width':1.7,'stroke-dasharray':'4 3',class:`arena-${field}`});
     }
     add('line',{x1:x(current),x2:x(current),y1:25,y2:292,class:'inspection'});
-    for(const i of new Set(Array.from({length:6},(_,i)=>Math.round(i*(days.length-1)/5))))add('text',{x:x(i),y:320,'text-anchor':'middle'},axisDate(days[i]));
+    const dateTicks=width<500?4:6;
+    for(const i of new Set(Array.from({length:dateTicks},(_,i)=>Math.round(i*(days.length-1)/(dateTicks-1)))))add('text',{x:x(i),y:320,'text-anchor':'middle'},axisDate(days[i]));
     const point=panel.points[current];
     $('arena-readout').textContent=`${panel.source_identifiers.join(', ')} · ${labelDate(point.date)} · ${t('Score')} ${fmt(point.score,true)} · ${t('interval')} ${fmt(point.lower,true)}–${fmt(point.upper,true)} · ${t('Reported battles')} ${fmt(point.battles,true)} · ${t('rank')} ${fmt(point.rank,true)} · ${t(point.actual_publication?'actual publication':point.publication_date?'held published state':'unavailable')} ${point.publication_date||''} · ${t('score comparability')} ${point.comparability}; ${t('source timezone')} ${point.source_timezone}.`;
   }
@@ -276,13 +286,13 @@
         $('range').value=new URLSearchParams(location.search).has('start')?'available':'release';
         $('range').addEventListener('change',()=>{const url=new URL(location.href);if($('range').value==='available'){url.searchParams.set('start',data.available_range.start);url.searchParams.set('end',data.available_range.end);}else{url.searchParams.delete('start');url.searchParams.delete('end');}location.assign(url);});
       }
-      svg.addEventListener('click',event=>{const rect=svg.getBoundingClientRect();const px=(event.clientX-rect.left)*900/rect.width;current=Math.max(0,Math.min(days.length-1,Math.round((px-box.left)/(box.right-box.left)*(days.length-1))));$('day').value=String(current);draw();});
+      svg.addEventListener('click',event=>{const rect=svg.getBoundingClientRect();const px=(event.clientX-rect.left)*svg.viewBox.baseVal.width/rect.width;current=Math.max(0,Math.min(days.length-1,Math.round((px-box.left)/(box.right-box.left)*(days.length-1))));$('day').value=String(current);draw();});
       let hoverFrame;
-      const inspect=event=>{const rect=event.currentTarget.getBoundingClientRect();const px=(event.clientX-rect.left)*900/rect.width;const day=Math.max(0,Math.min(days.length-1,Math.round((px-box.left)/(box.right-box.left)*(days.length-1))));if(day===current)return;cancelAnimationFrame(hoverFrame);hoverFrame=requestAnimationFrame(()=>{current=day;$('day').value=String(current);draw();});};
-      if(responseView){svg.addEventListener('pointermove',inspect);$('arena-chart')?.addEventListener('pointermove',inspect);}
+      const inspect=event=>{const target=event.currentTarget,rect=target.getBoundingClientRect(),bounds=target===svg?box:arenaBox;const px=(event.clientX-rect.left)*target.viewBox.baseVal.width/rect.width;const day=Math.max(0,Math.min(days.length-1,Math.round((px-bounds.left)/(bounds.right-bounds.left)*(days.length-1))));if(day===current)return;cancelAnimationFrame(hoverFrame);hoverFrame=requestAnimationFrame(()=>{current=day;$('day').value=String(current);draw();});};
+      if(responseView){svg.addEventListener('pointermove',inspect);$('arena-chart')?.addEventListener('pointermove',inspect);let priorWidth;new ResizeObserver(()=>{const width=chartWidth(svg);if(width!==priorWidth){priorWidth=width;draw();}}).observe(svg.parentElement);}
       $('launch-note').textContent=`Launch: ${data.launch_anchor.announced_date || data.launch_anchor.announced_at}. ${data.display_timezone} day labels; the announcement date does not imply a known announcement time.`;
       $('coverage-note').textContent=responseView?'Gaps mean unavailable evidence. HF changes are net rolling-counter differences. Arena dots are actual publications; dashed steps hold published states. Co-moving lines do not establish causation.':'Gaps mean unavailable data. Hollow dots mark partial days. Dotted markers show baselines that begin after launch. Arena steps repeat the last published state.';
-      sources();draw();$('chart-content').hidden=false;$('load-status').hidden=true;
+      sources();$('chart-content').hidden=false;draw();$('load-status').hidden=true;
     } catch(error) { $('load-status').textContent='Measurements are unavailable. Reload to try again.'; }
   }
   $('sources-open').addEventListener('click',()=>$('sources').showModal());

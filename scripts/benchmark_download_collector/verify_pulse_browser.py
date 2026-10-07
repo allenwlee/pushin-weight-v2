@@ -84,6 +84,21 @@ def verify_release_response(browser, check, screenshot, url):
     check(
         'document.documentElement.scrollWidth <= innerWidth && document.querySelector("#pulse-chart").getBoundingClientRect().width > 300'
     )
+    check(
+        '["#pulse-chart", "#arena-chart"].every(s=>document.querySelectorAll(s+" text").length > 0) && [...document.querySelectorAll("#pulse-chart text, #arena-chart text")].every(n=>n.getBoundingClientRect().height>=8)'
+    )
+    target = json.loads(
+        browser(
+            "eval",
+            '(()=>{const s=document.querySelector("#pulse-chart"),m=s.querySelector("[data-event=Launch]"),p=s.createSVGPoint();p.x=Number(m.getAttribute("x1"));p.y=100;const q=p.matrixTransform(s.getScreenCTM());return {x:q.x,y:q.y};})()',
+        )
+    )
+    browser("mouse", "move", str(round(target["x"])), str(round(target["y"])))
+    browser("mouse", "down", "left")
+    browser("mouse", "up", "left")
+    check(
+        'Number(document.querySelector("#day").value) === pulseEvidence.lines[0].points.findIndex(p=>p.date===pulseEvidence.launch_anchor.announced_date)'
+    )
     screenshot("response-mobile.png")
     browser("set", "viewport", "1440", "1080")
     browser("select", "#range", "available")
