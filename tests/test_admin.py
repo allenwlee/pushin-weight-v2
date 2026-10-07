@@ -86,6 +86,7 @@ def test_pending_scan_does_not_bury_official_accounts_or_list_history():
         account=Account.objects.create(author_id="61001"),
         evidence_hash="c" * 64,
         status="pending",
+        candidate_priority=2,
     )
     OfficialCompanyListIntent.objects.create(
         account=previous.account,
@@ -99,6 +100,7 @@ def test_pending_scan_does_not_bury_official_accounts_or_list_history():
             account=Account.objects.create(author_id=str(62000 + index)),
             evidence_hash="a" * 64,
             status="pending",
+            candidate_priority=2,
         )
     report = account_report(list_id=LIST_ID)
     assert {row["state"].pk for row in report["rows"]} == {official.pk, previous.pk}

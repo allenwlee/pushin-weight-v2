@@ -124,6 +124,8 @@ def build_evidence(
         "domains": sorted(domains),
         "policy_version": POLICY_VERSION,
     }
+    if getattr(account, "verified_type", None):
+        result["verification_type"] = account.verified_type
     result["identity"] = digest(
         {
             **result,
@@ -286,42 +288,99 @@ def evidence_for_account(account):
     return build_evidence(account, list(rows.values()), profiles)
 
 
-def enqueue_account(account, *, initial_scan=None):
+_EXPLICIT_CANDIDATE = object()
+
+
+def enqueue_account(
+    account, *, initial_scan=None, candidate_priority=_EXPLICIT_CANDIDATE
+):
+    """Ordinary discovery supplies a filter result; explicit IDs are overrides."""
     from django.db import transaction
 
     from core.models import OfficialCompanyAccountState
+    from core.official_company_candidates import CANDIDATE_POLICY, MANUAL_POLICY
 
-    evidence = evidence_for_account(account)
-    with transaction.atomic():
-        state, created = (
-            OfficialCompanyAccountState.objects.select_for_update().get_or_create(
-                account=account,
-                defaults={
-                    "evidence_hash": evidence["identity"],
-                    "evidence": evidence,
-                    "initial_scan": initial_scan,
-                },
-            )
+    explicit = candidate_priority is _EXPLICIT_CANDIDATE
+    if explicit:
+        candidate_priority = (
+            1 if (account.verified_type or "").casefold() == "business" else 2
         )
-        if state.status == "suppressed":
+    if candidate_priority not in {None, 1, 2, 3}:
+        raise ValueError("invalid candidate priority")
+    policy = MANUAL_POLICY if explicit else CANDIDATE_POLICY
+    with transaction.atomic():
+        state = (
+            OfficialCompanyAccountState.objects.select_for_update()
+            .filter(account=account)
+            .first()
+        )
+        if state and state.status == "suppressed":
             return state
+        if state and state.candidate_policy_version == MANUAL_POLICY and not explicit:
+            # An explicitly selected account is not an accidental scan admission.
+            candidate_priority = (
+                1
+                if (account.verified_type or "").casefold() == "business"
+                else state.candidate_priority
+            )
+            policy = MANUAL_POLICY
+        if candidate_priority is None:
+            if state is None:
+                return None
+            state.candidate_priority = None
+            state.candidate_policy_version = policy
+            fields = ["candidate_priority", "candidate_policy_version"]
+            if state.status in {
+                "pending",
+                "claimed",
+                "retry_due",
+                "no_evidence",
+                "deferred",
+            }:
+                state.status = "deferred"
+                state.claim_token = ""
+                state.claim_expires_at = None
+                state.next_attempt_at = None
+                fields += [
+                    "status",
+                    "claim_token",
+                    "claim_expires_at",
+                    "next_attempt_at",
+                ]
+            if initial_scan:
+                state.initial_scan = initial_scan
+                fields.append("initial_scan")
+            state.save(update_fields=fields)
+            return state
+        evidence = evidence_for_account(account)
+        created = state is None
+        if created:
+            state = OfficialCompanyAccountState(account=account, evidence_hash="")
         changed = state.evidence_hash != evidence["identity"]
-        if created or changed:
+        reentered = state.status == "deferred"
+        fields = ["candidate_priority", "candidate_policy_version"]
+        state.candidate_priority = candidate_priority
+        state.candidate_policy_version = policy
+        if initial_scan:
+            state.initial_scan = initial_scan
+            fields.append("initial_scan")
+        if created or changed or reentered:
             state.evidence = evidence
             state.evidence_hash = evidence["identity"]
             state.policy_version = POLICY_VERSION
-            state.status = "pending" if evidence["sources"] else "no_evidence"
+            state.status = (
+                "pending"
+                if evidence["sources"] or candidate_priority == 1
+                else "no_evidence"
+            )
             state.attempts = 0
             state.claim_token = ""
             state.claim_expires_at = None
             state.next_attempt_at = None
             state.last_error = ""
-        if initial_scan and state.initial_scan_id is None:
-            state.initial_scan = initial_scan
-            if not (created or changed):
-                state.save(update_fields=["initial_scan"])
-        if created or changed:
             state.save()
+        else:
+            state.save(update_fields=fields)
         if created and str(account.author_id) in OWNER_ATTESTATIONS:
             _apply_owner_attestation(state)
     return state
@@ -395,6 +454,8 @@ def claim_account(state_id, *, cfg, budget_scope, initial=False):
     with transaction.atomic():
         state = OfficialCompanyAccountState.objects.select_for_update().get(pk=state_id)
         if state.status not in {"pending", "retry_due", "claimed"}:
+            return None
+        if state.candidate_priority not in {1, 2, 3}:
             return None
         if state.next_attempt_at and state.next_attempt_at > now:
             return None
@@ -760,13 +821,17 @@ def register_account(state_id, *, cfg):
                 defaults={"state": state, "evidence_hash": state.evidence_hash},
             )
             # Do not clear suppression or manual-removal review on new evidence.
-            if intent.status in {
-                "pending",
-                "retry_due",
-                "verify_needed",
-                "claimed",
-                "blocked_auth",
-            } and intent.evidence_hash != state.evidence_hash:
+            if (
+                intent.status
+                in {
+                    "pending",
+                    "retry_due",
+                    "verify_needed",
+                    "claimed",
+                    "blocked_auth",
+                }
+                and intent.evidence_hash != state.evidence_hash
+            ):
                 intent.state = state
                 intent.evidence_hash = state.evidence_hash
                 # A superseded claim cannot complete against this new revision.

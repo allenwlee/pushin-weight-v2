@@ -23,8 +23,31 @@ from core.official_company_accounts import (
     evaluate_account,
     register_account,
 )
+from core.official_company_candidates import candidate_priorities
 
-INITIAL_KEY = "official-company-initial-v1"
+LEGACY_INITIAL_KEY = "official-company-initial-v1"
+INITIAL_KEY = "official-company-filtered-initial-v1"
+
+
+def enqueue_filtered_accounts(accounts, *, initial_scan=None, deadline=None):
+    priorities = candidate_priorities(accounts)
+    existing = set(
+        OfficialCompanyAccountState.objects.filter(
+            account_id__in=[a.pk for a in accounts]
+        ).values_list("account_id", flat=True)
+    )
+    processed = []
+    for account in accounts:
+        if deadline and time.monotonic() >= deadline:
+            break
+        if priorities[account.pk] is not None or account.pk in existing:
+            enqueue_account(
+                account,
+                initial_scan=initial_scan,
+                candidate_priority=priorities[account.pk],
+            )
+        processed.append(account)
+    return processed
 
 
 def coverage():
@@ -34,21 +57,35 @@ def coverage():
         if scan
         else OfficialCompanyAccountState.objects.none()
     )
-    counts = dict(
-        states.values("status").annotate(n=Count("pk")).values_list("status", "n")
+    candidates = states.filter(candidate_priority__in=[1, 2, 3]).exclude(
+        status="suppressed"
     )
+    counts = dict(
+        candidates.values("status").annotate(n=Count("pk")).values_list("status", "n")
+    )
+    gold = OfficialCompanyScan.objects.filter(pk=INITIAL_KEY + ":gold").first()
+    candidate_count = sum(counts.values())
     unresolved = sum(counts.get(k, 0) for k in ["pending", "claimed", "retry_due"])
+    screened_candidates = (
+        candidates.filter(account_id__lte=scan.cursor).count()
+        if scan and scan.cursor
+        else 0
+    )
     return {
         "population": scan.population if scan else 0,
         "enumerated": scan.enumerated if scan else 0,
         "enumeration_complete": bool(scan and scan.complete),
+        "gold_staged": gold.enumerated if gold else 0,
+        "gold_staging_complete": bool(gold and gold.complete),
+        "candidates": candidate_count,
+        "deferred": max(0, (scan.enumerated if scan else 0) - screened_candidates),
         "outcomes": counts,
-        "coverage_complete": bool(
-            scan
-            and scan.complete
-            and sum(counts.values()) >= scan.population
-            and unresolved == 0
+        "priorities": dict(
+            candidates.values("candidate_priority")
+            .annotate(n=Count("pk"))
+            .values_list("candidate_priority", "n")
         ),
+        "coverage_complete": bool(scan and scan.complete and unresolved == 0),
     }
 
 
@@ -56,15 +93,18 @@ def scan_initial_batch(*, limit=100, deadline=None):
     if not 1 <= limit <= 500:
         raise ValueError("initial inventory batch must be 1..500")
     with transaction.atomic():
+        legacy = OfficialCompanyScan.objects.filter(pk=LEGACY_INITIAL_KEY).first()
         scan, created = OfficialCompanyScan.objects.select_for_update().get_or_create(
-            key=INITIAL_KEY
+            key=INITIAL_KEY,
+            defaults={"started_at": legacy.started_at, "population": legacy.population}
+            if legacy
+            else {},
         )
         if created:
-            scan.population = Account.objects.filter(
-                first_seen_at__lte=scan.started_at
-            ).count()
-            # Changes during the full scan belong to independent observation
-            # cursors, even when they occur behind the initial keyset cursor.
+            if not legacy:
+                scan.population = Account.objects.filter(
+                    first_seen_at__lte=scan.started_at
+                ).count()
             for key in [
                 "account-observations",
                 "post-observations",
@@ -75,20 +115,43 @@ def scan_initial_batch(*, limit=100, deadline=None):
                 )
         if scan.complete:
             return coverage()
-        rows = list(
-            Account.objects.filter(
-                first_seen_at__lte=scan.started_at, author_id__gt=scan.cursor
-            ).order_by("author_id")[:limit]
+        inventory = Account.objects.filter(first_seen_at__lte=scan.started_at)
+        # Stage gold first, without counting authors twice. The subsequent full
+        # ID inventory supplies whole-population coverage, even if badges change.
+        gold, _ = OfficialCompanyScan.objects.select_for_update().get_or_create(
+            key=INITIAL_KEY + ":gold", defaults={"started_at": scan.started_at}
         )
-        for account in rows:
-            if deadline and time.monotonic() >= deadline:
-                break
-            enqueue_account(account, initial_scan=scan)
+        if not gold.complete:
+            gold_rows = list(
+                inventory.filter(
+                    verified_type__iexact="Business", author_id__gt=gold.cursor
+                ).order_by("author_id")[:limit]
+            )
+            for account in enqueue_filtered_accounts(
+                gold_rows, initial_scan=scan, deadline=deadline
+            ):
+                gold.cursor = account.author_id
+                gold.enumerated += 1
+            gold.complete = not inventory.filter(
+                verified_type__iexact="Business", author_id__gt=gold.cursor
+            ).exists()
+            gold.save()
+            if (
+                gold_rows
+                or not gold.complete
+                or (deadline and time.monotonic() >= deadline)
+            ):
+                scan.save()
+                return coverage()
+        rows = list(
+            inventory.filter(author_id__gt=scan.cursor).order_by("author_id")[:limit]
+        )
+        for account in enqueue_filtered_accounts(
+            rows, initial_scan=scan, deadline=deadline
+        ):
             scan.cursor = account.author_id
             scan.enumerated += 1
-        scan.complete = not Account.objects.filter(
-            first_seen_at__lte=scan.started_at, author_id__gt=scan.cursor
-        ).exists()
+        scan.complete = not inventory.filter(author_id__gt=scan.cursor).exists()
         scan.save()
     return coverage()
 
@@ -110,13 +173,23 @@ def _observations(key, model, time_field, *, limit, account_field=None, deadline
         if account_field:
             observations = observations.select_related(account_field)
         rows = list(observations[:limit])
+        unique = {}
+        for row in rows:
+            account = getattr(row, account_field) if account_field else row
+            if account is not None:
+                unique[account.pk] = account
+        processed = {
+            a.pk
+            for a in enqueue_filtered_accounts(list(unique.values()), deadline=deadline)
+        }
         seen = set()
         for row in rows:
             if deadline and time.monotonic() >= deadline:
                 break
             account = getattr(row, account_field) if account_field else row
             if account is not None and account.pk not in seen:
-                enqueue_account(account)
+                if account.pk not in processed:
+                    break
                 seen.add(account.pk)
             scan.cursor = json.dumps(
                 {"at": getattr(row, time_field).isoformat(), "pk": row.pk}
@@ -164,16 +237,13 @@ def enqueue_incremental(*, limit=100, deadline=None):
         )
         rows = list(
             Account.objects.filter(author_id__gt=scan.cursor).order_by("author_id")[
-                :bounds[3]
+                : bounds[3]
             ]
         )
         if not rows:
             scan.cursor = ""
-            rows = list(Account.objects.order_by("author_id")[:bounds[3]])
-        for account in rows:
-            if deadline and time.monotonic() >= deadline:
-                break
-            enqueue_account(account)
+            rows = list(Account.objects.order_by("author_id")[: bounds[3]])
+        for account in enqueue_filtered_accounts(rows, deadline=deadline):
             count += 1
             scan.cursor = account.author_id
         scan.save()
@@ -204,7 +274,8 @@ def drain_accounts(*, cfg, call, limit, budget_scope, initial=False, deadline=No
     result = {"attempted": 0, "registered": 0}
     qs = (
         OfficialCompanyAccountState.objects.filter(
-            status__in=["pending", "retry_due", "claimed"]
+            status__in=["pending", "retry_due", "claimed"],
+            candidate_priority__in=[1, 2, 3],
         )
         .filter(Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now))
         .filter(
@@ -215,23 +286,29 @@ def drain_accounts(*, cfg, call, limit, budget_scope, initial=False, deadline=No
     )
     if initial:
         qs = qs.filter(initial_scan_id=INITIAL_KEY)
-    # One due retry gets a slot; the remaining slots draw oldest unseen work.
-    retry = list(
-        qs.filter(status__in=["retry_due", "claimed"])
-        .order_by("created_at")
-        .values_list("pk", flat=True)[:1]
-    )
-    ids = retry + list(
-        qs.filter(status="pending")
-        .order_by("created_at" if initial else "-updated_at")
-        .values_list("pk", flat=True)[: max(0, limit - len(retry))]
-    )
-    if len(ids) < limit:
-        ids += list(
-            qs.exclude(pk__in=ids)
+    ids = []
+    for priority in [1, 2, 3]:
+        tier = qs.filter(candidate_priority=priority)
+        retry = list(
+            tier.filter(status__in=["retry_due", "claimed"])
             .order_by("created_at")
-            .values_list("pk", flat=True)[: limit - len(ids)]
+            .values_list("pk", flat=True)[:1]
         )
+        remaining = limit - len(ids)
+        selected = retry[:remaining] + list(
+            tier.filter(status="pending")
+            .order_by("created_at" if initial else "-updated_at")
+            .values_list("pk", flat=True)[: max(0, remaining - len(retry))]
+        )
+        if len(selected) < remaining:
+            selected += list(
+                tier.exclude(pk__in=selected)
+                .order_by("created_at")
+                .values_list("pk", flat=True)[: remaining - len(selected)]
+            )
+        ids += selected
+        if len(ids) >= limit:
+            break
     for state_id in ids[:limit]:
         if deadline and time.monotonic() + cfg.request_timeout_seconds + 2 > deadline:
             break

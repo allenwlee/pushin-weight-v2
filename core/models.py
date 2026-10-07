@@ -7286,6 +7286,8 @@ class OfficialCompanyAccountState(models.Model):
     decision = models.JSONField(default=dict)
     model = models.CharField(max_length=128, blank=True, default="")
     policy_version = models.CharField(max_length=96, blank=True, default="")
+    candidate_priority = models.PositiveSmallIntegerField(null=True, blank=True)
+    candidate_policy_version = models.CharField(max_length=96, blank=True, default="")
     attempts = models.PositiveIntegerField(default=0)
     next_attempt_at = models.DateTimeField(null=True, blank=True)
     claim_token = models.CharField(max_length=64, blank=True, default="")
@@ -7308,7 +7310,8 @@ class OfficialCompanyAccountState(models.Model):
         indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["status", "next_attempt_at"], name="idx_official_co_due"
-            )
+            ),
+            models.Index(fields=["status", "candidate_priority"], name="idx_official_co_priority")
         ]
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
@@ -7322,6 +7325,7 @@ class OfficialCompanyAccountState(models.Model):
                         "retry_due",
                         "registered",
                         "no_evidence",
+                        "deferred",
                         "suppressed",
                     ]
                 ),

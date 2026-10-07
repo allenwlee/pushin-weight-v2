@@ -21,7 +21,7 @@ ollija:
 
 PushinWeight should recognize official AI company and lab accounts in posts it already stores, register those organizations, and add their accounts to the private list that Call A collects. This includes closed-model and pre-release labs. The existing people-affiliation extractor remains focused on people.
 
-A one-time scan will cover every stored author in the entire database, with no post-age or observation-age cutoff, to find official AI labs that release or develop for release any kind of AI model: language, image, video, audio, speech, multimodal, robotics/action, embedding or other model types. It will use bounded resumable batches, keep evidence and coverage counts, and register settled organizations. Reflection, Aleph Alpha, and Bad Theory Labs are already owner-verified positive examples. Going forward, a separate incremental extractor will run with the existing 15-minute harvester, inspecting newly stored authors and materially changed post/profile evidence rather than repeating the whole initial scan.
+A one-time scan will cover every stored author in the entire database, with no post-age or observation-age cutoff, to find official AI labs that release or develop for release any kind of AI model: language, image, video, audio, speech, multimodal, robotics/action, embedding or other model types. It will cheaply screen every author in bounded resumable batches and evaluate only selected candidates, keeping deferred authors and coverage counts. Gold/business badges admit accounts on their own and receive highest priority. Badge-free entrances use the measured bio, development, company website/name and release signals. Registration still requires an official model-developer decision. Reflection, Aleph Alpha, and Bad Theory Labs are already owner-verified positive examples. Going forward, a separate incremental extractor will run with the existing 15-minute harvester, inspecting newly stored authors and materially changed post/profile evidence rather than repeating the whole initial scan.
 
 Tests will cover those examples and unseen companies, misleading accounts, duplicate identities, retries, and the real cycle entry point. Official X owner access is verified locally. The owner now authorizes LFG through production activation plus verified collection, including the initial full-database pass, continuing extraction, settled registration and list synchronization. Runtime secret provisioning and refresh/client validation are delivery work. Single-post Chatter/Pulse admission remains separate.
 
@@ -405,7 +405,7 @@ Resolve native X user IDs through the explicit X adapter, not generic primary-ke
 
 **Approach:** Add once-per-cycle scan/drain hooks and persistent counters. Share the optional extraction allowance across existing targeted work and the new role. Keep progress when caps/deadline expire. Commands call the same services and expose decision, registration, and sync results independently.
 
-Add explicit `initial-scan`/resume and incremental modes using the same evidence/extraction/registration services. Initial enumeration runs over the whole DB, freezes its population boundary, reports every outcome, and cannot declare completion with unenumerated accounts or pending retries. Enqueue new/changed observations independently from that boundary. Initial evaluation runs with automatic registration/list writes disabled until the frozen acceptance evaluation passes, then process accepted results without repeating model calls. The ongoing lane never reruns the entire initial scan.
+Add explicit `initial-scan`/resume and incremental modes using the same evidence/extraction/registration services. Initial enumeration cheaply screens the whole DB, freezes its population boundary, reports candidate outcomes separately from deferred nonmatches, and cannot declare completion with unenumerated accounts or pending candidate retries. Stage gold candidates first through a separate checkpoint; inventory remains ordered by stable author ID. Apply the same screen to new/changed observations and prevent legacy unscreened queue rows from reserving model funds. Preserve explicit bounded operator selection as an auditable manual override. Enqueue new/changed observations independently from that boundary. Initial evaluation runs with automatic registration/list writes disabled until the frozen acceptance evaluation passes, then process accepted results without repeating model calls. The ongoing lane never reruns the entire initial scan.
 
 **Test scenarios:**
 
@@ -565,19 +565,45 @@ runtime ceiling is approximately USD2.30; only elapsed runtime is charged.
 Initial coverage, two natural cycles and subsequent collection proof remain
 required; launching the job does not complete them.
 
+### Production activation in progress (2026-10-07, 10:02 JST)
+
+PR54 is merged by exact-SHA, non-forced fast-forward promotion. Production web
+`dep-db2pi1bl550s73c3q65g` and harvest code deploy
+`dep-db2pi1bl550s73c3q780` were observed live at
+`b13b38b5ff6df06d27531a6665449950e0685355`; migration0069 is applied.
+Hosted checks passed213discovery/admin tests (180required PostgreSQL) and302
+staff/staging tests (176required PostgreSQL), without skips/errors. The external
+Claude review could not run due to balance; replacement Grok timed out, without
+a usable artifact. Neither is completed independent coverage.
+
+The service-local funded activation deploy `dep-db2pj859fdbs738q5tpg` was also
+observed live at that SHA. The first startup enumeration froze91,028authors and
+queued1. No decision/model call or extractor list add had occurred at that
+observation. Render one-off job `job-db2pk1gm7kps73br6bm0` was launched and is
+running from the activated harvest snapshot, using the bounded operator source
+SHA256 `4357283fb62319e2f601b2558cb34f5c568f3192c72d2a1006744d0fb755317f`.
+Its early logs show `writer_busy` while the existing scheduled cycle owns the
+lock; it defers without pausing or cancelling that cycle. The owner-settled
+three-account bootstrap likewise deferred on the writer lock. Do not report
+these accounts as registered or added before persisted confirmation.
+
+Full initial coverage, paid model outcomes, owner-settled registration/list
+outcomes, two naturally scheduled incremental cycles and later collection proof
+remain open. Preserve the worktree and receipts while that endpoint is pending.
+
 ## Definition of Done
 
 The implementation is complete when U1–U6 meet their verification outcomes, all required regression and PostgreSQL checks pass, and abandoned experimental code is removed. Configuration, migrations, service boundaries, and operational documentation describe the same behavior.
 
 A disabled implementation can be code-complete while activation remains blocked. The full product outcome is complete only after the currently authorized discovery/registration runs demonstrate acceptance quality and an owner-authenticated list add is observed remotely and persisted locally. A queued intent, reachable endpoint, successful cron exit, or deployment alone is not that evidence.
 
-For the current request, completion requires the intended revision observed in production, initial whole-database scan coverage fully accounted for (accepted/rejected/review-needed/no-evidence; no silently omitted older authors), durable registration/list outcomes, successful runtime credential refresh validation, and at least two normal scheduled cycles showing incremental progress. Demonstrate a subsequently collected eligible post from a newly registered official account, with its correct brand attribution and normal post-processing outcome. A successful add, mock test or enabled flag alone is not verified collection. Preserve measured error/uncertainty evidence; do not guarantee exhaustive discovery beyond the stored population or Chatter/Pulse admission.
+For the current request, completion requires the intended revision observed in production, initial whole-database screening coverage fully accounted for (selected candidates and deferred nonmatches, with accepted/rejected/review-needed/no-evidence candidate outcomes; no silently omitted older authors), durable registration/list outcomes, successful runtime credential refresh validation, and at least two normal scheduled cycles showing incremental progress. Demonstrate a subsequently collected eligible post from a newly registered official account, with its correct brand attribution and normal post-processing outcome. A successful add, mock test or enabled flag alone is not verified collection. Preserve measured error/uncertainty evidence; do not guarantee exhaustive discovery beyond the stored population or Chatter/Pulse admission.
 
 ---
 
 ## Delivery Exceptions
 
-Owner selected LFG through production activation plus verified collection on 2026-10-06. This supersedes earlier planning-only and separately-authorized-activation wording for this feature. On 2026-10-07 the owner explicitly selected direct production delivery for this feature; omit staging delivery and preserve G2's staging resources. The owner also identified top-gun as the token-issuing app. Production pause/resume and unrelated taxonomy implementation are excluded. Local X list access is proven, but runtime provisioning/refresh and new account registration remain required work.
+Owner selected LFG through production activation plus verified collection on 2026-10-06. This supersedes earlier planning-only and separately-authorized-activation wording for this feature. On 2026-10-07 the owner explicitly selected direct production delivery for this feature; omit staging delivery and preserve G2's staging resources. The owner also identified top-gun as the token-issuing app. Normal production harvest pause/resume and unrelated taxonomy implementation are excluded. The owner paused only official-company extraction on 2026-10-07, then authorized resuming its filtered initial scan and extraction/registration/list synchronization with “ok let's run it”; the latest decision supersedes the feature pause. Local X list access is proven, but runtime provisioning/refresh and new account registration remain required work.
 
 ---
 
@@ -634,3 +660,32 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
   delivery.
 - Do not run an endless retry loop or start a persistent Ollija process.
 <!-- END OLLIJA DELIVERY GUIDE -->
+
+## Owner pause and candidate filtering — 2026-10-07
+
+The owner explicitly paused official-company discovery, then requested read-only research to reduce the roughly 91k author population before model evaluation. Stop the initial one-off scan and disable official-company extraction, registration and list sync; preserve normal scheduled harvesting, credentials, stored evidence and queue/cursor progress. No scan restart is authorized by the filtering discussion. This overrides the earlier pause exclusion for this feature only; normal production harvesting must remain active. Derive and measure candidate filters against the three settled official accounts (Reflection, Aleph Alpha, Bad Theory Labs), retaining their evidence and measuring coverage/reduction before proposing implementation. More than one stored post is a candidate signal, not an assumed safe exclusion. The earlier whole-population evaluation approach is suspended pending this revised selection strategy.
+
+Pause verified: one-off job `job-db2pk1gm7kps73br6bm0` is `canceled` (2026-10-07T01:25:54.752842Z); production harvest feature flags `ENABLED`, `REGISTRATION_ENABLED`, `LIST_SYNC_ENABLED` under `X_MONITOR_OFFICIAL_COMPANY_` are all `false`. Environment deploy `dep-db2pv967bikc73aid7sg` is LIVE at `b13b38b5ff6df06d27531a6665449950e0685355` (01:27:00.905935Z); harvest remains `not_suspended`. Initial durable enumeration is 14,001/91,028, incomplete. Existing scheduled lane completed two model decisions and an owner-attested Aleph Alpha registration/list add before pause: add requested 01:23:13.794003Z, acknowledged 01:23:13.949798Z, confirmed 01:23:13.954295Z. Three attempt records include one owner attestation; no claim that all three were paid model calls. Pending fresh-post health cohort revisit is unperformed, not passed. Preserve worktree because this work is paused/incomplete and its plan journal is dirty.
+
+Owner filter rule (2026-10-07): a gold/business badge is a standalone entrance to candidate evaluation and has highest queue priority; no additional website, AI-keyword, post-count or follower condition applies to that entrance. Read `verified_type = Business` rather than the verified/blue booleans (Reflection has Business with both booleans false). This is an evaluation entrance, not automatic classification/registration/list addition: non-AI businesses must still fail the official-model-developer decision. Badge-free alternate entrances remain required for Aleph Alpha and Bad Theory Labs. Extraction remains paused; this decision does not authorize resuming it.
+
+Read-only filter findings: [2026-10-07-103605-official-company-candidate-filter-measurements.md](../analysis/2026-10-07-103605-official-company-candidate-filter-measurements.md). Gold733 alone is first priority. Proposed ordered alternates add3,022 development-bio/website candidates and3,955 organization/domain/release candidates for7,710 total (91.53% reduction), retaining all three settled examples without filter ID overrides. First two tiers total3,755. Two-stored-post cutoff retains36,384 but loses Reflection and Aleph Alpha, so it is unsuitable as a mandatory entrance. Retain deferred outside-filter accounts and existing settled official mappings; do not mark them rejected or claim complete model evaluation. Yann LeCun demonstrates a personal-account false positive that still needs the model decision. Gold rule is owner-settled; alternate tiers remain recommendations. Candidate counts are stored-evidence measurements, not deployment of new filters or authorization to resume.
+
+
+## Filtered execution authorized — 2026-10-07
+
+The owner now explicitly says "ok let's run it", authorizing implementation, direct production delivery, and resume of filtered extraction/registration/list sync. Preserve normal harvesting. Execute the measured 7,710-style union against fresh stored evidence; actual candidate counts can differ as evidence changes. Gold alone is priority1; development-bio/external-website is priority2; AI bio + website + organization/domain name, or model-release post + organization-style name, is priority3. No post count, follower floor, HF, open-weight or age requirement. Nonmatches are deferred, not rejected. Existing settlements/registrations and suppressions remain durable.
+
+Extend U5/U6: cheap whole-population screening precedes expensive evaluation. A fresh candidate inventory checkpoint preserves the old interrupted unfiltered scan and reuses its frozen population boundary. Store nullable candidate priority/policy version on the existing account state and add deferred status; legacy unscreened states cannot dispatch until screened. No new Account FK or attribution/taxonomy changes. Additive migration0070 belongs to this branch after0069; benchmark branch must reconcile its own graph separately. Admit/sort gold first in enumeration and evaluation, including retries; expire/defer safely without hidden calls. Explicit bounded operator enqueue remains an auditable manual candidate override and does not apply to ordinary scan/incremental calls. Reuse registered and owner-attested decisions.
+
+Verification: failing then passing real scheduled-lane tests for outside-filter zero calls, nested-bio single-post positives, gold-only admission with false verified booleans, gold ordering ahead of older non-gold/retries, suppression/registration preservation, re-entry after changed evidence, resumable inventory/coverage accounting and claim-boundary gating of old states. Run PostgreSQL discovery/harvest and schema checks, migration forward/backward compatibility, review, hosted required checks and exact-SHA direct deployment; then funded one-off screening/drain plus normal scheduled progress. The requested immediate result is a running filtered production scan with observed gold-first model progress, not a claim that all candidate evaluations have already completed.
+
+## Filtered implementation verification — 2026-10-07
+
+The staged implementation reproduces the cached measured split exactly: gold 733; development-bio/website tier adds 3,022; organization/domain/release tier adds 3,955; total 7,710 of the original 91,028. This is replay evidence, not a claim that the live queue already contains those counts. The live implementation additionally reads stored profile snapshots; current evidence can therefore change the selected count.
+
+Local PostgreSQL discovery/harvest/admin regression suite: **222 passed**, required PostgreSQL **189 executed, zero skipped/errors**. Scoped Ruff and `makemigrations --check --dry-run` pass. Migration 0070 was exercised forward, reversed to 0069 with a deferred fixture translated to pending, and applied again on isolated PostgreSQL. Disable the feature before rolling back to legacy unfiltered code. Existing account identifiers, foreign keys, taxonomy, cron schedule, A/B/C shape and credentials are unchanged. Review and production activation receipts follow after completion; they are not established by these local checks.
+
+Staff/schema regression suite also passed: **302 tests**, required PostgreSQL **176 executed, zero skipped/errors**; Ollija **36 passed**. Strengthened the direct legacy-claim pin with positive USD funding; all **19 scan tests passed** on PostgreSQL afterward. Full review receipt: `/tmp/compound-engineering-501/ce-code-review/20261007-105622-d9a084/review.json`; seven local lenses ran sequentially per AGENTS and found no retained blocker. Cross-model coverage is unavailable: Claude returned provider HTTP402 insufficient balance; Grok4.7 xhigh reached its600second bound with no usable artifact. This is not a passed independent review. Peer jobs are terminal and their owned job directories are removed.
+
+The prior b13b38b5 immutable20-post health cohort was revisited exactly once after its30minute grace: **unhealthy**,0commentary in either language,17/20canonical language detections and16/16required Chinese translations. That pre-existing processing path is unchanged by candidate screening; do not mark its health gate or the original verified-collection endpoint passed. Preserve the detailed local receipt and investigate separately within appropriate ownership.

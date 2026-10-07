@@ -24,7 +24,13 @@ def account_report(*, list_id, page=1):
         found=Count("pk", filter=Q(status__in=["accepted", "registered"])),
         registered=Count("pk", filter=Q(status="registered")),
         review_needed=Count("pk", filter=Q(status="review_needed")),
-        pending=Count("pk", filter=Q(status__in=["pending", "claimed", "retry_due"])),
+        pending=Count(
+            "pk",
+            filter=Q(
+                status__in=["pending", "claimed", "retry_due"],
+                candidate_priority__in=[1, 2, 3],
+            ),
+        ),
         total=Count("pk"),
     )
     summary.update(

@@ -2,7 +2,19 @@
 
 This service finds official accounts of organizations developing or releasing AI models of any kind. It reads stored account profiles and posts. It registers supported company/brand identities and queues additions to Call A's existing private X list. It does not change editorial admission to Chatter or Pulse.
 
-There are two separate jobs. `initial-scan` enumerates every account present at its start boundary, without an age cutoff. The scheduled harvester independently examines account, post-fetch and profile observations, with a rotating inventory check for missed observations. Evidence changes produce a new decision; follower-count changes alone do not.
+There are two separate jobs. `initial-scan` cheaply screens every account at a frozen start boundary, without an age cutoff. Only selected candidates receive expensive official-account evaluation. The scheduled harvester independently screens new/changed account, post-fetch and profile evidence, with a rotating inventory check for missed observations. Follower-count changes alone do not create a new decision.
+
+Candidate evaluation has three priority tiers:
+
+1. Gold/business badge (`Account.verified_type = Business`) alone admits an account first, even with no bio or stored posts. The verified and blue booleans are not substitutes for this field.
+2. AI/model-related bio, development language, and an external profile website.
+3. AI/model-related bio plus external website and organization/domain-name resemblance, or model-release wording in an authored post plus an organization-style account name.
+
+These are alternate entrances, not proof of company ownership or AI model development. No minimum post/follower count, Hugging Face presence, open weights, language-model-only restriction or age cutoff is imposed. Profile text and expanded website URLs include nested post-author data and stored snapshots across history. Some personal accounts pass the cheap screen; the existing grounded evaluator must still reject them or request review before registration/list addition.
+
+Gold candidates are staged before the whole-author inventory; a separate gold checkpoint prevents mutable badge metadata from corrupting the full inventory's stable author-ID cursor. Evaluation and due retries obey tier precedence, sharing retry/fresh slots within each tier. The interrupted unfiltered `official-company-initial-v1` checkpoint remains stored. The filtered scan uses `official-company-filtered-initial-v1`, reusing the old frozen population boundary when present.
+
+Nonmatching accounts stay in `accounts`. Existing unprocessed queue rows become `deferred`; no state row is needed for a newly screened nonmatch. Candidate priority/policy fields distinguish screened work from legacy unscreened rows, which cannot reserve funds or dispatch. Changed evidence can make a deferred account eligible later. Existing decisions, attempts, registrations, list outcomes and suppressions remain durable; material identity evidence can still trigger reevaluation. Explicit bounded operator `enqueue --account-id` is a recorded manual candidate override, with gold precedence retained; ordinary initial/incremental discovery never uses that override.
 
 The implementation defaults to disabled. Code and test completion do not establish production activation. The linked [plan](../plans/2026-10-06-100039-feat-official-co-account-extraction-plan.md) and dated activation receipts determine deployment status.
 
@@ -14,7 +26,7 @@ Discovery, registration and outbound list synchronization have separate `enabled
 
 The scheduled lane runs once after essential harvest work, only on a normal scheduled cycle with sufficient time. Its default ceiling is two model calls and a 45-second lane deadline, sharing the cycle-wide optional extraction allowance with existing targeted extraction. Calls reserve a conservative cost before dispatch. Unknown spend remains reserved. Authentication/configuration rejection blocks this model adapter until its credential revision changes or an operator explicitly resumes it.
 
-The initial inventory is a separate resumable operator job. Enumeration and model evaluation are separate commands. Accepted, rejected, review-needed and no-evidence outcomes remain visible. Pending/retry work or unenumerated accounts means coverage is incomplete.
+The initial inventory is a separate resumable operator job. Enumeration and model evaluation are separate commands. Candidate accepted, rejected, review-needed and no-evidence outcomes remain visible. Coverage reports population, whole-inventory enumeration, gold staging, candidate totals/tiers and deferred nonmatches separately. Completed cheap screening does not mean all authors were model-evaluated. Candidate pending/retry work or unenumerated accounts means coverage is incomplete. Gold staging can produce candidates before whole-inventory enumeration starts.
 
 ## Inspection and explicit actions
 
