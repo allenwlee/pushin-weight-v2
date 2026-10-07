@@ -21,7 +21,7 @@ from django.utils import timezone
 from core.hf_metadata_client import NAMESPACE, REPO_ID
 from core.official_company_accounts import digest
 
-VERSION = "official-hf-model-developer-v1"
+VERSION = "official-hf-model-developer-v2"
 SALT = "official-company-hf-approval-v1"
 KEY_ENV = "PUSHINWEIGHT_OFFICIAL_COMPANY_HF_SIGNING_KEY"
 SHA = re.compile(r"^[0-9a-f]{40}$")
@@ -91,16 +91,16 @@ def _compact(text):
     return re.sub(r"[^a-z0-9]", "", text.casefold())
 
 
-def development_quote(card, organization, namespace):
+def development_quote(card, organization, namespace, *, identity_name="", publisher_urls=()):
     """A narrow positive proof; unsupported writing styles remain reviewable."""
     name = re.sub(r"[,\s]+(?:inc\.?|ltd\.?|llc|corporation)\s*$", "", organization, flags=re.IGNORECASE)
-    aliases = {_compact(name), _compact(namespace)} - {""}
+    aliases = {_compact(name), _compact(namespace), _compact(identity_name)} - {""}
 
-    def credited(value):
+    def credited(value, names):
         return any(re.search(
             r"(?:^|,\s*|\band\s+)" + r"[. _-]*".join(map(re.escape, alias))
             + r"(?=$|[\s,.;:])", value, re.IGNORECASE,
-        ) for alias in aliases)
+        ) for alias in names)
 
     for line in card.splitlines():
         if len(line) > 2000:
@@ -108,14 +108,24 @@ def development_quote(card, organization, namespace):
         # Name must immediately follow the development credit. A mirrored card
         # crediting Meta, with the host's name elsewhere, cannot pass.
         clean = re.sub(r"[*#]", "", line)
+        # Preserve the original quote, but match the visible link label. A
+        # research publisher may explicitly credit its parent company via the
+        # same company website shown on its verified HF profile.
+        links = re.findall(r"\[([^\]]+)\]\((https?://[^)]+)\)", clean)
+        clean = re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r"\1", clean)
+        names = aliases.copy()
+        for label, url in links:
+            alias = _compact(label)
+            if len(alias) >= 4 and _compact(name).startswith(alias) and _domain(url) in {_domain(site) for site in publisher_urls}:
+                names.add(alias)
         match = re.search(r"(?:developed|trained|fine[- ]?tuned|finetuned)\s+by\s*:?\s*(.+)", clean, re.IGNORECASE)
         if match and re.search(r"\b(?:not|never)\s*$", clean[:match.start()], re.IGNORECASE):
             continue
-        if match and credited(match[1]):
+        if match and credited(match[1], names):
             return line
         # Common model-card field: "Model developer: Cohere and Cohere Labs".
-        match = re.search(r"model\s+developer\s*:?\s*(.+)", re.sub(r"[*#]", "", line), re.IGNORECASE)
-        if match and credited(match[1]):
+        match = re.search(r"^\s*[-|]?\s*model\s+developer\s*:\s*(.+)", clean, re.IGNORECASE)
+        if match and credited(match[1], names):
             return line
     return ""
 
@@ -207,7 +217,7 @@ def verify(evidence, decision, *, client=None, seconds=20):
             if any("quantized" in str(tag) or str(tag).casefold() == "gguf" for tag in tags):
                 continue
             card = api.get(f"/{repo}/raw/{sha}/README.md", text=True)
-            quote = development_quote(card, org.get("fullname", ""), namespace) if isinstance(card, str) else ""
+            quote = development_quote(card, org.get("fullname", ""), namespace, identity_name=identity_name, publisher_urls=publisher["websites"]) if isinstance(card, str) else ""
             if quote:
                 result.update(outcome="passed", namespace=org["name"],
                               publisher_name=org.get("fullname"), ownership_urls=ownership,

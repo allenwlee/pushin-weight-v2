@@ -66,7 +66,8 @@ def test_real_profile_and_pinned_own_model_proof():
     assert result["identity_namespace"] == "examplelab"
 
 
-def test_verified_parent_company_binds_research_publisher_to_exact_x_account():
+@pytest.mark.parametrize("credit", ["Cohere", "Cohere and Cohere Labs"])
+def test_verified_parent_company_binds_research_publisher_to_exact_x_account(credit):
     def respond(request):
         path = request.url.path
         if path == "/api/quicksearch":
@@ -79,7 +80,7 @@ def test_verified_parent_company_binds_research_publisher_to_exact_x_account():
             return httpx.Response(200, text=f'<a class="leading-snug" href="https://twitter.com/{handle}">X</a><a class="leading-snug" href="https://cohere.com/research">Website</a>')
         if path == "/api/models":
             return httpx.Response(200, json=[] if request.url.params["author"] == "cohere" else [{"id": "CohereLabs/command", "sha": "a" * 40, "private": False, "siblings": [{"rfilename": "model.safetensors"}]}])
-        return httpx.Response(200, text="- **Developed by:** Cohere and Cohere Labs")
+        return httpx.Response(200, text=f"- **Developed by:** {credit}")
 
     with httpx.Client(transport=httpx.MockTransport(respond)) as client:
         result = verify(evidence("cohere"), {"organization_name": "Cohere"}, client=client)
@@ -213,3 +214,11 @@ def test_null_handle_and_invalid_review_name_do_not_crash_discovery():
         assert result["outcome"] == "review_needed" and calls == []
         result = verify(evidence(), {"organization_name": 42}, client=client)
     assert result["outcome"] == "passed"
+
+
+@pytest.mark.parametrize("quote", ["Developed by [Cohere](https://cohere.com/).", "- **Model developer:** [Cohere](https://cohere.com/)."])
+def test_parent_credit_link_must_match_verified_publisher_website_and_name(quote):
+    assert development_quote(quote, 'Cohere Labs', 'CohereLabs', publisher_urls=['https://cohere.com/research']) == quote
+    assert not development_quote(quote, 'Cohere Labs', 'CohereLabs', publisher_urls=['https://impostor.ai'])
+    assert not development_quote(quote, 'Unrelated Labs', 'unrelatedlabs', publisher_urls=['https://cohere.com'])
+    assert not development_quote('Developed by [Meta](https://meta.com/).', 'Meta Labs', 'metalabs', publisher_urls=['https://metalabs.ai'])
