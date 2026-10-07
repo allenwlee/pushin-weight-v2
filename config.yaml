@@ -95,7 +95,7 @@ discovery:
       staging_decisions_per_cycle: 5
       cycle_budget_usd: '0.02'
       daily_budget_usd: '0.50'
-      max_request_bytes: 32000
+      max_request_tokens: 64000
       max_response_bytes: 65536
   jobs:
     enabled: false
@@ -618,3 +618,14 @@ x_query_specs:
     notes: |
       Hybrid funnel U3 — B3 is HANDLE-ONLY (R5). Same shape as B2
       but covers the other-brand set.
+
+# Account-scoped model-lab discovery. Deployment activation uses explicit,
+# service-scoped X_MONITOR_OFFICIAL_COMPANY_* values and funded limits.
+official_company:
+  enabled: false
+  registration_enabled: false
+  list_sync_enabled: false
+  max_calls_per_cycle: 2
+  max_usd_per_cycle: 0
+  max_usd_per_day: 0
+  initial_scan_max_usd: 0

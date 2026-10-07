@@ -52,6 +52,7 @@ jobs:
           tests/test_person_identity.py tests/test_person_identity_corrections.py
           tests/test_person_affiliations.py tests/test_person_names.py tests/test_person_text.py
           tests/test_staff_library.py tests/test_staff_dossier.py
+          tests/test_media_storage.py
           tests/test_migration_060_person_names.py tests/test_migration_064_staff_sources.py
           tests/test_profile_snapshots.py tests/test_bio_change_personnel.py
           tests/test_targeted_extraction.py tests/test_intelligence_readers.py

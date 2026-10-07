@@ -599,3 +599,65 @@ def test_lane_telemetry_separates_records_evidence_tokens_and_latency(
     assert telemetry["n_unknown_tokens"] == 1
     assert telemetry["n_unknown_token_evidence"] == 1
     assert telemetry["fetch_to_visible_p95_ms"] == 5000
+
+
+def test_cycle_sends_fresh_announcement_to_real_jev_before_old_backlog(
+    tmp_path, monkeypatch
+):
+    import httpx
+
+    from x_monitor.jev_decisions import (
+        QUESTION_SET,
+        JevDecisionGate,
+        JevDecisionsClient,
+    )
+
+    cfg, call = _enabled_call(tmp_path)
+    api = FakeApi(
+        response={
+            "tweets": [
+                {"id": f"oversize-{i}", "text": "Long AI context " * 2200}
+                for i in range(19)
+            ]
+            + [{"id": "old-short", "text": "old announcement"}]
+        }
+    )
+    runner = CycleRunner(cfg=cfg, _clock=lambda: NOW - timedelta(hours=1))
+    runner._run_rare_type_search(call, api, now=NOW - timedelta(hours=1))
+    api.response = {
+        "tweets": [{"id": "beam", "text": "Introducing Beam: an agentic open model."}]
+    }
+    _patch_cycle_shell(monkeypatch, call=call, api=api, drain=False)
+    seen = []
+
+    def handler(request):
+        text = json.loads(request.content)["state"]["text"]
+        seen.append(text)
+        if len(text) > 32000:
+            return httpx.Response(413)
+        return httpx.Response(
+            200,
+            json={
+                "model": "jev-1.13.0",
+                "answers": {key: {"type": "noul", "noul": 0.1} for key in QUESTION_SET},
+                "usage": {"input_tokens": 1200, "output_tokens": 0},
+            },
+        )
+
+    config = cfg.discovery.rare_types.jev
+    gate = JevDecisionGate(
+        config=config,
+        client=JevDecisionsClient(
+            api_key="fake", config=config, transport=httpx.MockTransport(handler)
+        ),
+        environment="normal",
+        now=lambda: NOW,
+    )
+    monkeypatch.setattr(
+        "monitor.cycle.build_jev_decision_gate", lambda *_a, **_kw: gate
+    )
+    summary = CycleRunner(cfg=cfg, _clock=lambda: NOW).run()
+    assert seen[0].startswith("Introducing Beam")
+    assert RareTypeSearchHit.objects.get(provider_post_id="beam").decision.attempts == 1
+    assert summary["rare_type_ingestion"]["selected"] == 20
+    assert len(api.calls) == 2  # one old fixture fetch, one live-cycle search

@@ -81,6 +81,7 @@ from core.models import (
     PostEnrichmentState,
     PostTypeKey,
     Product,
+    RareTypeDecision,
     RareTypeSearchHit,
     SearchQuery,
     SentimentKey,
@@ -92,6 +93,7 @@ from core.profile_snapshots import (
     capture_post_profile_snapshot,
 )
 from core.rare_type_search import (
+    DECISION_RETRY_DELAY,
     kept_hits_pending_post,
     link_kept_hit_to_post,
     mark_hit_ingestion_failed,
@@ -2492,6 +2494,8 @@ class CycleRunner:
         _max_llm_calls: int | None = None,
         _relevancy_llm_call=None,
         _targeted_extraction_calls: dict[str, Any] | None = None,
+        _official_company_call=None,
+        _official_list_client=None,
         _clock=None,
         _monotonic=None,
     ) -> None:
@@ -2515,6 +2519,9 @@ class CycleRunner:
         # Production wire-in passes an anthropic_messages_call function.
         self._relevancy_llm_call = _relevancy_llm_call
         self._targeted_extraction_calls = dict(_targeted_extraction_calls or {})
+        self._official_company_call = _official_company_call
+        self._official_list_client = _official_list_client
+        self._optional_calls_remaining = cfg.targeted_extraction.max_calls_per_cycle
         # U14 keeps server-owned clocks injectable for deterministic latency
         # proof. Production defaults remain the wall/monotonic clocks.
         self._clock = _clock or (lambda: datetime.now(timezone.utc))
@@ -3159,6 +3166,7 @@ class CycleRunner:
         index: Any,
         search_terms: dict[str, str],
         fetched_since: datetime | None = None,
+        fresh_since: datetime | None = None,
         deadline: Any = None,
         hit_ids: set[int] | None = None,
         allow_disabled: bool = False,
@@ -3194,6 +3202,32 @@ class CycleRunner:
                 post_id__isnull=True,
                 payload_expired_at__isnull=True,
             )
+            now = self._wall_now()
+            # Eligibility comes before the bounded slice. Sleeping retries and
+            # active claims must not displace work that can actually run.
+            # Shared terminal decisions still need propagation to older hits.
+            candidates = candidates.filter(payload_expires_at__gt=now).filter(
+                Q(decision__isnull=True)
+                | Q(
+                    decision__status__in=[
+                        RareTypeDecision.Status.COMPLETED,
+                        RareTypeDecision.Status.REVIEW_NEEDED,
+                    ]
+                )
+                | Q(
+                    decision__status=RareTypeDecision.Status.PENDING,
+                    decision__next_attempt_at__isnull=True,
+                )
+                | Q(
+                    decision__status=RareTypeDecision.Status.PENDING,
+                    decision__next_attempt_at__lte=now,
+                )
+                | Q(
+                    decision__status=RareTypeDecision.Status.CLAIMED,
+                    decision__claim_expires_at__lte=now,
+                    decision__claimed_at__lte=now - DECISION_RETRY_DELAY,
+                )
+            )
             if fetched_since is not None:
                 candidates = candidates.filter(fetched_at__gte=fetched_since)
             if hit_ids is not None:
@@ -3203,11 +3237,35 @@ class CycleRunner:
                 if environment == "staging"
                 else self.cfg.discovery.rare_types.jev.normal_decisions_per_cycle
             )
+            fresh_since = fresh_since or now.replace(
+                minute=(now.minute // 15) * 15, second=0, microsecond=0
+            )
+            fresh = candidates.filter(fetched_at__gte=fresh_since, decision__isnull=True)
+            older = candidates.exclude(fetched_at__gte=fresh_since, decision__isnull=True)
+            # Reserve one quarter for older/retry work, borrowing unused slots.
+            fresh_limit = limit - max(1, limit // 4)
+            selected = list(
+                fresh.order_by("fetched_at", "id")
+                .values_list("pk", flat=True)[:fresh_limit]
+            )
+            selected += list(
+                older.order_by(
+                    Case(When(decision__attempts__gt=0, then=Value(0)), default=Value(1)),
+                    "fetched_at",
+                    "id",
+                ).values_list("pk", flat=True)[:limit - len(selected)]
+            )
+            if len(selected) < limit:
+                selected += list(
+                    fresh.exclude(pk__in=selected)
+                    .order_by("fetched_at", "id")
+                    .values_list("pk", flat=True)[:limit - len(selected)]
+                )
             shared_deadline = getattr(deadline, "deadline_at", None)
-            for hit in candidates.order_by("fetched_at", "id")[:limit]:
+            for hit_id in selected:
                 result["selected"] += 1
                 decision = gate.process_hit(
-                    hit.pk,
+                    hit_id,
                     owner=run_id,
                     shared_deadline_monotonic=shared_deadline,
                 )
@@ -4203,7 +4261,10 @@ class CycleRunner:
         classification_succeeded: set[str] = set()
         targeted_calls_remaining = (
             0 if repair_manifest is not None
-            else self.cfg.targeted_extraction.max_calls_per_cycle
+            else (
+                self._optional_calls_remaining if self.cfg.official_company.enabled
+                else self.cfg.targeted_extraction.max_calls_per_cycle
+            )
         )
         counters["n_targeted_extraction_calls"] = 0
         counters["n_targeted_records_written"] = 0
@@ -4274,6 +4335,8 @@ class CycleRunner:
                     eligible_rare_types=eligible_rare_types,
                 )
                 targeted_calls_remaining -= targeted.calls_made
+                if self.cfg.official_company.enabled:
+                    self._optional_calls_remaining -= targeted.calls_made
                 counters["n_targeted_extraction_calls"] += targeted.calls_made
                 counters["n_targeted_records_written"] += targeted.records_written
                 counters["n_targeted_evidence_written"] += targeted.evidence_written
@@ -4783,6 +4846,7 @@ class CycleRunner:
         Returns a run summary dict (compatible with LATEST.json shape).
         """
         cycle_started_wall = self._wall_now()
+        self._optional_calls_remaining = self.cfg.targeted_extraction.max_calls_per_cycle
         cycle_started_at = cycle_started_wall.isoformat(timespec="seconds")
         t0 = self._monotonic()
         run_id = (
@@ -4959,6 +5023,18 @@ class CycleRunner:
                     rare_result.get("provider_called", False)
                 )
                 summary["totals"]["n_results"] += rare_result.get("raw_count", 0)
+                summary["rare_type_ingestion"] = self._drain_rare_type_hits(
+                    run_id=run_id,
+                    index=index,
+                    search_terms=search_terms,
+                    fresh_since=cycle_started_wall,
+                    fetched_since=(
+                        cycle_started_wall
+                        if "staging" in os.environ.get("RENDER_SERVICE_NAME", "").lower()
+                        else None
+                    ),
+                    deadline=deadline,
+                )
                 continue
 
             # Resolve this call's time window from its cursor (or the
@@ -5316,13 +5392,15 @@ class CycleRunner:
                 if "staging" in os.environ.get("RENDER_SERVICE_NAME", "").lower()
                 else None
             )
-            summary["rare_type_ingestion"] = self._drain_rare_type_hits(
-                run_id=run_id,
-                index=index,
-                search_terms=search_terms,
-                fetched_since=rare_fetched_since,
-                deadline=deadline,
-            )
+            if "rare_type_ingestion" not in summary:
+                summary["rare_type_ingestion"] = self._drain_rare_type_hits(
+                    run_id=run_id,
+                    index=index,
+                    search_terms=search_terms,
+                    fetched_since=rare_fetched_since,
+                    fresh_since=cycle_started_wall,
+                    deadline=deadline,
+                )
             post_fetch_started = self._monotonic()
             pf_counters = self._run_post_fetch(
                 kept_all,
@@ -5436,6 +5514,11 @@ class CycleRunner:
                 logger.warning("metrics_refresh channel failed: %s", exc)
                 summary.setdefault("metrics_refresh", {})["error"] = str(exc)
 
+        if self.cycle_kind == "scheduled" and summary["status"] != "aborted":
+            summary["official_company_discovery"] = self._run_official_company_discovery(
+                run_id=run_id, deadline=deadline,
+            )
+
         # ---- Finalize ----
         summary["totals"]["n_results"] = self._posts_seen
         summary["totals"]["n_inserted"] = self._posts_inserted
@@ -5466,3 +5549,41 @@ class CycleRunner:
             summary["wall_clock_sec"],
         )
         return summary
+
+    def _run_official_company_discovery(self, *, run_id, deadline):
+        if (
+            self.dry_run
+            or self.cycle_kind != "scheduled"
+            or not self.cfg.official_company.enabled
+        ):
+            return {"status": "disabled"}
+        if deadline.remaining() < self.cfg.official_company.request_timeout_seconds + 2:
+            return {"status": "deferred_deadline"}
+        from core.official_company_discovery import (
+            build_discovery_call,
+            run_discovery_lane,
+        )
+
+        try:
+            call = self._official_company_call or build_discovery_call(
+                self.cfg.official_company
+            )
+            client = self._official_list_client
+            if client is None and self.cfg.official_company.list_sync_enabled:
+                from core.official_company_lists import build_owner_list_client
+
+                client = build_owner_list_client(self.cfg.official_company)
+            result = run_discovery_lane(
+                cfg=self.cfg.official_company,
+                run_id=run_id,
+                deadline=deadline,
+                call=call,
+                client=client,
+                allowance=self._optional_calls_remaining,
+            )
+            self._optional_calls_remaining -= result.get("attempted", 0)
+            if call is None:
+                result["status"] = "model_unavailable"
+            return result
+        except Exception as exc:  # noqa: BLE001 - optional lane never aborts essential harvest
+            return {"status": "degraded", "error": type(exc).__name__}

@@ -53,6 +53,7 @@ from django.http import (
     JsonResponse,
 )
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone as django_timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -5832,6 +5833,52 @@ _PRODUCT_REVIEW_COPY = {
 }
 
 
+_ADMIN_COPY = {
+    "en": {
+        "title": "Admin", "accounts": "Official AI accounts", "empty": "No official accounts have been found yet.",
+        "found": "Official accounts found", "registered": "Registered", "added": "Call A adds acknowledged",
+        "pending": "Awaiting evaluation", "review": "Needs review", "confirmed": "Membership confirmed",
+        "coverage": "Initial scan coverage", "not_started": "Initial scan has not started.",
+        "enumerated": "Enumerated", "population": "Population", "complete": "Enumeration complete",
+        "incomplete": "Enumeration in progress", "coverage_note": "Enumeration counts stored authors; it does not mean every account has been evaluated.",
+        "account": "Account", "organization": "Organization", "decision": "Discovery decision",
+        "list": "Call A list", "evidence": "Decision evidence", "updated": "Last updated", "previous": "Previous", "next": "Next",
+        "page": "Page", "of": "of", "add_note": "Add acknowledgements, membership confirmations, and pre-existing members are separate outcomes.",
+        "outcomes": {"not_queued": "Not queued", "added": "Add acknowledged", "confirmed_after_request": "Membership confirmed after add request", "already_present": "Already present; no add requested", "request_unconfirmed": "Add requested; outcome unconfirmed", "queued": "Queued"},
+        "requested": "First add request", "acknowledged": "First add acknowledgement", "observed": "Membership confirmed at",
+        "attempts": "Attempts", "error": "Last error", "models": "Model types", "policy": "Policy", "model": "Evaluator model",
+    },
+    "zh_hans": {
+        "title": "管理", "accounts": "官方 AI 账号", "empty": "尚未发现官方账号。",
+        "found": "已发现官方账号", "registered": "已登记", "added": "Call A 添加已确认",
+        "pending": "等待评估", "review": "需审核", "confirmed": "成员身份已确认",
+        "coverage": "初始扫描覆盖", "not_started": "初始扫描尚未开始。",
+        "enumerated": "已枚举", "population": "总数", "complete": "枚举完成",
+        "incomplete": "枚举进行中", "coverage_note": "枚举统计已存储的作者，不代表所有账号都已完成评估。",
+        "account": "账号", "organization": "组织", "decision": "发现判定", "list": "Call A 列表",
+        "evidence": "判定依据", "updated": "最后更新", "previous": "上一页", "next": "下一页",
+        "page": "页", "of": "/", "add_note": "添加确认、成员身份确认和原有成员是不同的结果。",
+        "outcomes": {"not_queued": "未排队", "added": "添加已确认", "confirmed_after_request": "添加请求后确认成员身份", "already_present": "原有成员；未请求添加", "request_unconfirmed": "已请求添加；结果未确认", "queued": "已排队"},
+        "requested": "首次添加请求", "acknowledged": "首次添加确认", "observed": "成员身份确认时间",
+        "attempts": "尝试次数", "error": "最近错误", "models": "模型类型", "policy": "策略", "model": "评估模型",
+    },
+    "ja": {
+        "title": "管理", "accounts": "公式 AI アカウント", "empty": "まだ公式アカウントは見つかっていません。",
+        "found": "発見した公式アカウント", "registered": "登録済み", "added": "Call A 追加確認済み",
+        "pending": "評価待ち", "review": "要確認", "confirmed": "メンバー確認済み",
+        "coverage": "初回スキャンの対象範囲", "not_started": "初回スキャンは未開始です。",
+        "enumerated": "列挙済み", "population": "対象数", "complete": "列挙完了",
+        "incomplete": "列挙中", "coverage_note": "列挙数は保存済み投稿者の数です。全アカウントの評価完了を意味しません。",
+        "account": "アカウント", "organization": "組織", "decision": "発見判定", "list": "Call A リスト",
+        "evidence": "判定の根拠", "updated": "最終更新", "previous": "前へ", "next": "次へ",
+        "page": "ページ", "of": "/", "add_note": "追加の確認、メンバー確認、既存メンバーは別の結果です。",
+        "outcomes": {"not_queued": "未登録", "added": "追加確認済み", "confirmed_after_request": "追加要求後にメンバー確認", "already_present": "既存メンバー；追加要求なし", "request_unconfirmed": "追加要求済み；結果未確認", "queued": "待機中"},
+        "requested": "初回追加要求", "acknowledged": "初回追加確認", "observed": "メンバー確認時刻",
+        "attempts": "試行回数", "error": "直近のエラー", "models": "モデル種別", "policy": "ポリシー", "model": "評価モデル",
+    },
+}
+
+
 def _can_review_products(request: HttpRequest) -> bool:
     if not request.user.is_authenticated:
         return False
@@ -5845,6 +5892,19 @@ def _product_review_context(
     request: HttpRequest, proposal: ProductVerificationProposal | None = None
 ) -> dict[str, Any]:
     locale = _resolve_locale(request)
+    copy_locale = "zh_hans" if locale in {"zh_cn", "zh-CN"} else locale
+    from pathlib import Path
+
+    from core.official_company_admin import account_report
+    from x_monitor.config import load_config
+
+    report = account_report(
+        list_id=load_config(Path("config.yaml")).official_company.list_id,
+        page=request.GET.get("accounts_page", 1),
+    )
+    admin_copy = _ADMIN_COPY.get(copy_locale, _ADMIN_COPY["en"])
+    for row in report["rows"]:
+        row["list_label"] = admin_copy["outcomes"][row["list_outcome"]]
     proposals = (
         ProductVerificationProposal.objects.select_related(
             "source_post", "account", "proposed_brand", "proposed_candidate"
@@ -5852,7 +5912,9 @@ def _product_review_context(
     )
     return {
         "active_locale": locale,
-        "copy": _PRODUCT_REVIEW_COPY.get(locale, _PRODUCT_REVIEW_COPY["en"]),
+        "copy": _PRODUCT_REVIEW_COPY.get(copy_locale, _PRODUCT_REVIEW_COPY["en"]),
+        "admin_copy": admin_copy,
+        "official_accounts": report,
         "proposals": proposals,
         "proposal": proposal,
         "brands": Brand.objects.filter(is_sentinel=False).order_by("nickname"),
@@ -5866,6 +5928,18 @@ def product_review(request: HttpRequest) -> HttpResponse:
     if not _can_review_products(request):
         return HttpResponseForbidden("Product review requires owner or staff access.")
     return render(request, "monitor/product_review.html", _product_review_context(request))
+
+
+@login_required
+def product_review_legacy(request: HttpRequest, proposal_id: int | None = None) -> HttpResponse:
+    if not _can_review_products(request):
+        return HttpResponseForbidden("Admin requires owner or staff access.")
+    if proposal_id is not None and request.method == "POST":
+        return product_review_detail(request, proposal_id)
+    target = reverse("product_review_detail", args=[proposal_id]) if proposal_id is not None else reverse("product_review")
+    if request.GET:
+        target += "?" + request.GET.urlencode()
+    return redirect(target, permanent=True)
 
 
 @login_required
@@ -5894,7 +5968,8 @@ def product_review_detail(request: HttpRequest, proposal_id: int) -> HttpRespons
             )
         except ProductReviewError as exc:
             return HttpResponseBadRequest(str(exc))
-        return redirect("product_review_detail", proposal_id=proposal.pk)
+        target = reverse("product_review_detail", args=[proposal.pk])
+        return redirect(target + "?" + urlencode({"locale": _resolve_locale(request)}))
     return render(request, "monitor/product_review.html", _product_review_context(request, proposal))
 
 

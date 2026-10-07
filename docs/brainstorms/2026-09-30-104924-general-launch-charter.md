@@ -162,10 +162,6 @@ to maintain this charter or its index.
   sources. Account avatars that are logos, cartoons or unattributed groups do not
   satisfy individual-portrait coverage. Additional source-category choices belong
   in the test/plan until settled; report unmet portrait requirements explicitly.
-  Source verification describes where an image was published, not biometric
-  identity confidence. The proposed facial-identification reference database is
-  excluded without the subjects' consent; the current work remains a
-  biographical dossier and source audit.
 - **G1-R12 (owner correction on 2026-10-01):** Contributors are not staff merely
   because they appear in a paper, report credit, repository or organization
   membership. Do not seek names, biographies, photos or videos for contributor-only

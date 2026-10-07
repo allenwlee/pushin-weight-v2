@@ -11,8 +11,7 @@ jurisdiction: mainland-China
 # Mainland China staff-data collection and founder travel risk
 
 Parts of this project could be viewed as sensitive, particularly systematic
-profiles of Chinese AI personnel and the proposed use of photographs for
-facial recognition. This research does not establish that the existing
+profiles of Chinese AI personnel. This research does not establish that the existing
 public-source dossier is unlawful, identify it as classified information, or
 estimate the owner's personal likelihood of questioning, detention or an exit
 ban. A PRC-qualified lawyer should assess the actual product and travel
@@ -35,9 +34,6 @@ does not record acceptance of a new collection policy or a new release gate.
   images. Four contributor-only observations remain outside the people roster.
   These counts describe the isolated pilot, not a production import or a complete
   employee census.
-- The owner earlier proposed using verified portraits to recognize people in
-  future images. That proposal is distinct from the existing source-attribution
-  records; this research makes no claim that biometric matching is implemented.
 - A self-contained HTML export of all 24 people and the saved images was placed
   at `/Users/allenwlee/Downloads/agents/2026-10-01-195517-deepseek-24-populated-fields-and-assets.html`.
   If that MacBook will travel to China, include the file and its contents in the
@@ -158,25 +154,6 @@ overseas server nor purchase through a search provider establishes compliance.
 Cross-border obligations require a separate assessment. The general exemptions
 noted above do not determine this product's mechanism or filing requirements.
 
-### Facial identification needs a separate assessment
-
-PIPL Articles 28–29 address biometric information as sensitive personal
-information, with necessity, protection and consent requirements.
-[PIPL, Articles 28–29](https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm).
-China's facial-recognition measures took effect June 1, 2025. They address
-covered applications within China and impose requirements including notice,
-consent where relied upon, and impact assessment. Article 2 expressly excludes
-specified technology-development and algorithm-training activities from these
-particular measures; that exception does not establish an exemption from other
-applicable law.
-[Facial-recognition measures, Articles 2 and 4–9](https://www.cac.gov.cn/2025-03/21/c_1744174262156096.htm).
-
-**Project assessment:** keeping a sourced editorial photograph and extracting
-facial characteristics to identify someone in other images need distinct
-analysis. The proposed matching use raises additional concerns. A
-`source_verified` value in the dossier documents attribution; it does not record
-the person's consent, a reuse licence or legal clearance.
-
 ### A ten-year tourism visa has a limited permitted purpose
 
 The Chinese Embassy in the United States identifies L visas with tourism,
@@ -248,9 +225,7 @@ These are recommendations for consideration, not recorded owner decisions:
    images. Retain source evidence and provide correction/removal procedures.
    Avoid expanding into private contact details, home addresses, movement
    tracking or internal company information.
-3. Leave facial recognition out pending a separate assessment of purpose,
-   consent, applicable rules and acceptable scope.
-4. Review the actual travel device, the dossier export and planned product work
+3. Review the actual travel device, the dossier export and planned product work
    during the visit. Neither these precautions nor a legal review can guarantee
    a particular entry, questioning or departure outcome.
 
@@ -274,7 +249,7 @@ These are recommendations for consideration, not recorded owner decisions:
 
 ## Source record and limits
 
-All nine sources below were opened during the October 2, 2026 research session.
+All eight sources below were opened during the October 2, 2026 research session.
 The Chinese texts are linked directly; the explanations above are paraphrases,
 not certified legal translations. Publication dates do not establish that this
 was an exhaustive search for every amendment, interpretation or local practice.
@@ -283,8 +258,7 @@ was an exhaustive search for every amendment, interpretation or local practice.
 | --- | --- | --- |
 | [China Travel Advisory](https://travel.state.gov/en/international-travel/travel-advisories/china.html) | U.S. Department of State; issue date displayed September 4, 2026 | Research, public material, detention/exit bans, technology guidance |
 | [Counterespionage Law](https://www.gc.gov.cn/columns/8e15378c-0a26-4abf-b213-3a302d59a699/202311/10/d2b1c908-8e70-47d4-a5aa-d4ee83fd4806.html) | Chinese government republication; law revised April 26, 2023; page November 10, 2023 | Articles 4 and 25 |
-| [Personal Information Protection Law](https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm) | Cyberspace Administration of China; August 20, 2021 | Articles 3–6, 13, 27–29 |
-| [Facial-recognition measures](https://www.cac.gov.cn/2025-03/21/c_1744174262156096.htm) | Cyberspace Administration of China and Ministry of Public Security; published March 21, 2025; effective June 1, 2025 | Territorial scope, exceptions and processing requirements |
+| [Personal Information Protection Law](https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm) | Cyberspace Administration of China; August 20, 2021 | Articles 3–6, 13 and 27 |
 | [Visa guidance](https://us.china-embassy.gov.cn/chn/lsfw/zj/qz/202509/t20250920_11712381.htm) | Chinese Embassy in the United States; page September 22, 2025 | L/M/F/Z categories |
 | [Entry and Exit Administration Law](https://www.nia.gov.cn/n741440/n741547/c1013311/content.html) | National Immigration Administration official text | Articles 37, 41, 43 and 81 |
 | [National Security Law](https://www.stats.gov.cn/gk/tjfg/xgfxfg/202503/t20250310_1958929.html) | National Bureau of Statistics republication, March 10, 2025; law adopted July 1, 2015 | Articles 3, 7 and 8; broad framework and its limits |

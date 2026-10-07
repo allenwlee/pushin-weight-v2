@@ -339,3 +339,164 @@ def test_staging_reconciliation_does_not_touch_carryover():
     )
     hit.refresh_from_db()
     assert hit.classified_at is None
+
+
+def test_fresh_hit_reaches_jev_before_19_old_rejected_requests(monkeypatch):
+    import json
+
+    import httpx
+
+    from x_monitor.jev_decisions import (
+        QUESTION_SET,
+        JevDecisionGate,
+        JevDecisionsClient,
+    )
+
+    old = [_hit(tweet_id=f"old-{i}", gate_state="decision_pending") for i in range(19)]
+    for hit in old:
+        hit.public_payload["text"] = "AI long context " * 2200
+        hit.fetched_at = NOW - timedelta(hours=1)
+        hit.save(update_fields=["public_payload", "fetched_at"])
+    other = _hit(tweet_id="old-short", gate_state="decision_pending")
+    RareTypeSearchHit.objects.filter(pk=other.pk).update(
+        fetched_at=NOW - timedelta(minutes=30)
+    )
+    fresh = _hit(tweet_id="beam-fresh", gate_state="decision_pending")
+    calls = []
+    runner = _runner()
+
+    def handler(request):
+        text = json.loads(request.content)["state"]["text"]
+        calls.append(text)
+        if len(text) > 32000:
+            return httpx.Response(413, json={"error": "context too long"})
+        return httpx.Response(
+            200,
+            json={
+                "model": "jev-1.13.0",
+                "answers": {key: {"type": "noul", "noul": 0.1} for key in QUESTION_SET},
+                "usage": {"input_tokens": 1200, "output_tokens": 0},
+            },
+        )
+
+    config = runner.cfg.discovery.rare_types.jev
+    gate = JevDecisionGate(
+        config=config,
+        client=JevDecisionsClient(
+            api_key="fake", config=config, transport=httpx.MockTransport(handler)
+        ),
+        environment="normal",
+        now=lambda: NOW,
+    )
+    monkeypatch.setattr(
+        "monitor.cycle.build_jev_decision_gate", lambda *_a, **_kw: gate
+    )
+    runner._drain_rare_type_hits(
+        run_id="fresh-priority", index=(None, {}), search_terms={}
+    )
+    assert calls[0] == fresh.public_payload["text"]
+    fresh.refresh_from_db()
+    assert fresh.decision.attempts == 1
+    assert fresh.gate_state == "junk"
+    assert RareTypeSearchHit.objects.filter(
+        last_error_code="provider_input_rejected", gate_state="review_needed"
+    ).exists()
+
+
+def test_due_retry_runs_next_cycle_without_sleeping_retries_displacing_fresh(
+    monkeypatch,
+):
+    import httpx
+
+    from x_monitor.jev_decisions import (
+        QUESTION_SET,
+        JevDecisionGate,
+        JevDecisionsClient,
+    )
+
+    runner = _runner()
+    clock = [NOW]
+    runner._wall_now = lambda: clock[0]
+    config = runner.cfg.discovery.rare_types.jev
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            return httpx.Response(503)
+        return httpx.Response(
+            200,
+            json={
+                "model": "jev-1.13.0",
+                "answers": {key: {"type": "noul", "noul": 0.1} for key in QUESTION_SET},
+                "usage": {"input_tokens": 1200, "output_tokens": 0},
+            },
+        )
+
+    gate = JevDecisionGate(
+        config=config,
+        client=JevDecisionsClient(
+            api_key="fake", config=config, transport=httpx.MockTransport(handler)
+        ),
+        environment="normal",
+        now=lambda: clock[0],
+    )
+    monkeypatch.setattr(
+        "monitor.cycle.build_jev_decision_gate", lambda *_a, **_kw: gate
+    )
+    retry = _hit(tweet_id="transient", gate_state="decision_pending")
+    runner._drain_rare_type_hits(run_id="first", index=(None, {}), search_terms={})
+    retry.refresh_from_db()
+    assert retry.gate_state == "provider_failed"
+    assert retry.decision.next_attempt_at == NOW + timedelta(minutes=15)
+    assert (
+        runner._drain_rare_type_hits(
+            run_id="too-soon", index=(None, {}), search_terms={}
+        )["selected"]
+        == 0
+    )
+    fresh = _hit(tweet_id="fresh-with-sleeping-retry", gate_state="decision_pending")
+    runner._drain_rare_type_hits(run_id="fresh", index=(None, {}), search_terms={})
+    fresh.refresh_from_db()
+    assert fresh.gate_state == "junk"
+    backlog = [_hit(tweet_id=f"retry-backlog-{i}", gate_state="decision_pending") for i in range(20)]
+    RareTypeSearchHit.objects.filter(pk__in=[hit.pk for hit in backlog]).update(fetched_at=NOW - timedelta(hours=1))
+    clock[0] += timedelta(minutes=15)
+    runner._drain_rare_type_hits(run_id="next-slot", index=(None, {}), search_terms={})
+    retry.refresh_from_db()
+    assert retry.gate_state == "junk"
+    assert retry.decision.attempts == 2
+    assert len(calls) == 22
+
+
+def test_fresh_and_backlog_allocations_borrow_unused_slots(monkeypatch):
+    selected = []
+
+    class Gate:
+        def process_hit(self, hit_id, **kwargs):
+            selected.append(hit_id)
+            return SimpleNamespace(outcome="junk")
+
+    monkeypatch.setattr(
+        "monitor.cycle.build_jev_decision_gate", lambda *_a, **_kw: Gate()
+    )
+    old = [
+        _hit(tweet_id=f"allocation-old-{i}", gate_state="decision_pending")
+        for i in range(10)
+    ]
+    RareTypeSearchHit.objects.filter(pk__in=[h.pk for h in old]).update(
+        fetched_at=NOW - timedelta(hours=1)
+    )
+    fresh = [
+        _hit(tweet_id=f"allocation-fresh-{i}", gate_state="decision_pending")
+        for i in range(20)
+    ]
+    runner = _runner()
+    runner._drain_rare_type_hits(run_id="mixed", index=(None, {}), search_terms={})
+    assert selected == [h.pk for h in fresh[:15]] + [h.pk for h in old[:5]]
+    selected.clear()
+    RareTypeSearchHit.objects.filter(pk__in=[h.pk for h in old]).update(
+        gate_state="junk"
+    )
+    runner._drain_rare_type_hits(run_id="borrow", index=(None, {}), search_terms={})
+    assert selected == [h.pk for h in fresh]
