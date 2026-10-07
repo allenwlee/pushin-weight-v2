@@ -63,7 +63,7 @@ def test_blockchain_prompt_and_provenance_follow_actual_call():
     attempt = OfficialCompanyAttempt.objects.get(state=state)
     state.refresh_from_db()
     assert calls[0][0] == evaluator_prompt(state.evidence)[0]
-    assert "higher hurdle" in calls[0][0]
+    assert "higher technical-evidence hurdle" in calls[0][0]
     assert attempt.policy_version == state.policy_version == BLOCKCHAIN_POLICY_VERSION
     assert state.status == "review_needed"
 

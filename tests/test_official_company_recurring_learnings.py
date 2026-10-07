@@ -155,6 +155,32 @@ def test_recurring_discovery_admits_each_settled_pattern_from_one_post(
     assert not OfficialCompanyListIntent.objects.exists()
 
 
+@pytest.mark.parametrize("kind", ["model", "agent", "harness"])
+def test_recurring_caller_uses_amended_product_rule_without_hf(recurring_cycle, kind):
+    a = Account.objects.create(
+        author_id="97811", handle="new_company", verified_type="business",
+        bio=f"We are New Company. We develop our own {kind}; our speech model is closed-weight with no HF page.",
+    )
+
+    def accepted(system, user, model, max_tokens):
+        assert "An AI model: proprietary/closed-weight" in system
+        assert "No HF page, public weights" in system
+        assert "Their own proprietary harness" in system
+        source = json.loads(user)["sources"][0]
+        citation = {"source_id": source["id"], "quote": source["text"]}
+        return {
+            "outcome": "accepted", "organization_name": "New Company", "development_type": kind,
+            "model_types": ["speech"] if kind == "model" else [], "rationale": "First-party own development",
+            "contradictions": [], "claims": {key: [citation] for key in ["organization", "official_account", "product_developer"]},
+        }
+
+    result = recurring_cycle(accepted)
+    state = OfficialCompanyAccountState.objects.get(account=a)
+    assert result["attempted"] == 1 and state.decision["development_type"] == kind
+    assert state.status == "review_needed" and not OfficialCompanyListIntent.objects.exists()
+    assert state.attempt_records.get().policy_version == POLICY_VERSION
+
+
 def test_gold_alone_enters_recurring_queue_before_older_lower_priority_retry(recurring_cycle):
     lower = Account.objects.create(author_id="97510", bio="We develop speech models")
     Post.objects.create(
@@ -224,7 +250,7 @@ def test_recurring_evaluation_uses_conditional_hurdle_and_keeps_unverified_posit
     attempt = state.attempt_records.get()
     assert result["attempted"] == 1 and result["registered"] == 0
     assert state.policy_version == attempt.policy_version == policy
-    assert ("higher hurdle" in call.call_args.args[0]) == (policy == BLOCKCHAIN_POLICY_VERSION)
+    assert ("higher technical-evidence hurdle" in call.call_args.args[0]) == (policy == BLOCKCHAIN_POLICY_VERSION)
     assert state.status == "review_needed" and state.last_error == "human_review_required"
     assert attempt.decision["outcome"] == "accepted"
     assert not BrandAccount.objects.filter(account=account).exists()

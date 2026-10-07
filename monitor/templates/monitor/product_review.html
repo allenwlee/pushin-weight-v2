@@ -56,6 +56,16 @@
   <nav class="admin-tabs" aria-label="{{ admin_copy.accounts }}">
     {% for tab in account_tabs %}<a href="{{ tab.url }}" data-account-tab="{{ tab.key }}"{% if accounts_tab == tab.key %} aria-current="page"{% endif %}>{{ tab.label }}{% if tab.count != None %} <span>({{ tab.count }})</span>{% endif %}</a>{% endfor %}
   </nav>
+  {% if qualification_rerun %}
+  <section id="qualification-rerun" class="panel account-section" aria-labelledby="rerun-title">
+    <h2 id="rerun-title">{{ rerun_copy.title }}</h2>
+    <p>{{ rerun_copy.population }}: <strong data-rerun-count="population">{{ qualification_rerun.population }}</strong></p>
+    <p class="muted">{{ rerun_copy.note }}</p>
+    <div class="metrics">
+      {% for metric in rerun_metrics %}<div class="metric">{{ metric.label }}<strong data-rerun-count="{{ metric.key }}">{{ metric.value }}</strong></div>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
   {% if accounts_tab == 'found' or accounts_tab == 'history' %}
     {% include 'monitor/_official_accounts_admin.html' %}
   {% else %}
