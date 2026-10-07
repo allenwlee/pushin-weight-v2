@@ -1,0 +1,15 @@
+............                                                             [100%]
+=============================== warnings summary ===============================
+tests/test_benchmark_pulse_views.py::test_feature_is_disabled_by_default
+tests/test_benchmark_pulse_views.py::test_public_page_real_template_and_read_only_series
+tests/test_benchmark_pulse_views.py::test_late_brand_posts_change_served_values_without_product_attribution
+tests/test_benchmark_pulse_views.py::test_unresolved_policy_blocks_page_and_json_even_when_enabled
+tests/test_benchmark_pulse_views.py::test_review_setting_does_not_allow_anonymous_bypass
+tests/test_benchmark_pulse_views.py::test_staging_owner_review_needs_no_staff_privilege_and_is_not_public
+  /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector/.venv/lib/python3.12/site-packages/django/core/handlers/base.py:61: UserWarning: No directory at: /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector/staticfiles/
+    mw_instance = middleware(adapted_handler)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=================== PostgreSQL required-verification status ====================
+required tests: executed=7 skipped=0 errors=0
+12 passed, 6 warnings in 0.84s

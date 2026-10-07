@@ -1,0 +1,96 @@
+{
+  "sha": "1375d1c0efaa053d5d3d9cf1ca652e580ddcd330",
+  "database": "pushinweight_staging",
+  "contract": "53fda009-28a4-4106-a91f-bd42ff7cb33e",
+  "counts": {
+    "database_bytes": 4613412543,
+    "metric_observations": 1371105,
+    "metric_values": 2056891,
+    "post_brand_links": 364056,
+    "posts": 290672,
+    "editorial_stories": 2,
+    "x_accounts": 88741
+  },
+  "runs": [
+    {
+      "source_id": "openrouter",
+      "status": "partial",
+      "count": 6
+    },
+    {
+      "source_id": "arena",
+      "status": "success",
+      "count": 1
+    },
+    {
+      "source_id": "hf",
+      "status": "partial",
+      "count": 3868
+    },
+    {
+      "source_id": "openrouter",
+      "status": "success",
+      "count": 2
+    },
+    {
+      "source_id": "arena",
+      "status": "partial",
+      "count": 13
+    }
+  ],
+  "charts": {
+    "deepseek": {
+      "start": "2026-09-10",
+      "end": "2026-10-03",
+      "lines": 7
+    },
+    "deepseek-history": {
+      "start": "2026-08-11",
+      "end": "2026-10-06",
+      "lines": 7,
+      "rank_baseline": {
+        "status": "launch_baseline",
+        "date": "2026-08-11",
+        "value": "74",
+        "evidence": [
+          {
+            "run_id": "bcd97781-904f-46df-8b76-6e4dbcdd9840",
+            "observation_id": 88812,
+            "source_identifier": "deepseek-v4-flash",
+            "payload_sha256": "2a2b021637a4a0301012ef7f0a8cc76f12ebf9d81892025b0e8a2cde1ae81c2f",
+            "source_as_of": null,
+            "archive": {
+              "publication_complete": true
+            }
+          }
+        ],
+        "policy": "first_observed",
+        "measured_subject_id": "20dc8a8b-2113-52f7-9c88-8b1a4f2e3da5",
+        "measured_subject": {
+          "key": "d9fe2d84-28b7-4ba2-b7fc-d086f647b07f",
+          "kind": "product",
+          "label": "DeepSeek-V4-Flash"
+        },
+        "proxy": true,
+        "reference": "requested_range_start"
+      },
+      "switch": "2026-09-25"
+    },
+    "glm": {
+      "start": "2026-08-26",
+      "end": "2026-10-03",
+      "lines": 7
+    },
+    "glm-history": {
+      "start": "2026-07-27",
+      "end": "2026-10-06",
+      "lines": 7
+    }
+  },
+  "post_coverage": {
+    "end": "2026-10-03",
+    "scope": "existing staging snapshot; last observed day excluded conservatively; no post import",
+    "start": "2026-08-26"
+  },
+  "scheduling_enabled": false
+}

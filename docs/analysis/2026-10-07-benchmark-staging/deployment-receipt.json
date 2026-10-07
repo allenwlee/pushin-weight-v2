@@ -1,0 +1,34 @@
+{
+  "verified_at": "2026-10-07T08:03:12.005199+00:00",
+  "delivery_target": "render_staging",
+  "deployed_sha": "1375d1c0efaa053d5d3d9cf1ca652e580ddcd330",
+  "contract_id": "53fda009-28a4-4106-a91f-bd42ff7cb33e",
+  "web_url": "https://pushinweight-staging-web.onrender.com",
+  "database": "pushinweight_staging",
+  "staging_backup": {
+    "bytes": 421275363,
+    "sha256": "262ae7b561843186668edf5ceef7a7b3182ec0e837ef985ef2a61237b27e44e9",
+    "restoration_rehearsed": true
+  },
+  "imported_runs": 3890,
+  "database_verification": "staging-verification.json",
+  "browser_verification": "live-history-browser.json",
+  "http_value_comparison": "live-http-values.json",
+  "production_deployed_by_this_task": false,
+  "recurring_collection_activated": false,
+  "production_merge_ready": false,
+  "public_forecast_trading_activated": false,
+  "fixture_cleanup": {
+    "owned_test_user_removed": true,
+    "owned_sessions_removed": 3,
+    "staging_uploads_removed": true
+  },
+  "remaining_limits": [
+    "Two conflicting HF archive dates excluded (683/685 publications)",
+    "OpenRouter coverage is its changing reported top-50 cohort",
+    "Removed HF likes/follows cannot be reconstructed",
+    "Staging posts unavailable after 2026-10-03",
+    "Newer main account references and migrations need reconciliation before production",
+    "Production backup and source-use grants remain separate prerequisites"
+  ]
+}
