@@ -93,6 +93,17 @@ def test_evidence_hash_ignores_post_order_and_follower_counts():
     assert first["identity"] == build_evidence(a, list(reversed(rows)))["identity"]
 
 
+def test_prompt_policy_change_preserves_existing_evidence_identity(monkeypatch):
+    from core import official_company_accounts
+
+    rows = [{"id": "1", "text": "We develop our own speech models."}]
+    before = build_evidence(account(), rows)
+    monkeypatch.setattr(official_company_accounts, "POLICY_VERSION", "future-evaluator")
+    after = build_evidence(account(), rows)
+    assert after == before
+    assert after["policy_version"] == "official-model-developer-v2"
+
+
 def test_known_positive_evidence_is_read_without_attestation_shortcut():
     import json
     from pathlib import Path

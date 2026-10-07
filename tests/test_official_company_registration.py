@@ -11,7 +11,7 @@ from core.models import (
     OfficialCompanyListIntent,
     Role,
 )
-from core.official_company_accounts import register_account
+from core.official_company_accounts import MODEL, POLICY_VERSION, register_account
 from x_monitor.config import OfficialCompanyConfig
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
@@ -23,8 +23,43 @@ def accepted(identifier="880", name="New Speech Lab"):
         account=a,
         evidence_hash="a" * 64,
         status="accepted",
+        model=MODEL,
+        policy_version=POLICY_VERSION,
         decision={"outcome": "accepted", "organization_name": name},
     )
+
+
+def test_old_evaluator_acceptance_requeues_without_registering():
+    state = accepted()
+    state.policy_version = "official-model-developer-v2"
+    state.attempts = 3
+    state.save()
+    old_hash, old_decision = state.evidence_hash, state.decision
+    counts = (Brand.objects.count(), Company.objects.count())
+    assert register_account(
+        state.pk, cfg=OfficialCompanyConfig(enabled=True, registration_enabled=True)
+    ) is None
+    state.refresh_from_db()
+    assert state.status == "pending"
+    assert state.attempts == 0
+    assert (state.evidence_hash, state.decision) == (old_hash, old_decision)
+    assert (Brand.objects.count(), Company.objects.count()) == counts
+    assert not BrandAccount.objects.filter(account=state.account).exists()
+    assert not CompanyAccount.objects.filter(account=state.account).exists()
+    assert not OfficialCompanyListIntent.objects.exists()
+
+
+def test_owner_settlement_survives_evaluator_policy_change():
+    state = accepted()
+    state.model = "owner-attestation"
+    state.policy_version = "owner:2026-10-06:preverified-model-labs:v1"
+    state.save()
+    assert register_account(
+        state.pk, cfg=OfficialCompanyConfig(enabled=True, registration_enabled=True)
+    )
+    state.refresh_from_db()
+    assert state.status == "registered"
+    assert state.model == "owner-attestation"
 
 
 def test_registration_is_idempotent_and_creates_no_ownership_or_product_claim():

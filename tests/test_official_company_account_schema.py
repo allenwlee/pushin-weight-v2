@@ -59,6 +59,36 @@ def state_for(identifier="992"):
     return enqueue_account(account)
 
 
+def test_unchanged_old_acceptance_requeues_for_current_evaluator():
+    from core.official_company_accounts import MODEL, POLICY_VERSION, enqueue_account
+
+    state = state_for()
+    state.status = "accepted"
+    state.model = MODEL
+    state.policy_version = "official-model-developer-v2"
+    state.attempts = 3
+    state.decision = {"outcome": "accepted"}
+    state.save()
+    old_hash = state.evidence_hash
+    state = enqueue_account(state.account)
+    assert state.status == "pending" and state.attempts == 0
+    assert state.policy_version == POLICY_VERSION
+    assert state.evidence_hash == old_hash
+    assert state.decision == {"outcome": "accepted"}
+
+
+@pytest.mark.parametrize("status", ["registered", "suppressed"])
+def test_prompt_revision_preserves_settled_state(status):
+    from core.official_company_accounts import MODEL, enqueue_account
+
+    state = state_for()
+    state.status = status
+    state.model = MODEL
+    state.policy_version = "official-model-developer-v2"
+    state.save()
+    assert enqueue_account(state.account).status == status
+
+
 def test_claim_reserves_once_and_stale_completion_cannot_replace_evidence():
     from core.official_company_accounts import claim_account, complete_attempt
 
@@ -66,6 +96,10 @@ def test_claim_reserves_once_and_stale_completion_cannot_replace_evidence():
     cfg = configured()
     attempt = claim_account(state.pk, cfg=cfg, budget_scope="cycle")
     assert attempt is not None
+    from core.official_company_accounts import POLICY_VERSION
+
+    assert attempt.policy_version == POLICY_VERSION
+    assert attempt.evidence["policy_version"] == "official-model-developer-v2"
     assert claim_account(state.pk, cfg=cfg, budget_scope="cycle") is None
     assert OfficialCompanyAttempt.objects.count() == 1
     state.refresh_from_db()
