@@ -211,7 +211,7 @@ def test_review_setting_does_not_allow_anonymous_bypass(client):
 @override_settings(
     BENCHMARK_METRICS_ENABLED=True, BENCHMARK_REVIEW_ENABLED=True, DEBUG=False
 )
-def test_staff_review_requires_nonproduction_environment(client, django_user_model):
+def test_staging_owner_review_needs_no_staff_privilege_and_is_not_public(client, django_user_model):
     from core.models import DataSource
 
     c = comparison()
@@ -231,4 +231,7 @@ def test_staff_review_requires_nonproduction_environment(client, django_user_mod
         assert client.get(url).status_code == 200
         user.is_staff = False
         user.save(update_fields=["is_staff"])
+        assert client.get(url).status_code == 200
+        user.email = "outside@example.org"
+        user.save(update_fields=["email"])
         assert client.get(url).status_code == 403

@@ -24,11 +24,14 @@ def _contract(contract_id, preset):
 
 
 def _authorize(request, contract, result, use):
+    staging_owner = settings.OLLIJA_STAGING_MODE and (
+        (getattr(request.user, "email", "") or "").strip().casefold()
+        in settings.OLLIJA_STAGING_ALLOWED_EMAILS
+    )
     review = (
         getattr(settings, "BENCHMARK_REVIEW_ENABLED", False)
-        and (settings.DEBUG or settings.OLLIJA_STAGING_MODE)
         and request.user.is_authenticated
-        and request.user.is_staff
+        and (staging_owner or (settings.DEBUG and request.user.is_staff))
     )
     enforce_use(
         contract, result, "isolated_review" if review else use, isolated_review=review

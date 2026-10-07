@@ -23,7 +23,7 @@ The PostgreSQL suite passed 217 tests, including 109 required database tests and
 | Surviving HF likes/follows | Reconstruction is labeled and omits removed relationships; never treated as historical observed snapshots | Excluded from operational historical forecasts |
 | Existing X posts | Existing staging posts and brand joins are reused; no new post collection/import | Current classifications cannot establish what a past forecast knew; no G3 training/inference/trading clearance |
 
-Review-mode access requires an authenticated staff user plus DEBUG or the staging environment, and an explicit review flag. The whole staging site retains its existing owner allowlist. Public HTML and JSON exports consult frozen use grants plus current restrictions. Collection/import commands require explicit isolated-review invocation where policy is unresolved. All recurring source scheduling remains disabled.
+Review-mode access requires an explicit review flag and either an authenticated owner on the existing staging email allowlist, or a staff user in local DEBUG mode. The live staging check found no existing owner account; using the existing owner allowlist lets the first Google sign-in review charts without granting staff/admin privileges. The whole staging site retains its existing owner allowlist. Public HTML and JSON exports consult frozen use grants plus current restrictions. Collection/import commands require explicit isolated-review invocation where policy is unresolved. All recurring source scheduling remains disabled.
 
 ## G3 input contract
 
