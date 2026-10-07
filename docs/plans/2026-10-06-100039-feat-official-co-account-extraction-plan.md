@@ -475,9 +475,12 @@ discovery 191 tests / 158 required PostgreSQL and staff/staging 302 tests /
 176 required PostgreSQL, with zero required skips/errors. Detailed receipts remain in the
 [implementation verification](../analysis/2026-10-07-061500-official-company-implementation-verification.md).
 
-Runtime renewal still requires the owner's identification of the app issuing
-the saved access/refresh token pair. Both existing local OAuth client pairs
-are present and differ; no guessed-client or alternate-app refresh is permitted.
+On 2026-10-07 the owner identified **top-gun** (app `33020022`) as the issuer of
+the saved access/refresh token pair. Runtime provisioning must pair those tokens
+with `TOPGUN_TWITTER_OAUTH2_CLIENT_ID` and `TOPGUN_TWITTER_OAUTH2_CLIENT_SECRET`,
+mapped to the project-specific runtime names. Do not use the separate
+openclaw-cross-post client. Live encrypted provisioning and renewal remain
+verification work; identification is not proof that renewal has succeeded.
 Shared staging retains the separate G2 candidate. The owner selected direct
 production delivery on 2026-10-07, preserving those resources and omitting
 staging delivery for this feature.
@@ -502,7 +505,7 @@ For the current request, completion requires the intended revision observed in p
 
 ## Delivery Exceptions
 
-Owner selected LFG through production activation plus verified collection on 2026-10-06. This supersedes earlier planning-only and separately-authorized-activation wording for this feature. On 2026-10-07 the owner explicitly selected direct production delivery for this feature; omit staging delivery and preserve G2's staging resources. Production pause/resume and unrelated taxonomy implementation are excluded. Local X list access is proven, but runtime provisioning/refresh and new account registration remain required work. Missing issuing-client identification blocks credential renewal and list activation, not deployment of the disabled implementation.
+Owner selected LFG through production activation plus verified collection on 2026-10-06. This supersedes earlier planning-only and separately-authorized-activation wording for this feature. On 2026-10-07 the owner explicitly selected direct production delivery for this feature; omit staging delivery and preserve G2's staging resources. The owner also identified top-gun as the token-issuing app. Production pause/resume and unrelated taxonomy implementation are excluded. Local X list access is proven, but runtime provisioning/refresh and new account registration remain required work.
 
 ---
 
