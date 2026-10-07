@@ -25,10 +25,17 @@ def _account_url(account):
     return f"https://x.com/i/user/{identifier}"
 
 
+FOUND_ACCOUNTS = Q(status="registered") | (
+    Q(status="accepted") & (Q(model="owner-attestation") | Q(decision__hf_verification__outcome="passed"))
+)
+
 CANDIDATE_STATUSES = {
     "all": None, "waiting": Q(status="pending"), "evaluating": Q(status="claimed"),
     "retry_due": Q(status="retry_due"),
-    "review_needed": Q(status="review_needed") | (Q(status="accepted") & ~Q(model="owner-attestation") & ~Q(decision__hf_verification__outcome="passed")),
+    "review_needed": Q(status="review_needed") | (
+        Q(status="accepted") & ~Q(model="owner-attestation")
+        & (Q(decision__hf_verification__outcome__isnull=True) | ~Q(decision__hf_verification__outcome="passed"))
+    ),
     "hf_verified": Q(status__in=["accepted", "registered"], decision__hf_verification__outcome="passed"),
     "rejected": Q(status="rejected"), "registered": Q(status="registered"),
     "no_evidence": Q(status="no_evidence"), "owner_settled": Q(model="owner-attestation"),
@@ -85,7 +92,7 @@ def candidate_report(*, page=1, status="all", query=""):
     }
 
 
-def account_report(*, list_id, page=1):
+def account_report(*, list_id, page=1, section="all"):
     states = OfficialCompanyAccountState.objects.all()
     intents = OfficialCompanyListIntent.objects.filter(list_id=int(list_id))
     summary = states.aggregate(
@@ -94,10 +101,7 @@ def account_report(*, list_id, page=1):
             filter=Q(attempts__gt=0)
             | Q(status__in=["accepted", "registered", "rejected", "review_needed"]),
         ),
-        found=Count(
-            "pk", filter=Q(status__in=["accepted", "registered"])
-            | Q(status="review_needed", decision__outcome="accepted"),
-        ),
+        found=Count("pk", filter=FOUND_ACCOUNTS),
         registered=Count("pk", filter=Q(status="registered")),
         review_needed=Count("pk", filter=Q(status="review_needed")),
         pending=Count(
@@ -118,11 +122,16 @@ def account_report(*, list_id, page=1):
             ),
         )
     )
-    query = (
-        states.filter(
+    filters = {
+        "found": FOUND_ACCOUNTS,
+        "history": Q(pk__in=intents.values("state_id")),
+        "all": (
             Q(status__in=["accepted", "registered", "review_needed"])
             | Q(pk__in=intents.values("state_id"))
-        )
+        ),
+    }
+    query = (
+        states.filter(filters.get(section, FOUND_ACCOUNTS))
         .select_related("account", "registered_company", "registered_brand")
         .defer("evidence")
         .prefetch_related(

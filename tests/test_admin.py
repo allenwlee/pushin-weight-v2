@@ -102,6 +102,7 @@ def test_pending_scan_does_not_bury_official_accounts_or_list_history():
         account=Account.objects.create(author_id="61000"),
         evidence_hash="b" * 64,
         status="accepted",
+        model="owner-attestation",
     )
     previous = OfficialCompanyAccountState.objects.create(
         account=Account.objects.create(author_id="61001"),
@@ -250,3 +251,38 @@ def test_candidate_llm_count_uses_completed_attempts_not_owner_or_failures():
     assert report["summary"]["owner_settled"] == 1
     assert report["summary"]["review_needed"] == 2
     assert candidate_report(status="owner_settled")["page"].paginator.count == 1
+
+
+def test_review_tab_forces_review_status_and_keeps_navigation(owner_client):
+    from core.official_company_candidates import CANDIDATE_POLICY
+
+    for number in range(53):
+        OfficialCompanyAccountState.objects.create(
+            account=Account.objects.create(author_id=str(98100 + number), handle=f"review_lab_{number}"),
+            evidence_hash="a" * 64, status="review_needed",
+            candidate_priority=1, candidate_policy_version=CANDIDATE_POLICY,
+        )
+    OfficialCompanyAccountState.objects.create(
+        account=Account.objects.create(author_id="98001", handle="verified_lab"),
+        evidence_hash="b" * 64, status="registered",
+        candidate_priority=1, candidate_policy_version=CANDIDATE_POLICY,
+    )
+    response = owner_client.get("/admin", {
+        "accounts_tab": "review", "candidate_status": "registered",
+        "candidate_page": 2, "locale": "ja",
+    })
+    context = response.context
+    assert context["accounts_tab"] == "review"
+    assert context["official_candidates"]["status"] == "review_needed"
+    assert context["official_candidates"]["page"].paginator.count == 53
+    assert len(context["official_candidates"]["rows"]) == 3
+    assert "accounts_tab=review" in context["official_candidates"]["previous_url"]
+    assert "locale=ja" in context["official_candidates"]["previous_url"]
+    assert 'data-admin-account="98001"' not in response.content.decode()
+    for tab in context["account_tabs"]:
+        assert "candidate_page=" not in tab["url"] and "candidate_status=" not in tab["url"]
+    response = owner_client.get("/admin", {"accounts_tab": "review", "candidate_q": "@review_lab_52"})
+    assert [r["state"].account.handle for r in response.context["official_candidates"]["rows"]] == ["review_lab_52"]
+    response = owner_client.get("/admin", {"accounts_tab": "invalid", "candidate_status": "waiting"})
+    assert response.context["accounts_tab"] == "found"
+    assert [r["state"].account.handle for r in response.context["official_accounts"]["rows"]] == ["verified_lab"]

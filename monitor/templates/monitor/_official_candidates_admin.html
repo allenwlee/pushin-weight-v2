@@ -1,6 +1,6 @@
 <section id="candidate-queue" class="panel account-section" aria-labelledby="candidate-title">
-  <h2 id="candidate-title">{{ candidate_copy.title }}</h2>
-  <p class="muted">{{ candidate_copy.note }}</p>
+  <h2 id="candidate-title">{{ candidate_section_title }}</h2>
+  <p class="muted">{{ candidate_section_note }}</p>
   <p>{{ candidate_copy.screened }}: <strong data-candidate-count="screened">{{ official_candidates.coverage.enumerated }}</strong> / {{ official_candidates.coverage.population }} · {{ admin_copy.updated }}: {{ candidate_refreshed_at|date:'Y-m-d H:i:s T' }}</p>
   <div class="metrics">
     {% for metric in candidate_metrics %}
@@ -10,11 +10,14 @@
   <form method="get" class="candidate-filters">
     <input type="hidden" name="locale" value="{{ active_locale }}">
     <input type="hidden" name="accounts_page" value="{{ official_accounts.page.number }}">
+    <input type="hidden" name="accounts_tab" value="{{ accounts_tab }}">
+    {% if accounts_tab != 'review' %}
     <label>{{ candidate_copy.status }}
       <select name="candidate_status">
         {% for option in candidate_status_options %}<option value="{{ option.value }}"{% if official_candidates.status == option.value %} selected{% endif %}>{{ option.label }}</option>{% endfor %}
       </select>
     </label>
+    {% endif %}
     <label>{{ candidate_copy.search }}<input name="candidate_q" value="{{ official_candidates.query }}" maxlength="100"></label>
     <button type="submit">{{ candidate_copy.apply }}</button>
   </form>
