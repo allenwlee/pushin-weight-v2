@@ -39,3 +39,13 @@ historical confirmation without an add receipt does not establish an addition.
 The parent retains the authorized whole-database scan, normal scheduled-cycle
 progress and subsequently collected, correctly attributed post as the remaining
 production endpoint. No staging mutation or production pause occurred.
+
+## Follow-up before deployment
+
+A fresh hosted run exposed the missing Playwright Python package before tests
+started. Discovery CI now installs the same Playwright requirement already
+present in the local development dependency group. The official table also
+excludes ordinary queued scan states; accepted accounts and list-history rows
+remain visible even while the whole-population backlog grows. A regression uses
+60 newer pending authors to verify that found companies and existing list history
+remain on the first page while global pending counts remain accurate.

@@ -59,7 +59,7 @@ class AdminBrowserTests(StaticLiveServerTestCase):
                 )
                 self.assertTrue(
                     page.get_by_text(
-                        "No accounts have been evaluated yet.", exact=True
+                        "No official accounts have been found yet.", exact=True
                     ).is_visible()
                 )
                 shot = (

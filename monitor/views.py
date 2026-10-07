@@ -5835,7 +5835,7 @@ _PRODUCT_REVIEW_COPY = {
 
 _ADMIN_COPY = {
     "en": {
-        "title": "Admin", "accounts": "Official AI accounts", "empty": "No accounts have been evaluated yet.",
+        "title": "Admin", "accounts": "Official AI accounts", "empty": "No official accounts have been found yet.",
         "found": "Official accounts found", "registered": "Registered", "added": "Call A adds acknowledged",
         "pending": "Awaiting evaluation", "review": "Needs review", "confirmed": "Membership confirmed",
         "coverage": "Initial scan coverage", "not_started": "Initial scan has not started.",
@@ -5849,7 +5849,7 @@ _ADMIN_COPY = {
         "attempts": "Attempts", "error": "Last error", "models": "Model types", "policy": "Policy", "model": "Evaluator model",
     },
     "zh_hans": {
-        "title": "管理", "accounts": "官方 AI 账号", "empty": "尚未评估任何账号。",
+        "title": "管理", "accounts": "官方 AI 账号", "empty": "尚未发现官方账号。",
         "found": "已发现官方账号", "registered": "已登记", "added": "Call A 添加已确认",
         "pending": "等待评估", "review": "需审核", "confirmed": "成员身份已确认",
         "coverage": "初始扫描覆盖", "not_started": "初始扫描尚未开始。",
@@ -5863,7 +5863,7 @@ _ADMIN_COPY = {
         "attempts": "尝试次数", "error": "最近错误", "models": "模型类型", "policy": "策略", "model": "评估模型",
     },
     "ja": {
-        "title": "管理", "accounts": "公式 AI アカウント", "empty": "まだアカウントは評価されていません。",
+        "title": "管理", "accounts": "公式 AI アカウント", "empty": "まだ公式アカウントは見つかっていません。",
         "found": "発見した公式アカウント", "registered": "登録済み", "added": "Call A 追加確認済み",
         "pending": "評価待ち", "review": "要確認", "confirmed": "メンバー確認済み",
         "coverage": "初回スキャンの対象範囲", "not_started": "初回スキャンは未開始です。",

@@ -37,7 +37,11 @@ def account_report(*, list_id, page=1):
         )
     )
     query = (
-        states.select_related("account", "registered_company", "registered_brand")
+        states.filter(
+            Q(status__in=["accepted", "registered"])
+            | Q(pk__in=intents.values("state_id"))
+        )
+        .select_related("account", "registered_company", "registered_brand")
         .defer("evidence")
         .prefetch_related(
             Prefetch("list_intents", queryset=intents, to_attr="admin_list_intents")

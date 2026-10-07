@@ -76,6 +76,37 @@ def test_existing_member_does_not_inflate_add_count(owner_client):
     assert "Already present; no add requested" in response.content.decode()
 
 
+def test_pending_scan_does_not_bury_official_accounts_or_list_history():
+    official = OfficialCompanyAccountState.objects.create(
+        account=Account.objects.create(author_id="61000"),
+        evidence_hash="b" * 64,
+        status="accepted",
+    )
+    previous = OfficialCompanyAccountState.objects.create(
+        account=Account.objects.create(author_id="61001"),
+        evidence_hash="c" * 64,
+        status="pending",
+    )
+    OfficialCompanyListIntent.objects.create(
+        account=previous.account,
+        state=previous,
+        evidence_hash="c" * 64,
+        list_id=LIST_ID,
+        status="confirmed",
+    )
+    for index in range(60):
+        OfficialCompanyAccountState.objects.create(
+            account=Account.objects.create(author_id=str(62000 + index)),
+            evidence_hash="a" * 64,
+            status="pending",
+        )
+    report = account_report(list_id=LIST_ID)
+    assert {row["state"].pk for row in report["rows"]} == {official.pk, previous.pk}
+    assert report["summary"]["pending"] == 61
+    assert report["summary"]["found"] == 1
+    assert not report["page"].has_next()
+
+
 def test_console_query_count_and_pagination_are_bounded():
     for index in range(52):
         account = Account.objects.create(

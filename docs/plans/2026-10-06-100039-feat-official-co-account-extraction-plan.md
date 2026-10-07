@@ -537,6 +537,34 @@ This is a planning estimate, not a measured population runtime or recall claim.
 Complete enumeration is not completed evaluation; retain the full-coverage
 endpoint and report unresolved work until it is actually processed.
 
+### Admin follow-up and bounded activation continuation (2026-10-07)
+
+The official-account table shows accepted/registered accounts and accounts with
+Call A list history. Full-population pending and coverage counters stay visible;
+initial enumeration must not bury found companies behind queued authors.
+Hosted discovery CI also explicitly installs the existing Playwright development
+requirement; the package's optional `dev` extra does not contain that group.
+
+Continue the owner-authorized direct production activation after the admin audit
+migration is live. Use service-local harvest overrides with an initial model cap
+of USD50 total, USD0.01 per normal cycle and USD1 per day. Preserve the fixed
+model, two-call/two-write limits, private list, encrypted owner tokens, writer
+lock and existing 15-minute cron. These are ceilings, not spend targets.
+
+The full scan may run as one explicitly launched, bounded Render one-off job on
+the production harvest service's verified build/environment. It calls only the
+existing management commands: enumerate in batches of at most500/90seconds,
+then evaluate initial states in batches of at most20/120seconds and synchronize
+at most2 list adds per30seconds. Use the production writer lock without waiting
+or pausing the cron; yield around each scheduled quarter and on `writer_busy`.
+Pin the candidate build SHA, stop on provider/auth block or funding exhaustion,
+and cap the operator process at10days. Save the job ID, source hash, effective
+nonsecret caps, coverage and outcomes. It is a resumable initial inventory,
+not another recurring scheduler. At the verified half-CPU job rate the10-day
+runtime ceiling is approximately USD2.30; only elapsed runtime is charged.
+Initial coverage, two natural cycles and subsequent collection proof remain
+required; launching the job does not complete them.
+
 ## Definition of Done
 
 The implementation is complete when U1–U6 meet their verification outcomes, all required regression and PostgreSQL checks pass, and abandoned experimental code is removed. Configuration, migrations, service boundaries, and operational documentation describe the same behavior.
