@@ -12,6 +12,24 @@ def setup_spec():
     from core.benchmark_metric_identity import register_definitions
 
     register_definitions()
+    # Test-only reviewed grants; real source rights are never inferred from these.
+    from core.benchmark_attribution import USES
+    from core.models import DataSource
+    from tests.test_benchmark_use_policy import decision
+
+    for source in DataSource.objects.all():
+        policy = {use: decision() for use in USES}
+        policy["datasets"] = {
+            name: {use: decision() for use in USES}
+            for name in (
+                "cfahlgren1/hub-stats",
+                "hfmlsoc/hub_weekly_snapshots",
+                "lmarena-ai/leaderboard-dataset",
+                "openrouter/rankings-daily",
+            )
+        }
+        source.metadata["use_policy"] = policy
+        source.save(update_fields=["metadata"])
     brand = Brand.objects.create(nickname="lab", display_name="Lab")
     company = Company.objects.create(nickname="lab", display_name="Lab")
     BrandCompany.objects.create(brand=brand, company=company)

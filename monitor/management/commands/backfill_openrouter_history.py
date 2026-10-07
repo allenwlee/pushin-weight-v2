@@ -28,9 +28,18 @@ class Command(BaseCommand):
         )
         parser.add_argument("--key-env", default="BENCHMARK_OPENROUTER_API_KEY")
         parser.add_argument("--apply", action="store_true")
+        parser.add_argument("--isolated-review", action="store_true")
 
     def handle(self, *args, **opts):
         contract = MetricCollectionContract.objects.get(pk=opts["contract"])
+        from core.benchmark_attribution import enforce_source_collection
+
+        enforce_source_collection(
+            contract,
+            "openrouter",
+            dataset="openrouter/rankings-daily",
+            isolated_review=opts["isolated_review"],
+        )
         if "openrouter" not in contract.source_configuration:
             raise CommandError("OpenRouter is not in this contract")
         chunks = list(date_chunks(opts["start_date"], opts["end_date"]))
@@ -93,6 +102,7 @@ class Command(BaseCommand):
                                 ]
                             ),
                             payload,
+                            isolated_review=opts["isolated_review"],
                             source_metadata={
                                 "ingestion_mode": "historical_import",
                                 "history_basis": "observed_snapshot",

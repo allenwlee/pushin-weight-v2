@@ -8,7 +8,7 @@
 <header class="page-heading"><div><a class="wordmark" href="/">PushinWeight</a><h1>{{ comparison.title }}</h1></div>
 <nav aria-label="Product comparisons">{% for key, item in comparisons.items %}<a href="{% url 'benchmark_pulse' contract.pk key %}"{% if key == preset %} aria-current="page"{% endif %}>{{ item.title }}</a>{% endfor %}</nav></header>
 <section class="pulse-panel" aria-labelledby="pulse-title">
-<header class="panel-heading"><div><h2 id="pulse-title">Pulse</h2><p>Change since launch · posts, downloads, usage and performance</p></div><button id="sources-open" type="button">Sources &amp; definitions</button></header>
+<header class="panel-heading"><div><h2 id="pulse-title">Pulse</h2><p>{% if comparison.release_history %}Release history · dashed rank shows the previous release{% else %}Change since launch · posts, downloads, usage and performance{% endif %}</p></div><button id="sources-open" type="button">Sources &amp; definitions</button></header>
 <p id="load-status" role="status">Loading measurements…</p>
 <div id="chart-content" hidden>
 <div class="toolbar"><div id="legend" aria-label="Visible series"></div><div class="scale-controls"><label for="scale">View</label><select id="scale"><option value="compressed">Compressed %</option><option value="linear">Linear %</option><option value="raw">Raw values</option></select><label for="raw-series" class="sr-only">Raw measurement</label><select id="raw-series" hidden></select></div></div>

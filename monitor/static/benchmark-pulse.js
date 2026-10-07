@@ -51,13 +51,17 @@
       html('div', row, fmt(mode === 'raw' ? p.raw_value : p.percent_change, mode === 'raw'), 'reading-value');
       html('small', row, `${fmt(p.raw_value, true)} ${line.unit}`);
       html('small', row, coverageText(p));
+      if (p.proxy_label) html('small', row, p.proxy_label);
+      else if (p.measured_subject) html('small', row, `Measured model: ${p.measured_subject.label}`);
+      if (p.model_changed) html('small', row, 'Model changed · first successor evaluation');
       const b = line.baseline;
       html('small', row, b.date ? `Baseline ${labelDate(b.date)}: ${fmt(b.value, true)}${b.status === 'later_baseline' ? ' · later than launch' : ''}` : 'Launch baseline unavailable');
+      if (b.measured_subject) html('small', row, `Baseline model: ${b.measured_subject.label}${b.proxy ? ' · previous release proxy' : ''}`);
       if (b.status === 'baseline_zero') html('small', row, 'Zero baseline: percentage change is undefined');
       if (p.related_values && line.metric_key === 'rating') html('small', row, `Interval ${fmt(p.related_values.rating_lower, true)}–${fmt(p.related_values.rating_upper, true)} · ${fmt(p.related_values.vote_count, true)} votes`);
       if (p.history_basis === 'reconstructed_current_relationships') html('small', row, 'Reconstructed from current relationships; removed likes/follows are excluded.');
       if (p.secondary_source) html('small', row, 'Historical community archive');
-      if (line.direction === 'lower_is_better') html('small', row, 'Lower rank is better; positive % means a higher rank number.');
+      if (line.direction === 'lower_is_better') html('small', row, 'Lower rank is better; rank % is not a change in model capability.');
     }
   }
   function draw() {
@@ -96,26 +100,38 @@
       element('line',{x1:x(i),y1:box.top,x2:x(i),y2:box.bottom,class:'marker'});
       element('text',{x:x(i)+(i>days.length/2?-5:5),y:34,'text-anchor':i>days.length/2?'end':'start'},`${label} · ${labelDate(date)}`);
     }
+    if (data.lines.some(line => line.interpretation)) {
+      const launch = data.launch_anchor.announced_date || data.launch_anchor.announced_at?.slice(0,10);
+      const events = [[launch, 'Launch'], ...lines.filter(line => line.interpretation?.switch_date).map(line => [line.interpretation.switch_date, 'Model changed'])];
+      events.forEach(([date,label], index) => {
+        const i=days.indexOf(date); if (i<0) return;
+        element('line',{x1:x(i),y1:box.top,x2:x(i),y2:box.bottom,class:'baseline','data-event':label});
+        element('text',{x:x(i)+(i>days.length/2?-5:5),y:34+index*14,'text-anchor':i>days.length/2?'end':'start'},`${label} · ${labelDate(date)}`);
+      });
+    }
     element('line',{x1:x(current),y1:box.top,x2:x(current),y2:box.bottom,class:'inspection'});
     for (const line of lines) {
       const color = colors[data.lines.indexOf(line)%colors.length];
-      let path = '', previous = null;
+      let path = '', proxyPath = '', previous = null, previousSegment = null;
       line.points.forEach((point,i)=>{
         const value=pointValue(point);
         if (value===null || !Number.isFinite(value)) { previous=null; return; }
         const px=x(i),py=y(value);
-        if (previous === null) path+=` M ${px} ${py}`;
-        else if (line.measurement_kind === 'state') path+=` H ${px} V ${py}`;
-        else path+=` L ${px} ${py}`;
-        previous=value;
+        let piece;
+        if (previous === null || previousSegment !== point.segment) piece=` M ${px} ${py}`;
+        else if (line.measurement_kind === 'state') piece=` H ${px} V ${py}`;
+        else piece=` L ${px} ${py}`;
+        if (point.proxy) proxyPath+=piece; else path+=piece;
+        previous=value; previousSegment=point.segment;
         // Every actual observation is visible, including a single-point series.
         if (point.observed || i===current) {
           const circle=element('circle',{cx:px,cy:py,r:i===current?4:2.2,fill:point.coverage==='partial'?'white':color,stroke:color,'stroke-width':1.6});
           const title=document.createElementNS(ns,'title');
-          title.textContent=`${line.label} · ${point.date}: ${fmt(mode==='raw'?point.raw_value:value,mode==='raw')} · ${coverageText(point)}`;circle.append(title);
+          title.textContent=`${line.label} · ${point.date}: ${fmt(mode==='raw'?point.raw_value:value,mode==='raw')} · ${coverageText(point)}${point.proxy_label ? ' · '+point.proxy_label : ''}`;circle.append(title);
         }
       });
       element('path',{d:path,stroke:color,class:'series','data-series':line.key});
+      if (proxyPath) element('path',{d:proxyPath,stroke:color,fill:'none','stroke-width':2,'stroke-dasharray':'6 4',class:'series-proxy','data-series':line.key});
     }
     if (!values.length) element('text',{x:470,y:210,'text-anchor':'middle'},'No values available for this view');
     $('chart-title').textContent = `${data.title} · ${mode==='raw'?'raw measurements':'change from baseline'}`;
@@ -143,6 +159,7 @@
     for (const line of data.lines) {
       const row=html('section',$('source-details'),undefined,'source-entry');
       html('h3',row,line.label);
+      if (line.interpretation) html('p',row,'Dashed rank segment: previous release proxy. The measured model changes at its first valid Arena evaluation; this is not a single model improving. '+line.interpretation.rationale);
       html('p',row,`Scope: ${line.subject.label || line.subject.key} · ${line.scope}. ${line.measurement_kind==='state'?'State at observation or publication':'Flow over a window'} · ${line.unit}.`);
       html('p',row,`Window: ${line.window_mode}${line.window_amount?' · '+line.window_amount:''}${line.window_unit?' '+line.window_unit:''}. Baseline: ${line.baseline.date || 'unavailable'} (${line.baseline.status.replaceAll('_',' ')}).`);
       const observed=line.points.filter(p=>p.observed);

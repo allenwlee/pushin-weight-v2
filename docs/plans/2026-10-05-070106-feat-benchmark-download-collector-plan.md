@@ -7,8 +7,11 @@ ollija:
   change_id: feat-benchmark-download-collector-2026-10-05-070106
   branch: feat/benchmark-download-collector
   workflow: plan
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  delivery_target: staging
+  delivery_selected_by_user: true
+  delivery_route: staged
+  delivery_route_selected_by_user: false
+  staging_transport: branch
 ---
 # Benchmark scores and model adoption in PostgreSQL
 
@@ -26,7 +29,9 @@ The October 6 Pulse exercise adds a production comparison contract: each line ha
 
 Implementation now runs in the isolated feature worktree and PostgreSQL database on fuchitalee. It remains independent of G1–G5 and includes historical imports, a database-backed Pulse response and UI, an offline report using the same series, and collection operations with separately authorized activation. Production remains unchanged. Verification must reproduce the five-line comparison, preserve exact raw values and coverage, and prove unchanged legacy counting on isolated PostgreSQL. Account abstraction requires a staged primary-key/foreign-key migration and source-qualified lookups, including the migration-only global handle index; this is not a column rename. Existing unset product types and unconfirmed mappings remain setup work; illustrative M-series links are not verified HF observations.
 
-The October 7 review adds three required fixes before renewed tested-and-ready sign-off: portable source/license attribution, acceptance of valid OpenRouter responses without an `other` bucket, and removal of per-author account queries. Dataset-specific permission records will use existing metadata. Public release additionally needs a documented HF/X permission basis; AA and unreviewed archives remain disabled. These release conditions do not prevent isolated verification, and this amendment authorizes plan edits only.
+The latest October 7 amendment adds an explicitly labeled predecessor-to-successor Arena rank history, while retaining exact-model views and measurements. It also requires source-use enforcement and honest historical inputs for G3. Collector deployment, public forecasts and trading integration receive separate sign-offs; G3 prediction accuracy and trading compliance remain its own work. No new table is proposed by this amendment.
+
+The earlier October 7 review adds three required fixes before renewed tested-and-ready sign-off: portable source/license attribution, acceptance of valid OpenRouter responses without an `other` bucket, and removal of per-author account queries. Dataset-specific permission records will use existing metadata. Public release additionally needs a documented HF/X permission basis; AA and unreviewed archives remain disabled. These release conditions do not prevent isolated verification, and this amendment authorizes plan edits only.
 
 ## October 7 amendment — engagement and complete available history
 
@@ -38,11 +43,11 @@ This amendment supersedes earlier planning-only statements for the work below. T
 - **R27 / KD17 — history provenance:** distinguish `observed_snapshot`, `archived_snapshot` and `reconstructed_current_relationships`. HF `likedAt`/`followedAt` can reconstruct arrival dates of relationships still present at retrieval, not the true past total including subsequently removed relationships. Keep reconstructions separate from snapshot series and label baseline, export and chart evidence. Do not retain follower/liker profile data when aggregate daily counts and provenance suffice. Archive revision/selection hash, retrieval timestamp, date precision and unknown timezone remain explicit.
 - **R28 / KD18 — OpenRouter history:** perform one logical initial backfill for the entire available completed-day history, retaining **all reported models on every day**, including untracked/unmapped models and the optional `other` aggregate. This is the union of changing historical top-50 cohorts, not today's top 50. Keep raw source rows even when no canonical mapping exists; do not fabricate products. Use provider-required date chunks if one HTTP request cannot cover the interval, checkpoint each chunk and never describe a partial run as complete. Preserve endpoint floor/ceiling and missing days in coverage; no invented zeroes or allocation of `other`.
 - **R29 / KD19 — HF/Arena history:** collect accessible history only for tracked brands and their evidenced repositories/accounts/provider identifiers. Preserve the existing Google exclusion except reviewed Gemma/Gemini products. Retain unresolved candidates as coverage gaps, not automatic canonical matches. Arena keeps publication dates, exact variants and the overall `text` configuration without style control (R30). HF archive scope includes downloads and likes; follower/like reconstructions are separately labeled.
-- **KD20 — deferred:** explicit time-bounded proxy attribution is a potential future TODO only. Do not implement proxy rules, proxy tables or inferred release attribution in this run.
+- **KD20 — deferred except R31/KD22 below:** general proxy attribution, including assigning company/account engagement or brand posts to a latest release, remains a future TODO. The owner's later Arena predecessor-ranking requirement is the sole planned exception: an explicitly labeled display series over actual product observations, without reattributing stored measurements or adding a proxy table.
 
-KD16–KD20 are session-settled, user-directed: the rejected alternatives are separate source-entity/history tables, indistinguishable reconstructed history, brand-filtered OR collection, provider-wide HF/Arena collection, and immediate proxy implementation respectively. They preserve existing identity decisions, truthful history and the owner's collection scope.
+KD16–KD20 are session-settled, user-directed: the rejected alternatives are separate source-entity/history tables, indistinguishable reconstructed history, brand-filtered OR collection, provider-wide HF/Arena collection, and general proxy implementation respectively. R31/KD22 narrows the last decision for the Arena ranking view only. They preserve existing identity decisions, truthful history and the owner's collection scope.
 
-**R30 / KD21 — Arena without style control (latest owner direction):** use the official dataset configuration `text`, category `overall`, corresponding to `https://arena.ai/leaderboard/text/overall-no-style-control`, for new historical collection and comparison contracts. G3's saved `kalshi-arena-series.json` and a fresh read of Kalshi KXLLM1 both identify this settlement source; this is evidence for that series, not a universal Kalshi eligibility rule. Supersedes R3/R8/R23 and U17 references to style-controlled selection for new work. Preserve old `text_style_control` observations and immutable contracts exactly; support reading them separately. Pin configuration in new contracts, observations, imports, UI/export labels and tests; reject an incoming configuration differing from its contract. Never relabel or blend old scores. No new table is needed. Add tests proving both configurations remain separate and mismatched imports fail. Proxy attribution stays deferred.
+**R30 / KD21 — Arena without style control (latest owner direction):** use the official dataset configuration `text`, category `overall`, corresponding to `https://arena.ai/leaderboard/text/overall-no-style-control`, for new historical collection and comparison contracts. G3's saved `kalshi-arena-series.json` and a fresh read of Kalshi KXLLM1 both identify this settlement source; this is evidence for that series, not a universal Kalshi eligibility rule. Supersedes R3/R8/R23 and U17 references to style-controlled selection for new work. Preserve old `text_style_control` observations and immutable contracts exactly; support reading them separately. Pin configuration in new contracts, observations, imports, UI/export labels and tests; reject an incoming configuration differing from its contract. Never relabel or blend old scores. No new table is needed. Add tests proving both configurations remain separate and mismatched imports fail. General proxy attribution stays deferred; R31/KD22 below is the later Arena-ranking exception.
 
 ### Execution and verification additions
 
@@ -54,7 +59,7 @@ Proof: real PostgreSQL constraint and forward migration tests; positive repo lik
 
 Proof: chunk boundaries, historical cohort turnover, unmapped models and optional other, duplicate rejection, resume/no duplicate writes, partial failures, archive selection/hash and missing dates, reconstructed-versus-observed separation. Produce a real-data coverage report per provider and entity with requested/returned interval, row count, unresolved mappings and missing dates. Before sign-off import collected evidence into the isolated database and exercise SQL/ORM and Pulse consumers. Inaccessible upstream history is a documented source limitation, not a successful imported interval.
 
-**U18 — review fixes and readiness.** Complete existing A1–A5 required fixes, including portable attribution, valid OR no-other responses and constant-query account lookup. Bound historical serving to requested range plus baseline/prior Arena publication. Run targeted PostgreSQL, compatibility, exporter and browser checks, review actual diff, and update PR50/evidence. Existing unchanged checks may be reused only within their recorded scope; new account/history behavior requires new proof. No production readiness claim before this amendment's evidence exists.
+**U18 — review fixes and readiness.** Complete existing A1–A5 required fixes and the later R31–R36/U19–U21 amendment below, including portable attribution, valid OR no-other responses and constant-query account lookup. Bound historical serving to requested range plus baseline/prior Arena publication. Run targeted PostgreSQL, compatibility, exporter and browser checks, review actual diff, and update PR50/evidence. Existing unchanged checks may be reused only within their recorded scope; new account/history/proxy/permission behavior requires new proof. No renewed tested-and-ready claim before this amendment's evidence exists; G3 forecast and trading activation remain separately gated.
 
 ### Deployment placement
 
@@ -145,11 +150,208 @@ this amendment has not been signed off or pushed. No live backup has been taken.
   Remaining endpoint: finish acquisition/replay inspection, final simplify/review,
   PR50 update and hosted CI. No renewed tested-and-ready sign-off yet.
 
+## October 7 amendment — G3 use review and predecessor ranking
+
+Owner-directed amendment after the G3 review and predecessor-ranking discussion.
+This turn updates the plan for the next implementation/review run; it does not
+start that rerun, publish forecasts, contact providers or authorize deployment.
+The accepted endpoint remains **tested and ready**, followed by owner review.
+Preserve existing bounded collectors and their receipts; inspect their actual
+completion before resuming instead of starting duplicate downloads. Prior
+execution checkpoints describe their recorded revision, not this amendment's completion.
+
+### Plain-English change
+
+Add a release-history view that shows the previous model's real Arena ranking
+before the new model has an evaluation, then switches visibly to the new model.
+Every point identifies the model actually evaluated. Keep the exact-model view
+available, and never write predecessor ranks onto the successor's records.
+
+Expand the review to cover predictions and trading-related uses of the collected
+data. Permission to show a chart must not silently become permission for every
+training, external-model or export use. Separate collector/storage release,
+public forecasting and exchange/trading activation so future G3 obligations are
+explicit without making the collector responsible for building G3 now.
+
+### Requirements and settled decisions
+
+**R31 / KD22 — predecessor Arena ranking (session-settled: user-directed).**
+Add an explicit release-history ranking preset alongside the existing exact-model
+preset. Its history uses a reviewed predecessor and then the selected successor:
+
+- Before the successor's launch and until its first valid Arena publication,
+  use the predecessor's actual observations in the same `text` / `overall`
+  configuration without style control. A release date alone does not trigger
+  the switch. Preserve native publication dates, uncertainty and omission rules.
+- At the successor's first valid published ranking, switch to that exact mapped
+  variant and mark **model changed**, distinct from an improvement of the same
+  model. Do not automatically revert to the predecessor if the successor later
+  disappears. Missing, stale and carried-forward states remain explicit; an
+  explicit omission from a complete publication terminates carry-forward.
+- Choose the predecessor through reviewed product relationships and exact
+  Arena variant mappings. Do not infer it from a shared brand, newest upload,
+  a quantization/fork, the best available rank or a similar name. An ambiguous,
+  absent or incompatible predecessor leaves a labeled gap. A manually reviewed
+  successor relationship must identify its evidence and must not claim HF
+  supplied it. Add only required mappings in a new immutable contract/version.
+- Preserve `target_product_subject_id`, actual measured subject/mapping, source
+  observation IDs, publication date, segment bounds, proxy rationale, relationship
+  evidence/version and transition rule in the comparison specification/output.
+  Store segment rules in existing `MetricCollectionContract.methodology`; reuse
+  `ProductRelationship`, `SourceSubjectMapping` and the shared observation/value
+  tables. A proxy is presentation/interpretation metadata, not another measurement
+  kind or historical value written to the successor. No new proxy table.
+- In charts, tooltips, JSON and offline reports, label predecessor points
+  **Previous release proxy — {model_name}**, distinguish their segment visually,
+  and mark both successor launch and first evaluation. Do not draw a seamless
+  transition implying one model changed rank. Credit predecessor and successor
+  datasets, including any offscreen baseline. Keep all exact-model observations
+  and legacy contracts unchanged. Arena score remains exact-model unless a later
+  explicit requirement extends this proxy to score.
+- Allow a bounded pre-launch lookback in this new preset. Implementation default:
+  30 calendar days before launch, adjustable in the preset, with the entire
+  requested interval still capped at 366 days. This is a configurable default,
+  not a claim about available history. Existing exact-model presets retain their
+  launch-date start. Brand posts may cover the lookback; successor HF/OR values
+  remain unavailable before they exist, without proxy substitution.
+- For this preset's rank percentage mode, use one fixed, disclosed baseline:
+  the first available valid rank on/after its requested start. Show the actual
+  baseline date/model; never reset it at the successor switch. Preserve
+  `100 * (value / baseline - 1)`, state **lower rank is better**, and explain that
+  ordinal-rank percent change is not a percentage change in model capability.
+  Raw rank remains available. Other lines keep their declared baseline policies;
+  no missing line is fabricated merely to start every series at zero.
+
+KD22 supersedes KD14's launch-only range and later exact-model Arena baseline
+only for the new release-history rank preset. It is the narrow exception to
+KD20; proxy attribution of posts, downloads, likes or followers stays deferred.
+The prior statement that ranks do not move is the motivating observation about
+the viewed period, not an assumption: retain any real within-model rank changes.
+
+**R32 / KD23 — permission by use (owner accepts expanded review scope).**
+Extend existing source/dataset policy metadata with separate decisions for
+collection/retention, internal analysis, fitting a forecasting model, foundation
+model training, external model inference, public forecasts, public charts,
+numeric exports/API/MCP, and exchange/trading integration. Reuse source metadata
+and the contract's frozen policy snapshot; no permission table is required.
+Record terms/agreement evidence, dataset/access route, review date, restrictions,
+retention/deletion duties and the selected use. Absence of a decision is
+unresolved. A review records a supported legal basis or applicable agreement;
+it need not invent a written-consent requirement where the published license
+already grants the use. Keep private agreements out of public responses.
+
+The current `core/benchmark_attribution.py` labels HF/X display/export unresolved;
+`monitor/benchmark_views.py` currently gates by feature flag only. The rerun must
+enforce reviewed source-use decisions at actual consumer boundaries, not merely
+show policy labels. Decide public output from every contributing source,
+including proxy/baseline evidence. Fail closed for an unresolved/prohibited use;
+do not silently remove a required line or expose it through a JSON route after
+hiding its download button. Isolated fixtures/review access must be explicitly
+scoped and tested, never an accidental public bypass. A later revoked permission
+must block current use while historical policy/evidence remains immutable;
+retention/deletion actions follow the applicable decision, not an assumed
+right to retain everything indefinitely.
+
+**R33 — time-correct forecast inputs.** Distinguish effective measurement period,
+provider publication/availability time, first local observation, retrieval/import
+time and later revision. Preserve these in existing run/observation metadata and
+provide a separate explicit cutoff-aware input contract for G3. Do not repurpose
+the retrospective chart reader as proof of what was known at a past instant.
+Unknown or date-only availability needs a conservative documented eligibility
+rule, not invented midnight precision. Current engagement reconstructions and
+later classifications are excluded from operational historical replay by default.
+Research reconstruction must be separately labeled. Late source corrections and
+relationship reviews create new versions, never rewrite saved forecast evidence.
+Proxy segments are available as labeled explanatory context; fitting on them
+requires an explicit method decision and cannot treat them as successor outcomes.
+
+**R34 — target and coverage contract for G3.** Supply exact subject/variant,
+provider configuration, metric/window/unit/timezone, observation basis,
+publication state and mapped/unmapped coverage. OR top-50 absence is unavailable,
+not zero; observed stock and reconstructed engagement stay separate; HF rolling
+changes are not daily downloads; brand posts are not exact-product attribution.
+Track collection/cohort/classification changes so G3 can distinguish them from
+adoption changes. Retain source-specific tokenization and population limitations.
+G3 owns target threshold/horizon, tie/non-release/not-listed/correction rules,
+market rule version, matching and final outcome; a collected Arena snapshot is
+not automatically the exchange's settlement evidence. The first pilot must show
+one reproducible chain from source observation through forecast to matched rules.
+
+**R35 — prediction qualification, owned by G3.** Before public probability claims,
+G3 must freeze target, sample/cohort, baseline, evaluation measures and iteration
+budget; evaluate later unseen releases, calibration, uncertainty and improvement
+over simple baselines. Include publisher/family leakage, today's LLM knowing
+historical outcomes, duplicated campaigns, manipulable metrics and feedback from
+our own site. Record inadequate sample support and an insufficient-evidence
+outcome. Test joint user assumptions, dependent factors, answer-order invariance
+and separate canonical/community/personal forecasts. This collector supplies
+honest inputs and audit references, not a validated prediction engine.
+
+**R36 — exchange and trading boundary, owned by G3/integration review.** Before
+market-data ingestion/display or model use, identify the actual applicable Kalshi
+API/partner agreement and rights for prices, descriptions, outcomes, caching,
+AI inference/training, redistribution and derived services. API accessibility
+and Builders participation are not permission evidence. Before trade suggestions,
+referral promotion or routing, qualified review must address actual company/user
+jurisdictions, compensation, personalization, eligibility and applicable adviser/
+intermediary obligations or exemptions. A disclaimer alone is not clearance.
+Use exact contract rules and executable dated quotes, quantity, fees and uncertainty;
+50% forecast direction alone is never a buy instruction. Preserve the forecast,
+user assumptions, quote and rule revision shown at decision time. Stale data,
+missing listings and provider corrections need explicit suppression/review behavior.
+Keep proposal submission, listing and orders separate; future order actions require
+explicit user intent, duplicate protection and their own authorized implementation.
+
+### Rerun units and evidence
+
+| Unit | Owned implementation / review scope | Required evidence |
+| --- | --- | --- |
+| U19 — use policy enforcement (R32/R36) | Extend `core/benchmark_attribution.py`, contract validation in `core/benchmark_metric_identity.py`, source-use checks in collection/history entry points and `monitor/benchmark_views.py`, plus the shared report/series export boundary. Use one policy vocabulary/validator; pin it in contracts and consult current restrictions without rewriting history. Review external-model egress for G3 as a handoff, without activating Jev. | Tests in `tests/test_benchmark_engagement.py`, `tests/test_benchmark_pulse_views.py`, `tests/test_benchmark_download_database_report.py` and relevant persistence/history tests: unresolved/prohibited/conditional uses, mixed sources, offscreen/proxy baselines, revocation, JSON/offline bypasses, explicit isolated preview, and unchanged permitted output. Data-use matrix includes each actual dataset and route; no credential implies permission. |
+| U20 — predecessor rank view (R31) | Extend frozen comparison validation, `core/benchmark_metric_series.py`, `core/benchmark_metric_report.py`, Pulse JS/template, offline report and `verify_pulse_browser.py`. Reuse reviewed relationship/mapping records; no synthetic successor values or new tables. | In `tests/test_benchmark_download_series_db.py` and view/report tests: pre-launch history, launch-to-first-evaluation interval, real predecessor rank changes, distinct model switch, no predecessor/ambiguous mapping, variant/config mismatch, zero/missing baseline, same-date precision, correction/removal and no fallback after switch. Browser-check actual DeepSeek and second-product data, mobile, legend, baseline, raw rank, transition and portable export. Compare legacy exact-model responses unchanged. |
+| U21 — G3 input and release review (R33–R36) | Extend shared source/history metadata and a separately named cutoff-aware reader under `core/benchmark_metric_series.py` (or a small companion if needed); document G3's input contract and open decisions. Reconcile R32 use decisions with A5 and release phases below. | PostgreSQL cases with late-imported archives, later corrections/classifications, unknown/date-only availability and explicit retrospective mode; prove no future evidence enters operational replay. Record source coverage/censoring and a versioned real-data example. Review schema/constraint drift; use existing metadata before proposing any migration. Document G3-owned forecast/trade gates as pending, never passed by collector tests. |
+
+Order: inspect retained U16/U17 acquisition/import receipts and finish remaining
+authorized history work → U19 policy decisions/enforcement and U21 input contract
+→ U20 proxy view → U18 final simplify, code/data-integrity/use review, browser
+verification, PR50 update and CI. Honor existing authorization and budgets; this
+amendment does not start new collection, renew a terminated worker, or authorize
+external provider contact. Use existing failures/fixtures first; red-before-green
+tests for changed behavior. Reuse only checks unaffected by code/data changes.
+
+### Separate release decisions
+
+| Release | Must be established before that release | Can remain disabled/pending |
+| --- | --- | --- |
+| Collector/schema/storage | Applicable collection/retention/internal-use basis; historical acquisition/replay coverage; U16–U21 collector-side tests/review; current migration graph and inbound Account FK reconciliation; verified recoverable live backup; separate owner deployment authorization. | Public charts/exports, G3 probabilities, Kalshi data/AI use and trading. No permission decision silently expands collection. |
+| Public charts or forecasts | Rights/enforcement for each exposed use and contributing dataset; truthful scopes/proxies and timestamps. Forecasts additionally require G3's qualified method, saved evidence/outputs, uncertainty and correction behavior. | Market data, proposals and orders until their own conditions are met. |
+| Exchange integration / trading | Actual data/API/partner terms, exact matching/settlement rules, audience/legal assessment and the selected activity's technical verification. Submission, referral/linking and orders have distinct scopes. | Any activity not explicitly selected and cleared; no blanket approval from the collector's release. |
+
+“Tested and ready” for this rerun means U19–U21's collector functionality and
+enforcement are verified, the source-use matrix and G3 handoff exist, and remaining
+external rights/G3 gates are explicit with affected uses disabled. It does not
+mean legal clearance, demonstrated forecast accuracy or production authorization.
+Retain the owner-required live backup and migration rehearsal; the isolated
+development copy is not the backup. Preserve the separate failed production
+health observation as a live-condition finding, not a passed check or permission
+for an unrelated repair.
+
+### Evidence for the expanded review (checked October 7)
+
+- [Current G3 design](/Users/fuchitalee/development/pushin-weight-v2/docs/brainstorms/2026-10-05-163237-g3-evidence-forecasts-markets.md) requires frozen inputs, chronological evaluation, scenarios and separate price comparison; these are planned behavior, not an implemented engine.
+- [Arena official dataset](https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset/blob/main/README.md) and [OpenRouter dataset API](https://openrouter.ai/docs/api/api-reference/datasets/daily-token-totals-for-top-50-models) declare CC BY 4.0. Its [license](https://creativecommons.org/licenses/by/4.0/) permits commercial adaptation with conditions; this is not provider endorsement or a forecast-performance guarantee. [OR usage guidance](https://openrouter.ai/docs/cookbook/administration/data-api) also describes excluded traffic and discourages a competing free API.
+- [Kalshi's website-linked Data Terms](https://kalshi-public-docs.s3.amazonaws.com/kalshi-data-terms-of-service.pdf), sections I–II, restrict commercial/derived uses and explicitly prohibit AI/ML use of the covered data. Determine the applicable API/negotiated agreement rather than assuming the website terms alone settle every access route or that public API access overrides them. No such agreement has been verified here.
+- [X Developer Agreement](https://docs.x.com/developer-terms/agreement), its restrictions section, specifically restricts foundation/frontier training. Do not conflate that with every statistical forecast or inference use; review our actual vendor/source rights and external processing separately. HF/X collection and downstream rights remain unresolved in A5.
+- [NFA adviser guidance](https://www.nfa.futures.org/members/cta/index.html) and [CFTC intermediary definitions](https://www.cftc.gov/IndustryOversight/Intermediaries/index.htm) justify qualified assessment of the actual compensated/personalized offering, including exceptions; this plan does not determine registration status.
+
 ## Goal Capsule
 
 Objective: users can compare post attention with benchmark performance and adoption, knowing which entities, units and periods each point actually represents. Means: the owner-controlled taxonomy and shared metric schema below (KD3, KD6–KD15; KTD1–KTD6), delivered in the existing isolated feature worktree. Preserve U1–U4 as historical baseline; execute future units in dependency order, not numeric order. Current endpoint is the owner-authorized tested-and-ready implementation in the isolated database, with reviewable PR and decided CI. Managed delivery remains on-request; production migration, deployment and activation require the later owner decision described in Delivery Exceptions.
 
 ## Delivery Exceptions
+
+**Latest owner selection — October 7 staging delivery:** LFG through deployment and verification on Render staging. Complete R31–R36/U19–U21 and remaining history/review work, publish the reviewed candidate, reconcile existing G1/G2 staging code and all inbound Account relationships, rehearse migration against the actual staging schema, preserve staging data and verify the deployed revision and feature. Staging code/configuration/migration and bounded source-data import are authorized; production deployment, production migrations and recurring collection activation remain excluded. This supersedes earlier tested-and-ready-only and amendment-turn restrictions for this run. The live production backup remains a future production prerequisite; take a separate recoverable staging backup before staging migration. Do not refresh or overwrite another session’s staging data.
+
+**Latest owner direction — G3 review/proxy amendment:** update this existing plan now and report concise changes. Prepare R31–R36/U19–U21 for the next run; do not begin that implementation/review rerun in this amendment turn. The existing tested-and-ready endpoint persists, with no production authorization. Preserve already-running bounded acquisition and the hourly timing probe. Later activation follows the separate release decisions above.
 
 **October 7 review follow-up:** the owner asks to incorporate the code/compliance review into this existing plan. This turn changes documentation only; it does not apply the fixes, contact providers, collect data, publish exports, or select a release. Preserve the underlying tested-and-ready implementation endpoint and on-request delivery. The previous test receipts remain valid for their recorded scope, but the three confirmed findings below must be resolved and verified before renewed sign-off. Unresolved public-use rights are release conditions, not a demand to halt existing production harvesting or delete historical data.
 
@@ -168,7 +370,7 @@ Convenience brand assignments mix companies, product lines and individual releas
 
 ### Requirements
 
-Stable requirement IDs are retained; R18 captures provider-neutral accounts, R19–R24 capture the Pulse prototype adjustments, and R25 captures portable attribution and source-specific public-use permission.
+Stable requirement IDs are retained; R18 captures provider-neutral accounts, R19–R24 the Pulse adjustments, R25 portable attribution, R26–R30 engagement/history/configuration, and R31–R36 predecessor ranking and G3 data-use/forecast/trading review. The latest amendment above governs conflicts with historical planning prose.
 
 | ID | Required outcome |
 | --- | --- |
@@ -213,7 +415,7 @@ Stable requirement IDs are retained; R18 captures provider-neutral accounts, R19
 - **KD11 (session-settled: user-directed) — grouping automation; Governs R14:** a reviewed rule can include a root product and follow accepted new_version links transitively. Preserve rule versions, evidence paths and manual exclusions; missing edges stay unresolved. Technical derivatives are not automatically successors or lab-owned offerings.
 - **KD12 (session-settled: user-directed) — naming and external identities; Governs R2/R13:** use metric table names (metric_types, source_metrics and metric_* fact/processing tables), separate semantic metric types from units, and reuse accounts for HF publishers and source_subject_mappings for external product/lab identifiers; no universal external-entity table. Product.type remains our reviewed classification, not a direct HF enum.
 - **KD13 (session-settled: user-directed) — account reuse; Governs R18:** accounts belong to one data source. Reuse existing account-to-company/brand/person relationships; abstract X assumptions before accepting HF accounts. A model listing, benchmark row or provider creator label is not an account.
-- **KD14 (session-settled: user-directed) — comparison scope and arithmetic; Governs R19/R20/R23:** the Flash comparison starts at its launch date and uses all DeepSeek brand posts, exact Flash HF/OR identifiers and separate Arena score/rank. A rolling-download change of 10 → 11 → 13 displays 0%, 10%, 30%. Arena's later published baseline must remain explicit.
+- **KD14 (session-settled: user-directed) — comparison scope and arithmetic; Governs R19/R20/R23:** the exact-model Flash comparison starts at its launch date and uses all DeepSeek brand posts, exact Flash HF/OR identifiers and separate Arena score/rank. R31/KD22 adds a separate pre-launch predecessor-ranking view without changing this preset. A rolling-download change of 10 → 11 → 13 displays 0%, 10%, 30%. Arena's later published baseline must remain explicit.
 - **KD15 — technical proposal informed by the prototype; Governs R21/R22/R24:** reuse the fifteen tables and their versioned JSON contracts for sourced comparison anchors, archive provenance and per-line definitions. Add historical import and production serving/operations units. The compressed percentage view demonstrated five-line visibility but is not yet an owner-approved final design.
 - No automatic fuzzy matching, bulk catalog reclassification or benchmark methodology blending. Scheduling and production activation are planned in U15, but are not executed or authorized by this planning revision.
 
@@ -729,6 +931,7 @@ For Parquet or other binary archives, keep bounded selected raw rows in the exis
 **Baseline and plotting rules:**
 
 - Resolve each raw series before calculating `100 * (value_t / baseline_value - 1)`. The first valid baseline is exactly 0%; this describes change in the measured level, not a running sum of daily activity or percentages. HF remains rolling-30-day downloads; post/token values remain counts for each UTC day.
+- R31 adds a separate release-history rank preset with pre-launch range, fixed first-available rank baseline and explicit predecessor/successor segments. The following launch baseline remains the default for exact-model presets and the other lines.
 - Default baseline policy is the requested launch-day value. Missing launch-day data produces `baseline_missing`; a preset may explicitly choose `first_available_on_or_after_launch` for that line, returning the actual later baseline date and label. Zero baseline produces `baseline_zero` with percentage values unavailable; raw data remains available. Do not silently skip a real zero to find a positive value.
 - Arena can carry an observed publication forward until the next publication under R8, never backward before its first publication. Return effective/publication date and carried-forward status. Absence in the next complete publication stops the line; a failed fetch instead retains the prior known publication with a stale/failure indicator. Do not cross contracts/configurations. For a broader max-rating rollup, rank belongs to that same winning row, not a separate minimum-rank model.
 - Preserve the arithmetic sign for ranks: 29 → 40 is approximately +37.93% in rank number and represents worse placement. Label lower-is-better rather than silently invert it. Show raw rating/rank beside percentages; a score percentage is descriptive change on that provider's scale, not a percentage improvement in ability.
@@ -1146,6 +1349,8 @@ Owner requested a 48-hour poll, then explicitly changed frequency to **hourly**.
 
 During implementation, not during this planning revision:
 
+The next run must include U19–U21 and prove the full PostgreSQL → series → Pulse/offline/export path for predecessor segments and permission enforcement, plus cutoff-aware G3 input tests. Re-run affected regression/browser checks at the new revision; do not reuse the 0e328c7a receipts as evidence for behavior added by this amendment. Frozen old exact-model contracts must still produce the same responses. Record review answers separately for storage, charts/forecasts and exchange/trading.
+
 1. Inspect current migration leaf and shared-file claims; run migration generation against the leaf. Validate schema drift contains only fifteen proposed tables across U10/U5, documented U12 account/FK/HFOrg alterations and their owned indexes/constraints. No source_entities, source_accounts or data_source_types tables.
 2. Run fresh/upgraded disposable PostgreSQL migration tests; require all database tests to execute without skips. Use a dedicated local test database and a durable pytest basetemp on fuchitalee.
 3. Run focused feature tests plus tests/test_hf_metadata_client.py and tests/test_product_identity.py. Required pattern after implementation: .venv/bin/pytest tests/test_benchmark_download*.py tests/test_measurement_taxonomy*.py tests/test_measurement_attribution.py tests/test_benchmark_download_series_db.py tests/test_benchmark_pulse_views.py tests/test_hf_metadata_client.py tests/test_product_identity.py --basetemp=<task-owned-durable-path>, with explicit dedicated PostgreSQL test environment.
@@ -1158,7 +1363,7 @@ During implementation, not during this planning revision:
 
 ## Definition of Done
 
-**October 7 additions:** the A1–A5 readiness boundary above is part of completion. Reopen tested-and-ready sign-off for the three confirmed fixes; retain historical receipts as scoped evidence. Public licensing/permission conditions remain separately visible until resolved.
+**Latest October 7 additions:** R31–R36/U19–U21 and the separate collector, public-output and exchange/trading release decisions above govern the next rerun. Verify the predecessor-ranking view, enforced source-use policy and cutoff-aware input contract; retain unresolved G3-owned forecast/trade gates as disabled and pending. The A1–A5 readiness boundary is also part of completion. Reopen tested-and-ready sign-off for the three confirmed fixes; retain historical receipts as scoped evidence. Public licensing/permission conditions remain separately visible until resolved.
 
 After separately selected implementation: the fifteen-new-table migration set and staged U12 existing-account changes apply cleanly on fresh and populated isolated PostgreSQL; a reviewed contract links typed measurements to stable subject identities and frozen rollup relationships; collection and bounded historical import persist provenance, successes/failures/revisions without secret leakage or duplicate counting; the actual Pulse response and UI reproduce five scoped lines with correct baselines, raw values, date precision and coverage; U9 regression/browser checks pass and operating instructions cover disabled scheduling plus activation/rollback. Without separately selected release/activation authority, the endpoint is a tested disabled candidate. When production activation is selected, completion additionally requires U15's observed scheduled persistence and live served comparison.
 
@@ -1203,11 +1408,18 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Delivery target: `staging`
+- Owner selection recorded: `true`
 - Delivery route: `staged`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
+5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
+6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
+7. Run staging checks. Stop here if they fail.
 
 ### Failure handling
 

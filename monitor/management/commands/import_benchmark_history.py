@@ -13,6 +13,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("manifest")
         parser.add_argument("--apply", action="store_true")
+        parser.add_argument("--isolated-review", action="store_true")
 
     def handle(self, *args, **options):
         try:
@@ -20,7 +21,11 @@ class Command(BaseCommand):
             if path.stat().st_size > 32 * 1024 * 1024:
                 raise ValueError("history manifest exceeds 32MiB")
             manifest = json.loads(path.read_text())
-            result = import_history(manifest, apply=options["apply"])
+            result = import_history(
+                manifest,
+                apply=options["apply"],
+                isolated_review=options["isolated_review"],
+            )
             if options["apply"]:
                 result = {
                     "applied": True,

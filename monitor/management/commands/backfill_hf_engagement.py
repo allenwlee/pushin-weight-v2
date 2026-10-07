@@ -17,11 +17,21 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("cohort")
+        parser.add_argument("--contract", required=True)
+        parser.add_argument("--isolated-review", action="store_true")
         parser.add_argument("--output", required=True)
         parser.add_argument("--max-requests", type=int, default=10000)
         parser.add_argument("--max-seconds", type=int, default=3600)
 
     def handle(self, *args, **opts):
+        from core.benchmark_attribution import enforce_source_collection
+        from core.models import MetricCollectionContract
+
+        contract = MetricCollectionContract.objects.get(pk=opts["contract"])
+        enforce_source_collection(
+            contract, "hf", dataset=None, isolated_review=opts["isolated_review"]
+        )
+
         if (
             not 1 <= opts["max_requests"] <= 20000
             or not 1 <= opts["max_seconds"] <= 14400

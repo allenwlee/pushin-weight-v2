@@ -23,12 +23,25 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("cohort")
+        parser.add_argument("--contract", required=True)
+        parser.add_argument("--isolated-review", action="store_true")
         parser.add_argument("--output", required=True)
         parser.add_argument("--max-seconds", type=int, default=7200)
         parser.add_argument("--max-requests", type=int, default=150000)
         parser.add_argument("--max-bytes", type=int, default=32 * 1024**3)
 
     def handle(self, *args, **opts):
+        from core.benchmark_attribution import enforce_source_collection
+        from core.models import MetricCollectionContract
+
+        contract = MetricCollectionContract.objects.get(pk=opts["contract"])
+        enforce_source_collection(
+            contract,
+            "hf",
+            dataset="cfahlgren1/hub-stats",
+            isolated_review=opts["isolated_review"],
+        )
+
         # Resolver redirects contain expiring public signatures; never log them.
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)

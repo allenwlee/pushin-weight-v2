@@ -20,11 +20,20 @@ class Command(BaseCommand):
         parser.add_argument("--organization", action="append", required=True)
         parser.add_argument("--output", required=True)
         parser.add_argument("--apply", action="store_true")
+        parser.add_argument("--isolated-review", action="store_true")
 
     def handle(self, *args, **opts):
         import pyarrow.parquet as pq
 
         contract = MetricCollectionContract.objects.get(pk=opts["contract"])
+        from core.benchmark_attribution import enforce_source_collection
+
+        enforce_source_collection(
+            contract,
+            "arena",
+            dataset="lmarena-ai/leaderboard-dataset",
+            isolated_review=opts["isolated_review"],
+        )
         config = contract.source_configuration["arena"].get(
             "config", "text_style_control"
         )
@@ -100,6 +109,7 @@ class Command(BaseCommand):
                         ]
                     ),
                     payload,
+                    isolated_review=opts["isolated_review"],
                     source_metadata={
                         "ingestion_mode": "historical_import",
                         "history_basis": "observed_snapshot",

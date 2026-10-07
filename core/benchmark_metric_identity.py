@@ -274,6 +274,12 @@ def prepare_collection(spec):
         settings.setdefault(
             "attribution", copy.deepcopy(source.metadata.get("attribution", {}))
         )
+        from core.benchmark_attribution import validate_use_policy
+
+        settings.setdefault(
+            "use_policy", copy.deepcopy(source.metadata.get("use_policy", {}))
+        )
+        validate_use_policy(settings["use_policy"])
     mappings = []
     seen = set()
     require(
@@ -505,6 +511,9 @@ def validate_comparisons(taxonomy, mappings, config, methodology):
                 "launch precision required",
             )
             aware_instant(anchor["announced_at"])
+        from core.benchmark_predecessor import validate_release_history
+
+        validate_release_history(preset, taxonomy, mappings, config)
         lines = preset["lines"]
         require(
             0 < len(lines) <= 20 and len({line["key"] for line in lines}) == len(lines),

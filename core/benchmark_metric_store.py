@@ -490,9 +490,18 @@ def persist_source(
     adapter=None,
     fetch=None,
     batch_id=None,
+    isolated_review=False,
 ):
     """Manual/import entry point; deterministic keys make replay a no-op."""
     require(source in contract.source_configuration, "source is outside contract")
+    from core.benchmark_attribution import enforce_source_collection
+
+    enforce_source_collection(
+        contract,
+        source,
+        dataset=(source_metadata or {}).get("dataset_id"),
+        isolated_review=isolated_review,
+    )
     require(re.fullmatch(r"[0-9a-f]{64}", ingestion_key or ""), "invalid ingestion key")
     with collection_lock(contract, source):
         now = timezone.now()

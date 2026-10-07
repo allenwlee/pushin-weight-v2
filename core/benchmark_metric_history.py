@@ -192,7 +192,7 @@ def prepare_history(manifest):
     return contract, source, key, payload, metadata
 
 
-def import_history(manifest, *, apply=False):
+def import_history(manifest, *, apply=False, isolated_review=False):
     contract, source, key, payload, metadata = prepare_history(manifest)
     if not apply:
         from core.benchmark_metric_store import prepare_rows
@@ -208,4 +208,11 @@ def import_history(manifest, *, apply=False):
             "observations": len(prepared),
             "values": sum(len(values) for _, values in prepared),
         }
-    return persist_source(contract, source, key, payload, source_metadata=metadata)
+    return persist_source(
+        contract,
+        source,
+        key,
+        payload,
+        source_metadata=metadata,
+        isolated_review=isolated_review,
+    )

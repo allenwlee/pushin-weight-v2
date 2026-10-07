@@ -17,6 +17,7 @@ class Command(BaseCommand):
         parser.add_argument("--kind", choices=["archive", "engagement"], required=True)
         parser.add_argument("--contract", required=True)
         parser.add_argument("--apply", action="store_true")
+        parser.add_argument("--isolated-review", action="store_true")
         parser.add_argument("--allow-incomplete", action="store_true")
 
     def handle(self, *args, **opts):
@@ -92,7 +93,11 @@ class Command(BaseCommand):
                     ],
                 }
                 if payload["rows"]:
-                    result = import_history(manifest, apply=opts["apply"])
+                    result = import_history(
+                        manifest,
+                        apply=opts["apply"],
+                        isolated_review=opts["isolated_review"],
+                    )
                     if opts["apply"]:
                         self.check_run(result)
                         report["runs"].append(str(result.pk))
@@ -154,6 +159,7 @@ class Command(BaseCommand):
                             "hf",
                             digest([contract.contract_hash, saved["sha256"], mode]),
                             payload,
+                            isolated_review=opts["isolated_review"],
                             source_metadata={
                                 "ingestion_mode": "direct"
                                 if mode == "observed_snapshot"

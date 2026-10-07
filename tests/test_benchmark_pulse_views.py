@@ -13,6 +13,16 @@ def secure_requests(settings):
     settings.SECURE_SSL_REDIRECT = False
 
 
+def allow_fixture_uses(spec):
+    from core.benchmark_attribution import USES
+    from tests.test_benchmark_use_policy import decision
+
+    policy = {use: decision() for use in USES}
+    policy["datasets"] = {"cfahlgren1/hub-stats": {use: decision() for use in USES}}
+    spec["source_configuration"]["hf"]["use_policy"] = policy
+    spec["methodology"]["source_use_policy"] = {"x": policy}
+
+
 def comparison():
     _, spec = setup_spec()
     subject = spec["mappings"][0]["subject_id"]
@@ -42,6 +52,7 @@ def comparison():
             ],
         }
     }
+    allow_fixture_uses(spec)
     return configure_collection(spec)
 
 
@@ -133,6 +144,7 @@ def test_late_brand_posts_change_served_values_without_product_attribution(clien
             ],
         }
     }
+    allow_fixture_uses(spec)
     contract = configure_collection(spec)
     import_history(manifest(contract), apply=True)
     for day in [10, 11]:
@@ -155,3 +167,42 @@ def test_late_brand_posts_change_served_values_without_product_attribution(clien
     assert after["lines"][1]["points"][0]["raw_value"] == "6"
     assert after["lines"][1]["subject"]["kind"] == "product"
     assert after["lines"][0]["subject"]["kind"] == "brand"
+
+
+@override_settings(BENCHMARK_METRICS_ENABLED=True)
+def test_unresolved_policy_blocks_page_and_json_even_when_enabled(client):
+    c = comparison()
+    from core.models import DataSource
+
+    source = DataSource.objects.get(pk="hf")
+    source.metadata["use_policy"] = {
+        "public_charts": {"status": "unresolved"},
+        "numeric_export": {"status": "unresolved"},
+    }
+    source.save(update_fields=["metadata"])
+    for name in ("benchmark_pulse", "benchmark_series"):
+        response = client.get(
+            reverse(name, args=[c.pk, "fixture"]), {"end": "2026-09-12"}
+        )
+        assert response.status_code == 403
+        assert "no-store" in response.headers["Cache-Control"]
+
+
+@override_settings(BENCHMARK_METRICS_ENABLED=True, BENCHMARK_REVIEW_ENABLED=True)
+def test_review_setting_does_not_allow_anonymous_bypass(client):
+    c = comparison()
+    from core.models import DataSource
+
+    source = DataSource.objects.get(pk="hf")
+    source.metadata["use_policy"] = {
+        "public_charts": {"status": "unresolved"},
+        "numeric_export": {"status": "unresolved"},
+    }
+    source.save(update_fields=["metadata"])
+    assert (
+        client.get(
+            reverse("benchmark_series", args=[c.pk, "fixture"]),
+            {"review": "1", "end": "2026-09-12"},
+        ).status_code
+        == 403
+    )

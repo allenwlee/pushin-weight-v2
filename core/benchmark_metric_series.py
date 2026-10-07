@@ -63,7 +63,7 @@ def normalize_points(points, launch_date, policy):
     }
 
 
-def post_points(contract, line, days):
+def post_points(contract, line, days, *, allow_missing_coverage=False):
     subject = contract.catalog_snapshot["subjects"][line["subject_id"]]
     policy = line.get("post_policy", "legacy_brand")
     if policy == "legacy_brand":
@@ -90,7 +90,7 @@ def post_points(contract, line, days):
         .annotate(count=Count("pk", distinct=True))
     }
     coverage = contract.methodology.get("post_coverage")
-    if coverage:
+    if coverage and not allow_missing_coverage:
         require(
             coverage["start"] <= days[0] <= days[-1] <= coverage["end"],
             "post dates outside known collection coverage",
@@ -99,9 +99,15 @@ def post_points(contract, line, days):
     return [
         {
             "date": day,
-            "raw_value": str(counts.get(day, 0)),
-            "coverage": "partial" if day >= today else "observed",
-            "observed": True,
+            "raw_value": str(counts.get(day, 0))
+            if not coverage or coverage["start"] <= day <= coverage["end"]
+            else None,
+            "coverage": "missing"
+            if coverage and not coverage["start"] <= day <= coverage["end"]
+            else "partial"
+            if day >= today
+            else "observed",
+            "observed": not coverage or coverage["start"] <= day <= coverage["end"],
             "source_date": day,
             "source_timezone": "UTC",
             "measurement_kind": "flow",
@@ -537,7 +543,15 @@ def build_comparison(contract, preset_key, start_date=None, end_date=None):
     if coverage:
         default_end = min(default_end, coverage["end"])
     end = native_date(end_date or default_end)
-    start = native_date(start_date or launch)
+    history = preset.get("release_history")
+    default_start = (
+        first - timedelta(days=history.get("lookback_days", 30))
+        if history is not None
+        else first
+    )
+    start = native_date(start_date) if start_date else default_start
+    if history is not None:
+        first = min(first, start)
     require(
         first <= start <= end and 0 <= (end - first).days < 366,
         "comparison must start at or after reviewed launch and span at most 366 days",
@@ -549,13 +563,40 @@ def build_comparison(contract, preset_key, start_date=None, end_date=None):
     require(0 < len(preset.get("lines", [])) <= 20, "invalid line count")
     for line in preset["lines"]:
         subject = contract.catalog_snapshot["subjects"][line["subject_id"]]
-        if line["source"] == "x":
-            points = post_points(contract, line, days)
+        interpretation = None
+        if (
+            history is not None
+            and line["source"] == "arena"
+            and line["metric_key"] == "rank"
+        ):
+            from core.benchmark_predecessor import predecessor_points
+
+            points, definition, mapping_ids, interpretation = predecessor_points(
+                contract, line, days
+            )
+        elif line["source"] == "x":
+            points = post_points(
+                contract, line, days, allow_missing_coverage=history is not None
+            )
             definition = None
             mapping_ids = []
         else:
             points, definition, mapping_ids = metric_points(contract, line, days)
-        baseline = normalize_points(points, launch, line.get("baseline", "launch"))
+        baseline = normalize_points(
+            points,
+            start.isoformat() if interpretation else launch,
+            "first_observed" if interpretation else line.get("baseline", "launch"),
+        )
+        if interpretation:
+            baseline_point = next(
+                (p for p in points if p["date"] == baseline["date"]), {}
+            )
+            baseline.update(
+                measured_subject_id=baseline_point.get("measured_subject_id"),
+                measured_subject=baseline_point.get("measured_subject"),
+                proxy=baseline_point.get("proxy", False),
+                reference="requested_range_start",
+            )
         lines.append(
             {
                 "key": line["key"],
@@ -589,6 +630,7 @@ def build_comparison(contract, preset_key, start_date=None, end_date=None):
                 if line["metric_key"] == "rank"
                 else None,
                 "baseline": baseline,
+                **({"interpretation": interpretation} if interpretation else {}),
                 "points": [p for p in points if p["date"] >= start.isoformat()],
             }
         )

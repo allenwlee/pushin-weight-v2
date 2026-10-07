@@ -27,6 +27,7 @@ class Command(BaseCommand):
         parser.add_argument("--end-date", required=True)
         parser.add_argument("--batch-id", default=None)
         parser.add_argument("--apply", action="store_true")
+        parser.add_argument("--isolated-review", action="store_true")
         parser.add_argument("--max-requests", type=int, default=20)
         parser.add_argument("--max-seconds", type=int, default=120)
         parser.add_argument("--max-bytes", type=int, default=8 * 1024 * 1024)
@@ -96,7 +97,14 @@ class Command(BaseCommand):
                         selected = [
                             {
                                 "product_key": str(m.subject.product_id),
-                                **({"account_identifier": m.external_identifier, "account_kind": m.identifier_scope} if m.source_subject_kind == "account" else {"repo_id": m.external_identifier}),
+                                **(
+                                    {
+                                        "account_identifier": m.external_identifier,
+                                        "account_kind": m.identifier_scope,
+                                    }
+                                    if m.source_subject_kind == "account"
+                                    else {"repo_id": m.external_identifier}
+                                ),
                             }
                             for m in contract.mappings.filter(
                                 source_id="hf"
@@ -112,8 +120,12 @@ class Command(BaseCommand):
                         )
                     else:
                         result = sources.arena(
-                            budget, params["start_date"], params["end_date"],
-                            config=contract.source_configuration[source].get("config", "text_style_control"),
+                            budget,
+                            params["start_date"],
+                            params["end_date"],
+                            config=contract.source_configuration[source].get(
+                                "config", "text_style_control"
+                            ),
                         )
                     result["request_count"] = options["max_requests"] - budget.remaining
                     return result
@@ -122,6 +134,7 @@ class Command(BaseCommand):
                     contract,
                     source,
                     key,
+                    isolated_review=options["isolated_review"],
                     request_params=params,
                     source_metadata={
                         "ingestion_mode": "direct",

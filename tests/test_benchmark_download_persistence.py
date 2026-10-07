@@ -188,7 +188,14 @@ def test_fourth_benchmark_needs_only_its_own_score_definition():
         identifier_scope="",
         external_identifier="fixture-model",
     )
-    spec["source_configuration"] = {"fixture_bench": {"metrics": ["score"]}}
+    from tests.test_benchmark_use_policy import decision
+
+    spec["source_configuration"] = {
+        "fixture_bench": {
+            "metrics": ["score"],
+            "use_policy": {use: decision() for use in ("collection", "retention")},
+        }
+    }
     contract = configure_collection(spec)
     data = {
         "rows": [
