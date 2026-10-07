@@ -43,7 +43,7 @@ relations:
     - subject_relationships
     - post_subject_attributions
     - metric_types
-    - source_metrics
+    - metrics
     - metric_collection_contracts
     - source_subject_mappings
     - metric_collection_runs
@@ -215,7 +215,7 @@ relations:
     - subject_relationships
     - post_subject_attributions
     - metric_types
-    - source_metrics
+    - metrics
     - metric_collection_contracts
     - source_subject_mappings
     - metric_collection_runs
@@ -540,7 +540,7 @@ validation:
     - subject_relationships
     - post_subject_attributions
     - metric_types
-    - source_metrics
+    - metrics
     - metric_collection_contracts
     - source_subject_mappings
     - metric_collection_runs

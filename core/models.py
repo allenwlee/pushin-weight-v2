@@ -7509,7 +7509,7 @@ class SourceMetric(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
-        db_table = "source_metrics"
+        db_table = "metrics"
         indexes = [
             models.Index(
                 fields=["metric_type", "source"], name="idx_metric_type_source"

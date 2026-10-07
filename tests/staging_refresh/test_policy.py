@@ -287,7 +287,7 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "subject_relationships",
         "post_subject_attributions",
         "metric_types",
-        "source_metrics",
+        "metrics",
         "metric_collection_contracts",
         "source_subject_mappings",
         "metric_collection_runs",
@@ -382,9 +382,9 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
     } == policy.relations.optional_source_tables
 
     assert {
-        f"{table}_id_seq"
+        f"{'source_metrics' if table == 'metrics' else table}_id_seq"
         for table in policy.relations.optional_source_tables
-        if f"{table}_id_seq" in policy.relations.sequences
+        if f"{'source_metrics' if table == 'metrics' else table}_id_seq" in policy.relations.sequences
     } == policy.relations.optional_source_sequences
 
 
@@ -516,7 +516,7 @@ def test_benchmark_evidence_is_copied_with_optional_pre_migration_sources():
         "subject_relationships",
         "post_subject_attributions",
         "metric_types",
-        "source_metrics",
+        "metrics",
         "metric_collection_contracts",
         "source_subject_mappings",
         "metric_collection_runs",
