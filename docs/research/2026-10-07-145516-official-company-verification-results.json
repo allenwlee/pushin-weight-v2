@@ -1,0 +1,368 @@
+{
+  "meta": {
+    "cases_sha256": "90dce170b776c360c35149db521392e738b82960b17e6760a8e315197d7c426d",
+    "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
+    "max_calls": 8,
+    "max_usd": "0.02",
+    "max_passes": 1,
+    "scope": "supplied stored + external research evidence, no production mutations",
+    "rubric": "Cohere/Abacus/Nous/closed lab accepted with direct development citations; hosts/news/model users not accepted; IoTeX accepted only with direct technical contribution citation, otherwise review. Proposed owner labels remain separate."
+  },
+  "summary": {
+    "cases": 8,
+    "passed": 5,
+    "all_passed": false,
+    "estimated_usd": "0.00102672",
+    "conservative_reserved_usd": "0.00427884",
+    "unknown_cost_cases": [],
+    "physical_requests": 8,
+    "production_mutations": 0,
+    "case_path": "docs/research/2026-10-07-145516-official-company-verification-cases.json"
+  },
+  "results": [
+    {
+      "key": "crusoe",
+      "expected": "not_accepted",
+      "owner_proposed_label": "accepted",
+      "outcome": "rejected",
+      "policy": "official-model-developer-v2",
+      "prompt_sha256": "c5da86146a0140420d5a86e10a4c7418a60e773427dcf648434c369e4a939f1e",
+      "decision": {
+        "outcome": "rejected",
+        "organization_name": "Crusoe",
+        "model_types": [],
+        "rationale": "The account's own identity and posts consistently position Crusoe as an AI infrastructure company that provides compute to serve models developed by others (e.g., Hermes Agent, Nemotron, Kimi, GLM). The Hugging Face profile describes quants as 'Auto-generated quantized models courtesy of CrusoeAI compute' and lists 'Model developer: Meta' for the model repo, further indicating Crusoe does not develop models. No evidence shows Crusoe develops or releases AI models. Thus, the account does not qualify as an official model-developer account.",
+        "contradictions": [
+          "The supplied evidence consistently describes an infrastructure provider, not a model developer.",
+          "The Hugging Face external source explicitly lists 'Model developer: Meta' for the model repository."
+        ],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "account:profile_bio_text",
+              "quote": "The AI factory company. We are on a mission to accelerate the abundance of energy and intelligence."
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "account:profile_bio_text",
+              "quote": "The AI factory company. We are on a mission to accelerate the abundance of energy and intelligence."
+            }
+          ],
+          "model_developer": []
+        }
+      },
+      "error_type": null,
+      "label_passed": true,
+      "citation_passed": true,
+      "passed": true,
+      "usage": {
+        "input_tokens": 1364,
+        "output_tokens": 303
+      },
+      "estimated_usd": "0.00013638",
+      "reserved_usd": "0.00054234",
+      "seconds": 9.22
+    },
+    {
+      "key": "cohere",
+      "expected": "accepted",
+      "owner_proposed_label": "accepted",
+      "outcome": "accepted",
+      "policy": "official-model-developer-v2",
+      "prompt_sha256": "c5da86146a0140420d5a86e10a4c7418a60e773427dcf648434c369e4a939f1e",
+      "decision": {
+        "outcome": "accepted",
+        "organization_name": "Cohere",
+        "model_types": [
+          "language",
+          "embedding"
+        ],
+        "rationale": "The account self-identifies as 'Cohere' with consistent bios mentioning building private systems and open-source models, plus links to cohere.com, a first-party domain. External first-party sources from CohereLabs (Cohere's research lab) explicitly state Cohere builds models. Posts refer to 'North Small Translate' and 'Embed 5 Pro' as their models, with Embed 5 Pro described as a retrieval/embedding model and North Small Translate as a language model. The account is verified as a Business. No contradictory evidence of parody, fan, or personal identity is provided.",
+        "contradictions": [],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "account:profile_bio_text",
+              "quote": "AI for Empowerment. We build private systems for enterprise, and open-source models for builders"
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "account:profile_bio_text",
+              "quote": "We build private systems for enterprise, and open-source models for builders"
+            }
+          ],
+          "model_developer": [
+            {
+              "source_id": "post:2105285145267687637",
+              "quote": "Embed 5 Pro is our best retrieval model yet."
+            },
+            {
+              "source_id": "post:2098081717529551246",
+              "quote": "North Small Translate achieves an 83.6 score"
+            },
+            {
+              "source_id": "external:1",
+              "quote": "Developed by: Cohere and Cohere Labs."
+            }
+          ]
+        }
+      },
+      "error_type": null,
+      "label_passed": true,
+      "citation_passed": false,
+      "passed": false,
+      "usage": {
+        "input_tokens": 1415,
+        "output_tokens": 380
+      },
+      "estimated_usd": "0.0001533",
+      "reserved_usd": "0.00056532",
+      "seconds": 12.15
+    },
+    {
+      "key": "abacus",
+      "expected": "accepted",
+      "owner_proposed_label": "accepted",
+      "outcome": "error",
+      "policy": "official-model-developer-v2",
+      "prompt_sha256": "c5da86146a0140420d5a86e10a4c7418a60e773427dcf648434c369e4a939f1e",
+      "decision": null,
+      "error_type": "ValueError",
+      "label_passed": false,
+      "citation_passed": true,
+      "passed": false,
+      "usage": {
+        "input_tokens": 1903,
+        "output_tokens": 350
+      },
+      "estimated_usd": "0.00017718",
+      "reserved_usd": "0.00063126",
+      "seconds": 14.58
+    },
+    {
+      "key": "dailydev",
+      "expected": "not_accepted",
+      "owner_proposed_label": "not_accepted",
+      "outcome": "error",
+      "policy": "official-model-developer-v2",
+      "prompt_sha256": "c5da86146a0140420d5a86e10a4c7418a60e773427dcf648434c369e4a939f1e",
+      "decision": null,
+      "error_type": "ValueError",
+      "label_passed": false,
+      "citation_passed": true,
+      "passed": false,
+      "usage": {
+        "input_tokens": 1321,
+        "output_tokens": 288
+      },
+      "estimated_usd": "0.0001311",
+      "reserved_usd": "0.00052866",
+      "seconds": 7.31
+    },
+    {
+      "key": "iotex",
+      "expected": "development_citation_or_review",
+      "owner_proposed_label": "not_accepted",
+      "outcome": "review_needed",
+      "policy": "official-model-developer-v2-web3-v1",
+      "prompt_sha256": "f0fb71f469d6244d568deb119f60319422acfedea38a06f037c24ec7477e9c1f",
+      "decision": {
+        "outcome": "review_needed",
+        "organization_name": "IoTeX",
+        "model_types": [
+          "other"
+        ],
+        "rationale": "The account consistently identifies as IoTeX, the blockchain platform for Real-World AI. It is verified as a Business account. However, the evidence for model development is mixed. The 'Trio' model is described as a 'foundation model' and 'world model' built at MachineFi Lab, which could indicate development. Yet, the other post explicitly routes to models from other organizations (OpenAI, Anthropic, Google, etc.), suggesting IoTeX is primarily an aggregator/platform. This ambiguity, combined with the blockchain (Web3) association, warrants review. The strongest new model claim ('Ox Alpha' / GLM 5.3 Flash) is attributed to @Zai_org and @ZixuanLi_, not IoTeX itself. The 'Trio' evidence is suggestive but not fully definitive in the supplied excerpts.",
+        "contradictions": [],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "account:profile_bio_text",
+              "quote": "The blockchain platform for Real-World AI."
+            },
+            {
+              "source_id": "post:2092659326649610476:bio",
+              "quote": "The blockchain platform for Real-World AI."
+            },
+            {
+              "source_id": "post:2096705579641360770:bio",
+              "quote": "The blockchain platform for Real-World AI."
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "account:profile_bio_text",
+              "quote": "The blockchain platform for Real-World AI."
+            }
+          ],
+          "model_developer": [
+            {
+              "source_id": "external:0",
+              "quote": "a foundation model trained for operations"
+            },
+            {
+              "source_id": "external:1",
+              "quote": "built at MachineFi Lab by the core team behind IoTeX"
+            }
+          ]
+        }
+      },
+      "error_type": null,
+      "label_passed": true,
+      "citation_passed": true,
+      "passed": true,
+      "usage": {
+        "input_tokens": 1517,
+        "output_tokens": 435
+      },
+      "estimated_usd": "0.00016932",
+      "reserved_usd": "0.00059736",
+      "seconds": 9.84
+    },
+    {
+      "key": "invideo",
+      "expected": "not_accepted",
+      "owner_proposed_label": "not_accepted",
+      "outcome": "review_needed",
+      "policy": "official-model-developer-v2",
+      "prompt_sha256": "c5da86146a0140420d5a86e10a4c7418a60e773427dcf648434c369e4a939f1e",
+      "decision": {
+        "outcome": "review_needed",
+        "organization_name": null,
+        "model_types": [],
+        "rationale": "The account presents as an official business for invideo, an AI video platform, and the post and external source reference model integration. However, the supplied evidence does not establish that Invideo itself is a developer/releaser of AI models. The bio describes a platform for creating videos, and the external source emphasizes using other providers' models ('more than 200 image, video, audio, and music models'). The post mentions 'Minimax H3 is now live,' implying integration of another company's model, not development. No supplied evidence positively identifies Invideo as a model developer (as opposed to a platform leveraging external models), nor does it provide contradictory claims. The identity is consistent, but the core 'model_developer' claim lacks support in the evidence, necessitating review.",
+        "contradictions": [],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "account:profile_bio_text",
+              "quote": "The AI video platform for serious creatives."
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "account:profile_bio_text",
+              "quote": "The AI video platform for serious creatives."
+            }
+          ],
+          "model_developer": []
+        }
+      },
+      "error_type": null,
+      "label_passed": true,
+      "citation_passed": true,
+      "passed": true,
+      "usage": {
+        "input_tokens": 1004,
+        "output_tokens": 257
+      },
+      "estimated_usd": "0.0001065",
+      "reserved_usd": "0.00048102",
+      "seconds": 10.44
+    },
+    {
+      "key": "nousresearch",
+      "expected": "accepted",
+      "owner_proposed_label": null,
+      "outcome": "accepted",
+      "policy": "official-model-developer-v2-web3-v1",
+      "prompt_sha256": "f0fb71f469d6244d568deb119f60319422acfedea38a06f037c24ec7477e9c1f",
+      "decision": {
+        "outcome": "accepted",
+        "organization_name": "Nous Research",
+        "model_types": [
+          "other"
+        ],
+        "rationale": "The supplied evidence consistently identifies the account as the official Nous Research organization, and the model card explicitly states that the model was fine-tuned by Nous Research, establishing first-party model development. The blockchain mention on the website is secondary to the direct technical development evidence and does not undermine the qualified claims, as the model card provides explicit development contribution.",
+        "contradictions": [],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "profile",
+              "quote": "NousResearch company https://nousresearch.com/"
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "profile",
+              "quote": "NousResearch company https://nousresearch.com/"
+            }
+          ],
+          "model_developer": [
+            {
+              "source_id": "model",
+              "quote": "This model was fine-tuned by Nous Research, with Teknium and Karan4D leading the fine tuning process"
+            }
+          ]
+        }
+      },
+      "error_type": null,
+      "label_passed": true,
+      "citation_passed": true,
+      "passed": true,
+      "usage": {
+        "input_tokens": 901,
+        "output_tokens": 185
+      },
+      "estimated_usd": "0.00008736",
+      "reserved_usd": "0.00049902",
+      "seconds": 3.8
+    },
+    {
+      "key": "closed-speech-no-hf",
+      "expected": "accepted",
+      "owner_proposed_label": null,
+      "outcome": "accepted",
+      "policy": "official-model-developer-v2",
+      "prompt_sha256": "c5da86146a0140420d5a86e10a4c7418a60e773427dcf648434c369e4a939f1e",
+      "decision": {
+        "outcome": "accepted",
+        "organization_name": "Closed Speech Lab",
+        "model_types": [
+          "speech"
+        ],
+        "rationale": "The account self-identifies as the official account of an organization that trains proprietary speech generation models, and the release statement documents a trained model released via API without public weights, satisfying the model developer criterion.",
+        "contradictions": [],
+        "claims": {
+          "organization": [
+            {
+              "source_id": "bio",
+              "quote": "Official account of Closed Speech Lab."
+            }
+          ],
+          "official_account": [
+            {
+              "source_id": "bio",
+              "quote": "Official account of Closed Speech Lab."
+            }
+          ],
+          "model_developer": [
+            {
+              "source_id": "release",
+              "quote": "We trained and released Speech-One through our API."
+            }
+          ]
+        }
+      },
+      "error_type": null,
+      "label_passed": true,
+      "citation_passed": true,
+      "passed": true,
+      "usage": {
+        "input_tokens": 676,
+        "output_tokens": 139
+      },
+      "estimated_usd": "0.00006558",
+      "reserved_usd": "0.00043386",
+      "seconds": 2.71
+    }
+  ],
+  "limits": [
+    "Diagnostic eight-case test is not all green; preserve all frozen failures. No production external HF evidence ingestion implemented by this test.",
+    "Cohere outcome correct but strict frozen citation grader only allows external source; its valid existing X development citations cause grading failure.",
+    "Abacus/daily.dev failed response validation; failed raw response body was not retained by this one-off harness, so exact causes are unverified. No repeated calls within this frozen pass.",
+    "Nous fixture is supplied public primary-source evidence; no production X account or list addition is asserted. All positive nominations still need owner review."
+  ]
+}

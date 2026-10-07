@@ -17,6 +17,25 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 LIST_ID = 2067062923525275922
 
 
+def test_candidates_show_existing_official_brands_without_duplicate_counts(owner_client):
+    from core.models import Brand, BrandAccount, Role
+    from core.official_company_candidates import CANDIDATE_POLICY
+
+    a = Account.objects.create(author_id="1019503378517200897", handle="SenseTime_AI")
+    state = OfficialCompanyAccountState.objects.create(account=a, evidence_hash="b" * 64, candidate_priority=1, candidate_policy_version=CANDIDATE_POLICY, status="review_needed")
+    role, _ = Role.objects.get_or_create(key="official")
+    for key in ["sensechat", "sensenova"]:
+        BrandAccount.objects.create(account=a, brand=Brand.objects.create(nickname=key), role=role)
+    response = owner_client.get(reverse("product_review"), {"candidate_status": "already_tracked"})
+    report = response.context["official_candidates"]
+    assert report["summary"]["already_tracked"] == 1
+    assert report["summary"]["llm_evaluated"] == 0
+    assert report["page"].paginator.count == 1
+    assert report["rows"][0]["state"].pk == state.pk
+    assert set(report["rows"][0]["tracked_brands"]) == {"sensechat", "sensenova"}
+    assert b"sensechat" in response.content and b"sensenova" in response.content
+
+
 @pytest.fixture
 def owner_client(settings):
     settings.SECURE_SSL_REDIRECT = False
@@ -176,3 +195,58 @@ def test_already_open_legacy_approval_form_still_saves(owner_client):
     assert response.url == f"/admin/products/{proposal.pk}/?locale=en"
     proposal.refresh_from_db()
     assert proposal.review_status == "approved"
+
+
+def test_candidate_filters_preserve_pagination_and_exclude_unscreened(owner_client):
+    from core.official_company_candidates import CANDIDATE_POLICY
+
+    for number in range(53):
+        account = Account.objects.create(author_id=str(94000 + number), handle=f"selected_lab_{number}")
+        OfficialCompanyAccountState.objects.create(
+            account=account, evidence_hash="f" * 64, status="pending",
+            candidate_priority=1 if number == 52 else 2, candidate_policy_version=CANDIDATE_POLICY,
+        )
+    for identifier, priority, policy in [("95000", None, ""), ("95001", 2, "old-filter")]:
+        OfficialCompanyAccountState.objects.create(
+            account=Account.objects.create(author_id=identifier, handle="legacy_unfiltered_" + identifier),
+            evidence_hash="a" * 64, candidate_priority=priority, candidate_policy_version=policy,
+        )
+    response = owner_client.get("/admin", {"candidate_page": 2, "candidate_status": "waiting", "locale": "ja", "accounts_page": 1})
+    candidates = response.context["official_candidates"]
+    assert candidates["summary"]["selected"] == 53
+    assert len(candidates["rows"]) == 3 and candidates["page"].paginator.count == 53
+    assert "candidate_status=waiting" in candidates["previous_url"] and "locale=ja" in candidates["previous_url"]
+    assert "accounts_page=1" in candidates["previous_url"]
+    response = owner_client.get("/admin", {"candidate_q": "@selected_lab_52", "candidate_status": "waiting"})
+    assert [r["state"].account.handle for r in response.context["official_candidates"]["rows"]] == ["selected_lab_52"]
+    response = owner_client.get("/admin", {"candidate_status": "unknown", "candidate_q": '"><script>alert(1)</script>'})
+    assert response.context["official_candidates"]["status"] == "all"
+    assert '<script>alert(1)</script>' not in response.content.decode()
+
+
+def test_candidate_llm_count_uses_completed_attempts_not_owner_or_failures():
+    from core.models import OfficialCompanyAttempt
+    from core.official_company_admin import candidate_report
+    from core.official_company_candidates import CANDIDATE_POLICY
+
+    for index, model, attempt_status, state_status in [
+        (0, "test-model", "completed", "review_needed"),
+        (1, "owner-attestation", "owner_attested", "accepted"),
+        (2, "test-model", "failed", "review_needed"),
+    ]:
+        state = OfficialCompanyAccountState.objects.create(
+            account=Account.objects.create(author_id=str(96000 + index)),
+            evidence_hash="a" * 64, model=model, status=state_status,
+            candidate_priority=1, candidate_policy_version=CANDIDATE_POLICY,
+        )
+        for number in range(2):
+            OfficialCompanyAttempt.objects.create(
+                state=state, evidence_hash=state.evidence_hash, claim_token=f"{index}-{number}",
+                model=model, policy_version="test", status=attempt_status, reserved_usd=0,
+            )
+    report = candidate_report()
+    assert report["summary"]["selected"] == 3
+    assert report["summary"]["llm_evaluated"] == 1
+    assert report["summary"]["owner_settled"] == 1
+    assert report["summary"]["review_needed"] == 2
+    assert candidate_report(status="owner_settled")["page"].paginator.count == 1

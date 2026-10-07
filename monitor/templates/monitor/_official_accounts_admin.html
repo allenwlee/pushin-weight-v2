@@ -52,9 +52,9 @@
     </table>
   </div>
   <nav class="pagination" aria-label="{{ admin_copy.accounts }}">
-    {% if official_accounts.page.has_previous %}<a href="?accounts_page={{ official_accounts.page.previous_page_number }}&amp;locale={{ active_locale }}">{{ admin_copy.previous }}</a>{% endif %}
+    {% if official_accounts.previous_url %}<a href="{{ official_accounts.previous_url }}">{{ admin_copy.previous }}</a>{% endif %}
     <span>{{ admin_copy.page }} {{ official_accounts.page.number }} {{ admin_copy.of }} {{ official_accounts.page.paginator.num_pages }}</span>
-    {% if official_accounts.page.has_next %}<a href="?accounts_page={{ official_accounts.page.next_page_number }}&amp;locale={{ active_locale }}">{{ admin_copy.next }}</a>{% endif %}
+    {% if official_accounts.next_url %}<a href="{{ official_accounts.next_url }}">{{ admin_copy.next }}</a>{% endif %}
   </nav>
   {% else %}<p>{{ admin_copy.empty }}</p>{% endif %}
 </section>

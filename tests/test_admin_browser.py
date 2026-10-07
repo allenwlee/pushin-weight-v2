@@ -103,6 +103,111 @@ class AdminBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_hf_approved_account_and_list_history_are_visible(self):
+        from unittest.mock import Mock, patch
+
+        import httpx
+
+        from core.official_company_accounts import enqueue_account, register_account
+        from core.official_company_candidates import CANDIDATE_POLICY
+        from core.official_company_hf import verify, verify_review_candidates
+        from core.official_company_lists import sync_intents
+        from tests.test_official_company_hf import transport
+        from x_monitor.config import OfficialCompanyConfig
+
+        state = enqueue_account(Account.objects.create(author_id="92103", handle="examplelab", bio="We develop our own speech models."))
+        state.status = "review_needed"
+        state.candidate_policy_version = CANDIDATE_POLICY
+        state.last_error = "ValueError"
+        state.save()
+        route, _ = transport()
+        def public_verifier(evidence, decision, **kwargs):
+            with httpx.Client(transport=route) as client:
+                return verify(evidence, decision, client=client, **kwargs)
+        env_patch = patch.dict("os.environ", {"PUSHINWEIGHT_OFFICIAL_COMPANY_HF_SIGNING_KEY": "isolated-browser-key"})
+        env_patch.start()
+        self.addCleanup(env_patch.stop)
+        with patch("core.official_company_hf.verify", public_verifier):
+            self.assertEqual(verify_review_candidates(limit=1)["approved"], 1)
+        cfg = OfficialCompanyConfig(enabled=True, registration_enabled=True, list_sync_enabled=True)
+        self.assertIsNotNone(register_account(state.pk, cfg=cfg))
+        provider = Mock()
+        provider.members.return_value = (set(), True)
+        sync_intents(cfg=cfg, client=provider)
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = self._context(browser).new_page()
+                page.goto(self.live_server_url + "/admin?locale=en&candidate_status=hf_verified")
+                queue = page.locator("#candidate-queue")
+                self.assertEqual(queue.locator('[data-candidate-count="hf_verified"]').inner_text(), "1")
+                self.assertEqual(queue.locator('[data-candidate-count="review_needed"]').inner_text(), "0")
+                row = queue.locator('[data-admin-candidate="92103"]')
+                self.assertTrue(row.get_by_text("Registered", exact=True).is_visible())
+                self.assertEqual(row.get_by_role("link", name="examplelab/speech").get_attribute("href"), "https://huggingface.co/examplelab/speech")
+                self.assertTrue(page.locator('[data-admin-account="92103"]').get_by_text("Add acknowledged", exact=True).is_visible())
+                shot = Path(__file__).resolve().parents[1] / ".pytest-tmp/admin-hf-verified.png"
+                shot.parent.mkdir(exist_ok=True)
+                page.screenshot(path=str(shot), full_page=True)
+            finally:
+                browser.close()
+
+    def test_candidate_queue_tracks_waiting_and_rejected_accounts(self):
+        from core.models import Brand, BrandAccount, Role
+        from core.official_company_candidates import CANDIDATE_POLICY
+
+        for identifier, handle, status, priority in [
+            ("92101", "waiting_lab", "pending", 1),
+            ("92102", "rejected_company", "rejected", 2),
+        ]:
+            OfficialCompanyAccountState.objects.create(
+                account=Account.objects.create(author_id=identifier, handle=handle),
+                evidence_hash="e" * 64, status=status,
+                candidate_priority=priority, candidate_policy_version=CANDIDATE_POLICY,
+                decision={"outcome": "rejected", "rationale": "No model development evidence."}
+                if status == "rejected" else {},
+            )
+        role, _ = Role.objects.get_or_create(key="official")
+        BrandAccount.objects.create(account_id="92101", brand=Brand.objects.create(nickname="known_model"), role=role)
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = self._context(browser).new_page()
+                errors = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                page.goto(self.live_server_url + "/admin?locale=en")
+                queue = page.locator("#candidate-queue")
+                self.assertTrue(queue.is_visible())
+                self.assertTrue(queue.get_by_text("@waiting_lab", exact=True).is_visible())
+                self.assertTrue(queue.get_by_text("@rejected_company", exact=True).is_visible())
+                self.assertEqual(queue.locator('[data-candidate-count="selected"]').inner_text(), "2")
+                self.assertEqual(queue.locator('[data-candidate-count="llm_evaluated"]').inner_text(), "0")
+                self.assertEqual(queue.locator('[data-candidate-count="already_tracked"]').inner_text(), "1")
+                self.assertTrue(queue.get_by_text("Tracked brands: known_model", exact=True).is_visible())
+                queue.get_by_label("Candidate status").select_option("already_tracked")
+                queue.get_by_role("button", name="Apply filters").click()
+                queue = page.locator("#candidate-queue")
+                self.assertTrue(queue.get_by_text("@waiting_lab", exact=True).is_visible())
+                self.assertEqual(queue.get_by_text("@rejected_company", exact=True).count(), 0)
+                queue.get_by_label("Candidate status").select_option("rejected")
+                queue.get_by_role("button", name="Apply filters").click()
+                queue = page.locator("#candidate-queue")
+                self.assertFalse(queue.get_by_text("@waiting_lab", exact=True).count())
+                self.assertTrue(queue.get_by_text("@rejected_company", exact=True).is_visible())
+                for locale, title in [("zh_hans", "候选账号队列"), ("ja", "候補アカウントの待機列")]:
+                    page.goto(self.live_server_url + "/admin?locale=" + locale)
+                    self.assertTrue(page.get_by_role("heading", name=title, exact=True).is_visible())
+                page.goto(self.live_server_url + "/admin?locale=en")
+                page.set_viewport_size({"width": 390, "height": 844})
+                self.assertTrue(page.locator("#candidate-queue").is_visible())
+                self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
+                shot = Path(__file__).resolve().parents[1] / ".pytest-tmp/admin-candidate-queue.png"
+                shot.parent.mkdir(exist_ok=True)
+                page.screenshot(path=str(shot), full_page=True)
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
     def test_admin_route_has_discovery_details(self):
         now = timezone.now()
         for identifier, name, requested, acknowledged in [

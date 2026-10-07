@@ -1,0 +1,522 @@
+{
+  "observed_at": "2026-10-07T05:50:01.632005+00:00",
+  "scope": "Frozen eight-case supplied-evidence test. External excerpts are test enrichment only; no recurring HF fetches or production account modifications. Proposed labels and observed proof remain distinct.",
+  "max_calls": 8,
+  "max_usd": "0.02",
+  "max_passes": 1,
+  "cases": [
+    {
+      "key": "crusoe",
+      "expected": "not_accepted",
+      "owner_proposed_label": "accepted",
+      "evidence": {
+        "provider": "x",
+        "external_identifier": "1090015752780828672",
+        "handle": "CrusoeAI",
+        "display_name": "Crusoe",
+        "sources": [
+          {
+            "id": "account:profile_bio_text",
+            "text": "The AI factory company. We are on a mission to accelerate the abundance of energy and intelligence.",
+            "observed_at": "2026-09-24 19:01:07.846224+00:00"
+          },
+          {
+            "id": "post:2080016785160499364",
+            "text": "New walkthrough: wiring @NousResearch's Hermes Agent to Crusoe Managed Inference via the OpenAI-compatible endpoint, running on NVIDIA Nemotron™ 3, Kimi K2.6, and GLM 5.2.\n\nFull walkthrough → https://t.co/UYQIihJ2Si\n\n#AgenticAI #OpenWeights #openmodel @CrusoeDev",
+            "observed_at": "2026-07-24T21:30:23.333501+00:00"
+          },
+          {
+            "id": "post:2080846046758838575",
+            "text": "Open models are only as good as the infrastructure serving them.\n\nCrusoe now leads all 17 benchmarked API providers on GLM-5.2 (max): 417 tok/s output speed, 5.67s time-to-first-token.\n\nOpen models, engineered to lead: https://t.co/3QhZFYcO9B\n\n#AIInfrastructure #OpenModels #GLM52Max",
+            "observed_at": "2026-07-25T02:46:05.874398+00:00"
+          },
+          {
+            "id": "post:2103197844916310185",
+            "text": "AI Trends - AI Infra Summit, Jev, Qwen 4 https://t.co/dRRkc1fX7s",
+            "observed_at": "2026-09-24T19:01:07.858615+00:00"
+          },
+          {
+            "id": "post:2103197844916310185:bio",
+            "text": "The AI factory company. We are on a mission to accelerate the abundance of energy and intelligence.",
+            "observed_at": "2026-09-24T19:01:07.858615+00:00"
+          },
+          {
+            "id": "post:2103197844916310185:bio:url:0",
+            "text": "http://www.crusoe.ai",
+            "observed_at": "2026-09-24T19:01:07.858615+00:00"
+          },
+          {
+            "id": "external:0",
+            "text": "Crusoe AI company Verified https://crusoe.ai. Quants Auto-generated quantized models courtesy of CrusoeAI compute.",
+            "source_url": "https://huggingface.co/crusoeai",
+            "observed_at": "2026-10-07T05:50:01.632005+00:00",
+            "kind": "public-first-party-excerpt"
+          },
+          {
+            "id": "external:1",
+            "text": "Model developer: Meta",
+            "source_url": "https://huggingface.co/crusoeai/Llama-3.3-70B-Instruct",
+            "observed_at": "2026-10-07T05:50:01.632005+00:00",
+            "kind": "public-first-party-excerpt"
+          }
+        ],
+        "domains": [
+          "crusoe.ai"
+        ],
+        "policy_version": "official-model-developer-v2",
+        "verification_type": "Business",
+        "identity": "8a4751aaa663c8ccc9e74980b27396e29f2bc2051b19c369cb76cdbbe6d8429d"
+      },
+      "development_support": {}
+    },
+    {
+      "key": "cohere",
+      "expected": "accepted",
+      "owner_proposed_label": "accepted",
+      "evidence": {
+        "provider": "x",
+        "external_identifier": "1326237414025801729",
+        "handle": "cohere",
+        "display_name": "Cohere",
+        "sources": [
+          {
+            "id": "account:profile_bio_text",
+            "text": "AI for Empowerment. We build private systems for enterprise, and open-source models for builders, to help people lead better lives.",
+            "observed_at": "2026-09-30 13:15:30.059601+00:00"
+          },
+          {
+            "id": "post:2098081717529551246",
+            "text": "On the WMT benchmark (averaged across all languages), North Small Translate achieves an 83.6 score, outperforming models such as DeepL and Google Translate as well as open options, including GLM 5.2 and Mistral Large 3. https://t.co/B34EIvwepj",
+            "observed_at": "2026-09-10T16:15:27.837423+00:00"
+          },
+          {
+            "id": "post:2098081717529551246:bio",
+            "text": "AI for Empowerment. We build private systems for enterprise, and open-source models for builders, to help people lead better lives.",
+            "observed_at": "2026-09-10T16:15:27.837423+00:00"
+          },
+          {
+            "id": "post:2098081717529551246:bio:url:0",
+            "text": "http://cohere.com",
+            "observed_at": "2026-09-10T16:15:27.837423+00:00"
+          },
+          {
+            "id": "post:2105285145267687637",
+            "text": "Embed 5 Pro is our best retrieval model yet. It achieves the strongest average score of any model we measured on ViDoRe V3, beating out Voyage 4 Large, Gemini Embedding 2, and Jina Embeddings v5.\n\nIt also excels at image retrieval, parsed PDFs, and is trained on over 100 languages, meaning enterprises receive a wide range of capabilities within a single strong model.",
+            "observed_at": "2026-09-30T13:15:30.075387+00:00"
+          },
+          {
+            "id": "post:2105285145267687637:bio",
+            "text": "AI for Empowerment. We build private systems for enterprise, and open-source models for builders, to help people lead better lives.",
+            "observed_at": "2026-09-30T13:15:30.075387+00:00"
+          },
+          {
+            "id": "post:2105285145267687637:bio:url:0",
+            "text": "http://cohere.com",
+            "observed_at": "2026-09-30T13:15:30.075387+00:00"
+          },
+          {
+            "id": "external:0",
+            "text": "Cohere Labs is Cohere's research lab that seeks to solve complex machine learning problems.",
+            "source_url": "https://huggingface.co/CohereLabs",
+            "observed_at": "2026-10-07T05:50:01.632005+00:00",
+            "kind": "public-first-party-excerpt"
+          },
+          {
+            "id": "external:1",
+            "text": "Developed by: Cohere and Cohere Labs. Cohere Labs Command A Translate is an open weights research release.",
+            "source_url": "https://huggingface.co/CohereLabs/command-a-translate-08-2025",
+            "observed_at": "2026-10-07T05:50:01.632005+00:00",
+            "kind": "public-first-party-excerpt"
+          }
+        ],
+        "domains": [
+          "cohere.com"
+        ],
+        "policy_version": "official-model-developer-v2",
+        "verification_type": "Business",
+        "identity": "53c80548ba40eab9d331279a892ebbc3d37aebc5a3a562d8ccf85f1ac1fd4235"
+      },
+      "development_support": {
+        "external:1": [
+          "Developed by: Cohere",
+          "We created Smaug-72B-v0.1"
+        ]
+      }
+    },
+    {
+      "key": "abacus",
+      "expected": "accepted",
+      "owner_proposed_label": "accepted",
+      "evidence": {
+        "provider": "x",
+        "external_identifier": "1116005290762067969",
+        "handle": "abacusai",
+        "display_name": "Abacus.AI",
+        "sources": [
+          {
+            "id": "account:profile_bio_text",
+            "text": "A powerful AI Agent and SuperComputer - Build your company on  Abacus AI and ChatLLM - Access to 100+ AI models",
+            "observed_at": "2026-08-31 08:52:19.215204+00:00"
+          },
+          {
+            "id": "post:2078933461784756545",
+            "text": "Extremely proud to support and serve all open source AI models 🔥",
+            "observed_at": "2026-07-20T00:04:37+00:00"
+          },
+          {
+            "id": "post:2088253964727001279",
+            "text": "We will be open-sourcing a fully-featured desktop FREE AI app\n\n- one-click access to totally free models\n- limited but FREE access to DeepSeek Flash \n- 100+ connectors\n- solid coding and messaging agent\n\nFree and open-source models are getting stronger - get started on FREE,  graduate to paid once you are familiar with AI",
+            "observed_at": "2026-08-14T13:30:39.954463+00:00"
+          },
+          {
+            "id": "post:2088253964727001279:bio",
+            "text": "A powerful AI Agent and SuperComputer - Build your company on  Abacus AI and ChatLLM - Access to 100+ AI models",
+            "observed_at": "2026-08-14T13:30:39.954463+00:00"
+          },
+          {
+            "id": "post:2088253964727001279:bio:url:0",
+            "text": "http://abacus.ai",
+            "observed_at": "2026-08-14T13:30:39.954463+00:00"
+          },
+          {
+            "id": "post:2089598842991972744",
+            "text": "Qwen 3.8 27B is available on ChatLLM and is UNLIMITED",
+            "observed_at": "2026-08-18T06:30:50.437153+00:00"
+          },
+          {
+            "id": "post:2089598842991972744:bio",
+            "text": "A powerful AI Agent and SuperComputer - Build your company on  Abacus AI and ChatLLM - Access to 100+ AI models",
+            "observed_at": "2026-08-18T06:30:50.437153+00:00"
+          },
+          {
+            "id": "post:2089598842991972744:bio:url:0",
+            "text": "http://abacus.ai",
+            "observed_at": "2026-08-18T06:30:50.437153+00:00"
+          },
+          {
+            "id": "post:2090211677203845344",
+            "text": "DeepSeek Flash and Pro are available on ChatLLM and is UNLIMITED",
+            "observed_at": "2026-08-19T23:00:31.978426+00:00"
+          },
+          {
+            "id": "post:2090211677203845344:bio",
+            "text": "A powerful AI Agent and SuperComputer - Build your company on  Abacus AI and ChatLLM - Access to 100+ AI models",
+            "observed_at": "2026-08-19T23:00:31.978426+00:00"
+          },
+          {
+            "id": "post:2090211677203845344:bio:url:0",
+            "text": "http://abacus.ai",
+            "observed_at": "2026-08-19T23:00:31.978426+00:00"
+          },
+          {
+            "id": "post:2090314662948786567",
+            "text": "ChatLLM - Use The Best AI For Your Use Case\n\nOpen-source AI is available on a unlimited basis\n\nDeepSeek Pro - Unlimited\nGLM 5.3 - Unlimited \nDeepSeek Flash -Unlimited\nQwen 3.8 27B - Unlimited\nFlash 3.1 - Unlimited\n\nUse the best model for your use-case. ALL IN ONE PLACE https://t.co/ELrDaejYcF",
+            "observed_at": "2026-08-20T06:00:30.729664+00:00"
+          },
+          {
+            "id": "post:2090314662948786567:bio",
+            "text": "A powerful AI Agent and SuperComputer - Build your company on  Abacus AI and ChatLLM - Access to 100+ AI models",
+            "observed_at": "2026-08-20T06:00:30.729664+00:00"
+          },
+          {
+            "id": "post:2090314662948786567:bio:url:0",
+            "text": "http://abacus.ai",
+            "observed_at": "2026-08-20T06:00:30.729664+00:00"
+          },
+          {
+            "id": "external:0",
+            "text": "Abacus.AI, Inc. company Verified https://abacus.ai",
+            "source_url": "https://huggingface.co/abacusai",
+            "observed_at": "2026-10-07T05:50:01.632005+00:00",
+            "kind": "public-first-party-excerpt"
+          },
+          {
+            "id": "external:1",
+            "text": "We created Smaug-72B-v0.1 using a new fine-tuning technique, DPO-Positive (DPOP), and new pairwise preference versions of ARC, HellaSwag, and MetaMath",
+            "source_url": "https://huggingface.co/abacusai/Smaug-72B-v0.1",
+            "observed_at": "2026-10-07T05:50:01.632005+00:00",
+            "kind": "public-first-party-excerpt"
+          }
+        ],
+        "domains": [
+          "abacus.ai"
+        ],
+        "policy_version": "official-model-developer-v2",
+        "verification_type": "Business",
+        "identity": "68c9fa3c57d017bf54a1dd7f893e1b377bffc084e5cfb5e1543cb67f54eba198"
+      },
+      "development_support": {
+        "external:1": [
+          "Developed by: Cohere",
+          "We created Smaug-72B-v0.1"
+        ]
+      }
+    },
+    {
+      "key": "dailydev",
+      "expected": "not_accepted",
+      "owner_proposed_label": "not_accepted",
+      "evidence": {
+        "provider": "x",
+        "external_identifier": "940195568806256640",
+        "handle": "dailydotdev",
+        "display_name": "daily.dev",
+        "sources": [
+          {
+            "id": "account:profile_bio_text",
+            "text": "Where developers discover what's next",
+            "observed_at": "2026-10-06 21:50:12.334056+00:00"
+          },
+          {
+            "id": "post:2099384808803598585",
+            "text": "Anthropic says DeepSeek and Kimi forwarded your prompts https://t.co/9ypN3JekEa",
+            "observed_at": "2026-09-14T06:30:47.829593+00:00"
+          },
+          {
+            "id": "post:2099384808803598585:bio",
+            "text": "Where developers discover what's next",
+            "observed_at": "2026-09-14T06:30:47.829593+00:00"
+          },
+          {
+            "id": "post:2099384808803598585:bio:url:0",
+            "text": "https://daily.dev",
+            "observed_at": "2026-09-14T06:30:47.829593+00:00"
+          },
+          {
+            "id": "post:2105558085477478776",
+            "text": "DeepSeek kernel code runs on Huawei Ascend, not Nvidia https://t.co/yf7kKD1RUV",
+            "observed_at": "2026-10-01T14:19:01.118327+00:00"
+          },
+          {
+            "id": "post:2105558085477478776:bio",
+            "text": "Where developers discover what's next",
+            "observed_at": "2026-10-01T14:19:01.118327+00:00"
+          },
+          {
+            "id": "post:2105558085477478776:bio:url:0",
+            "text": "https://daily.dev",
+            "observed_at": "2026-10-01T14:19:01.118327+00:00"
+          },
+          {
+            "id": "post:2107398057822130676",
+            "text": "DeepSeek is raising billions for Huawei chip compute https://t.co/rSehVbZLIh",
+            "observed_at": "2026-10-06T21:50:12.337924+00:00"
+          },
+          {
+            "id": "post:2107398057822130676:bio",
+            "text": "Where developers discover what's next",
+            "observed_at": "2026-10-06T21:50:12.337924+00:00"
+          },
+          {
+            "id": "post:2107398057822130676:bio:url:0",
+            "text": "https://daily.dev",
+            "observed_at": "2026-10-06T21:50:12.337924+00:00"
+          },
+          {
+            "id": "external:0",
+            "text": "daily.dev is the developer community where millions of engineers come to discover what is next.",
+            "source_url": "https://daily.dev/",
+            "observed_at": "2026-10-07T05:50:01.632005+00:00",
+            "kind": "public-first-party-excerpt"
+          }
+        ],
+        "domains": [
+          "daily.dev"
+        ],
+        "policy_version": "official-model-developer-v2",
+        "verification_type": "Business",
+        "identity": "8c852d0dc12752651f69623f9d10b361738eef82d6dc0d6768ee5b26c0795041"
+      },
+      "development_support": {}
+    },
+    {
+      "key": "iotex",
+      "expected": "development_citation_or_review",
+      "owner_proposed_label": "not_accepted",
+      "evidence": {
+        "provider": "x",
+        "external_identifier": "944255537121656833",
+        "handle": "iotex_io",
+        "display_name": "IoTeX",
+        "sources": [
+          {
+            "id": "account:profile_bio_text",
+            "text": "The blockchain platform for Real-World AI.",
+            "observed_at": "2026-09-07 03:47:44.595631+00:00"
+          },
+          {
+            "id": "post:2092659326649610476",
+            "text": "The highly anticipated stealth model \"Ox Alpha\" is officially GLM 5.3 Flash by @Zai_org & @ZixuanLi_! 🔥\n\nAn absolute beast for developers: \n• 1M context window \n• Deep reasoning + tool calling \n• Open weights\n\nStart building with it right now on QuickSilver Pro 👇 https://t.co/SWBlVIGlBo",
+            "observed_at": "2026-08-26T17:16:10.118751+00:00"
+          },
+          {
+            "id": "post:2092659326649610476:bio",
+            "text": "The blockchain platform for Real-World AI.",
+            "observed_at": "2026-08-26T17:16:10.118751+00:00"
+          },
+          {
+            "id": "post:2092659326649610476:bio:url:0",
+            "text": "http://iotex.io",
+            "observed_at": "2026-08-26T17:16:10.118751+00:00"
+          },
+          {
+            "id": "post:2096705579641360770",
+            "text": "2 billion tokens in the last 7 days.\n\nNot through one model. Through 45, from OpenAI, Anthropic, Google, DeepSeek, Moonshot, Zhipu and more, routed one question at a time to whichever model is best for it.\n \nThat's what a many-model world looks like in practice. No subscriptions, no markup, one key, pay per token in card or USDC via X402.",
+            "observed_at": "2026-09-06T21:15:32.403901+00:00"
+          },
+          {
+            "id": "post:2096705579641360770:bio",
+            "text": "The blockchain platform for Real-World AI.",
+            "observed_at": "2026-09-06T21:15:32.403901+00:00"
+          },
+          {
+            "id": "post:2096705579641360770:bio:url:0",
+            "text": "http://iotex.io",
+            "observed_at": "2026-09-06T21:15:32.403901+00:00"
+          },
+          {
+            "id": "external:0",
+            "text": "a foundation model trained for operations",
+            "source_url": "https://iotex.io/trio",
+            "observed_at": "2026-10-07T05:50:01.632005+00:00",
+            "kind": "public-first-party-excerpt"
+          },
+          {
+            "id": "external:1",
+            "text": "built at MachineFi Lab by the core team behind IoTeX. LoRA modules and a cross-tier fusion adapter, trained in GPU-hours",
+            "source_url": "https://blog.iotex.io/blog/introducing-trio-a-world-model-for-physical-operations/",
+            "observed_at": "2026-10-07T05:50:01.632005+00:00",
+            "kind": "public-first-party-excerpt"
+          }
+        ],
+        "domains": [
+          "iotex.io"
+        ],
+        "policy_version": "official-model-developer-v2",
+        "verification_type": "Business",
+        "identity": "4e13c432824dcfb92aafc6aaf888373d19db1b83662833c24cbf1e2cef0e8308"
+      },
+      "development_support": {
+        "external:1": [
+          "LoRA modules",
+          "trained in GPU-hours"
+        ]
+      }
+    },
+    {
+      "key": "invideo",
+      "expected": "not_accepted",
+      "owner_proposed_label": "not_accepted",
+      "evidence": {
+        "provider": "x",
+        "external_identifier": "1072450495086817280",
+        "handle": "invideoOfficial",
+        "display_name": "Invideo",
+        "sources": [
+          {
+            "id": "account:profile_bio_text",
+            "text": "The AI video platform for serious creatives.",
+            "observed_at": "2026-08-31 03:36:19.976084+00:00"
+          },
+          {
+            "id": "post:2083266531224637602",
+            "text": "Minimax H3 is now live on invideo https://t.co/26emPCbL4h",
+            "observed_at": "2026-07-31T19:14:18.975899+00:00"
+          },
+          {
+            "id": "post:2083266531224637602:bio",
+            "text": "The AI video platform for serious creatives.",
+            "observed_at": "2026-07-31T19:14:18.975899+00:00"
+          },
+          {
+            "id": "post:2083266531224637602:bio:url:0",
+            "text": "https://invideo.io",
+            "observed_at": "2026-07-31T19:14:18.975899+00:00"
+          },
+          {
+            "id": "external:0",
+            "text": "Agent Two runs on more than 200 image, video, audio, and music models, and invideo has signed contracts with every model provider",
+            "source_url": "https://invideo.io/news/introducing-invideo-for-enterprise-invideo-agent-two/",
+            "observed_at": "2026-10-07T05:50:01.632005+00:00",
+            "kind": "public-first-party-excerpt"
+          }
+        ],
+        "domains": [
+          "invideo.io"
+        ],
+        "policy_version": "official-model-developer-v2",
+        "verification_type": "Business",
+        "identity": "91f00eca283b91ab1d39b87cb2d7e27c23badb8cae73fa603ea1ccde43dc5bb5"
+      },
+      "development_support": {}
+    },
+    {
+      "key": "nousresearch",
+      "expected": "accepted",
+      "kind": "public-primary-source-counterexample-no-stored-account-claim",
+      "evidence": {
+        "provider": "x",
+        "external_identifier": "fixture-nous",
+        "handle": "NousResearch",
+        "display_name": "Nous Research",
+        "sources": [
+          {
+            "id": "profile",
+            "text": "NousResearch company https://nousresearch.com/ nousresearch",
+            "source_url": "https://huggingface.co/NousResearch"
+          },
+          {
+            "id": "model",
+            "text": "This model was fine-tuned by Nous Research, with Teknium and Karan4D leading the fine tuning process",
+            "source_url": "https://huggingface.co/NousResearch/Nous-Hermes-13b"
+          },
+          {
+            "id": "blockchain",
+            "text": "Coordination happens on the Solana blockchain, ensuring a fault-tolerant and censorship-resistant network.",
+            "source_url": "https://nousresearch.com/nous-psyche"
+          }
+        ],
+        "domains": [
+          "nousresearch.com"
+        ],
+        "policy_version": "official-model-developer-v2"
+      },
+      "development_support": {
+        "model": [
+          "fine-tuned by Nous Research"
+        ]
+      }
+    },
+    {
+      "key": "closed-speech-no-hf",
+      "expected": "accepted",
+      "kind": "synthetic-policy-boundary",
+      "evidence": {
+        "provider": "x",
+        "external_identifier": "fixture-closed",
+        "handle": "ClosedSpeechLab",
+        "display_name": "Closed Speech Lab",
+        "sources": [
+          {
+            "id": "bio",
+            "text": "Official account of Closed Speech Lab. We train our own proprietary speech generation models."
+          },
+          {
+            "id": "release",
+            "text": "We trained and released Speech-One through our API. No Hugging Face repository or public weights exist."
+          }
+        ],
+        "domains": [],
+        "policy_version": "official-model-developer-v2"
+      },
+      "development_support": {
+        "bio": [
+          "We train our own"
+        ],
+        "release": [
+          "We trained and released"
+        ]
+      }
+    }
+  ]
+}

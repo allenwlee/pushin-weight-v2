@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlparse
 
 ROLE = "official_co_account_extraction"
 POLICY_VERSION = "official-model-developer-v2"
+BLOCKCHAIN_POLICY_VERSION = "official-model-developer-v2-web3-v1"
 # Prompt revisions change attempt provenance, not unchanged public evidence.
 EVIDENCE_POLICY_VERSION = "official-model-developer-v2"
 MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
@@ -240,6 +242,28 @@ claim/citation wrapper keys:
 A company account's identity never proves a particular product mention."""
 
 
+def evaluator_prompt(evidence):
+    """Raise the development-evidence hurdle only for the owner's risk signal."""
+    flagged = any(
+        re.search(r"\b(?:blockchain|web[ -]?3)\b|区块链|區塊鏈|ブロックチェーン", source.get("text", ""), re.IGNORECASE)
+        for source in evidence.get("sources", [])
+    )
+    if not flagged:
+        return SYSTEM_PROMPT, POLICY_VERSION
+    return SYSTEM_PROMPT + """
+Additional verification rule: the supplied evidence mentions blockchain or Web3.
+Apply a higher hurdle for accepted model_developer claims. Require explicit,
+first-party technical evidence identifying a model that this organization trained,
+fine-tuned, or is developing, and its actual development contribution. A token,
+AI platform, decentralized compute network, model hosting, repository upload,
+quantization, partnership, or generic 'world model' claim alone is insufficient.
+Hold for review when direct development evidence is missing or ambiguous.
+Blockchain association is not an automatic rejection: verified model-development
+work still qualifies. Ground acceptance in the technical development evidence,
+not blockchain marketing or merely supplying compute to another model developer.
+""", BLOCKCHAIN_POLICY_VERSION
+
+
 def evidence_for_account(account):
     """Read bounded representative inputs over all history, never a date window."""
     from django.db.models import Q
@@ -398,15 +422,19 @@ def enqueue_account(
             state.save(update_fields=fields)
         if created and str(account.author_id) in OWNER_ATTESTATIONS:
             _apply_owner_attestation(state)
+        _hold_existing_tracked_account(state)
         _hold_for_human_review(state)
     return state
 
 
 def _hold_for_human_review(state):
-    """Model positives are nominations; only an owner settlement can register."""
+    """Hold nominations unless owner settlement or verified HF proof applies."""
+    from core.official_company_hf import approved
+
     if (
         state.status == "accepted"
         and state.model != "owner-attestation"
+        and not approved(state)
     ):
         state.status = "review_needed"
         state.last_error = "human_review_required"
@@ -516,13 +544,16 @@ def claim_account(state_id, *, cfg, budget_scope, initial=False):
             and state.claim_expires_at > now
         ):
             return None
+        if _hold_existing_tracked_account(state):
+            return None
         if state.attempts >= 3:
             state.status = "review_needed"
             state.last_error = "attempt_limit"
             state.save()
             return None
         payload = json.dumps(state.evidence, ensure_ascii=False, sort_keys=True)
-        input_bytes = len((SYSTEM_PROMPT + payload).encode())
+        prompt, policy_version = evaluator_prompt(state.evidence)
+        input_bytes = len((prompt + payload).encode())
         if input_bytes > cfg.max_input_bytes:
             state.status = "review_needed"
             state.last_error = "evidence_envelope_exceeded"
@@ -565,7 +596,7 @@ def claim_account(state_id, *, cfg, budget_scope, initial=False):
         )
         state.attempts += 1
         state.model = cfg.model
-        state.policy_version = POLICY_VERSION
+        state.policy_version = policy_version
         state.save()
         return OfficialCompanyAttempt.objects.create(
             state=state,
@@ -573,7 +604,7 @@ def claim_account(state_id, *, cfg, budget_scope, initial=False):
             evidence=state.evidence,
             claim_token=token,
             model=cfg.model,
-            policy_version=POLICY_VERSION,
+            policy_version=policy_version,
             reserved_usd=reserve,
             budget_keys=list(limits),
         )
@@ -703,7 +734,7 @@ def evaluate_account(state_id, *, cfg, call, budget_scope, initial=False):
         return False
     try:
         response = call(
-            SYSTEM_PROMPT,
+            evaluator_prompt(attempt.evidence)[0],
             json.dumps(attempt.evidence, ensure_ascii=False, sort_keys=True),
             cfg.model,
             cfg.max_tokens,
@@ -747,6 +778,27 @@ def official_organization_links(account):
             ).select_related("company")
         ),
     )
+
+
+def _hold_existing_tracked_account(state):
+    """Known official links avoid rediscovery; they grant no new list approval."""
+    if state.model == "owner-attestation" or state.status == "registered":
+        return False
+    if state.status not in {"pending", "retry_due", "claimed"}:
+        return False
+    brands, companies = official_organization_links(state.account)
+    if not brands and not companies:
+        return False
+    state.status = "review_needed"
+    state.last_error = "already_tracked"
+    state.claim_token = ""
+    state.claim_expires_at = None
+    state.next_attempt_at = None
+    state.save(update_fields=[
+        "status", "last_error", "claim_token", "claim_expires_at",
+        "next_attempt_at", "updated_at",
+    ])
+    return True
 
 
 def register_account(state_id, *, cfg):

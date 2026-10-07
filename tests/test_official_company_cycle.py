@@ -171,6 +171,35 @@ def test_dry_run_command_and_manual_cycle_do_not_enqueue_or_dispatch():
     assert json.loads(out.getvalue())["enumerated"] == 0
 
 
+def test_scheduled_lane_yields_to_discovery_without_spending(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from django.db import connections
+
+    from core.models import OfficialCompanyAttempt, OfficialCompanyBudget
+    from core.official_company_lock import official_company_writer_lock
+
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "official-scheduled-contention")
+    enqueue_account(Account.objects.create(author_id="92503", bio="AI model research lab"))
+    call = Mock(side_effect=AssertionError("Discovery is already evaluating"))
+    client = Mock()
+
+    def scheduled():
+        try:
+            runner = CycleRunner(cfg=config(), cycle_kind="scheduled", _official_company_call=call, _official_list_client=client)
+            before = runner._optional_calls_remaining
+            result = runner._run_official_company_discovery(run_id="contender", deadline=runner.cfg.harvest.start_deadline())
+            assert runner._optional_calls_remaining == before
+            return result
+        finally:
+            connections["default"].close()
+
+    with official_company_writer_lock(execution_mode="manual", entrypoint="initial-worker") as lease:
+        assert lease.acquired
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            assert pool.submit(scheduled).result(timeout=15) == {"status": "discovery_busy", "attempted": 0, "enqueued": 0}
+    assert not call.called and not client.members.called
+    assert not OfficialCompanyAttempt.objects.exists() and not OfficialCompanyBudget.objects.exists()
 def test_cycle_wide_exhaustion_and_deadline_preserve_unattempted_work():
     account = Account.objects.create(author_id="12345", bio="AI model lab")
     enqueue_account(account)

@@ -13,6 +13,61 @@ from core.official_company_discovery import (
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
 
+def test_existing_official_brand_link_skips_paid_discovery_without_list_writes():
+    from core.models import (
+        Brand,
+        BrandAccount,
+        OfficialCompanyAttempt,
+        OfficialCompanyListIntent,
+        Role,
+    )
+    from core.official_company_accounts import enqueue_account, evaluate_account
+    from x_monitor.config import OfficialCompanyConfig
+
+    a = Account.objects.create(author_id="1034844617261248512", handle="AIatMeta", bio="Official AI research", verified_type="Business")
+    brand = Brand.objects.create(nickname="llama")
+    role, _ = Role.objects.get_or_create(key="official")
+    BrandAccount.objects.create(brand=brand, account=a, role=role)
+    brand_count = Brand.objects.count()
+    state = enqueue_account(a)
+    calls = []
+    assert not evaluate_account(state.pk, cfg=OfficialCompanyConfig(enabled=True), call=lambda *args: calls.append(args), budget_scope="known-brand")
+    state.refresh_from_db()
+    assert state.status == "review_needed" and state.last_error == "already_tracked"
+    assert state.attempts == 0 and calls == []
+    assert OfficialCompanyAttempt.objects.count() == 0
+    assert OfficialCompanyListIntent.objects.count() == 0
+    assert Brand.objects.count() == brand_count
+
+
+def test_blockchain_prompt_and_provenance_follow_actual_call():
+    from core.models import OfficialCompanyAttempt, OfficialCompanyBudget
+    from core.official_company_accounts import (
+        BLOCKCHAIN_POLICY_VERSION,
+        enqueue_account,
+        evaluate_account,
+        evaluator_prompt,
+    )
+    from x_monitor.config import OfficialCompanyConfig
+
+    a = Account.objects.create(author_id="944255537121656833", handle="iotex_io", bio="The blockchain platform for Real-World AI.", verified_type="Business")
+    state = enqueue_account(a)
+    OfficialCompanyBudget.objects.create(key="initial-total")
+    calls = []
+
+    def call(*args):
+        calls.append(args)
+        return {"outcome": "review_needed", "organization_name": "IoTeX", "model_types": [], "rationale": "No direct model development evidence.", "contradictions": [], "claims": {}, "usage": {"input_tokens": 10, "output_tokens": 10}}
+
+    assert evaluate_account(state.pk, cfg=OfficialCompanyConfig(enabled=True, initial_scan_max_usd=1), call=call, budget_scope="risk", initial=True)
+    attempt = OfficialCompanyAttempt.objects.get(state=state)
+    state.refresh_from_db()
+    assert calls[0][0] == evaluator_prompt(state.evidence)[0]
+    assert "higher hurdle" in calls[0][0]
+    assert attempt.policy_version == state.policy_version == BLOCKCHAIN_POLICY_VERSION
+    assert state.status == "review_needed"
+
+
 def test_full_inventory_has_no_age_cutoff_and_resumes_without_duplicates():
     for identifier in ["1", "2", "3"]:
         Account.objects.create(
@@ -333,3 +388,100 @@ def test_drain_holds_existing_model_positives_when_registration_is_disabled():
     assert state.decision["outcome"] == "accepted"
     assert state.evidence_hash == old_hash and state.attempts == 1
     call.assert_not_called()
+
+
+@pytest.mark.parametrize("registration", [False, True])
+def test_review_only_command_evaluates_while_harvest_writer_is_owned(monkeypatch, registration):
+    import json
+    from concurrent.futures import ThreadPoolExecutor
+    from decimal import Decimal
+    from io import StringIO
+    from types import SimpleNamespace
+
+    from django.core.management import call_command
+    from django.db import connections
+
+    from core.official_company_accounts import enqueue_account
+    from monitor.management.commands import official_co_account_extraction as command
+    from monitor.run_lock import harvest_writer_lock
+    from tests.test_official_company_cycle import accept
+    from x_monitor.config import OfficialCompanyConfig
+
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "official-independent-test")
+    cfg = OfficialCompanyConfig(
+        enabled=True, registration_enabled=registration, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1),
+    )
+    account = Account.objects.create(
+        author_id="92501", handle="independent_lab",
+        bio="We are Voice Lab. We release our own speech models.",
+    )
+    enqueue_account(account)
+    calls = []
+
+    def evaluator(*args):
+        calls.append(args)
+        return accept(*args)
+
+    monkeypatch.setattr(command, "load_config", lambda path: SimpleNamespace(official_company=cfg))
+    monkeypatch.setattr(command, "build_discovery_call", lambda cfg: evaluator)
+
+    def run_command():
+        try:
+            inventory = StringIO()
+            call_command("official_co_account_extraction", "initial-scan", limit=10, stdout=inventory)
+            assert json.loads(inventory.getvalue())["enumerated"] == 1
+            out = StringIO()
+            call_command("official_co_account_extraction", "drain", evaluate_only=True, limit=1, stdout=out)
+            return json.loads(out.getvalue())
+        finally:
+            connections["default"].close()
+
+    with harvest_writer_lock(execution_mode="live", entrypoint="scheduled-harvest") as lease:
+        assert lease.acquired
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            result = pool.submit(run_command).result(timeout=15)
+        assert result.get("attempted") == 1
+        assert len(calls) == 1
+    state = OfficialCompanyAccountState.objects.get(account=account)
+    assert state.status == "review_needed" and state.last_error == "human_review_required"
+
+
+def test_competing_discovery_command_dispatches_nothing(monkeypatch):
+    import json
+    from concurrent.futures import ThreadPoolExecutor
+    from decimal import Decimal
+    from io import StringIO
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from django.core.management import call_command
+    from django.db import connections
+
+    from core.models import OfficialCompanyAttempt
+    from core.official_company_accounts import enqueue_account
+    from core.official_company_lock import official_company_writer_lock
+    from monitor.management.commands import official_co_account_extraction as command
+    from x_monitor.config import OfficialCompanyConfig
+
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "official-competing-test")
+    cfg = OfficialCompanyConfig(enabled=True, max_usd_per_cycle=Decimal(1), max_usd_per_day=Decimal(1))
+    state = enqueue_account(Account.objects.create(author_id="92502", bio="AI model research lab"))
+    call = Mock(side_effect=AssertionError("Concurrent evaluator must not dispatch"))
+    monkeypatch.setattr(command, "load_config", lambda path: SimpleNamespace(official_company=cfg))
+    monkeypatch.setattr(command, "build_discovery_call", lambda cfg: call)
+
+    def contender():
+        try:
+            output = StringIO()
+            call_command("official_co_account_extraction", "drain", limit=1, stdout=output)
+            return json.loads(output.getvalue())
+        finally:
+            connections["default"].close()
+
+    with official_company_writer_lock(execution_mode="manual", entrypoint="initial-worker") as lease:
+        assert lease.acquired
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            assert pool.submit(contender).result(timeout=15)["status"] == "discovery_busy"
+    state.refresh_from_db()
+    assert state.status == "pending" and not call.called
+    assert not OfficialCompanyAttempt.objects.exists()

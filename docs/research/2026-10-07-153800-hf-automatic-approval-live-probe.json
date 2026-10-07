@@ -1,0 +1,193 @@
+{
+  "read_only": true,
+  "max_requests": 36,
+  "max_seconds": 60,
+  "cases": [
+    {
+      "key": "cohere",
+      "expected": "passed",
+      "matched": false,
+      "result": {
+        "version": "official-hf-model-developer-v1",
+        "outcome": "review_needed",
+        "evidence_hash": "806b4c36234c18e23107c285c33c9ae1ddef4dd8da9ef459cf33502b7b187af9",
+        "observed_at": "2026-10-07T06:16:52.511540+00:00",
+        "requests": [
+          {
+            "url": "https://huggingface.co/api/quicksearch",
+            "parameters": {
+              "q": "Cohere"
+            },
+            "observed_at": "2026-10-07T06:16:52.511588+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          },
+          {
+            "url": "https://huggingface.co/api/organizations/cohere/overview",
+            "parameters": null,
+            "observed_at": "2026-10-07T06:16:52.753576+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          },
+          {
+            "url": "https://huggingface.co/cohere",
+            "parameters": null,
+            "observed_at": "2026-10-07T06:16:52.944973+00:00",
+            "outcome": "http_302",
+            "http_status": 302
+          },
+          {
+            "url": "https://huggingface.co/api/organizations/coherelabs/overview",
+            "parameters": null,
+            "observed_at": "2026-10-07T06:16:53.113664+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          },
+          {
+            "url": "https://huggingface.co/coherelabs",
+            "parameters": null,
+            "observed_at": "2026-10-07T06:16:53.324113+00:00",
+            "outcome": "http_307",
+            "http_status": 307
+          }
+        ]
+      }
+    },
+    {
+      "key": "abacus",
+      "expected": "passed",
+      "matched": true,
+      "result": {
+        "version": "official-hf-model-developer-v1",
+        "outcome": "passed",
+        "evidence_hash": "c1fb6c069675185efd5bdcf1c6c88e83e24c476e800e005668c854510d161ab9",
+        "observed_at": "2026-10-07T06:16:53.621697+00:00",
+        "requests": [
+          {
+            "url": "https://huggingface.co/api/quicksearch",
+            "parameters": {
+              "q": "Abacus.AI"
+            },
+            "observed_at": "2026-10-07T06:16:53.621863+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          },
+          {
+            "url": "https://huggingface.co/api/organizations/abacusai/overview",
+            "parameters": null,
+            "observed_at": "2026-10-07T06:16:53.838504+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          },
+          {
+            "url": "https://huggingface.co/abacusai",
+            "parameters": null,
+            "observed_at": "2026-10-07T06:16:54.020591+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          },
+          {
+            "url": "https://huggingface.co/api/models",
+            "parameters": {
+              "author": "abacusai",
+              "limit": 3,
+              "full": "true",
+              "sort": "downloads",
+              "direction": -1
+            },
+            "observed_at": "2026-10-07T06:16:54.337381+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          },
+          {
+            "url": "https://huggingface.co/abacusai/Smaug-Mini/raw/ee82c1ded4be75e160c0f7730fdae9e93ee4c80e/README.md",
+            "parameters": null,
+            "observed_at": "2026-10-07T06:16:54.512350+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          }
+        ],
+        "namespace": "abacusai",
+        "publisher_name": "Abacus.AI, Inc.",
+        "ownership_urls": [
+          "https://twitter.com/abacusai"
+        ],
+        "identity_namespace": "abacusai",
+        "organization_name": "Abacus.AI, Inc.",
+        "publisher_profiles": [
+          {
+            "namespace": "abacusai",
+            "is_verified": true,
+            "account_links": [
+              "https://twitter.com/abacusai"
+            ],
+            "websites": [
+              "https://abacus.ai"
+            ]
+          }
+        ],
+        "repo_id": "abacusai/Smaug-Mini",
+        "sha": "ee82c1ded4be75e160c0f7730fdae9e93ee4c80e",
+        "model_url": "https://huggingface.co/abacusai/Smaug-Mini",
+        "card_url": "https://huggingface.co/abacusai/Smaug-Mini/blob/ee82c1ded4be75e160c0f7730fdae9e93ee4c80e/README.md",
+        "development_quote": "Smaug-Mini is an agentic finetune of [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B), finetuned by Abacus.AI. It improves end-to-end agentic tool use and automation performance (+4.5 on AutomationBench, +17.1 on JobBench, +2.0 overall on LiveBench, +2.5 on IFBench) while holding the base model's general capabilities at parity (GPQA-diamond at the official number, LiveBench coding and agentic-coding at board parity). The weights load exactly like the official release: same layout, same `Qwen3_5ForConditionalGeneration` architecture with the vision tower intact, same 262,144-token context, same reasoning interface with `xhigh` / `medium` / `low` effort levels."
+      }
+    },
+    {
+      "key": "crusoe",
+      "expected": "review_needed",
+      "matched": true,
+      "result": {
+        "version": "official-hf-model-developer-v1",
+        "outcome": "review_needed",
+        "evidence_hash": "59ee3e781069ab39f733a4370646b661b0e8d0f4f86974cb8747aa68b22be202",
+        "observed_at": "2026-10-07T06:16:54.699071+00:00",
+        "requests": [
+          {
+            "url": "https://huggingface.co/api/quicksearch",
+            "parameters": {
+              "q": "Crusoe"
+            },
+            "observed_at": "2026-10-07T06:16:54.699114+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          },
+          {
+            "url": "https://huggingface.co/api/organizations/crusoeai/overview",
+            "parameters": null,
+            "observed_at": "2026-10-07T06:16:54.901540+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          },
+          {
+            "url": "https://huggingface.co/crusoeai",
+            "parameters": null,
+            "observed_at": "2026-10-07T06:16:55.074486+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          },
+          {
+            "url": "https://huggingface.co/api/organizations/crusoecloud/overview",
+            "parameters": null,
+            "observed_at": "2026-10-07T06:16:55.415611+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          },
+          {
+            "url": "https://huggingface.co/api/models",
+            "parameters": {
+              "author": "crusoeai",
+              "limit": 3,
+              "full": "true",
+              "sort": "downloads",
+              "direction": -1
+            },
+            "observed_at": "2026-10-07T06:16:55.588324+00:00",
+            "outcome": "ok",
+            "http_status": 200
+          }
+        ]
+      }
+    }
+  ]
+}

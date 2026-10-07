@@ -4,6 +4,7 @@ import json
 import os
 import time
 import uuid
+from contextlib import ExitStack
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
@@ -17,8 +18,10 @@ from core.official_company_discovery import (
     coverage,
     drain_accounts,
     enqueue_incremental,
+    register_ready_accounts,
     scan_initial_batch,
 )
+from core.official_company_lock import official_company_writer_lock
 from monitor.run_lock import harvest_writer_lock
 from x_monitor.config import load_config
 
@@ -36,6 +39,7 @@ class Command(BaseCommand):
                 "enqueue",
                 "drain",
                 "register",
+                "register-ready",
                 "retry",
                 "suppress",
                 "sync",
@@ -48,6 +52,7 @@ class Command(BaseCommand):
         parser.add_argument("--limit", type=int, default=100)
         parser.add_argument("--seconds", type=int, default=45)
         parser.add_argument("--initial", action="store_true")
+        parser.add_argument("--evaluate-only", action="store_true")
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--config", default="config.yaml")
         parser.add_argument("--replace-owner-credential", action="store_true")
@@ -86,14 +91,25 @@ class Command(BaseCommand):
         if not cfg.enabled:
             raise CommandError("official company discovery is disabled")
         run_id = "official-co-" + uuid.uuid4().hex
-        with harvest_writer_lock(
-            execution_mode="manual",
-            entrypoint="official_co_account_extraction",
-            run_id=run_id,
-        ) as lease:
+        review_only = action in {"initial-scan", "incremental", "enqueue"} or (
+            action == "drain" and (opts["evaluate_only"] or (
+                not cfg.registration_enabled and not cfg.list_sync_enabled
+            ))
+        )
+        context = {
+            "execution_mode": "manual", "entrypoint": "official_co_account_extraction",
+            "run_id": run_id,
+        }
+        with ExitStack() as stack:
+            if not review_only:
+                harvest_lease = stack.enter_context(harvest_writer_lock(**context))
+                if not harvest_lease.acquired:
+                    self.stdout.write(json.dumps({"status": "writer_busy", "run_id": run_id}))
+                    return
+            lease = stack.enter_context(official_company_writer_lock(**context))
             if not lease.acquired:
                 self.stdout.write(
-                    json.dumps({"status": "writer_busy", "run_id": run_id})
+                    json.dumps({"status": "discovery_busy", "run_id": run_id})
                 )
                 return
             deadline = time.monotonic() + opts["seconds"]
@@ -153,7 +169,10 @@ class Command(BaseCommand):
                     budget_scope=run_id,
                     initial=opts["initial"],
                     deadline=deadline,
+                    evaluate_only=opts["evaluate_only"],
                 )
+            elif action == "register-ready":
+                result = {"registered": register_ready_accounts(cfg=cfg, limit=limit, deadline=deadline)}
             elif action == "register":
                 result = {
                     "registered": sum(
