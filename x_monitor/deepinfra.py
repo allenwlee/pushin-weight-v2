@@ -18,9 +18,10 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any
-from urllib.parse import urlparse
 
+from .provider_http import https_request
 from .provider_telemetry import ProviderResponse, ProviderTextResponse
+from .structured_output import closed_object as _closed_object
 
 DEEPINFRA_ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
 DEEPSEEK_0731_MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
@@ -86,15 +87,6 @@ _PROFILES: dict[str, dict[str, Any]] = {
         for profile in ("headline_rank_v1", "headline_editor_v1", "headline_critic_v1")
     },
 }
-
-
-def _closed_object(properties: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "type": "object",
-        "properties": properties,
-        "required": list(properties),
-        "additionalProperties": False,
-    }
 
 
 _REF_SCHEMA = _closed_object({
@@ -248,6 +240,18 @@ for _key in ("supported_headline_en", "supported_secondary_en"):
     _ledger_check["properties"][_key] = {"type": "string"}
     _ledger_check["required"].append(_key)
 _PROFILES["headline_critic_v6"] = _ledger_profile
+
+# G2 shares the proven factual settings and receipt validation, but supplies its
+# own source-bound schema. Its selection/voice policy and call graph stay local.
+EDITORIAL_PROFILES = frozenset({"editorial_editor_v1", "editorial_writer_v1"})
+for _editorial_profile, _baseline in (
+    ("editorial_editor_v1", "headline_editor_v4"),
+    ("editorial_writer_v1", "headline_critic_v6"),
+):
+    _PROFILES[_editorial_profile] = {
+        key: value for key, value in _PROFILES[_baseline].items()
+        if key != "response_format"
+    }
 
 
 def _bound_headline_format(profile_name: str, messages: list[dict[str, Any]]) -> dict[str, Any]:
@@ -462,8 +466,15 @@ class DeepInfraChatCompletionsClient:
             raise ValueError("deepinfra_base_url_unsupported")
         if self.request_profile is not None and self.request_profile not in _PROFILES:
             raise ValueError("deepinfra_request_profile_unsupported")
-        if self.request_profile and self.request_profile.startswith("headline_") and self.model != DEEPSEEK_0731_MODEL:
+        if self._requires_priority and self.model != DEEPSEEK_0731_MODEL:
             raise ValueError("deepinfra_headline_model_mismatch")
+
+    @property
+    def _requires_priority(self) -> bool:
+        return bool(self.request_profile and (
+            self.request_profile.startswith("headline_")
+            or self.request_profile in EDITORIAL_PROFILES
+        ))
 
     @property
     def _base_url(self) -> str:
@@ -513,6 +524,7 @@ class DeepInfraChatCompletionsClient:
         top_p: float | None = None,
         seed: int | None = None,
         reasoning_effort: str | None = None,
+        response_schema: dict[str, Any] | None = None,
         **_ignored: Any,
     ) -> dict[str, Any]:
         if model is not None and model != self.model:
@@ -528,8 +540,7 @@ class DeepInfraChatCompletionsClient:
         request: dict[str, Any] = {"model": self.model, "max_tokens": max_tokens, "messages": request_messages}
         profile = _PROFILES.get(self.request_profile or "", {})
         if (
-            self.request_profile
-            and self.request_profile.startswith("headline_")
+            self._requires_priority
             and set(_ignored) - {"timeout"}
         ):
             raise DeepInfraPermanentError("deepinfra_headline_unsupported_option")
@@ -539,15 +550,28 @@ class DeepInfraChatCompletionsClient:
                 raise DeepInfraPermanentError("deepinfra_request_profile_mismatch")
             if selected is not None:
                 request[name] = selected
-        if self.request_profile and self.request_profile.startswith("headline_"):
+        if self.request_profile in EDITORIAL_PROFILES:
+            if not isinstance(response_schema, dict) or response_schema.get("type") != "object":
+                raise DeepInfraPermanentError("deepinfra_editorial_schema_missing")
+            request["service_tier"] = profile["service_tier"]
+            request["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": self.request_profile, "strict": True,
+                    "schema": deepcopy(response_schema),
+                },
+            }
+        elif response_schema is not None:
+            raise DeepInfraPermanentError("deepinfra_response_schema_unsupported")
+        elif self.request_profile and self.request_profile.startswith("headline_"):
             request["service_tier"] = profile["service_tier"]
             request["response_format"] = (
                 _bound_headline_format(self.request_profile, messages)
                 if self.request_profile in {"headline_editor_v4", "headline_critic_v4", "headline_critic_v5", "headline_critic_v6"}
                 else profile["response_format"]
             )
-        # Deliberately omit response_format, provider, service_tier, thinking,
-        # reasoning, and OpenRouter routing controls from the direct envelope.
+        # Non-structured profiles omit response_format and service_tier. All
+        # direct profiles omit thinking and OpenRouter routing controls.
         return request
 
     def _send_request(self, request: dict[str, Any], *, timeout: Any) -> dict[str, Any]:
@@ -563,25 +587,15 @@ class DeepInfraChatCompletionsClient:
                 raise
             except (TimeoutError, OSError) as exc:
                 raise DeepInfraRetryableError("deepinfra_transport_failure") from exc
-        parsed = urlparse(self._endpoint_url())
-        conn = http.client.HTTPSConnection(parsed.hostname, parsed.port or 443, timeout=timeout)
         try:
-            try:
-                conn.request(
-                    "POST",
-                    parsed.path or "/v1/openai/chat/completions",
-                    body=json.dumps(request, ensure_ascii=False).encode("utf-8"),
-                    headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                )
-                response = conn.getresponse()
-                body = response.read()
-            except (TimeoutError, OSError, http.client.HTTPException) as exc:
-                raise DeepInfraRetryableError("deepinfra_transport_failure") from exc
-        finally:
-            conn.close()
-        if not 200 <= response.status < 300:
-            exc_type = DeepInfraRetryableError if response.status == 429 or response.status >= 500 else DeepInfraPermanentError
-            raise exc_type(f"deepinfra_http_status_{response.status}")
+            status, body = https_request(self._endpoint_url(), self.api_key, request, timeout=timeout)
+        except (TimeoutError, OSError, http.client.HTTPException) as exc:
+            raise DeepInfraRetryableError("deepinfra_transport_failure") from exc
+        except ValueError as exc:
+            raise DeepInfraPermanentError("deepinfra_response_shape_invalid") from exc
+        if not 200 <= status < 300:
+            exc_type = DeepInfraRetryableError if status == 429 or status >= 500 else DeepInfraPermanentError
+            raise exc_type(f"deepinfra_http_status_{status}")
         try:
             decoded = json.loads(body)
         except (TypeError, ValueError) as exc:
@@ -596,7 +610,7 @@ class DeepInfraChatCompletionsClient:
         usage = _usage(decoded, model=self.model, request_identity=self.request_identity)
         if decoded.get("model") != self.model:
             raise DeepInfraPermanentError("deepinfra_response_model_mismatch", provider_usage=usage)
-        if self.request_profile and self.request_profile.startswith("headline_"):
+        if self._requires_priority:
             if decoded.get("service_tier") != "priority":
                 raise DeepInfraPermanentError("deepinfra_service_tier_mismatch", provider_usage=usage)
             raw = decoded.get("usage")
@@ -624,6 +638,10 @@ class DeepInfraChatCompletionsClient:
 
     def messages_create(self, **kwargs: Any) -> ProviderResponse:
         decoded = self._send_request(self.build_request(**kwargs), timeout=kwargs.get("timeout", 60))
+        return self.parse_response(decoded)
+
+    def parse_response(self, decoded: dict[str, Any]) -> ProviderResponse:
+        """Validate an already received reply without sending or retrying anything."""
         usage, content = self._validated_response(decoded)
         try:
             parsed = json.loads(_strip_json_fence(content), object_pairs_hook=_json_without_duplicate_keys)

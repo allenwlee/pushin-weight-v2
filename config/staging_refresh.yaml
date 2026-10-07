@@ -120,6 +120,14 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   excluded_tables:
+    # Editorial jobs, accepted editions and media are one environment-local graph.
+    - editorial_assessments
+    - editorial_budgets
+    - editorial_calls
+    - editorial_editions
+    - editorial_heroes
+    - editorial_pictures
+    - editorial_stories
     # Discovery work and encrypted owner credentials belong to one environment.
     - official_company_account_states
     - official_company_attempts
@@ -181,6 +189,13 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    - editorial_assessments
+    - editorial_budgets
+    - editorial_calls
+    - editorial_editions
+    - editorial_heroes
+    - editorial_pictures
+    - editorial_stories
     - official_company_account_states
     - official_company_attempts
     - official_company_budgets
@@ -263,6 +278,8 @@ relations:
   views:
     - trend_narrative_versions
   sequences:
+    - editorial_assessments_id_seq
+    - editorial_calls_id_seq
     - official_company_account_states_id_seq
     - official_company_attempts_id_seq
     - official_company_list_intents_id_seq
@@ -342,6 +359,8 @@ relations:
     - twitter_list_memberships_id_seq
     - untracked_brand_promotion_evidence_id_seq
   optional_source_sequences:
+    - editorial_assessments_id_seq
+    - editorial_calls_id_seq
     - official_company_account_states_id_seq
     - official_company_attempts_id_seq
     - official_company_list_intents_id_seq
@@ -399,6 +418,13 @@ relations:
 
 scrub:
   truncate_tables:
+    - editorial_assessments
+    - editorial_budgets
+    - editorial_calls
+    - editorial_editions
+    - editorial_heroes
+    - editorial_pictures
+    - editorial_stories
     - official_company_account_states
     - official_company_attempts
     - official_company_budgets

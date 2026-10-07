@@ -1,0 +1,17 @@
+{% load static i18n %}<!doctype html>
+<html lang="{{ requested_locale }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ item.headline }} · PushinWeight</title><link rel="canonical" href="{{ canonical_url }}">
+<meta property="og:type" content="article"><meta property="og:title" content="{{ item.headline }}"><meta property="og:description" content="{{ item.byline }}"><meta property="og:url" content="{{ canonical_url }}">
+<meta name="twitter:card" content="{% if poster_url %}summary_large_image{% else %}summary{% endif %}">{% if poster_url %}<meta property="og:image" content="{{ poster_url }}">{% endif %}
+<link rel="stylesheet" href="{% static 'monitor/editorial/editorial.css' %}"></head>
+<body class="editorial-page"><nav><a href="/">{% translate "Current General" %}</a><a href="{% url 'editorial_archive' %}?track={{ item.track }}&amp;lang={{ requested_locale }}">{% translate "Story archive" %}</a></nav>
+<main><article class="expanded-story" lang="{{ item.locale }}"><p class="eyebrow">{{ item.track|title }} · <time datetime="{{ item.published_at }}">{{ item.published_at|slice:':10' }}</time></p>
+{% if fallback %}<p>{% translate "This story is currently available in English." %}</p>{% endif %}
+<h1>{{ item.headline }}</h1><p class="byline">{{ item.byline }}</p>
+{% include 'monitor/editorial/asset.html' with asset=item.asset %}
+<div class="article-copy">{{ item.article|linebreaks }}</div>
+{% if item.track == 'pulse' and item.chart_support == 'unavailable' %}<p class="chart-note">{% translate "Chart support is unavailable for this development." %}</p>{% endif %}
+{% if item.track == 'pulse' and item.chart_support == 'not_supported' %}<p class="chart-note">{% translate "Available chart data does not support this development." %}</p>{% endif %}
+{% if item.sources %}<p class="source-attribution">{% translate "Sources" %} · {% blocktranslate count count=item.source_count %}{{ count }} post{% plural %}{{ count }} posts{% endblocktranslate %}: {% for source in item.sources %}<a href="{{ source.url }}" rel="noopener noreferrer" target="_blank">{{ source.label }} {{ forloop.counter }}</a> {% endfor %}</p>{% endif %}
+<a class="share-link" href="https://twitter.com/intent/tweet?url={{ canonical_url|urlencode }}&amp;text={{ item.headline|urlencode }}" rel="noopener noreferrer" target="_blank">{% translate "Share on X" %}</a>
+</article></main></body></html>

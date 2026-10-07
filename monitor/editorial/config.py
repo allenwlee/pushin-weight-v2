@@ -1,0 +1,170 @@
+"""Explicit operator configuration; importing or reading never spends money."""
+
+import os
+from decimal import Decimal
+from pathlib import Path
+from typing import Literal
+
+import yaml
+from django.conf import settings
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from x_monitor.deepinfra import DEEPINFRA_ENDPOINT, DEEPSEEK_0731_MODEL
+
+PictureMode = Literal["off", "select_only", "derive"]
+
+
+class Route(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+    model: str = Field(min_length=1, max_length=160)
+    endpoint: Literal[
+        "https://openrouter.ai/api/v1/chat/completions",
+        "https://api.deepinfra.com/v1/openai/chat/completions",
+        "https://api.openai.com/v1/chat/completions",
+    ]
+    key_env: Literal["OPENROUTER_API_KEY", "DEEPINFRA_API_KEY", "OPENAI_API_KEY"]
+    reasoning: Literal["none", "medium", "high", "xhigh", "ultra"] | None = None
+    request_profile: Literal["editorial_editor_v1", "editorial_writer_v1"] | None = None
+    timeout_seconds: int = Field(default=90, ge=1, le=300)
+    vision: bool = False
+    image_token_ceiling: int = Field(default=16384, ge=1024, le=65536)
+    input_usd_per_million: float = Field(gt=0)
+    output_usd_per_million: float = Field(gt=0)
+    max_output_tokens: int = Field(default=2048, ge=256, le=65536)
+
+    @model_validator(mode="after")
+    def match_credential(self):
+        expected = {
+            "https://openrouter.ai/api/v1/chat/completions": "OPENROUTER_API_KEY",
+            DEEPINFRA_ENDPOINT: "DEEPINFRA_API_KEY",
+            "https://api.openai.com/v1/chat/completions": "OPENAI_API_KEY",
+        }[self.endpoint]
+        if self.key_env != expected:
+            raise ValueError("credential must match explicit provider route")
+        if self.request_profile and (
+            self.endpoint != DEEPINFRA_ENDPOINT
+            or self.model != DEEPSEEK_0731_MODEL
+            or self.reasoning != "none"
+            or self.vision
+        ):
+            raise ValueError(
+                "factual profile requires direct 0731, reasoning none and text input"
+            )
+        return self
+
+
+class EditorialConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
+    enabled: bool = False
+    public_enabled: bool = False
+    daily_usd: float = Field(default=0, ge=0, le=1000)
+    assessment_usd: float = Field(default=0, ge=0, le=100)
+    daily_calls: int = Field(default=0, ge=0, le=1000)
+    assessment_calls: int = Field(default=4, ge=1, le=20)
+    media_daily_calls: int = Field(default=0, ge=0, le=96)
+    media_cost_ceiling_usd: float = Field(default=0, ge=0, le=100)
+    media_duration: int = Field(default=6, ge=4, le=15)
+    media_max_polls: int = Field(default=40, ge=1, le=60)
+    max_posts: int = Field(default=160, ge=1, le=1000)
+    max_context_posts: int = Field(default=40, ge=0, le=200)
+    max_packet_bytes: int = Field(default=240000, ge=4000, le=300000)
+    max_schema_bytes: int = Field(default=120000, ge=4000, le=120000)
+    max_story_bytes: int = Field(default=96000, ge=4000, le=240000)
+    max_story_context_posts: int = Field(default=24, ge=0, le=40)
+    context_history_days: int = Field(default=180, ge=7, le=365)
+    context_query_timeout_ms: int = Field(default=1500, ge=100, le=5000)
+    max_images: int = Field(default=3, ge=1, le=8)
+    half_life_hours: float = Field(default=6, gt=0, le=48)
+    replacement_margin: float = Field(default=5, ge=0, le=100)
+    pulse_limit: int = Field(default=1, ge=0, le=15)
+    routes: dict[Literal["editor", "chatter", "pulse"], Route] = Field(
+        default_factory=dict
+    )
+    voices: dict[str, str] = Field(
+        default_factory=lambda: {
+            "chatter:en": "chatter-en-v1",
+            "pulse:en": "pulse-en-v1",
+        }
+    )
+    pictures: dict[str, PictureMode] = Field(default_factory=dict)
+    permitted_reuse: list[Literal["permitted", "unknown"]] = Field(
+        default_factory=lambda: ["permitted"]
+    )
+
+    @model_validator(mode="after")
+    def validate_activation(self):
+        kinds = {"atomic", "current_headline", "chatter", "pulse"}
+        if any(
+            key not in kinds
+            and not (
+                key.startswith("atomic:") and key.count(":") == 1 and key[7:].isalnum()
+            )
+            for key in self.pictures
+        ):
+            raise ValueError("unknown picture content kind")
+        if any(
+            key
+            not in {
+                f"{track}:{locale}"
+                for track in ("chatter", "pulse")
+                for locale in ("en", "zh-cn", "ja")
+            }
+            for key in self.voices
+        ):
+            raise ValueError("unsupported voice binding")
+        if self.enabled and (
+            set(self.routes) != {"editor", "chatter", "pulse"}
+            or not self.daily_usd
+            or not self.assessment_usd
+            or not self.daily_calls
+        ):
+            raise ValueError("generation requires explicit routes and positive budgets")
+        if "derive" in self.pictures.values() and (
+            not self.media_daily_calls
+            or not self.media_cost_ceiling_usd
+            or not self.daily_usd
+            or not self.assessment_usd
+            or not self.daily_calls
+        ):
+            raise ValueError("derivatives require explicit media budgets")
+        if self.enabled:
+            from .voices import load_bound_voices
+
+            load_bound_voices(self)
+        return self
+
+    def picture_mode(self, content_kind: str, source_platform: str = "") -> PictureMode:
+        return self.pictures.get(
+            f"{content_kind}:{source_platform}", self.pictures.get(content_kind, "off")
+        )
+
+
+def load_editorial_config(path: Path | None = None) -> EditorialConfig:
+    # Every worker/reader/CLI uses the same explicitly selected deployment profile.
+    # Route identifiers and prices are always in that file, never inferred from keys.
+    if path is None:
+        config_root = (Path(settings.BASE_DIR) / "config").resolve()
+        path = (
+            Path(settings.BASE_DIR)
+            / os.environ.get("EDITORIAL_CONFIG_PATH", "config/editorial.yaml")
+        ).resolve()
+        if not path.is_relative_to(config_root) or path.suffix not in {".yaml", ".yml"}:
+            raise ValueError("editorial profile must be a YAML file under config")
+    with path.open() as stream:
+        data = yaml.safe_load(stream) or {}
+    cfg = EditorialConfig.model_validate(data)
+    for name, field in (
+        ("EDITORIAL_ENABLED", "enabled"),
+        ("EDITORIAL_PUBLIC_ENABLED", "public_enabled"),
+    ):
+        value = os.environ.get(name)
+        if value is not None:
+            if value.lower() not in {"true", "false"}:
+                raise ValueError(f"{name} must be true or false")
+            data[field] = value.lower() == "true"
+    if "EDITORIAL_DAILY_USD" in os.environ:
+        ceiling = Decimal(os.environ["EDITORIAL_DAILY_USD"])
+        if not ceiling.is_finite() or not 0 <= ceiling <= Decimal(str(cfg.daily_usd)):
+            raise ValueError("runtime daily cap may only lower the profile ceiling")
+        data["daily_usd"] = float(ceiling)
+    return EditorialConfig.model_validate(data)

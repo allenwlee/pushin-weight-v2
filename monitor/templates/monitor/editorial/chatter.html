@@ -1,0 +1,4 @@
+{% load i18n %}<section class="chatter" aria-label="Chatter">
+{% if feed.hero %}<article class="chatter-hero"><p class="eyebrow">Chatter</p><h2><a href="{{ feed.hero.url }}">{{ feed.hero.headline }}</a></h2><p class="byline">{{ feed.hero.byline }}</p>{% include 'monitor/editorial/asset.html' with asset=feed.hero.asset %}</article>{% endif %}
+{% if feed.history %}<button type="button" class="history-toggle" aria-pressed="false" data-pause="{% translate 'Pause scrolling' %}" data-resume="{% translate 'Resume scrolling' %}">{% translate "Pause scrolling" %}</button><div class="chatter-history" tabindex="0" aria-label="{% translate 'Previous Chatter stories' %}">{% for item in feed.history %}<article><h3><a href="{{ item.url }}">{{ item.headline }}</a></h3><p>{{ item.byline }}</p></article>{% endfor %}</div>{% endif %}
+</section>

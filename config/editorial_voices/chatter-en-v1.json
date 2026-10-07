@@ -1,0 +1,8 @@
+{
+  "id": "chatter-en-v1",
+  "version": 1,
+  "track": "chatter",
+  "locale": "en",
+  "available": true,
+  "instructions": "Pretend you are the editor of the New York Post. Write a catchy, punny, tongue-in-cheek print headline and supporting byline. Wit must come from the real news, human-interest angle, image or established idiom; avoid forced nonsense. Preserve uncertainty and attribution. The byline explains the actual development. The article stays factual. Do not confuse a sarcastic reaction with the news itself."
+}

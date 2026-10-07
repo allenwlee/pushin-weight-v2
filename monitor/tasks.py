@@ -193,3 +193,39 @@ def _execute_cycle(*, dry_run: bool) -> dict:
         logger.exception("monitor run_cycle failed")
         # Don't auto-retry — Celery beat will fire the next cycle on schedule
         raise
+
+
+@shared_task(name="monitor.tasks.refresh_editorial", autoretry_for=(), max_retries=0,
+             ignore_result=True, acks_late=True, reject_on_worker_lost=True,
+             soft_time_limit=660, time_limit=720)
+def refresh_editorial(envelope):
+    from django.utils import timezone
+
+    from core.models import EditorialPicture
+    from monitor.editorial.dispatch import dispatch_poll
+    from monitor.editorial.service import run_editorial
+    # Recover due polls after broker loss; the database claim coalesces duplicates.
+    for pk in EditorialPicture.objects.filter(state="pending", next_poll_at__lte=timezone.now()).values_list("pk", flat=True)[:20]:
+        dispatch_poll(pk)
+    return run_editorial(envelope)
+
+
+@shared_task(name="monitor.tasks.poll_editorial_picture", autoretry_for=(), max_retries=0,
+             ignore_result=True, acks_late=True, reject_on_worker_lost=True,
+             soft_time_limit=170, time_limit=180)
+def poll_editorial_picture(picture_id):
+    from monitor.editorial.config import load_editorial_config
+    from monitor.editorial.dispatch import dispatch_poll
+    from monitor.editorial.media import poll_derivative
+    result = poll_derivative(picture_id, load_editorial_config())
+    if result.reschedule:
+        dispatch_poll(result.picture.pk)
+    return {"state": result.picture.state}
+
+
+@shared_task(name="monitor.tasks.edit_content_picture", autoretry_for=(), max_retries=0,
+             ignore_result=True, acks_late=True, reject_on_worker_lost=True,
+             soft_time_limit=170, time_limit=180)
+def edit_content_picture(content_kind, content_id, source_platform="x"):
+    from monitor.editorial.bindings import picture_for_content
+    return picture_for_content(content_kind, content_id, source_platform=source_platform)

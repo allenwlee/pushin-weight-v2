@@ -428,6 +428,9 @@ def publish_post_synthesis(
             commentary_en=normalized["en"],
             commentary_zh_cn=normalized["zh-cn"],
         )
+        from monitor.editorial.dispatch import dispatch_picture
+
+        dispatch_picture("atomic", artifact.pk)
         return artifact
 
 

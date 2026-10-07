@@ -278,6 +278,13 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
     policy = load_policy(POLICY_PATH)
 
     assert {
+        "editorial_assessments",
+        "editorial_budgets",
+        "editorial_calls",
+        "editorial_editions",
+        "editorial_heroes",
+        "editorial_pictures",
+        "editorial_stories",
         "official_company_account_states",
         "official_company_attempts",
         "official_company_budgets",

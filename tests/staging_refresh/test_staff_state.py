@@ -112,3 +112,90 @@ def test_scrub_keeps_selected_names_and_prose_without_replaying_staff_work():
         StaffProviderRequest,
     ):
         assert not model.objects.exists(), model._meta.db_table
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_scrub_removes_editorial_work_and_assets_but_preserves_source_posts():
+    from core.models import (
+        EditorialAssessment,
+        EditorialBudget,
+        EditorialCall,
+        EditorialEdition,
+        EditorialHero,
+        EditorialPicture,
+        EditorialStory,
+        Post,
+    )
+
+    policy = load_policy(
+        Path(__file__).resolve().parents[2] / "config/staging_refresh.yaml"
+    )
+    now = timezone.now()
+    post = Post.objects.create(
+        tweet_id="editorial-source", text="Keep this source", created_at=now
+    )
+    assessment = EditorialAssessment.objects.create(
+        interval=now, cutoff=now, source_cycle_id="production-cycle", lease_until=now
+    )
+    story = EditorialStory.objects.create(development_key="staging-editorial")
+    edition = EditorialEdition.objects.create(
+        story=story,
+        assessment=assessment,
+        track="chatter",
+        locale="en",
+        revision=1,
+        headline="Saved headline",
+        byline="Saved byline",
+        article="Saved article",
+        importance=50,
+        occurred_at=now,
+        fingerprint="a" * 64,
+        voice={},
+        model="fixture",
+        evidence={},
+        selection={},
+    )
+    EditorialHero.objects.create(key="chatter:en", edition=edition)
+    EditorialBudget.objects.create(
+        day=now.date(), reserved_usd=1, calls=1, media_calls=1
+    )
+    EditorialCall.objects.create(
+        assessment=assessment,
+        stage="media:production",
+        kind="media",
+        reserved_usd=1,
+        budget_day=now.date(),
+    )
+    media = StaffMediaObject.objects.create(
+        sha256="f" * 64,
+        storage_name="production-only/editorial-source.jpg",
+        media_type="image/jpeg",
+        byte_size=100,
+    )
+    EditorialPicture.objects.create(
+        content_kind="chatter",
+        content_id=str(edition.pk),
+        revision_hash="b" * 64,
+        assessment=assessment,
+        source_media=media,
+        mode="derive",
+        state="pending",
+        provider_task_id="production-task",
+    )
+
+    with transaction.atomic(), connection.cursor() as cursor:
+        result = scrub_candidate_data(cursor, policy)
+
+    assert Post.objects.get(pk=post.pk).text == "Keep this source"
+    for model in (
+        EditorialAssessment,
+        EditorialBudget,
+        EditorialCall,
+        EditorialEdition,
+        EditorialHero,
+        EditorialPicture,
+        EditorialStory,
+    ):
+        assert not model.objects.exists(), model._meta.db_table
+        assert result.cleared_rows[model._meta.db_table] == 1

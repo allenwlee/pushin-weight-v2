@@ -1,0 +1,547 @@
+{
+  "provenance": "docs/analysis/2026-10-02-193700-g2-chatter-pulse-manual-rerun/2026-10-02-230912-owner-review/resolved-verdicts.json",
+  "raw_export_sha256": "7f9a4332a45a8e3ddee3d20dd97e4ef8cf73e054e4762ec49ec743961b1201e6",
+  "default_rule": "i didn't finish all the reviews, just assume i agree that the remainder are not headline worthy",
+  "cases": [
+    {
+      "id": "E01",
+      "subject": "Gemini 4 Argon announced, with access restricted initially",
+      "chatter": true,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E02",
+      "subject": "OpenAI discloses a reasoning-extraction campaign and links a core cluster to Moonshot associates",
+      "chatter": true,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E03",
+      "subject": "FT reports Tencent's roughly $7 billion Oracle compute lease",
+      "chatter": false,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E04",
+      "subject": "DeepSeek releases tools for Huawei Ascend hardware",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E05",
+      "subject": "Evaluations report stronger cyber capabilities in open-weight GLM-5.3",
+      "chatter": false,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E06",
+      "subject": "ChatGPT Pro 500 and changes to Pro 200 allowances draw complaints",
+      "chatter": true,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E07",
+      "subject": "Runway announces Praxis-1 for robot control",
+      "chatter": false,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E08",
+      "subject": "Qwen-Image-2.1 releases weights and native transparency support",
+      "chatter": false,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E09",
+      "subject": "Ant announces Ling-3.1-flash, with open sourcing still planned",
+      "chatter": true,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E10",
+      "subject": "Ideogram 4.5 launches for repeated image editing",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E11",
+      "subject": "Fulcrum introduces Echo, a writing model it says cost under $5,000 to train",
+      "chatter": true,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E12",
+      "subject": "Upstage releases Solar Mini 4; evaluator finds low token prices do not mean low task cost",
+      "chatter": true,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E13",
+      "subject": "Siva Reddy joins Mistral to build a team in Canada",
+      "chatter": false,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E14",
+      "subject": "ARC Prize reports verified GLM-5.3 Flash benchmark results",
+      "chatter": false,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E15",
+      "subject": "HeyGen and Creatify adapt MiniMax H3 for business video",
+      "chatter": false,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E16",
+      "subject": "Creatify introduces Boreal-H3 for advertising video",
+      "chatter": false,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E17",
+      "subject": "MiniMax makes M3.1 Flash Preview free for Code subscribers through October 7",
+      "chatter": false,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E18",
+      "subject": "Framework opens preorders for a 192 GB Desktop configuration",
+      "chatter": true,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E19",
+      "subject": "Perplexity previews a contextual embedding model",
+      "chatter": true,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E20",
+      "subject": "Public Qwen 'pain' experiments prompt argument, parody and token promotion",
+      "chatter": true,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E21",
+      "subject": "PewDiePie reportedly announces Ajax for local use in Odysseus",
+      "chatter": true,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E22",
+      "subject": "DeepSeek Harness desktop preview and a community Linux build",
+      "chatter": true,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E23",
+      "subject": "A post alleges Meta Muse accessed private messages despite denied permission",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E24",
+      "subject": "Reports of an FTC inquiry into AI consumer risks",
+      "chatter": true,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E25",
+      "subject": "SynthID Bio reportedly watermarks AI-designed proteins",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E26",
+      "subject": "StepFun colleague warns that a teammate's X account was compromised",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E27",
+      "subject": "STEPX Neo reportedly receives network-access approval before an October launch",
+      "chatter": true,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E28",
+      "subject": "Figure's F.02 decommission film draws Terminator-themed reactions",
+      "chatter": true,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E29",
+      "subject": "Rallies posts a losing DeepSeek stock-portfolio scoreboard",
+      "chatter": true,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E30",
+      "subject": "Conflicting claims about who built Space Bunny Alpha",
+      "chatter": true,
+      "pulse": true,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E31",
+      "subject": "An OpenHuman-versus-Hermes speed comparison uses different models",
+      "chatter": true,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E32",
+      "subject": "A Qwen 4 logo post is treated as a shipped-model announcement",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E33",
+      "subject": "A supposed DeepSeek bot turns $100 into $35,000 overnight",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E34",
+      "subject": "An individual researcher announces joining Apple's human-centered ML team",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E35",
+      "subject": "A new applied research engineer joins Sakana AI",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "explicit_export_choice"
+      }
+    },
+    {
+      "id": "E36",
+      "subject": "A joke compares anxiety to Qwen with a high reasoning limit",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E37",
+      "subject": "A reseller promotes discounted access to existing video models",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E38",
+      "subject": "A creator shows a personal MiniMax H3 motion-graphics experiment",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E39",
+      "subject": "A daily AI roundup repeats several already identified stories",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E40",
+      "subject": "Sber reportedly releases GigaChat 3.5 Reasoning",
+      "chatter": true,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E41",
+      "subject": "A preprint reports inconsistent gender judgments across models",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "explicit_export_choice",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E42",
+      "subject": "One user reports mixed-language output from MiniMax M3.1 Flash",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E43",
+      "subject": "Tencent and university researchers announce ExplorationBench",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E44",
+      "subject": "Notion adds seven existing models to its picker",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E45",
+      "subject": "LangChain reports better results on its own agents after optimization",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E46",
+      "subject": "OpenAgentCore offers a self-hosted alternative around agent execution",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E47",
+      "subject": "Modal reportedly makes multi-node GPU clusters generally available",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E48",
+      "subject": "Hugging Face launches an automated text-to-speech leaderboard",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E49",
+      "subject": "A spoof claims SSI built superintelligence with 'Norwood 7' and 'Scalp'",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E50",
+      "subject": "A paper uses the mathematical term 'minimax'",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E51",
+      "subject": "Tencent penguin 'temporary staff' image joke",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E52",
+      "subject": "AI watchers joke about an exhausting release calendar",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E53",
+      "subject": "A White House AI clip prompts jokes about executives' expressions",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    },
+    {
+      "id": "E54",
+      "subject": "A mathematical prompt reportedly makes DeepSeek 'freak out'",
+      "chatter": false,
+      "pulse": false,
+      "origins": {
+        "chatter": "owner_instruction_for_unreviewed",
+        "pulse": "owner_instruction_for_unreviewed"
+      }
+    }
+  ]
+}
