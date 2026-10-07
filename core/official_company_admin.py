@@ -1,8 +1,18 @@
 """Bounded read-only official-account reporting for the owner console."""
 
 from django.core.paginator import Paginator
-from django.db.models import Count, Exists, OuterRef, Prefetch, Q
-from django.db.models.functions import Collate
+from django.db.models import (
+    Case,
+    Count,
+    Exists,
+    OuterRef,
+    Prefetch,
+    Q,
+    Subquery,
+    Value,
+    When,
+)
+from django.db.models.functions import Coalesce, Collate
 
 from core.models import (
     BrandAccount,
@@ -26,20 +36,32 @@ def _account_url(account):
 
 
 FOUND_ACCOUNTS = Q(status="registered") | (
-    Q(status="accepted") & (Q(model="owner-attestation") | Q(decision__hf_verification__outcome="passed"))
+    Q(status="accepted") & (
+        Q(model="owner-attestation")
+        | (Q(decision__hf_verification__outcome__isnull=False) & Q(decision__hf_verification__outcome="passed"))
+    )
+)
+
+ALREADY_TRACKED = ~FOUND_ACCOUNTS & (
+    Q(has_official_brand=True) | Q(has_official_company=True) | Q(last_error="already_tracked")
+)
+FAILED_EVALUATIONS = ~ALREADY_TRACKED & Q(status__in=["review_needed", "retry_due"]) & (
+    Q(latest_attempt_status="failed")
+    | Q(last_error__in=["attempt_limit", "evidence_envelope_exceeded"])
 )
 
 CANDIDATE_STATUSES = {
     "all": None, "waiting": Q(status="pending"), "evaluating": Q(status="claimed"),
     "retry_due": Q(status="retry_due"),
-    "review_needed": Q(status="review_needed") | (
+    "review_needed": (Q(status="review_needed") | (
         Q(status="accepted") & ~Q(model="owner-attestation")
         & (Q(decision__hf_verification__outcome__isnull=True) | ~Q(decision__hf_verification__outcome="passed"))
-    ),
+    )) & ~ALREADY_TRACKED & ~FAILED_EVALUATIONS,
+    "failed_evaluations": FAILED_EVALUATIONS,
     "hf_verified": Q(status__in=["accepted", "registered"], decision__hf_verification__outcome="passed"),
     "rejected": Q(status="rejected"), "registered": Q(status="registered"),
     "no_evidence": Q(status="no_evidence"), "owner_settled": Q(model="owner-attestation"),
-    "already_tracked": Q(has_official_brand=True) | Q(has_official_company=True),
+    "already_tracked": ALREADY_TRACKED,
 }
 
 
@@ -49,6 +71,17 @@ def candidate_report(*, page=1, status="all", query=""):
     ).exclude(status="suppressed").annotate(
         has_official_brand=Exists(BrandAccount.objects.filter(account_id=OuterRef("account_id"), role_id="official")),
         has_official_company=Exists(CompanyAccount.objects.filter(account_id=OuterRef("account_id"), role_id="official")),
+        latest_attempt_status=Coalesce(Subquery(
+            OfficialCompanyAttempt.objects.filter(
+                state_id=OuterRef("pk"), evidence_hash=OuterRef("evidence_hash"),
+            ).exclude(model="owner-attestation").order_by("-created_at", "-pk").values("status")[:1]
+        ), Value("")),
+    ).annotate(
+        attention_category=Case(
+            When(ALREADY_TRACKED, then=Value("already_tracked")),
+            When(FAILED_EVALUATIONS, then=Value("failed_evaluations")),
+            default=Value(""),
+        ),
     )
     completed = OfficialCompanyAttempt.objects.filter(
         state_id=OuterRef("pk"), status="completed",
@@ -61,6 +94,7 @@ def candidate_report(*, page=1, status="all", query=""):
         evaluating=Count("pk", filter=Q(status="claimed")),
         retry_due=Count("pk", filter=Q(status="retry_due")),
         review_needed=Count("pk", filter=CANDIDATE_STATUSES["review_needed"]),
+        failed_evaluations=Count("pk", filter=FAILED_EVALUATIONS),
         hf_verified=Count("pk", filter=CANDIDATE_STATUSES["hf_verified"]),
         rejected=Count("pk", filter=Q(status="rejected")),
         already_tracked=Count("pk", filter=CANDIDATE_STATUSES["already_tracked"]),
@@ -85,6 +119,7 @@ def candidate_report(*, page=1, status="all", query=""):
     return {
         "summary": summary, "coverage": coverage(), "page": result,
         "rows": [{"state": state, "x_url": _account_url(state.account),
+                  "attention_category": state.attention_category,
                   "tracked_brands": [edge.brand_id for edge in state.account.admin_official_brands],
                   "tracked_companies": [edge.company_id for edge in state.account.admin_official_companies]}
                  for state in result],

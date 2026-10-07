@@ -5837,6 +5837,8 @@ _ADMIN_COPY = {
     "en": {
         "title": "Admin", "accounts": "Official AI accounts", "empty": "No official accounts have been found yet.",
         "review_tab": "Review needed", "queue_tab": "Scan queue", "history_tab": "List history",
+        "failed_tab": "Failed evaluations", "failed_note": "These evaluations failed or could not run. See the recorded error; this is not a company qualification decision.",
+        "tracked_tab": "Already tracked", "tracked_note": "These accounts already have official tracked brand or company links. Their existing links are shown below.",
         "history_empty": "No list synchronization history yet.",
         "review_note": "These candidates need review before registration or list addition. Verified HF model developers appear under Official accounts found.",
         "found": "Official accounts found", "registered": "Registered", "added": "Call A adds acknowledged",
@@ -5854,6 +5856,8 @@ _ADMIN_COPY = {
     "zh_hans": {
         "title": "管理", "accounts": "官方 AI 账号", "empty": "尚未发现官方账号。",
         "review_tab": "需审核", "queue_tab": "扫描队列", "history_tab": "列表记录",
+        "failed_tab": "评估失败", "failed_note": "这些评估失败或无法运行。请查看记录的错误；这不代表公司资格判定。",
+        "tracked_tab": "已追踪", "tracked_note": "这些账号已有官方品牌或公司关联，现有关联显示在下方。",
         "history_empty": "暂无列表同步记录。",
         "review_note": "这些候选账号在登记或添加到列表前需要审核。经验证的 HF 模型开发者显示在“已发现官方账号”中。",
         "found": "已发现官方账号", "registered": "已登记", "added": "Call A 添加已确认",
@@ -5871,6 +5875,8 @@ _ADMIN_COPY = {
     "ja": {
         "title": "管理", "accounts": "公式 AI アカウント", "empty": "まだ公式アカウントは見つかっていません。",
         "review_tab": "要確認", "queue_tab": "スキャン待機列", "history_tab": "リスト履歴",
+        "failed_tab": "評価失敗", "failed_note": "評価が失敗したか実行できませんでした。記録されたエラーを確認してください。企業の適格性の判断ではありません。",
+        "tracked_tab": "追跡済み", "tracked_note": "これらのアカウントには追跡中の公式ブランドまたは企業との関連があります。既存の関連を下に表示します。",
         "history_empty": "リスト同期の履歴はまだありません。",
         "review_note": "これらの候補は登録やリスト追加の前に確認が必要です。HF で検証済みのモデル開発者は「発見した公式アカウント」に表示されます。",
         "found": "発見した公式アカウント", "registered": "登録済み", "added": "Call A 追加確認済み",
@@ -5891,6 +5897,7 @@ _ADMIN_COPY = {
 _CANDIDATE_COPY = {
     "en": {
         "hf_verified": "HF verified",
+        "failed_evaluations": "Failed evaluations",
         "already_tracked": "Already tracked", "tracked_brands": "Tracked brands", "tracked_companies": "Tracked companies",
         "title": "Candidate queue", "note": "Screening selects candidates; completed LLM decisions count actual evaluations. Verified HF model publishers can be approved automatically; other positive decisions require human review. Gold accounts go first.",
         "screened": "Authors screened", "selected": "Candidates selected", "llm_evaluated": "Accounts evaluated by LLM",
@@ -5902,6 +5909,7 @@ _CANDIDATE_COPY = {
     },
     "zh_hans": {
         "hf_verified": "HF 已验证",
+        "failed_evaluations": "评估失败",
         "already_tracked": "已追踪", "tracked_brands": "已追踪品牌", "tracked_companies": "已追踪公司",
         "title": "候选账号队列", "note": "筛选仅选出候选账号；LLM 判定完成数统计实际评估。HF 模型发布者经验证后可自动确认；其他正面判定需要人工审核。金标账号优先。",
         "screened": "已筛选作者", "selected": "已选候选账号", "llm_evaluated": "LLM 已评估账号",
@@ -5913,6 +5921,7 @@ _CANDIDATE_COPY = {
     },
     "ja": {
         "hf_verified": "HF 検証済み",
+        "failed_evaluations": "評価失敗",
         "already_tracked": "追跡済み", "tracked_brands": "追跡中のブランド", "tracked_companies": "追跡中の企業",
         "title": "候補アカウントの待機列", "note": "スクリーニングは候補の選定です。LLM の判定完了数は実際の評価を数えます。HF のモデル公開者は検証後に自動確認でき、その他の肯定判定は人の確認が必要です。金バッジを優先します。",
         "screened": "確認した投稿者", "selected": "選定した候補", "llm_evaluated": "LLM 評価済みアカウント",
@@ -5952,7 +5961,7 @@ def _product_review_context(
     # admin entry point opens settled accounts, with review and audit separate.
     default_tab = "queue" if any(key in request.GET for key in ("candidate_status", "candidate_q", "candidate_page")) else "found"
     accounts_tab = request.GET.get("accounts_tab", default_tab)
-    if accounts_tab not in {"found", "review", "queue", "history"}:
+    if accounts_tab not in {"found", "review", "failed", "tracked", "queue", "history"}:
         accounts_tab = "found"
     report = account_report(
         list_id=load_config(Path("config.yaml")).official_company.list_id,
@@ -5962,9 +5971,10 @@ def _product_review_context(
     admin_copy = _ADMIN_COPY.get(copy_locale, _ADMIN_COPY["en"])
     for row in report["rows"]:
         row["list_label"] = admin_copy["outcomes"][row["list_outcome"]]
+    fixed_status = {"review": "review_needed", "failed": "failed_evaluations", "tracked": "already_tracked"}.get(accounts_tab)
     candidates = candidate_report(
         page=request.GET.get("candidate_page", 1),
-        status="review_needed" if accounts_tab == "review" else request.GET.get("candidate_status", "all"),
+        status=fixed_status or request.GET.get("candidate_status", "all"),
         query=request.GET.get("candidate_q", ""),
     )
     candidate_copy = _CANDIDATE_COPY.get(copy_locale, _CANDIDATE_COPY["en"])
@@ -5974,6 +5984,8 @@ def _product_review_context(
         status_key = {"pending": "waiting", "claimed": "evaluating", "accepted": "review_needed"}.get(state.status, state.status)
         if state.status == "accepted" and state.decision.get("hf_verification", {}).get("outcome") == "passed":
             status_key = "hf_verified"
+        if row["attention_category"]:
+            status_key = row["attention_category"]
         row["status_label"] = candidate_copy["owner_settled"] if state.model == "owner-attestation" else candidate_copy.get(status_key, state.status)
     for paginated, key in [(report, "accounts_page"), (candidates, "candidate_page")]:
         for direction in ["previous", "next"]:
@@ -5988,6 +6000,8 @@ def _product_review_context(
     for key, label, count in [
         ("found", admin_copy["found"], report["summary"]["found"]),
         ("review", admin_copy["review_tab"], candidates["summary"]["review_needed"]),
+        ("failed", admin_copy["failed_tab"], candidates["summary"]["failed_evaluations"]),
+        ("tracked", admin_copy["tracked_tab"], candidates["summary"]["already_tracked"]),
         ("queue", admin_copy["queue_tab"], candidates["summary"]["selected"]),
         ("history", admin_copy["history_tab"], None),
     ]:
@@ -6010,15 +6024,16 @@ def _product_review_context(
         "account_tabs": tabs,
         "account_section_title": admin_copy["history_tab"] if accounts_tab == "history" else admin_copy["accounts"],
         "account_section_empty": admin_copy["history_empty"] if accounts_tab == "history" else admin_copy["empty"],
-        "candidate_section_title": admin_copy["review_tab"] if accounts_tab == "review" else candidate_copy["title"],
-        "candidate_section_note": admin_copy["review_note"] if accounts_tab == "review" else candidate_copy["note"],
+        "candidate_section_title": admin_copy[accounts_tab + "_tab"] if fixed_status else candidate_copy["title"],
+        "candidate_section_note": admin_copy[accounts_tab + "_note"] if fixed_status else candidate_copy["note"],
         "official_accounts": report,
         "official_candidates": candidates,
         "candidate_copy": candidate_copy,
+        "candidate_fixed_status": bool(fixed_status),
         "candidate_metrics": [
             {"key": key, "label": candidate_copy[key], "value": value}
             for key, value in candidates["summary"].items()
-            if accounts_tab != "review" or key == "review_needed"
+            if not fixed_status or key == fixed_status
         ],
         "candidate_status_options": [
             {"value": key, "label": candidate_copy[key]} for key in CANDIDATE_STATUSES

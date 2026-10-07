@@ -11,7 +11,7 @@
     <input type="hidden" name="locale" value="{{ active_locale }}">
     <input type="hidden" name="accounts_page" value="{{ official_accounts.page.number }}">
     <input type="hidden" name="accounts_tab" value="{{ accounts_tab }}">
-    {% if accounts_tab != 'review' %}
+    {% if not candidate_fixed_status %}
     <label>{{ candidate_copy.status }}
       <select name="candidate_status">
         {% for option in candidate_status_options %}<option value="{{ option.value }}"{% if official_candidates.status == option.value %} selected{% endif %}>{{ option.label }}</option>{% endfor %}

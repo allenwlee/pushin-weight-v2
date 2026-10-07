@@ -24,6 +24,86 @@ pytestmark = pytest.mark.requires_postgres
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class AdminBrowserTests(StaticLiveServerTestCase):
+    def test_failed_and_tracked_tabs_do_not_mix_with_company_review(self):
+        from core.models import BrandAccount, OfficialCompanyAttempt, Role
+        from core.official_company_candidates import CANDIDATE_POLICY
+
+        states = {}
+        for number, handle, error in [
+            (97201, "ordinary_review", "human_review_required"),
+            (97202, "invalid_eval", "ValueError"),
+            (97203, "provider_failed", "DeepInfraPermanentError"),
+            (97204, "tracked_company", "already_tracked"),
+        ]:
+            state = OfficialCompanyAccountState.objects.create(
+                account=Account.objects.create(author_id=str(number), handle=handle),
+                status="review_needed", evidence_hash="a" * 64,
+                candidate_priority=1, candidate_policy_version=CANDIDATE_POLICY,
+                last_error=error, model="test-model",
+                decision={"organization_name": handle},
+            )
+            states[number] = state
+            if number != 97204:
+                OfficialCompanyAttempt.objects.create(
+                    state=state, evidence_hash=state.evidence_hash,
+                    claim_token=str(number), policy_version="test", model="test-model",
+                    status="completed" if number == 97201 else "failed", reserved_usd=0,
+                    error_code="" if number == 97201 else error,
+                )
+        role, _ = Role.objects.get_or_create(key="official")
+        for name in ["tracked_alpha", "tracked_beta"]:
+            BrandAccount.objects.create(
+                account=states[97204].account,
+                brand=Brand.objects.create(nickname=name), role=role,
+            )
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = self._context(browser).new_page()
+                for locale, failed_label, tracked_label in [
+                    ("en", "Failed evaluations", "Already tracked"),
+                    ("zh_hans", "评估失败", "已追踪"),
+                    ("ja", "評価失敗", "追跡済み"),
+                ]:
+                    page.goto(self.live_server_url + "/admin?accounts_tab=review&locale=" + locale)
+                    self.assertTrue(page.locator('[data-admin-candidate="97201"]').is_visible())
+                    for number in [97202, 97203, 97204]:
+                        self.assertEqual(page.locator(f'[data-admin-candidate="{number}"]').count(), 0)
+                    self.assertIn(failed_label, page.locator('[data-account-tab="failed"]').inner_text())
+                    self.assertIn(tracked_label, page.locator('[data-account-tab="tracked"]').inner_text())
+                    page.locator('[data-account-tab="failed"]').focus()
+                    page.keyboard.press("Enter")
+                    page.wait_for_url("**accounts_tab=failed**")
+                    self.assertEqual(page.locator('[data-account-tab="failed"]').get_attribute("aria-current"), "page")
+                    self.assertEqual(page.locator('[data-candidate-count="failed_evaluations"]').inner_text(), "2")
+                    self.assertEqual(page.locator('select[name="candidate_status"]').count(), 0)
+                    for number, error in [(97202, "ValueError"), (97203, "DeepInfraPermanentError")]:
+                        row = page.locator(f'[data-admin-candidate="{number}"]')
+                        self.assertTrue(row.is_visible())
+                        row.locator("summary").click()
+                        self.assertTrue(row.get_by_text(error, exact=True).is_visible())
+                    page.locator('input[name="candidate_q"]').fill("invalid_eval")
+                    page.locator('button[type="submit"]').first.click()
+                    self.assertTrue(page.locator('[data-admin-candidate="97202"]').is_visible())
+                    self.assertEqual(page.locator('[data-admin-candidate="97203"]').count(), 0)
+                    page.locator('input[name="candidate_q"]').fill("")
+                    page.locator('button[type="submit"]').first.click()
+                    page.locator('[data-account-tab="tracked"]').click()
+                    self.assertTrue(page.locator('[data-admin-candidate="97204"]').is_visible())
+                    self.assertEqual(page.locator('[data-candidate-count="already_tracked"]').inner_text(), "1")
+                    self.assertEqual(page.locator('[data-admin-candidate="97202"]').count(), 0)
+                    self.assertTrue(page.get_by_text("tracked_alpha, tracked_beta").is_visible())
+                    page.set_viewport_size({"width": 390, "height": 844})
+                    self.assertTrue(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"))
+                    shot = Path(__file__).resolve().parents[1] / f".pytest-tmp/admin-tracked-{locale}.png"
+                    shot.parent.mkdir(exist_ok=True)
+                    page.screenshot(path=str(shot), full_page=True)
+                    page.locator('[data-account-tab="failed"]').click()
+                    page.screenshot(path=str(shot.with_name(f"admin-failed-{locale}.png")), full_page=True)
+                    page.set_viewport_size({"width": 1440, "height": 1000})
+            finally:
+                browser.close()
+
     def test_official_found_and_review_tabs_separate_accounts(self):
         from core.official_company_candidates import CANDIDATE_POLICY
 
