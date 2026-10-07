@@ -16,6 +16,7 @@ ARCHIVES = {
     },
     "arena": {"lmarena-ai/leaderboard-dataset": "lmarena-ai"},
     "openrouter": {"openrouter/rankings-daily": "openrouter"},
+    "opencode": {"opencode/model-daily": "opencode"},
 }
 
 
@@ -116,6 +117,7 @@ def prepare_history(manifest):
             # Import time belongs to this run; the archive's timestamp is provenance.
             original_observed = item.pop("observed_at", None)
             item["_source_metadata"] = {
+                **item.get("_source_metadata", {}),
                 "archive_snapshot_date": day.isoformat(),
                 "archive_snapshot_precision": "date",
                 "archive_snapshot_timezone": snap.get("snapshot_timezone", "unknown"),
@@ -170,6 +172,22 @@ def prepare_history(manifest):
     if source == "openrouter":
         require(len(snapshots) == 1, "one complete OpenRouter revision per import")
         payload.update(meta={"version": "v1"}, as_of=max(as_of) if as_of else None)
+    if source == "opencode":
+        require(
+            len(snapshots) == 1, "one complete OpenCode endpoint revision per import"
+        )
+        require(
+            all(
+                start <= native_date(row["date"]) <= end
+                for row in rows
+                if row.get("status") != "error"
+            ),
+            "OpenCode usage date outside range",
+        )
+        payload["endpoint_checks"] = copy.deepcopy(
+            snapshots[0]["payload"]["endpoint_checks"]
+        )
+        payload["status"] = snapshots[0]["payload"]["status"]
     metadata = {
         "ingestion_mode": "historical_import",
         "measurement_provider": source,

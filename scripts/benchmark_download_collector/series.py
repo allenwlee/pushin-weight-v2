@@ -21,7 +21,7 @@ def build_report(snapshots, start_date, end_date):
     )
     brands, products = validate_inputs(first["catalog"], first["mapping"])
     frozen = contract(first["catalog"], first["mapping"])
-    by_source = {source: {} for source in ("arena", "openrouter")}
+    by_source = {source: {} for source in ("arena", "openrouter", "opencode")}
     for row in first["mapping"]["mappings"]:
         by_source[row["source"]][row["source_id"]] = products[row["product_key"]][
             "brand_id"

@@ -8119,8 +8119,9 @@ class OfficialCompanyScan(models.Model):
 
 
 class OfficialCompanyAccountState(models.Model):
+    native_account_id = models.TextField(db_column="account_id", null=True, editable=False)
     account = models.OneToOneField(
-        Account, on_delete=models.PROTECT, related_name="official_company_state"
+        Account, db_column="account_key", on_delete=models.PROTECT, related_name="official_company_state"
     )
     evidence_hash = models.CharField(max_length=64)
     evidence = models.JSONField(default=dict)
@@ -8146,6 +8147,14 @@ class OfficialCompanyAccountState(models.Model):
     last_error = models.CharField(max_length=128, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        fields = kwargs.get("update_fields")
+        if fields is None or "account" in fields or "account_id" in fields:
+            self.native_account_id = self.account.author_id
+            if fields is not None:
+                kwargs["update_fields"] = set(fields) | {"native_account_id"}
+        return super().save(*args, **kwargs)
 
     class Meta:
         db_table = "official_company_account_states"
@@ -8225,8 +8234,9 @@ class OfficialCompanyAttempt(models.Model):
 
 
 class OfficialCompanyListIntent(models.Model):
+    native_account_id = models.TextField(db_column="account_id", null=True, editable=False)
     account = models.ForeignKey(
-        Account, on_delete=models.PROTECT, related_name="official_list_intents"
+        Account, db_column="account_key", on_delete=models.PROTECT, related_name="official_list_intents"
     )
     state = models.ForeignKey(
         OfficialCompanyAccountState,
@@ -8246,6 +8256,14 @@ class OfficialCompanyListIntent(models.Model):
     add_acknowledged_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        fields = kwargs.get("update_fields")
+        if fields is None or "account" in fields or "account_id" in fields:
+            self.native_account_id = self.account.author_id
+            if fields is not None:
+                kwargs["update_fields"] = set(fields) | {"native_account_id"}
+        return super().save(*args, **kwargs)
 
     class Meta:
         db_table = "official_company_list_intents"

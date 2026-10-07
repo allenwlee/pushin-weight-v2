@@ -206,6 +206,7 @@ def _point(value, definition, day):
             {
                 "run_id": str(run.pk),
                 "observation_id": observation.pk,
+                "value_id": value.pk,
                 "source_identifier": observation.source_identifier,
                 "payload_sha256": run.payload_sha256,
                 "source_as_of": run.source_as_of.isoformat()
@@ -218,6 +219,9 @@ def _point(value, definition, day):
 
 
 def metric_points(contract, line, days):
+    from core.benchmark_measurement_pins import measurement_contract
+
+    contract = measurement_contract(contract, line)
     source = line["source"]
     settings = contract.source_configuration[source]
     frozen = next(
@@ -230,6 +234,61 @@ def metric_points(contract, line, days):
 
     require(definition_snapshot(definition) == frozen, "pinned definition changed")
     mappings = mapping_scope(contract, line)
+    if source == "opencode":
+        from core.benchmark_opencode import selected_rows
+
+        require(
+            len(mappings) == 1 and line.get("aggregation", "single") == "single",
+            "OpenCode counts require a single reviewed model",
+        )
+        rows = selected_rows(contract, [m.pk for m in mappings], days[0], days[-1])
+        points = []
+        for day in days:
+            row = rows.get((mappings[0].external_identifier, day))
+            value = (
+                next(
+                    (
+                        v
+                        for v in row["observation"].values.all()
+                        if v.source_metric_id == definition.pk
+                    ),
+                    None,
+                )
+                if row
+                else None
+            )
+            partial = (
+                row and row["observation"].source_metadata["period_status"] == "partial"
+            )
+            if value is None or (partial and not line.get("include_partial", False)):
+                points.append(
+                    {
+                        "date": day,
+                        "raw_value": None,
+                        "coverage": "partial" if partial else "missing",
+                        "observed": False,
+                        "evidence": [],
+                    }
+                )
+            else:
+                point = _point(value, definition, day)
+                point.update(
+                    coverage="partial" if partial else "observed",
+                    period_status="partial" if partial else "completed",
+                    endpoint_updated_at=row["check"]["updated_at"],
+                    revision_anomaly=row["check"].get("revision_anomaly"),
+                    traffic_scope="opencode_go_and_free",
+                    approximate=definition.metric_key in {"unique_users", "sessions"},
+                    selected_count=1,
+                    reported_count=1,
+                )
+                point["evidence"][0].update(
+                    endpoint_check_run_id=row["check_run_id"],
+                    endpoint_body_sha256=row["check"]["body_sha256"],
+                    endpoint_updated_at=row["check"]["updated_at"],
+                )
+                points.append(point)
+        return points, definition, [str(m.pk) for m in mappings]
     mapping_ids = {m.pk for m in mappings}
     aggregation = line.get("aggregation", "single")
     require(
@@ -408,17 +467,19 @@ def metric_points(contract, line, days):
                 ]
         point.update(selected_count=len(mapping_ids), reported_count=len(cohort))
         if source == "arena":
+            related = (
+                chosen if aggregation == "best_score" else next(iter(cohort.values()))
+            ).observation.values.all()
             point["related_values"] = {
                 v.source_metric.metric_key: (
                     str(v.integer_value)
                     if v.integer_value is not None
                     else v.float_value
                 )
-                for v in (
-                    chosen
-                    if aggregation == "best_score"
-                    else next(iter(cohort.values()))
-                ).observation.values.all()
+                for v in related
+            }
+            point["related_value_ids"] = {
+                v.source_metric.metric_key: v.pk for v in related
             }
         selected[day] = point
         selected_revision[day] = revisions[(day, run_id)]
@@ -526,6 +587,10 @@ def metric_points(contract, line, days):
 def build_comparison(contract, preset_key, start_date=None, end_date=None):
     preset = contract.methodology.get("comparisons", {}).get(preset_key)
     require(preset is not None, "unknown comparison preset")
+    if preset.get("chart_kind") == "release_response_v1":
+        from core.benchmark_release_response import build_release_response
+
+        return build_release_response(contract, preset, start_date, end_date)
     anchor = preset["launch_anchor"]
     require(
         anchor["product_subject_id"] in contract.catalog_snapshot["subjects"],

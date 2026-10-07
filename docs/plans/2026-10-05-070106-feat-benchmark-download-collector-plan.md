@@ -37,6 +37,16 @@ The owner has now selected one combined release-response chart as the default G5
 
 The latest naming decision renames the definition table from `source_metrics` to `metrics`. A metric still belongs to one data source and retains its unit, numeric type, version and state/flow semantics. This is a migration of the existing table, not another table or a change in recorded measurements. The schema below uses the proposed name; implementation and deployed databases still use the old name until U24 is executed and verified under a later authorized run.
 
+## October 8 execution checkpoint — amended candidate
+
+U22–U27 are implemented locally and remain under the owner-selected staging delivery. The shared release-response computation, linked raw Arena panel, metrics rename and OpenCode daily history/hourly revision handling are exercised on PostgreSQL. OpenCode's initial reviewed cohort is DeepSeek V4.1 Flash and GLM 5.3 Flash; additional products require reviewed exact mappings. Collectors remain disabled and source-use decisions continue to restrict review data from public forecasts/trading/public numeric redistribution.
+
+Integration with main `702fef5b` exposed two newer official-company account links that the original account cutover did not know about. Migration `0074_official_company_generic_accounts` adds their UUID account links while retaining native X IDs, evidence, list status, uniqueness and native-writer compatibility. It accepts either independent migration order, updates the saved account-observation checkpoint without repeating completed work, and keeps company discovery X-only. Existing full-save paths and owner attestations use the correct native ID. This is a required account-abstraction integration repair; no table is added and no company decisions, budgets, list requests or production jobs are replayed.
+
+Staging backup is retained privately on fuchitalee and was restored before rehearsing the populated rename and account repair. Definition object/constraint/index identities, IDs, sequence and all 2,056,891 prior values survive the rename; the staged review will reuse immutable parent measurements rather than copy them. Review ran inline under the project's sequential agent rule. External Claude and Grok attempts returned no usable review (402 balance failure and timeout); independent reviewer coverage is unavailable and is not counted as passed.
+
+The delivery receipt will record the actual candidate SHA, hosted checks, stage migration preservation, bounded import, owner-gated browser/API proof and restored service settings. Production and recurring activation are excluded.
+
 ## October 7 amendment — OpenCode as a fourth peer source
 
 **R42–R45 / KD27 (session-settled: user-directed):** add OpenCode alongside

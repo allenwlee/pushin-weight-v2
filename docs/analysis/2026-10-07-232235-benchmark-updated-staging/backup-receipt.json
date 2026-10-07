@@ -1,0 +1,12 @@
+{
+  "source": "pushinweight_staging",
+  "service": "srv-d9vb8t49v7es738lf2ng",
+  "started_epoch": 1791379433.6034062,
+  "completed_epoch": 1791379938.1435258,
+  "exit_code": 0,
+  "bytes": 557431905,
+  "path": "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector/.local/benchmark-updated-staging-20261007/staging-before-benchmark.dump",
+  "production": false,
+  "sha256": "3b7826af8843c0c61bc5d291c62da4a5e02d2a022f15738643cce82d37d2f9cf",
+  "restore_verified": true
+}

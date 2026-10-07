@@ -108,4 +108,27 @@ def collection_health(contract, *, now=None):
             "freshness_seconds": threshold,
             "publication_freshness_seconds": publication_threshold,
         }
+        if source == "opencode":
+            from core.benchmark_opencode import publication_times
+
+            publication = publication_times(contract)
+            expected = set(
+                contract.mappings.filter(source_id=source).values_list(
+                    "external_identifier", flat=True
+                )
+            )
+            complete = bool(expected) and expected <= publication.keys()
+            oldest = min(publication[k] for k in expected) if complete else None
+            result[source].update(
+                publication_updated_at={
+                    k: v.isoformat() for k, v in publication.items()
+                },
+                publication_freshness="unknown"
+                if oldest is None
+                else "stale"
+                if (now - oldest).total_seconds() > publication_threshold
+                else "fresh",
+                publication_time_precision="instant",
+                traffic_scope="opencode_go_and_free",
+            )
     return result

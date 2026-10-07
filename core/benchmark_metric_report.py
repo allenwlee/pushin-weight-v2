@@ -15,6 +15,8 @@ PANELS = {
 
 def report_from_comparison(comparison):
     """Adapt presentation only; never recalculate measurements or baselines."""
+    if comparison.get("chart_kind") == "release_response_v1":
+        return {"schema_version": 1, "database_comparison": comparison}
     selected = {}
     for line in comparison["lines"]:
         panel = PANELS.get((line["source"], line["metric_key"]))

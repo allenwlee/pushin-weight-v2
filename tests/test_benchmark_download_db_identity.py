@@ -26,6 +26,7 @@ def setup_spec():
                 "hfmlsoc/hub_weekly_snapshots",
                 "lmarena-ai/leaderboard-dataset",
                 "openrouter/rankings-daily",
+                "opencode/model-daily",
             )
         }
         source.metadata["use_policy"] = policy

@@ -316,6 +316,37 @@ headline to exaggerate its absolute materiality. The default view shows the
 top two supported brands; explicit brand filters show those brands from the
 same already-generated run.
 
+## Provider measurements
+
+### Reference week
+
+The earliest seven consecutive completed post-launch dates for which all three
+selected release-response lines have actual data. Each line uses its own raw
+mean over those same dates. Display smoothing and date-range controls do not
+change those means. A correction to source evidence changes the reference revision.
+
+### Net rolling-counter change
+
+The signed difference between adjacent observed HF 30-day download counters.
+An increase does not establish the number of newly generated downloads: old
+downloads are also leaving the rolling window. Missing adjacent snapshots create
+a gap rather than an estimated daily allocation.
+
+### Endpoint revision
+
+A provider's update of an exported report, identified by source update time and
+canonical JSON body hash. OpenCode updates UTC daily totals hourly. Repeated
+snapshots are revisions of one daily window, not independent hourly usage.
+Unchanged values retain the original observation; each successful check retains
+references and its own retrieval time. Current-day reports have an incomplete end.
+
+### Measurement contract pin
+
+A reviewed comparison's explicit reference to an immutable measurement contract
+by ID and hash. It reuses retained evidence under identical source definitions
+and identities. The current comparison still needs its own review and use rights;
+an operational forecast cutoff must exclude later reviews and imports.
+
 ## x-monitor deployment
 
 Vocabulary scoped to the launchd-based deployment story — the two LaunchAgents, the pause sentinel, and the in-process lockfile that prevents overlapping cycles.

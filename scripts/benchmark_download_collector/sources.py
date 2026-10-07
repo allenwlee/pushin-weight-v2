@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import time
 from contextlib import closing
 from datetime import UTC, datetime, timedelta
@@ -14,7 +15,7 @@ import httpx
 
 from core.hf_metadata_client import HFMetadataClient
 
-from .identity import count, day, days, require, timestamp
+from .identity import count, day, days, digest, require, timestamp
 
 ARENA_URL = "https://datasets-server.huggingface.co/filter"
 ARENA_DATASET = "lmarena-ai/leaderboard-dataset"
@@ -26,7 +27,19 @@ SOURCE_URLS = {
     "arena": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
     "hf": "https://huggingface.co/docs/hub/models-download-stats",
     "openrouter": "https://openrouter.ai/rankings",
+    "opencode": "https://opencode.ai/data/llms.txt",
 }
+
+
+def opencode_url(path):
+    require(
+        isinstance(path, str)
+        and re.fullmatch(
+            r"/data/[a-z0-9][a-z0-9_-]{0,80}/[a-z0-9][a-z0-9_-]{0,128}\.json", path
+        ),
+        "unreviewed OpenCode model endpoint",
+    )
+    return "https://opencode.ai" + path
 
 
 class SourceError(ValueError):
@@ -57,6 +70,7 @@ class Budget:
         self.remaining = max_requests
         self.deadline = clock() + max_seconds
         self.max_bytes = max_bytes
+        self.opencode_bytes = 0
 
     def check(self):
         if self.remaining <= 0:
@@ -64,7 +78,7 @@ class Budget:
         if self.clock() >= self.deadline:
             raise SourceError("time_cap")
 
-    def get(self, url, params, *, key=None, asset=False):
+    def get(self, url, params, *, key=None, asset=False, opencode=False):
         if asset:
             parsed = urlsplit(url)
             require(
@@ -77,6 +91,9 @@ class Budget:
                 ),
                 "untrusted_arena_asset_redirect",
             )
+        elif opencode:
+            parsed = urlsplit(url)
+            require(url == opencode_url(parsed.path), "untrusted_opencode_url")
         else:
             require(url in {ARENA_URL, OPENROUTER_URL}, "unsupported source URL")
         require(not key or url == OPENROUTER_URL, "credential host mismatch")
@@ -117,6 +134,10 @@ class Budget:
                         content = bytearray()
                         for chunk in response.iter_bytes(chunk_size=65536):
                             content.extend(chunk)
+                            if opencode:
+                                self.opencode_bytes += len(chunk)
+                                if self.opencode_bytes > self.max_bytes:
+                                    raise SourceError("response_size_cap")
                             if len(content) > self.max_bytes:
                                 raise SourceError("response_size_cap")
                             if self.clock() >= self.deadline:
@@ -175,6 +196,92 @@ class Budget:
         if all_time is not None:
             count(all_time)
         return result.payload
+
+
+def opencode(budget, selected, *, now=None):
+    """Capture the entire exposed model history, never index rounding or totals."""
+    now = now or datetime.now(UTC)
+    require(
+        isinstance(selected, list) and 0 < len(selected) <= 100,
+        "OpenCode cohort budget",
+    )
+    identifiers = [item["external_identifier"] for item in selected]
+    require(len(set(identifiers)) == len(identifiers), "duplicate OpenCode model")
+    for item in selected:
+        opencode_url(item["endpoint_path"])
+    rows, checks = [], []
+    for item in selected:
+        identifier, path = item["external_identifier"], item["endpoint_path"]
+        check = {"source_identifier": identifier, "endpoint_path": path}
+        try:
+            payload = budget.get(opencode_url(path), None, opencode=True)
+            check.update(body_sha256=digest(payload), native_payload=payload)
+            require(
+                payload.get("model", {}).get("id") == identifier,
+                "OpenCode model identity mismatch",
+            )
+            revision = timestamp(payload["updatedAt"]).astimezone(UTC)
+            require(
+                revision <= now.astimezone(UTC) + timedelta(minutes=5),
+                "future OpenCode export",
+            )
+            check["updated_at"] = revision.isoformat()
+            daily = payload["usage"]["daily"]
+            require(
+                isinstance(daily, list) and 0 < len(daily) <= 366,
+                "OpenCode history row budget",
+            )
+            own, seen = [], set()
+            for native in daily:
+                label = day(native["date"])
+                require(
+                    label <= revision.date() and label not in seen,
+                    "future or duplicate OpenCode date",
+                )
+                seen.add(label)
+                require("tokens" in native, "missing OpenCode tokens")
+                for key in ("tokens", "uniqueUsers", "sessions"):
+                    if key in native:
+                        require(
+                            type(native[key]) is int and 0 <= native[key] < 10**30,
+                            "invalid OpenCode count",
+                        )
+                own.append(
+                    {
+                        **native,
+                        "model_id": identifier,
+                        "_source_metadata": {
+                            "endpoint_path": path,
+                            "updated_at": revision.isoformat(),
+                            "endpoint_body_sha256": check["body_sha256"],
+                            "period_status": "partial"
+                            if label == revision.date()
+                            else "completed",
+                            "traffic_scope": "opencode_go_and_free",
+                            "approximate_metrics": ["unique_users", "sessions"],
+                        },
+                    }
+                )
+            rows.extend(own)
+            checks.append(
+                {**check, "status": "ok", "dates": sorted(d.isoformat() for d in seen)}
+            )
+        except (ValueError, TypeError, KeyError) as exc:
+            check.update(status="error", error_code=safe_error(exc))
+            checks.append(check)
+            rows.append(
+                {
+                    "model_id": identifier,
+                    "status": "error",
+                    "_source_metadata": {"endpoint_path": path},
+                }
+            )
+    return {
+        "status": "ok" if all(c["status"] == "ok" for c in checks) else "partial",
+        "rows": rows,
+        "endpoint_checks": checks,
+        "coverage": "entire_exposed_model_history",
+    }
 
 
 def validate_arena_row(row, start_date, end_date):

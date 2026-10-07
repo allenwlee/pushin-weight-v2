@@ -69,7 +69,7 @@ def coverage():
     candidate_count = sum(counts.values())
     unresolved = sum(counts.get(k, 0) for k in ["pending", "claimed", "retry_due"])
     screened_candidates = (
-        candidates.filter(account_id__lte=scan.cursor).count()
+        candidates.filter(account__author_id__lte=scan.cursor).count()
         if scan and scan.cursor
         else 0
     )
@@ -104,7 +104,7 @@ def scan_initial_batch(*, limit=100, deadline=None):
         )
         if created:
             if not legacy:
-                scan.population = Account.objects.filter(
+                scan.population = Account.x.filter(
                     first_seen_at__lte=scan.started_at
                 ).count()
             for key in [
@@ -117,7 +117,7 @@ def scan_initial_batch(*, limit=100, deadline=None):
                 )
         if scan.complete:
             return coverage()
-        inventory = Account.objects.filter(first_seen_at__lte=scan.started_at)
+        inventory = Account.x.filter(first_seen_at__lte=scan.started_at)
         # Stage gold first, without counting authors twice. The subsequent full
         # ID inventory supplies whole-population coverage, even if badges change.
         gold, _ = OfficialCompanyScan.objects.select_for_update().get_or_create(
@@ -173,7 +173,11 @@ def _observations(key, model, time_field, *, limit, account_field=None, deadline
         # Observation timestamps, never the post's publication date.
         observations = model.objects.filter(after).order_by(time_field, "pk")
         if account_field:
-            observations = observations.select_related(account_field)
+            observations = observations.filter(
+                **{account_field + "__data_source_id": "x"}
+            ).select_related(account_field)
+        else:
+            observations = observations.filter(data_source_id="x")
         rows = list(observations[:limit])
         unique = {}
         for row in rows:
@@ -194,7 +198,7 @@ def _observations(key, model, time_field, *, limit, account_field=None, deadline
                     break
                 seen.add(account.pk)
             scan.cursor = json.dumps(
-                {"at": getattr(row, time_field).isoformat(), "pk": row.pk}
+                {"at": getattr(row, time_field).isoformat(), "pk": str(row.pk)}
             )
             scan.enumerated += 1
         scan.save()
@@ -238,13 +242,13 @@ def enqueue_incremental(*, limit=100, deadline=None):
             key="rotating-inventory"
         )
         rows = list(
-            Account.objects.filter(author_id__gt=scan.cursor).order_by("author_id")[
+            Account.x.filter(author_id__gt=scan.cursor).order_by("author_id")[
                 : bounds[3]
             ]
         )
         if not rows:
             scan.cursor = ""
-            rows = list(Account.objects.order_by("author_id")[: bounds[3]])
+            rows = list(Account.x.order_by("author_id")[: bounds[3]])
         for account in enqueue_filtered_accounts(rows, deadline=deadline):
             count += 1
             scan.cursor = account.author_id

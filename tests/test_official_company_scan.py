@@ -95,9 +95,9 @@ def test_no_evidence_is_explicit_and_arrivals_during_initial_are_incremental():
         author_id="2", bio="We develop our own speech models", verified_type="Business"
     )
     enqueue_incremental(limit=100)
-    assert not OfficialCompanyAccountState.objects.filter(account_id="1").exists()
+    assert not OfficialCompanyAccountState.objects.filter(account__author_id="1").exists()
     assert coverage()["deferred"] == 1
-    assert OfficialCompanyAccountState.objects.get(account_id="2").status == "pending"
+    assert OfficialCompanyAccountState.objects.get(account__author_id="2").status == "pending"
 
 
 def test_material_profile_change_is_reenqueued_but_followers_are_not():

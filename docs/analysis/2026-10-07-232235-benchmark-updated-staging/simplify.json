@@ -1,0 +1,19 @@
+{
+  "status": "complete",
+  "mode": "inline under AGENTS",
+  "lenses": [
+    "reuse",
+    "quality",
+    "efficiency"
+  ],
+  "changes": [
+    "Shared reference-week engine serves API, live Pulse and offline export.",
+    "Reuse immutable parent-contract facts instead of copying 2M values.",
+    "Project latest OpenCode date references and publication times in PostgreSQL, avoiding full hourly envelope materialization."
+  ],
+  "preserved": [
+    "HF/OR/Arena contracts and legacy preset arithmetic",
+    "new source remains scheduling-disabled",
+    "no new OpenCode table"
+  ]
+}

@@ -1,0 +1,172 @@
+........................................................................ [ 23%]
+......................................F................................. [ 46%]
+........................................................................ [ 69%]
+........................................................................ [ 92%]
+.......................                                                  [100%]
+=================================== FAILURES ===================================
+_ test_populated_rename_and_reverse_preserve_oid_ids_foreign_keys_and_sequence _
+
+    def test_populated_rename_and_reverse_preserve_oid_ids_foreign_keys_and_sequence():
+        from core.benchmark_metric_store import persist_source
+        from core.models import MetricValue, SourceMetric
+
+        run = persist_source(configured(), "hf", "9" * 64, payload())
+        before = list(
+            MetricValue.objects.values_list("id", "source_metric_id", "integer_value")
+        )
+        definitions = list(SourceMetric.objects.values_list("id", "metric_key"))
+
+        def state(table):
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT %s::regclass::oid", [table])
+                oid = cursor.fetchone()[0]
+                cursor.execute("SELECT pg_get_serial_sequence(%s, 'id')", [table])
+                sequence = cursor.fetchone()[0]
+                cursor.execute(
+                    "SELECT oid, conname FROM pg_constraint WHERE conrelid = %s ORDER BY oid",
+                    [oid],
+                )
+                constraints = cursor.fetchall()
+                cursor.execute(
+                    "SELECT indexrelid FROM pg_index WHERE indrelid = %s ORDER BY indexrelid",
+                    [oid],
+                )
+                indexes = cursor.fetchall()
+            return oid, sequence, constraints, indexes
+
+        assert SourceMetric._meta.db_table == "metrics"
+        original = state("metrics")
+        assert original[1].endswith("source_metrics_id_seq")
+        executor = MigrationExecutor(connection)
+        try:
+>           executor.migrate([("core", "0072_merge_benchmark_main")])
+
+tests/test_benchmark_metrics_rename.py:45:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv/lib/python3.12/site-packages/django/db/migrations/executor.py:141: in migrate
+    state = self._migrate_all_backwards(plan, full_plan, fake=fake)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/django/db/migrations/executor.py:219: in _migrate_all_backwards
+    self.unapply_migration(states[migration], migration, fake=fake)
+.venv/lib/python3.12/site-packages/django/db/migrations/executor.py:282: in unapply_migration
+    state = migration.unapply(state, schema_editor)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/django/db/migrations/migration.py:193: in unapply
+    operation.database_backwards(
+.venv/lib/python3.12/site-packages/django/db/migrations/operations/special.py:56: in database_backwards
+    database_operation.database_backwards(
+.venv/lib/python3.12/site-packages/django/db/migrations/operations/special.py:204: in database_backwards
+    self.reverse_code(from_state.apps, schema_editor)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+apps = <django.db.migrations.state.StateApps object at 0x10e8132f0>
+schema_editor = <django.db.backends.postgresql.schema.DatabaseSchemaEditor object at 0x10e73a600>
+
+    def reverse(apps, schema_editor):
+>       raise IrreversibleError(
+            "Preserve account links; use reviewed forward repair or database restore."
+        )
+E       django.db.migrations.exceptions.IrreversibleError: Preserve account links; use reviewed forward repair or database restore.
+
+core/migrations/0074_official_company_generic_accounts.py:117: IrreversibleError
+
+During handling of the above exception, another exception occurred:
+
+    def test_populated_rename_and_reverse_preserve_oid_ids_foreign_keys_and_sequence():
+        from core.benchmark_metric_store import persist_source
+        from core.models import MetricValue, SourceMetric
+
+        run = persist_source(configured(), "hf", "9" * 64, payload())
+        before = list(
+            MetricValue.objects.values_list("id", "source_metric_id", "integer_value")
+        )
+        definitions = list(SourceMetric.objects.values_list("id", "metric_key"))
+
+        def state(table):
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT %s::regclass::oid", [table])
+                oid = cursor.fetchone()[0]
+                cursor.execute("SELECT pg_get_serial_sequence(%s, 'id')", [table])
+                sequence = cursor.fetchone()[0]
+                cursor.execute(
+                    "SELECT oid, conname FROM pg_constraint WHERE conrelid = %s ORDER BY oid",
+                    [oid],
+                )
+                constraints = cursor.fetchall()
+                cursor.execute(
+                    "SELECT indexrelid FROM pg_index WHERE indrelid = %s ORDER BY indexrelid",
+                    [oid],
+                )
+                indexes = cursor.fetchall()
+            return oid, sequence, constraints, indexes
+
+        assert SourceMetric._meta.db_table == "metrics"
+        original = state("metrics")
+        assert original[1].endswith("source_metrics_id_seq")
+        executor = MigrationExecutor(connection)
+        try:
+            executor.migrate([("core", "0072_merge_benchmark_main")])
+            assert state("source_metrics") == original
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT id, metric_key FROM source_metrics ORDER BY id")
+                assert cursor.fetchall() == sorted(definitions)
+            executor = MigrationExecutor(connection)
+            executor.migrate([("core", "0073_rename_metrics")])
+            assert state("metrics") == original
+            assert (
+                list(
+                    MetricValue.objects.values_list(
+                        "id", "source_metric_id", "integer_value"
+                    )
+                )
+                == before
+            )
+            assert run.observations.count() == 1
+        finally:
+>           MigrationExecutor(connection).migrate([("core", "0073_rename_metrics")])
+
+tests/test_benchmark_metrics_rename.py:63:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv/lib/python3.12/site-packages/django/db/migrations/executor.py:141: in migrate
+    state = self._migrate_all_backwards(plan, full_plan, fake=fake)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/django/db/migrations/executor.py:219: in _migrate_all_backwards
+    self.unapply_migration(states[migration], migration, fake=fake)
+.venv/lib/python3.12/site-packages/django/db/migrations/executor.py:282: in unapply_migration
+    state = migration.unapply(state, schema_editor)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/django/db/migrations/migration.py:193: in unapply
+    operation.database_backwards(
+.venv/lib/python3.12/site-packages/django/db/migrations/operations/special.py:56: in database_backwards
+    database_operation.database_backwards(
+.venv/lib/python3.12/site-packages/django/db/migrations/operations/special.py:204: in database_backwards
+    self.reverse_code(from_state.apps, schema_editor)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+apps = <django.db.migrations.state.StateApps object at 0x10f258230>
+schema_editor = <django.db.backends.postgresql.schema.DatabaseSchemaEditor object at 0x10f421d90>
+
+    def reverse(apps, schema_editor):
+>       raise IrreversibleError(
+            "Preserve account links; use reviewed forward repair or database restore."
+        )
+E       django.db.migrations.exceptions.IrreversibleError: Preserve account links; use reviewed forward repair or database restore.
+
+core/migrations/0074_official_company_generic_accounts.py:117: IrreversibleError
+=============================== warnings summary ===============================
+tests/test_benchmark_pulse_views.py::test_feature_is_disabled_by_default
+tests/test_benchmark_pulse_views.py::test_public_page_real_template_and_read_only_series
+tests/test_benchmark_pulse_views.py::test_late_brand_posts_change_served_values_without_product_attribution
+tests/test_benchmark_pulse_views.py::test_unresolved_policy_blocks_page_and_json_even_when_enabled
+tests/test_benchmark_pulse_views.py::test_review_setting_does_not_allow_anonymous_bypass
+tests/test_benchmark_pulse_views.py::test_staging_owner_review_needs_no_staff_privilege_and_is_not_public
+tests/test_benchmark_release_response.py::test_real_response_exports_same_computation_and_no_provider_requests
+  /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector/.venv/lib/python3.12/site-packages/django/core/handlers/base.py:61: UserWarning: No directory at: /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector/staticfiles/
+    mw_instance = middleware(adapted_handler)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=================== PostgreSQL required-verification status ====================
+required tests: executed=164 skipped=0 errors=0
+=========================== short test summary info ============================
+FAILED tests/test_benchmark_metrics_rename.py::test_populated_rename_and_reverse_preserve_oid_ids_foreign_keys_and_sequence
+1 failed, 310 passed, 7 warnings in 93.18s (0:01:33)

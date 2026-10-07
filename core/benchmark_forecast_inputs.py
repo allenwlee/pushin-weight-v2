@@ -10,6 +10,68 @@ from core.measurement_taxonomy import require
 from core.models import MetricValue
 
 
+def evidence_selection(contract, mapping_ids, cutoff):
+    """Follow frozen history pins while retaining today's identity review boundary."""
+    from core.benchmark_measurement_pins import measurement_contract
+
+    mappings = contract.mappings.all()
+    if mapping_ids is not None:
+        require(0 < len(mapping_ids) <= 1000, "bounded mapping selection required")
+        mappings = mappings.filter(pk__in=mapping_ids)
+    if cutoff is not None:
+        if (
+            max(
+                contract.reviewed_at,
+                contract.created_at,
+                contract.taxonomy_version.created_at,
+            )
+            > cutoff
+        ):
+            return Q(pk__in=[])
+        mappings = mappings.filter(reviewed_at__lte=cutoff)
+    selected = list(mappings)
+    require(len(selected) <= 1000, "bounded mapping selection required")
+    selection = Q(
+        observation__run__contract=contract,
+        observation__mapping_id__in=[m.pk for m in selected],
+    )
+    seen = set()
+    for preset in contract.methodology.get("comparisons", {}).values():
+        lines = [*preset["lines"]]
+        if preset.get("arena_line"):
+            lines.append(preset["arena_line"])
+        for line in lines:
+            if not line.get("measurement_contract"):
+                continue
+            parent = measurement_contract(contract, line)
+            key = (
+                parent.pk,
+                line["source"],
+                line["metric_key"],
+                tuple(line["mapping_identifiers"]),
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            for mapping in selected:
+                if (
+                    mapping.source_id != line["source"]
+                    or mapping.external_identifier not in line["mapping_identifiers"]
+                ):
+                    continue
+                retained = parent.mappings.get(
+                    source_id=mapping.source_id,
+                    external_identifier=mapping.external_identifier,
+                    source_subject_kind=mapping.source_subject_kind,
+                    identifier_scope=mapping.identifier_scope,
+                    subject_id=mapping.subject_id,
+                )
+                selection |= Q(
+                    observation__run__contract=parent, observation__mapping=retained
+                )
+    return selection
+
+
 def forecast_inputs(
     contract,
     cutoff,
@@ -29,14 +91,15 @@ def forecast_inputs(
     )
     require(type(limit) is int and 1 <= limit <= 10000, "invalid evidence limit")
     values = MetricValue.objects.filter(
-        observation__run__contract=contract,
         observation__run__status__in=["success", "partial"],
         observation__status="ok",
         observation__mapping__isnull=False,
     )
-    if mapping_ids is not None:
-        require(0 < len(mapping_ids) <= 1000, "bounded mapping selection required")
-        values = values.filter(observation__mapping_id__in=mapping_ids)
+    values = values.filter(
+        evidence_selection(
+            contract, mapping_ids, cutoff if mode == "operational" else None
+        )
+    )
     if mode == "operational":
         # Observed/imported locally is a conservative availability boundary. Never
         # promote a date-only archive label into a precise availability instant.

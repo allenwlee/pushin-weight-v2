@@ -290,6 +290,54 @@ def native_rows(source, payload):
                     }
                 },
             }
+        elif source == "opencode":
+            out = {
+                "source_identifier": row["model_id"],
+                "source_subject_kind": "model",
+                "dimensions": {},
+                "source_metadata": metadata,
+                "metrics": {},
+            }
+            if row.get("status") == "error":
+                out.update(status="error", error_code="source_subject_error")
+            else:
+                label = native_date(row["date"])
+                revision = aware_instant(metadata["updated_at"])
+                require(label <= revision.date(), "OpenCode future row")
+                partial = label == revision.date()
+                require(
+                    metadata["period_status"]
+                    == ("partial" if partial else "completed"),
+                    "OpenCode period mismatch",
+                )
+                start, end = calendar_window(label.isoformat(), "UTC")
+                metadata["nominal_window_end_at"] = end.isoformat()
+                out["dimensions"] = {"date": label.isoformat()}
+                for wire, metric in (
+                    ("tokens", "tokens"),
+                    ("uniqueUsers", "unique_users"),
+                    ("sessions", "sessions"),
+                ):
+                    if wire in row:
+                        require(
+                            type(row[wire]) is int and 0 <= row[wire] < 10**30,
+                            "invalid OpenCode count",
+                        )
+                        out["metrics"][metric] = {
+                            "value": row[wire],
+                            "temporal_status": "date_only" if partial else "exact",
+                            "window_start_at": start,
+                            "window_end_at": None if partial else end,
+                            "period_label_date": label.isoformat(),
+                        }
+                semantic = {
+                    "model_id": row["model_id"],
+                    "date": label.isoformat(),
+                    "period_status": metadata["period_status"],
+                    "scope": metadata.get("traffic_scope"),
+                    "values": {k: v["value"] for k, v in out["metrics"].items()},
+                }
+                metadata["row_semantic_hash"] = digest(semantic)
         elif source == "arena":
             metadata["publication_complete"] = payload.get("coverage") in {
                 "latest_publication_only",
@@ -585,6 +633,20 @@ def persist_source(
             if payload.get("as_of") and source == "openrouter":
                 run.source_as_of = aware_instant(payload["as_of"])
             prepared = prepare_rows(contract, source, payload, adapter=adapter)
+            retained_successful = set()
+            if source == "opencode":
+                from core.benchmark_opencode import prepare_revisions
+
+                prepared, checks, retained_successful = prepare_revisions(
+                    contract, prepared, payload
+                )
+                run.source_metadata["endpoint_checks"] = checks
+                revisions = [
+                    aware_instant(c["updated_at"])
+                    for c in checks
+                    if c.get("status") == "ok"
+                ]
+                run.source_as_of = max(revisions) if revisions else None
         except (ValueError, KeyError, TypeError, OverflowError):
             run.status = "failed"
             run.error_code = "invalid_source_data"
@@ -592,7 +654,7 @@ def persist_source(
             run.save()
             return run
         with transaction.atomic():
-            successful = set()
+            successful = retained_successful
             errors = False
             observations = MetricObservation.objects.bulk_create(
                 [MetricObservation(run=run, **data) for data, _ in prepared],
@@ -612,6 +674,15 @@ def persist_source(
                 errors |= observation.status == "error"
                 if observation.mapping_id and values:
                     successful.add(observation.mapping_id)
+                if source == "opencode" and observation.status == "ok":
+                    check = next(
+                        c
+                        for c in run.source_metadata["endpoint_checks"]
+                        if c["source_identifier"] == observation.source_identifier
+                    )
+                    check["row_references"][observation.dimensions["date"]] = (
+                        observation.pk
+                    )
             run.success_count = len(successful)
             run.status = (
                 "success"

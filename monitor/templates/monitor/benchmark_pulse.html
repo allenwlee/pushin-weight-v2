@@ -1,5 +1,5 @@
-{% load static %}<!doctype html>
-<html lang="en">
+{% load static i18n %}{% get_current_language as LANGUAGE_CODE %}<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{ comparison.title }} · Pulse</title>
 <link rel="stylesheet" href="{% static 'benchmark-pulse.css' %}">
@@ -8,16 +8,27 @@
 <header class="page-heading"><div><a class="wordmark" href="/">PushinWeight</a><h1>{{ comparison.title }}</h1></div>
 <nav aria-label="Product comparisons">{% for key, item in comparisons.items %}<a href="{% url 'benchmark_pulse' contract.pk key %}"{% if key == preset %} aria-current="page"{% endif %}>{{ item.title }}</a>{% endfor %}</nav></header>
 <section class="pulse-panel" aria-labelledby="pulse-title">
-<header class="panel-heading"><div><h2 id="pulse-title">Pulse</h2><p>{% if comparison.release_history %}Release history · dashed rank shows the previous release{% else %}Change since launch · posts, downloads, usage and performance{% endif %}</p></div><button id="sources-open" type="button">Sources &amp; definitions</button></header>
+<header class="panel-heading"><div><h2 id="pulse-title">Pulse</h2><p>{% if comparison.chart_kind %}{% trans "Release response · discussion, reported usage and HF counter changes" %}{% elif comparison.release_history %}Release history · dashed rank shows the previous release{% else %}Change since launch · posts, downloads, usage and performance{% endif %}</p></div><button id="sources-open" type="button">Sources &amp; definitions</button></header>
 <p id="load-status" role="status">Loading measurements…</p>
 <div id="chart-content" hidden>
-<div class="toolbar"><div id="legend" aria-label="Visible series"></div><div class="scale-controls"><label for="scale">View</label><select id="scale"><option value="compressed">Compressed %</option><option value="linear">Linear %</option><option value="raw">Raw values</option></select><label for="raw-series" class="sr-only">Raw measurement</label><select id="raw-series" hidden></select></div></div>
+<div class="toolbar"><div id="legend" aria-label="Visible series"></div><div class="scale-controls"><label for="scale">View</label><select id="scale">{% if not comparison.chart_kind %}<option value="compressed">Compressed %</option>{% endif %}<option value="linear">Linear %</option><option value="raw">Raw values</option></select><label for="raw-series" class="sr-only">Raw measurement</label><select id="raw-series" hidden></select></div></div>
+{% if comparison.chart_kind %}<div class="response-controls">
+<label for="smoothing">{% trans "Display" %}</label><select id="smoothing"><option value="3">{% trans "Three-day average" %}</option><option value="1">{% trans "Daily values" %}</option></select>
+<label for="range">{% trans "Date range" %}</label><select id="range"><option value="release">{% trans "Release context" %}</option><option value="available">{% trans "All available" %}</option></select>
+<label for="date-axis">{% trans "Dates" %}</label><select id="date-axis"><option value="calendar">{% trans "Calendar" %}</option><option value="relative">{% trans "Days from release" %}</option></select>
+{% if comparison.usage_provider_options %}<label for="usage-provider">{% trans "Usage provider" %}</label><select id="usage-provider">{% for source, key in comparison.usage_provider_options.items %}<option value="{% url 'benchmark_pulse' contract.pk key %}"{% if key == preset %} selected{% endif %}>{% if source == 'opencode' %}OpenCode · Go + free{% else %}OpenRouter{% endif %}</option>{% endfor %}</select>{% endif %}
+</div><p id="reference-note" class="muted"></p>{% endif %}
 <p id="scale-explanation" class="muted"></p>
 <div class="pulse-layout"><div class="chart-column"><svg id="pulse-chart" viewBox="0 0 900 440" role="img" aria-labelledby="chart-title chart-description"><title id="chart-title">Change from baseline</title><desc id="chart-description">Use the day slider below to inspect exact values and coverage.</desc></svg>
 <div class="day-control"><label for="day">Inspect day</label><input id="day" type="range" min="0" value="0" step="1"><output id="day-label" for="day"></output></div>
 <p id="launch-note" class="muted"></p></div>
 <aside aria-label="Selected day measurements"><h3 id="readout-date"></h3><div id="readout"></div></aside></div>
+{% if comparison.chart_kind and comparison.arena_line %}<section id="arena-panel" aria-labelledby="arena-title">
+<div class="panel-heading"><div><h3 id="arena-title">{% trans "Arena evaluation history" %}</h3><p>{% trans "Published score, uncertainty and reported battles · overall text, no style control" %}</p></div><label>{% trans "Evaluation" %} <select id="arena-measurement"><option value="score">{% trans "Score" %}</option><option value="rank">{% trans "Rank" %}</option></select></label></div>
+<svg id="arena-chart" viewBox="0 0 900 340" role="img" aria-labelledby="arena-chart-title"><title id="arena-chart-title">{% trans "Arena score and reported battles" %}</title></svg>
+<p id="arena-readout"></p><p class="muted">{% trans "Battles are reported comparisons, not unique people or exact daily new battles. Unknown score anchors break comparison segments." %}</p>
+</section>{% endif %}
 <footer><p>Posts cover the whole brand. Provider measurements cover the selected product or labeled variant. Rank: lower is better.</p><p id="coverage-note"></p></footer>
 </div></section>
 <dialog id="sources"><div class="dialog-heading"><h2>Sources &amp; definitions</h2><button id="sources-close" type="button" aria-label="Close sources">Close</button></div><div id="source-details"></div><a id="download-data" download="pulse-series.json">Download data &amp; evidence (JSON)</a></dialog>
-</main></body></html>
+</main>{{ pulse_labels|json_script:"pulse-labels" }}</body></html>

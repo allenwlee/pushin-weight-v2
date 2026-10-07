@@ -3,12 +3,48 @@
 from django.conf import settings
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.utils.translation import gettext
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET
 
 from core.benchmark_attribution import UseNotPermitted, enforce_use
 from core.benchmark_metric_series import build_comparison
 from core.models import MetricCollectionContract
+
+
+def pulse_labels():
+    return {
+        text: gettext(text)
+        for text in (
+            "Change from reference-week average (%)",
+            "Not available",
+            "Reference mean",
+            "Reference week unavailable",
+            "Three-day mean",
+            "Reported rolling 30-day counter",
+            "Nonpositive reference mean: percentage change is unavailable",
+            "OpenCode Go + free traffic only",
+            "Adjacent actual HF snapshots unavailable",
+            "Arena score",
+            "Rank · lower is better",
+            "Reported battles",
+            "Reference week",
+            "fixed raw means",
+            "actual publication",
+            "held published state",
+            "unavailable",
+            "score comparability",
+            "source timezone",
+            "Score",
+            "interval",
+            "rank",
+            "Linear scale",
+            "trailing three-day means",
+            "daily values",
+            "relative to fixed raw reference-week means",
+            "A common complete reference week is unavailable. Raw values remain inspectable.",
+        )
+    }
 
 
 def _contract(contract_id, preset):
@@ -65,7 +101,17 @@ def pulse(request, contract_id, preset):
             "contract": contract,
             "preset": preset,
             "comparison": comparisons[preset],
-            "comparisons": comparisons,
+            "comparisons": {
+                key: item
+                for key, item in comparisons.items()
+                if not comparisons[preset].get("chart_kind")
+                or (
+                    item.get("chart_kind") == "release_response_v1"
+                    and item["lines"][2]["source"]
+                    == comparisons[preset]["lines"][2]["source"]
+                )
+            },
+            "pulse_labels": pulse_labels(),
         },
     )
 

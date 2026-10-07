@@ -121,7 +121,14 @@ def validate_inputs(catalog, mapping):
     seen = set()
     for row in rows:
         require(isinstance(row, dict), "mapping must be an object")
-        require(row.get("source") in {"arena", "openrouter"}, "unknown mapping source")
+        require(
+            row.get("source") in {"arena", "openrouter", "opencode"},
+            "unknown mapping source",
+        )
+        if row["source"] == "opencode":
+            from .sources import opencode_url
+
+            opencode_url(row.get("endpoint_path"))
         source_id = row.get("source_id")
         require(
             isinstance(source_id, str)

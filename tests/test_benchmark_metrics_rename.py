@@ -40,15 +40,24 @@ def test_populated_rename_and_reverse_preserve_oid_ids_foreign_keys_and_sequence
     assert SourceMetric._meta.db_table == "metrics"
     original = state("metrics")
     assert original[1].endswith("source_metrics_id_seq")
-    executor = MigrationExecutor(connection)
+    loader = MigrationExecutor(connection).loader
+    old_state = loader.project_state([("core", "0072_merge_benchmark_main")])
+    new_state = loader.project_state([("core", "0073_rename_metrics")])
+    operation = loader.disk_migrations[("core", "0073_rename_metrics")].operations[0]
+    # Exercise this reversible rename without reversing the later, deliberately
+    # irreversible account migration or touching its preserved account links.
+    reversed_rename = False
     try:
-        executor.migrate([("core", "0072_merge_benchmark_main")])
+        with connection.schema_editor() as editor:
+            operation.database_backwards("core", editor, new_state, old_state)
+        reversed_rename = True
         assert state("source_metrics") == original
         with connection.cursor() as cursor:
             cursor.execute("SELECT id, metric_key FROM source_metrics ORDER BY id")
             assert cursor.fetchall() == sorted(definitions)
-        executor = MigrationExecutor(connection)
-        executor.migrate([("core", "0073_rename_metrics")])
+        with connection.schema_editor() as editor:
+            operation.database_forwards("core", editor, old_state, new_state)
+        reversed_rename = False
         assert state("metrics") == original
         assert (
             list(
@@ -60,4 +69,6 @@ def test_populated_rename_and_reverse_preserve_oid_ids_foreign_keys_and_sequence
         )
         assert run.observations.count() == 1
     finally:
-        MigrationExecutor(connection).migrate([("core", "0073_rename_metrics")])
+        if reversed_rename:
+            with connection.schema_editor() as editor:
+                operation.database_forwards("core", editor, old_state, new_state)

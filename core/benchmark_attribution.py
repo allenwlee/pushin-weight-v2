@@ -7,6 +7,14 @@ from urllib.parse import urlsplit
 from core.measurement_taxonomy import digest
 
 DEFAULTS = {
+    "opencode": {
+        "publisher": "OpenCode",
+        "url": "https://opencode.ai/data/llms.txt",
+        "license": None,
+        "license_url": None,
+        "public_display": "unresolved",
+        "data_export": "unresolved",
+    },
     "arena": {
         "publisher": "LMArena",
         "url": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",

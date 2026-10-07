@@ -76,3 +76,179 @@ msgstr "Older stories"
 
 msgid "Available chart data does not support this development."
 msgstr "Available chart data does not support this development."
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Release response · discussion, reported usage and HF counter changes"
+msgstr "Release response · discussion, reported usage and HF counter changes"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Display"
+msgstr "Display"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Three-day average"
+msgstr "Three-day average"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Daily values"
+msgstr "Daily values"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Date range"
+msgstr "Date range"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Release context"
+msgstr "Release context"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "All available"
+msgstr "All available"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Dates"
+msgstr "Dates"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Calendar"
+msgstr "Calendar"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Days from release"
+msgstr "Days from release"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Usage provider"
+msgstr "Usage provider"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Arena evaluation history"
+msgstr "Arena evaluation history"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Published score, uncertainty and reported battles · overall text, no style control"
+msgstr "Published score, uncertainty and reported battles · overall text, no style control"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Evaluation"
+msgstr "Evaluation"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Score"
+msgstr "Score"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Rank"
+msgstr "Rank"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Arena score and reported battles"
+msgstr "Arena score and reported battles"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Battles are reported comparisons, not unique people or exact daily new battles. Unknown score anchors break comparison segments."
+msgstr "Battles are reported comparisons, not unique people or exact daily new battles. Unknown score anchors break comparison segments."
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Change from reference-week average (%)"
+msgstr "Change from reference-week average (%)"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Not available"
+msgstr "Not available"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reference mean"
+msgstr "Reference mean"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reference week unavailable"
+msgstr "Reference week unavailable"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Three-day mean"
+msgstr "Three-day mean"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reported rolling 30-day counter"
+msgstr "Reported rolling 30-day counter"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Nonpositive reference mean: percentage change is unavailable"
+msgstr "Nonpositive reference mean: percentage change is unavailable"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "OpenCode Go + free traffic only"
+msgstr "OpenCode Go + free traffic only"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Adjacent actual HF snapshots unavailable"
+msgstr "Adjacent actual HF snapshots unavailable"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Arena score"
+msgstr "Arena score"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Rank · lower is better"
+msgstr "Rank · lower is better"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reported battles"
+msgstr "Reported battles"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reference week"
+msgstr "Reference week"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "fixed raw means"
+msgstr "fixed raw means"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "actual publication"
+msgstr "actual publication"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "held published state"
+msgstr "held published state"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "unavailable"
+msgstr "unavailable"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "score comparability"
+msgstr "score comparability"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "source timezone"
+msgstr "source timezone"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "interval"
+msgstr "interval"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "rank"
+msgstr "rank"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Linear scale"
+msgstr "Linear scale"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "trailing three-day means"
+msgstr "trailing three-day means"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "daily values"
+msgstr "daily values"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "relative to fixed raw reference-week means"
+msgstr "relative to fixed raw reference-week means"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "A common complete reference week is unavailable. Raw values remain inspectable."
+msgstr "A common complete reference week is unavailable. Raw values remain inspectable."

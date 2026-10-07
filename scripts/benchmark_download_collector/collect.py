@@ -79,8 +79,21 @@ def collect(
         "hf": lambda: sources.hf(
             budget, [products[key] for key in mapping["hf_product_keys"]]
         ),
+        "opencode": lambda: sources.opencode(
+            budget,
+            [
+                {
+                    "external_identifier": item["source_id"],
+                    "endpoint_path": item["endpoint_path"],
+                }
+                for item in mapping["mappings"]
+                if item["source"] == "opencode"
+            ],
+        ),
     }
     for source, reader in readers.items():
+        if source == "opencode" and source not in selected:
+            continue
         result = {"status": "not_requested", "rows": []}
         if source in selected:
             try:

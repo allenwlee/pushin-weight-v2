@@ -39,7 +39,7 @@ def main(argv=None):
     gather.add_argument(
         "--sources",
         nargs="+",
-        choices=("arena", "hf", "openrouter"),
+        choices=("arena", "hf", "openrouter", "opencode"),
         default=["arena", "hf", "openrouter"],
     )
     gather.add_argument("--max-requests", type=int, default=80)

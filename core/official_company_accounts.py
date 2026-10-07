@@ -490,7 +490,7 @@ def _apply_owner_attestation(state):
 
     from core.models import OfficialCompanyAttempt
 
-    name = OWNER_ATTESTATIONS[str(state.account_id)]
+    name = OWNER_ATTESTATIONS[x_account_identifier(state.account)]
     source = {
         "id": "owner:2026-10-06:preverified-model-labs:v1",
         "text": f"The owner verified this stable account as the official account of {name}, an AI model developer.",

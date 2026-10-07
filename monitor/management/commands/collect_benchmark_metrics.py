@@ -21,7 +21,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--contract", required=True)
         parser.add_argument(
-            "--source", required=True, choices=["hf", "openrouter", "arena"]
+            "--source", required=True, choices=["hf", "openrouter", "arena", "opencode"]
         )
         parser.add_argument("--start-date", required=True)
         parser.add_argument("--end-date", required=True)
@@ -117,6 +117,19 @@ class Command(BaseCommand):
                             params["start_date"],
                             params["end_date"],
                             key=os.environ.get(options["openrouter_key_env"]),
+                        )
+                    elif source == "opencode":
+                        result = sources.opencode(
+                            budget,
+                            [
+                                {
+                                    "external_identifier": m.external_identifier,
+                                    "endpoint_path": m.identifier_metadata[
+                                        "endpoint_path"
+                                    ],
+                                }
+                                for m in contract.mappings.filter(source_id=source)
+                            ],
                         )
                     else:
                         result = sources.arena(

@@ -1,15 +1,15 @@
 # Benchmark and download collector
 
-Compare collected posts with Hugging Face downloads, OpenRouter token usage and
-Arena scores and ranks. The database-backed Pulse page reads a reviewed product
+Compare collected posts with Hugging Face downloads, OpenRouter or OpenCode token usage and
+Arena scores, uncertainty and reported battles. The database-backed Pulse page reads a reviewed product
 crosswalk and retained measurements from PostgreSQL. Each line shows its actual
 scope, baseline date, raw value and source evidence. Missing data stays missing.
 
-The database integration is a disabled candidate for review. It introduces fifteen
-tables and generalizes existing accounts so X and HF accounts have separate source
-identities. Production deployment, collection schedules and page activation require
-a separate release decision. The original offline diagnostic report remains
-available below.
+The integration is available for isolated review. Production and recurring collection
+remain disabled. Source definitions share the `metrics` table; hourly OpenCode
+revisions use the existing collection-run, observation and value tables. Existing X
+and HF accounts retain their separate source identities. The original diagnostic
+presets remain available alongside release-response presets.
 
 This is independent work adjacent to G1–G5, not a G6 dependency. Coordination lives
 in the authoritative [General Launch Index](../../docs/brainstorms/2026-09-30-104924-general-launch-index.md);
@@ -57,8 +57,49 @@ For OpenRouter, provide `BENCHMARK_OPENROUTER_API_KEY` in the command's environm
 Do not put the key in a manifest or shell history. Select completed UTC days only;
 its command accepts `--source openrouter`. HF collects current counters regardless
 of the supplied reporting dates; historical HF values require archive import.
-Arena's direct command reads its latest complete publication. No provider network
+Arena's direct command reads its latest complete publication. OpenCode exports a
+selected model's entire available daily history on each refresh. No provider network
 call runs inside a page request.
+
+## Release-response chart and OpenCode history
+
+A `release_response_v1` preset compares three lines: whole-brand posts, signed net
+changes between adjacent actual HF rolling-download snapshots, and exact-product
+daily tokens from one selected provider. Each line is normalized against its own
+raw mean in the earliest common complete seven-day post-launch reference week.
+The default display uses trailing three-day means. Date, smoothing and inspection
+controls preserve the reference; missing or nonpositive means produce no percentage.
+HF net counter change is not newly generated downloads. The linked Arena panel
+shows raw score, bounds and reported battles from the same publication, with rank
+as an optional view. Unknown score anchors break comparison segments.
+
+OpenCode measurements cover Go + free traffic, including cached tokens; they exclude
+external-provider client traffic. `unique_users` and `sessions` are approximate
+daily distinct counts, never cross-model sums. Reviewed model IDs and endpoint paths
+are separate fields: punctuation must not be guessed from another provider's slug.
+The initial reviewed cohort is DeepSeek V4.1 Flash and GLM 5.3 Flash.
+
+```sh
+python manage.py backfill_opencode_history --contract CONTRACT_UUID \
+  --output /path/to/new-history-directory --isolated-review --apply
+python manage.py benchmark_opencode_snapshots --contract CONTRACT_UUID \
+  --start-date 2026-10-06 --end-date 2026-10-07 --isolated-review
+```
+
+Every endpoint check retains its source `updatedAt`, canonical JSON body hash and
+date-to-observation references. Unchanged rows reuse values; changed totals append
+revisions, including decreases. Current-day rows have an unknown actual end time
+and remain provisional. Closed UTC days use `[00:00, next 00:00)` windows. Never sum
+successive hourly snapshots as hourly usage. Publication and retrieval freshness
+are separate. The provisional polling interval is one hour, but no schedule is enabled.
+
+New reviewed presets can pin a parent measurement contract by ID and hash, reusing
+history without duplicating measured values. The chart and forecast reader validate
+definitions and identities. Operational forecast reads also require the current
+contract and mappings to have been reviewed before the cutoff, plus the retained
+facts to have been observed and imported before it. Retrospective imports do not
+become past-known evidence. Source permissions remain separate for collection,
+internal review, public charts, numeric export and forecast/trading uses.
 
 The page and JSON endpoint are `/benchmarks/CONTRACT_UUID/PRESET/` and its
 `series/` child. `BENCHMARK_METRICS_ENABLED` defaults to false (404). Enabling it
@@ -84,7 +125,7 @@ OpenRouter counts cover completed UTC days; Arena states carry forward only from
 an actual publication. A later complete publication omitting the selected model
 clears that state. A selected-row historical extract cannot establish omission.
 
-Normalization is `100 * (value / baseline - 1)`, not a sum of daily changes. A
+Legacy diagnostic normalization is `100 * (value / baseline - 1)`. A
 zero/missing launch baseline cannot produce a percentage. An explicitly selected
 later baseline is disclosed. Integer values travel as strings so large token totals
 retain precision. Arena raw score/rank, uncertainty bounds and votes remain stored.
@@ -92,8 +133,9 @@ retain precision. Arena raw score/rank, uncertainty bounds and votes remain stor
 ## Save a database-backed offline report
 
 `python manage.py render_benchmark_report --contract CONTRACT_UUID --preset deepseek
---end-date 2026-10-06 --output /path/to/new-report.html` saves the existing four-panel
-raw-value report from the same `build_comparison` result as Pulse. The output path
+--end-date 2026-10-06 --output /path/to/new-report.html` saves the diagnostic four-panel
+report, or the same combined Pulse view for a release-response preset, from the
+same `build_comparison` result as the live page. The output path
 must be new. This reads the database and makes no provider calls. Each panel accepts
 one matching line in the preset; ambiguous duplicates are rejected.
 
@@ -117,6 +159,8 @@ and a reviewed contract with that source’s `scheduling_enabled=true`. It appli
 the reviewed completed-day lag and revision recheck range, and uses stable polling
 batch IDs. Owner-selected runtime activation remains required; this candidate
 registers no cron or Celery beat task.
+OpenCode instead defaults to hourly polling and two-hour freshness, and rechecks
+the full returned history. Its current-day row is retained separately from completed-day comparisons.
 
 `benchmark_collection_health` separates the latest attempt, last fully successful
 retrieval, selected-subject coverage and latest known effective date. Unknown timing

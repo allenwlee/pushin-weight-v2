@@ -1,0 +1,12 @@
+{
+  "fixed": [
+    "Frozen forecast parent facts were not admitted by the new contract.",
+    "OpenCode history read loaded all hourly JSON instead of bounded SQL projections.",
+    "Endpoint ID/path/hash/date metadata mismatch admission was too loose.",
+    "Comparison order/provider-target contracts needed strict validation.",
+    "Offline range control could attempt a network reload.",
+    "New chart navigation duplicated old comparison presets.",
+    "Newly integrated company account tables retained native-ID foreign keys and UUID-unaware saved cursors/owner attestations."
+  ],
+  "verification": "282 main integration + prior309 benchmark regression/30affected/22admission; populated rename and both account migration orders tested. Final frozen benchmark regression still running."
+}

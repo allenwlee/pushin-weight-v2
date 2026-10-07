@@ -40,6 +40,13 @@ SOURCES = {
         "exact-v1",
     ),
     "arena": ("Arena", "benchmark", "https://arena.ai", "arena-style-v1", "exact-v1"),
+    "opencode": (
+        "OpenCode",
+        "model_adoption",
+        "https://opencode.ai",
+        "opencode-daily-v1",
+        "exact-v1",
+    ),
     "artificial_analysis": (
         "Artificial Analysis",
         "benchmark",
@@ -67,6 +74,8 @@ METRIC_TYPES = [
     "post_volume",
     "likes",
     "followers",
+    "active_users",
+    "session_count",
 ]
 
 
@@ -78,6 +87,9 @@ def definition_rows():
         ("hf", "likes", "state", "count", "likes", "integer"),
         ("hf", "followers", "state", "count", "followers", "integer"),
         ("openrouter", "total_tokens", "flow", "count", "tokens", "integer"),
+        ("opencode", "tokens", "flow", "count", "tokens", "integer"),
+        ("opencode", "unique_users", "flow", "count", "users", "integer"),
+        ("opencode", "sessions", "flow", "count", "sessions", "integer"),
         ("arena", "rating", "state", "score", "arena_points", "float"),
         ("arena", "rating_lower", "state", "score", "arena_points", "float"),
         ("arena", "rating_upper", "state", "score", "arena_points", "float"),
@@ -89,6 +101,9 @@ def definition_rows():
             "downloads": "downloads",
             "downloads_all_time": "downloads",
             "total_tokens": "token_usage",
+            "tokens": "token_usage",
+            "unique_users": "active_users",
+            "sessions": "session_count",
             "vote_count": "vote_count",
             "rank": "rank",
             "likes": "likes",
@@ -115,7 +130,15 @@ def definition_rows():
             "window_duration_basis": "none",
             "window_alignment": None,
             "source_timezone": "unknown",
-            "required": key not in {"variance", "rank", "likes", "followers"},
+            "required": key
+            not in {
+                "variance",
+                "rank",
+                "likes",
+                "followers",
+                "unique_users",
+                "sessions",
+            },
             "definition_metadata": {
                 "wire_field": "downloadsAllTime"
                 if key == "downloads_all_time"
@@ -132,7 +155,7 @@ def definition_rows():
             )
         if key == "downloads_all_time":
             row.update(window_mode="since_origin")
-        if source == "openrouter":
+        if source in {"openrouter", "opencode"}:
             row.update(
                 window_mode="calendar",
                 window_amount=1,
@@ -140,6 +163,15 @@ def definition_rows():
                 window_duration_basis="calendar",
                 window_alignment="source_local_midnight",
                 source_timezone="UTC",
+            )
+        if source == "opencode":
+            row["definition_metadata"].update(
+                wire_field="uniqueUsers" if key == "unique_users" else key,
+                traffic_scope="opencode_go_and_free",
+                approximate_distinct=key in {"unique_users", "sessions"},
+                token_components=["input", "output", "cache_read", "cache_write"]
+                if key == "tokens"
+                else None,
             )
         rows.append(row)
     # Early official Arena publications lack uncertainty/votes. Version this
@@ -237,6 +269,18 @@ def prepare_collection(spec):
     for source_key, settings in config.items():
         from core.benchmark_metric_operations import validate_operations
 
+        if source_key == "opencode":
+            for key, value in {
+                "poll_seconds": 3600,
+                "freshness_seconds": 7200,
+                "publication_freshness_seconds": 7200,
+                "max_requests": 100,
+                "max_seconds": 120,
+                "max_bytes": 16 * 1024 * 1024,
+                "completed_day_lag": 0,
+                "recheck_days": 56,
+            }.items():
+                settings.setdefault(key, value)
         validate_operations(settings)
         if source_key == "arena":
             require(
@@ -304,6 +348,11 @@ def prepare_collection(spec):
             "product__hf_org", "account"
         ).get(pk=subject_key)
         kind = row["source_subject_kind"]
+        if source == "opencode":
+            from scripts.benchmark_download_collector.sources import opencode_url
+
+            require(kind == "model", "OpenCode mapping must identify a product model")
+            opencode_url(row.get("identifier_metadata", {}).get("endpoint_path"))
         scope = row.get("identifier_scope", "")
         require(
             (kind in {"model", "repository"} and subject.subject_kind == "product")
@@ -515,11 +564,71 @@ def validate_comparisons(taxonomy, mappings, config, methodology):
 
         validate_release_history(preset, taxonomy, mappings, config)
         lines = preset["lines"]
+        chart_kind = preset.get("chart_kind")
+        require(chart_kind in (None, "release_response_v1"), "unsupported chart kind")
+        if chart_kind == "release_response_v1":
+            require(
+                len(lines) == 3
+                and [line["source"] for line in lines]
+                in (["x", "hf", "openrouter"], ["x", "hf", "opencode"]),
+                "release response needs posts, HF and one usage provider",
+            )
+            launch = (
+                native_date(anchor["announced_date"])
+                if anchor["precision"] == "date"
+                else aware_instant(anchor["announced_at"]).date()
+            )
+            first = native_date(preset["reference_search"]["start_date"])
+            last = native_date(preset["reference_search"]["end_date"])
+            require(
+                launch < first <= last and 6 <= (last - first).days < 366,
+                "bounded post-launch reference search required",
+            )
+            for line in lines:
+                require(
+                    line["metric_key"]
+                    == {
+                        "x": "post_volume",
+                        "hf": "downloads",
+                        "openrouter": "total_tokens",
+                        "opencode": "tokens",
+                    }[line["source"]],
+                    "release response metric mismatch",
+                )
+                require(
+                    line.get("transform", "identity")
+                    == (
+                        "adjacent_snapshot_difference"
+                        if line["source"] == "hf"
+                        else "identity"
+                    ),
+                    "release response transform mismatch",
+                )
+                if line["source"] != "x":
+                    require(
+                        line["subject_id"] == anchor["product_subject_id"]
+                        and line.get("aggregation", "single") == "single",
+                        "release response needs exact launch product",
+                    )
+            if preset.get("arena_line"):
+                panel = preset["arena_line"]
+                require(
+                    panel["source"] == "arena"
+                    and panel["metric_key"] == "rating"
+                    and panel["subject_id"] == anchor["product_subject_id"]
+                    and panel.get("aggregation", "single") == "single"
+                    and config["arena"].get("config") == "text",
+                    "Arena panel needs exact no-style-control score",
+                )
+                lines = [*lines, panel]
         require(
             0 < len(lines) <= 20 and len({line["key"] for line in lines}) == len(lines),
             "unique bounded lines required",
         )
         for line in lines:
+            from core.benchmark_measurement_pins import validate_pin
+
+            validate_pin(line, mappings, config)
             key = line["subject_id"]
             require(
                 key in taxonomy.snapshot["subjects"], "line subject outside taxonomy"
@@ -560,3 +669,14 @@ def validate_comparisons(taxonomy, mappings, config, methodology):
                     or (mapped["kind"] == "product" and mapped["key"] in products),
                     "mapping outside line scope",
                 )
+    for preset in presets.values():
+        for source, key in preset.get("usage_provider_options", {}).items():
+            target = presets.get(key)
+            require(
+                source in {"openrouter", "opencode"}
+                and target
+                and target.get("chart_kind") == "release_response_v1"
+                and target["lines"][2]["source"] == source
+                and target["launch_anchor"] == preset["launch_anchor"],
+                "usage provider option differs from reviewed product",
+            )
