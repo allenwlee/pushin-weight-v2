@@ -36,6 +36,21 @@ model types, decision rationale/citations, registration state and Call A list
 outcome. Account rows are paginated in groups of 50. Initial scan enumeration
 and completed account evaluation are different observations.
 
+The console has six tabs. **Official accounts found** shows settled identities.
+**Review needed** shows unresolved company candidates, excluding evaluation
+failures and existing tracked accounts. **Failed evaluations** shows current
+failed attempts, including those waiting for retry, and evaluations blocked by
+the attempt or evidence-size limit. An older failure or failure for superseded
+evidence does not keep a subsequently successful evaluation in this tab.
+**Already tracked** shows candidates with existing official brand/company links
+or the recorded `already_tracked` marker; settled Found identities are excluded.
+Existing tracked accounts take precedence over failures, and multiple official
+links still count as one account. **Scan queue** retains all selected candidates
+and status filters. **List history** retains the synchronization audit.
+Each dedicated tab has its own count, search and pagination; status parameters
+cannot switch its category. Separating these views changes no stored decision,
+approval, retry schedule or list membership.
+
 The add counter counts accounts with an acknowledged provider add. A membership
 read confirming an already-present account does not increment it. A timed-out
 request followed by positive membership readback is shown separately because

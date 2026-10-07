@@ -249,8 +249,102 @@ def test_candidate_llm_count_uses_completed_attempts_not_owner_or_failures():
     assert report["summary"]["selected"] == 3
     assert report["summary"]["llm_evaluated"] == 1
     assert report["summary"]["owner_settled"] == 1
-    assert report["summary"]["review_needed"] == 2
+    assert report["summary"]["review_needed"] == 1
+    assert report["summary"]["failed_evaluations"] == 1
     assert candidate_report(status="owner_settled")["page"].paginator.count == 1
+
+
+def test_attention_tabs_partition_current_failures_tracked_and_review(owner_client):
+    from core.models import (
+        Brand,
+        BrandAccount,
+        Company,
+        CompanyAccount,
+        OfficialCompanyAttempt,
+        Role,
+    )
+    from core.official_company_candidates import CANDIDATE_POLICY
+
+    states = {}
+    for index, name, status, error in [
+        (0, "ordinary", "review_needed", "human_review_required"),
+        (1, "latest_failed", "review_needed", "ValueError"),
+        (2, "retry_failed", "retry_due", "TimeoutError"),
+        (3, "recovered", "review_needed", "human_review_required"),
+        (4, "stale_failure", "review_needed", ""),
+        (5, "tracked_brand", "review_needed", "ValueError"),
+        (6, "tracked_company", "accepted", ""),
+        (7, "registered", "registered", ""),
+        (8, "blocked", "review_needed", "evidence_envelope_exceeded"),
+    ]:
+        state = OfficialCompanyAccountState.objects.create(
+            account=Account.objects.create(author_id=str(97300 + index), handle=name),
+            evidence_hash="a" * 64, status=status, last_error=error,
+            candidate_priority=1, candidate_policy_version=CANDIDATE_POLICY,
+        )
+        states[name] = state
+        attempt_statuses = {
+            "latest_failed": ["completed", "failed"], "retry_failed": ["failed"],
+            "recovered": ["failed", "completed"], "stale_failure": ["failed"],
+            "tracked_brand": ["failed"], "registered": ["failed"],
+        }.get(name, [])
+        for number, attempt_status in enumerate(attempt_statuses):
+            OfficialCompanyAttempt.objects.create(
+                state=state, evidence_hash="b" * 64 if name == "stale_failure" else state.evidence_hash,
+                claim_token=f"{name}-{number}", model="test-model", policy_version="test",
+                status=attempt_status, reserved_usd=0,
+            )
+    role, _ = Role.objects.get_or_create(key="official")
+    for name in ["alpha", "beta"]:
+        BrandAccount.objects.create(
+            account=states["tracked_brand"].account,
+            brand=Brand.objects.create(nickname=name), role=role,
+        )
+    company = Company.objects.create(nickname="existing_company")
+    for name in ["tracked_company", "registered"]:
+        CompanyAccount.objects.create(account=states[name].account, company=company, role=role)
+    expected = {
+        "review": {"ordinary", "recovered", "stale_failure"},
+        "failed": {"latest_failed", "retry_failed", "blocked"},
+        "tracked": {"tracked_brand", "tracked_company"},
+    }
+    for tab, names in expected.items():
+        response = owner_client.get("/admin", {"accounts_tab": tab, "candidate_status": "registered", "locale": "en"})
+        assert response.status_code == 200
+        context = response.context
+        assert {r["state"].account.handle for r in context["official_candidates"]["rows"]} == names
+        assert context["candidate_metrics"][0]["value"] == len(names)
+        assert len(context["candidate_metrics"]) == 1
+        assert 'select name="candidate_status"' not in response.content.decode()
+        assert context["official_candidates"]["summary"]["selected"] == 9
+    tracked_row = next(r for r in context["official_candidates"]["rows"] if r["state"].account.handle == "tracked_company")
+    assert tracked_row["tracked_companies"] == ["existing_company"]
+    assert tracked_row["status_label"] == "Already tracked"
+
+
+@pytest.mark.parametrize("tab,error", [("failed", "ValueError"), ("tracked", "already_tracked")])
+def test_attention_tabs_preserve_search_pagination_and_fixed_status(owner_client, tab, error):
+    from core.models import OfficialCompanyAttempt
+    from core.official_company_candidates import CANDIDATE_POLICY
+
+    for number in range(53):
+        state = OfficialCompanyAccountState.objects.create(
+            account=Account.objects.create(author_id=str(97400 + number), handle=f"attention_{number}"),
+            evidence_hash="a" * 64, status="review_needed", last_error=error,
+            candidate_priority=1, candidate_policy_version=CANDIDATE_POLICY,
+        )
+        if tab == "failed":
+            OfficialCompanyAttempt.objects.create(
+                state=state, evidence_hash=state.evidence_hash, claim_token=str(number),
+                model="test-model", policy_version="test", status="failed", reserved_usd=0,
+            )
+    response = owner_client.get("/admin", {"accounts_tab": tab, "candidate_page": 2, "candidate_status": "registered", "locale": "ja"})
+    report = response.context["official_candidates"]
+    assert len(report["rows"]) == 3 and report["page"].paginator.count == 53
+    assert f"accounts_tab={tab}" in report["previous_url"]
+    assert "locale=ja" in report["previous_url"]
+    response = owner_client.get("/admin", {"accounts_tab": tab, "candidate_q": "attention_52"})
+    assert [r["state"].account.handle for r in response.context["official_candidates"]["rows"]] == ["attention_52"]
 
 
 def test_review_tab_forces_review_status_and_keeps_navigation(owner_client):
