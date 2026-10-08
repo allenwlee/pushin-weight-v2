@@ -9,10 +9,13 @@ from django.utils import timezone
 from core.models import (
     EditorialBudget,
     EditorialEdition,
+    EditorialHero,
     OriginalContentRun,
+    OriginalContentSelection,
     OriginalContentText,
 )
 from monitor.original_content import (
+    WORKFLOWS,
     advisory_lock,
     budget_totals,
     citation_values,
@@ -111,6 +114,21 @@ def readiness():
         if not copy_equal or not sources_equal:
             report["exceptions"].append(
                 {"kind": "shared_edition_parity", "id": str(edition.pk)}
+            )
+    for hero in EditorialHero.objects.filter(edition__isnull=False).select_related(
+        "edition"
+    ):
+        saved = hero.edition
+        pointer = (
+            OriginalContentSelection.objects.filter(
+                scope_key=f"featured:{WORKFLOWS[saved.track]}:{saved.locale}"
+            )
+            .select_related("text")
+            .first()
+        )
+        if pointer is None or pointer.text is None or pointer.text.public_id != saved.pk:
+            report["exceptions"].append(
+                {"kind": "shared_featured_parity", "id": hero.key}
             )
     for budget in EditorialBudget.objects.all():
         totals = budget_totals("editorial", budget.day)

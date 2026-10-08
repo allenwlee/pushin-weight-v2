@@ -108,3 +108,18 @@ def test_shared_source_reads_remain_bounded_by_page_count(monkeypatch):
         result = feed_payload(cfg, limit=20)
     assert len(result["items"]) == 20
     assert len(many) <= len(one) + 1
+
+
+def test_cutover_blocks_a_missing_featured_pointer_after_import():
+    from core.models import OriginalContentSelection
+    from monitor.original_content_cutover import readiness
+
+    Post.objects.create(tweet_id="1", text="Original source")
+    saved = edition()
+    EditorialHero.objects.create(key="chatter:en", edition=saved)
+    assert backfill_original_content(apply=True)["ready"]
+    assert readiness()["ready"]
+    OriginalContentSelection.objects.filter(scope_key="featured:social-brief:en").delete()
+    report = readiness()
+    assert not report["ready"]
+    assert any(e["kind"] == "shared_featured_parity" for e in report["exceptions"])

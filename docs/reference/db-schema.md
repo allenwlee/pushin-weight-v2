@@ -6448,4 +6448,3 @@ None declared beyond field/FK/constraint indexes.
 None declared beyond primary keys, field uniqueness and foreign keys.
 
 [Back to table inventory](#table-inventory)
-
