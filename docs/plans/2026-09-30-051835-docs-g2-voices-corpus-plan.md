@@ -10,7 +10,7 @@ ollija:
   change_id: docs-g2-voices-corpus-2026-09-30-051835
   branch: feat/g2-editorial
   workflow: implementation
-  delivery_target: staging
+  delivery_target: production
   delivery_selected_by_user: true
   delivery_route: staged
   staging_transport: branch
@@ -25,7 +25,7 @@ We will extend the existing headline tables and add one source-link table. Exist
 
 Storage consolidation comes first, with current writing behavior preserved. Packet-maker extraction and measured call reduction follow separately. Verification will compare saved text, citations, URLs, pictures, publication choices, costs and retries, including populated-database migration and rollback. The schema image below shows the proposed end state.
 
-The owner now authorizes implementation and verified staging delivery. Production Chatter and Pulse keep running. Old tables remain available during the seven-day rollback window after storage cutover; retirement cannot run before that safeguard is satisfied.
+The compatible release is verified on staging. The owner now authorizes production delivery and accepts the brief website restart and generation pause required for this release. Harvesting remains running. Old tables remain available during the seven-day rollback window after each environment's storage cutover; retirement cannot run before the remaining safeguards are satisfied.
 
 ---
 
@@ -34,7 +34,7 @@ The owner now authorizes implementation and verified staging delivery. Productio
 - **Objective:** Operators can inspect and extend generated stories and headlines through one consistent content model, with dependable citations and resource accounting.
 - **Means:** Headline-first schema consolidation (KTD10), shared packet-maker (KTD16), and profile-specific final writing (KTD17).
 - **Authority:** Current owner instructions; G2-R43/R48/R50–R54 in the authoritative General Launch Charter; this current execution contract; historical release evidence.
-- **Endpoint:** Implement, test, review and deploy this contract to staging under the October 8 LFG request. Production is excluded. Observe the seven-day rollback safeguard before destructive retirement.
+- **Endpoint:** Observe compatible application revision `900d0b14976ec74bfeca42349249dd966968e2e7` deployed to production and shared storage activated, with saved content/source/budget preservation and generation resumption verified. This extends the completed October 8 staging endpoint under the owner's “that's fine. deploy” instruction. Observe the seven-day rollback safeguard before destructive retirement.
 - **Execution scope:** U9–U15 are the consolidation units. U9–U14 and the compatible staging phase are complete in the October 8 receipt below. U15 physical retirement remains gated. U1–U8 and completed October releases are historical evidence and must not be rerun.
 - **Stop conditions:** Escalate a material contradiction of the owner-selected architecture or an unresolved migration discrepancy. Missing historical data must be reported, never replaced with invented evidence.
 
@@ -446,6 +446,10 @@ The plan-writing request was fulfilled by the execution contract and its embedde
 Future implementation completes when U9–U15 satisfy their verification outcomes: all three outputs use shared content/text/citations and call provenance, all active preparation paths use packet-maker, current behavior passes its regression net, and obsolete storage retires after KTD18's safeguards. Source counts/URLs are relational and inspectable for each saved language/version. URLs, pictures, budget ceilings, uncertainty, last-good and all-brand visibility survive migration. Abandoned code is removed; references describe the actual implemented state. Paid semantic quality remains unproven unless separately evaluated.
 
 ---
+
+## October 8 production continuation
+
+The owner explicitly selected production after accepting the persistent-disk website restart and short generation pause. Reuse the unchanged application candidate `900d0b14976ec74bfeca42349249dd966968e2e7` already verified on staging; documentation-only follow-up commits on this feature branch are not application deployment candidates. Default staged/branch delivery is retained. Do not repeat paid quality experiments or copy staging's disabled generation/public controls. Pause only the headline worker after confirming no active provider send, preserve harvesting/synthesis/jobs, import and reconcile production history, activate shared storage on compatible consumers, resume generation and observe actual deployment/runtime revisions. Retain legacy tables and start the production seven-day clock only from its own observed shared cutover. Rollback switches storage within this compatible release; it never redeploys an old provider writer or reverses expanded schema. Preserve concurrent G1 production work through non-forced integration and a bounded G2 migration/worker window; preserve G5 local work.
 
 ## October 8 compatible staging release receipt
 
@@ -2298,7 +2302,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `implementation`
-- Delivery target: `staging`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 - Delivery route: `staged`
 
@@ -2310,6 +2314,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-editorial` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-editorial` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -2325,7 +2336,9 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-October 8 current request: `$compound-engineering:lfg this plan to staging` authorizes implementation, isolated tests, review, scoped Git delivery and observed staging deployment. Use the default staging-branch route, preserve existing staging benchmark schema/data and independent production release ownership. Production, new paid quality trials and recurring collection activation are excluded. Keep production Chatter/Pulse and harvester running. The seven-day rollback/backup safeguards remain in force; code and isolated retirement rehearsal may precede actual table removal.
+October 8 current continuation: “that's fine. deploy” explicitly authorizes compatible production delivery and accepts the brief persistent-disk web restart and generation pause explained immediately beforehand. Promote the unchanged application candidate `900d0b14976ec74bfeca42349249dd966968e2e7` already verified on staging; documentation-only receipts do not change that candidate. Preserve current enabled production generation/public settings, other services, credentials and budgets. Harvesting stays running. No fresh paid quality trial or destructive retirement is authorized by this continuation. Keep the production rollback clock and native-writer/restore safeguards. Preserve concurrent G1 work with non-forced integration.
+
+October 8 completed staging request: `$compound-engineering:lfg this plan to staging` authorized implementation, isolated tests, review, scoped Git delivery and observed staging deployment. Its endpoint was completed at application900; the production exclusion from that request is superseded only by the explicit continuation above.
 
 Historical completed release — October 7: the owner said “deploy lfg” after the proposed
 exact-commit staging route, the completed fresh live run, and the explicit
