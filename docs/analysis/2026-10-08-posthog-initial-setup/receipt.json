@@ -1,0 +1,341 @@
+{
+  "created_at": "2026-10-08T06:42:22.493091+00:00",
+  "base_revision": "dcbedf22",
+  "branch": "feat/posthog-initial-setup",
+  "worktree": "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/posthog-initial-setup",
+  "code_state": "uncommitted",
+  "authorization_endpoint": "initial setup; delivery on-request",
+  "project": {
+    "id": 652560,
+    "name": "Default project",
+    "region": "us",
+    "capture_token_matched": true
+  },
+  "live_verification": {
+    "project_id": 652560,
+    "environment": "test",
+    "is_test": true,
+    "started_at": "2026-10-08T06:31:41.488429+00:00",
+    "sdk_sha256": "424078084f3d1b63dad53a28540c9e9df257843663e12954577d3c886ac133a3",
+    "run_id": "01a11a35-e631-7f6a-818c-989d7fcad567",
+    "pageview_uuid": "01a11a35-e631-7f6a-818c-989d7fcad567",
+    "browser_capture_http_status": 200,
+    "server_queued": true,
+    "finished_at": "2026-10-08T06:31:46.821459+00:00",
+    "ingestion_query_attempts": 3,
+    "ingestion_columns": [
+      "uuid",
+      "event",
+      "environment",
+      "channel",
+      "is_test",
+      "current_url",
+      "pathname",
+      "setup_run_id"
+    ],
+    "ingestion_rows": [
+      [
+        "01a11a35-e631-7f6a-818c-989d7fcad567",
+        "$pageview",
+        "test",
+        "web",
+        true,
+        "http://localhost:62091/",
+        "/",
+        null
+      ],
+      [
+        "0c3c1125-1a83-4c30-ac93-597cafe7d28f",
+        "analytics setup test",
+        "test",
+        "server",
+        true,
+        null,
+        null,
+        "01a11a35-e631-7f6a-818c-989d7fcad567"
+      ]
+    ],
+    "ingestion_verified": true,
+    "dashboard_setup_query_verified": true
+  },
+  "dashboard": {
+    "id": 2184992,
+    "name": "PushinWeight \u2014 Traffic & usage",
+    "url": "https://us.posthog.com/project/652560/dashboard/2184992",
+    "insights": [
+      {
+        "id": 12644462,
+        "name": "PW \u00b7 Production pageviews",
+        "query": {
+          "kind": "InsightVizNode",
+          "source": {
+            "kind": "TrendsQuery",
+            "version": 4,
+            "interval": "day",
+            "dateRange": {
+              "date_from": "-30d",
+              "explicitDate": false
+            },
+            "series": [
+              {
+                "kind": "EventsNode",
+                "event": "$pageview",
+                "name": "$pageview",
+                "math": "total"
+              }
+            ],
+            "properties": [
+              {
+                "type": "event",
+                "key": "environment",
+                "operator": "exact",
+                "value": "production"
+              },
+              {
+                "type": "event",
+                "key": "is_test",
+                "operator": "exact",
+                "value": false
+              }
+            ],
+            "filterTestAccounts": false,
+            "trendsFilter": {
+              "display": "ActionsLineGraph"
+            }
+          }
+        }
+      },
+      {
+        "id": 12644463,
+        "name": "PW \u00b7 Production visitors",
+        "query": {
+          "kind": "InsightVizNode",
+          "source": {
+            "kind": "TrendsQuery",
+            "version": 4,
+            "interval": "day",
+            "dateRange": {
+              "date_from": "-30d",
+              "explicitDate": false
+            },
+            "series": [
+              {
+                "kind": "EventsNode",
+                "event": "$pageview",
+                "name": "$pageview",
+                "math": "dau"
+              }
+            ],
+            "properties": [
+              {
+                "type": "event",
+                "key": "environment",
+                "operator": "exact",
+                "value": "production"
+              },
+              {
+                "type": "event",
+                "key": "is_test",
+                "operator": "exact",
+                "value": false
+              }
+            ],
+            "filterTestAccounts": false,
+            "trendsFilter": {
+              "display": "ActionsLineGraph"
+            }
+          }
+        }
+      },
+      {
+        "id": 12644464,
+        "name": "PW \u00b7 Signed-in visitors",
+        "query": {
+          "kind": "InsightVizNode",
+          "source": {
+            "kind": "TrendsQuery",
+            "version": 4,
+            "interval": "day",
+            "dateRange": {
+              "date_from": "-30d",
+              "explicitDate": false
+            },
+            "series": [
+              {
+                "kind": "EventsNode",
+                "event": "$pageview",
+                "name": "$pageview",
+                "math": "dau"
+              }
+            ],
+            "properties": [
+              {
+                "type": "event",
+                "key": "environment",
+                "operator": "exact",
+                "value": "production"
+              },
+              {
+                "type": "event",
+                "key": "is_test",
+                "operator": "exact",
+                "value": false
+              },
+              {
+                "type": "event",
+                "key": "$user_id",
+                "operator": "is_set"
+              }
+            ],
+            "filterTestAccounts": false,
+            "trendsFilter": {
+              "display": "ActionsLineGraph"
+            }
+          }
+        }
+      },
+      {
+        "id": 12644465,
+        "name": "PW \u00b7 Public pages",
+        "query": {
+          "kind": "InsightVizNode",
+          "source": {
+            "kind": "TrendsQuery",
+            "version": 4,
+            "interval": "day",
+            "dateRange": {
+              "date_from": "-30d",
+              "explicitDate": false
+            },
+            "series": [
+              {
+                "kind": "EventsNode",
+                "event": "$pageview",
+                "name": "$pageview",
+                "math": "total"
+              }
+            ],
+            "properties": [
+              {
+                "type": "event",
+                "key": "environment",
+                "operator": "exact",
+                "value": "production"
+              },
+              {
+                "type": "event",
+                "key": "is_test",
+                "operator": "exact",
+                "value": false
+              }
+            ],
+            "filterTestAccounts": false,
+            "trendsFilter": {
+              "display": "ActionsTable"
+            },
+            "breakdownFilter": {
+              "breakdown": "$pathname",
+              "breakdown_type": "event"
+            }
+          }
+        }
+      },
+      {
+        "id": 12644466,
+        "name": "PW \u00b7 Setup verification",
+        "query": {
+          "kind": "DataTableNode",
+          "source": {
+            "kind": "HogQLQuery",
+            "query": "SELECT event, properties.environment AS environment, properties.channel AS channel, properties.is_test AS is_test, properties.$pathname AS path, timestamp FROM events WHERE uuid = '01a11a35-e631-7f6a-818c-989d7fcad567' OR properties.setup_run_id = '01a11a35-e631-7f6a-818c-989d7fcad567' ORDER BY timestamp"
+          }
+        }
+      }
+    ],
+    "tile_count": 5,
+    "stored_queries_verified": true,
+    "query_checks": [
+      {
+        "name": "PW \u00b7 Production pageviews",
+        "passed": true,
+        "series": 1,
+        "production_count": 0.0
+      },
+      {
+        "name": "PW \u00b7 Public pages",
+        "passed": true,
+        "series": 0,
+        "production_count": 0
+      },
+      {
+        "name": "PW \u00b7 Setup verification",
+        "passed": true,
+        "records": 2
+      },
+      {
+        "name": "PW \u00b7 Production visitors",
+        "passed": true,
+        "production_count": 0.0
+      },
+      {
+        "name": "PW \u00b7 Signed-in visitors",
+        "passed": true,
+        "production_count": 0.0
+      }
+    ]
+  },
+  "local_checks": {
+    "tests": {
+      "passed": 28,
+      "subtests_passed": 13,
+      "required_postgres_executed": 10,
+      "required_postgres_skipped": 0,
+      "command": "DEBUG=True DATABASE_URL=<owned-local-db> .venv/bin/pytest tests/test_posthog_analytics.py tests/test_posthog_analytics_browser.py tests/test_home_v22_mockup_diff.py --reuse-db -q --tb=short"
+    },
+    "scoped_ruff": "passed",
+    "formatting": "passed",
+    "javascript_syntax": "passed",
+    "django_system_check": "passed",
+    "locked_dependency_sync": "passed",
+    "sdk_error_redaction": "real SDK consumer failure leaked fixture text before the filter; final regression passes",
+    "inline_simplification": {
+      "reuse": "no finding",
+      "quality": "no refactoring finding",
+      "efficiency": "no finding",
+      "refactoring_changes": 0
+    },
+    "typecheck": "no project typecheck configured"
+  },
+  "coverage_limits": {
+    "repository_ruff": {
+      "status": "failed outside changed files",
+      "findings": 1854,
+      "changed_python_file_findings": 0
+    },
+    "existing_cookie_tests": {
+      "failed": 3,
+      "reason": "Unchanged mock chart payload lacks computed_at; direct view caller bypasses the analytics middleware."
+    },
+    "warnings": "Finder-backed local static serving emits missing collected-static directory warnings; browser assets and callers are exercised.",
+    "full_unrelated_suite": "not run",
+    "shipping_review": "not performed; no shipping endpoint selected"
+  },
+  "source_sha256": {
+    ".env.example": "3166548ddd8fb22277422d7eceed6bec08499dd65c459d96b18f03e86ba3896b",
+    "project/analytics.py": "deb1581de123cf608a7aaf1239be4cc81a0604e7c59f4422a6c317ba3a7370c4",
+    "project/settings.py": "1adbd927de832c2c07643d50daf4ae64a3d5350f883c4c1ae0ad84bbb871f700",
+    "monitor/static/pw-analytics.js": "f6754a8d93e45de6232e38de5594d4c76ceb2d2f8e49681697cb1fc04b4d597e",
+    "pyproject.toml": "e339b2be4b0ead4d006aa6cc313ca9351f6f4d588e01de9686d1869897eb2248",
+    "uv.lock": "852709d0470d167132c9f03e003f91bcdaca3ca9ba3d28fb6dc6b8f46df120d4",
+    "tests/test_posthog_analytics.py": "b16587f7abd610ee98cd624c1e5b6516a3d21fc2208ce933a453c61324e6833d",
+    "tests/test_posthog_analytics_browser.py": "3eab00bd05c8834a7f344c5c898712a07e6889ca472476ca48a33ef18071fbe4",
+    "docs/operations/posthog-analytics.md": "6fe036b4a1a3cfcf89f9eddd5e87867d68099c34c7faff9362c6006d5d495dfa"
+  },
+  "production": {
+    "tracking_activated": false,
+    "deployed": false,
+    "preference_ui_added": false,
+    "git_delivery": false
+  },
+  "local_database": "owned disposable PostgreSQL cluster stopped after verification"
+}

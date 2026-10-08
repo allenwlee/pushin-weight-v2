@@ -107,6 +107,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "project.analytics.PostHogMiddleware",
     "project.middleware.StagingOwnerOnlyMiddleware",
     "project.revision.BridgewrightRevisionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -134,6 +135,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "project.wsgi.application"
 ASGI_APPLICATION = "project.asgi.application"
+
+# Analytics remains inactive unless a deployment explicitly configures it.
+# Personal API keys are operator-only and never loaded by the application.
+POSTHOG_ENABLED = env.bool("POSTHOG_ENABLED", default=False)
+POSTHOG_PROJECT_TOKEN = env("POSTHOG_PROJECT_TOKEN", default="")
+POSTHOG_REGION = env("POSTHOG_REGION", default="us")
+POSTHOG_ENVIRONMENT = env("POSTHOG_ENVIRONMENT", default="")
 
 # ============================================================================
 # Database
