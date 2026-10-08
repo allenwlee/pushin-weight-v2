@@ -25,7 +25,7 @@ def configured(settings):
     settings.POSTHOG_ENVIRONMENT = "test"
 
 
-def page_response(path="/", *, consent="granted", user_id=None, headers=None):
+def page_response(path="/", *, consent=None, user_id=None, headers=None):
     request = RequestFactory().get(path, **(headers or {}))
     request.resolver_match = resolve(request.path)
     request.user = SimpleNamespace(is_authenticated=user_id is not None, pk=user_id)
@@ -53,12 +53,12 @@ def test_default_disabled(settings):
 
 
 @pytest.mark.parametrize("consent", [None, "denied", "unknown"])
-def test_no_browser_loading_without_opt_in(configured, consent):
-    assert bootstrap(page_response(consent=consent)) is None
+def test_public_page_tracking_does_not_require_opt_in(configured, consent):
+    assert bootstrap(page_response(consent=consent)) is not None
 
 
 @pytest.mark.parametrize("headers", [{"HTTP_DNT": "1"}, {"HTTP_SEC_GPC": "1"}])
-def test_browser_preferences_override_consent(configured, headers):
+def test_browser_preferences_suppress_tracking(configured, headers):
     assert bootstrap(page_response(headers=headers)) is None
 
 

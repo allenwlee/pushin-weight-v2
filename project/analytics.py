@@ -1,4 +1,4 @@
-"""Opt-in pageviews and bounded, asynchronous PostHog server events."""
+"""Public pageviews and bounded, asynchronous PostHog server events."""
 
 from __future__ import annotations
 
@@ -124,7 +124,7 @@ def capture(event, *, user_id=None, distinct_id=None, properties=None):
 
 
 class PostHogMiddleware:
-    """Add analytics only to opted-in, complete public HTML responses.
+    """Add analytics only to complete public HTML responses.
 
     Response insertion keeps the shared shell and future G5 templates intact.
     API/partial/auth/private pages never load the SDK.
@@ -149,11 +149,7 @@ class PostHogMiddleware:
         ):
             return response
         patch_vary_headers(response, ("Cookie", "DNT", "Sec-GPC"))
-        if (
-            request.COOKIES.get("pw_analytics_consent") != "granted"
-            or request.headers.get("DNT") == "1"
-            or request.headers.get("Sec-GPC") == "1"
-        ):
+        if request.headers.get("DNT") == "1" or request.headers.get("Sec-GPC") == "1":
             return response
         try:
             body = response.content

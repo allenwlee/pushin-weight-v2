@@ -2,10 +2,6 @@
   "use strict";
   var node = document.getElementById("pw-analytics-config");
   if (!node || navigator.doNotTrack === "1" || navigator.globalPrivacyControl === true) return;
-  if (!document.cookie.split(";").some(function (cookie) {
-    return cookie.trim() === "pw_analytics_consent=granted";
-  })) return;
-
   try {
     var config = JSON.parse(node.textContent);
     if (!["https://us.i.posthog.com", "https://eu.i.posthog.com"].includes(config.host)) return;

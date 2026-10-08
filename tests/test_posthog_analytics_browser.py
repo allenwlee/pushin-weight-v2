@@ -92,17 +92,6 @@ class PostHogBrowserTests(StaticLiveServerTestCase):
 
         context.route("https://us.i.posthog.com/**", ingest)
 
-    def grant_consent(self, context):
-        context.add_cookies(
-            [
-                {
-                    "name": "pw_analytics_consent",
-                    "value": "granted",
-                    "url": self.live_server_url,
-                }
-            ]
-        )
-
     def visit(self, page, events):
         previous = len([event for event in events if event.get("event") == "$pageview"])
         page.goto(
@@ -152,7 +141,6 @@ class PostHogBrowserTests(StaticLiveServerTestCase):
             context.add_init_script(NORMAL_BROWSER_SCRIPT)
             events = []
             self.install_routes(context, events)
-            self.grant_consent(context)
             page = context.new_page()
             anonymous = self.visit(page, events)
             identities = []
@@ -219,10 +207,10 @@ class PostHogBrowserTests(StaticLiveServerTestCase):
             )
             browser.close()
 
-    def test_no_consent_disabled_preferences_and_blocked_sdk(self):
+    def test_disabled_preferences_and_blocked_sdk(self):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
-            for scenario in ("no-consent", "disabled", "dnt", "gpc", "blocked", "bot"):
+            for scenario in ("disabled", "dnt", "gpc", "blocked", "bot"):
                 with self.subTest(scenario=scenario):
                     context = browser.new_context(
                         user_agent=BROWSER_USER_AGENT,
@@ -241,8 +229,6 @@ class PostHogBrowserTests(StaticLiveServerTestCase):
                             else None
                         ),
                     )
-                    if scenario != "no-consent":
-                        self.grant_consent(context)
                     if scenario == "gpc":
                         context.add_init_script(
                             "Object.defineProperty(navigator, 'globalPrivacyControl', {value: true});"

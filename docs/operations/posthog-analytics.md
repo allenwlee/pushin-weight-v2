@@ -1,12 +1,12 @@
 # PostHog site analytics
 
-PostHog records opted-in visits to the public homepage and brand pages, so operators can see traffic and usage. It also provides a small server helper for approved events. It is independent of prediction, MCP and harvesting work.
+PostHog records visits to the public homepage and brand pages, so operators can see traffic and usage. It also provides a small server helper for approved events. It is independent of prediction, MCP and harvesting work.
 
 ## Normal workflow
 
-Keep analytics disabled until the intended environment and preference flow are selected. Configure the project token, region and environment on that web service. Visitors with `pw_analytics_consent=granted` can produce pageviews; other visitors never download the SDK. Do Not Track and Global Privacy Control override the cookie. This initial foundation does not add a preference control to the page; connect an owner-selected preference flow before public activation.
+Configure the project token, region and environment on the intended web service, then enable analytics. Public pageviews run automatically without a consent cookie or an opt-in control. Do Not Track and Global Privacy Control suppress tracking. The owner selected this behavior for the production activation on October 8, 2026.
 
-Signed-in browsers use `pushinweight:user:<Django-user-pk>`. The next opted-in public page resets identity after logout or an account switch. Email, name, page text, query parameters, fragments, filters and authentication URLs are excluded. Automatic click collection, session replay, surveys, flags and error capture are off. The SDK retains its bot filter.
+Signed-in browsers use `pushinweight:user:<Django-user-pk>`. The next tracked public page resets identity after logout or an account switch. Email, name, page text, query parameters, fragments, filters and authentication URLs are excluded. Automatic click collection, session replay, surveys, flags and error capture are off. The SDK retains its bot filter.
 
 ## Application configuration
 
@@ -54,7 +54,7 @@ DATABASE_URL=postgresql://<local-test-role>@127.0.0.1:<test-port>/<test-db> \
   --basetemp=.pytest-tmp/posthog-tests
 ```
 
-The browser tests exercise the real homepage, Django sessions and logout endpoint, both identity transitions, missing consent, disabled configuration, browser preferences and SDK failure. The positive fixture represents an ordinary browser with a normal user agent, client hints and `webdriver=false`; a separate unmodified automation fixture verifies bot suppression. All test-suite events remain intercepted and marked as test traffic. No required browser tests may be skipped.
+The browser tests exercise the real homepage without a consent cookie, Django sessions and logout endpoint, both identity transitions, disabled configuration, browser preferences and SDK failure. The positive fixture represents an ordinary browser with a normal user agent, client hints and `webdriver=false`; a separate unmodified automation fixture verifies bot suppression. All test-suite events remain intercepted and marked as test traffic. No required browser tests may be skipped.
 
 For live verification, send one labeled test pageview and one bounded server setup event, then query their actual records. A capture endpoint HTTP 200 or a queued SDK event alone does not establish ingestion. Use the query API's `refresh=force_async` when a synchronous query times out; poll its returned ID within a fixed time budget. Keep setup receipts and test traffic distinct from deployed production evidence.
 
@@ -62,7 +62,7 @@ For live verification, send one labeled test pageview and one bounded server set
 
 The [PushinWeight traffic and usage dashboard](https://us.posthog.com/project/652560/dashboard/2184992) has five tiles: production pageviews, visitors, signed-in visitors, public paths and a separate setup verification table. The setup table uses the actual two labeled records from the initial verification. The existing onboarding dashboard is preserved.
 
-Production dashboard series filter `environment=production` and `is_test=false`; setup traffic is shown separately. Before activation, select the deployment endpoint and connect the tracking preference flow. This foundation itself grants no Git delivery or deployment authority. Disable capture by setting `POSTHOG_ENABLED=False`; the middleware and server helper become inert.
+Production dashboard series filter `environment=production` and `is_test=false`; setup traffic is shown separately. The owner authorized direct production deployment with tracking enabled and no opt-in requirement. Disable capture by setting `POSTHOG_ENABLED=False`; the middleware and server helper become inert.
 
 ## References
 
