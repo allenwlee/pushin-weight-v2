@@ -22,6 +22,7 @@ dependencies = [
     "Django>=5.2,<5.3",
     "psycopg[binary]>=3.2",
     "django-environ>=0.11",
+    "posthog==7.64.1",
     "django-allauth[socialaccount]>=65",
     "gunicorn>=23",
     "whitenoise>=6",
