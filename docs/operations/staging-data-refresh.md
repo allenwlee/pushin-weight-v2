@@ -16,10 +16,13 @@ source secret. Do not copy either setting to another service.
 ## One-time source reader
 
 The allowlist below covers the rare-type/HF schema, G1 identity/media tables and
-G2 editorial tables through migration 0068.
-Relations introduced after the production migration boundary at 0027 remain
-optional on the source so a staging refresh can accept an older production
-snapshot and create those relations during the shadow migration. Refresh
+shared authored-content tables through migration 0079. The source must already
+have the six canonical content base tables and seven compatibility views. A
+pre-rename source fails closed; upgrading the refresh source schema is a separate
+authorized operation, not a step this release performs automatically.
+
+Declared optional relations may be absent on a source with the compatible
+physical-name/view inventory and are created during shadow migration. Refresh
 preflight compares the source's complete table inventory with the tracked
 policy and fails closed with `source_classified_table_missing:<table>` when a
 required relation is absent; the later shadow migration does not bypass that

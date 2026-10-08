@@ -257,6 +257,40 @@ def test_valid_staging_preflight_is_authorized() -> None:
     assert result.target.database == "pushinweight_staging"
 
 
+def test_pre_rename_source_requires_separate_schema_preparation() -> None:
+    policy = load_policy(POLICY_PATH)
+    source = _inspection(policy, source=True)
+    old = {
+        "brand_trend_narratives",
+        "brand_trend_narrative_texts",
+        "trend_narrative_runs",
+        "trend_narrative_provider_calls",
+        "trend_narrative_visible_runs",
+        "editorial_pictures",
+    }
+    canonical = {
+        "original_content",
+        "original_content_texts",
+        "original_content_runs",
+        "original_content_calls",
+        "original_content_selections",
+        "content_pictures",
+    }
+    source = replace(
+        source,
+        base_tables=(source.base_tables - canonical) | old,
+        views=source.views - old,
+    )
+    with pytest.raises(PolicyError, match="source_unclassified_table:"):
+        authorize(
+            policy,
+            action="preflight",
+            environ=_environment(policy),
+            source=source,
+            target=_inspection(policy, source=False),
+        )
+
+
 def test_staging_first_preflight_accepts_declared_post_migration_relations_absent():
     policy = load_policy(POLICY_PATH)
     source = _inspection(policy, source=True)
