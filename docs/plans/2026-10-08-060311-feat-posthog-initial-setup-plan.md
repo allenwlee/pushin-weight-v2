@@ -22,11 +22,11 @@ Add basic site analytics independently of G1–G5. The owner has supplied a proj
 
 Browser pageviews will require an explicit opt-in and respect browser tracking preferences. Capture only the homepage and public brand pages, with sanitized paths and internal account IDs. Automatic clicks, recordings and domain events remain outside this setup. A small server helper queues approved events without delaying site requests. Production stays inactive until the owner chooses an activation endpoint and tracking preference flow.
 
-Verify disabled behavior, browser identity transitions, bounded payloads, server failure isolation and actual ingestion of labeled setup traffic. Prepare a starter dashboard using the real events. No Git delivery or production configuration is authorized by this setup continuation.
+Verify disabled behavior, browser identity transitions, bounded payloads, server failure isolation and actual ingestion of labeled setup traffic. Prepare a starter dashboard using the real events. The subsequent owner request “deploy” authorizes Git delivery and observed production deployment; collection remains disabled while the preference choice is pending.
 
 ## Goal Capsule
 
-Implement and locally verify the independent PostHog foundation at origin/main dcbedf22. Preserve all other worktrees and their edits. Host authority remains fuchitalee.
+Implement, verify and deploy the independent PostHog foundation while preserving current main and all other worktrees and their edits. The initial base was origin/main dcbedf22; deployment integrates the current production branch. Host authority remains fuchitalee.
 
 ## Product Contract
 
@@ -48,13 +48,13 @@ Before production-code writes, observe the new focused regression fail because t
 
 ## Definition of Done
 
-Local code/tests and operator instructions are reviewable; disabled configuration sends nothing; the genuine browser and server caller chains show bounded metadata and safe failure behavior. Labeled pageview/server events are queryable and the starter dashboard exists and excludes test traffic. If PostHog query availability blocks live proof, retain that limitation separately from local passes. Production activation and delivery remain on-request.
+Local code/tests and operator instructions are reviewable; disabled configuration sends nothing; the genuine browser and server caller chains show bounded metadata and safe failure behavior. Labeled pageview/server events are queryable and the starter dashboard exists and excludes test traffic. If PostHog query availability blocks live proof, retain that limitation separately from local passes. The authorized deployment finishes when the exact candidate revision is observed on production and disabled behavior is verified. Visitor collection requires the owner's preference-flow choice.
 
 ## Delivery Exceptions
 
 The October 8 continuation says “deploy”, authorizing Git delivery and observed production deployment of this foundation. The selected target is production; the repository's default staged route remains in effect unless the owner selects another route. The preference-control question is pending. Prepare the existing foundation with production tracking disabled until that choice is resolved; do not add UI or enable collection merely from elapsed time. Preserve billing, harvest/worker controls, other releases and all unrelated service configuration.
 
-The candidate incorporates current main `da69456ae1cff072c8ff3f867761238fd0c9463d`; scoped tests were rerun after integration. G2 currently owns the staging service for its OriginalContent production continuation. Check that ownership and service availability before any staging mutation. Worktree isolation protects the dirty shared documentation checkout. Execution and local review stay inline per the supplied AGENTS.md tool map; no independent local reviewer is claimed.
+The candidate incorporates current main `926ef61cc52a643e2199cb5cdfa3850778645efd`, including the subsequent G2 history-streaming fix. After integration, the combined focused suite passed: 64 tests, 13 subtests and all ten PostgreSQL-required tests executed with none skipped. This includes 36 Ollija contract checks. G2 currently owns the staging service for its OriginalContent production continuation. Check that ownership and service availability before any staging mutation. Worktree isolation protects the dirty shared documentation checkout. Execution and local review stay inline per the supplied AGENTS.md tool map; no independent local reviewer is claimed.
 
 ## Sources
 
@@ -69,9 +69,9 @@ Initial foundation completed locally on October 8, 2026. US project 652560 and t
 
 Final focused verification: 28 tests passed, 13 subtests passed; ten PostgreSQL-required tests executed and none skipped. Scoped Ruff, formatting, JavaScript syntax, locked dependency sync and Django system checks passed. The actual SDK failure regression proved that raw error text was logged before the safeguard and is now excluded. Inline reuse, quality and efficiency review required no behavior-preserving refactoring.
 
-Repository-wide Ruff reports 1,854 findings outside the changed Python files; it is not a passed check. Three unchanged direct-view cookie tests have a mock chart payload missing `computed_at`; that existing fixture limitation is retained separately. Homepage route regressions pass with the required local `DEBUG=True` environment. Full unrelated suites and shipping review were not performed. The generated lock also resolves the existing benchmark extra declaration that was absent from the baseline lock.
+Repository-wide Ruff reports 1,854 findings outside the changed Python files; it is not a passed check. Three unchanged direct-view cookie tests have a mock chart payload missing `computed_at`; that existing fixture limitation is retained separately. Homepage route regressions pass with the required local `DEBUG=True` environment. Full unrelated suites were not performed. Inline shipping review found no actionable code defects; it does not represent an independent review. The generated lock also resolves the existing benchmark extra declaration that was absent from the baseline lock.
 
-Detailed evidence is in `docs/analysis/2026-10-08-posthog-initial-setup/receipt.json`. The code remains uncommitted in the isolated worktree. Production configuration, preference UI, Git delivery and deployment remain unselected and inactive.
+Detailed initial setup evidence is in `docs/analysis/2026-10-08-posthog-initial-setup/receipt.json`. The foundation commit `e20b8362f7ca17ce8c7ec2d3d3a51dd6f4ddc32f` is published on `feat/posthog-initial-setup`. Production deployment is authorized and in progress; the route choice is pending because G2 is using staging. Preference UI and visitor collection remain inactive.
 
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
