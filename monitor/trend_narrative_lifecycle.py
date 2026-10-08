@@ -260,7 +260,7 @@ def prepare_brand_trend_narrative(
         last_good = None
         if status == BrandTrendNarrative.Status.HELD:
             visible = (
-                TrendNarrativeVisibleRun.objects.select_for_update()
+                TrendNarrativeVisibleRun.objects.select_for_update(of=("self",))
                 .filter(window_days=run.window_days)
                 .select_related("run")
                 .first()
@@ -353,7 +353,7 @@ def activate_trend_narrative_run(run_id: int, *, now) -> bool:
         ):
             return False
         pointer = (
-            TrendNarrativeVisibleRun.objects.select_for_update()
+            TrendNarrativeVisibleRun.objects.select_for_update(of=("self",))
             .filter(window_days=run.window_days)
             .select_related("run")
             .first()

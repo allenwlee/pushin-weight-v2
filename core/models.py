@@ -3841,7 +3841,7 @@ class TrendNarrative(models.Model):
         )
 
 
-class TrendNarrativeRun(models.Model):
+class OriginalContentRun(models.Model):
     """Immutable all-brand facts cutoff for one source-cycle/window pair."""
 
     class Status(models.TextChoices):
@@ -3852,10 +3852,21 @@ class TrendNarrativeRun(models.Model):
         SUPERSEDED = "superseded", "Superseded"
 
     source_cycle_id = models.CharField(max_length=128)
-    window_days = models.PositiveSmallIntegerField()
+    window_days = models.PositiveSmallIntegerField(null=True, blank=True)
     facts_as_of = models.DateTimeField()
     packet_schema_version = models.PositiveSmallIntegerField()
     snapshot = models.JSONField()
+    workflow_key = models.CharField(max_length=80, null=True, blank=True)
+    workflow_version = models.CharField(max_length=64, blank=True, default="")
+    scope_key = models.CharField(max_length=160, null=True, blank=True)
+    interval = models.DateTimeField(null=True, blank=True)
+    config_snapshot = models.JSONField(default=dict)
+    decisions = models.JSONField(default=dict)
+    outcome = models.JSONField(default=dict)
+    execution_state = models.CharField(max_length=16, default="preparing")
+    fence = models.PositiveIntegerField(default=1)
+    claim_owner = models.CharField(max_length=128, blank=True, default="")
+    lease_until = models.DateTimeField(null=True, blank=True)
     brand_manifest = models.JSONField(default=list, db_default=[])
     batch_manifest = models.JSONField(default=list, db_default=[])
     internal_order = models.JSONField(default=list, db_default=[])
@@ -3874,6 +3885,9 @@ class TrendNarrativeRun(models.Model):
                 fields=["source_cycle_id", "window_days"],
                 name="uq_tnr_source_window",
             ),
+            models.UniqueConstraint(fields=["source_cycle_id", "scope_key", "workflow_key"], name="uq_oc_run_cycle_scope"),
+            models.UniqueConstraint(fields=["scope_key", "interval"], condition=models.Q(interval__isnull=False), name="uq_oc_run_interval"),
+            models.UniqueConstraint(fields=["scope_key", "workflow_key"], condition=models.Q(workflow_key="reservation-carryforward"), name="uq_oc_carryforward"),
             models.CheckConstraint(
                 condition=models.Q(window_days__in=[1, 7, 30, 365]),
                 name="ck_tnr_window",
@@ -3915,6 +3929,9 @@ class TrendNarrativeRun(models.Model):
             ),
             models.Index(fields=["status", "created_at"], name="idx_tnr_status_created"),
         ]
+
+
+TrendNarrativeRun = OriginalContentRun  # Python compatibility; no duplicate model/table.
 
 
 class TrendNarrativeWorkSlot(models.Model):
@@ -3997,15 +4014,19 @@ class TrendNarrativeWorkSlot(models.Model):
         ]
 
 
-class TrendNarrativeVisibleRun(models.Model):
+class OriginalContentSelection(models.Model):
     """The one monotonic visible cutoff for a supported time window."""
 
-    window_days = models.PositiveSmallIntegerField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)
+    window_days = models.PositiveSmallIntegerField(null=True, blank=True, unique=True)
+    scope_key = models.CharField(max_length=160, null=True, blank=True, unique=True)
     run = models.ForeignKey(
         TrendNarrativeRun,
         on_delete=models.PROTECT,
+        null=True, blank=True,
         related_name="visible_pointers",
     )
+    text = models.ForeignKey("OriginalContentText", on_delete=models.PROTECT, null=True, blank=True, related_name="selected_by")
     facts_as_of = models.DateTimeField()
     activated_at = models.DateTimeField()
     updated_at = models.DateTimeField(auto_now=True)
@@ -4017,7 +4038,15 @@ class TrendNarrativeVisibleRun(models.Model):
                 condition=models.Q(window_days__in=[1, 7, 30, 365]),
                 name="ck_tnvr_window",
             ),
+            models.CheckConstraint(
+                condition=(models.Q(run__isnull=False, text__isnull=True, window_days__isnull=False)
+                           | models.Q(run__isnull=True, text__isnull=False, window_days__isnull=True)),
+                name="ck_oc_selection_shape",
+            ),
         ]
+
+
+TrendNarrativeVisibleRun = OriginalContentSelection
 
 
 class TrendNarrativeDemand(models.Model):
@@ -4119,7 +4148,7 @@ class TrendNarrativeDemand(models.Model):
         ]
 
 
-class TrendNarrativeProviderCall(models.Model):
+class OriginalContentCall(models.Model):
     """Append-only bounded transport ledger for rank/editor/critic work."""
 
     class Stage(models.TextChoices):
@@ -4139,10 +4168,21 @@ class TrendNarrativeProviderCall(models.Model):
         on_delete=models.CASCADE,
         related_name="provider_calls",
     )
-    stage = models.CharField(max_length=16, choices=Stage.choices)
-    batch_key = models.CharField(max_length=128, blank=True, default="")
+    stage = models.CharField(max_length=200)
+    batch_key = models.CharField(max_length=200, blank=True, default="")
     request_identity = models.CharField(max_length=128)
-    request_hash = models.CharField(max_length=64)
+    request_hash = models.CharField(max_length=64, null=True, blank=True)
+    workflow_key = models.CharField(max_length=80, null=True, blank=True)
+    workflow_version = models.CharField(max_length=64, blank=True, default="")
+    kind = models.CharField(max_length=16, default="text")
+    provider = models.CharField(max_length=80, blank=True, default="")
+    model = models.CharField(max_length=160, blank=True, default="")
+    budget_scope = models.CharField(max_length=80, default="headlines")
+    budget_day = models.DateField(null=True, blank=True)
+    reserved_usd = models.DecimalField(max_digits=12, decimal_places=6, default=0)
+    actual_usd = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+    provenance = models.JSONField(default=dict)
+    legacy_import = models.BooleanField(default=False)
     response_hash = models.CharField(max_length=64, blank=True, default="")
     request_packet = models.JSONField(blank=True, null=True)
     response_payload = models.JSONField(blank=True, null=True)
@@ -4171,12 +4211,11 @@ class TrendNarrativeProviderCall(models.Model):
             models.UniqueConstraint(
                 fields=["request_identity"], name="uq_tnpc_request_identity"
             ),
-            models.CheckConstraint(
-                condition=models.Q(
-                    stage__in=["rank", "editor", "critic"]
-                ),
-                name="ck_tnpc_stage",
-            ),
+            models.CheckConstraint(condition=models.Q(stage__gt=""), name="ck_oc_call_stage"),
+            models.CheckConstraint(condition=models.Q(reserved_usd__gte=0), name="ck_oc_reservation"),
+            models.CheckConstraint(condition=models.Q(kind__in=["text", "media"]), name="ck_oc_call_kind"),
+            models.UniqueConstraint(fields=["stage"], condition=models.Q(kind="media"), name="uq_oc_media_stage"),
+            models.CheckConstraint(condition=models.Q(legacy_import=True) | models.Q(request_hash__isnull=False, request_hash__gt=""), name="ck_oc_request_hash"),
             models.CheckConstraint(
                 condition=models.Q(
                     state__in=["reserved", "sent", "completed", "ambiguous", "failed"]
@@ -4192,14 +4231,17 @@ class TrendNarrativeProviderCall(models.Model):
             ),
             models.CheckConstraint(
                 condition=(
-                    models.Q(sent_at__isnull=True, state="reserved")
+                    models.Q(legacy_import=True)
+                    | models.Q(sent_at__isnull=True, state="reserved")
+                    | models.Q(sent_at__isnull=True, state="failed", error_code__startswith="pre_send:")
                     | models.Q(sent_at__isnull=False, state__in=["sent", "completed", "ambiguous", "failed"])
                 ),
                 name="ck_tnpc_sent_shape",
             ),
             models.CheckConstraint(
                 condition=(
-                    models.Q(completed_at__isnull=True, state__in=["reserved", "sent", "ambiguous", "failed"])
+                    models.Q(legacy_import=True)
+                    | models.Q(completed_at__isnull=True, state__in=["reserved", "sent", "ambiguous", "failed"])
                     | models.Q(completed_at__isnull=False, state="completed", response_hash__gt="")
                 ),
                 name="ck_tnpc_completed_shape",
@@ -4208,10 +4250,14 @@ class TrendNarrativeProviderCall(models.Model):
         indexes = [
             models.Index(fields=["state", "claim_expires_at"], name="idx_tnpc_claim_due"),
             models.Index(fields=["run", "stage"], name="idx_tnpc_run_stage"),
+            models.Index(fields=["budget_scope", "budget_day"], name="idx_oc_call_budget"),
         ]
 
 
-class BrandTrendNarrative(models.Model):
+TrendNarrativeProviderCall = OriginalContentCall
+
+
+class OriginalContent(models.Model):
     """One immutable prepared outcome for a brand within a run."""
 
     class Status(models.TextChoices):
@@ -4255,6 +4301,17 @@ class BrandTrendNarrative(models.Model):
     brand_key_snapshot = models.CharField(max_length=64)
     brand_name_en_snapshot = models.TextField()
     brand_name_zh_cn_snapshot = models.TextField()
+    workflow_key = models.CharField(max_length=80, null=True, blank=True)
+    output_key = models.CharField(max_length=200, null=True, blank=True)
+    subject_key = models.CharField(max_length=200, blank=True, default="")
+    story_id = models.UUIDField(null=True, blank=True, db_index=True)
+    revision = models.PositiveIntegerField(default=1)
+    occurred_at = models.DateTimeField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
+    importance = models.FloatField(null=True, blank=True)
+    fingerprint = models.CharField(max_length=64, blank=True, default="")
+    provenance = models.JSONField(default=dict)
+    selection = models.JSONField(default=dict)
     status = models.CharField(max_length=32, choices=Status.choices)
     headline_en = models.TextField(blank=True, default="")
     headline_zh_cn = models.TextField(blank=True, default="")
@@ -4294,9 +4351,11 @@ class BrandTrendNarrative(models.Model):
         db_table = "brand_trend_narratives"
         constraints = [
             models.UniqueConstraint(
-                fields=["run", "brand_key_snapshot"],
-                name="uq_btn_run_brand",
+                fields=["run", "workflow_key", "output_key"],
+                name="uq_oc_run_output",
             ),
+            models.UniqueConstraint(fields=["run", "brand_key_snapshot"], condition=models.Q(workflow_key__isnull=True) | models.Q(workflow_key="brand-window"), name="uq_oc_trend_brand"),
+            models.CheckConstraint(condition=models.Q(importance__isnull=True) | models.Q(importance__gte=0, importance__lte=100), name="ck_oc_importance"),
             models.CheckConstraint(
                 condition=models.Q(
                     status__in=["prepared", "approved", "held", "unavailable", "no_content", "data_quality_unavailable"]
@@ -4306,7 +4365,10 @@ class BrandTrendNarrative(models.Model):
             models.CheckConstraint(
                 condition=(
                     models.Q(status="prepared", verified_at__isnull=True)
-                    | models.Q(status="approved", verified_at__isnull=False, headline_en__gt="", headline_zh_cn__gt="", secondary_en__gt="", secondary_zh_cn__gt="")
+                    | (models.Q(status="approved", verified_at__isnull=False)
+                       & ((models.Q(workflow_key__isnull=True) | models.Q(workflow_key="brand-window"))
+                          & models.Q(headline_en__gt="", headline_zh_cn__gt="", secondary_en__gt="", secondary_zh_cn__gt="")
+                          | models.Q(workflow_key__in=["social-brief", "development-report"])))
                     | models.Q(status__in=["held", "unavailable", "no_content", "data_quality_unavailable"])
                 ),
                 name="ck_btn_output_shape",
@@ -4350,10 +4412,15 @@ class BrandTrendNarrative(models.Model):
         indexes = [
             models.Index(fields=["brand_key_snapshot", "-attempted_at"], name="idx_btn_brand_attempt"),
             models.Index(fields=["run", "status"], name="idx_btn_run_status"),
+            models.Index(fields=["subject_key", "workflow_key", "-published_at", "id"], name="idx_oc_subject_history"),
+            models.Index(fields=["workflow_key", "-published_at"], name="idx_oc_workflow_feed"),
         ]
 
 
-class BrandTrendNarrativeText(models.Model):
+BrandTrendNarrative = OriginalContent
+
+
+class OriginalContentText(models.Model):
     """Locale-complete text bundle for a versioned brand narrative."""
 
     narrative = models.ForeignKey(
@@ -4364,7 +4431,19 @@ class BrandTrendNarrativeText(models.Model):
     locale = models.CharField(max_length=8)
     headline = models.TextField()
     secondary = models.TextField()
+    body = models.TextField(blank=True, default="")
+    public_id = models.UUIDField(null=True, blank=True, unique=True)
+    producing_call = models.ForeignKey(OriginalContentCall, on_delete=models.PROTECT, null=True, blank=True, related_name="produced_texts")
+    provenance = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def content(self):
+        return self.narrative
+
+    @property
+    def byline(self):
+        return self.secondary
 
     class Meta:
         db_table = "brand_trend_narrative_texts"
@@ -4381,6 +4460,33 @@ class BrandTrendNarrativeText(models.Model):
                 condition=~models.Q(headline="") & ~models.Q(secondary=""),
                 name="ck_brand_trend_narrative_text",
             ),
+        ]
+
+
+BrandTrendNarrativeText = OriginalContentText
+
+
+class OriginalContentSource(models.Model):
+    """A writing-time citation on one immutable localized text."""
+
+    text = models.ForeignKey(OriginalContentText, on_delete=models.CASCADE, related_name="sources")
+    post = models.ForeignKey(Post, on_delete=models.PROTECT, related_name="original_content_citations")
+    position = models.PositiveSmallIntegerField()
+    url_snapshot = models.CharField(max_length=4096)
+    author_label_snapshot = models.TextField(blank=True, default="")
+    source_hash = models.CharField(max_length=64, null=True, blank=True)
+    hash_basis = models.CharField(max_length=24)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "original_content_sources"
+        ordering = ["position"]
+        constraints = [
+            models.UniqueConstraint(fields=["text", "post"], name="uq_oc_source_post"),
+            models.UniqueConstraint(fields=["text", "position"], name="uq_oc_source_position"),
+            models.CheckConstraint(condition=~models.Q(url_snapshot=""), name="ck_oc_source_url"),
+            models.CheckConstraint(condition=(models.Q(hash_basis="legacy_unavailable", source_hash__isnull=True)
+                | models.Q(hash_basis__in=["writing_packet", "legacy_packet"], source_hash__isnull=False, source_hash__gt="")), name="ck_oc_source_hash"),
         ]
 
 
@@ -8061,7 +8167,7 @@ class EditorialHero(models.Model):
         db_table = "editorial_heroes"
 
 
-class EditorialPicture(models.Model):
+class ContentPicture(models.Model):
     """Optional generic attachment; source assets never become generated originals."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -8069,6 +8175,8 @@ class EditorialPicture(models.Model):
     content_id = models.CharField(max_length=160)
     source_platform = models.CharField(max_length=24, default="x")
     revision_hash = models.CharField(max_length=64)
+    text = models.ForeignKey(OriginalContentText, on_delete=models.PROTECT, null=True, blank=True, related_name="pictures")
+    run = models.ForeignKey(OriginalContentRun, on_delete=models.PROTECT, null=True, blank=True, related_name="pictures")
     assessment = models.ForeignKey(
         EditorialAssessment, on_delete=models.PROTECT, null=True
     )
@@ -8101,6 +8209,9 @@ class EditorialPicture(models.Model):
                 fields=["state", "next_poll_at"], name="idx_editorial_picture_poll"
             )
         ]
+
+
+EditorialPicture = ContentPicture
 
 
 # Additive official model-lab discovery. Account FKs must join the benchmark
