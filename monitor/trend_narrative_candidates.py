@@ -3774,6 +3774,9 @@ def _evidence_candidate(
 
     return {
         "evidence_id": evidence_id,
+        # Private persistence binding; closed provider projections omit these.
+        "post_id": str(row["tweet_id"]),
+        "url": f"https://x.com/i/status/{row['tweet_id']}",
         "author_group_id": author_group_id,
         "source_cluster_id": source_cluster_id,
         "excerpt": excerpt,

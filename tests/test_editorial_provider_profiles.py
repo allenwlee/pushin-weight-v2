@@ -221,7 +221,7 @@ def test_factual_reply_rejected_with_safe_usage_and_request_identity(
         }[defect]
     monkeypatch.setenv("DEEPINFRA_API_KEY", "private-test-key")
     monkeypatch.setattr(
-        providers, "call_once", lambda row, stage, kind, ceiling, cfg, send: send()
+        providers, "call_once", lambda row, stage, kind, ceiling, cfg, send, **kwargs: send()
     )
     req = editor_request(packet, cfg)
     with pytest.raises(ProviderReplyError) as caught:
@@ -257,7 +257,7 @@ def test_success_records_usage_and_elapsed_time_without_another_send(
     route = cfg.routes["editor"]
     monkeypatch.setenv("DEEPINFRA_API_KEY", "private-test-key")
     monkeypatch.setattr(
-        providers, "call_once", lambda row, stage, kind, ceiling, cfg, send: send()
+        providers, "call_once", lambda row, stage, kind, ceiling, cfg, send, **kwargs: send()
     )
     calls = []
 
@@ -290,7 +290,7 @@ def test_transport_failures_keep_safe_timing_without_guessed_phase(
     cfg, packet = factual_setup
     monkeypatch.setenv("DEEPINFRA_API_KEY", "private-test-key")
     monkeypatch.setattr(
-        providers, "call_once", lambda row, stage, kind, ceiling, cfg, send: send()
+        providers, "call_once", lambda row, stage, kind, ceiling, cfg, send, **kwargs: send()
     )
     sends = []
 

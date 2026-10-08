@@ -1,4 +1,5 @@
 """Freeze saved editions and their independent locale/version attribution."""
+
 import json
 from pathlib import Path
 
@@ -13,7 +14,9 @@ pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 
 def test_saved_locale_and_revision_citations_do_not_merge():
-    fixture = json.loads(Path("tests/fixtures/original_content_migration.json").read_text())
+    fixture = json.loads(
+        Path("tests/fixtures/original_content_migration.json").read_text()
+    )
     story = EditorialStory.objects.create(development_key="frozen-multilingual")
     for n, version in enumerate(fixture["versions"]):
         sources = [
@@ -21,9 +24,13 @@ def test_saved_locale_and_revision_citations_do_not_merge():
             for key in version["post_ids"]
         ]
         saved = edition(
-            f"Saved headline {n}", story=story, track=version["track"],
-            locale=version["locale"], revision=version["revision"],
-            fingerprint=str(n), evidence={"sources": sources},
+            f"Saved headline {n}",
+            story=story,
+            track=version["track"],
+            locale=version["locale"],
+            revision=version["revision"],
+            fingerprint=str(n),
+            evidence={"sources": sources},
         )
         result = edition_payload(saved, EditorialConfig())
         assert result["id"] == str(saved.pk)

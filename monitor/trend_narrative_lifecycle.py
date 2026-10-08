@@ -411,16 +411,33 @@ def prune_per_brand_trend_narrative_history(
                 .values_list("pk", flat=True)[:keep_per_window]
             )
             protected = pinned_run_ids | newest_ids
-            count, _ = (
-                TrendNarrativeRun.objects.filter(
-                    window_days=window_days,
-                    created_at__lt=cutoff,
-                    status=TrendNarrativeRun.Status.SUPERSEDED,
-                )
-                .exclude(pk__in=protected)
-                .delete()
-            )
-            deleted += count
+            eligible = TrendNarrativeRun.objects.filter(
+                window_days=window_days,
+                created_at__lt=cutoff,
+                status=TrendNarrativeRun.Status.SUPERSEDED,
+            ).exclude(pk__in=protected)
+            # Shared authored history is protected from incidental run deletion.
+            # The established trend-retention policy explicitly removes only its
+            # old, unpinned children; editorial runs have no trend window.
+            from core.models import ContentPicture
+
+            picture_content_ids = [
+                int(value)
+                for value in ContentPicture.objects.filter(
+                    content_kind="current_headline"
+                ).values_list("content_id", flat=True)
+                if str(value).isdecimal()
+            ]
+            picture_run_ids = BrandTrendNarrative.objects.filter(
+                pk__in=picture_content_ids
+            ).values_list("run_id", flat=True)
+            for old_run in eligible.exclude(pk__in=picture_run_ids):
+                children, _ = BrandTrendNarrative.objects.filter(run=old_run).delete()
+                calls, _ = TrendNarrativeProviderCall.objects.filter(
+                    run=old_run
+                ).delete()
+                count, _ = old_run.delete()
+                deleted += children + calls + count
     return deleted
 
 
@@ -1225,7 +1242,9 @@ def _write_subjects(
                     except ValueError:
                         product_key = None
                     if product_key is not None:
-                        product = Product.objects.filter(product_key=product_key).first()
+                        product = Product.objects.filter(
+                            product_key=product_key
+                        ).first()
         if identity_type == TrendNarrativeSubject.IdentityType.BRAND and brand is None:
             raise ValueError("known brand subjects require an existing brand")
         if (

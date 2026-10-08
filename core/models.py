@@ -4165,7 +4165,7 @@ class OriginalContentCall(models.Model):
 
     run = models.ForeignKey(
         TrendNarrativeRun,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="provider_calls",
     )
     stage = models.CharField(max_length=200)
@@ -4286,7 +4286,7 @@ class OriginalContent(models.Model):
 
     run = models.ForeignKey(
         TrendNarrativeRun,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="brand_narratives",
     )
     brand = models.ForeignKey(

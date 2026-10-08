@@ -138,7 +138,10 @@ def test_snapshot_aliases_skip_short_nonprimary_product_words(monkeypatch):
     monkeypatch.setattr(candidates.BrandKeyword, "objects", Keywords())
     class Accounts:
         def filter(self, **kwargs):
-            assert kwargs["role_id"] == "official"
+            if "account__data_source_id" in kwargs:
+                assert kwargs["account__data_source_id"] == "x"
+            else:
+                assert kwargs["role_id"] == "official"
             return self
 
         def order_by(self, *args):
