@@ -19,10 +19,24 @@ from core.official_company_accounts import x_account_identifier
 
 
 class XListError(RuntimeError):
-    def __init__(self, code, *, auth=False, unknown=False):
+    def __init__(self, code, *, auth=False, unknown=False, retry_at=None):
         super().__init__(code)
         self.auth = auth
         self.unknown = unknown
+        self.retry_at = retry_at
+
+
+def _rate_limit_retry_at(response):
+    now = timezone.now()
+    headers = getattr(response, "headers", {})
+    seconds = []
+    for key in ("x-rate-limit-reset", "retry-after"):
+        value = headers.get(key)
+        if isinstance(value, str) and value.isdecimal():
+            delay = int(value) - now.timestamp() if key.endswith("reset") else int(value)
+            seconds.append(delay)
+    # Bound provider values; missing headers retain the existing 15-minute delay.
+    return now + timedelta(seconds=min(86400, max(30, max(seconds, default=900))))
 
 
 @dataclass
@@ -61,6 +75,8 @@ class XOwnerListClient:
             return self._call(method, path, **kwargs)
         if response.status_code in {401, 403}:
             raise XListError("owner_auth_denied", auth=True)
+        if response.status_code == 429:
+            raise XListError("http_429", retry_at=_rate_limit_retry_at(response))
         if response.status_code >= 300:
             raise XListError(
                 "http_" + str(response.status_code),
@@ -164,7 +180,7 @@ def _claim(intent_id):
         return intent
 
 
-def _complete(claim, status, error=""):
+def _complete(claim, status, error="", *, retry_at=None):
     from monitor.list_membership import _upsert_membership
 
     with transaction.atomic():
@@ -185,10 +201,13 @@ def _complete(claim, status, error=""):
         intent.claim_token = ""
         intent.claim_expires_at = None
         intent.next_attempt_at = (
-            now + timedelta(minutes=15)
+            retry_at or now + timedelta(minutes=15)
             if status in {"retry_due", "verify_needed"}
             else None
         )
+        if error == "http_429":
+            # A provider cooldown is not an account-specific delivery failure.
+            intent.attempts = max(0, intent.attempts - 1)
         if status == "confirmed":
             intent.confirmed_at = now
             _upsert_membership(
@@ -215,6 +234,20 @@ def sync_intents(*, cfg, client, deadline=None):
     # Claims, reads and writes are bounded independently of queue size. An expired
     # claim is always read back before a new POST, including a crash after POST.
     now = timezone.now()
+    rate_pause = (
+        OfficialCompanyListIntent.objects.filter(
+            list_id=int(cfg.list_id),
+            status__in=["retry_due", "verify_needed"],
+            last_error="http_429",
+            next_attempt_at__gt=now,
+        )
+        .order_by("-next_attempt_at")
+        .values_list("next_attempt_at", flat=True)
+        .first()
+    )
+    if rate_pause:
+        result.update(status="deferred_rate_limit", retry_at=rate_pause.isoformat())
+        return result
     removed_ids = list(
         OfficialCompanyListIntent.objects.filter(
             status="confirmed",
@@ -260,10 +293,15 @@ def sync_intents(*, cfg, client, deadline=None):
                 claim,
                 "blocked_auth" if auth else "verify_needed",
                 str(exc) if isinstance(exc, XListError) else type(exc).__name__,
+                retry_at=exc.retry_at if isinstance(exc, XListError) else None,
             )
-        result["status"] = "blocked_auth" if auth else "deferred"
+        result["status"] = (
+            "blocked_auth" if auth else
+            "deferred_rate_limit" if isinstance(exc, XListError) and str(exc) == "http_429"
+            else "deferred"
+        )
         return result
-    for claim in claims:
+    for position, claim in enumerate(claims):
         try:
             identifier = x_account_identifier(claim.account)
             if identifier in members:
@@ -296,6 +334,12 @@ def sync_intents(*, cfg, client, deadline=None):
             )
             result["confirmed"] += int(_complete(claim, "confirmed"))
         except Exception as exc:  # noqa: BLE001
+            if isinstance(exc, XListError) and str(exc) == "http_429":
+                retry_at = exc.retry_at or timezone.now() + timedelta(minutes=15)
+                for paused in claims[position:]:
+                    _complete(paused, "verify_needed", "http_429", retry_at=retry_at)
+                result.update(status="deferred_rate_limit", retry_at=retry_at.isoformat())
+                return result
             auth = isinstance(exc, XListError) and exc.auth
             terminal = isinstance(exc, XListError) and str(exc) in {
                 "http_400",
