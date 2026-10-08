@@ -245,7 +245,9 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None):
             "request_packet": body,
             "provider": urlsplit(route.endpoint).hostname,
             "model": route.model,
-            "workflow_version": digest(cfg.model_dump(mode="json")),
+            "workflow_version": digest(
+                [cfg.model_dump(mode="json"), request.get("packet_version", "legacy")]
+            ),
             "rates": {
                 "input_usd_per_million": route.input_usd_per_million,
                 "output_usd_per_million": route.output_usd_per_million,
