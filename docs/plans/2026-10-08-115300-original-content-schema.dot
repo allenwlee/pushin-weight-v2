@@ -1,0 +1,62 @@
+digraph OriginalContentSchema {
+  graph [rankdir=TB, bgcolor="#f7f9fc", pad="0.35", nodesep="0.45", ranksep="0.9", splines=polyline,
+    fontname="Helvetica", fontsize=23, label="PROPOSED ORIGINALCONTENT SCHEMA\nOne new source table · Existing headline infrastructure reused", labelloc=t];
+  node [shape=plain, fontname="Helvetica", fontsize=13];
+  edge [fontname="Helvetica", fontsize=11, color="#54657c", arrowsize=0.75, penwidth=1.5];
+
+  runs [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="white">
+    <TR><TD BGCOLOR="#dceafd"><B>original_content_runs</B><BR/>reuses trend_narrative_runs</TD></TR>
+    <TR><TD ALIGN="LEFT">PK id<BR ALIGN="LEFT"/>workflow_key / workflow_version<BR ALIGN="LEFT"/>scope_key / interval / window_days?<BR ALIGN="LEFT"/>source_cycle_id / facts_as_of<BR ALIGN="LEFT"/>snapshot / config / decisions / outcome<BR ALIGN="LEFT"/>execution_state / status / fence / claim</TD></TR></TABLE>>];
+  calls [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="white">
+    <TR><TD BGCOLOR="#dceafd"><B>original_content_calls</B><BR/>reuses trend_narrative_provider_calls</TD></TR>
+    <TR><TD ALIGN="LEFT">PK id · FK run_id<BR ALIGN="LEFT"/>workflow / stage / batch_key<BR ALIGN="LEFT"/>provider / model / kind<BR ALIGN="LEFT"/>unique request_identity / state<BR ALIGN="LEFT"/>budget_scope / budget_day / reserved_usd<BR ALIGN="LEFT"/>actual_usd? / tokens / payloads / claims</TD></TR></TABLE>>];
+  content [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="white">
+    <TR><TD BGCOLOR="#dceafd"><B>original_content</B><BR/>reuses brand_trend_narratives</TD></TR>
+    <TR><TD ALIGN="LEFT">PK id · FK run_id / brand_id?<BR ALIGN="LEFT"/>workflow_key / output_key / subject_key<BR ALIGN="LEFT"/>story_id? / revision / fingerprint<BR ALIGN="LEFT"/>status / published_at? / importance?<BR ALIGN="LEFT"/>FK last_good_id? → self<BR ALIGN="LEFT"/>fact, critic, selection and provenance audit</TD></TR></TABLE>>];
+  texts [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="white">
+    <TR><TD BGCOLOR="#dceafd"><B>original_content_texts</B><BR/>reuses brand_trend_narrative_texts</TD></TR>
+    <TR><TD ALIGN="LEFT">PK id · FK content_id<BR ALIGN="LEFT"/>locale · unique public_id UUID<BR ALIGN="LEFT"/>headline / byline / body<BR ALIGN="LEFT"/>FK producing_call_id?<BR ALIGN="LEFT"/>voice and origin provenance<BR ALIGN="LEFT"/>UNIQUE content_id + locale</TD></TR></TABLE>>];
+  sources [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="white">
+    <TR><TD BGCOLOR="#d9f4df"><B>original_content_sources</B><BR/><B>SOLE NEW TABLE</B></TD></TR>
+    <TR><TD ALIGN="LEFT">PK id · FK text_id / post_id<BR ALIGN="LEFT"/>position / created_at<BR ALIGN="LEFT"/>url_snapshot / author_label_snapshot<BR ALIGN="LEFT"/>source_hash? / hash_basis<BR ALIGN="LEFT"/>UNIQUE text_id + post_id<BR ALIGN="LEFT"/>UNIQUE text_id + position</TD></TR></TABLE>>];
+  selections [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="white">
+    <TR><TD BGCOLOR="#dceafd"><B>original_content_selections</B><BR/>reuses trend_narrative_visible_runs</TD></TR>
+    <TR><TD ALIGN="LEFT">PK id · UNIQUE scope_key<BR ALIGN="LEFT"/>window_days? / facts_as_of / activated_at<BR ALIGN="LEFT"/>FK run_id? OR FK text_id?<BR ALIGN="LEFT"/>window → complete run<BR ALIGN="LEFT"/>featured locale → exact saved text</TD></TR></TABLE>>];
+  pictures [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="white">
+    <TR><TD BGCOLOR="#ffe9c4"><B>content_pictures</B><BR/>reuses editorial_pictures</TD></TR>
+    <TR><TD ALIGN="LEFT">PK UUID · FK text_id? / run_id?<BR ALIGN="LEFT"/>FK source_media_id? / person_media_id?<BR ALIGN="LEFT"/>generic kind/id for other content<BR ALIGN="LEFT"/>mode / state / provenance<BR ALIGN="LEFT"/>provider task / polling / storage / hashes</TD></TR></TABLE>>];
+  posts [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="white">
+    <TR><TD BGCOLOR="#e8ecf1"><B>posts</B><BR/>existing harvested source material</TD></TR>
+    <TR><TD ALIGN="LEFT">PK tweet_id (text, current Post key)<BR ALIGN="LEFT"/>original evidence and timestamps<BR ALIGN="LEFT"/>No generated OriginalContent stored here</TD></TR></TABLE>>];
+  brands [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="white">
+    <TR><TD BGCOLOR="#e8ecf1"><B>brands</B></TD></TR>
+    <TR><TD ALIGN="LEFT">Existing brand identity<BR ALIGN="LEFT"/>Optional primary brand for content</TD></TR></TABLE>>];
+  slots [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="white">
+    <TR><TD BGCOLOR="#e8ecf1"><B>trend_narrative_work_slots</B></TD></TR>
+    <TR><TD ALIGN="LEFT">PK window_days<BR ALIGN="LEFT"/>FK active_run_id?<BR ALIGN="LEFT"/>Existing claim / coalesced queue</TD></TR></TABLE>>];
+  demands [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="white">
+    <TR><TD BGCOLOR="#e8ecf1"><B>trend_narrative_demands</B></TD></TR>
+    <TR><TD ALIGN="LEFT">FK brand_id<BR ALIGN="LEFT"/>UNIQUE brand_id + window_days<BR ALIGN="LEFT"/>Existing trend-only demand</TD></TR></TABLE>>];
+  media [label=<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10" BGCOLOR="white">
+    <TR><TD BGCOLOR="#e8ecf1"><B>staff_media_objects · people_media</B><BR/>two existing shared media tables</TD></TR>
+    <TR><TD ALIGN="LEFT">Source bytes / hashes / reviewed person attribution<BR ALIGN="LEFT"/>No media storage redesign</TD></TR></TABLE>>];
+
+  {rank=same; selections; runs; slots;}
+  {rank=same; calls; content; brands;}
+  {rank=same; texts; pictures; demands;}
+  {rank=same; sources; media;}
+  runs -> calls [label="1 run → many calls"];
+  runs -> content [label="1 run → many outcomes"];
+  content -> texts [label="1 version → many locales"];
+  texts -> sources [label="1 text → many citations"];
+  sources -> posts [label="many citations → 1 post\nprotected deletion"];
+  calls -> texts [label="writer call → saved texts", color="#2b70bc"];
+  selections -> runs [label="window FK", constraint=false];
+  selections -> texts [label="featured text FK", color="#2b70bc"];
+  slots -> runs [label="active run FK", constraint=false];
+  content -> brands [label="optional brand FK", constraint=false];
+  brands -> demands [label="1 brand → many demands"];
+  runs -> pictures [label="execution FK", style=dashed];
+  texts -> pictures [label="exact saved copy FK", constraint=false];
+  pictures -> media [label="2 source-media FKs"];
+}
