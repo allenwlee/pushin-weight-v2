@@ -5234,7 +5234,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         staff_role, _ = Role.objects.get_or_create(key="staff")
         BrandAccount.objects.create(
             brand_id="moonshot_kimi",
-            account_id="v22-metadata-account-006",
+            account=Account.objects.get(author_id="v22-metadata-account-006"),
             role=staff_role,
         )
         Account.objects.filter(author_id="v22-metadata-account-002").update(

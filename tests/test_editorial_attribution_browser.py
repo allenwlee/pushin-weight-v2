@@ -17,12 +17,16 @@ def browser_settings(settings):
     settings.ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 
 
-def test_story_source_count_and_complete_links(live_server, monkeypatch):
+@pytest.mark.parametrize("storage", ["legacy", "shared"])
+def test_story_source_count_and_complete_links(live_server, monkeypatch, storage):
+    monkeypatch.setenv("ORIGINAL_CONTENT_STORAGE", storage)
     monkeypatch.setattr(
         "monitor.editorial.views.load_editorial_config",
         lambda: EditorialConfig(public_enabled=True),
     )
     urls = ["https://x.com/i/status/1", "https://x.com/i/status/2"]
+    if storage == "shared":
+        urls[1] = "https://example.org/posts/2"
     item = edition(
         evidence={
             "sources": [
@@ -31,6 +35,12 @@ def test_story_source_count_and_complete_links(live_server, monkeypatch):
             ]
         }
     )
+    if storage == "shared":
+        from core.models import Post
+        from monitor.original_content_backfill import backfill_original_content
+
+        Post.objects.bulk_create([Post(tweet_id="1"), Post(tweet_id="2")])
+        assert backfill_original_content(apply=True)["ready"]
     with sync_playwright() as pw:
         executable = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE")
         browser = pw.chromium.launch(

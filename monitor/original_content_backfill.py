@@ -44,6 +44,7 @@ def workflow_for_stage(stage, kind):
 
 def import_assessment(row):
     """Called inside the owner's short transaction for overlap-safe mirroring."""
+    row = EditorialAssessment.objects.select_for_update().get(pk=row.pk)
     outcome = dict(row.outcome)
     receipt = "external_reserved_usd" in outcome
     day = row.interval.astimezone(UTC).date()
@@ -259,6 +260,7 @@ def import_edition(edition, run=None, *, legacy=True, producer=None):
 
 
 def import_hero(hero):
+    hero = EditorialHero.objects.select_for_update().get(pk=hero.pk)
     if hero.edition_id is None or hero.key == "provider-lock":
         return
     text = OriginalContentText.objects.select_related("narrative__run").get(
@@ -266,6 +268,9 @@ def import_hero(hero):
     )
     scope = f"featured:{text.narrative.workflow_key}:{text.locale}"
     advisory_lock("selection:" + scope)
+    current = OriginalContentSelection.objects.filter(scope_key=scope).first()
+    if current and current.facts_as_of > text.narrative.run.facts_as_of:
+        return
     OriginalContentSelection.objects.update_or_create(
         scope_key=scope,
         defaults={

@@ -82,7 +82,7 @@ def project_trend_narrative(
                 queryset=BrandTrendNarrative.objects.select_related(
                     "brand", "last_good__brand"
                 ).prefetch_related(
-                    "localized_texts", "last_good__localized_texts"
+                    "localized_texts__sources", "last_good__localized_texts__sources"
                 ).defer(
                     "propositions",
                     "events",
@@ -508,6 +508,7 @@ def _per_brand_item(
         else fallback_brand is not None
     )
     verified_at = served.verified_at if served is not None else None
+    source_links = []
     attempted_at = outcome.attempted_at if outcome is not None else None
     if state in {"available", "stale"} and served is not None:
         locale_code = "zh-cn" if is_zh else "ja" if is_ja else "en"
@@ -518,6 +519,9 @@ def _per_brand_item(
         if locale_row is not None:
             headline = locale_row.headline
             secondary = locale_row.secondary
+            from monitor.original_content import source_payload
+
+            source_links = source_payload(locale_row)
         elif is_ja:
             state = "unavailable"
             headline, secondary = _terminal_copy(
@@ -552,6 +556,8 @@ def _per_brand_item(
         ),
         "headline": headline,
         "secondary": secondary,
+        "source_count": len(source_links),
+        "sources": source_links,
         "verified_at": _iso(verified_at),
         "attempted_at": _iso(attempted_at),
         "freshness": freshness,

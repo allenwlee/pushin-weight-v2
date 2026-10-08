@@ -4368,7 +4368,7 @@ class OriginalContent(models.Model):
                     | (models.Q(status="approved", verified_at__isnull=False)
                        & ((models.Q(workflow_key__isnull=True) | models.Q(workflow_key="brand-window"))
                           & models.Q(headline_en__gt="", headline_zh_cn__gt="", secondary_en__gt="", secondary_zh_cn__gt="")
-                          | models.Q(workflow_key__in=["social-brief", "development-report"])))
+                          | (models.Q(workflow_key__isnull=False, workflow_key__gt="") & ~models.Q(workflow_key="brand-window"))))
                     | models.Q(status__in=["held", "unavailable", "no_content", "data_quality_unavailable"])
                 ),
                 name="ck_btn_output_shape",

@@ -232,6 +232,10 @@ def publish_content(content, texts, *, selected_scope=None, fence=None, legacy=F
 
 def source_payload(text):
     return [
-        {"url": row.url_snapshot, "label": row.author_label_snapshot or "Source"}
+        {
+            "url": row.url_snapshot,
+            "label": row.author_label_snapshot
+            or ("X" if urlsplit(row.url_snapshot).hostname == "x.com" else "Source"),
+        }
         for row in text.sources.all()
     ]

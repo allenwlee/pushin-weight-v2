@@ -212,6 +212,10 @@ def initialize_per_brand_snapshot(
             source_cycle_id=source_cycle_id,
             window_days=window_days,
             defaults={
+                "workflow_key": "brand-window",
+                "workflow_version": hashlib.sha256(config.model_dump_json().encode()).hexdigest(),
+                "scope_key": f"trend-window:{window_days}",
+                "config_snapshot": config.model_dump(mode="json"),
                 "facts_as_of": facts_as_of,
                 "packet_schema_version": int(
                     snapshot.get("packet_schema_version") or 3
@@ -1250,6 +1254,7 @@ def _apply_critic(run, batch, call, *, now):
             ),
             selected_evidence_packet=dossier.get("evidence", []),
             final_critic_payload=decision,
+            producing_call=call,
         )
 
 
