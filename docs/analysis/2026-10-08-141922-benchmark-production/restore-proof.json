@@ -1,0 +1,25 @@
+{
+  "status": "passed",
+  "source_database": "pushinweight_shadow",
+  "rehearsal_database": "pw_benchmark_production_rehearsal_20261008",
+  "host": "127.0.0.1",
+  "port": 55436,
+  "started_at_utc": "2026-10-08T04:10:21.062091+00:00",
+  "completed_at_utc": "2026-10-08T04:12:07.864991+00:00",
+  "restored_tables": 151,
+  "critical_counts_from_restored_archive": {
+    "posts": 304184,
+    "posts_brands": 382373,
+    "accounts": 92183,
+    "editorial_stories": 14,
+    "companies": 43,
+    "products": 2407,
+    "brands": 62,
+    "people": 775,
+    "twitter_list_memberships": 83,
+    "official_company_account_states": 20851,
+    "official_company_list_intents": 12
+  },
+  "invalid_indexes": 0,
+  "backup_sha256": "45abf3648acdb1f0d8d3181f76b69dcc2476b640a038f47303990891548d949d"
+}

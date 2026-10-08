@@ -1,0 +1,20 @@
+{
+  "before": {
+    "title": "走个量 Pushin' Weight",
+    "textLength": 18766,
+    "links": 103,
+    "bodyVisible": true
+  },
+  "after": {
+    "title": "走个量 Pushin' Weight",
+    "textLength": 17620,
+    "links": 103,
+    "bodyVisible": true,
+    "internalPaths": [
+      "/brands/deepseek/",
+      "/brands/mistral/"
+    ]
+  },
+  "fresh_oauth_journey_tested": false,
+  "scope": "Own headless session; public homepage and separately verified existing custom admin rendering."
+}

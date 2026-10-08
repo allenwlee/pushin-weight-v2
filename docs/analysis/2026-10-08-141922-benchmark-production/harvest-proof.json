@@ -1,0 +1,60 @@
+{
+  "verified_at_utc": "2026-10-08T05:21:22.037814+00:00",
+  "actual_cycle_sha": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8",
+  "summary_hash": "9d55cf380e0fb4bd46d312e796c4caa2573394344a6182d68fe8fb7f3ec3caa8",
+  "canonical_hash_valid": true,
+  "run_id": "20261008T051556_0000-88c95a2f",
+  "service_id": "crn-d9gv94o4n6ts739tqaug",
+  "cycle_kind": "scheduled",
+  "status": "degraded",
+  "started_at": "2026-10-08T05:15:56+00:00",
+  "finished_at": "2026-10-08T05:20:47+00:00",
+  "totals": {
+    "keep_rate_max": 0.7,
+    "keep_rate_mean": 0.3035,
+    "keep_rate_min": 0.0,
+    "n_attributed": 21,
+    "n_calls_planned": 8,
+    "n_calls_run": 8,
+    "n_classifications_written": 0,
+    "n_inserted": 16,
+    "n_persist_failed": 0,
+    "n_results": 53,
+    "n_updated": 5
+  },
+  "errors_count": 6,
+  "degraded": {
+    "classifier_batch_failed": 1,
+    "enrichment_quarantined": 1,
+    "list_membership_reconciliation": 1
+  },
+  "errors_by_type": {
+    "classifier_batch_failed": 1,
+    "classifier_flags_invalid": 0,
+    "classifier_unavailable": 0,
+    "enrichment_quarantined": 1,
+    "synthesis_prewarm_failed": 0,
+    "targeted_extraction_failed": 0,
+    "translator_batch_failed": 0,
+    "translator_unavailable": 0
+  },
+  "scheduled_not_manually_triggered": true,
+  "persisted_posts_reported": 20,
+  "existing_pre_release_degradation": {
+    "classifier_batch_failed": 1,
+    "list_membership_reconciliation": 1
+  },
+  "post_fetch_failure_counters": {
+    "n_enrichment_failed": 0,
+    "n_enrichment_failed_carryover": 0,
+    "n_enrichment_failed_current_cycle": 0,
+    "n_enrichment_quarantined": 1
+  },
+  "account_link_database_proof": {
+    "reported_post_ids_found_in_database": 20,
+    "native_authors_with_generic_links": 20,
+    "native_to_generic_mismatches": 0,
+    "actual_web_sha": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8"
+  },
+  "limitation": "Cycle remains degraded; classifier/list reconciliation warnings existed before release and one enrichment quarantine remains. No claim of fully healthy harvesting."
+}

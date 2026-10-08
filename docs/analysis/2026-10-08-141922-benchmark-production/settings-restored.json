@@ -1,0 +1,75 @@
+{
+  "services": [
+    {
+      "id": "srv-dao7hrjtqb8s73e7c3g0",
+      "name": "pushinweight-synthesis",
+      "type": "background_worker",
+      "branch": "main",
+      "autoDeploy": "yes",
+      "autoDeployTrigger": "commit",
+      "suspended": "not_suspended",
+      "schedule": null
+    },
+    {
+      "id": "crn-dao7hrjtqb8s73e7c3gg",
+      "name": "pushinweight-jobs",
+      "type": "cron_job",
+      "branch": "main",
+      "autoDeploy": "yes",
+      "autoDeployTrigger": "commit",
+      "suspended": "not_suspended",
+      "schedule": "17 */6 * * *"
+    },
+    {
+      "id": "srv-d9ufj4e417fc73d93g20",
+      "name": "pushinweight-headlines",
+      "type": "background_worker",
+      "branch": "main",
+      "autoDeploy": "yes",
+      "autoDeployTrigger": "commit",
+      "suspended": "not_suspended",
+      "schedule": null
+    },
+    {
+      "id": "crn-d9gv94o4n6ts739tqaug",
+      "name": "pushinweight-harvest",
+      "type": "cron_job",
+      "branch": "main",
+      "autoDeploy": "yes",
+      "autoDeployTrigger": "commit",
+      "suspended": "not_suspended",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "id": "srv-d9go2breo5us73cg6vrg",
+      "name": "pushinweight-beat",
+      "type": "background_worker",
+      "branch": "main",
+      "autoDeploy": "yes",
+      "autoDeployTrigger": "commit",
+      "suspended": "suspended",
+      "schedule": null
+    },
+    {
+      "id": "srv-d9go2breo5us73cg6vqg",
+      "name": "pushinweight-web",
+      "type": "web_service",
+      "branch": "main",
+      "autoDeploy": "yes",
+      "autoDeployTrigger": "commit",
+      "suspended": "not_suspended",
+      "schedule": null
+    },
+    {
+      "id": "srv-d9go2breo5us73cg6vr0",
+      "name": "pushinweight-worker",
+      "type": "background_worker",
+      "branch": "main",
+      "autoDeploy": "yes",
+      "autoDeployTrigger": "commit",
+      "suspended": "suspended",
+      "schedule": null
+    }
+  ],
+  "original_settings_restored": true
+}

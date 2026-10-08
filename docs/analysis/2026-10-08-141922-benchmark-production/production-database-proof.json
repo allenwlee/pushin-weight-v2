@@ -1,0 +1,100 @@
+{
+  "verified_at_utc": "2026-10-08T05:12:07.699208+00:00",
+  "database": "pushinweight_shadow",
+  "actual_web_process_sha": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8",
+  "staging_mode": false,
+  "benchmark_flags": {
+    "review": false,
+    "metrics": false,
+    "collection": false
+  },
+  "preserved_native_records": {
+    "accounts": 92186,
+    "posts": 304199,
+    "twitter_list_memberships": 83,
+    "brands_accounts": 109,
+    "companies_accounts": 11,
+    "untracked_brand_promotion_evidence": 9397,
+    "account_post_appearances": 6803,
+    "product_verification_proposals": 103,
+    "people_accounts": 710,
+    "account_profile_snapshots": 27671,
+    "profile_movement_candidates": 0,
+    "official_company_account_states": 20851,
+    "official_company_list_intents": 12
+  },
+  "native_to_generic_link_mismatches": {
+    "posts": 0,
+    "twitter_list_memberships": 0,
+    "brands_accounts": 0,
+    "companies_accounts": 0,
+    "untracked_brand_promotion_evidence": 0,
+    "account_post_appearances": 0,
+    "product_verification_proposals": 0,
+    "people_accounts": 0,
+    "account_profile_snapshots": 0,
+    "profile_movement_candidates": 0,
+    "official_company_account_states": 0,
+    "official_company_list_intents": 0
+  },
+  "existing_counts": {
+    "posts_brands": 382541,
+    "editorial_stories": 14,
+    "editorial_editions": 19,
+    "hf_orgs": 30,
+    "companies": 43,
+    "brands": 62,
+    "products": 2407,
+    "people": 777,
+    "official_company_attempts": 8835,
+    "data_sources": 2,
+    "taxonomy_versions": 0,
+    "product_groups": 0,
+    "product_relationships": 0,
+    "product_group_memberships": 0,
+    "measurement_subjects": 0,
+    "subject_relationships": 0,
+    "post_subject_attributions": 0,
+    "metric_types": 0,
+    "metrics": 0,
+    "metric_collection_contracts": 0,
+    "source_subject_mappings": 0,
+    "metric_collection_runs": 0,
+    "metric_observations": 0,
+    "metric_values": 0
+  },
+  "shared_tables_present": 15,
+  "core_migrations": [
+    "0072_merge_benchmark_main",
+    "0073_rename_metrics",
+    "0074_official_company_generic_accounts"
+  ],
+  "migration_leaf": [
+    "0074_official_company_generic_accounts"
+  ],
+  "product_counts_by_type": [
+    {
+      "type": null,
+      "count": 2407
+    }
+  ],
+  "products_type_unchanged_by_release": true,
+  "taxonomy_records_preserved": {
+    "products": {
+      "count": 2407,
+      "all_original_fields_unchanged": true
+    },
+    "hf_model_catalog_observations": {
+      "count": 2407,
+      "all_original_fields_unchanged": true
+    },
+    "hf_orgs": {
+      "count": 30,
+      "all_original_fields_unchanged": true
+    }
+  },
+  "invalid_indexes": 0,
+  "account_primary_key": "account_key",
+  "all_data_sources_disabled": true,
+  "measurement_history_imported": false
+}

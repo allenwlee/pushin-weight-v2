@@ -1,0 +1,15 @@
+{
+  "verified_at_utc": "2026-10-08T05:18:25.810414+00:00",
+  "workers": [
+    {
+      "service": "pushinweight-synthesis",
+      "actual_process_sha": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8",
+      "ssh_environment_sha": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8"
+    },
+    {
+      "service": "pushinweight-headlines",
+      "actual_process_sha": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8",
+      "ssh_environment_sha": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "path": "/",
+    "status": 200,
+    "bytes": 586003,
+    "redirect_path": null
+  },
+  {
+    "path": "/brands/deepseek/",
+    "status": 302,
+    "bytes": 0,
+    "redirect_path": "/accounts/login/"
+  },
+  {
+    "path": "/brands/mistral/",
+    "status": 302,
+    "bytes": 0,
+    "redirect_path": "/accounts/login/"
+  },
+  {
+    "path": "/admin/",
+    "status": 302,
+    "bytes": 0,
+    "redirect_path": "/accounts/login/"
+  }
+]

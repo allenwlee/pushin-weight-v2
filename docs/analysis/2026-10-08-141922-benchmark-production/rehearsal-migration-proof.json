@@ -1,0 +1,29 @@
+{
+  "status": "passed",
+  "rehearsal_database": "pw_benchmark_production_rehearsal_20261008",
+  "started_at_utc": "2026-10-08T04:12:07.865730+00:00",
+  "completed_at_utc": "2026-10-08T04:23:13.532173+00:00",
+  "existing_table_counts_preserved": 147,
+  "framework_added_permissions": 60,
+  "framework_added_content_types": 15,
+  "native_account_and_post_checksums_preserved": true,
+  "metrics_table_present": true,
+  "sources_enabled": false,
+  "migrations": [
+    "0065_editorial_stories",
+    "0065_measurement_taxonomy",
+    "0065_official_company_discovery",
+    "0066_account_source_identity",
+    "0066_editorial_picture_claim_scopes",
+    "0066_official_company_list_intents",
+    "0067_editorial_anchor_index",
+    "0067_official_company_owner_credentials",
+    "0067_shared_metrics",
+    "0068_account_measurement_subject",
+    "0068_editorial_media_stage_once",
+    "0068_official_company_provider_state",
+    "0072_merge_benchmark_main",
+    "0073_rename_metrics",
+    "0074_official_company_generic_accounts"
+  ]
+}
