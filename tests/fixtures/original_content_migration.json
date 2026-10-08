@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "external_receipt": {"reserved_usd": "2.093153", "calls": 10, "media_calls": 0, "provider_send": false},
+  "versions": [
+    {"track": "chatter", "locale": "en", "revision": 1, "post_ids": ["9001"]},
+    {"track": "chatter", "locale": "ja", "revision": 1, "post_ids": ["9002", "9001"]},
+    {"track": "chatter", "locale": "en", "revision": 2, "post_ids": ["9002"]},
+    {"track": "pulse", "locale": "en", "revision": 1, "post_ids": ["9001", "9002"]}
+  ],
+  "calls": [
+    {"stage": "editor", "kind": "text", "state": "complete", "reserved_usd": "0.200000"},
+    {"stage": "media:historical-picture", "kind": "media", "state": "ambiguous", "reserved_usd": "0.100000"}
+  ]
+}
