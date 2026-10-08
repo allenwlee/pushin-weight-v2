@@ -96,7 +96,8 @@ def test_missing_source_and_unexplained_budget_block_ready_without_dummy_rows():
     assert not OriginalContentText.objects.filter(public_id=saved.pk).exists()
 
 
-def test_headline_opaque_alias_recovers_actual_post_key_from_saved_identity():
+@pytest.mark.parametrize("projected_characters", [None, 7])
+def test_headline_opaque_alias_recovers_actual_post_key_from_saved_identity(projected_characters):
     from hashlib import sha256
 
     from core.models import Brand
@@ -116,6 +117,7 @@ def test_headline_opaque_alias_recovers_actual_post_key_from_saved_identity():
         ).hexdigest()[:24]
     )
     source = {"evidence_id": alias, "excerpt": passage, "created_at": now.isoformat()}
+    projected_source = {**source, "excerpt": passage[:projected_characters]}
     Brand.objects.create(nickname="minimax", display_name="MiniMax")
     run = OriginalContentRun.objects.create(
         source_cycle_id="headline-history",
@@ -144,7 +146,7 @@ def test_headline_opaque_alias_recovers_actual_post_key_from_saved_identity():
         secondary_zh_cn="保存说明",
         attempted_at=now,
         verified_at=now,
-        selected_evidence_packet=[source],
+        selected_evidence_packet=[projected_source],
         cited_evidence_ids=[alias],
     )
     assert backfill_original_content(apply=False)["ready"]
@@ -153,5 +155,39 @@ def test_headline_opaque_alias_recovers_actual_post_key_from_saved_identity():
     for text in parent.localized_texts.all():
         citation = text.sources.get()
         assert citation.post_id == "historic-headline"
-        assert citation.source_hash == digest(source)
+        assert citation.source_hash == digest(projected_source)
         assert citation.hash_basis == "legacy_packet"
+
+
+def test_history_stream_does_not_materialize_one_large_run_snapshot_per_headline():
+    """Production's holdable cursor exhausted temp disk on the repeated JSON join."""
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    now = timezone.now()
+    post = Post.objects.create(tweet_id="snapshot-source", text="Saved source")
+    source = {"evidence_id": "e_saved", "post_id": post.pk, "excerpt": "Saved source"}
+    run = OriginalContentRun.objects.create(
+        source_cycle_id="large-history", window_days=7, facts_as_of=now,
+        packet_schema_version=3,
+        snapshot={"padding": "x" * 1_000_000, "dossiers": [{"evidence": [source]}]},
+    )
+    for n in range(6):
+        OriginalContent.objects.create(
+            run=run, brand_key_snapshot=f"brand-{n}", status="approved",
+            headline_en="Saved title", secondary_en="Saved explanation",
+            headline_zh_cn="保存标题", secondary_zh_cn="保存说明",
+            attempted_at=now, verified_at=now,
+            selected_evidence_packet=[source], cited_evidence_ids=["e_saved"],
+        )
+    for apply in (False, True, True):
+        with CaptureQueriesContext(connection) as queries:
+            assert backfill_original_content(apply=apply, batch_size=2)["ready"]
+        snapshot_reads = [q["sql"] for q in queries
+                          if '"trend_narrative_runs"."snapshot"' in q["sql"]
+                          and "SELECT" in q["sql"]]
+        assert snapshot_reads
+        assert all("JOIN" not in sql for sql in snapshot_reads)
+        assert len(snapshot_reads) <= (2 if apply else 1)
+    assert OriginalContentText.objects.count() == 12
+    assert all(t.sources.get().post_id == post.pk for t in OriginalContentText.objects.all())

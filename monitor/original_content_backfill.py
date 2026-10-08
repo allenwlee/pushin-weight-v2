@@ -321,6 +321,26 @@ def reconcile_budgets():
     return discrepancies
 
 
+def headline_history(*, batch_size=200):
+    """Stream one run's headlines without repeating its large context JSON.
+
+    PostgreSQL materializes Django's holdable cursors outside a transaction.
+    Joining each headline to its complete run snapshot can spill many GB to
+    temporary disk. Defer that snapshot, load it only if citations need it,
+    and share the same run object until its headlines have been processed.
+    """
+    runs = (
+        OriginalContentRun.objects.filter(window_days__isnull=False)
+        .only("id", "window_days", "facts_as_of")
+        .order_by("pk")
+    )
+    for run in runs.iterator(chunk_size=batch_size):
+        headlines = OriginalContent.objects.filter(run_id=run.pk).order_by("pk")
+        for headline in headlines.iterator(chunk_size=batch_size):
+            headline.run = run
+            yield headline
+
+
 def backfill_original_content(
     *, apply=False, batch_size=200, after_assessment=0, limit=None
 ):
@@ -340,11 +360,7 @@ def backfill_original_content(
         "last_assessment": after_assessment,
     }
     report["exceptions"].extend(reconcile_budgets())
-    for headline in (
-        OriginalContent.objects.filter(run__window_days__isnull=False)
-        .select_related("run")
-        .iterator(chunk_size=batch_size)
-    ):
+    for headline in headline_history(batch_size=batch_size):
         try:
             citation_values(headline_citations(headline), legacy=True)
             for text in headline.localized_texts.all():
@@ -494,7 +510,8 @@ def headline_citations(row):
                         "e_"
                         + sha256(
                             "\x1f".join(
-                                [candidate, str(pk), occurrence, source["excerpt"]]
+                                [candidate, str(pk), occurrence,
+                                 private.get("excerpt", source["excerpt"])]
                             ).encode()
                         ).hexdigest()[:24]
                     )
@@ -516,18 +533,19 @@ def headline_citations(row):
 
 def import_headline_metadata():
     """Preserve primary keys, parent-only bilingual copy and current window pointers."""
-    for run in OriginalContentRun.objects.filter(window_days__isnull=False).iterator(
-        chunk_size=200
+    for run in (
+        OriginalContentRun.objects.filter(window_days__isnull=False)
+        .only("id", "window_days")
+        .iterator(chunk_size=200)
     ):
         OriginalContentRun.objects.filter(pk=run.pk).update(
             workflow_key="brand-window",
             scope_key=f"trend-window:{run.window_days}",
         )
-    for row in OriginalContent.objects.filter(run__window_days__isnull=False).iterator(
-        chunk_size=200
-    ):
+    for historical in headline_history():
         with transaction.atomic():
-            row = OriginalContent.objects.select_for_update().get(pk=row.pk)
+            row = OriginalContent.objects.select_for_update().get(pk=historical.pk)
+            row.run = historical.run
             OriginalContent.objects.filter(pk=row.pk).update(
                 workflow_key="brand-window",
                 output_key=row.brand_key_snapshot,
