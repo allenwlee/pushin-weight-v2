@@ -7,11 +7,11 @@ import re
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
-CANDIDATE_POLICY = "official-company-candidates-v1"
+CANDIDATE_POLICY = "official-company-candidates-v2-offerings"
 MANUAL_POLICY = "explicit-operator-candidate-v1"
 AI = re.compile(
     r"\b(ai|llms?|models?|intelligence|inference|weights|diffusion|robotics|"
-    r"embedding|generative|neural)\b|人工智能|大模型|语言模型|語言模型|生成AI|機械学習",
+    r"embedding|generative|neural|agents?|harness(?:es)?)\b|人工智能|大模型|语言模型|語言模型|生成AI|機械学習",
     re.IGNORECASE,
 )
 DEVELOPMENT = re.compile(
@@ -30,7 +30,7 @@ RELEASE = re.compile(
 )
 MODEL = re.compile(
     r"\b(models?|llms?|weights|inference|diffusion|tokens?|parameters?|training|"
-    r"speech|vision|robotics|embedding)\b|模型|モデル",
+    r"speech|vision|robotics|embedding|agents?|harness(?:es)?)\b|模型|モデル",
     re.IGNORECASE,
 )
 SOCIAL_DOMAINS = frozenset(

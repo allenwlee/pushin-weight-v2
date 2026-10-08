@@ -28,6 +28,7 @@ from core.official_company_accounts import (
 from core.official_company_hf import VERSION as HF_POLICY_VERSION
 
 COHORT_KEY = "official-company-requalification-20261007-v3"
+FROZEN_POLICY = "official-ai-product-developer-v3"
 POLICIES = {POLICY_VERSION, BLOCKCHAIN_POLICY_VERSION}
 
 
@@ -67,13 +68,15 @@ def cohort_report(*, include_members=False):
         return None
     cursor = json.loads(scan.cursor)
     members = {row["state_id"]: row for row in cursor["members"]}
-    if len(members) > 2000 or cursor["policy_version"] != POLICY_VERSION:
+    if len(members) > 2000 or cursor["policy_version"] not in {FROZEN_POLICY, POLICY_VERSION}:
         raise ValueError("unsupported cohort")
     states = {row["pk"]: row for row in OfficialCompanyAccountState.objects.filter(pk__in=members).values(
         "pk", "status", "decision", "evidence_hash", "last_error", "next_attempt_at",
     )}
+    policies = ({FROZEN_POLICY, "official-ai-product-developer-v3-web3-v1"}
+                if cursor["policy_version"] == FROZEN_POLICY else POLICIES)
     attempts = list(OfficialCompanyAttempt.objects.filter(
-        state_id__in=members, policy_version__in=POLICIES, created_at__gte=scan.started_at,
+        state_id__in=members, policy_version__in=policies, created_at__gte=scan.started_at,
     ).order_by("-created_at", "-pk").values(
         "pk", "state_id", "evidence_hash", "status", "decision", "actual_usd", "reserved_usd", "error_code",
     ))
@@ -89,7 +92,7 @@ def cohort_report(*, include_members=False):
             reserved += attempt["reserved_usd"]
     result = {
         "key": COHORT_KEY, "population": scan.population, "qualified": 0,
-        "newly_qualified": 0, "model": 0, "agent": 0, "harness": 0,
+        "newly_qualified": 0, "model": 0, "agent": 0, "harness": 0, "other": 0,
         "uncertain": 0, "rejected": 0, "failed": 0, "retry_pending": 0,
         "pending": 0, "excluded": 0, "hf_verified": 0,
         "qualified_accounts": [], "spent_usd": str(spent), "reserved_usd": str(reserved),
@@ -129,7 +132,7 @@ def cohort_report(*, include_members=False):
         else:
             decision = None
         excluded = str(state_id) in cursor["excluded"] or (
-            state_id in cursor["queued"] and (
+            state_id in cursor["queued"] and attempt is None and (
                 state.get("status") in {"suppressed", "registered"}
                 or state.get("last_error") == "already_tracked"
             )
