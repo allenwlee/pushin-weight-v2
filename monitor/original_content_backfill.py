@@ -510,7 +510,8 @@ def headline_citations(row):
                         "e_"
                         + sha256(
                             "\x1f".join(
-                                [candidate, str(pk), occurrence, source["excerpt"]]
+                                [candidate, str(pk), occurrence,
+                                 private.get("excerpt", source["excerpt"])]
                             ).encode()
                         ).hexdigest()[:24]
                     )
