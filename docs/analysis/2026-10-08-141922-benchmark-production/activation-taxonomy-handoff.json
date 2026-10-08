@@ -1,0 +1,42 @@
+{
+  "runtime_sha": "00d7311754cf0837004c859e73c65c740aebab4d",
+  "migration_leaf": "0079_original_content_physical_names",
+  "product_counts_by_type": [
+    {
+      "type": null,
+      "count": 2404
+    },
+    {
+      "type": "llm-model",
+      "count": 3
+    }
+  ],
+  "selected_products": [
+    {
+      "product_key": "d8a9dbb6-49df-4d40-b6cd-dcbeb3bd15ff",
+      "repo_id": "deepseek-ai/DeepSeek-V4.1-Flash",
+      "type": "llm-model"
+    },
+    {
+      "product_key": "d9fe2d84-28b7-4ba2-b7fc-d086f647b07f",
+      "repo_id": "deepseek-ai/DeepSeek-V4-Flash",
+      "type": "llm-model"
+    },
+    {
+      "product_key": "cceb45fc-f883-4b25-8c9d-aeba27ca82d6",
+      "repo_id": "zai-org/GLM-5.3-Flash",
+      "type": "llm-model"
+    }
+  ],
+  "contract_id": "75c4a856-385b-429a-9b03-c7e023ea6f73",
+  "contract_hash": "1c05d33280cc41b6695cf9b752c922462ee8ff4acf1f7faded9c5296cb7d08b4",
+  "taxonomy_version_id": "b7a3b8ba-9663-4c72-a8c8-3b0e93e6e991",
+  "assigned_types_with_zero_rows": [
+    "other-ai-model",
+    "agent-harness"
+  ],
+  "existing_taxonomy_snapshots_rewritten": false,
+  "new_five_category_vocabulary_implemented": false,
+  "current_counts_supersede_original_release_handoff": true,
+  "reason_for_three_assignments": "Required current llm-model type for reviewed provider mappings; no other product changed."
+}
