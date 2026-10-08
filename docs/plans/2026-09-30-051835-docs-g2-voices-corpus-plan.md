@@ -25,7 +25,7 @@ We will extend the existing headline tables and add one source-link table. Exist
 
 Storage consolidation comes first, with current writing behavior preserved. Packet-maker extraction and measured call reduction follow separately. Verification will compare saved text, citations, URLs, pictures, publication choices, costs and retries, including populated-database migration and rollback. The schema image below shows the proposed end state.
 
-The compatible release is verified on staging. The owner now authorizes production delivery and accepts the brief website restart and generation pause required for this release. Harvesting remains running. Old tables remain available during the seven-day rollback window after each environment's storage cutover; retirement cannot run before the remaining safeguards are satisfied.
+The compatible release is verified on staging and production. Django uses the new model names, but the retained PostgreSQL tables still have their old physical names. The owner clarified that physical names must change too, then selected finishing this production release first and recording the renames as a separate follow-up amendment. Harvesting remains running. Old tables remain available during the seven-day rollback window after each environment's storage cutover; retirement cannot run before the remaining safeguards are satisfied.
 
 ---
 
@@ -35,7 +35,7 @@ The compatible release is verified on staging. The owner now authorizes producti
 - **Means:** Headline-first schema consolidation (KTD10), shared packet-maker (KTD16), and profile-specific final writing (KTD17).
 - **Authority:** Current owner instructions; G2-R43/R48/R50–R54 in the authoritative General Launch Charter; this current execution contract; historical release evidence.
 - **Endpoint:** Observe the compatible application release, including the production-scale history streaming correction, deployed to production and shared storage activated, with saved content/source/budget preservation and generation resumption verified. This extends the completed October 8 staging endpoint under the owner's “that's fine. deploy” instruction. Observe the seven-day rollback safeguard before destructive retirement.
-- **Execution scope:** U9–U15 are the consolidation units. U9–U14 and the compatible staging phase are complete in the October 8 receipt below. U15 physical retirement remains gated. U1–U8 and completed October releases are historical evidence and must not be rerun.
+- **Execution scope:** U9–U15 are the consolidation units. U9–U14 and compatible staging/production delivery are complete in the October 8 receipts below. U15 physical retirement remains gated. U16 records the owner's physical-name amendment as planning only; it is excluded from this production continuation. U1–U8 and completed October releases are historical evidence and must not be rerun.
 - **Stop conditions:** Escalate a material contradiction of the owner-selected architecture or an unresolved migration discrepancy. Missing historical data must be reported, never replaced with invented evidence.
 
 ---
@@ -155,7 +155,7 @@ flowchart TB
 
 ### Proposed Relevant Schema
 
-Table names below are the final names. During compatibility delivery the existing physical names stay mapped with `db_table`/`db_column`; no view or duplicate replacement table is introduced.
+Table names below are the final names. They are not all present in the deployed physical schema: compatibility delivery retains the existing names through `db_table`/`db_column`. The owner's October 8 clarification requires the physical rename follow-up in U16; renaming Django classes alone does not satisfy that final requirement. No view or duplicate replacement table is introduced by the current release.
 
 | Existing table | Target table/model | One row represents |
 | --- | --- | --- |
@@ -259,7 +259,7 @@ Atomic service checks replace constraints that cannot span locale/citation child
 
 ## Implementation Units
 
-Only U9–U15 below constitute the proposed remaining implementation. Additions keep existing U1–U8 IDs intact in the historical appendix.
+U9–U15 define the compatible consolidation and gated retirement. U16 is the owner's later physical-name amendment, recorded as planning only. Additions keep existing U1–U8 IDs intact in the historical appendix.
 
 ### U9. Capture the regression net and migration inventory
 
@@ -406,18 +406,41 @@ Only U9–U15 below constitute the proposed remaining implementation. Additions 
 
 **Dependencies:** U12 plus the seven-day rollback window; U13/U14 may proceed independently before retirement.
 
-**Files:** `core/models.py`, new ordered retirement/rename migrations in `core/migrations/`, obsolete editorial imports and adapters discovered in U9, `tests/test_original_content_retirement.py` (new), `docs/reference/db-schema.md`, `docs/reference/editorial-stories.md`, `docs/reference/headline-trend-narratives.md`, `docs/deploy/render.md`, `CONCEPTS.md`, `.github/workflows/g2-editorial.yml`.
+**Files:** `core/models.py`, new ordered retirement migrations in `core/migrations/`, obsolete editorial imports and adapters discovered in U9, `tests/test_original_content_retirement.py` (new), `docs/reference/db-schema.md`, `docs/reference/editorial-stories.md`, `docs/reference/headline-trend-narratives.md`, `docs/deploy/render.md`, `CONCEPTS.md`, `.github/workflows/g2-editorial.yml`. Physical table renames have their own U16 migration/release contract.
 
-**Approach:** Verify dependency inventory and restore-proof, remove only replaced tables/fields, and perform explicit physical renames while preserving primary keys/FKs/sequences. Retain predecessor trend tables, trend work/demand and all shared media. Update maintained references from implemented code, including budget queries, backfill exceptions, disable/rollback controls and source-count semantics. Remove abandoned adapters and experimental attempts.
+**Approach:** Verify dependency inventory and restore-proof and remove only replaced tables/fields, preserving primary keys/FKs/sequences. Physical table renames are separately planned in U16 and must not be bundled into this cleanup without its proved rollout. Retain predecessor trend tables, trend work/demand and all shared media. Update maintained references from implemented code, including budget queries, backfill exceptions, disable/rollback controls and source-count semantics. Remove abandoned adapters and experimental attempts.
 
 **Test scenarios:**
 
 - Populated retirement leaves exact IDs, source URLs, call totals, visible pointers and picture hashes intact; fresh install produces the same final schema.
-- Existing generic atomic-commentary pictures and legacy trend readers still work after physical renames.
+- Existing generic atomic-commentary pictures and predecessor trend readers still work after retirement; U16 verifies their behavior across physical renames separately.
 - Backup restore plus publication/call overlap reconciliation loses no saved output and authorizes no duplicate send.
 - Catalog shows one added source table and six removed obsolete editorial tables, with no dangling FK or remaining legacy consumer.
 
 **Verification:** Preservation report, backup proof and seven-day observation are complete before removal; schema/reference/CI inventories agree with the implemented end state.
+
+### U16. Physical table-name amendment — planning only
+
+**Owner decision:** On October 8, after clarifying that actual PostgreSQL table names must change, the owner selected finishing the current compatible production release first and amending this same plan. Do not create or apply rename migrations during that continuation. This amendment is not an execution-ready release or new deployment authorization.
+
+**Goal:** The retained database tables use the proposed names below, and Django's migration state and every consumer agree with the real PostgreSQL catalog. Preserve existing rows, primary keys, foreign keys, source links, publication selections and provider-call identities.
+
+| Current physical table | Intended physical table |
+| --- | --- |
+| `brand_trend_narratives` | `original_content` |
+| `brand_trend_narrative_texts` | `original_content_texts` |
+| `trend_narrative_runs` | `original_content_runs` |
+| `trend_narrative_provider_calls` | `original_content_calls` |
+| `trend_narrative_visible_runs` | `original_content_selections` |
+| `editorial_pictures` | `content_pictures` (existing accepted picture-table target) |
+
+`original_content_sources` already has its final name. Retain the predecessor `trend_narratives`/`trend_narrative_subjects` and trend-specific demands/work slots. Column renames and deleting the six obsolete editorial tables remain separately scoped; a physical table rename must not silently include either operation.
+
+**Implementation contract for the follow-up:** Change the relevant model `Meta.db_table` values, generate explicit Django `AlterModelTable` migrations, inspect their SQL and dependencies, and verify that no delete/create or data copy was inferred. Inventory live ORM consumers, raw SQL, refresh allowlists, sequence references, catalog checks, management scripts and maintained references. Keep historical migrations intact. Use the existing multi-service migration guard with a bounded lock wait.
+
+**Rollout design still required before execution:** Prove how old and new web/worker/cron processes resolve table names throughout migration and rollback. A Django rename preserves foreign-key targets, but an already-running process can still query the old table name. Do not assume a deploy is atomic across services or that an updatable compatibility view supports all existing insert/conflict paths. Keep harvesting running, preserve concurrent discovery work, and state any required serving/generation pause before the later release. Retain the existing rollback-window requirement; do not use renaming as permission to remove legacy storage.
+
+**Regression net and completion proof:** Rehearse populated forward and reverse renames on PostgreSQL, capture before/after row and original-field checksums, verify catalog names and FK targets, and exercise the actual headline/editorial/picture writers and readers plus shared citation and budget queries. Fresh installation must produce the same final schema. Verify source counts, every URL, saved public links, last-good/featured selections, unchanged call reservations and media access. Test overlapping service versions and concurrent migration runners using the chosen rollout mechanism. Review the completed migration and rollback design before selecting its later execution endpoint.
 
 ---
 
@@ -443,7 +466,7 @@ A later delivery follows the owner-selected endpoint and current Ollija guide. D
 
 The plan-writing request was fulfilled by the execution contract and its embedded schema image. The October 8 receipt below records subsequent implementation and staging verification.
 
-Future implementation completes when U9–U15 satisfy their verification outcomes: all three outputs use shared content/text/citations and call provenance, all active preparation paths use packet-maker, current behavior passes its regression net, and obsolete storage retires after KTD18's safeguards. Source counts/URLs are relational and inspectable for each saved language/version. URLs, pictures, budget ceilings, uncertainty, last-good and all-brand visibility survive migration. Abandoned code is removed; references describe the actual implemented state. Paid semantic quality remains unproven unless separately evaluated.
+Future consolidation completes when U9–U16 satisfy their verification outcomes: all three outputs use shared content/text/citations and call provenance, all active preparation paths use packet-maker, current behavior passes its regression net, obsolete storage retires after KTD18's safeguards, and retained physical tables have the agreed names through a separately proved rollout. The current production continuation completes the compatible phase only; it does not claim U15 retirement or U16 renames. Source counts/URLs are relational and inspectable for each saved language/version. URLs, pictures, budget ceilings, uncertainty, last-good and all-brand visibility survive migration. Abandoned code is removed; references describe the actual implemented state. Paid semantic quality remains unproven unless separately evaluated.
 
 ---
 
@@ -455,7 +478,31 @@ Deployment iteration2 has one major correction: `headline_history()` selects sma
 
 Corrected streaming candidate `f676d106f1bc20fe1c336055bbd0a17cc5707d8f` passed 36 storage/packet regressions (25 PostgreSQL) and three candidate-binding tests. Both staging services are live at that revision; native dry/import/replay/readiness checks preserve their two editions and 15 calls. The exact candidate passed 267 UI tests, 67 subtests, 102 PostgreSQL checks and all 5,028 assurance obligations in a fresh isolated database. The first UI retry reused a database whose transaction tests had flushed its migration-seeded geography rows; this fixture problem was repaired by a fresh isolated database, without product changes. UI performance was not rerun for this import-only correction; the unchanged UI/assets/dependencies retain candidate900's measured evidence, and new import resource behavior has its own production-shaped test and read-only rehearsal.
 
-Deployment iteration3 adds one further correction: production history has 1,966 aliases created from the original snapshot excerpt, while the later selected writing packet stores a 160-character trim. Exact SHA-256 replays for production headlines1172,1173 and20500 resolve uniquely from the saved full excerpts (1,000/274/896 characters); the selected trims resolve none. Use that original saved excerpt only to recover the post identity, preserving the selected packet as the writing/hash basis. The shortened-excerpt regression fails before this correction. Never use today's mutable source text or invent an ID. Concurrent G1 release `da69456ae1cff072c8ff3f867761238fd0c9463d` already preserves expanded G2 code; integrate it through a non-forced merge before the final staging/production candidate. The G2 worker remains paused and readers remain legacy pending full reconciliation.
+Deployment iteration3 adds one further correction: production history has 1,966 aliases created from the original snapshot excerpt, while the later selected writing packet stores a 160-character trim. Exact SHA-256 replays for production headlines1172,1173 and20500 resolve uniquely from the saved full excerpts (1,000/274/896 characters); the selected trims resolve none. Use that original saved excerpt only to recover the post identity, preserving the selected packet as the writing/hash basis. The shortened-excerpt regression fails before this correction. Never use today's mutable source text or invent an ID. Concurrent G1 release `da69456ae1cff072c8ff3f867761238fd0c9463d` already preserves expanded G2 code; it was integrated through a non-forced merge into final candidate926. The pause and legacy reader phase ended after the reconciliation described below.
+
+## October 8 compatible production release receipt
+
+**Application endpoint:** Final integrated candidate `926ef61cc52a643e2199cb5cdfa3850778645efd` was tested unchanged on staging, promoted non-forced to main and observed LIVE on all five production services. Web and headline worker use shared storage with mirroring, generation/public access enabled and core migration leaf `0078_original_content_workflow_shape`. The headline worker resumed at `2026-10-08T07:18:01Z`; generation was paused for approximately 50 minutes while the two production-scale importer defects were reproduced and repaired. The website served its legacy reader during history import, with brief service restarts. Harvesting/synthesis/jobs were not suspended and schedules were unchanged.
+
+**Iteration count:** Three application deployment iterations, with two major corrections: bounded run-scoped snapshot streaming and source-alias recovery from the original saved excerpt. Fixture/environment retries are not application iterations. Final926 passed 78 integration/storage/discovery tests, including 57 required PostgreSQL tests with no skips/errors, plus 267 UI tests, 67 subtests, 102 PostgreSQL checks and all 5,028 assurance obligations. The earlier 550-test release evidence remains valid for unchanged code within its stated scope. The final import-only fixes and preserved G1 discovery policy did not change UI/assets/dependencies; performance was explicitly not rerun, and candidate900's measurement remains scoped to the unchanged UI. No paid quality trial was launched.
+
+**Production import:** A read-only full-history rehearsal found zero exceptions before import. The exact tested926 backfill module then ran through the native Django ORM in the compatible live G1da web process while readers remained legacy; no remote application file was edited. It imported 71 assessments, 14 stories, 19 editions and 52 provider-call records, mapped all 27,155 existing headline parents, and created 43,568 relational source links. There are 19,882 localized texts after import, including the preserved original 13,005 headline texts and the separately imported editorial editions/fallback copies. Replaying saved accepted results made no provider request.
+
+**Preservation:** All eight checksums over original editorial/product fields and five checksums over original headline tables match before/after import. The headline comparison preserves 925 runs, two visible-run records, 12,196 provider calls, 27,155 parents and 13,005 original localized texts, excluding newly imported editorial rows/metadata. Existing products and picture assignments retain their original fields. Harvester and independent G1 discovery remained active, so this is an exact original-field preservation claim, not a claim that all production-table counts stayed frozen.
+
+**Resource/runtime proof:** Legacy and shared reservations reconcile exactly: October7 USD4.974125/29 calls/zero media calls; October8 USD4.968034/33 calls/zero media calls. These are reserved ceilings, not invoice charges. The ten previously recorded external spend receipts are carried forward once. Native worker proof confirms the project OpenAI key is present without exposing its value, the original Celery arguments are running, and zero editorial calls were in-flight at verification. The temporary candidate-only startup guard was removed from configuration. The web reader does not require a provider key.
+
+**Reader/browser proof:** All 19 pinned editions passed native story/archive checks in English, Chinese and Japanese: 57 locale checks preserving source counts, source order and every URL. Public desktop Pulse, mobile Japanese Pulse and mobile Chinese Chatter browser checks also passed with no horizontal overflow. Chinese/Japanese requests correctly serve saved English text with fallback copy; only English voices are configured. All 19 picture assignment records are preserved. Their source/generated variants were already unavailable: both legacy and shared routes returned404 for all38 checks. Positive media access is covered by isolated tests; no production image-file success is claimed.
+
+**Independent production continuation:** G1 subsequently deployed descendant `a66b59637202280c944368770298414824fa7485` to web/harvest for its account-cursor compatibility fix. It contains926, and its diff changes no G2 models, migrations, adapters, config or UI. Preserve that authorized continuation. Its web restart closed the first cutover-audit SSH connection before a receipt was saved; a read-only database check confirmed no audit row before a fresh native attempt on the unchanged926 headline worker. This is an environment interruption, not another G2 application iteration.
+
+**Observed deployment IDs at926:** web `dep-db3k6ed9fdbs73e5hoa0`; headline worker `dep-db3k6ejncjis73aoi8n0`; synthesis `dep-db3jusrtqb8s73eanue0`; harvest `dep-db3jut6gekts73f3s370`; jobs `dep-db3jutegekts73f3s450`. The later G1 web deployment is `dep-db3kac60tbcc73ft0p90`, and harvest is `dep-db3kacbtqb8s73ec0k60`. Three natural harvest completions were observed throughout rollout; their pre-existing list/discovery/classifier degraded statuses are separate from this storage change and are not claimed repaired.
+
+**Physical schema and follow-up:** This application release changed Django names/relationships through ORM migrations while retaining five old SQL table names and the compatible picture-table name. The owner's latest steering keeps physical renames in planning-only U16. Six-table deletion/native writer replacement and encrypted restore proof remain gated U15 work. No physical rename or drop migration was created or applied. The final documentation commit is a feature-branch receipt/amendment only; it is not a replacement deployed application candidate.
+
+**Cutover clock and restored controls:** The native worker recorded the validated cutover at `2026-10-08T07:37:56.303216+00:00` (16:37:56 JST), after a complete reconciliation with no provider send. The earliest possible production retirement is October15 at16:37:56 JST; native writer replacement and an encrypted restore proof remain additional requirements, so the report correctly stays `ready=false`. All five original `autoDeployTrigger=commit` settings, startup/build commands, branches and unsuspended states are restored and verified. Harvest remains every15minutes and jobs at `17 */6 * * *`. The current web's native runtime check at G1a66 confirms shared storage/mirroring, migration0078, enabled public/generation configuration and the same source/text/budget totals; headline worker, synthesis and jobs remain at verified926. The first interrupted audit saved no row, so the later clock is conservative and no time from staging or first activation is borrowed.
+
+**Evidence:** Host-owned private artifacts are under `.local/g2-original-content-production-20261008/`, including the native import, all13 checksum preservation report, shared web/worker runtime probes, 57 view checks, three browser samples, consumer receipts and service/deployment snapshots. No credentials are included. Retain the canonical worktree for these private artifacts and the follow-up plan; do not force cleanup or treat a later documentation-only head as the deployed application SHA.
 
 ## October 8 compatible staging release receipt
 
@@ -2341,6 +2388,8 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 <!-- END OLLIJA DELIVERY GUIDE -->
 
 ## Delivery Exceptions
+
+October 8 latest owner steering: finish and verify the current compatible production release first. Record the physical table-name requirement in U16 of this same plan; no physical rename or retirement is authorized as part of this continuation. Django class names and physical PostgreSQL names must be reported distinctly. Preserve the independently deployed G1 descendant that contains the verified G2 candidate; do not overwrite it just to obtain a uniform Git revision for a documentation receipt.
 
 October 8 current continuation: “that's fine. deploy” explicitly authorizes compatible production delivery and accepts the brief persistent-disk web restart and generation pause explained immediately beforehand. Candidate900 applied expanded schema; its proven production-scale history-query defect now requires the scoped streaming fix and corrected-candidate staging verification. Preserve current enabled production generation/public settings, other services, credentials and budgets. Harvesting stays running. No fresh paid quality trial or destructive retirement is authorized by this continuation. Keep the production rollback clock and native-writer/restore safeguards. Preserve concurrent G1 work with non-forced integration.
 

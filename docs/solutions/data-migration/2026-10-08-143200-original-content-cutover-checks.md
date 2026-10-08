@@ -41,3 +41,49 @@ different observations.
 The broader staging cutover and destructive retirement are separate work.
 This learning records the locally verified guard, not a deployment or restore
 claim.
+
+## Production history needs a bounded query shape
+
+The compatible production rollout found a second failure before import:
+PostgreSQL could not write its temporary cursor file. The history query joined
+27,155 headline parents to their complete run snapshots. Django opened a
+holdable server cursor outside a transaction, repeating the large snapshot
+for every parent and materializing that joined result. Reducing the fetch
+batch size did not remove the oversized database result.
+
+`headline_history()` now streams small run fields and processes each run's
+parents separately. It loads the saved snapshot only when a citation needs
+it and shares that run object for the whole group. The metadata import also
+selects only the run fields it updates and retains the shared run object when
+locking a parent. Keep the potentially large JSON out of the joined cursor.
+
+The PostgreSQL regression uses a large saved snapshot and several parents.
+It proves that dry-run, import and replay avoid a snapshot-bearing join and
+read that snapshot once per pass. The actual production history check then
+completed without the temporary-disk failure. The failed check had made no
+content import or reader switch.
+
+## Recover source identity from the original saved excerpt
+
+Production's complete dry-run also found 1,966 unresolved historical aliases.
+The original evidence ID hashes the candidate ID, post ID, occurrence kind
+and saved full excerpt. Later writing projection trimmed that excerpt to 160
+characters while retaining the evidence ID. Recomputing the ID from the trim
+could never identify the original post.
+
+Use the full excerpt retained in the run snapshot for identity recovery.
+Keep the selected writing projection as the citation's recorded hash basis.
+The lookup remains bounded by the saved creation time and facts cutoff and
+requires one exact hash match; it never consults today's mutable source text
+to guess an ID. Three production samples resolved uniquely with the saved
+1,000/274/896-character excerpts and resolved none with their 160-character
+writing trims. A shortened-projection regression failed before the correction.
+
+The complete production dry-run then reported zero discrepancies. The import
+preserved 19 Chatter/Pulse editions and 52 calls, mapped all 27,155 existing
+headline parents and created 43,568 relational source links. Eight checksums
+over original editorial/product fields and five original-headline table
+checksums match before and after import, including all 13,005 pre-existing
+localized texts. New imported records and metadata are excluded from those
+original-field comparisons. Encrypted restore and native-writer retirement
+proof remain separate prerequisites for deleting obsolete tables.
