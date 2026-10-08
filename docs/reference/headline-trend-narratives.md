@@ -1,5 +1,10 @@
 # Per-brand trend narratives
 
+Persistence is shared through [OriginalContent](original-content.md), with exact
+locale/version citations and producing calls. Compatibility mappings keep
+existing physical names. All-brand activation, last-good behavior, ranking and
+critic stages remain governed by this headline contract.
+
 Version: v0.2.0-beta.1
 Last updated: 2026-09-21 12:39:30 JST
 

@@ -108,17 +108,18 @@ current hero. Missing chart movement is not an exclusion rule.
 The owner-selected name for authored aggregate content, including trend headlines,
 Chatter and Pulse. It is distinct from a collected source post. A saved publication
 can have a headline, byline, body and citations, with workflow provenance that stays
-stable when its public label changes. The shared storage is proposed in the
-[G2 consolidation plan](docs/plans/2026-09-30-051835-docs-g2-voices-corpus-plan.md);
-the current separate storage remains deployed until that migration is implemented.
+stable when its public label changes. The [storage contract](docs/reference/original-content.md)
+uses headline tables with compatibility mappings and one shared citation join.
+Legacy editorial writes remain during the rollback window.
 
 ### Packet-maker
 
-The proposed shared preparation process that queries stored posts, collects relevant
+The shared preparation process that queries stored posts, collects relevant
 context and facts, and projects bounded evidence for a writing workflow. Preparation
 runs in code; the workflow's prompt and language-model call follow it. Different
 writing workflows can reuse preparation while retaining their own selection and
-copy requirements. Its extraction and verification are specified in the G2 plan.
+copy requirements. Its [contract](docs/reference/original-content.md#code-only-packet-maker)
+includes immutable packets, UTF-8 bounds and revision-aware reuse.
 
 ### Story and edition
 

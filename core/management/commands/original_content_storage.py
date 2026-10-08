@@ -6,17 +6,25 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 
-from monitor.original_content_cutover import readiness, record_cutover
+from monitor.original_content_cutover import (
+    readiness,
+    record_cutover,
+    retirement_status,
+)
 
 
 class Command(BaseCommand):
     help = "Report OriginalContent storage readiness and compatibility"
 
     def add_arguments(self, parser):
+        parser.add_argument("--retirement-report", action="store_true")
         parser.add_argument("--record-cutover", action="store_true")
         parser.add_argument("--consumer-receipts")
 
     def handle(self, *args, **options):
+        if options["retirement_report"]:
+            self.stdout.write(json.dumps(retirement_status()))
+            return
         try:
             if options["record_cutover"]:
                 if not options["consumer_receipts"]:

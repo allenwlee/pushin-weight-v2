@@ -1,6 +1,7 @@
 """Readiness and an auditable cutover timestamp; never changes service flags."""
 
 import re
+from datetime import datetime, timedelta
 
 from django.db import transaction
 from django.utils import timezone
@@ -21,6 +22,36 @@ from monitor.original_content_backfill import backfill_original_content
 
 ADAPTER_VERSION = "original-content-storage-v1"
 CONSUMERS = frozenset({"web", "headlines", "editorial", "pictures"})
+
+# Compatible writers still need these inputs throughout the rollback window.
+LEGACY_WRITERS = (
+    "monitor.editorial.service",
+    "monitor.editorial.persistence",
+    "monitor.editorial.evidence",
+)
+
+
+def retirement_status(*, now=None):
+    now = now or timezone.now()
+    receipt = (
+        OriginalContentRun.objects.filter(
+            scope_key="migration:original-content:cutover"
+        )
+        .order_by("created_at")
+        .first()
+    )
+    started = datetime.fromisoformat(receipt.outcome["cutover_at"]) if receipt else None
+    return {
+        "ready": False,
+        "cutover_at": started.isoformat() if started else None,
+        "earliest_retirement_at": (started + timedelta(days=7)).isoformat()
+        if started
+        else None,
+        "rollback_window_elapsed": bool(started and now >= started + timedelta(days=7)),
+        "legacy_consumers": list(LEGACY_WRITERS),
+        "restore_proof_required": True,
+        "reason": "Compatible legacy writers must be removed and an encrypted restore proven before destructive retirement.",
+    }
 
 
 def validate_consumers(receipts, candidate):

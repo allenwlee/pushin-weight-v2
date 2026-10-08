@@ -1,5 +1,11 @@
 # Render runbook — Pushin Weight v2
 
+For compatible OriginalContent storage delivery, follow the
+[storage controls and cutover contract](../reference/original-content.md#controls-cutover-and-rollback).
+Deploy compatible consumers before backfill/activation; keep legacy writers and
+tables during the seven-day rollback window. A shared-storage flag does not
+activate provider calls. Production controls remain independent of staging.
+
 Last verified against the Render account and Blueprint: 2026-08-27.
 
 The isolated owner-review stack is defined separately in

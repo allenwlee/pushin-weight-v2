@@ -374,6 +374,7 @@ Graphviz schema and legacy SQLite file are read-only historical artifacts.
 - [Classifier prompts](docs/reference/classifier-prompts.md)
 - [Post commentary](docs/reference/commenter.md)
 - [Chatter, Pulse and the picture editor](docs/reference/editorial-stories.md)
+- [OriginalContent storage and packet preparation](docs/reference/original-content.md)
 - [Post translation](docs/reference/translator-output.md)
 - [Rare-type intelligence](docs/reference/rare-types.md)
 - [Trend narrative contract](docs/reference/headline-trend-narratives.md)
