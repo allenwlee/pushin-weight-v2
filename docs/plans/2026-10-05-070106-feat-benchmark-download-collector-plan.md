@@ -7,7 +7,7 @@ ollija:
   change_id: feat-benchmark-download-collector-2026-10-05-070106
   branch: feat/benchmark-download-collector
   workflow: plan
-  delivery_target: staging
+  delivery_target: production
   delivery_selected_by_user: true
   delivery_route: staged
   delivery_route_selected_by_user: false
@@ -36,6 +36,12 @@ The earlier October 7 review required portable source/license attribution, accep
 The owner has now selected one combined release-response chart as the default G5 Pulse presentation: brand posts, exact-product OpenRouter tokens and net change in the selected HF rolling-download counter. Each line shows percentage change from its own average over the same first complete post-release week, with optional three-day smoothing. Zero represents that reference average, not the launch-day value. Arena score, confidence bands and reported battle counts share its date selection in a linked panel; rank remains supporting context. This October 7 selection replaces the earlier unresolved default-chart proposal, while preserving old comparison contracts and diagnostic views. U22–U23 are implemented and verified on Render staging at `e28cbda9`; the original diagnostic comparisons remain available.
 
 The latest naming decision renames the definition table from `source_metrics` to `metrics`. A metric still belongs to one data source and retains its unit, numeric type, version and state/flow semantics. This is a migration of the existing table, not another table or a change in recorded measurements. U24 is implemented and verified on isolated and populated staging PostgreSQL; the current candidate and staging database use `metrics`. Production remains unchanged.
+
+## October 8 production release — authorized, in progress
+
+The owner has authorized production deployment after staging review. The endpoint is verified production code/schema with benchmark collection, review/readers and public output disabled. Earlier staging-only exclusions below describe those completed runs, not the current authority. No source-use, forecast/trading or recurring activation decision changes. BenchLM remains a research candidate.
+
+Release checks: back up `pushinweight_shadow` on `dpg-d9koekqjobas73fvjqng-a`, validate the archive and restore it to a new owned local PostgreSQL database, rehearse all pending migrations and preserve native account/post checksums and existing table counts. Verify live account inbound references, main revision and database activity before migration. Serialize production deployment so one build runs the long account migration; preserve original production auto-deploy settings, schedules and suspension states. After deployment verify exact actual web process SHA, migration leaf, fifteen shared tables, generic/native account links, disabled flags, existing public/admin reads and the next natural scheduled harvest result. Use backup/forward repair for account rollback. Keep private backup/source exports out of Git; publish sanitized release receipts.
 
 ## October 8 execution checkpoint — tested and staging verified
 
@@ -828,6 +834,10 @@ for an unrelated repair.
 Objective: users can compare post attention with benchmark performance and adoption, knowing which entities, units and periods each point actually represents. Means: the owner-controlled taxonomy and shared metric schema below (KD3, KD6–KD15; KTD1–KTD6), delivered in the existing isolated feature worktree. Preserve U1–U4 as historical baseline; execute future units in dependency order, not numeric order. Current endpoint is the owner-authorized tested implementation plus verified Render staging deployment, with a reviewable PR and decided CI. Managed delivery targets staging; production migration, deployment and recurring activation require a later owner decision described in Delivery Exceptions.
 
 ## Delivery Exceptions
+
+**Latest owner direction — October 8, production deployment:** the owner said “ok go” after the readiness report. Deploy the staging-verified code and schema to production, initially disabled: no benchmark recurring collection, numeric charts, forecasts, exports or trading activation. Take and verify a recoverable live-production backup before the first production migration; preserve existing production collection and other jobs. Reuse the October 8 exact-code staging and CI evidence while code/main/dependencies remain unchanged. Documentation-only release metadata does not require repeating an already completed staging deployment. Use one production migration runner, reconcile actual live catalog/writers, verify exact deployed revision and preservation, and retain backup/forward-repair rollback for account cutover. BenchLM remains research only. This is production deployment authority, not source-use or feature activation approval.
+
+**Latest owner direction — October 8, research only:** retain the BenchLM reputation/access assessment as a deferred research candidate. See [BenchLM source research](../research/2026-10-08-122602-benchlm-data-source-candidate.md). This does not select a fifth provider, add an implementation unit or reopen the completed staging delivery. The current task writes research and its discovery links only; source registry, mappings, schema, collection, forecasts, public display and deployment remain unchanged.
 
 **Latest owner execution selection — October 7, 22:06 JST:** LFG this updated plan through testing and deployment/verification on Render staging. Execute pending U22–U27, including the selected combined chart and Arena panel, populated/fresh `metrics` rename, and OpenCode history/hourly revision-aware collection and serving. This supersedes amendment-only restrictions for this run. Preserve the existing staged route, other sessions' integrated code and staging data, existing immutable comparison contracts and the HF timing worker. Bounded source-data import and staging migration/runtime coordination are authorized; production deployment/migration and recurring collection activation remain excluded. Verify a recoverable staging backup before the rename and exact candidate SHA plus feature behavior after deployment.
 
@@ -1971,7 +1981,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `staging`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 - Delivery route: `staged`
 
@@ -1983,6 +1993,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
