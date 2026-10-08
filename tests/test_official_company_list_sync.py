@@ -217,3 +217,76 @@ def test_list_read_reaches_fourth_page_before_confirming_absence():
     assert members == {"1", "2", "3", "4"}
     assert complete
     assert requests == [None, "1", "2", "3"]
+
+
+def test_rate_limit_stops_batch_and_pauses_other_accounts_without_spending_retries():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    first, cfg = setup_intent()
+    second_account = Account.objects.create(author_id="987655", handle="another_lab")
+    second_state = OfficialCompanyAccountState.objects.create(
+        account=second_account, status="registered", evidence_hash="b" * 64,
+    )
+    second = OfficialCompanyListIntent.objects.create(
+        account=second_account, state=second_state, evidence_hash=second_state.evidence_hash,
+        list_id=first.list_id,
+    )
+    client = Mock()
+    client.members.return_value = (set(), True)
+    reset = timezone.now() + timedelta(minutes=20)
+    client.add.side_effect = XListError("http_429", retry_at=reset)
+    result = sync_intents(cfg=cfg, client=client)
+    assert result["status"] == "deferred_rate_limit" and result["writes"] == 1
+    client.add.assert_called_once_with(first.account.author_id)
+    for intent in [first, second]:
+        intent.refresh_from_db()
+        assert intent.status == "verify_needed" and intent.last_error == "http_429"
+        assert intent.next_attempt_at == reset and intent.attempts == 0
+        assert intent.claim_token == "" and intent.add_acknowledged_at is None
+    assert second.add_requested_at is None
+    client.reset_mock()
+    assert sync_intents(cfg=cfg, client=client)["status"] == "deferred_rate_limit"
+    client.preflight.assert_not_called()
+    OfficialCompanyListIntent.objects.update(next_attempt_at=timezone.now() - timedelta(seconds=1))
+    client.add.side_effect = None
+    assert sync_intents(cfg=cfg, client=client)["confirmed"] == 2
+    assert OfficialCompanyListIntent.objects.filter(status="confirmed", attempts=1).count() == 2
+
+
+def test_repeated_provider_throttles_do_not_exhaust_account_retry_allowance():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    intent, cfg = setup_intent()
+    client = Mock()
+    client.members.return_value = (set(), True)
+    client.add.side_effect = XListError("http_429")
+    for _ in range(6):
+        result = sync_intents(cfg=cfg, client=client)
+        assert result["status"] == "deferred_rate_limit"
+        intent.refresh_from_db()
+        assert intent.attempts == 0 and intent.status == "verify_needed"
+        intent.next_attempt_at = timezone.now() - timedelta(seconds=1)
+        intent.save()
+    client.add.side_effect = None
+    assert sync_intents(cfg=cfg, client=client)["confirmed"] == 1
+
+
+def test_adapter_preserves_bounded_provider_reset_on_429():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    reset = int((timezone.now() + timedelta(minutes=20)).timestamp())
+    response = Mock(status_code=429, headers={"x-rate-limit-reset": str(reset)})
+    client = XOwnerListClient(
+        access_token="test-token", list_id="2067062923525275922", owner_id="17456158",
+        request=Mock(return_value=response),
+    )
+    with pytest.raises(XListError, match="http_429") as error:
+        client.preflight()
+    assert error.value.retry_at.timestamp() == pytest.approx(reset, abs=0.01)
+    assert not error.value.auth
