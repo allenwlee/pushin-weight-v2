@@ -76,7 +76,7 @@ def test_profile_evidence_stays_off_another_persons_claim():
         profile_data={"description": "Researcher at DeepSeek"},
     )
     payload = {
-        "account_id": str(account.pk),
+        "account_id": account.author_id,
         "brand_id": "deepseek",
         "affiliation_type": "employment",
         "status": "current",
@@ -343,12 +343,12 @@ def test_affiliation_contexts_batch_reviewed_roles_and_call_a_membership(
     )
 
     with django_assert_num_queries(2):
-        contexts = build_account_affiliation_contexts((first.pk, second.pk))
+        contexts = build_account_affiliation_contexts((first.author_id, second.author_id))
 
-    assert contexts[first.pk].reviewed_edges == ((brand.pk, "staff"),)
-    assert contexts[first.pk].call_a_active is False
-    assert contexts[second.pk].reviewed_edges == ()
-    assert contexts[second.pk].call_a_active is True
+    assert contexts[first.author_id].reviewed_edges == ((brand.pk, "staff"),)
+    assert contexts[first.author_id].call_a_active is False
+    assert contexts[second.author_id].reviewed_edges == ()
+    assert contexts[second.author_id].call_a_active is True
 
 
 def test_backfill_checkpoint_resume_and_full_rerun_are_idempotent(tmp_path, capsys):
@@ -410,7 +410,7 @@ def test_production_persist_call_chain_captures_profile_without_provider_call():
     }
 
     assert runner._persist_items([item]) == (1, 0, 0, 0)
-    snapshot = AccountProfileSnapshot.objects.get(account_id="live-author")
+    snapshot = AccountProfileSnapshot.objects.get(account__author_id="live-author")
     assert snapshot.description == "Independent researcher"
     assert snapshot.first_source_post_id == "live-profile"
     assert runner._errors == []

@@ -279,10 +279,10 @@ def test_canonical_x_accounts_create_idempotent_role_links(tmp_path: Path):
     assert Account.objects.get(author_id="2085289191609716736").handle == "dotsstudioai"
     assert Account.objects.get(author_id="2040060892176601088").handle == "ChaoQiao42"
     assert BrandAccount.objects.get(
-        brand_id="dots", account_id="2085289191609716736"
+        brand_id="dots", account__author_id="2085289191609716736"
     ).role_id == "official"
     assert BrandAccount.objects.get(
-        brand_id="dots", account_id="2040060892176601088"
+        brand_id="dots", account__author_id="2040060892176601088"
     ).role_id == "staff"
     assert not Account.objects.filter(
         author_id__regex=r"^(handle:|synthetic:)"

@@ -697,7 +697,7 @@ def _known_brand(context: _BrandEvidenceContext, value: Any) -> Brand | None:
         elif normalized in source_text:
             context.resolved[brand_id] = brand
             return brand
-    handles = BrandAccount.objects.filter(brand=brand).exclude(
+    handles = BrandAccount.objects.filter(account__data_source_id="x").filter(brand=brand).exclude(
         account__handle__isnull=True
     ).values_list("account__handle", flat=True)
     if any(
@@ -801,7 +801,7 @@ def _source_relationship(post: Post, brand: Brand | None) -> str:
     if post.author_id is None or brand is None:
         return "third_party"
     role = (
-        BrandAccount.objects.filter(account_id=post.author_id, brand=brand)
+        BrandAccount.objects.filter(account__data_source_id="x").filter(account_id=post.author_id, brand=brand)
         .values_list("role_id", flat=True)
         .first()
     )
@@ -1663,7 +1663,7 @@ def _persist_model_releases(
                     "observed_name": model_name,
                     "candidate_repo_id": candidate_repo_id,
                     "account_evidence": {
-                        "stable_account_id": str(post.author_id),
+                        "stable_account_id": post.author.author_id,
                         "handle": post.author_handle or "",
                         "account_handle_at_extraction": post.author.handle or "",
                         "account_verified_type": post.author.verified_type,

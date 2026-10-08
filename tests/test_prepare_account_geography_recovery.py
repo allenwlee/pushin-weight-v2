@@ -107,7 +107,7 @@ def test_geography_snapshot_is_narrow_and_restore_proved():
         for column in receipt.columns:
             assert column in create_sql
 
-        Account.objects.filter(pk="1").update(account_based_in="Europe")
+        Account.x.filter(author_id="1").update(account_based_in="Europe")
         with pytest.raises(CommandError, match="does not match recovery snapshot"):
             verify_geography_recovery_snapshot(receipt)
     finally:

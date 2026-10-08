@@ -1,0 +1,64 @@
+{
+  "passed": true,
+  "candidate_sha": "d3d5f97bc737730e16699c04a5fd7802e0120152",
+  "contract_id": "1b91bd1b-a07d-47c9-a5ae-0e2089fc581e",
+  "checks": [
+    {
+      "preset": "deepseek-response",
+      "http_status": 200,
+      "seconds": 8.433,
+      "numeric_points_matched": 91,
+      "reference_week_matched": true,
+      "arena_raw_fields_matched": true,
+      "no_store": true
+    },
+    {
+      "preset": "deepseek-opencode-response",
+      "http_status": 200,
+      "seconds": 6.885,
+      "numeric_points_matched": 105,
+      "reference_week_matched": true,
+      "arena_raw_fields_matched": true,
+      "no_store": true
+    },
+    {
+      "preset": "glm-response",
+      "http_status": 200,
+      "seconds": 7.319,
+      "numeric_points_matched": 121,
+      "reference_week_matched": true,
+      "arena_raw_fields_matched": true,
+      "no_store": true
+    },
+    {
+      "preset": "glm-opencode-response",
+      "http_status": 200,
+      "seconds": 4.013,
+      "numeric_points_matched": 134,
+      "reference_week_matched": true,
+      "arena_raw_fields_matched": true,
+      "no_store": true
+    },
+    {
+      "legacy_preset": "deepseek",
+      "status": 200,
+      "lines": 7
+    },
+    {
+      "legacy_preset": "glm",
+      "status": 200,
+      "lines": 7
+    },
+    {
+      "anonymous": "/benchmarks/1b91bd1b-a07d-47c9-a5ae-0e2089fc581e/deepseek-response/",
+      "status": 302
+    },
+    {
+      "anonymous": "/benchmarks/1b91bd1b-a07d-47c9-a5ae-0e2089fc581e/deepseek-response/series/?end=2026-10-06",
+      "status": 302
+    }
+  ],
+  "reuse_at_candidate_sha": "e28cbda9fa340db61ca4d86e738c5db08ac73260",
+  "reuse_reason": "Later commits change only SVG sizing, pointer coordinates, score/rank tick notation and browser assertions. Python readers, source facts, contracts and response arithmetic are unchanged.",
+  "numeric_point_counts_overlap": true
+}

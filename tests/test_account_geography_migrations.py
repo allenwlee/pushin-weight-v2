@@ -29,6 +29,7 @@ def _current_core_leaf():
     return MigrationExecutor(connection).loader.graph.leaf_nodes("core")
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_geography_migrations_preserve_existing_country_column_and_seed_taxonomy():
     try:
         _prepare_historical_core_schema()
@@ -69,6 +70,7 @@ def test_geography_migrations_preserve_existing_country_column_and_seed_taxonomy
         _apps_at(_current_core_leaf())
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_country_foreign_key_preflight_rejects_unknown_existing_code():
     try:
         _prepare_historical_core_schema()

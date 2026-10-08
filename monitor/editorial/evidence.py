@@ -59,7 +59,7 @@ def post_evidence(post):
         id=str(post.pk),
         platform="x",
         url=f"https://x.com/i/status/{post.pk}" if str(post.pk).isdigit() else "",
-        author_id=post.author_id,
+        author_id=post.native_author_id,
         author_handle=post.author_handle or "",
         is_reply=bool(post.is_reply or post.in_reply_to_id),
         parent_post_id=post.in_reply_to_id or "",

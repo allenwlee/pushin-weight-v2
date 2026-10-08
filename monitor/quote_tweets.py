@@ -87,7 +87,7 @@ def staff_handles_set(enabled_models: list[str] | None = None) -> set[str]:
 
     Mirrors x_monitor.store.Store.read_brand_official_staff_handles.
     """
-    qs = BrandAccount.objects.filter(
+    qs = BrandAccount.objects.filter(account__data_source_id="x").filter(
         role_id__in=["official", "staff"]
     ).select_related("account")
     if enabled_models is not None:

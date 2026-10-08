@@ -1,0 +1,246 @@
+{
+  "status": "complete",
+  "plan_path": "docs/plans/2026-10-05-070106-feat-benchmark-download-collector-plan.md",
+  "changed_files": [
+    ".github/workflows/g2-editorial.yml",
+    "CONCEPTS.md",
+    "README.md",
+    "config.yaml",
+    "config/editorial-english-launch.yaml",
+    "config/editorial.yaml",
+    "config/editorial_voices/chatter-en-v1.json",
+    "config/editorial_voices/chatter-ja-v1.json",
+    "config/editorial_voices/chatter-zh-cn-v1.json",
+    "config/editorial_voices/pulse-en-v1.json",
+    "config/editorial_voices/pulse-ja-v1.json",
+    "config/editorial_voices/pulse-zh-cn-v1.json",
+    "config/staging_refresh.yaml",
+    "core/benchmark_attribution.py",
+    "core/benchmark_forecast_inputs.py",
+    "core/benchmark_metric_history.py",
+    "core/benchmark_metric_identity.py",
+    "core/benchmark_metric_report.py",
+    "core/benchmark_metric_series.py",
+    "core/benchmark_metric_store.py",
+    "core/benchmark_predecessor.py",
+    "core/migrations/0065_editorial_stories.py",
+    "core/migrations/0066_editorial_picture_claim_scopes.py",
+    "core/migrations/0067_editorial_anchor_index.py",
+    "core/migrations/0068_editorial_media_stage_once.py",
+    "core/models.py",
+    "core/staff_assets/media.py",
+    "docs/analysis/2026-10-05-g2-implementation/browser-result.md",
+    "docs/analysis/2026-10-05-g2-implementation/implementation-result.json",
+    "docs/analysis/2026-10-05-g2-implementation/review-fix-tests.txt",
+    "docs/analysis/2026-10-05-g2-implementation/staff-staging-tests.txt",
+    "docs/analysis/2026-10-05-g2-implementation/verification.md",
+    "docs/operations/staging-data-refresh.md",
+    "docs/plans/2026-09-30-051835-docs-g2-voices-corpus-plan.md",
+    "docs/plans/2026-10-05-070106-feat-benchmark-download-collector-plan.md",
+    "docs/reference/commenter.md",
+    "docs/reference/db-schema.md",
+    "docs/reference/editorial-stories.md",
+    "docs/reference/post-content-artifacts.md",
+    "docs/reviews/2026-10-05-161000-g2-plan-review.md",
+    "docs/reviews/2026-10-05-174611-g2-code-review.md",
+    "locale/en/LC_MESSAGES/django.mo",
+    "locale/en/LC_MESSAGES/django.po",
+    "locale/ja/LC_MESSAGES/django.mo",
+    "locale/ja/LC_MESSAGES/django.po",
+    "locale/zh_Hans/LC_MESSAGES/django.mo",
+    "locale/zh_Hans/LC_MESSAGES/django.po",
+    "monitor/benchmark_views.py",
+    "monitor/editorial/__init__.py",
+    "monitor/editorial/bindings.py",
+    "monitor/editorial/config.py",
+    "monitor/editorial/contracts.py",
+    "monitor/editorial/dispatch.py",
+    "monitor/editorial/evidence.py",
+    "monitor/editorial/media.py",
+    "monitor/editorial/persistence.py",
+    "monitor/editorial/pictures.py",
+    "monitor/editorial/providers.py",
+    "monitor/editorial/readers.py",
+    "monitor/editorial/selection.py",
+    "monitor/editorial/service.py",
+    "monitor/editorial/views.py",
+    "monitor/editorial/voices.py",
+    "monitor/editorial/writing.py",
+    "monitor/management/commands/backfill_arena_history.py",
+    "monitor/management/commands/backfill_hf_archive.py",
+    "monitor/management/commands/backfill_hf_engagement.py",
+    "monitor/management/commands/backfill_openrouter_history.py",
+    "monitor/management/commands/benchmark_series.py",
+    "monitor/management/commands/collect_benchmark_metrics.py",
+    "monitor/management/commands/editorial.py",
+    "monitor/management/commands/import_benchmark_history.py",
+    "monitor/management/commands/import_hf_backfill.py",
+    "monitor/management/commands/render_benchmark_report.py",
+    "monitor/post_artifacts.py",
+    "monitor/static/benchmark-pulse.js",
+    "monitor/static/monitor/editorial/editorial.css",
+    "monitor/static/monitor/editorial/editorial.js",
+    "monitor/tasks.py",
+    "monitor/templates/monitor/benchmark_pulse.html",
+    "monitor/templates/monitor/editorial/archive.html",
+    "monitor/templates/monitor/editorial/asset.html",
+    "monitor/templates/monitor/editorial/chatter.html",
+    "monitor/templates/monitor/editorial/story.html",
+    "monitor/trend_narrative_dispatch.py",
+    "monitor/trend_narrative_lifecycle.py",
+    "monitor/urls.py",
+    "project/settings.py",
+    "scripts/benchmark_download_collector/report.html",
+    "tests/editorial_support.py",
+    "tests/fixtures/editorial_owner_review.json",
+    "tests/staging_refresh/test_policy.py",
+    "tests/staging_refresh/test_staff_state.py",
+    "tests/test_benchmark_download_db_identity.py",
+    "tests/test_benchmark_download_persistence.py",
+    "tests/test_benchmark_forecast_inputs.py",
+    "tests/test_benchmark_predecessor.py",
+    "tests/test_benchmark_pulse_views.py",
+    "tests/test_benchmark_use_policy.py",
+    "tests/test_editorial_config.py",
+    "tests/test_editorial_end_to_end.py",
+    "tests/test_editorial_http.py",
+    "tests/test_editorial_media.py",
+    "tests/test_editorial_orchestration.py",
+    "tests/test_editorial_persistence.py",
+    "tests/test_editorial_pictures.py",
+    "tests/test_editorial_selection.py",
+    "tests/test_editorial_views.py",
+    "tests/test_editorial_writing.py",
+    "tests/test_synthesis_tagged_text.py",
+    "x_monitor/config.py",
+    "x_monitor/deepinfra.py",
+    "x_monitor/provider_http.py",
+    "x_monitor/synthesis.py"
+  ],
+  "u_ids_attempted": [
+    "U19",
+    "U20",
+    "U21",
+    "G2 integration"
+  ],
+  "u_ids_completed": [
+    "U19",
+    "U20",
+    "U21",
+    "G2 integration"
+  ],
+  "verification_results": {
+    "combined_tests": 217,
+    "required_postgres_tests": 109,
+    "skipped": 0,
+    "errors": 0,
+    "final_delta_tests": 12,
+    "browser_steps": 38
+  },
+  "verification_evidence": [
+    {
+      "unit": "U19",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_benchmark_use_policy.py",
+        "tests/test_benchmark_pulse_views.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_benchmark_use_policy.py",
+        "tests/test_benchmark_pulse_views.py"
+      ],
+      "red_failure": "missing policy functions and HTTP 200 instead of 403 observed before implementation",
+      "verification": "all consumer boundaries and staff/nonproduction checks pass",
+      "exception_reason": null
+    },
+    {
+      "unit": "U20",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_benchmark_predecessor.py",
+        "tests/test_benchmark_download_database_report.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_benchmark_predecessor.py",
+        "tests/test_benchmark_download_database_report.py"
+      ],
+      "red_failure": "pre-launch date and style-controlled configuration accepted before implementation",
+      "verification": "reviewed exact predecessor, revision-aware switch, gap/removal/export tests pass; actual DeepSeek/GLM browser checks pass",
+      "exception_reason": null
+    },
+    {
+      "unit": "U21",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_benchmark_forecast_inputs.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_benchmark_forecast_inputs.py"
+      ],
+      "red_failure": "reader missing, then JSON null exclusion fixed",
+      "verification": "cutoff excludes late imports, later taxonomy and reconstructed engagement; retrospective mode labeled",
+      "exception_reason": null
+    },
+    {
+      "unit": "G2 integration",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_editorial_pictures.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_editorial_pictures.py"
+      ],
+      "red_failure": "native X author ID was replaced by account UUID in editorial packet",
+      "verification": "native IDs and picture lookup preserved; all 10 inbound relationships reconciled on restored staging database",
+      "exception_reason": null
+    }
+  ],
+  "source_kind": "plan",
+  "source_digest": "1114d25417b5b2609c34e39fbfb251140682d82a097b229e49fe81e41fc7b151",
+  "settled_decision_conflicts": [],
+  "behavior_change": true,
+  "standalone_shipping_skipped": true,
+  "implementation_engine_binding": null,
+  "requested_route": "native",
+  "actual_route": "native",
+  "requested_model": null,
+  "actual_model": "unverified",
+  "requested_effort": null,
+  "fallback_reason": null,
+  "run_id": null,
+  "unit_receipts": {
+    "U19": {
+      "tests": [
+        "tests/test_benchmark_use_policy.py",
+        "tests/test_benchmark_pulse_views.py"
+      ],
+      "red": "missing policy functions and HTTP 200 instead of 403 observed before implementation",
+      "result": "all consumer boundaries and staff/nonproduction checks pass"
+    },
+    "U20": {
+      "tests": [
+        "tests/test_benchmark_predecessor.py",
+        "tests/test_benchmark_download_database_report.py"
+      ],
+      "red": "pre-launch date and style-controlled configuration accepted before implementation",
+      "result": "reviewed exact predecessor, revision-aware switch, gap/removal/export tests pass; actual DeepSeek/GLM browser checks pass"
+    },
+    "U21": {
+      "tests": [
+        "tests/test_benchmark_forecast_inputs.py"
+      ],
+      "red": "reader missing, then JSON null exclusion fixed",
+      "result": "cutoff excludes late imports, later taxonomy and reconstructed engagement; retrospective mode labeled"
+    },
+    "G2 integration": {
+      "tests": [
+        "tests/test_editorial_pictures.py"
+      ],
+      "red": "native X author ID was replaced by account UUID in editorial packet",
+      "result": "native IDs and picture lookup preserved; all 10 inbound relationships reconciled on restored staging database"
+    }
+  },
+  "plan_checkpoint": null,
+  "blockers": [],
+  "recovery_path": null
+}

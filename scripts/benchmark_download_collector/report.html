@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Brand attention & model adoption</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #162c35;
+        --muted: #526871;
+        --border: #d5e0e1;
+        --paper: #f5f7f5;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font:
+          15px/1.5 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 1120px;
+        margin: auto;
+        padding: 32px 24px 56px;
+      }
+      h1 {
+        font-size: clamp(26px, 4vw, 42px);
+        line-height: 1.15;
+        letter-spacing: -0.035em;
+        margin: 12px 0;
+      }
+      h2 {
+        font-size: 18px;
+        margin: 0;
+      }
+      p {
+        margin: 8px 0;
+      }
+      .eyebrow {
+        letter-spacing: 0.16em;
+        font-size: 11px;
+        font-weight: 750;
+        color: #356254;
+      }
+      .muted,
+      .note {
+        color: var(--muted);
+      }
+      .controls {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin: 24px 0;
+        align-items: end;
+      }
+      label {
+        display: grid;
+        gap: 5px;
+        font-size: 12px;
+        font-weight: 650;
+      }
+      select,
+      input {
+        font: inherit;
+        font-size: 15px;
+        padding: 9px 12px;
+        min-height: 44px;
+        background: white;
+        border: 1px solid #99aeb3;
+        border-radius: 6px;
+        color: var(--ink);
+        max-width: 100%;
+      }
+      select:focus,
+      input:focus,
+      summary:focus {
+        outline: 3px solid #7db9b5;
+        outline-offset: 2px;
+      }
+      .banner {
+        background: #fff2d6;
+        border-left: 4px solid #b16a06;
+        padding: 12px;
+        margin: 18px 0;
+      }
+      .panel {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        margin: 14px 0;
+        padding: 18px 22px 12px;
+        overflow: hidden;
+      }
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: baseline;
+      }
+      .latest {
+        font-size: 22px;
+        font-variant-numeric: tabular-nums;
+        font-weight: 650;
+      }
+      .note {
+        font-size: 12px;
+        min-height: 20px;
+      }
+      .chart {
+        width: 100%;
+        height: 180px;
+        display: block;
+        margin-top: 6px;
+      }
+      .chart text {
+        font:
+          12px system-ui,
+          sans-serif;
+        fill: #526871;
+      }
+      .chart .empty {
+        font-size: 16px;
+      }
+      .table-scroll {
+        max-width: 100%;
+        overflow: auto;
+        margin-top: 14px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+      th,
+      td {
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        padding: 9px 12px;
+      }
+      th {
+        background: #eef2ef;
+        position: sticky;
+        top: 0;
+      }
+      td {
+        font-variant-numeric: tabular-nums;
+      }
+      details {
+        margin: 16px 0;
+        padding: 14px;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      summary {
+        cursor: pointer;
+        font-weight: 650;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        font:
+          12px/1.5 ui-monospace,
+          monospace;
+        max-height: 340px;
+        overflow: auto;
+      }
+      footer {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 24px;
+      }
+      a {
+        color: #006c78;
+      }
+      .legend {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      #range-error {
+        color: #9c301c;
+      }
+      #count-scope {
+        max-width: 85ch;
+      }
+      @media (max-width: 560px) {
+        main {
+          padding: 20px 12px 36px;
+        }
+        .panel {
+          padding: 14px 10px 8px;
+        }
+        .controls {
+          gap: 10px;
+        }
+        .controls label:first-child {
+          width: 100%;
+        }
+        .controls label {
+          flex: 1;
+          min-width: 130px;
+        }
+        .latest {
+          font-size: 18px;
+        }
+        .chart {
+          height: 165px;
+        }
+        .panel-head {
+          align-items: start;
+        }
+        h2 {
+          font-size: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="eyebrow">PUSHINWEIGHT · RESEARCH</div>
+      <h1 id="heading"></h1>
+      <p class="muted" id="subtitle"></p>
+      <div id="demo" class="banner" hidden></div>
+      <div class="controls">
+        <label
+          ><span id="brand-label"></span
+          ><select id="brand"></select
+        ></label>
+        <label
+          ><span id="start-label"></span><input type="date" id="start"
+        /></label>
+        <label
+          ><span id="end-label"></span><input type="date" id="end"
+        /></label>
+        <label
+          ><span id="language-label"></span
+          ><select id="language" aria-label="Language / 语言">
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+          </select></label
+        >
+      </div>
+      <p id="range-error" role="alert"></p>
+      <p id="count-scope" class="legend"></p>
+      <section id="charts" aria-label="Daily comparison charts"></section>
+      <details open>
+        <summary id="table-label"></summary>
+        <div class="table-scroll" id="values-region" tabindex="0" role="region" aria-labelledby="table-label"><table id="values"></table></div>
+      </details>
+      <details>
+        <summary id="coverage-label"></summary>
+        <p id="coverage-note" class="note"></p>
+        <pre id="coverage"></pre>
+      </details>
+      <details>
+        <summary id="mapping-label"></summary>
+        <p id="mapping-note" class="note"></p>
+        <pre id="unresolved"></pre>
+      </details>
+      <footer>
+        <p>
+          <a
+            href="https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset"
+            >Arena · CC BY 4.0</a
+          >
+          ·
+          <a href="https://huggingface.co/docs/hub/models-download-stats"
+            >Hugging Face</a
+          >
+        </p>
+        <p id="or-credit"></p>
+        <div id="source-credits"></div>
+        <p id="token-note"></p>
+        <p id="generated"></p>
+      </footer>
+    </main>
+    <script type="application/json" id="report-data">
+      __REPORT_DATA__
+    </script>
+    <script>
+      "use strict";
+      const data = JSON.parse(
+        document.getElementById("report-data").textContent,
+      );
+      const $ = (id) => document.getElementById(id);
+      const words = {
+        en: {
+          heading: "Attention, performance & adoption",
+          subtitle: "One brand. Four measures. Daily windows in UTC.",
+          brand: "Brand",
+          start: "From",
+          end: "Through",
+          language: "Language",
+          demo: "SYNTHETIC DEMO — These values illustrate the report; they are not live measurements.",
+          scope:
+            "Posts count all collected posts attributed to this brand. HF shows a rolling 30-day total observed on each date. OpenRouter shows mapped models reported in its daily top 50. Missing data stays blank.",
+          posts: "Post volume",
+          arena: "Arena performance",
+          hf: "Hugging Face downloads",
+          openrouter: "OpenRouter usage",
+          postNote: "Collected posts · distinct posts per brand · UTC day",
+          arenaNote:
+            "Best mapped model · overall, style-controlled text rating · held between publications",
+          hfNote:
+            "Rolling 30-day downloads · selected official repositories · observations only",
+          orNote:
+            "Daily tokens · mapped top-50 public models only · partial brand coverage",
+          na: "N/A",
+          empty: "No available observations in this window",
+          table: "Daily values & score provenance",
+          coverage: "Collection status & coverage",
+          coverageNote:
+            "Statuses preserve failed requests. A failed retry does not erase an earlier successful observation. Expand the table for the publication and observation dates.",
+          mapping: "Unresolved source models",
+          mappingNote:
+            "These models have no reviewed mapping. They contribute no brand values. This is not evidence that the brand has no activity.",
+          date: "UTC date",
+          model: "Arena model",
+          published: "Published",
+          observed: "Observed",
+          hfCoverage: "HF repos collected / selected",
+          orModels: "OR models counted",
+          interval: "Arena interval",
+          votes: "Arena votes",
+          other: "OR other tokens (all brands)",
+          unmapped: "OR unmapped models (all brands)",
+          range:
+            "Choose an end date on or after the start date, within the report window.",
+          tokenNote:
+            "OpenRouter counts platform traffic only; providers use different tokenizers. HF download requests are not unique users. Arena and OpenRouter data are attributed under CC BY 4.0.",
+          generated: "Report generated",
+        },
+        zh: {
+          heading: "关注度、性能与使用量",
+          subtitle: "同一品牌，四项指标；按 UTC 自然日对齐。",
+          brand: "品牌",
+          start: "开始日期",
+          end: "结束日期",
+          language: "语言",
+          demo: "模拟示例 — 数据仅用于展示报告，并非真实测量值。",
+          scope:
+            "帖子数量包含所有已采集且归属该品牌的帖子。HF 展示观察当日的过去 30 天下载量；OpenRouter 展示每日前 50 名中已匹配模型的用量。缺失数据保留为空。",
+          posts: "帖子数量",
+          arena: "Arena 性能",
+          hf: "Hugging Face 下载量",
+          openrouter: "OpenRouter 使用量",
+          postNote: "已采集帖子 · 每品牌去重计数 · UTC 自然日",
+          arenaNote:
+            "已匹配模型中的最高分 · 风格控制的整体文本评分 · 发布间隔内保持不变",
+          hfNote: "过去 30 天下载量 · 所选官方仓库 · 仅展示实际观察日期",
+          orNote:
+            "每日 token 数 · 仅前 50 名中已匹配的公开模型 · 品牌覆盖不完整",
+          na: "暂无数据",
+          empty: "此日期范围内没有可用的观察数据",
+          table: "每日数值与评分来源",
+          coverage: "采集状态与覆盖范围",
+          coverageNote:
+            "保留请求失败状态。重试失败不会抹去此前的成功观察。表格显示发布和观察日期。",
+          mapping: "尚未匹配的来源模型",
+          mappingNote:
+            "这些模型尚无经过核查的映射，不计入品牌指标。这不表示品牌没有活动。",
+          date: "UTC 日期",
+          model: "Arena 模型",
+          published: "发布日期",
+          observed: "观察时间",
+          hfCoverage: "HF 已采集 / 所选仓库",
+          orModels: "OR 计入模型数",
+          interval: "Arena 区间",
+          votes: "Arena 票数",
+          other: "OR 其他 token 数（所有品牌）",
+          unmapped: "OR 未匹配模型数（所有品牌）",
+          range: "结束日期不得早于开始日期，且必须在报告范围内。",
+          tokenNote:
+            "OpenRouter 仅统计其平台流量，各提供商的 tokenizer 不同。HF 下载请求量并非独立用户数。Arena 和 OpenRouter 数据按 CC BY 4.0 标注来源。",
+          generated: "报告生成时间",
+        },
+      };
+      let lang = "en";
+      if (data.arena_config === "text") {
+        words.en.arenaNote = "Best mapped model · overall text rating, no style control · held between publications";
+        words.zh.arenaNote = "已匹配模型中的最高分 · 不含风格控制的整体文本评分 · 发布间隔内保持不变";
+      }
+      for (const credit of data.database_comparison?.attributions || []) {
+        const paragraph = document.createElement("p");
+        paragraph.textContent = credit.notice + (credit.revision ? " Revision " + credit.revision : "");
+        if (credit.license_url) {
+          const link = document.createElement("a");
+          link.href = credit.license_url;
+          link.textContent = " · " + credit.license;
+          paragraph.append(link);
+        }
+        $("source-credits").append(paragraph);
+      }
+      const labels = {
+        posts: ["posts", "postNote", "#266e65"],
+        arena: ["arena", "arenaNote", "#516bb0"],
+        hf: ["hf", "hfNote", "#a46a1d"],
+        openrouter: ["openrouter", "orNote", "#9a527e"],
+      };
+      if (data.database_comparison?.lines.some(line => line.metric_key === "rank")) {
+        words.en.rank = "Arena rank · lower is better";
+        words.zh.rank = "Arena 排名 · 越低越好";
+        words.en.rankNote = "Previous release proxy is labeled at each point; the line breaks when the evaluated model changes. Rank percentage is not a change in capability.";
+        words.zh.rankNote = "每个数据点标明前代模型代理；被评估模型变化时曲线断开。排名百分比不代表能力变化。";
+        labels.rank = ["rank", "rankNote", "#b24b43"];
+      }
+      const value = (p, k) => (k === "posts" ? p.posts : (p[k]?.value ?? null));
+      function number(v, precise = false) {
+        if (v === null || v === undefined) return words[lang].na;
+        if (typeof v === "string" && /^\d+$/.test(v))
+          return BigInt(v).toLocaleString(lang);
+        return Number(v).toLocaleString(lang, {
+          maximumFractionDigits: precise ? 2 : 0,
+        });
+      }
+      function el(tag, text, attributes = {}) {
+        const n = document.createElement(tag);
+        if (text !== undefined) n.textContent = text;
+        for (const [k, v] of Object.entries(attributes)) n.setAttribute(k, v);
+        return n;
+      }
+      function svgEl(tag, attributes, text) {
+        const n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+        for (const [k, v] of Object.entries(attributes)) n.setAttribute(k, v);
+        if (text !== undefined) n.textContent = text;
+        return n;
+      }
+      function chart(points, key, color) {
+        const width = Math.max(280, $("charts").clientWidth - (window.innerWidth <= 560 ? 22 : 46));
+        const svg = svgEl("svg", {
+          viewBox: `0 0 ${width} 180`,
+          class: "chart",
+          role: "img",
+          "aria-label": words[lang][key],
+          preserveAspectRatio: "none",
+        });
+        const vals = points
+          .map((p) => value(p, key))
+          .filter((v) => v !== null)
+          .map(Number);
+        const low =
+          key === "arena" && vals.length
+            ? Math.floor(Math.min(...vals) / 50) * 50
+            : 0;
+        let high = vals.length ? Math.max(...vals) * 1.07 : 1;
+        if (high <= low) high = low + 1;
+        const x = (i) =>
+          70 + (points.length === 1 ? 0.5 : i / (points.length - 1)) * (width - 86);
+        const y = (v) => 140 - ((Number(v) - low) / (high - low)) * 115;
+        for (const v of [low, high]) {
+          svg.append(
+            svgEl("line", {
+              x1: 70,
+              x2: width - 16,
+              y1: y(v),
+              y2: y(v),
+              stroke: "#dfe7e7",
+            }),
+          );
+          svg.append(
+            svgEl(
+              "text",
+              { x: 62, y: y(v) + 4, "text-anchor": "end" },
+              Intl.NumberFormat(lang, {
+                notation: "compact",
+                maximumFractionDigits: 1,
+              }).format(v),
+            ),
+          );
+        }
+        let path = "",
+          previousSegment = null,
+          previous = null;
+        points.forEach((p, i) => {
+          const v = value(p, key);
+          if (v === null) {
+            previous = null;
+            return;
+          }
+          const xx = x(i),
+            yy = y(v);
+          if (key === "rank" && previousSegment !== p.rank.segment) previous = null;
+          previousSegment = p[key]?.segment;
+          path +=
+            previous === null
+              ? ` M ${xx} ${yy}`
+              : key === "arena" || key === "rank"
+                ? ` H ${xx} V ${yy}`
+                : ` L ${xx} ${yy}`;
+          previous = v;
+          const dot = svgEl("circle", { cx: xx, cy: yy, r: 3.5, fill: color });
+          let tip = `${p.date}: ${number(v, key === "arena")}`;
+          if (key === "arena")
+            tip += ` · ${p.arena.model} · ${words[lang].published}: ${p.arena.published_at}`;
+          if (key === "rank")
+            tip += ` · ${p.rank.proxy_label || p.rank.measured_subject?.label || p.rank.model} · ${p.rank.percent_change === null ? words[lang].na : p.rank.percent_change + "%"} · ${words[lang].published}: ${p.rank.published_at}${p.rank.model_changed ? " · Model changed" : ""}`;
+          dot.append(svgEl("title", {}, tip));
+          svg.append(dot);
+        });
+        svg.append(
+          svgEl("path", {
+            d: path,
+            fill: "none",
+            stroke: color,
+            "stroke-width": 2.5,
+            "stroke-linejoin": "round",
+          }),
+        );
+        if (!vals.length)
+          svg.append(
+            svgEl(
+              "text",
+              { x: width / 2, y: 86, "text-anchor": "middle", class: "empty" },
+              words[lang].empty,
+            ),
+          );
+        const indices = [
+          ...new Set([
+            0,
+            Math.floor((points.length - 1) / 2),
+            points.length - 1,
+          ]),
+        ];
+        indices.forEach((i) => {
+          if (points[i])
+            svg.append(
+              svgEl(
+                "text",
+                {
+                  x: x(i),
+                  y: 169,
+                  "text-anchor":
+                    i === 0
+                      ? "start"
+                      : i === points.length - 1
+                        ? "end"
+                        : "middle",
+                },
+                points[i].date,
+              ),
+            );
+        });
+        return svg;
+      }
+      function render() {
+        const t = words[lang];
+        document.documentElement.lang = lang;
+        document.title = t.heading;
+        $("start").setAttribute("aria-label", t.start);
+        $("end").setAttribute("aria-label", t.end);
+        for (const [id, key] of Object.entries({
+          heading: "heading",
+          subtitle: "subtitle",
+          "brand-label": "brand",
+          "start-label": "start",
+          "end-label": "end",
+          "language-label": "language",
+          demo: "demo",
+          "count-scope": "scope",
+          "table-label": "table",
+          "coverage-label": "coverage",
+          "coverage-note": "coverageNote",
+          "mapping-label": "mapping",
+          "mapping-note": "mappingNote",
+          "token-note": "tokenNote",
+        }))
+          $(id).textContent = t[key];
+        $("demo").hidden = !data.synthetic;
+        for (const option of $("brand").options) {
+          const s = data.series.find((s) => s.brand_id === option.value);
+          option.textContent = lang === "zh" ? s.label_zh : s.label;
+        }
+        const brand = data.series.find((s) => s.brand_id === $("brand").value);
+        const valid =
+          $("start").value &&
+          $("end").value &&
+          $("start").value <= $("end").value &&
+          $("start").value >= data.start_date &&
+          $("end").value <= data.end_date;
+        $("range-error").textContent = valid ? "" : t.range;
+        const points = valid
+          ? brand.points.filter(
+              (p) => p.date >= $("start").value && p.date <= $("end").value,
+            )
+          : [];
+        $("charts").replaceChildren();
+        for (const [key, [title, note, color]] of Object.entries(labels)) {
+          const panel = el("article", undefined, {
+            class: "panel",
+            "data-metric": key,
+          });
+          const head = el("div", undefined, { class: "panel-head" });
+          head.append(el("h2", t[title]));
+          const last = points.at(-1);
+          head.append(
+            el(
+              "span",
+              number(last ? value(last, key) : null, key === "arena"),
+              { class: "latest" },
+            ),
+          );
+          panel.append(
+            head,
+            el("p", t[note], { class: "note" }),
+            chart(points, key, color),
+          );
+          $("charts").append(panel);
+        }
+        const header = el("tr");
+        for (const text of [
+          t.date,
+          t.posts,
+          t.arena,
+          t.model,
+          t.published,
+          t.interval,
+          t.votes,
+          t.hf,
+          t.hfCoverage,
+          `${t.hf} ${t.observed}`,
+          t.openrouter,
+          t.orModels,
+          `${t.openrouter} as of`,
+          t.other,
+          t.unmapped,
+        ])
+          header.append(el("th", text, { scope: "col" }));
+        const thead = el("thead");
+        thead.append(header);
+        const tbody = el("tbody");
+        for (const p of points) {
+          const row = el("tr");
+          const cells = [
+            p.date,
+            number(p.posts),
+            number(p.arena?.value, true),
+            p.arena?.model ?? t.na,
+            p.arena?.published_at ?? t.na,
+            p.arena
+              ? `${number(p.arena.lower, true)} – ${number(p.arena.upper, true)}`
+              : t.na,
+            number(p.arena?.votes),
+            number(p.hf?.value),
+            p.hf
+              ? `${p.hf.successful} / ${p.hf.selected}`
+              : `0 / ${brand.hf_selected}`,
+            p.hf?.observed_at ?? t.na,
+            number(p.openrouter?.value),
+            p.openrouter?.models.length ?? t.na,
+            p.openrouter?.as_of ?? t.na,
+            number(p.openrouter?.other_tokens),
+            p.openrouter?.unmapped_models ?? t.na,
+          ];
+          cells.forEach((c) => row.append(el("td", String(c))));
+          tbody.append(row);
+        }
+        $("values").replaceChildren(thead, tbody);
+        $("coverage").textContent = data.statuses
+          .map(
+            (s) =>
+              `${s.observed_at} · ${s.source}: ${s.status}${s.error ? " (" + s.error + ")" : ""}`,
+          )
+          .join("\n");
+        $("unresolved").textContent = JSON.stringify(data.unresolved, null, 2);
+        $("or-credit").textContent =
+          `Source: OpenRouter (openrouter.ai/rankings), as of ${data.openrouter_as_of.join(", ") || t.na}.`;
+        $("generated").textContent = `${t.generated}: ${data.generated_at}`;
+      }
+      data.series.forEach((s) =>
+        $("brand").append(el("option", s.label, { value: s.brand_id })),
+      );
+      for (const id of ["start", "end"]) {
+        $(id).min = data.start_date;
+        $(id).max = data.end_date;
+        $(id).value = id === "start" ? data.start_date : data.end_date;
+        $(id).addEventListener("change", render);
+        $(id).addEventListener("input", render);
+      }
+      $("brand").addEventListener("change", render);
+      $("language").addEventListener("change", () => {
+        lang = $("language").value;
+        render();
+      });
+      window.addEventListener("resize", render);
+      render();
+    </script>
+  </body>
+</html>

@@ -20,8 +20,8 @@
       <thead><tr><th scope="col">{{ admin_copy.account }}</th><th scope="col">{{ admin_copy.organization }}</th><th scope="col">{{ admin_copy.decision }}</th><th scope="col">{{ admin_copy.list }}</th></tr></thead>
       <tbody>
       {% for row in official_accounts.rows %}
-        <tr data-admin-account="{{ row.state.account_id }}">
-          <td>{% if row.x_url %}<a href="{{ row.x_url }}" target="_blank" rel="noopener noreferrer">@{{ row.state.account.handle|default:row.state.account_id }}</a>{% else %}{{ row.state.account.handle|default:row.state.account_id }}{% endif %}<br><small class="muted">{{ row.state.account_id }}</small></td>
+        <tr data-admin-account="{{ row.state.account.author_id }}">
+          <td>{% if row.x_url %}<a href="{{ row.x_url }}" target="_blank" rel="noopener noreferrer">@{{ row.state.account.handle|default:row.state.account.author_id }}</a>{% else %}{{ row.state.account.handle|default:row.state.account.author_id }}{% endif %}<br><small class="muted">{{ row.state.account.author_id }}</small></td>
           <td>{{ row.state.decision.organization_name|default:'—' }}
             {% if row.state.registered_company %}<p>{{ row.state.registered_company.display_name }}</p>{% endif %}
             {% if row.state.registered_brand %}<p>{{ admin_copy.brand|default:copy.brand }}: {{ row.state.registered_brand.display_name|default:row.state.registered_brand_id }}</p>{% endif %}

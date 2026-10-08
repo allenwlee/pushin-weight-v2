@@ -315,7 +315,7 @@ def _new_publisher_proposal(*, verified_type: str = "Business"):
         classification_version="test",
     )
     evidence = {
-        "stable_account_id": account.pk,
+        "stable_account_id": account.author_id,
         **source_repo_evidence(post, "NewPublisher-AI/Model-One"),
     }
     proposal = ProductVerificationProposal.objects.create(

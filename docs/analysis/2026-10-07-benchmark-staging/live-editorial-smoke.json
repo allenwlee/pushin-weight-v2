@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "path": "/stories/",
+      "status": 200,
+      "bytes": 1596
+    },
+    {
+      "path": "/api/v2/editorial-stories/",
+      "status": 200,
+      "bytes": 2526
+    }
+  ]
+}

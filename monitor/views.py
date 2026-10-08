@@ -2255,7 +2255,7 @@ def _enrich_posts_with_classifications(
     scalar_reads = read_brand_scalars_many(scalar_pairs)
     role_map: dict[tuple[str, str], str | None] = {}
     if author_ids and post_brand_ids:
-        ba_qs = BrandAccount.objects.filter(
+        ba_qs = BrandAccount.objects.filter(account__data_source_id="x").filter(
             account_id__in=author_ids,
             brand_id__in=post_brand_ids,
         ).select_related("role")
@@ -3429,13 +3429,13 @@ def _filter_home_posts_queryset(
         if role_scope not in (None, "__all__"):
             role_scope_filter["brand_id__in"] = role_scope
         role_post_filter = {"brand__posts__post__tweet_id": OuterRef("tweet_id")}
-        has_known_role = BrandAccount.objects.filter(
+        has_known_role = BrandAccount.objects.filter(account__data_source_id="x").filter(
             account_id=OuterRef("author_id"),
             role_id__in=known_roles,
             **role_scope_filter,
             **role_post_filter,
         )
-        has_selected_role = BrandAccount.objects.filter(
+        has_selected_role = BrandAccount.objects.filter(account__data_source_id="x").filter(
             account_id=OuterRef("author_id"),
             role_id__in=selected_known,
             **role_scope_filter,
@@ -4329,7 +4329,7 @@ def _each_chart_payload(
                         assigned[post_id].add(key)
         elif tab == "role":
             authors = {author_id for _, _, _, author_id in batch if author_id}
-            role_by_author = dict(BrandAccount.objects.filter(brand_id=brand, account_id__in=authors).values_list("account_id", "role_id"))
+            role_by_author = dict(BrandAccount.objects.filter(account__data_source_id="x").filter(brand_id=brand, account__author_id__in=authors).values_list("account__author_id", "role_id"))
             for post_id, _, _, author_id in batch:
                 role = role_by_author.get(author_id)
                 assigned[post_id].add(role if role in series and role != "other" else "other")
@@ -5962,6 +5962,88 @@ _REQUALIFICATION_COPY = {
 }
 
 
+_FROZEN_RUN_COPY = {
+    "en": {
+        "previous_category": 'Previously qualifying',
+        "uncertain_category": 'Uncertain',
+        "rejected_category": 'Rejected',
+        "failed_category": 'Failed evaluations',
+        "excluded_category": 'Excluded',
+        "previous_note": 'Companies that passed before the frozen run and qualify again under the new rule.',
+        "uncertain_note": 'Completed evaluations without enough evidence to settle qualification.',
+        "rejected_note": 'Completed evaluations that do not meet the qualification rule.',
+        "failed_note": 'Evaluations with a terminal error and no valid new-rule decision.',
+        "excluded_note": 'Frozen accounts excluded from rerun evaluation, for example because evidence changed or an account was already settled.',
+        "title": "Frozen account run", "admin": "Admin", "scope": "Only accounts in this frozen cohort.",
+        "frozen_at": "Frozen at", "updated": "Updated", "progress": "Run progress",
+        "newly": "Newly qualifying", "awaiting": "Awaiting", "pending": "Pending",
+        "newly_note": "New positive results under the broader model, agent or harness rule. Earlier positives are excluded. Human review is still needed unless independently verified.",
+        "awaiting_note": "Evaluations waiting for another attempt after a temporary error. These are not qualification decisions.",
+        "pending_note": "Frozen accounts waiting for their first new-rule result, including requests in flight.",
+        "search": "Search account or company", "apply": "Search", "account": "Account", "company": "Company",
+        "development": "Development", "detail": "Decision or queue detail", "evidence": "Evidence and earlier result",
+        "baseline": "Earlier result", "accepted": "Previously qualifying", "review_needed": "Previously uncertain",
+        "no_decision": "No earlier valid decision", "rejected": "Rejected", "model_label": "Model", "agent_label": "Agent", "harness_label": "Harness",
+        "next_retry": "Next retry", "in_flight": "Evaluation in flight", "waiting": "Waiting for evaluation",
+        "hf_verified": "HF verified and registered", "empty": "No accounts in this view.",
+        "not_started": "The frozen run has not been initialized.", "pages": "Account pages", "page": "Page",
+        "previous": "Previous", "next": "Next", "other": "Other results", "refresh": "Refresh",
+    },
+    "zh_hans": {
+        "previous_category": '之前已符合条件',
+        "uncertain_category": '不确定',
+        "rejected_category": '未通过',
+        "failed_category": '评估失败',
+        "excluded_category": '不参与重评',
+        "previous_note": '在固定扫描前已通过，并再次符合新规则的公司。',
+        "uncertain_note": '评估已完成，但证据不足以确定是否符合条件。',
+        "rejected_note": '评估已完成，不符合资格规则。',
+        "failed_note": '评估出现终止错误，尚无有效的新规则判定。',
+        "excluded_note": '未参与本次重评的固定账号，例如证据已更改或身份已经确认。',
+        "title": "固定账号扫描", "admin": "管理", "scope": "仅显示此固定批次内的账号。",
+        "frozen_at": "固定时间", "updated": "更新时间", "progress": "扫描进度",
+        "newly": "新符合条件", "awaiting": "等待中", "pending": "待处理",
+        "newly_note": "按照模型、智能体或运行框架新规则首次通过的账号，不包含之前的正面判定。未经独立验证的结果仍需人工审核。",
+        "awaiting_note": "因暂时错误而等待再次评估的账号，不代表资格判定。",
+        "pending_note": "等待新规则首次结果的固定账号，包括正在评估的账号。",
+        "search": "搜索账号或公司", "apply": "搜索", "account": "账号", "company": "公司",
+        "development": "开发类型", "detail": "判定或队列详情", "evidence": "证据和之前的结果",
+        "baseline": "之前的结果", "accepted": "之前符合条件", "review_needed": "之前不确定",
+        "no_decision": "之前无有效判定", "rejected": "已排除", "model_label": "模型", "agent_label": "智能体", "harness_label": "运行框架",
+        "next_retry": "下次重试", "in_flight": "正在评估", "waiting": "等待评估",
+        "hf_verified": "HF 已验证并登记", "empty": "此视图没有账号。",
+        "not_started": "固定扫描尚未初始化。", "pages": "账号分页", "page": "页",
+        "previous": "上一页", "next": "下一页", "other": "其他结果", "refresh": "刷新",
+    },
+    "ja": {
+        "previous_category": '以前から適格',
+        "uncertain_category": '不確定',
+        "rejected_category": '不適格',
+        "failed_category": '評価失敗',
+        "excluded_category": '再評価対象外',
+        "previous_note": '固定前に適格で、新基準でも再び適格と判定された会社です。',
+        "uncertain_note": '評価は完了しましたが、適格性を確定する根拠が不足しています。',
+        "rejected_note": '評価が完了し、適格基準を満たさないと判定された対象です。',
+        "failed_note": '終端エラーで有効な新基準の判定が得られなかった評価です。',
+        "excluded_note": '根拠の変更や確定済みの状態などにより再評価から除外された固定対象です。',
+        "title": "固定アカウントの再評価", "admin": "管理", "scope": "固定した対象内のアカウントのみを表示します。",
+        "frozen_at": "固定日時", "updated": "更新日時", "progress": "再評価の進捗",
+        "newly": "新規適格", "awaiting": "待機中", "pending": "未処理",
+        "newly_note": "モデル・エージェント・実行基盤の新基準で新たに適格になったアカウントです。以前の肯定判定は含みません。独立した検証がなければ人の確認が必要です。",
+        "awaiting_note": "一時的なエラー後の再試行待ちです。適格性の判定ではありません。",
+        "pending_note": "新基準による最初の結果を待つ固定対象です。評価中のリクエストも含みます。",
+        "search": "アカウント・会社を検索", "apply": "検索", "account": "アカウント", "company": "会社",
+        "development": "開発区分", "detail": "判定・待機の詳細", "evidence": "根拠と以前の結果",
+        "baseline": "以前の結果", "accepted": "以前から適格", "review_needed": "以前は不確定",
+        "no_decision": "以前の有効な判定なし", "rejected": "対象外", "model_label": "モデル", "agent_label": "エージェント", "harness_label": "実行基盤",
+        "next_retry": "次の再試行", "in_flight": "評価中", "waiting": "評価待ち",
+        "hf_verified": "HF 検証・登録済み", "empty": "この表示にアカウントはありません。",
+        "not_started": "固定対象の再評価はまだ初期化されていません。", "pages": "アカウントのページ", "page": "ページ",
+        "previous": "前へ", "next": "次へ", "other": "その他の結果", "refresh": "更新",
+    },
+}
+
+
 def _can_review_products(request: HttpRequest) -> bool:
     if not request.user.is_authenticated:
         return False
@@ -6063,6 +6145,7 @@ def _product_review_context(
         "candidate_copy": candidate_copy,
         "candidate_fixed_status": bool(fixed_status),
         "qualification_rerun": rerun,
+        "frozen_run_label": _FROZEN_RUN_COPY.get(copy_locale, _FROZEN_RUN_COPY["en"])["title"],
         "rerun_copy": rerun_copy,
         "rerun_metrics": [
             {"key": key, "label": rerun_copy[key], "value": rerun[key]}
@@ -6084,6 +6167,51 @@ def _product_review_context(
         "companies": Company.objects.order_by("nickname"),
         "product_types": Product.TYPES,
     }
+
+
+@login_required
+def frozen_account_run(request: HttpRequest) -> HttpResponse:
+    if not _can_review_products(request):
+        return HttpResponseForbidden("Admin requires owner or staff access.")
+    from core.official_company_requalification_admin import OTHER_CATEGORIES, TABS, frozen_run_report
+
+    locale = _resolve_locale(request)
+    copy_locale = "zh_hans" if locale in {"zh_cn", "zh-CN"} else locale
+    copy = {**_REQUALIFICATION_COPY.get(copy_locale, _REQUALIFICATION_COPY["en"]),
+            **_FROZEN_RUN_COPY.get(copy_locale, _FROZEN_RUN_COPY["en"])}
+    report = frozen_run_report(tab=request.GET.get("tab", "newly"),
+                               page=request.GET.get("page", 1), query=request.GET.get("q", ""))
+
+    def page_url(tab, page=1):
+        params = request.GET.copy()
+        for key, value in {"locale": locale, "tab": tab, "page": page}.items():
+            params[key] = value
+        return reverse("frozen_account_run") + "?" + params.urlencode()
+
+    for row in report["rows"]:
+        kind = row["development_type"]
+        row["development_label"] = copy.get(str(kind) + "_label", "—")
+        row["baseline_label"] = copy.get(row["baseline_outcome"], copy["no_decision"])
+        row["pending_label"] = copy["in_flight"] if row["attempt_id"] else copy["waiting"]
+    current = report["page"]
+    summary = report["summary"]
+    return render(request, "monitor/frozen_account_run.html", {
+        "active_locale": locale, "frozen_copy": copy, "frozen_run": report,
+        "admin_url": reverse("product_review") + "?" + urlencode({"locale": locale}),
+        "refresh_url": page_url(report["tab"], current.number if current else 1),
+        "frozen_tabs": [{"key": key, "label": copy[key], "count": summary[bucket],
+                         "url": page_url(key)} for key, bucket in TABS.items()] if summary else [],
+        "frozen_categories": [{"key": key, "label": copy[key + "_category"],
+                               "count": summary[bucket] - (summary["newly_qualified"] if key == "previous" else 0),
+                               "url": page_url(key)} for key, bucket in OTHER_CATEGORIES.items()] if summary else [],
+        "frozen_metrics": [{"key": key, "label": copy[key], "value": summary[key]}
+                           for key in ("population", "completed", "qualified")] if summary else [],
+        "section_title": copy.get(report["tab"] + "_category", copy[report["tab"]]),
+        "section_note": copy[report["tab"] + "_note"],
+        "previous_url": page_url(report["tab"], current.previous_page_number()) if current and current.has_previous() else "",
+        "next_url": page_url(report["tab"], current.next_page_number()) if current and current.has_next() else "",
+        "refreshed_at": django_timezone.now(),
+    })
 
 
 @login_required

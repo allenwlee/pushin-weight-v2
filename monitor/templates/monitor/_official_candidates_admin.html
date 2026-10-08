@@ -26,8 +26,8 @@
       <thead><tr><th>{{ admin_copy.account }}</th><th>{{ candidate_copy.entrance }}</th><th>{{ candidate_copy.status }}</th><th>{{ admin_copy.attempts }}</th><th>{{ admin_copy.decision }}</th></tr></thead>
       <tbody>
       {% for row in official_candidates.rows %}
-        <tr data-admin-candidate="{{ row.state.account_id }}">
-          <td>{% if row.x_url %}<a href="{{ row.x_url }}" target="_blank" rel="noopener noreferrer">@{{ row.state.account.handle|default:row.state.account_id }}</a>{% else %}{{ row.state.account.handle|default:row.state.account_id }}{% endif %}{% if row.tracked_brands %}<p>{{ candidate_copy.tracked_brands }}: {{ row.tracked_brands|join:', ' }}</p>{% endif %}{% if row.tracked_companies %}<p>{{ candidate_copy.tracked_companies }}: {{ row.tracked_companies|join:', ' }}</p>{% endif %}</td>
+        <tr data-admin-candidate="{{ row.state.account.author_id }}">
+          <td>{% if row.x_url %}<a href="{{ row.x_url }}" target="_blank" rel="noopener noreferrer">@{{ row.state.account.handle|default:row.state.account.author_id }}</a>{% else %}{{ row.state.account.handle|default:row.state.account.author_id }}{% endif %}{% if row.tracked_brands %}<p>{{ candidate_copy.tracked_brands }}: {{ row.tracked_brands|join:', ' }}</p>{% endif %}{% if row.tracked_companies %}<p>{{ candidate_copy.tracked_companies }}: {{ row.tracked_companies|join:', ' }}</p>{% endif %}</td>
           <td>{{ row.entrance_label }}</td>
           <td><span>{{ row.status_label }}</span>{% if row.state.decision.hf_verification.outcome == 'passed' %}<p>{{ candidate_copy.hf_verified }}: <a href="{{ row.state.decision.hf_verification.model_url }}" target="_blank" rel="noopener noreferrer">{{ row.state.decision.hf_verification.repo_id }}</a></p>{% endif %}</td>
           <td>{{ row.state.attempts }}</td>

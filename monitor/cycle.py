@@ -217,7 +217,7 @@ def _classification_tracked_brand_catalog() -> list[dict[str, Any]]:
             rows[str(brand_id)]["hashtags"].append(
                 value if value.startswith("#") else f"#{value}"
             )
-    for brand_id, handle, role in BrandAccount.objects.filter(
+    for brand_id, handle, role in BrandAccount.objects.filter(account__data_source_id="x").filter(
         brand_id__in=rows
     ).exclude(account__handle__isnull=True).values_list(
         "brand_id", "account__handle", "role_id"
@@ -3768,7 +3768,7 @@ class CycleRunner:
         }
         author_ids = {str(state.post.author_id) for state in claimed_states if state.post.author_id}
         affiliations_by_author: dict[str, list[dict[str, str | bool]]] = defaultdict(list)
-        for account_id, brand_id, role_id in BrandAccount.objects.filter(
+        for account_id, brand_id, role_id in BrandAccount.objects.filter(account__data_source_id="x").filter(
             account_id__in=author_ids
         ).values_list("account_id", "brand_id", "role_id"):
             affiliations_by_author[str(account_id)].append(

@@ -46,7 +46,7 @@ class Command(BaseCommand):
             after_author_id = checkpoint.get("last_completed_author_id")
 
         accounts = (
-            Account.objects.filter(posts__isnull=False).distinct().order_by("author_id")
+            Account.x.filter(posts__isnull=False).distinct().order_by("author_id")
         )
         if after_author_id:
             accounts = accounts.filter(author_id__gt=str(after_author_id))
@@ -96,7 +96,7 @@ class Command(BaseCommand):
                 report["candidate_counts"][key] += value
             for key, value in account_report["call_a"].items():
                 report["call_a"][key] += value
-            report["last_completed_author_id"] = str(account.pk)
+            report["last_completed_author_id"] = account.author_id
             if checkpoint_path is not None and not options["dry_run"]:
                 self._write_json(checkpoint_path, report)
 

@@ -135,7 +135,9 @@ def pytest_sessionfinish(session, exitstatus):
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
     """Always expose whether required PostgreSQL verification actually ran."""
     executed, skipped, errors = _required_postgres_report_counts(terminalreporter)
-    terminalreporter.write_sep("=", "PostgreSQL required-verification status", yellow=True)
+    terminalreporter.write_sep(
+        "=", "PostgreSQL required-verification status", yellow=True
+    )
     terminalreporter.write_line(
         f"required tests: executed={executed} skipped={skipped} errors={errors}"
     )
@@ -148,3 +150,34 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
             terminalreporter.write_line(
                 f"DATABASE_URL is {_database_url() or '<unset>'}; {_SKIP_REASON}"
             )
+
+
+@pytest.fixture
+def isolated_migration_database(transactional_db):
+    """Old migration proofs cannot reverse mixed-source account identities.
+
+    Use a disposable test database at the preceding schema; preserve the main
+    test database and always drop this database, even on a failed assertion.
+    """
+    import uuid
+
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+
+    assert connection.vendor == "postgresql"
+    original_name = connection.settings_dict["NAME"]
+    assert original_name.startswith("test_")
+    name = "test_pw_migration_" + uuid.uuid4().hex
+    with connection.cursor() as cursor:
+        cursor.execute(f'CREATE DATABASE "{name}"')
+    connection.close()
+    connection.settings_dict["NAME"] = name
+    try:
+        executor = MigrationExecutor(connection)
+        executor.migrate([("core", "0065_measurement_taxonomy")])
+        yield
+    finally:
+        connection.close()
+        connection.settings_dict["NAME"] = original_name
+        with connection.cursor() as cursor:
+            cursor.execute(f'DROP DATABASE "{name}"')

@@ -1,0 +1,16 @@
+........................................................................ [ 21%]
+........................................................................ [ 42%]
+........................................................................ [ 63%]
+........................................................................ [ 84%]
+...................................................                      [100%]
+=============================== warnings summary ===============================
+tests/test_benchmark_pulse_views.py: 6 warnings
+tests/test_editorial_views.py: 10 warnings
+tests/test_editorial_end_to_end.py: 1 warning
+  /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector/.venv/lib/python3.12/site-packages/django/core/handlers/base.py:61: UserWarning: No directory at: /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector/staticfiles/
+    mw_instance = middleware(adapted_handler)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=================== PostgreSQL required-verification status ====================
+required tests: executed=189 skipped=0 errors=0
+339 passed, 17 warnings in 77.69s (0:01:17)

@@ -18,7 +18,7 @@ services:
     runtime: python
     region: oregon
     plan: starter
-    buildCommand: ./build.sh
+    buildCommand: pip install -e '.[benchmark]' && ./build.sh
     startCommand: gunicorn project.wsgi:application --log-file -
     healthCheckPath: /accounts/login/
     envVars:
@@ -47,6 +47,10 @@ services:
         value: "True"
       - key: OLLIJA_STAGING_ALLOWED_EMAILS
         sync: false
+      - key: BENCHMARK_METRICS_ENABLED
+        value: "True"
+      - key: BENCHMARK_REVIEW_ENABLED
+        value: "True"
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

@@ -1,0 +1,274 @@
+{
+  "passed": true,
+  "receipts": [
+    {
+      "args": [
+        "set",
+        "viewport",
+        "1440",
+        "1080"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "open",
+        "https://pushinweight-staging-web.onrender.com/benchmarks/53fda009-28a4-4106-a91f-bd42ff7cb33e/deepseek-history/?end=2026-10-06"
+      ],
+      "output": "\u2713 DeepSeek V4.1 Flash \u00b7 release history \u00b7 Pulse\n  https://pushinweight-staging-web.onrender.com/benchmarks/53fda009-28a4-4106-a91f-bd42ff7cb33e/deepseek-history/?end=2026-10-06\n"
+    },
+    {
+      "args": [
+        "wait",
+        "#legend button"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "snapshot",
+        "-i"
+      ],
+      "output": "- link \"PushinWeight\" [ref=e2]\n- heading \"DeepSeek V4.1 Flash \u00b7 release history\" [level=1, ref=e3]\n- navigation \"Product comparisons\" [ref=e4]\n  - link \"GLM 5.3 Flash\" [ref=e5]\n  - link \"DeepSeek V4.1 Flash\" [ref=e6]\n  - link \"GLM 5.3 Flash \u00b7 release history\" [ref=e7]\n  - link \"DeepSeek V4.1 Flash \u00b7 release history\" [ref=e8]\n- region \"Pulse\" [ref=e1]\n  - heading \"Pulse\" [level=2, ref=e9]\n  - button \"Sources & definitions\" [ref=e10]\n  - button \"DEEPSEEK brand posts\" [ref=e13]\n  - button \"HF \u00b7 rolling 30-day downloads\" [ref=e14]\n  - button \"OpenRouter \u00b7 daily tokens\" [ref=e15]\n  - button \"Arena \u00b7 score (Max)\" [ref=e16]\n  - button \"Arena \u00b7 rank (release history)\" [ref=e17]\n  - button \"Repository likes\" [ref=e18]\n  - button \"deepseek-ai account followers\" [ref=e19]\n  - combobox \"View\" [expanded=false, ref=e11]: Compressed %\n    - option \"Compressed %\" [selected, ref=e21]\n    - option \"Linear %\" [ref=e22]\n    - option \"Raw values\" [ref=e23]\n  - slider \"Inspect day\" [ref=e12]: 56\n  - heading \"Oct 6, 2026 \u00b7 UTC\" [level=3, ref=e20]\n"
+    },
+    {
+      "args": [
+        "eval",
+        "(async()=>{if(!(document.querySelectorAll(\".series-proxy\").length === 1 && document.querySelectorAll(\"[data-event]\").length === 2))throw Error(\"history assertion failed\");return true})()"
+      ],
+      "output": "true\n"
+    },
+    {
+      "args": [
+        "focus",
+        "#day"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "press",
+        "Home"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "eval",
+        "(async()=>{if(!(document.querySelector(\"#readout\").innerText.includes(\"Previous release proxy\") && document.querySelector(\"#readout\").innerText.includes(\"74 position\")))throw Error(\"history assertion failed\");return true})()"
+      ],
+      "output": "true\n"
+    },
+    {
+      "args": [
+        "screenshot"
+      ],
+      "output": "\u2713 Screenshot saved to /Users/fuchitalee/.agent-browser/tmp/screenshots/screenshot-1791359961489.png\n"
+    },
+    {
+      "args": [
+        "select",
+        "#scale",
+        "raw"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "select",
+        "#raw-series",
+        "rank"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "eval",
+        "(async()=>{if(!(document.querySelectorAll(\"path.series\").length === 1 && document.querySelectorAll(\".series-proxy\").length === 1))throw Error(\"history assertion failed\");return true})()"
+      ],
+      "output": "true\n"
+    },
+    {
+      "args": [
+        "screenshot"
+      ],
+      "output": "\u2713 Screenshot saved to /Users/fuchitalee/.agent-browser/tmp/screenshots/screenshot-1791359961559.png\n"
+    },
+    {
+      "args": [
+        "press",
+        "End"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "select",
+        "#scale",
+        "linear"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "eval",
+        "(async()=>{if(!(document.querySelector(\"#scale-explanation\").innerText.includes(\"Linear scale\")))throw Error(\"history assertion failed\");return true})()"
+      ],
+      "output": "true\n"
+    },
+    {
+      "args": [
+        "click",
+        "#legend button[data-line=\"rank\"]"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "eval",
+        "(async()=>{if(!(document.querySelectorAll(\".series-proxy\").length === 0))throw Error(\"history assertion failed\");return true})()"
+      ],
+      "output": "true\n"
+    },
+    {
+      "args": [
+        "click",
+        "#legend button[data-line=\"rank\"]"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "click",
+        "#sources-open"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "eval",
+        "(async()=>{if(!(document.querySelector(\"#sources\").open && document.querySelector(\"#download-data\").href.startsWith(\"blob:\")))throw Error(\"history assertion failed\");return true})()"
+      ],
+      "output": "true\n"
+    },
+    {
+      "args": [
+        "click",
+        "#sources-close"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "set",
+        "viewport",
+        "390",
+        "844"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "eval",
+        "(async()=>{if(!(document.documentElement.scrollWidth <= innerWidth))throw Error(\"history assertion failed\");return true})()"
+      ],
+      "output": "true\n"
+    },
+    {
+      "args": [
+        "screenshot"
+      ],
+      "output": "\u2713 Screenshot saved to /Users/fuchitalee/.agent-browser/tmp/screenshots/screenshot-1791359961747.png\n"
+    },
+    {
+      "args": [
+        "open",
+        "https://pushinweight-staging-web.onrender.com/benchmarks/53fda009-28a4-4106-a91f-bd42ff7cb33e/glm-history/?end=2026-10-06"
+      ],
+      "output": "\u2713 GLM 5.3 Flash \u00b7 release history \u00b7 Pulse\n  https://pushinweight-staging-web.onrender.com/benchmarks/53fda009-28a4-4106-a91f-bd42ff7cb33e/glm-history/?end=2026-10-06\n"
+    },
+    {
+      "args": [
+        "wait",
+        "#legend button"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "snapshot",
+        "-i"
+      ],
+      "output": "- link \"PushinWeight\" [ref=e2]\n- heading \"GLM 5.3 Flash \u00b7 release history\" [level=1, ref=e3]\n- navigation \"Product comparisons\" [ref=e4]\n  - link \"GLM 5.3 Flash\" [ref=e5]\n  - link \"DeepSeek V4.1 Flash\" [ref=e6]\n  - link \"GLM 5.3 Flash \u00b7 release history\" [ref=e7]\n  - link \"DeepSeek V4.1 Flash \u00b7 release history\" [ref=e8]\n- region \"Pulse\" [ref=e1]\n  - heading \"Pulse\" [level=2, ref=e9]\n  - button \"Sources & definitions\" [ref=e10]\n  - button \"GLM brand posts\" [ref=e13]\n  - button \"HF \u00b7 rolling 30-day downloads\" [ref=e14]\n  - button \"OpenRouter \u00b7 daily tokens\" [ref=e15]\n  - button \"Arena \u00b7 score\" [ref=e16]\n  - button \"Arena \u00b7 rank (release history)\" [ref=e17]\n  - button \"Repository likes\" [ref=e18]\n  - button \"zai-org account followers\" [ref=e19]\n  - combobox \"View\" [expanded=false, ref=e11]: Compressed %\n    - option \"Compressed %\" [selected, ref=e21]\n    - option \"Linear %\" [ref=e22]\n    - option \"Raw values\" [ref=e23]\n  - slider \"Inspect day\" [ref=e12]: 71\n  - heading \"Oct 6, 2026 \u00b7 UTC\" [level=3, ref=e20]\n"
+    },
+    {
+      "args": [
+        "focus",
+        "#day"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "press",
+        "Home"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "eval",
+        "(async()=>{if(!(document.querySelectorAll(\".series-proxy\").length === 0 && document.querySelector(\"#readout\").innerText.includes(\"missing_predecessor\")))throw Error(\"history assertion failed\");return true})()"
+      ],
+      "output": "true\n"
+    },
+    {
+      "args": [
+        "screenshot"
+      ],
+      "output": "\u2713 Screenshot saved to /Users/fuchitalee/.agent-browser/tmp/screenshots/screenshot-1791359970866.png\n"
+    },
+    {
+      "args": [
+        "set",
+        "viewport",
+        "1440",
+        "1080"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "open",
+        "https://pushinweight-staging-web.onrender.com/benchmarks/53fda009-28a4-4106-a91f-bd42ff7cb33e/deepseek/?end=2026-10-03"
+      ],
+      "output": "\u2713 DeepSeek V4.1 Flash \u00b7 Pulse\n  https://pushinweight-staging-web.onrender.com/benchmarks/53fda009-28a4-4106-a91f-bd42ff7cb33e/deepseek/?end=2026-10-03\n"
+    },
+    {
+      "args": [
+        "wait",
+        "#legend button"
+      ],
+      "output": "\u2713 Done\n"
+    },
+    {
+      "args": [
+        "eval",
+        "(async()=>{if(!(document.querySelectorAll(\".series-proxy\").length === 0))throw Error(\"history assertion failed\");return true})()"
+      ],
+      "output": "true\n"
+    },
+    {
+      "args": [
+        "screenshot"
+      ],
+      "output": "\u2713 Screenshot saved to /Users/fuchitalee/.agent-browser/tmp/screenshots/screenshot-1791359980423.png\n"
+    },
+    {
+      "args": [
+        "errors"
+      ],
+      "output": ""
+    }
+  ]
+}

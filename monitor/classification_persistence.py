@@ -130,7 +130,7 @@ def _exact_account(*, account_handle: Any, handle: Any) -> Account | None:
     for value in (account_handle, handle):
         normalized = _normalized_handle(value)
         if normalized:
-            account = Account.objects.filter(handle__iexact=normalized).first()
+            account = Account.x.filter(handle__iexact=normalized).first()
             if account is not None:
                 return account
     return None

@@ -1,6 +1,6 @@
 # Staging data refresh
 
-Last verified: 2026-10-05 (G2 table policy, local tests; see release receipts for live checks).
+Last verified: 2026-10-07 (combined benchmark/G2 candidate policy; see release receipts for live checks).
 
 This procedure replaces only the isolated `pushinweight_staging` database with
 a current production snapshot. It never changes the production database. The
@@ -63,6 +63,11 @@ REVOKE ALL ON ALL TABLES IN SCHEMA public FROM staging_refresh_reader;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM staging_refresh_reader;
 
 GRANT SELECT ON
+  data_sources, taxonomy_versions, product_groups, product_relationships,
+  product_group_memberships, measurement_subjects, subject_relationships,
+  post_subject_attributions, metric_types, source_metrics,
+  metric_collection_contracts, source_subject_mappings, metric_collection_runs,
+  metric_observations, metric_values,
   people_names, people_name_evidence, people_texts, people_text_translations,
   account_based_in_mappings, account_post_appearances,
   account_profile_snapshots, accounts, audience_topic_concepts,
@@ -131,6 +136,7 @@ GRANT MAINTAIN ON
 TO staging_refresh_reader;
 
 GRANT SELECT ON
+  source_metrics_id_seq, metric_observations_id_seq, metric_values_id_seq,
   editorial_assessments_id_seq, editorial_calls_id_seq,
   people_identity_corrections_id_seq, people_media_id_seq,
   official_company_account_states_id_seq, official_company_attempts_id_seq,
@@ -591,3 +597,23 @@ HF catalog refresh policy: Products (including rich metadata) are copied. The
 three `hf_model_catalog_*` ledger tables are excluded, optional on older sources,
 and scrubbed on staging. Copied metadata references retain their original run
 UUID and do not imply the original observations exist in staging.
+
+## Benchmark evidence and provider-neutral accounts
+
+The candidate policy through 0067 copies all fifteen benchmark taxonomy and
+measurement tables listed in the SELECT grants above. Collection runs are durable
+provenance referenced by observations, not a work queue to resume. Copied contracts
+and provider metadata contain no credentials; source writers reject secret fields.
+The three new integer sequences are copied. These relations and sequences remain
+optional on pre-migration sources and are required in the migrated candidate.
+
+Fourteen new tables receive exact source/candidate count checks when present on
+the source. `data_sources` is excluded from that count comparison because migration
+0066 may add the X/HF registry rows. Account/source foreign keys and the exhaustive
+table/sequence checks remain enforced. Candidate validation requires account_key,
+data_source_id and external_identifier on accounts and author_account_key on posts;
+native X author_id columns remain available for compatibility.
+
+Collection activation remains disabled by default. A refresh is not authorization
+to enable benchmark schedules or serving. These candidate policy/grant instructions
+have not been applied to a live database by the benchmark implementation task.

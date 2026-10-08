@@ -1,0 +1,41 @@
+{
+  "services": [
+    {
+      "id": "srv-d9vb8t49v7es738lf2ng",
+      "name": "pushinweight-staging-web",
+      "branch": "staging",
+      "autoDeploy": "no",
+      "suspended": "not_suspended"
+    },
+    {
+      "id": "srv-da7vrdqd0e5s739uvcsg",
+      "name": "pushinweight-staging-headlines",
+      "branch": "staging",
+      "autoDeploy": "no",
+      "suspended": "not_suspended"
+    },
+    {
+      "id": "srv-dai099u7bikc73e14chg",
+      "name": "pushinweight-staging-synthesis",
+      "branch": "staging",
+      "autoDeploy": "yes",
+      "suspended": "suspended"
+    },
+    {
+      "id": "crn-da7vrdqd0e5s739uvcs0",
+      "name": "pushinweight-staging-harvest",
+      "branch": "staging",
+      "autoDeploy": "yes",
+      "suspended": "suspended"
+    },
+    {
+      "id": "crn-dain9moae00c73f7d73g",
+      "name": "pushinweight-staging-jobs",
+      "branch": "staging",
+      "autoDeploy": "yes",
+      "suspended": "not_suspended"
+    }
+  ],
+  "original_reader_settings_restored": true,
+  "schedules_unchanged": true
+}

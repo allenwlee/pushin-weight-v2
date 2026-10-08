@@ -17,6 +17,7 @@ STAGE1 = [("core", "0028_ai_enrichment_stage1_taxonomy")]
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_stage1_migration_seeds_forward_and_reverse_keeps_legacy_rows():
     """The pre-publication reverse removes only additive Stage 1 schema."""
     executor = MigrationExecutor(connection)

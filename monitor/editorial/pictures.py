@@ -73,7 +73,9 @@ def candidate_roles(event, packet):
     author_people = {
         str(p)
         for p in PersonAccount.objects.filter(
-            account_id__in=authors, resolution_status="confirmed"
+            account__data_source_id="x",
+            account__author_id__in=authors,
+            resolution_status="confirmed",
         ).values_list("person_id", flat=True)
     }
     roles = list(

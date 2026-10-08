@@ -15,6 +15,7 @@ BEFORE = [("core", "0040_postbrandclassificationjudgment_and_more")]
 AFTER = [("core", "0041_event_canonical_url_event_external_event_id_and_more")]
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_migration_preserves_evidence_and_reconciles_only_exact_dated_occurrences():
     executor = MigrationExecutor(connection)
     try:

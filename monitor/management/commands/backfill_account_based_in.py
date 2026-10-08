@@ -107,7 +107,7 @@ def _percentile(values: list[float], percentile: float) -> float | None:
 
 def _eligible_accounts(*, refresh: bool, eligible_before: datetime | None = None):
     queryset = (
-        Account.objects.filter(author_id__regex=r"^[0-9]+$")
+        Account.x.filter(author_id__regex=r"^[0-9]+$")
         .exclude(handle__isnull=True)
         .exclude(handle="")
     )
@@ -246,7 +246,7 @@ def _selection_distribution(
     selections: list[FetchSelection],
 ) -> dict[str, dict[str, int]]:
     author_ids = [selection.author_id for selection in selections]
-    rows = Account.objects.filter(author_id__in=author_ids).values_list(
+    rows = Account.x.filter(author_id__in=author_ids).values_list(
         "author_id",
         "created_at",
         "followers_count",
@@ -550,7 +550,7 @@ class Command(BaseCommand):
                 recovery_receipt = _parse_recovery_receipt(options["recovery_receipt"])
                 _verify_recovery_snapshot(recovery_receipt)
                 eligible_before = recovery_receipt.created_at
-                snapshotted_rows = Account.objects.filter(
+                snapshotted_rows = Account.x.filter(
                     first_seen_at__lte=eligible_before
                 ).count()
                 if snapshotted_rows != recovery_receipt.snapshot_account_count:
@@ -747,7 +747,7 @@ class Command(BaseCommand):
 
         finished_at = timezone.now()
         wall_seconds = round(time.monotonic() - run_started, 3)
-        full_population = Account.objects.filter(
+        full_population = Account.x.filter(
             ~Q(handle__isnull=True), ~Q(handle="")
         ).count()
         remaining_queryset = _eligible_accounts(

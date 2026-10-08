@@ -10,6 +10,7 @@ BEFORE = [("core", "0044_merge_20260918_1344")]
 AFTER = [("core", "0056_merge_hf_catalog_rare_types")]
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_populated_products_receive_distinct_keys_and_keep_ids_and_hf_metadata():
     executor = MigrationExecutor(connection)
     try:

@@ -1,0 +1,12 @@
+[
+  {
+    "url": "https://pushinweight-staging-web.onrender.com/benchmarks/53fda009-28a4-4106-a91f-bd42ff7cb33e/deepseek-history/",
+    "anonymous_status": 302,
+    "location": "/accounts/login/"
+  },
+  {
+    "url": "https://pushinweight-staging-web.onrender.com/benchmarks/53fda009-28a4-4106-a91f-bd42ff7cb33e/deepseek-history/series/",
+    "anonymous_status": 302,
+    "location": "/accounts/login/"
+  }
+]

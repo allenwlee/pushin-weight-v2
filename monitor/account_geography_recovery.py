@@ -245,7 +245,7 @@ def verify_geography_recovery_snapshot(
     ):
         raise CommandError("geography recovery snapshot does not match its receipt")
 
-    queryset = Account.objects.filter(first_seen_at__lte=receipt.created_at)
+    queryset = Account.x.filter(first_seen_at__lte=receipt.created_at)
     current_count, current_digest = digest_account_queryset(queryset)
     if (
         current_count != receipt.snapshot_account_count

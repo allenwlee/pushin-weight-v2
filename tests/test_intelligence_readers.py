@@ -141,6 +141,7 @@ def test_person_reader_separates_employment_and_keeps_profile_provenance(
         document = person_intelligence(person.pk)
 
     _assert_contract_root("person_intelligence", document)
+    assert document["person"]["accounts"][0]["author_id"] == "reader-anna"
     assert document["person"]["date_of_birth"] == {
         "value": "1987",
         "precision": "year",

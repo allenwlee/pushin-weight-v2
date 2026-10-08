@@ -134,6 +134,8 @@ def from_deepseek_dossier(data):
         )
         if team.get("db_person_id"):
             record["person_id"] = team["db_person_id"]
+        if person.get("account_key"):
+            record["account_key"] = person["account_key"]
         if person.get("account_id"):
             record["account_id"] = person["account_id"]
         primary = None

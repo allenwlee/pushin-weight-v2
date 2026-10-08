@@ -308,3 +308,179 @@ msgstr "この動向を裏付けるデータは、現在のチャートにはあ
 msgid "%(count)s post"
 msgid_plural "%(count)s posts"
 msgstr[0] "%(count)s 件の投稿"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Release response · discussion, reported usage and HF counter changes"
+msgstr "リリースへの反応 · 投稿、報告された利用量、HFカウンターの変化"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Display"
+msgstr "表示"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Three-day average"
+msgstr "3日平均"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Daily values"
+msgstr "日次値"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Date range"
+msgstr "期間"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Release context"
+msgstr "リリース前後"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "All available"
+msgstr "取得済みの全期間"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Dates"
+msgstr "日付"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Calendar"
+msgstr "暦日"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Days from release"
+msgstr "リリースからの日数"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Usage provider"
+msgstr "利用量の提供元"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Arena evaluation history"
+msgstr "Arenaの評価履歴"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Published score, uncertainty and reported battles · overall text, no style control"
+msgstr "公開スコア、信頼区間、報告された対戦数 · 総合テキスト、スタイル補正なし"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Evaluation"
+msgstr "評価"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Score"
+msgstr "スコア"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Rank"
+msgstr "順位"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Arena score and reported battles"
+msgstr "Arenaスコアと報告された対戦数"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Battles are reported comparisons, not unique people or exact daily new battles. Unknown score anchors break comparison segments."
+msgstr "対戦数は報告された比較回数で、ユニークユーザー数や日ごとの新規対戦数ではありません。スコアの基準が不明な区間は接続しません。"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Change from reference-week average (%)"
+msgstr "基準週平均からの変化 (%)"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Not available"
+msgstr "取得なし"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reference mean"
+msgstr "基準平均"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reference week unavailable"
+msgstr "基準週なし"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Three-day mean"
+msgstr "3日平均"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reported rolling 30-day counter"
+msgstr "報告された30日移動カウンター"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Nonpositive reference mean: percentage change is unavailable"
+msgstr "基準平均が正でないため、変化率は表示できません。"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "OpenCode Go + free traffic only"
+msgstr "OpenCode Goと無料トラフィックのみ"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Adjacent actual HF snapshots unavailable"
+msgstr "隣接日の実測HFスナップショットなし"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Arena score"
+msgstr "Arenaスコア"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Rank · lower is better"
+msgstr "順位 · 小さいほど上位"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reported battles"
+msgstr "報告された対戦数"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reference week"
+msgstr "基準週"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "fixed raw means"
+msgstr "固定された生データ平均"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "actual publication"
+msgstr "実際の公開"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "held published state"
+msgstr "直近の公開値を保持"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "unavailable"
+msgstr "取得なし"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "score comparability"
+msgstr "スコアの比較可能性"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "source timezone"
+msgstr "提供元のタイムゾーン"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "interval"
+msgstr "区間"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "rank"
+msgstr "順位"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Linear scale"
+msgstr "線形目盛"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "trailing three-day means"
+msgstr "直近3日平均"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "daily values"
+msgstr "日次値"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "relative to fixed raw reference-week means"
+msgstr "固定された基準週の生データ平均に対する比率"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "A common complete reference week is unavailable. Raw values remain inspectable."
+msgstr "全系列に共通する完全な基準週がありません。生データは確認できます。"

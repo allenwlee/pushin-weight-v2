@@ -11,6 +11,7 @@ BEFORE = [("core", "0048_rare_type_candidate_tokens")]
 AFTER = [("core", "0049_rare_type_domain_records")]
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_populated_brand_owned_event_survives_candidate_owner_migration():
     executor = MigrationExecutor(connection)
     try:

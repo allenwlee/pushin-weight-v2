@@ -46,6 +46,10 @@ def normalized_handle(handle):
 
 
 def person_id_for_account(account_id):
+    # Preserve existing derived person IDs when the caller now has an account UUID.
+    if isinstance(account_id, uuid.UUID):
+        account = Account.objects.get(pk=account_id)
+        account_id = account.author_id or str(account.pk)
     return uuid.uuid5(uuid.NAMESPACE_URL, f"pushinweight:account:{account_id}")
 
 
@@ -73,7 +77,7 @@ def account_person(account, *, create=False, observed_at=None, display_name=None
     else:
         ids = [
             person_id_for_account(account.pk),
-            uuid.uuid5(uuid.NAMESPACE_URL, f"staff-library:account:{account.pk}"),
+            uuid.uuid5(uuid.NAMESPACE_URL, f"staff-library:account:{account.author_id or account.pk}"),
         ]
         resolved = [
             canonical_person(pk)
@@ -99,7 +103,7 @@ def account_person(account, *, create=False, observed_at=None, display_name=None
                     "display_name": display_name
                     or account.display_name
                     or account.handle
-                    or account.pk
+                    or str(account.pk)
                 },
             )
     if person and create:
@@ -125,7 +129,7 @@ def subject_person(*, handle, display_name, source_key, account=None, observed_a
     _write_lock()
     handle = normalized_handle(handle)
     if account is None and handle:
-        accounts = list(Account.objects.filter(handle__iexact=handle)[:2])
+        accounts = list(Account.x.filter(handle__iexact=handle)[:2])
         if len(accounts) > 1:
             raise IdentityConflict("Handle matches multiple stored accounts")
         account = accounts[0] if accounts else None
@@ -149,9 +153,17 @@ def manifest_person(record, *, create=False):
     if create:
         _write_lock()
     account_id = record.get("account_id")
-    accounts = Account.objects
-    account = accounts.filter(pk=account_id).first() if account_id else None
-    if account_id and not account:
+    accounts = Account.x
+    account = None
+    if record.get("account_key"):
+        account = Account.objects.filter(pk=record["account_key"]).first()
+    elif account_id:
+        # Legacy manifests identify X by native ID; typed UUIDs are internal keys.
+        if isinstance(account_id, uuid.UUID):
+            account = accounts.filter(pk=account_id).first()
+        else:
+            account = accounts.filter(author_id=str(account_id)).first()
+    if (account_id or record.get("account_key")) and not account:
         raise ValueError(
             "Account ID is not stored; import the real account first or omit it"
         )
@@ -189,8 +201,8 @@ def manifest_person(record, *, create=False):
         return person, account
     if account:
         direct = record["source_key"] in {
-            "account:" + account.pk,
-            "x-account:" + account.pk,
+            "account:" + (account.author_id or str(account.pk)),
+            "x-account:" + (account.author_id or str(account.pk)),
         } and record.get("eligibility") in {"db_staff", "call_a_person"}
         if not direct and (links or account_person(account) is not None):
             raise IdentityConflict(

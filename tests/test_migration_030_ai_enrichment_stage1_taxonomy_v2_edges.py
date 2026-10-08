@@ -32,6 +32,7 @@ STATE_PROVENANCE_FIELDS = (
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_release_b_rewrites_only_v1_state_edges_and_preserves_provenance():
     executor = MigrationExecutor(connection)
     try:

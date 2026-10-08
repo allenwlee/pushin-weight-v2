@@ -34,6 +34,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+benchmark = ["pyarrow>=25,<26"]
 dev = [
     "pytest>=8",
     "jsonschema>=4",
@@ -61,3 +62,6 @@ dev = [
     "hypothesis>=6.138,<7",
     "playwright>=1.62.0",
 ]
+
+[tool.setuptools.package-data]
+core = ["benchmark_licenses/*.txt"]

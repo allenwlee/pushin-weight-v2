@@ -1222,7 +1222,7 @@ def _snapshot_brand_aliases(
     # A curated official handle can disambiguate a short product name in a
     # third-party post. Only include handles that themselves name the tracked
     # brand/product; a parent-company account must not identify a subbrand.
-    accounts = BrandAccount.objects.filter(
+    accounts = BrandAccount.objects.filter(account__data_source_id="x").filter(
         brand_id__in=aliases, role_id="official",
     ).order_by("brand_id", "account__handle").values_list(
         "brand_id", "account__handle"

@@ -1,0 +1,45 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "end": "2026-10-03",
+      "preset": "deepseek",
+      "status": 200,
+      "seconds": 4.766,
+      "provider_points_matched": 144,
+      "cache_control": "max-age=0, no-cache, no-store, must-revalidate, private"
+    },
+    {
+      "end": "2026-10-06",
+      "preset": "deepseek-history",
+      "status": 200,
+      "seconds": 8.018,
+      "provider_points_matched": 342,
+      "cache_control": "max-age=0, no-cache, no-store, must-revalidate, private"
+    },
+    {
+      "end": "2026-10-03",
+      "preset": "glm",
+      "status": 200,
+      "seconds": 3.627,
+      "provider_points_matched": 234,
+      "cache_control": "max-age=0, no-cache, no-store, must-revalidate, private"
+    },
+    {
+      "end": "2026-10-06",
+      "preset": "glm-history",
+      "status": 200,
+      "seconds": 7.198,
+      "provider_points_matched": 432,
+      "cache_control": "max-age=0, no-cache, no-store, must-revalidate, private"
+    },
+    {
+      "preset": "deepseek",
+      "outside_coverage_status": 400
+    },
+    {
+      "preset": "glm",
+      "outside_coverage_status": 400
+    }
+  ]
+}

@@ -272,3 +272,24 @@ def test_captured_live_payloads_keep_complementary_fields():
 def test_valid_underscore_model_name_does_not_block_namespace_page():
     hf = client(lambda r: httpx.Response(200, json=[{"id": "lab/_model"}]))
     assert hf.list_page("lab").outcome == "ok"
+
+
+def test_rate_limit_reset_controls_retry_delay():
+    responses = iter(
+        [
+            httpx.Response(429, headers={"ratelimit": '"api";r=0;t=40'}),
+            httpx.Response(200, json={"id": "lab/model"}),
+        ]
+    )
+    sleeps = []
+    hf = client(lambda r: next(responses))
+    hf.sleep = sleeps.append
+    assert hf.download_counts("lab/model").outcome == "ok"
+    assert sum(sleeps) >= 40
+
+
+def test_account_counts_rejects_wrong_identity():
+    hf = client(
+        lambda r: httpx.Response(200, json={"name": "other", "numFollowers": 12})
+    )
+    assert hf.account_counts("lab", "organization").outcome == "identity_mismatch"

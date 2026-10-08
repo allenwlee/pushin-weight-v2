@@ -37,7 +37,7 @@ def _find_duplicate_groups(
         cur.execute("""
             SELECT handle, array_agg(author_id ORDER BY first_seen_at)
             FROM accounts
-            WHERE handle IS NOT NULL AND handle != ''
+            WHERE data_source_id='x' AND handle IS NOT NULL AND handle != ''
             GROUP BY handle
             HAVING COUNT(*) > 1
         """)
@@ -45,7 +45,7 @@ def _find_duplicate_groups(
         cur.execute("""
             SELECT handle, array_agg(author_id ORDER BY first_seen_at)
             FROM accounts
-            WHERE handle IS NOT NULL AND handle != ''
+            WHERE data_source_id='x' AND handle IS NOT NULL AND handle != ''
             GROUP BY handle
             HAVING COUNT(*) > 1
               AND bool_or(author_id ~ '^[0-9]+$')
@@ -82,14 +82,14 @@ def _find_lonely_placeholders(
     cur.execute("""
         SELECT a.handle, a.author_id
         FROM accounts a
-        WHERE a.handle IS NOT NULL AND a.handle != ''
+        WHERE a.data_source_id='x' AND a.handle IS NOT NULL AND a.handle != ''
           AND (
             a.author_id LIKE 'handle:%%'
             OR a.author_id LIKE 'synthetic:%%'
           )
           AND NOT EXISTS (
             SELECT 1 FROM accounts b
-            WHERE b.handle IS NOT NULL AND b.handle != ''
+            WHERE b.data_source_id='x' AND b.handle IS NOT NULL AND b.handle != ''
               AND LOWER(b.handle) = LOWER(a.handle)
               AND b.author_id <> a.author_id
           )

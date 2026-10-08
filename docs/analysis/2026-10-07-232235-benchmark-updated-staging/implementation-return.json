@@ -1,0 +1,276 @@
+{
+  "status": "complete",
+  "plan_path": "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector/docs/plans/2026-10-05-070106-feat-benchmark-download-collector-plan.md",
+  "changed_files": [
+    "CONCEPTS.md",
+    "config/staging_refresh.yaml",
+    "core/benchmark_attribution.py",
+    "core/benchmark_forecast_inputs.py",
+    "core/benchmark_measurement_pins.py",
+    "core/benchmark_metric_history.py",
+    "core/benchmark_metric_identity.py",
+    "core/benchmark_metric_operations.py",
+    "core/benchmark_metric_report.py",
+    "core/benchmark_metric_series.py",
+    "core/benchmark_metric_store.py",
+    "core/benchmark_opencode.py",
+    "core/benchmark_release_response.py",
+    "core/migrations/0072_merge_benchmark_main.py",
+    "core/migrations/0073_rename_metrics.py",
+    "core/models.py",
+    "locale/en/LC_MESSAGES/django.mo",
+    "locale/en/LC_MESSAGES/django.po",
+    "locale/ja/LC_MESSAGES/django.mo",
+    "locale/ja/LC_MESSAGES/django.po",
+    "locale/zh_Hans/LC_MESSAGES/django.mo",
+    "locale/zh_Hans/LC_MESSAGES/django.po",
+    "monitor/benchmark_views.py",
+    "monitor/management/commands/backfill_opencode_history.py",
+    "monitor/management/commands/benchmark_opencode_snapshots.py",
+    "monitor/management/commands/collect_benchmark_metrics.py",
+    "monitor/static/benchmark-pulse.css",
+    "monitor/static/benchmark-pulse.js",
+    "monitor/templates/monitor/benchmark_pulse.html",
+    "scripts/benchmark_download_collector/README.md",
+    "scripts/benchmark_download_collector/__main__.py",
+    "scripts/benchmark_download_collector/collect.py",
+    "scripts/benchmark_download_collector/identity.py",
+    "scripts/benchmark_download_collector/report.py",
+    "scripts/benchmark_download_collector/series.py",
+    "scripts/benchmark_download_collector/sources.py",
+    "scripts/benchmark_download_collector/verify_pulse_browser.py",
+    "tests/staging_refresh/test_policy.py",
+    "tests/test_benchmark_download_db_identity.py",
+    "tests/test_benchmark_metrics_rename.py",
+    "tests/test_benchmark_opencode.py",
+    "tests/test_benchmark_release_response.py"
+  ],
+  "u_ids_attempted": [
+    "U22",
+    "U23",
+    "U24",
+    "U25",
+    "U26",
+    "U27"
+  ],
+  "u_ids_completed": [
+    "U22",
+    "U23",
+    "U24",
+    "U25",
+    "U26",
+    "U27"
+  ],
+  "verification_results": [
+    "309 scoped feature/account/catalog/staff regressions passed; required PostgreSQL 162 executed, zero skips/errors.",
+    "Final affected 30 passed; required PostgreSQL 21 executed, zero skips/errors.",
+    "Actual staging backup restored; reverse/forward rename preserved 2057227 values, object OID, constraints, indexes and sequence.",
+    "Real retained history -> HTTP -> three-line Pulse, provider switch, smoothing/range, linked Arena and mobile checks passed.",
+    "Offline export rendered from PostgreSQL; 3 paths, no resource requests, no browser errors."
+  ],
+  "verification_evidence": [
+    {
+      "unit": "U22",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_benchmark_series.py",
+        "tests/test_benchmark_pulse_views.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_benchmark_release_response.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/test_benchmark_series.py",
+        "tests/test_benchmark_pulse_views.py"
+      ],
+      "red_failure_or_characterization": "Module import failed before implementation; negative-difference and reference-window tests then passed.",
+      "verification_commands": [
+        "See regression.log and final-affected.log; browser evidence remains private under .local/benchmark-updated-staging-20261007/."
+      ],
+      "exception_reason": null
+    },
+    {
+      "unit": "U23",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_benchmark_series.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_benchmark_release_response.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/test_benchmark_series.py"
+      ],
+      "red_failure_or_characterization": "Characterized retained same-publication score, bounds and declining votes; new panel assertion absent before implementation.",
+      "verification_commands": [
+        "See regression.log and final-affected.log; browser evidence remains private under .local/benchmark-updated-staging-20261007/."
+      ],
+      "exception_reason": null
+    },
+    {
+      "unit": "U24",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/staging_refresh/test_policy.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_benchmark_metrics_rename.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/staging_refresh/test_policy.py"
+      ],
+      "red_failure_or_characterization": "Prior table name assertion failed before rename; populated reverse/forward OID, constraints, sequence and values retained.",
+      "verification_commands": [
+        "See regression.log and final-affected.log; browser evidence remains private under .local/benchmark-updated-staging-20261007/."
+      ],
+      "exception_reason": null
+    },
+    {
+      "unit": "U25",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_benchmark_download_collector.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_benchmark_opencode.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/test_benchmark_download_collector.py"
+      ],
+      "red_failure_or_characterization": "New reader ImportError before implementation. Existing Budget class regressions caught and repaired.",
+      "verification_commands": [
+        "See regression.log and final-affected.log; browser evidence remains private under .local/benchmark-updated-staging-20261007/."
+      ],
+      "exception_reason": null
+    },
+    {
+      "unit": "U26",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_benchmark_operations.py",
+        "tests/test_benchmark_download_persistence.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_benchmark_opencode.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/test_benchmark_operations.py",
+        "tests/test_benchmark_download_persistence.py"
+      ],
+      "red_failure_or_characterization": "Unchanged-poll duplicate value count failed (12 instead of 6); corrected through actual PostgreSQL writer.",
+      "verification_commands": [
+        "See regression.log and final-affected.log; browser evidence remains private under .local/benchmark-updated-staging-20261007/."
+      ],
+      "exception_reason": null
+    },
+    {
+      "unit": "U27",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_benchmark_forecast_inputs.py",
+        "tests/test_benchmark_pulse_views.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_benchmark_opencode.py",
+        "tests/test_benchmark_release_response.py",
+        "scripts/benchmark_download_collector/verify_pulse_browser.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/test_benchmark_forecast_inputs.py",
+        "tests/test_benchmark_pulse_views.py"
+      ],
+      "red_failure_or_characterization": "History reuse initially returned no retained provider evidence through the forecast reader; explicit identity and review cutoff now enforced.",
+      "verification_commands": [
+        "See regression.log and final-affected.log; browser evidence remains private under .local/benchmark-updated-staging-20261007/."
+      ],
+      "exception_reason": null
+    }
+  ],
+  "implementation_engine_binding": null,
+  "requested_route": "native",
+  "actual_route": "native inline",
+  "requested_model": null,
+  "actual_model": "session model",
+  "requested_effort": null,
+  "fallback_reason": null,
+  "run_id": null,
+  "source_kind": "plan",
+  "source_digest": "10d58f28c280a7b3c63de656670b183f2775150bc72a5cfb384be80388f0e0ea",
+  "unit_receipts": [
+    {
+      "unit": "U22",
+      "route": "inline",
+      "model": "session model",
+      "detached_process": null,
+      "integration": "canonical feature worktree",
+      "verification": "passed",
+      "canonical_commit": "pending parent shipping tail",
+      "cleanup": "staging-only worktree retained"
+    },
+    {
+      "unit": "U23",
+      "route": "inline",
+      "model": "session model",
+      "detached_process": null,
+      "integration": "canonical feature worktree",
+      "verification": "passed",
+      "canonical_commit": "pending parent shipping tail",
+      "cleanup": "staging-only worktree retained"
+    },
+    {
+      "unit": "U24",
+      "route": "inline",
+      "model": "session model",
+      "detached_process": null,
+      "integration": "canonical feature worktree",
+      "verification": "passed",
+      "canonical_commit": "pending parent shipping tail",
+      "cleanup": "staging-only worktree retained"
+    },
+    {
+      "unit": "U25",
+      "route": "inline",
+      "model": "session model",
+      "detached_process": null,
+      "integration": "canonical feature worktree",
+      "verification": "passed",
+      "canonical_commit": "pending parent shipping tail",
+      "cleanup": "staging-only worktree retained"
+    },
+    {
+      "unit": "U26",
+      "route": "inline",
+      "model": "session model",
+      "detached_process": null,
+      "integration": "canonical feature worktree",
+      "verification": "passed",
+      "canonical_commit": "pending parent shipping tail",
+      "cleanup": "staging-only worktree retained"
+    },
+    {
+      "unit": "U27",
+      "route": "inline",
+      "model": "session model",
+      "detached_process": null,
+      "integration": "canonical feature worktree",
+      "verification": "passed",
+      "canonical_commit": "pending parent shipping tail",
+      "cleanup": "staging-only worktree retained"
+    }
+  ],
+  "plan_checkpoint": "1ce02ffc",
+  "blockers": [],
+  "recovery_path": "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector/.local/benchmark-updated-staging-20261007",
+  "settled_decision_conflicts": [],
+  "behavior_change": true,
+  "standalone_shipping_skipped": true,
+  "account_integration": {
+    "migration": "0074_official_company_generic_accounts",
+    "preserved": "native X links, UUID identities, evidence/list outcomes and observation checkpoint",
+    "tests": "282 integrated tests passed; both populated migration orders covered"
+  },
+  "freeze_verification": {
+    "benchmark": "310 tests passed; rename test initially failed because it tried reversing unrelated irreversible account migration. Scoped rename operation corrected and that test passed separately.",
+    "lint": "focused Ruff, node syntax, git whitespace and migration-state check pass"
+  }
+}

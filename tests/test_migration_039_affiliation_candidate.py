@@ -15,6 +15,7 @@ BEFORE = [("core", "0038_split_translation_synthesis_ja")]
 AFTER = [("core", "0039_affiliation_candidate_and_integrity_guards")]
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_migration_preserves_known_brand_rows_and_allows_candidate_rows():
     executor = MigrationExecutor(connection)
     try:

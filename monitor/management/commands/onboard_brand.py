@@ -459,7 +459,7 @@ def _validate(
             if row.co_pack != expected_pack:
                 warnings.append(f"{row.nickname}: co_pack differs from harvest policy")
         for handle, author_id, _role in row.account_roles:
-            existing_by_id = Account.objects.filter(author_id=author_id).first()
+            existing_by_id = Account.x.filter(author_id=author_id).first()
             if (
                 existing_by_id
                 and existing_by_id.handle
@@ -469,7 +469,7 @@ def _validate(
                     f"canonical X author id {author_id!r} is already bound to another handle"
                 )
             conflicting_ids = list(
-                Account.objects.filter(handle__iexact=handle)
+                Account.x.filter(handle__iexact=handle)
                 .exclude(author_id=author_id)
                 .values_list("author_id", flat=True)
             )

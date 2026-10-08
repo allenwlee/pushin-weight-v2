@@ -25,6 +25,7 @@ LOCALES = ("en", "zh-cn", "ja")
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_u18a_migration_seeds_catalogs_and_copies_v3_stances_exactly():
     executor = MigrationExecutor(connection)
     try:
@@ -200,7 +201,7 @@ def test_u18a_subject_evidence_is_post_bound_and_keeps_exact_account_optional():
         first_seen_at=now,
         last_seen_at=now + timedelta(minutes=1),
     )
-    assert evidence.exact_matched_account_id == account.author_id
+    assert evidence.exact_matched_account_id == account.pk
     assert evidence.promotion.post_id == evidence.source_post_id == post.tweet_id
 
     with pytest.raises(IntegrityError), transaction.atomic():

@@ -1,0 +1,72 @@
+[
+  {
+    "id": "srv-d9vb8t49v7es738lf2ng",
+    "name": "pushinweight-staging-web",
+    "branch": "staging",
+    "autoDeploy": "no",
+    "suspended": "not_suspended",
+    "runtime": {
+      "schedule": null,
+      "envSpecificDetails": {
+        "buildCommand": "pip install -e '.[benchmark]' && ./build.sh",
+        "startCommand": "gunicorn project.wsgi:application --log-file -"
+      }
+    }
+  },
+  {
+    "id": "srv-da7vrdqd0e5s739uvcsg",
+    "name": "pushinweight-staging-headlines",
+    "branch": "staging",
+    "autoDeploy": "no",
+    "suspended": "not_suspended",
+    "runtime": {
+      "schedule": null,
+      "envSpecificDetails": {
+        "buildCommand": "./build.sh",
+        "startCommand": "celery -A project worker -l INFO -Q trend-narratives --concurrency=1 --prefetch-multiplier=1 --without-gossip --without-mingle"
+      }
+    }
+  },
+  {
+    "id": "srv-dai099u7bikc73e14chg",
+    "name": "pushinweight-staging-synthesis",
+    "branch": "staging",
+    "autoDeploy": "yes",
+    "suspended": "suspended",
+    "runtime": {
+      "schedule": null,
+      "envSpecificDetails": {
+        "buildCommand": "./build.sh",
+        "startCommand": "python manage.py run_synthesis_worker"
+      }
+    }
+  },
+  {
+    "id": "crn-da7vrdqd0e5s739uvcs0",
+    "name": "pushinweight-staging-harvest",
+    "branch": "staging",
+    "autoDeploy": "yes",
+    "suspended": "suspended",
+    "runtime": {
+      "schedule": "0 0 31 2 *",
+      "envSpecificDetails": {
+        "buildCommand": "./build.sh",
+        "startCommand": "python manage.py run_cycle --staging-acceptance \"${X_MONITOR_STAGING_ACCEPTANCE_CALL_ID:?staging acceptance call ID missing}\" --json"
+      }
+    }
+  },
+  {
+    "id": "crn-dain9moae00c73f7d73g",
+    "name": "pushinweight-staging-jobs",
+    "branch": "staging",
+    "autoDeploy": "yes",
+    "suspended": "not_suspended",
+    "runtime": {
+      "schedule": "0 0 31 2 *",
+      "envSpecificDetails": {
+        "buildCommand": "./build.sh",
+        "startCommand": "python manage.py sync_job_sources"
+      }
+    }
+  }
+]

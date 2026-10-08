@@ -1,0 +1,38 @@
+{
+  "provider": "openrouter",
+  "retrieved_at": "2026-10-06T12:52:19.786754+00:00",
+  "source_url": "https://openrouter.ai",
+  "whole_payload_sha256": "0a2e5cbd7a4b47a450b6d0570d7145326ce139b16ce05cee47a3a95857565f78",
+  "selection_sha256": "09af02001b07c74789089750d97ad25db6647af5964706afa52ee509e35524cb",
+  "selection_note": "Public provider metadata only; selected rows, no post bodies or credentials.",
+  "payload": {
+    "meta": {
+      "as_of": "2026-10-06T12:52:21.816Z",
+      "version": "v1",
+      "end_date": "2026-10-05",
+      "start_date": "2026-08-26"
+    },
+    "rows": [
+      {
+        "date": "2026-10-05",
+        "total_tokens": "6458330218100",
+        "model_permaslug": "deepseek/deepseek-v4.1-flash-20260910"
+      },
+      {
+        "date": "2026-10-05",
+        "total_tokens": "1603476115426",
+        "model_permaslug": "z-ai/glm-5.3-flash-20260826"
+      },
+      {
+        "date": "2026-10-05",
+        "total_tokens": "1689320754908",
+        "model_permaslug": "other"
+      }
+    ],
+    "as_of": "2026-10-06T12:52:21.816Z",
+    "status": "ok",
+    "coverage": "top_50_public_models",
+    "missing_dates": [],
+    "request_count": 1
+  }
+}

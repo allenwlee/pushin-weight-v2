@@ -235,3 +235,179 @@ msgstr "现有图表数据未能支持这一动态。"
 msgid "%(count)s post"
 msgid_plural "%(count)s posts"
 msgstr[0] "%(count)s 条帖子"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Release response · discussion, reported usage and HF counter changes"
+msgstr "发布响应 · 讨论量、报告的用量与 HF 计数变化"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Display"
+msgstr "显示"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Three-day average"
+msgstr "三日平均"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Daily values"
+msgstr "每日数值"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Date range"
+msgstr "日期范围"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Release context"
+msgstr "发布前后"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "All available"
+msgstr "全部可用日期"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Dates"
+msgstr "日期"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Calendar"
+msgstr "日历日期"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Days from release"
+msgstr "距发布天数"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Usage provider"
+msgstr "用量来源"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Arena evaluation history"
+msgstr "Arena 评估历史"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Published score, uncertainty and reported battles · overall text, no style control"
+msgstr "发布的评分、置信区间及对战数 · 综合文本，无风格控制"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Evaluation"
+msgstr "评估"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Score"
+msgstr "评分"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Rank"
+msgstr "排名"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Arena score and reported battles"
+msgstr "Arena 评分与报告的对战数"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Battles are reported comparisons, not unique people or exact daily new battles. Unknown score anchors break comparison segments."
+msgstr "对战数是报告中的比较次数，并非独立用户数或精确的每日新增对战数。评分锚点不明时，比较曲线会断开。"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Change from reference-week average (%)"
+msgstr "相对参考周平均值的变化 (%)"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Not available"
+msgstr "不可用"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reference mean"
+msgstr "参考平均值"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reference week unavailable"
+msgstr "参考周不可用"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Three-day mean"
+msgstr "三日平均值"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reported rolling 30-day counter"
+msgstr "报告的滚动 30 日计数"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Nonpositive reference mean: percentage change is unavailable"
+msgstr "参考平均值不大于零，百分比变化不可用"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "OpenCode Go + free traffic only"
+msgstr "仅 OpenCode Go 与免费流量"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Adjacent actual HF snapshots unavailable"
+msgstr "相邻日期的真实 HF 快照不可用"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Arena score"
+msgstr "Arena 评分"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Rank · lower is better"
+msgstr "排名 · 数字越小越好"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reported battles"
+msgstr "报告的对战数"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Reference week"
+msgstr "参考周"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "fixed raw means"
+msgstr "固定的原始平均值"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "actual publication"
+msgstr "实际发布"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "held published state"
+msgstr "沿用已发布状态"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "unavailable"
+msgstr "不可用"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "score comparability"
+msgstr "评分可比性"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "source timezone"
+msgstr "来源时区"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "interval"
+msgstr "区间"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "rank"
+msgstr "排名"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "Linear scale"
+msgstr "线性刻度"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "trailing three-day means"
+msgstr "最近三日平均值"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "daily values"
+msgstr "每日数值"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "relative to fixed raw reference-week means"
+msgstr "相对固定的原始参考周平均值"
+
+#: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
+msgid "A common complete reference week is unavailable. Raw values remain inspectable."
+msgstr "完整的共同参考周不可用。仍可查看原始数值。"

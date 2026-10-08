@@ -259,3 +259,30 @@ def test_existing_headline_publication_uses_shared_picture_binding(monkeypatch):
         picture_for_content("current_headline", narrative.pk, cfg=cfg)["state"]
         == "selected"
     )
+
+
+def test_native_x_author_survives_generic_account_identity_in_editorial_packet():
+    import json
+
+    from core.models import Account, PersonAccount, Post
+    from monitor.editorial.evidence import post_evidence
+    from monitor.editorial.pictures import candidate_roles
+
+    person, role, _ = person_photo("blue", "founder")
+    account = Account.objects.create(author_id="123456", handle="lab_author")
+    PersonAccount.objects.create(
+        person=person,
+        account=account,
+        resolution_status="confirmed",
+        first_observed_at=timezone.now(),
+        last_observed_at=timezone.now(),
+    )
+    post = Post.objects.create(
+        tweet_id="123", author=account, text="A release", created_at=timezone.now()
+    )
+    post.refresh_from_db()
+    evidence = post_evidence(post)
+    assert evidence["author_id"] == "123456"
+    json.dumps(evidence)
+    roles = candidate_roles(selection(post_ids=["123"]), {"posts": [evidence]})
+    assert any(r.pk == role.pk and priority[0] == 1 for priority, r in roles)

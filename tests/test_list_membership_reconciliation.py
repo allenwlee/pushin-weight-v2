@@ -59,7 +59,7 @@ def test_complete_snapshot_activates_updates_and_deactivates_atomically():
     assert result.deactivated == 1
     assert set(TwitterListMembership.objects.filter(
         list_id=42, active=True
-    ).values_list("account_id", flat=True)) == {"1", "2"}
+    ).values_list("account__author_id", flat=True)) == {"1", "2"}
     removed.refresh_from_db()
     assert TwitterListMembership.objects.get(list_id=42, account=removed).active is False
     kept.refresh_from_db()
@@ -155,7 +155,7 @@ def test_call_a_author_is_observed_immediately_without_complete_snapshot():
     )
 
     assert result.observed == 1
-    membership = TwitterListMembership.objects.get(list_id=42, account_id="1")
+    membership = TwitterListMembership.objects.get(list_id=42, account__author_id="1")
     assert membership.active is True
     assert membership.source == "call_a"
     assert membership.source_run_id == "run-1"
@@ -214,3 +214,16 @@ def test_sync_command_dry_run_never_calls_provider(monkeypatch):
         stdout=stdout,
     )
     assert "dry run" in stdout.getvalue()
+
+
+def test_cycle_author_context_queries_are_constant(django_assert_num_queries):
+    from monitor.cycle import CycleRunner
+
+    items = []
+    for number in range(20):
+        account = Account.objects.create(author_id=str(10000 + number), handle=f'author{number}')
+        TwitterListMembership.objects.create(list_id=42, account=account, active=True, source='call_a')
+        items.append({'author_id': account.author_id})
+    with django_assert_num_queries(2):
+        CycleRunner._prepare_call_a_roles(object(), items, list_id=42)
+    assert all(item['_author_membership_source'] == 'call_a' for item in items)

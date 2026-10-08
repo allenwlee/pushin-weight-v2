@@ -1,0 +1,12 @@
+{
+  "status": "complete",
+  "scope": "responsive release-response charts and pointer coordinates only",
+  "before": "real Render staging d3 SVG labels have 5 screen pixels at 390x844",
+  "after": "actual local DB-backed page passes minimum 8-pixel labels for both charts and physical mouse selection of the launch date",
+  "browser_commands": 78,
+  "browser_assertions": 28,
+  "pytest": "8 passed; 8 required PostgreSQL executed, 0 skips/errors",
+  "review": "All changed lines reviewed inline. Each SVG uses its own horizontal bounds; resize redraws only on width changes. Numeric data, requests, contracts, source rights and legacy 900-unit chart geometry remain unchanged. The homepage/its assurance declaration and G5 prototypes are outside this dedicated benchmark page change.",
+  "tests": "Strengthened existing real-browser verifier with readable text on both graphs and a physical click using the SVG screen transform; zero-match labels fail. Static JS syntax, Ruff and whitespace pass.",
+  "residuals": []
+}

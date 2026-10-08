@@ -23,6 +23,7 @@ V3_ONLY_KEYS = tuple(
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_taxonomy_v3_labels_are_additive_and_preserve_v2_rows():
     executor = MigrationExecutor(connection)
     try:

@@ -478,6 +478,7 @@ class Company(models.Model):
 
 
 class HFOrg(models.Model):
+    account = models.OneToOneField("Account", to_field="account_key", db_column="account_key", null=True, on_delete=models.PROTECT, related_name="legacy_hf_org")
     namespace = models.CharField(
         max_length=64,
         primary_key=True,
@@ -944,11 +945,38 @@ class AccountBasedInMapping(models.Model):
         ]
 
 
+class XAccountManager(models.Manager):
+    """Explicit adapter for existing X-only callers; generic identity uses objects."""
+    def get_queryset(self):
+        return super().get_queryset().filter(data_source_id="x")
+
+    def create(self, **kwargs):
+        kwargs.setdefault("data_source_id", "x")
+        return super().create(**kwargs)
+
+
 class Account(models.Model):
-    author_id = models.TextField(primary_key=True)
-    handle = models.CharField(
-        max_length=64,
-        db_collation="case_insensitive",
+    account_key = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    data_source = models.ForeignKey("DataSource", on_delete=models.PROTECT)
+    external_identifier = models.TextField(default="")
+    normalized_identifier = models.TextField(default="", db_collation="C")
+    identifier_kind = models.CharField(max_length=32, default="provider_id")
+    normalized_handle = models.TextField(null=True, db_collation="C")
+    account_kind = models.CharField(max_length=24, default="unknown")
+    provider_metadata = models.JSONField(default=dict)
+    objects = models.Manager()
+    x = XAccountManager()
+    author_id = models.TextField(unique=True, null=True)
+
+    def save(self, *args, **kwargs):
+        from core.account_identity import normalize_account
+        normalize_account(self)
+        if kwargs.get("update_fields") is not None:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"data_source", "external_identifier", "normalized_identifier", "identifier_kind", "normalized_handle", "account_kind", "author_id"}
+        return super().save(*args, **kwargs)
+
+    handle = models.TextField(
+        db_collation="C",
         blank=True,
         null=True,
     )
@@ -1058,6 +1086,12 @@ class Account(models.Model):
         ]
         ordering = ["handle"]
         constraints = [
+            models.UniqueConstraint(fields=["data_source", "normalized_identifier"], name="uq_account_source_identifier"),
+            models.UniqueConstraint(fields=["data_source", "normalized_handle"], condition=models.Q(normalized_handle__isnull=False), name="uq_account_source_handle"),
+            models.CheckConstraint(condition=~models.Q(external_identifier="") & ~models.Q(normalized_identifier=""), name="ck_account_identity_nonempty"),
+            models.CheckConstraint(condition=models.Q(identifier_kind__in=["provider_id", "namespace"]), name="ck_account_identifier_kind"),
+            models.CheckConstraint(condition=models.Q(account_kind__in=["organization", "individual", "channel", "unknown"]), name="ck_account_kind"),
+            models.CheckConstraint(condition=(models.Q(data_source="x", author_id=models.F("external_identifier"), author_id__isnull=False) | (~models.Q(data_source="x") & models.Q(author_id__isnull=True))), name="ck_account_native_x_id"),
             models.CheckConstraint(
                 condition=(
                     models.Q(country__isnull=True)
@@ -1138,12 +1172,12 @@ class Account(models.Model):
 
         with transaction.atomic():
             if expected_handle is None:
-                account, created = cls.objects.select_for_update().get_or_create(
+                account, created = cls.x.select_for_update().get_or_create(
                     author_id=target_id
                 )
             else:
                 account = (
-                    cls.objects.select_for_update()
+                    cls.x.select_for_update()
                     .filter(author_id=target_id)
                     .first()
                 )
@@ -1259,7 +1293,7 @@ class Account(models.Model):
                 if (
                     field_name == "handle"
                     and account.handle != validated
-                    and cls.objects.filter(handle__iexact=validated)
+                    and cls.x.filter(handle__iexact=validated)
                     .exclude(author_id=target_id)
                     .exists()
                 ):
@@ -1335,12 +1369,13 @@ class TwitterListMembership(models.Model):
     """Durable membership snapshot keyed by Twitter list and account."""
 
     list_id = models.BigIntegerField()
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
         related_name="twitter_list_memberships",
-        db_column="author_id",
-        to_field="author_id",
+        db_column="account_key",
+        to_field="account_key",
     )
     active = models.BooleanField(default=True)
     first_seen_at = models.DateTimeField(default=timezone.now)
@@ -1403,14 +1438,15 @@ class Post(models.Model):
         blank=True,
         null=True,
     )
+    native_author_id = models.TextField(db_column="author_id", null=True, editable=False)
     author = models.ForeignKey(
         Account,
         on_delete=models.SET_NULL,
         blank=True,
         null=True,
         related_name="posts",
-        db_column="author_id",
-        to_field="author_id",
+        db_column="author_account_key",
+        to_field="account_key",
     )
     text = models.TextField(blank=True, null=True)
     lang = models.TextField(blank=True, null=True)
@@ -2046,12 +2082,13 @@ class BrandAccount(models.Model):
         db_column="brand_id",
         to_field="nickname",
     )
+    native_account_id = models.TextField(db_column="accounts_id", null=True, editable=False)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
         related_name="brands",
-        db_column="accounts_id",
-        to_field="author_id",
+        db_column="account_key",
+        to_field="account_key",
     )
     role = models.ForeignKey(
         Role,
@@ -2078,12 +2115,13 @@ class CompanyAccount(models.Model):
         db_column="company_id",
         to_field="nickname",
     )
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
         related_name="companies",
-        db_column="author_id",
-        to_field="author_id",
+        db_column="account_key",
+        to_field="account_key",
     )
     role = models.ForeignKey(
         Role,
@@ -2689,12 +2727,13 @@ class UntrackedBrandPromotionEvidence(models.Model):
         db_column="source_post_id",
         to_field="tweet_id",
     )
+    native_account_id = models.TextField(db_column="exact_matched_account_id", null=True, editable=False)
     exact_matched_account = models.ForeignKey(
         Account,
         on_delete=models.SET_NULL,
         related_name="untracked_brand_promotion_evidence",
-        db_column="exact_matched_account_id",
-        to_field="author_id",
+        db_column="matched_account_key",
+        to_field="account_key",
         blank=True,
         null=True,
     )
@@ -2747,12 +2786,13 @@ class UntrackedBrandPromotionEvidence(models.Model):
 
 class AccountPostAppearance(models.Model):
     pk = models.CompositePrimaryKey("account", "post")
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
         related_name="appearances",
-        db_column="author_id",
-        to_field="author_id",
+        db_column="account_key",
+        to_field="account_key",
     )
     post = models.ForeignKey(
         Post,
@@ -2935,9 +2975,10 @@ class ProductVerificationProposal(models.Model):
         "BrandDiscoveryCandidate", on_delete=models.PROTECT, blank=True, null=True,
         related_name="product_verification_proposals",
     )
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account, on_delete=models.PROTECT, related_name="product_verification_proposals",
-        db_column="author_id", to_field="author_id",
+        db_column="account_key", to_field="account_key",
     )
     account_handle_snapshot = models.CharField(max_length=64, blank=True, default="")
     observed_name = models.TextField()
@@ -4969,12 +5010,13 @@ class PersonAccount(models.Model):
         related_name="account_links",
         db_column="person_id",
     )
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
         related_name="person_links",
-        db_column="author_id",
-        to_field="author_id",
+        db_column="account_key",
+        to_field="account_key",
     )
     is_primary = models.BooleanField(default=False)
     first_observed_at = models.DateTimeField()
@@ -5028,12 +5070,13 @@ class PersonAccount(models.Model):
 
 class AccountProfileSnapshot(models.Model):
     id = models.BigAutoField(primary_key=True)
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account,
         on_delete=models.CASCADE,
         related_name="profile_snapshots",
-        db_column="author_id",
-        to_field="author_id",
+        db_column="account_key",
+        to_field="account_key",
     )
     profile_hash = models.CharField(max_length=64)
     first_observed_at = models.DateTimeField()
@@ -5098,9 +5141,10 @@ class ProfileMovementCandidate(models.Model):
     STATUSES = (("pending", "Pending"), ("succeeded", "Succeeded"), ("failed", "Failed"))
 
     id = models.BigAutoField(primary_key=True)
+    native_account_id = models.TextField(db_column="author_id", null=True, editable=False)
     account = models.ForeignKey(
         Account, on_delete=models.CASCADE, related_name="profile_movement_candidates",
-        db_column="author_id", to_field="author_id",
+        db_column="account_key", to_field="account_key",
     )
     prior_snapshot = models.ForeignKey(
         AccountProfileSnapshot, on_delete=models.PROTECT,
@@ -7269,6 +7313,602 @@ class RareTypeSearchHit(models.Model):
         ]
 
 
+# Shared taxonomy and external measurements. Provider facts never rewrite catalog identity.
+class DataSource(models.Model):
+    id = models.CharField(max_length=32, primary_key=True)
+    name = models.CharField(max_length=128)
+    source_type = models.CharField(max_length=32)
+    enabled = models.BooleanField(default=False)
+    metadata = models.JSONField(default=dict)
+    website_url = models.URLField(max_length=2048,default="")
+    identifier_normalizer = models.CharField(max_length=32,default="exact-v1")
+    adapter_key = models.CharField(max_length=64,null=True)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'data_sources'
+        indexes = [models.Index(fields=["source_type"],name="idx_source_type")]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(source_type__in=["benchmark","model_adoption","social"]),name="ck_source_type"),
+            models.CheckConstraint(condition=models.Q(enabled=False)|(models.Q(adapter_key__isnull=False)&~models.Q(adapter_key="")),name="ck_source_enabled_adapter"),
+        ]
+
+
+class TaxonomyVersion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    version_hash = models.CharField(max_length=64, unique=True)
+    snapshot = models.JSONField()
+    reviewed_by = models.TextField()
+    created_at = models.DateTimeField(default=timezone.now)
+    reviewed_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'taxonomy_versions'
+        constraints = [models.CheckConstraint(condition=models.Q(version_hash__regex=r'^[0-9a-f]{64}$'), name='ck_taxonomy_hash')]
+
+
+class ProductGroup(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group_key = models.CharField(max_length=128, unique=True)
+    name = models.TextField()
+    description = models.TextField(default='')
+    group_kind = models.CharField(max_length=32, default='series')
+    rule_kind = models.CharField(max_length=32, default='manual')
+    root_product = models.ForeignKey(Product, to_field='product_key', db_column='root_product_key', null=True, on_delete=models.PROTECT)
+    rule_version = models.PositiveSmallIntegerField(default=1)
+    rule_configuration = models.JSONField(default=dict)
+    rule_taxonomy_version = models.ForeignKey(TaxonomyVersion, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'product_groups'
+        constraints = [
+            models.CheckConstraint(condition=models.Q(group_kind__in=['series','family','collection']), name='ck_product_group_kind'),
+            models.CheckConstraint(condition=models.Q(rule_version__gt=0), name='ck_product_group_rule_version'),
+            models.CheckConstraint(condition=(models.Q(rule_kind='manual',root_product__isnull=True) | models.Q(rule_kind='new_version_chain',root_product__isnull=False)), name='ck_product_group_rule_root'),
+        ]
+
+
+class ProductRelationship(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    taxonomy_version = models.ForeignKey(TaxonomyVersion, on_delete=models.PROTECT)
+    parent_product = models.ForeignKey(Product, to_field='product_key', db_column='parent_product_key', related_name='child_relationships', on_delete=models.PROTECT)
+    child_product = models.ForeignKey(Product, to_field='product_key', db_column='child_product_key', related_name='parent_relationships', on_delete=models.PROTECT)
+    relationship_type = models.CharField(max_length=32)
+    source = models.ForeignKey(DataSource, null=True, on_delete=models.PROTECT)
+    evidence_method = models.CharField(max_length=32, default='source_reported')
+    evidence = models.JSONField()
+    observed_at = models.DateTimeField(default=timezone.now)
+    reviewed_by = models.TextField()
+    reviewed_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'product_relationships'
+        constraints = [
+            models.UniqueConstraint(fields=['taxonomy_version','parent_product','child_product','relationship_type'],name='uq_product_relationship'),
+            models.CheckConstraint(condition=~models.Q(parent_product=models.F('child_product')),name='ck_product_relationship_self'),
+            models.CheckConstraint(condition=models.Q(relationship_type__in=['new_version','finetune','adapter','quantized','merge']),name='ck_product_relationship_type'),
+            models.CheckConstraint(condition=models.Q(evidence_method__in=['source_reported','publisher_declared','provider_inferred','artifact_verified','our_inference']),name='ck_product_relationship_method'),
+        ]
+        indexes=[models.Index(fields=['taxonomy_version','parent_product','relationship_type']),models.Index(fields=['taxonomy_version','child_product','relationship_type'])]
+
+
+class ProductGroupMembership(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    taxonomy_version = models.ForeignKey(TaxonomyVersion, on_delete=models.PROTECT)
+    group = models.ForeignKey(ProductGroup, on_delete=models.PROTECT)
+    product = models.ForeignKey(Product, to_field='product_key', db_column='product_key', on_delete=models.PROTECT)
+    membership_status = models.CharField(max_length=16)
+    membership_method = models.CharField(max_length=24)
+    rule_version = models.PositiveSmallIntegerField(null=True)
+    evidence = models.JSONField(default=dict)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'product_group_memberships'
+        constraints = [
+            models.UniqueConstraint(fields=['taxonomy_version','group','product'],name='uq_product_group_membership'),
+            models.CheckConstraint(condition=(models.Q(membership_method='manual_include',membership_status='included',rule_version__isnull=True)|models.Q(membership_method='manual_exclude',membership_status='excluded',rule_version__isnull=True)|models.Q(membership_method='rule_generated',membership_status='included',rule_version__gt=0)),name='ck_product_group_membership'),
+        ]
+        indexes=[models.Index(fields=['taxonomy_version','group','membership_status'])]
+
+
+class MeasurementSubject(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    subject_kind = models.CharField(max_length=16)
+    company = models.OneToOneField(Company,null=True,on_delete=models.PROTECT,related_name='measurement_subject')
+    brand = models.OneToOneField(Brand,null=True,on_delete=models.PROTECT,related_name='measurement_subject')
+    product_group = models.OneToOneField(ProductGroup,null=True,on_delete=models.PROTECT,related_name='subject')
+    product = models.OneToOneField(Product,to_field='product_key',db_column='product_key',null=True,on_delete=models.PROTECT,related_name='measurement_subject')
+    account = models.OneToOneField(Account, null=True, on_delete=models.PROTECT, related_name='measurement_subject')
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'measurement_subjects'
+        constraints=[models.CheckConstraint(condition=(
+            models.Q(account__isnull=True,subject_kind='company',company__isnull=False,brand__isnull=True,product_group__isnull=True,product__isnull=True)|
+            models.Q(account__isnull=True,subject_kind='brand',company__isnull=True,brand__isnull=False,product_group__isnull=True,product__isnull=True)|
+            models.Q(account__isnull=True,subject_kind='product_group',company__isnull=True,brand__isnull=True,product_group__isnull=False,product__isnull=True)|
+            models.Q(account__isnull=True,subject_kind='product',company__isnull=True,brand__isnull=True,product_group__isnull=True,product__isnull=False)
+            |models.Q(subject_kind='account',account__isnull=False,company__isnull=True,brand__isnull=True,product_group__isnull=True,product__isnull=True)
+        ),name='ck_measurement_subject_target')]
+
+
+class SubjectRelationship(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    taxonomy_version = models.ForeignKey(TaxonomyVersion,on_delete=models.PROTECT)
+    parent_subject = models.ForeignKey(MeasurementSubject,on_delete=models.PROTECT,related_name='outgoing_relationships')
+    child_subject = models.ForeignKey(MeasurementSubject,on_delete=models.PROTECT,related_name='incoming_relationships')
+    relation_kind = models.CharField(max_length=32)
+    effective_from_date = models.DateField(null=True)
+    effective_to_date = models.DateField(null=True)
+    effective_date_precision = models.CharField(max_length=16,default='unknown')
+    evidence = models.JSONField()
+
+    class Meta:
+        db_table = 'subject_relationships'
+        constraints=[
+            models.UniqueConstraint(fields=['taxonomy_version','parent_subject','child_subject','relation_kind'],name='uq_subject_relationship'),
+            models.CheckConstraint(condition=~models.Q(parent_subject=models.F('child_subject')),name='ck_subject_relationship_self'),
+            models.CheckConstraint(condition=models.Q(relation_kind__in=['owns','offers']),name='ck_subject_relationship_kind'),
+            models.CheckConstraint(condition=models.Q(effective_date_precision__in=['day','unknown']),name='ck_subject_date_precision'),
+            models.CheckConstraint(condition=models.Q(effective_from_date__isnull=True)|models.Q(effective_to_date__isnull=True)|models.Q(effective_to_date__gt=models.F('effective_from_date')),name='ck_subject_date_order'),
+        ]
+
+
+class PostSubjectAttribution(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post = models.ForeignKey(Post,on_delete=models.PROTECT)
+    subject = models.ForeignKey(MeasurementSubject,on_delete=models.PROTECT)
+    taxonomy_version = models.ForeignKey(TaxonomyVersion,on_delete=models.PROTECT)
+    assertion_key = models.CharField(max_length=64)
+    attribution_kind = models.CharField(max_length=24)
+    observed_name = models.TextField()
+    policy_version = models.CharField(max_length=128)
+    evidence = models.JSONField()
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'post_subject_attributions'
+        constraints=[
+            models.UniqueConstraint(fields=['post','subject','taxonomy_version','policy_version','assertion_key'],name='uq_post_subject_assertion'),
+            models.CheckConstraint(condition=models.Q(attribution_kind__in=['direct_mention','legacy_brand']),name='ck_post_subject_kind'),
+            models.CheckConstraint(condition=models.Q(assertion_key__regex=r'^[0-9a-f]{64}$'),name='ck_post_subject_assertion_hash'),
+        ]
+        indexes=[models.Index(fields=['subject','taxonomy_version','post'])]
+
+class MetricType(models.Model):
+    id = models.CharField(max_length=32, primary_key=True)
+    name = models.CharField(max_length=128)
+    description = models.TextField(default="")
+
+    class Meta:
+        db_table = "metric_types"
+
+
+class SourceMetric(models.Model):
+    source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
+    metric_type = models.ForeignKey(MetricType, on_delete=models.PROTECT)
+    metric_key = models.CharField(max_length=64)
+    version = models.PositiveSmallIntegerField()
+    name = models.CharField(max_length=128)
+    unit = models.CharField(max_length=64)
+    value_kind = models.CharField(max_length=16)
+    quantity_form = models.CharField(max_length=16)
+    value_role = models.CharField(max_length=32, default="value")
+    measurement_kind = models.CharField(max_length=24)
+    window_mode = models.CharField(max_length=16, default="none")
+    window_amount = models.DecimalField(max_digits=12, decimal_places=3, null=True)
+    window_unit = models.CharField(max_length=24, null=True)
+    window_duration_basis = models.CharField(max_length=16, default="none")
+    window_alignment = models.CharField(max_length=32, null=True)
+    source_timezone = models.CharField(max_length=64, default="unknown")
+    required = models.BooleanField(default=True)
+    definition_metadata = models.JSONField(default=dict)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "metrics"
+        indexes = [
+            models.Index(
+                fields=["metric_type", "source"], name="idx_metric_type_source"
+            )
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "metric_key", "version"],
+                name="uq_source_metric_version",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(version__gt=0), name="ck_metric_version"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(value_kind__in=["integer", "float"]),
+                name="ck_metric_value_kind",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    quantity_form__in=["count", "score", "rank", "variance", "ratio"]
+                ),
+                name="ck_metric_quantity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    value_role__in=["value", "lower_bound", "upper_bound"]
+                ),
+                name="ck_metric_value_role",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        measurement_kind="state",
+                        window_mode="none",
+                        window_duration_basis="none",
+                        window_amount__isnull=True,
+                        window_unit__isnull=True,
+                        window_alignment__isnull=True,
+                    )
+                    | models.Q(
+                        measurement_kind="flow",
+                        window_mode="since_origin",
+                        window_duration_basis="none",
+                        window_amount__isnull=True,
+                        window_unit__isnull=True,
+                        window_alignment__isnull=True,
+                    )
+                    | (
+                        models.Q(
+                            measurement_kind="flow",
+                            window_mode__in=["rolling", "calendar", "fixed"],
+                            window_amount__gt=0,
+                            window_amount__lt=1000000000,
+                            window_amount__isnull=False,
+                            window_unit__in=["day", "second"],
+                            window_unit__isnull=False,
+                            window_duration_basis__in=["calendar", "fixed", "unknown"],
+                        )
+                        & (
+                            models.Q(
+                                window_mode="calendar",
+                                window_alignment__in=[
+                                    "source_local_midnight",
+                                    "provider_defined",
+                                ],
+                                window_alignment__isnull=False,
+                            )
+                            | (
+                                models.Q(window_alignment__isnull=True)
+                                & ~models.Q(window_mode="calendar")
+                            )
+                        )
+                    )
+                ),
+                name="ck_metric_kind_window",
+            ),
+        ]
+
+
+class MetricCollectionContract(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    taxonomy_version = models.ForeignKey(TaxonomyVersion, on_delete=models.PROTECT)
+    contract_hash = models.CharField(max_length=64, unique=True)
+    catalog_hash = models.CharField(max_length=64)
+    mapping_hash = models.CharField(max_length=64)
+    methodology_hash = models.CharField(max_length=64)
+    schema_version = models.PositiveSmallIntegerField(default=1)
+    catalog_snapshot = models.JSONField()
+    source_configuration = models.JSONField()
+    methodology = models.JSONField()
+    reviewed_by = models.TextField()
+    reviewed_at = models.DateTimeField(default=timezone.now)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "metric_collection_contracts"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(schema_version__gt=0),
+                name="ck_contract_schema_version",
+            ),
+            *[
+                models.CheckConstraint(
+                    condition=models.Q(**{field + "__regex": r"^[0-9a-f]{64}$"}),
+                    name="ck_contract_" + field,
+                )
+                for field in (
+                    "contract_hash",
+                    "catalog_hash",
+                    "mapping_hash",
+                    "methodology_hash",
+                )
+            ],
+        ]
+
+
+class SourceSubjectMapping(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    contract = models.ForeignKey(
+        MetricCollectionContract, on_delete=models.PROTECT, related_name="mappings"
+    )
+    source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
+    source_subject_kind = models.CharField(max_length=32)
+    identifier_scope = models.CharField(max_length=128, default="")
+    external_identifier = models.CharField(max_length=256)
+    normalized_identifier = models.CharField(max_length=256, db_collation="C")
+    subject = models.ForeignKey(MeasurementSubject, on_delete=models.PROTECT)
+    publisher_account = models.ForeignKey(
+        Account, db_column="publisher_account_key", null=True, on_delete=models.PROTECT
+    )
+    mapping_hash = models.CharField(max_length=64)
+    evidence_url = models.URLField(max_length=2048)
+    identity_snapshot = models.JSONField(default=dict)
+    identifier_metadata = models.JSONField(default=dict)
+    reviewed_by = models.TextField()
+    reviewed_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "source_subject_mappings"
+        indexes = [
+            models.Index(
+                fields=["contract", "subject"], name="idx_mapping_contract_subject"
+            ),
+            models.Index(
+                fields=["source", "normalized_identifier"],
+                name="idx_mapping_source_identifier",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "contract",
+                    "source",
+                    "source_subject_kind",
+                    "identifier_scope",
+                    "normalized_identifier",
+                ],
+                name="uq_source_subject_mapping",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    source_subject_kind__in=["repository", "model", "lab", "account"]
+                ),
+                name="ck_mapping_subject_kind",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(external_identifier="")
+                & ~models.Q(normalized_identifier=""),
+                name="ck_mapping_identifier",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(mapping_hash__regex=r"^[0-9a-f]{64}$"),
+                name="ck_mapping_hash",
+            ),
+        ]
+
+
+class MetricCollectionRun(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    batch_id = models.UUIDField(default=uuid.uuid4)
+    contract = models.ForeignKey(MetricCollectionContract, on_delete=models.PROTECT)
+    source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
+    ingestion_key = models.CharField(max_length=64, unique=True)
+    status = models.CharField(max_length=16, default="running")
+    started_at = models.DateTimeField(default=timezone.now)
+    lease_expires_at = models.DateTimeField()
+    observed_at = models.DateTimeField(null=True)
+    completed_at = models.DateTimeField(null=True)
+    source_as_of = models.DateTimeField(null=True)
+    source_url = models.TextField(default="")
+    request_params = models.JSONField(default=dict)
+    source_metadata = models.JSONField(default=dict)
+    request_count = models.PositiveIntegerField(default=0)
+    selected_count = models.PositiveIntegerField(default=0)
+    success_count = models.PositiveIntegerField(default=0)
+    payload_sha256 = models.CharField(max_length=64, null=True)
+    raw_payload = models.JSONField(null=True)
+    error_code = models.CharField(max_length=64, null=True)
+
+    class Meta:
+        db_table = "metric_collection_runs"
+        indexes = [
+            models.Index(
+                fields=["contract", "source", "status", "completed_at"],
+                name="idx_metric_run_outcome",
+            ),
+            models.Index(fields=["batch_id"], name="idx_metric_run_batch"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(ingestion_key__regex=r"^[0-9a-f]{64}$"),
+                name="ck_metric_ingestion_key",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(payload_sha256__isnull=True)
+                | models.Q(payload_sha256__regex=r"^[0-9a-f]{64}$"),
+                name="ck_run_payload_hash",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status="running", completed_at__isnull=True)
+                | models.Q(
+                    status__in=["success", "partial", "failed", "aborted"],
+                    completed_at__isnull=False,
+                ),
+                name="ck_run_terminal",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(success_count__lte=models.F("selected_count")),
+                name="ck_run_success_count",
+            ),
+        ]
+
+
+class MetricObservation(models.Model):
+    run = models.ForeignKey(
+        MetricCollectionRun, on_delete=models.PROTECT, related_name="observations"
+    )
+    mapping = models.ForeignKey(
+        SourceSubjectMapping, null=True, on_delete=models.PROTECT
+    )
+    source_identifier = models.CharField(max_length=256)
+    source_subject_kind = models.CharField(max_length=32)
+    observed_at = models.DateTimeField(default=timezone.now)
+    dimensions = models.JSONField(default=dict)
+    source_metadata = models.JSONField(default=dict)
+    observation_key = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, default="ok")
+    published_at = models.DateTimeField(null=True)
+    published_date = models.DateField(null=True)
+    publication_precision = models.CharField(max_length=16, default="unknown")
+    error_code = models.CharField(max_length=64, null=True)
+
+    class Meta:
+        db_table = "metric_observations"
+        indexes = [
+            models.Index(
+                fields=["mapping", "observed_at"], name="idx_observation_mapping_time"
+            ),
+            models.Index(
+                fields=["run", "published_date"], name="idx_observation_publication"
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["run", "observation_key"], name="uq_metric_observation"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(observation_key__regex=r"^[0-9a-f]{64}$"),
+                name="ck_observation_key",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    source_subject_kind__in=["model", "repository", "lab", "account", "aggregate"]
+                ),
+                name="ck_observation_kind",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    source_subject_kind__in=["model", "repository", "lab", "account"]
+                )
+                | models.Q(mapping__isnull=True),
+                name="ck_observation_aggregate",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status="ok", error_code__isnull=True)
+                | (
+                    models.Q(status="error", error_code__isnull=False)
+                    & ~models.Q(error_code="")
+                ),
+                name="ck_observation_status",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        publication_precision="instant",
+                        published_at__isnull=False,
+                        published_date__isnull=True,
+                    )
+                    | models.Q(
+                        publication_precision="date",
+                        published_at__isnull=True,
+                        published_date__isnull=False,
+                    )
+                    | models.Q(
+                        publication_precision="unknown",
+                        published_at__isnull=True,
+                        published_date__isnull=True,
+                    )
+                ),
+                name="ck_observation_publication",
+            ),
+        ]
+
+
+class MetricValue(models.Model):
+    observation = models.ForeignKey(
+        MetricObservation, on_delete=models.PROTECT, related_name="values"
+    )
+    source_metric = models.ForeignKey(SourceMetric, on_delete=models.PROTECT)
+    integer_value = models.DecimalField(max_digits=30, decimal_places=0, null=True)
+    float_value = models.FloatField(null=True)
+    temporal_status = models.CharField(max_length=16, default="unknown")
+    source_timezone = models.CharField(max_length=64, default="unknown")
+    as_of_at = models.DateTimeField(null=True)
+    as_of_date = models.DateField(null=True)
+    window_start_at = models.DateTimeField(null=True)
+    window_end_at = models.DateTimeField(null=True)
+    period_label_date = models.DateField(null=True)
+
+    class Meta:
+        db_table = "metric_values"
+        indexes = [
+            models.Index(
+                fields=["source_metric", "observation"], name="idx_value_definition_obs"
+            ),
+            models.Index(fields=["window_end_at"], name="idx_value_window_end"),
+            models.Index(fields=["as_of_date"], name="idx_value_as_of_date"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["observation", "source_metric"], name="uq_metric_value"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    integer_value__isnull=False, float_value__isnull=True
+                )
+                | models.Q(integer_value__isnull=True, float_value__isnull=False),
+                name="ck_value_one_number",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(integer_value__isnull=True)
+                | models.Q(integer_value__gt=-(10**30), integer_value__lt=10**30),
+                name="ck_value_integer_finite",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(float_value__isnull=True)
+                | models.Q(float_value__gt=float("-inf"), float_value__lt=float("inf")),
+                name="ck_value_float_finite",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    temporal_status__in=["exact", "date_only", "unknown"]
+                ),
+                name="ck_value_temporal_status",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(as_of_at__isnull=True)
+                | models.Q(as_of_date__isnull=True),
+                name="ck_value_state_precision",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(window_start_at__isnull=True)
+                | models.Q(window_end_at__isnull=True)
+                | models.Q(window_end_at__gt=models.F("window_start_at")),
+                name="ck_value_window_order",
+            ),
+            *[
+                models.CheckConstraint(
+                    condition=models.Q(**{field + "__isnull": True})
+                    | models.Q(
+                        models.Func(
+                            models.F(field),
+                            function="isfinite",
+                            output_field=models.BooleanField(),
+                        )
+                    ),
+                    name="ck_value_finite_" + field,
+                )
+                for field in (
+                    "as_of_at",
+                    "as_of_date",
+                    "window_start_at",
+                    "window_end_at",
+                    "period_label_date",
+                )
+            ],
+        ]
+
+
 class EditorialAssessment(models.Model):
     """One bounded evaluation of all tracks at a fixed quarter-hour cutoff."""
 
@@ -7479,8 +8119,9 @@ class OfficialCompanyScan(models.Model):
 
 
 class OfficialCompanyAccountState(models.Model):
+    native_account_id = models.TextField(db_column="account_id", null=True, editable=False)
     account = models.OneToOneField(
-        Account, on_delete=models.PROTECT, related_name="official_company_state"
+        Account, db_column="account_key", on_delete=models.PROTECT, related_name="official_company_state"
     )
     evidence_hash = models.CharField(max_length=64)
     evidence = models.JSONField(default=dict)
@@ -7506,6 +8147,14 @@ class OfficialCompanyAccountState(models.Model):
     last_error = models.CharField(max_length=128, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        fields = kwargs.get("update_fields")
+        if fields is None or "account" in fields or "account_id" in fields:
+            self.native_account_id = self.account.author_id
+            if fields is not None:
+                kwargs["update_fields"] = set(fields) | {"native_account_id"}
+        return super().save(*args, **kwargs)
 
     class Meta:
         db_table = "official_company_account_states"
@@ -7585,8 +8234,9 @@ class OfficialCompanyAttempt(models.Model):
 
 
 class OfficialCompanyListIntent(models.Model):
+    native_account_id = models.TextField(db_column="account_id", null=True, editable=False)
     account = models.ForeignKey(
-        Account, on_delete=models.PROTECT, related_name="official_list_intents"
+        Account, db_column="account_key", on_delete=models.PROTECT, related_name="official_list_intents"
     )
     state = models.ForeignKey(
         OfficialCompanyAccountState,
@@ -7606,6 +8256,14 @@ class OfficialCompanyListIntent(models.Model):
     add_acknowledged_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        fields = kwargs.get("update_fields")
+        if fields is None or "account" in fields or "account_id" in fields:
+            self.native_account_id = self.account.author_id
+            if fields is not None:
+                kwargs["update_fields"] = set(fields) | {"native_account_id"}
+        return super().save(*args, **kwargs)
 
     class Meta:
         db_table = "official_company_list_intents"

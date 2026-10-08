@@ -485,7 +485,7 @@ def record_profile_movement_candidate(
     ):
         return None
     identity = hashlib.sha256(
-        f"{snapshot.account_id}:{prior.pk}:{snapshot.pk}".encode()
+        f"{snapshot.account.author_id or snapshot.account_id}:{prior.pk}:{snapshot.pk}".encode()
     ).hexdigest()
     candidate, _ = ProfileMovementCandidate.objects.get_or_create(
         movement_identity=identity,
@@ -506,7 +506,7 @@ def record_profile_movement_candidate(
 
 def build_brand_reference_index() -> tuple[BrandReference, ...]:
     handles: dict[str, set[str]] = {}
-    for brand_id, handle in BrandAccount.objects.exclude(
+    for brand_id, handle in BrandAccount.objects.filter(account__data_source_id="x").exclude(
         account__handle__isnull=True
     ).values_list("brand_id", "account__handle"):
         if handle:
@@ -547,17 +547,17 @@ def build_account_affiliation_contexts(
     if not ids:
         return {}
     reviewed: dict[str, list[tuple[str, str]]] = {account_id: [] for account_id in ids}
-    for account_id, brand_id, role_id in BrandAccount.objects.filter(
-        account_id__in=ids
-    ).values_list("account_id", "brand_id", "role_id"):
+    for account_id, brand_id, role_id in BrandAccount.objects.filter(account__data_source_id="x").filter(
+        account__author_id__in=ids
+    ).values_list("account__author_id", "brand_id", "role_id"):
         reviewed[str(account_id)].append((str(brand_id), str(role_id)))
     call_a_accounts = {
         str(account_id)
         for account_id in TwitterListMembership.objects.filter(
-            account_id__in=ids,
+            account__author_id__in=ids,
             active=True,
             source="call_a",
-        ).values_list("account_id", flat=True)
+        ).values_list("account__author_id", flat=True)
     }
     return {
         account_id: AccountAffiliationContext(
@@ -709,7 +709,7 @@ def classify_affiliation_signals(
     if context is None:
         reviewed_edges = {
             str(edge.brand_id): str(edge.role_id)
-            for edge in BrandAccount.objects.filter(account=account)
+            for edge in BrandAccount.objects.filter(account__data_source_id="x").filter(account=account)
         }
         call_a_active = TwitterListMembership.objects.filter(
             account=account, active=True, source="call_a"
@@ -839,7 +839,7 @@ def persist_affiliation_candidates(
                 continue
 
         claim_payload = {
-            "account_id": str(account.pk),
+            "account_id": account.author_id or str(account.pk),
             "brand_id": signal.brand_id,
             "affiliation_type": signal.affiliation_type,
             "status": signal.status,

@@ -86,3 +86,7 @@ data/*.test*
 
 # Local staff-library pilot storage
 .local/staff-media/
+.local/benchmark-*/
+.local/benchmark-*.html
+.local/benchmark-*.png
+.local/benchmark-*.json

@@ -898,6 +898,7 @@ def test_successful_notice_only_output_is_rejected(checker):
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_schema_aware_stdout_query_round_trips_real_schema_profiles(checker):
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor

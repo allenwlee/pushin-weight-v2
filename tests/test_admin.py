@@ -380,3 +380,93 @@ def test_review_tab_forces_review_status_and_keeps_navigation(owner_client):
     response = owner_client.get("/admin", {"accounts_tab": "invalid", "candidate_status": "waiting"})
     assert response.context["accounts_tab"] == "found"
     assert [r["state"].account.handle for r in response.context["official_accounts"]["rows"]] == ["verified_lab"]
+
+
+def test_frozen_run_is_read_only_and_limits_tabs_to_frozen_results(owner_client):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from core.models import OfficialCompanyAttempt, OfficialCompanyScan
+    from core.official_company_requalification import cohort_report, initialize_cohort
+    from tests.test_official_company_requalification import manifest, state
+
+    fresh, prior, retry, waiting, stale, rejected, outside = [state(98001 + n) for n in range(7)]
+    prior.decision = {"outcome": "accepted"}
+    prior.save()
+    initialize_cohort(manifest([fresh, prior, retry, waiting, stale, rejected]))
+    for s, status, outcome, evidence_hash, policy in [
+        (fresh, "completed", "accepted", fresh.evidence_hash, POLICY_VERSION),
+        (prior, "completed", "accepted", prior.evidence_hash, POLICY_VERSION),
+        (retry, "failed", None, retry.evidence_hash, POLICY_VERSION),
+        (stale, "completed", "accepted", "b" * 64, POLICY_VERSION),
+        (stale, "completed", "accepted", stale.evidence_hash, "old-policy"),
+        (rejected, "completed", "rejected", rejected.evidence_hash, POLICY_VERSION),
+        (outside, "completed", "accepted", outside.evidence_hash, POLICY_VERSION),
+    ]:
+        OfficialCompanyAttempt.objects.create(
+            state=s, claim_token=f"frozen-scope-{s.pk}-{policy}-{evidence_hash[:1]}",
+            status=status, evidence_hash=evidence_hash, policy_version=policy, model="test",
+            reserved_usd=0, error_code="TimeoutError" if status == "failed" else "",
+            decision={"outcome": outcome, "organization_name": "<script>company</script>",
+                      "development_type": "agent", "rationale": "Own agent"},
+        )
+    retry.status = "retry_due"
+    retry.next_attempt_at = timezone.now() + timedelta(minutes=15)
+    retry.save()
+    waiting.status = "claimed"
+    waiting.save()
+    OfficialCompanyAttempt.objects.create(
+        state=waiting, evidence_hash=waiting.evidence_hash, claim_token="frozen-in-flight",
+        status="reserved", model="test", policy_version=POLICY_VERSION, reserved_usd=0,
+    )
+    detailed = cohort_report(include_members=True)
+    assert cohort_report() == {key: value for key, value in detailed.items() if key not in {'members', 'frozen_at'}}
+    snapshots = list(OfficialCompanyAccountState.objects.order_by('pk').values())
+    cursor = OfficialCompanyScan.objects.get().cursor
+    for tab, expected in [("newly", [fresh]), ("awaiting", [retry]), ("pending", [waiting, stale]), ("previous", [prior]), ("rejected", [rejected]), ("uncertain", []), ("failed", []), ("excluded", [])]:
+        response = owner_client.get('/admin/official-accounts/frozen-run', {'tab': tab, 'account_id': outside.account_id, 'locale': 'en'})
+        report = response.context['frozen_run']
+        assert [row['state_id'] for row in report['rows']] == [s.pk for s in expected]
+        assert report['summary']['population'] == 6 and report['summary']['newly_qualified'] == 1
+        assert len(response.context['frozen_tabs']) == 3
+        assert b'<script>company</script>' not in response.content
+        if tab == 'pending':
+            assert b'Evaluation in flight' in response.content and b'Waiting for evaluation' in response.content
+    assert list(OfficialCompanyAccountState.objects.order_by('pk').values()) == snapshots
+    assert OfficialCompanyScan.objects.get().cursor == cursor
+    assert not OfficialCompanyListIntent.objects.exists()
+    assert owner_client.get('/admin/official-accounts/frozen-run', {'tab': 'unknown'}).context['frozen_run']['tab'] == 'newly'
+
+
+def test_frozen_page_search_pagination_and_query_bounds(owner_client):
+    from core.official_company_requalification import initialize_cohort
+    from core.official_company_requalification_admin import frozen_run_report
+    from tests.test_official_company_requalification import manifest, state
+
+    candidates = [state(98200 + index) for index in range(53)]
+    initialize_cohort(manifest(candidates))
+    with CaptureQueriesContext(connection) as queries:
+        report = frozen_run_report(tab='pending')
+    assert len(queries) <= 4 and len(report['rows']) == 50 and report['page'].paginator.count == 53
+    response = owner_client.get('/admin/official-accounts/frozen-run', {'tab': 'pending', 'page': 2, 'locale': 'ja'})
+    assert len(response.context['frozen_run']['rows']) == 3
+    assert 'tab=pending' in response.context['previous_url'] and 'locale=ja' in response.context['previous_url']
+    for tab in response.context['frozen_tabs']:
+        assert tab['url'].count('tab=') == 1 and 'page=1' in tab['url']
+    matched = owner_client.get('/admin/official-accounts/frozen-run', {'tab': 'pending', 'q': '@company_98252'})
+    assert [row['state_id'] for row in matched.context['frozen_run']['rows']] == [candidates[-1].pk]
+    escaped = owner_client.get('/admin/official-accounts/frozen-run', {'tab': 'pending', 'q': '"><script>alert(1)</script>'})
+    assert b'<script>alert(1)</script>' not in escaped.content
+    assert not escaped.context['frozen_run']['rows']
+
+
+def test_frozen_page_keeps_admin_auth_and_handles_uninitialized_run(owner_client):
+    path = '/admin/official-accounts/frozen-run'
+    assert Client().get(path).status_code == 302
+    ordinary = Client()
+    ordinary.force_login(get_user_model().objects.create_user(username='frozen-ordinary'))
+    assert ordinary.get(path).status_code == 403
+    response = owner_client.get(path, {'locale': 'en'})
+    assert response.status_code == 200 and response.context['frozen_run']['summary'] is None
+    assert b'has not been initialized' in response.content
