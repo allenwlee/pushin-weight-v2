@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-08 14:08 JST
+Last verified: 2026-10-08 17:13:14 JST
 
-Scope: **151 application tables**, **1920 physical columns**, plus one compatibility view. Source: integrated `feat/g2-editorial`; migration graph through `0078_original_content_workflow_shape`.
+Scope: **151 application tables**, **1920 physical columns**, plus seven compatibility views. Source: integrated `feat/g2-editorial`; migration graph through `0079_original_content_physical_names`.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -133,14 +133,11 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 128 application tables appears once in this inventory and once in
-the detailed sections. Subject counts above sum to 128.
+Each of the 151 application tables appears once in this inventory and once in
+the detailed sections. Subject counts above sum to 151.
 
 | Table | Subject | What one row represents |
 | --- | --- | --- |
-| [_applied_config_snapshot](#table-_applied_config_snapshot) | [Collection, extraction, and processing records](#processing) | One configuration artifact’s last applied content hash. |
-| [account_based_in_mappings](#table-account_based_in_mappings) | [Countries and regions](#geography) | One reviewed mapping from an X “based in” string to a country or region. |
-| [account_post_appearances](#table-account_post_appearances) | [Accounts, profiles, and lists](#accounts) | One account’s appearance in one collected post, with collection context. |
 | [_applied_config_snapshot](#table-_applied_config_snapshot) | [Collection, extraction, and processing records](#processing) | One configuration artifact’s last applied content hash. |
 | [account_based_in_mappings](#table-account_based_in_mappings) | [Countries and regions](#geography) | One reviewed mapping from an X “based in” string to a country or region. |
 | [account_post_appearances](#table-account_post_appearances) | [Accounts, profiles, and lists](#accounts) | One account’s appearance in one collected post, with collection context. |
@@ -155,14 +152,13 @@ the detailed sections. Subject counts above sum to 128.
 | [brand_hashtags](#table-brand_hashtags) | [Companies, brands, and organization discovery](#organizations) | One hashtag associated with a brand. |
 | [brand_keywords](#table-brand_keywords) | [Companies, brands, and organization discovery](#organizations) | One literal or regular-expression matching pattern for a brand. |
 | [brand_search_terms](#table-brand_search_terms) | [Companies, brands, and organization discovery](#organizations) | One search term associated with a brand. |
-| [brand_trend_narrative_texts](#table-brand_trend_narrative_texts) | [Authored content and trend publication](#headlines) | One locale’s headline and byline for a brand narrative. |
-| [brand_trend_narratives](#table-brand_trend_narratives) | [Authored content and trend publication](#headlines) | One prepared brand headline outcome within a run. |
 | [brands](#table-brands) | [Companies, brands, and organization discovery](#organizations) | One brand identity and its display metadata. |
 | [brands_accounts](#table-brands_accounts) | [Companies, brands, and organization discovery](#organizations) | One account’s role for a brand, such as official or researcher. |
 | [brands_companies](#table-brands_companies) | [Companies, brands, and organization discovery](#organizations) | One ownership relationship between a brand and a company. |
 | [call_state](#table-call_state) | [Collection, extraction, and processing records](#processing) | One harvest cursor for a brand, call, bucket, and query combination. |
 | [companies](#table-companies) | [Companies, brands, and organization discovery](#organizations) | One company identity, including its recorded headquarters country. |
 | [companies_accounts](#table-companies_accounts) | [Companies, brands, and organization discovery](#organizations) | One account’s role for a company. |
+| [content_pictures](#table-content_pictures) | [Compatible editorial input storage and pictures](#editorial) | One optional source/derivative assignment for a content revision. |
 | [countries](#table-countries) | [Countries and regions](#geography) | One country/territory code and optional display-parent relationship. |
 | [country_codes_region](#table-country_codes_region) | [Countries and regions](#geography) | One country’s assigned region and the source of that assignment. |
 | [country_labels](#table-country_labels) | [Countries and regions](#geography) | One translated label for a country code. |
@@ -174,7 +170,6 @@ the detailed sections. Subject counts above sum to 128.
 | [editorial_calls](#table-editorial_calls) | [Compatible editorial input storage and pictures](#editorial) | One reserved provider stage and its saved response or uncertain-send outcome. |
 | [editorial_editions](#table-editorial_editions) | [Compatible editorial input storage and pictures](#editorial) | One immutable accepted story edition for a track, locale and revision. |
 | [editorial_heroes](#table-editorial_heroes) | [Compatible editorial input storage and pictures](#editorial) | One current hero pointer, or the shared provider-lock row. |
-| [editorial_pictures](#table-editorial_pictures) | [Compatible editorial input storage and pictures](#editorial) | One optional source/derivative assignment for a content revision. |
 | [editorial_stories](#table-editorial_stories) | [Compatible editorial input storage and pictures](#editorial) | One permanent development identity with original-post anchors. |
 | [event_evidence](#table-event_evidence) | [Events and opportunities](#events) | One source observation supporting an event occurrence. |
 | [events](#table-events) | [Events and opportunities](#events) | One attendance-bearing occurrence, such as a conference or meetup. |
@@ -211,7 +206,12 @@ the detailed sections. Subject counts above sum to 128.
 | [official_company_provider_states](#table-official_company_provider_states) | [Official-company collection](#official-companies) | One provider lifecycle/control record for official-company collection. |
 | [official_company_scans](#table-official_company_scans) | [Official-company collection](#official-companies) | One official-company account scan and its outcome. |
 | [opportunities](#table-opportunities) | [Events and opportunities](#events) | One bounded offer in which an action can provide a benefit, optionally linked to an event. |
+| [original_content](#table-original_content) | [Authored content and trend publication](#headlines) | One prepared brand headline outcome within a run. |
+| [original_content_calls](#table-original_content_calls) | [Authored content and trend publication](#headlines) | One recorded provider attempt for ranking, editing, or reviewing headlines. |
+| [original_content_runs](#table-original_content_runs) | [Authored content and trend publication](#headlines) | One common evidence cutoff for an all-brand headline run and time window. |
+| [original_content_selections](#table-original_content_selections) | [Authored content and trend publication](#headlines) | One currently visible run for a supported time window. |
 | [original_content_sources](#table-original_content_sources) | [Authored content and trend publication](#headlines) | One distinct cited post supporting one saved locale/version, with immutable ordered URL/author/hash snapshots. |
+| [original_content_texts](#table-original_content_texts) | [Authored content and trend publication](#headlines) | One locale’s headline and byline for a brand narrative. |
 | [people](#table-people) | [People and job history](#people) | One person, whether or not they have an X account. |
 | [people_accounts](#table-people_accounts) | [People and job history](#people) | One proposed or reviewed link between a person and an X account. |
 | [people_brand_affiliation_evidence](#table-people_brand_affiliation_evidence) | [People and job history](#people) | One source observation supporting an affiliation claim. |
@@ -280,10 +280,7 @@ the detailed sections. Subject counts above sum to 128.
 | [targeted_extraction_states](#table-targeted_extraction_states) | [Collection, extraction, and processing records](#processing) | One post/role extraction state, used to avoid repeating the same work. |
 | [taxonomy_versions](#table-taxonomy_versions) | [Classification vocabularies and translated labels](#vocabularies) | One versioned taxonomy identity and its manifest. |
 | [trend_narrative_demands](#table-trend_narrative_demands) | [Authored content and trend publication](#headlines) | One coalesced brand/window headline request and its scheduling state. |
-| [trend_narrative_provider_calls](#table-trend_narrative_provider_calls) | [Authored content and trend publication](#headlines) | One recorded provider attempt for ranking, editing, or reviewing headlines. |
-| [trend_narrative_runs](#table-trend_narrative_runs) | [Authored content and trend publication](#headlines) | One common evidence cutoff for an all-brand headline run and time window. |
 | [trend_narrative_subjects](#table-trend_narrative_subjects) | [Authored content and trend publication](#headlines) | One reported subject attached to a headline publication. |
-| [trend_narrative_visible_runs](#table-trend_narrative_visible_runs) | [Authored content and trend publication](#headlines) | One currently visible run for a supported time window. |
 | [trend_narrative_work_slots](#table-trend_narrative_work_slots) | [Authored content and trend publication](#headlines) | One window’s active work claim and optional newer queued cutoff. |
 | [trend_narratives](#table-trend_narratives) | [Authored content and trend publication](#headlines) | One durable attempt/version of a shared time-window headline. |
 | [twitter_list_memberships](#table-twitter_list_memberships) | [Accounts, profiles, and lists](#accounts) | One account’s membership state in one X list. |
@@ -4294,9 +4291,9 @@ Model: [PostSynthesisRateLimitBucket](../../core/models.py#L2025).
 ## Authored content and trend publication
 
 Headline content, published selection, work ownership, and provider attempts
-are different records. `trend_narrative_runs` fixes a shared facts cutoff;
-`brand_trend_narratives` and their locale text rows hold prepared brand outcomes.
-`trend_narrative_visible_runs` points readers at the visible run for a window.
+are different records. `original_content_runs` fixes a shared facts cutoff;
+`original_content` and their locale text rows hold prepared brand outcomes.
+`original_content_selections` points readers at the visible run for a window.
 Work slots and demands coordinate preparation; provider-call rows record bounded
 attempts and costs. Existence of a prepared row alone does not prove it is
 currently visible.
@@ -4447,8 +4444,9 @@ None declared beyond field/FK/constraint indexes.
 [Back to table inventory](#table-inventory)
 
 <a id="table-trend_narrative_runs"></a>
+<a id="table-original_content_runs"></a>
 
-### `trend_narrative_runs` — OriginalContentRun
+### `original_content_runs` — OriginalContentRun
 
 One evidence preparation/dispatch execution and its immutable cutoff/configuration snapshot.
 
@@ -4486,8 +4484,8 @@ Model: [OriginalContentRun](../../core/models.py#L3844).
 
 **Named indexes:**
 
-- `idx_tnr_window_facts`: `CREATE INDEX "idx_tnr_window_facts" ON "trend_narrative_runs" ("window_days", "facts_as_of")`.
-- `idx_tnr_status_created`: `CREATE INDEX "idx_tnr_status_created" ON "trend_narrative_runs" ("status", "created_at")`.
+- `idx_tnr_window_facts`: `CREATE INDEX "idx_tnr_window_facts" ON "original_content_runs" ("window_days", "facts_as_of")`.
+- `idx_tnr_status_created`: `CREATE INDEX "idx_tnr_status_created" ON "original_content_runs" ("status", "created_at")`.
 
 **Named constraints:**
 
@@ -4503,8 +4501,9 @@ Model: [OriginalContentRun](../../core/models.py#L3844).
 [Back to table inventory](#table-inventory)
 
 <a id="table-brand_trend_narratives"></a>
+<a id="table-original_content"></a>
 
-### `brand_trend_narratives` — OriginalContent
+### `original_content` — OriginalContent
 
 One authored output version or held headline outcome, grouped by its producing workflow.
 
@@ -4515,7 +4514,7 @@ Model: [OriginalContent](../../core/models.py#L4260).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `run_id` | `bigint` | No | FK → [`trend_narrative_runs`](#table-trend_narrative_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
+| `run_id` | `bigint` | No | FK → [`original_content_runs`](#table-original_content_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
 | `brand_id` | `varchar(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
 | `brand_key_snapshot` | `varchar(64)` | No | Stored value. |
 | `brand_name_en_snapshot` | `text` | No | Stored value. |
@@ -4551,15 +4550,15 @@ Model: [OriginalContent](../../core/models.py#L4260).
 | `verified_at` | `timestamp with time zone` | Yes | Stored value. |
 | `attempted_at` | `timestamp with time zone` | No | Stored value. |
 | `error_code` | `varchar(64)` | No | Django default: `''` (not an assumed SQL default). |
-| `last_good_id` | `bigint` | Yes | FK → [`brand_trend_narratives`](#table-brand_trend_narratives) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `last_good`. |
+| `last_good_id` | `bigint` | Yes | FK → [`original_content`](#table-original_content) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `last_good`. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 
 **Named indexes:**
 
-- `idx_btn_brand_attempt`: `CREATE INDEX "idx_btn_brand_attempt" ON "brand_trend_narratives" ("brand_key_snapshot", "attempted_at" DESC)`.
-- `idx_btn_run_status`: `CREATE INDEX "idx_btn_run_status" ON "brand_trend_narratives" ("run_id", "status")`.
-- `idx_oc_subject_history`: `CREATE INDEX "idx_oc_subject_history" ON "brand_trend_narratives" ("subject_key", "workflow_key", "published_at" DESC, "id")`.
-- `idx_oc_workflow_feed`: `CREATE INDEX "idx_oc_workflow_feed" ON "brand_trend_narratives" ("workflow_key", "published_at" DESC)`.
+- `idx_btn_brand_attempt`: `CREATE INDEX "idx_btn_brand_attempt" ON "original_content" ("brand_key_snapshot", "attempted_at" DESC)`.
+- `idx_btn_run_status`: `CREATE INDEX "idx_btn_run_status" ON "original_content" ("run_id", "status")`.
+- `idx_oc_subject_history`: `CREATE INDEX "idx_oc_subject_history" ON "original_content" ("subject_key", "workflow_key", "published_at" DESC, "id")`.
+- `idx_oc_workflow_feed`: `CREATE INDEX "idx_oc_workflow_feed" ON "original_content" ("workflow_key", "published_at" DESC)`.
 
 **Named constraints:**
 
@@ -4577,8 +4576,9 @@ Model: [OriginalContent](../../core/models.py#L4260).
 [Back to table inventory](#table-inventory)
 
 <a id="table-brand_trend_narrative_texts"></a>
+<a id="table-original_content_texts"></a>
 
-### `brand_trend_narrative_texts` — OriginalContentText
+### `original_content_texts` — OriginalContentText
 
 One saved language/version with exact copy, a public UUID and producing-call provenance.
 
@@ -4589,13 +4589,13 @@ Model: [OriginalContentText](../../core/models.py#L4423).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `narrative_id` | `bigint` | No | FK → [`brand_trend_narratives`](#table-brand_trend_narratives) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `narrative`. |
+| `narrative_id` | `bigint` | No | FK → [`original_content`](#table-original_content) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `narrative`. |
 | `locale` | `varchar(8)` | No | Stored value. |
 | `headline` | `text` | No | Stored value. |
 | `secondary` | `text` | No | Stored value. |
 | `body` | `text` | No | Django default: `''` (not an assumed SQL default). |
 | `public_id` | `uuid` | Yes | Field-level unique. |
-| `producing_call_id` | `bigint` | Yes | FK → [`trend_narrative_provider_calls`](#table-trend_narrative_provider_calls) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `producing_call`. |
+| `producing_call_id` | `bigint` | Yes | FK → [`original_content_calls`](#table-original_content_calls) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `producing_call`. |
 | `provenance` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 
@@ -4612,8 +4612,9 @@ None declared beyond field/FK/constraint indexes.
 [Back to table inventory](#table-inventory)
 
 <a id="table-trend_narrative_visible_runs"></a>
+<a id="table-original_content_selections"></a>
 
-### `trend_narrative_visible_runs` — OriginalContentSelection
+### `original_content_selections` — OriginalContentSelection
 
 One selected all-brand window run or exact featured locale/version.
 
@@ -4626,8 +4627,8 @@ Model: [OriginalContentSelection](../../core/models.py#L4017).
 | `id` | `bigint` | No | PK; database-generated identity. |
 | `window_days` | `smallint` | Yes | PK. Nonnegative. Field-level unique. |
 | `scope_key` | `varchar(160)` | Yes | Field-level unique. |
-| `run_id` | `bigint` | Yes | FK → [`trend_narrative_runs`](#table-trend_narrative_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
-| `text_id` | `bigint` | Yes | FK → [`brand_trend_narrative_texts`](#table-brand_trend_narrative_texts) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `text`. |
+| `run_id` | `bigint` | Yes | FK → [`original_content_runs`](#table-original_content_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
+| `text_id` | `bigint` | Yes | FK → [`original_content_texts`](#table-original_content_texts) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `text`. |
 | `facts_as_of` | `timestamp with time zone` | No | Stored value. |
 | `activated_at` | `timestamp with time zone` | No | Stored value. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
@@ -4658,7 +4659,7 @@ Model: [TrendNarrativeWorkSlot](../../core/models.py#L3937).
 | `window_days` | `smallint` | No | PK. Nonnegative. PK component. |
 | `active_source_cycle_id` | `varchar(128)` | No | Django default: `''` (not an assumed SQL default). |
 | `active_facts_as_of` | `timestamp with time zone` | Yes | Stored value. |
-| `active_run_id` | `bigint` | Yes | FK → [`trend_narrative_runs`](#table-trend_narrative_runs) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `active_run`. |
+| `active_run_id` | `bigint` | Yes | FK → [`original_content_runs`](#table-original_content_runs) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `active_run`. |
 | `snapshot_claim_owner` | `varchar(128)` | No | Django default: `''` (not an assumed SQL default). |
 | `snapshot_claim_fence` | `integer` | No | Django default: `0` (not an assumed SQL default). |
 | `snapshot_claimed_at` | `timestamp with time zone` | Yes | Stored value. |
@@ -4735,8 +4736,9 @@ Model: [TrendNarrativeDemand](../../core/models.py#L4052).
 [Back to table inventory](#table-inventory)
 
 <a id="table-trend_narrative_provider_calls"></a>
+<a id="table-original_content_calls"></a>
 
-### `trend_narrative_provider_calls` — OriginalContentCall
+### `original_content_calls` — OriginalContentCall
 
 One provider attempt with its actual request identity, pessimistic reservation and completion/uncertainty state.
 
@@ -4747,7 +4749,7 @@ Model: [OriginalContentCall](../../core/models.py#L4151).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `run_id` | `bigint` | No | FK → [`trend_narrative_runs`](#table-trend_narrative_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
+| `run_id` | `bigint` | No | FK → [`original_content_runs`](#table-original_content_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
 | `stage` | `varchar(200)` | No | Stored value. |
 | `batch_key` | `varchar(200)` | No | Django default: `''` (not an assumed SQL default). |
 | `request_identity` | `varchar(128)` | No | Stored value. |
@@ -4783,9 +4785,9 @@ Model: [OriginalContentCall](../../core/models.py#L4151).
 
 **Named indexes:**
 
-- `idx_tnpc_claim_due`: `CREATE INDEX "idx_tnpc_claim_due" ON "trend_narrative_provider_calls" ("state", "claim_expires_at")`.
-- `idx_tnpc_run_stage`: `CREATE INDEX "idx_tnpc_run_stage" ON "trend_narrative_provider_calls" ("run_id", "stage")`.
-- `idx_oc_call_budget`: `CREATE INDEX "idx_oc_call_budget" ON "trend_narrative_provider_calls" ("budget_scope", "budget_day")`.
+- `idx_tnpc_claim_due`: `CREATE INDEX "idx_tnpc_claim_due" ON "original_content_calls" ("state", "claim_expires_at")`.
+- `idx_tnpc_run_stage`: `CREATE INDEX "idx_tnpc_run_stage" ON "original_content_calls" ("run_id", "stage")`.
+- `idx_oc_call_budget`: `CREATE INDEX "idx_oc_call_budget" ON "original_content_calls" ("budget_scope", "budget_day")`.
 
 **Named constraints:**
 
@@ -4816,7 +4818,7 @@ Model: [OriginalContentSource](../../core/models.py#L4469).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `text_id` | `bigint` | No | FK → [`brand_trend_narrative_texts`](#table-brand_trend_narrative_texts) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `text`. |
+| `text_id` | `bigint` | No | FK → [`original_content_texts`](#table-original_content_texts) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `text`. |
 | `post_id` | `text` | No | FK → [`posts`](#table-posts) (`tweet_id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `post`. |
 | `position` | `smallint` | No | Stored value. |
 | `url_snapshot` | `varchar(4096)` | No | Stored value. |
@@ -5052,8 +5054,9 @@ None beyond the keys and field checks described above.
 [Back to table inventory](#table-inventory)
 
 <a id="table-editorial_pictures"></a>
+<a id="table-content_pictures"></a>
 
-### `editorial_pictures` — ContentPicture
+### `content_pictures` — ContentPicture
 
 One optional generic source/derivative attachment, with protected optional shared text/run relationships.
 
@@ -5068,8 +5071,8 @@ Model: [ContentPicture](../../core/models.py#L8170).
 | `content_id` | `varchar(160)` | No | Stored value. |
 | `source_platform` | `varchar(24)` | No | Django default: `'x'` (not an assumed SQL default). |
 | `revision_hash` | `varchar(64)` | No | Stored value. |
-| `text_id` | `bigint` | Yes | FK → [`brand_trend_narrative_texts`](#table-brand_trend_narrative_texts) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `text`. |
-| `run_id` | `bigint` | Yes | FK → [`trend_narrative_runs`](#table-trend_narrative_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
+| `text_id` | `bigint` | Yes | FK → [`original_content_texts`](#table-original_content_texts) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `text`. |
+| `run_id` | `bigint` | Yes | FK → [`original_content_runs`](#table-original_content_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
 | `assessment_id` | `bigint` | Yes | FK → [`editorial_assessments`](#table-editorial_assessments) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `assessment`. |
 | `person_media_id` | `bigint` | Yes | FK → [`people_media`](#table-people_media) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `person_media`. |
 | `source_media_id` | `varchar(64)` | Yes | FK → [`staff_media_objects`](#table-staff_media_objects) (`sha256`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_media`. |
@@ -5087,7 +5090,7 @@ Model: [ContentPicture](../../core/models.py#L8170).
 
 **Named indexes:**
 
-- `idx_editorial_picture_poll`: `CREATE INDEX "idx_editorial_picture_poll" ON "editorial_pictures" ("state", "next_poll_at")`.
+- `idx_editorial_picture_poll`: `CREATE INDEX "idx_editorial_picture_poll" ON "content_pictures" ("state", "next_poll_at")`.
 
 **Named constraints:**
 
@@ -5785,7 +5788,7 @@ Reservations commit before HTTP. They count toward lifetime per-person, per-run 
 
 [Back to table inventory](#table-inventory)
 
-## Compatibility view and schema boundary
+## Compatibility views and schema boundary
 
 `trend_narrative_versions` is a PostgreSQL **view**, outside the application-table count, with no Django model. [Migration 0014](../../core/migrations/0014_expand_trend_narrative.py)
 creates it with `SELECT * FROM trend_narratives`. PostgreSQL fixes that view’s
@@ -5793,11 +5796,29 @@ column list at creation; do not assume later table columns automatically appear
 in the existing view. Inspect the deployed view definition before relying on
 its exact column set.
 
-The column/type/index inventory above was reconciled with all 128 concrete
-`core` models and the final migration state through migration 0068. Raw SQL
+[Migration 0079](../../core/migrations/0079_original_content_physical_names.py)
+adds six temporary writable views after atomically renaming their base tables:
+
+| Old-name view | Canonical base table |
+| --- | --- |
+| `brand_trend_narratives` | `original_content` |
+| `brand_trend_narrative_texts` | `original_content_texts` |
+| `trend_narrative_runs` | `original_content_runs` |
+| `trend_narrative_provider_calls` | `original_content_calls` |
+| `trend_narrative_visible_runs` | `original_content_selections` |
+| `editorial_pictures` | `content_pictures` |
+
+These views select the unchanged columns; they contain no copied rows. Runtime
+models target canonical base tables. Table, FK, index, constraint and sequence
+identities are preserved, including existing sequence names. Lock waits are
+bounded to five seconds in both migration directions. Alias removal is separately
+scoped after the rollback period and verification of all consumers.
+
+The column/type/index inventory above was reconciled with all 151 concrete
+`core` models and the final migration state through migration 0079. Raw SQL
 migrations additionally supply the account-handle expression index, the named
 account-country FK, the two explicit SQL delete actions on posts, the ICU
-collation, the person-name selection/immutability triggers, and this compatibility view. Application-level validators and
+collation, the person-name selection/immutability triggers, and these compatibility views. Application-level validators and
 reader/writer behavior still matter; a database check does not prove that a
 real-world identity or source claim is true.
 

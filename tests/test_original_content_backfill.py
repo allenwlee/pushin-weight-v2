@@ -184,7 +184,7 @@ def test_history_stream_does_not_materialize_one_large_run_snapshot_per_headline
         with CaptureQueriesContext(connection) as queries:
             assert backfill_original_content(apply=apply, batch_size=2)["ready"]
         snapshot_reads = [q["sql"] for q in queries
-                          if '"trend_narrative_runs"."snapshot"' in q["sql"]
+                          if f'"{OriginalContentRun._meta.db_table}"."snapshot"' in q["sql"]
                           and "SELECT" in q["sql"]]
         assert snapshot_reads
         assert all("JOIN" not in sql for sql in snapshot_reads)

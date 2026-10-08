@@ -3879,7 +3879,7 @@ class OriginalContentRun(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "trend_narrative_runs"
+        db_table = "original_content_runs"
         constraints = [
             models.UniqueConstraint(
                 fields=["source_cycle_id", "window_days"],
@@ -4032,7 +4032,7 @@ class OriginalContentSelection(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "trend_narrative_visible_runs"
+        db_table = "original_content_selections"
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(window_days__in=[1, 7, 30, 365]),
@@ -4202,7 +4202,7 @@ class OriginalContentCall(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "trend_narrative_provider_calls"
+        db_table = "original_content_calls"
         constraints = [
             models.UniqueConstraint(
                 fields=["run", "stage", "batch_key"],
@@ -4348,7 +4348,7 @@ class OriginalContent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "brand_trend_narratives"
+        db_table = "original_content"
         constraints = [
             models.UniqueConstraint(
                 fields=["run", "workflow_key", "output_key"],
@@ -4446,7 +4446,7 @@ class OriginalContentText(models.Model):
         return self.secondary
 
     class Meta:
-        db_table = "brand_trend_narrative_texts"
+        db_table = "original_content_texts"
         constraints = [
             models.UniqueConstraint(
                 fields=["narrative", "locale"],
@@ -8197,7 +8197,7 @@ class ContentPicture(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = "editorial_pictures"
+        db_table = "content_pictures"
         constraints: ClassVar[list] = [
             models.UniqueConstraint(
                 fields=["content_kind", "content_id", "revision_hash"],

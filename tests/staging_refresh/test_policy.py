@@ -73,6 +73,19 @@ def test_loads_the_tracked_exhaustive_policy() -> None:
     assert "auth_user" in policy.relations.excluded_tables
     assert "posts" in policy.relations.copied_tables
     assert "trend_narrative_versions" in policy.relations.views
+    aliases = {
+        "brand_trend_narratives",
+        "brand_trend_narrative_texts",
+        "trend_narrative_runs",
+        "trend_narrative_provider_calls",
+        "trend_narrative_visible_runs",
+        "editorial_pictures",
+    }
+    assert aliases <= policy.relations.views
+    assert aliases.isdisjoint(policy.relations.classified_tables)
+    assert aliases.isdisjoint(policy.scrub.truncate_tables)
+    assert "original_content_sources" in policy.relations.excluded_tables
+    assert "original_content_sources" in policy.scrub.truncate_tables
     assert policy.validation.forward_migration_count_deltas == {}
     assert policy.validation.forward_migration_translation_count_deltas == {}
     assert {"brands", "brands_companies", "companies"} <= set(
@@ -154,11 +167,11 @@ def test_migration_graph_tables_are_exhaustively_classified() -> None:
 def test_per_brand_headline_graph_is_environment_local_state() -> None:
     policy = load_policy(POLICY_PATH)
     runtime_tables = {
-        "trend_narrative_runs",
-        "brand_trend_narratives",
+        "original_content_runs",
+        "original_content",
         "trend_narrative_work_slots",
-        "trend_narrative_provider_calls",
-        "trend_narrative_visible_runs",
+        "original_content_calls",
+        "original_content_selections",
     }
 
     assert runtime_tables <= policy.relations.excluded_tables
@@ -298,7 +311,7 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "editorial_calls",
         "editorial_editions",
         "editorial_heroes",
-        "editorial_pictures",
+        "content_pictures",
         "editorial_stories",
         "official_company_account_states",
         "official_company_attempts",
@@ -361,7 +374,8 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "targeted_extraction_attempts",
         "targeted_extraction_states",
         "trend_narrative_demands",
-        "brand_trend_narrative_texts",
+        "original_content_texts",
+        "original_content_sources",
         "post_synthesis_artifacts",
         "post_synthesis_daily_budgets",
         "post_synthesis_demands",
@@ -381,10 +395,15 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "rare_type_search_runs",
     } == policy.relations.optional_source_tables
 
+    # Table renames retain owned sequence names; do not invent renamed sequences.
+    sequence_prefix = {
+        "metrics": "source_metrics",
+        "original_content_texts": "brand_trend_narrative_texts",
+    }
     assert {
-        f"{'source_metrics' if table == 'metrics' else table}_id_seq"
+        f"{sequence_prefix.get(table, table)}_id_seq"
         for table in policy.relations.optional_source_tables
-        if f"{'source_metrics' if table == 'metrics' else table}_id_seq" in policy.relations.sequences
+        if f"{sequence_prefix.get(table, table)}_id_seq" in policy.relations.sequences
     } == policy.relations.optional_source_sequences
 
 

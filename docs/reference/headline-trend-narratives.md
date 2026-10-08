@@ -1,8 +1,8 @@
 # Per-brand trend narratives
 
 Persistence is shared through [OriginalContent](original-content.md), with exact
-locale/version citations and producing calls. Compatibility mappings keep
-existing physical names. All-brand activation, last-good behavior, ranking and
+locale/version citations and producing calls. Tables use canonical OriginalContent
+names, with temporary writable old-name views for deployment overlap. All-brand activation, last-good behavior, ranking and
 critic stages remain governed by this headline contract.
 
 Version: v0.2.0-beta.1

@@ -5,24 +5,35 @@ material. Each saved language/version owns its headline, byline, optional body,
 producing-call reference and exact cited posts. Counts measure distinct posts,
 not independent publishers or verified confirmations.
 
-Compatibility delivery retains physical names and Python import aliases. The
-source join is the only new table. Full column, key and constraint details for
+The shared tables use their OriginalContent names; Python import aliases and
+six temporary writable views preserve older consumers. The source join is the
+only added application table. Full column, key and constraint details for
 all seven models below are in the linked schema sections, verified against
-models/migration state through `0078_original_content_workflow_shape`.
+models/migration state through `0079_original_content_physical_names`.
 
 | Model | Physical table | One record means |
 | --- | --- | --- |
-| OriginalContent | [brand_trend_narratives](db-schema.md#table-brand_trend_narratives) | One output version or held headline outcome. |
-| OriginalContentText | [brand_trend_narrative_texts](db-schema.md#table-brand_trend_narrative_texts) | One saved language/version with its public UUID. |
+| OriginalContent | [original_content](db-schema.md#table-original_content) | One output version or held headline outcome. |
+| OriginalContentText | [original_content_texts](db-schema.md#table-original_content_texts) | One saved language/version with its public UUID. |
 | OriginalContentSource | [original_content_sources](db-schema.md#table-original_content_sources) | One distinct cited post for that text, in citation order. |
-| OriginalContentRun | [trend_narrative_runs](db-schema.md#table-trend_narrative_runs) | One evidence/dispatch execution, cutoff, configuration and claim. |
-| OriginalContentCall | [trend_narrative_provider_calls](db-schema.md#table-trend_narrative_provider_calls) | One reserved provider attempt and its completion/uncertainty state. |
-| OriginalContentSelection | [trend_narrative_visible_runs](db-schema.md#table-trend_narrative_visible_runs) | A selected all-brand window or exact featured text. |
-| ContentPicture | [editorial_pictures](db-schema.md#table-editorial_pictures) | A generic source/derivative attachment with optional text/run references. |
+| OriginalContentRun | [original_content_runs](db-schema.md#table-original_content_runs) | One evidence/dispatch execution, cutoff, configuration and claim. |
+| OriginalContentCall | [original_content_calls](db-schema.md#table-original_content_calls) | One reserved provider attempt and its completion/uncertainty state. |
+| OriginalContentSelection | [original_content_selections](db-schema.md#table-original_content_selections) | A selected all-brand window or exact featured text. |
+| ContentPicture | [content_pictures](db-schema.md#table-content_pictures) | A generic source/derivative attachment with optional text/run references. |
 
 `TrendNarrative`, trend work slots/demands, staff media objects and people media
 remain separate. Pictures retain atomic commentary and other generic attachment
 kinds. Image selection/generation metadata does not become a post citation.
+
+Migration `0079` renames six existing tables and creates their old-name views in
+one transaction. Rows, IDs, foreign keys, named constraints and owned sequences
+retain their identities. Views contain no copied rows. Runtime ORM queries use
+the canonical tables; old processes can read/write through the aliases during
+deployment or compatible code rollback. Refreshes classify aliases as views,
+never tables to copy or truncate. Lock waits are bounded to five seconds and
+individual migration statements to thirty seconds; a failure rolls back the
+entire change. Reverse migration drops aliases before restoring old table names
+and requires draining canonical-name consumers. Alias removal is a later release.
 
 ## Versions, workflows and citations
 
