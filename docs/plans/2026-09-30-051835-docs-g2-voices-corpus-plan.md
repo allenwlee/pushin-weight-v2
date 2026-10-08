@@ -35,7 +35,7 @@ The owner now authorizes implementation and verified staging delivery. Productio
 - **Means:** Headline-first schema consolidation (KTD10), shared packet-maker (KTD16), and profile-specific final writing (KTD17).
 - **Authority:** Current owner instructions; G2-R43/R48/R50–R54 in the authoritative General Launch Charter; this current execution contract; historical release evidence.
 - **Endpoint:** Implement, test, review and deploy this contract to staging under the October 8 LFG request. Production is excluded. Observe the seven-day rollback safeguard before destructive retirement.
-- **Execution scope:** U9–U15 are the proposed remaining work. U1–U8 and completed October releases are retained as historical evidence and must not be rerun.
+- **Execution scope:** U9–U15 are the consolidation units. U9–U14 and the compatible staging phase are complete in the October 8 receipt below. U15 physical retirement remains gated. U1–U8 and completed October releases are historical evidence and must not be rerun.
 - **Stop conditions:** Escalate a material contradiction of the owner-selected architecture or an unresolved migration discrepancy. Missing historical data must be reported, never replaced with invented evidence.
 
 ---
@@ -441,9 +441,29 @@ A later delivery follows the owner-selected endpoint and current Ollija guide. D
 
 ## Definition of Done
 
-The plan-writing request is fulfilled by this completed execution contract and its embedded schema image. No implementation/test/deployment result is claimed now.
+The plan-writing request was fulfilled by the execution contract and its embedded schema image. The October 8 receipt below records subsequent implementation and staging verification.
 
 Future implementation completes when U9–U15 satisfy their verification outcomes: all three outputs use shared content/text/citations and call provenance, all active preparation paths use packet-maker, current behavior passes its regression net, and obsolete storage retires after KTD18's safeguards. Source counts/URLs are relational and inspectable for each saved language/version. URLs, pictures, budget ceilings, uncertainty, last-good and all-brand visibility survive migration. Abandoned code is removed; references describe the actual implemented state. Paid semantic quality remains unproven unless separately evaluated.
+
+---
+
+## October 8 compatible staging release receipt
+
+**Endpoint:** The authorized compatible phase is deployed and verified on staging at `900d0b14976ec74bfeca42349249dd966968e2e7`. This receipt is a documentation-only follow-up on `feat/g2-editorial`; staging retains that tested application revision. Production was not changed. Both production web and headline worker were observed live at the independent benchmark revision `dcbedf22d1cd70b4c0d54822980afda70b4f85c8`.
+
+**Implementation:** U9–U14 are implemented. Existing headline tables now support `OriginalContent`, localized text, producing workflows and a shared call ledger. The sole added application table is `original_content_sources`, with real post foreign keys and ordered URL snapshots; displayed source counts come from those links. Chatter/Pulse publication and readers use the compatible shared adapter. All three preparation paths use immutable packet-maker inputs while retaining their existing generation stages, models, limits and quality requirements. U15 operating references and the guarded retirement report are implemented; six-table deletion, physical renames and replacement of the remaining compatibility writers are not complete.
+
+**Verification:** The final editorial/headline suite passed 550 tests, including 317 required PostgreSQL tests with no skips or errors. The two reproduced review fixes passed 12 cutover/import tests and nine assurance-binding tests. The exact candidate passed 267 UI tests plus 67 subtests, 102 PostgreSQL checks, all 5,028 assurance obligations, and the blocking local performance contract. Mobile Lighthouse largest-contentful-paint was 7,079 ms against a 6,000 ms advisory target; this was not a passed advisory threshold. Owned lint, migration drift, Django checks, whitespace and Ollija checks passed. Simplification and persona reviews were performed sequentially in the main agent. Claude external review returned insufficient balance; the permitted Grok replacement timed out. An in-process adversarial review completed, without independent corroboration.
+
+**Iteration and savings:** One offline writing-boundary iteration used the frozen seven-case acceptance set; no provider request or new live-quality trial was made. Removing only the duplicate source-provenance instruction reduced actual request bytes from 106,306 to 105,431: 875 bytes, or 0.823%. Source IDs, schema, grounding instructions and call stages are unchanged; zero calls were removed. No larger token-cost or semantic-quality gain is claimed.
+
+**Staging data and activation:** Read-only inventory preceded migrations `0075`–`0078`. The staging headline worker was paused; a temporary candidate-only startup guard prevented an older process from consuming jobs when Render required resumption before deployment. Its original Celery start command is restored. Bounded import reconciled 13 assessments, 15 calls, two English editions, both relational citations and the featured pointer without exceptions. All 145 unaffected table counts and eight checksums over original editorial/product fields match the inventory, including the existing benchmark records. Both services are live with `ORIGINAL_CONTENT_STORAGE=shared` and mirroring enabled; their original automatic-deploy-off settings, build commands and other staging service states are preserved. Generation/public access remain disabled on staging.
+
+**Reader proof and limits:** The local browser checked the home/story surfaces and complete two-source attribution. On deployed staging, staff-authorized native view requests returned 200 for both saved articles and archives in `en`, `zh-cn` and `ja`, preserving the source count and URL in every view. Chinese/Japanese requests serve the saved English text with localized fallback copy; only English voices are bound, and no new Chinese/Japanese voice was created. The staging browser verified the unchanged login wall and health route; external Google sign-in was not exercised. Both copied picture records are intact, but their files are unavailable in staging storage. Legacy and shared asset routes both return 404; positive picture access is covered by the isolated regression suite, not claimed as a staging asset success.
+
+**Retirement remains pending:** The observed shared cutover receipt is `2026-10-08T06:06:52.100932+00:00` (15:06:52 JST). Earliest possible retirement is October 15 at 15:06:52 JST. Elapsed time alone is insufficient: `monitor.editorial.service`, `monitor.editorial.persistence` and `monitor.editorial.evidence` still use legacy compatibility records, and an encrypted backup restore must be proven before any destructive migration. The retirement command correctly reports `ready=false`; no drop migration was shipped. Keep this staging worktree and rollback records for the later U15 completion.
+
+**Evidence:** Private host-owned artifacts are under `.local/g2-original-content-20261008/`: `final-regressions.txt`, `review.json`, `assurance-candidate-final.txt`, `performance-result.json`, `preservation.json`, `runtime-shared-{web,headlines}.txt`, `views-shared-web.txt`, `cutover-web.txt` and `final-services.json`. The final live deployments are `dep-db3j3ul9fdbs73e1h5jg` (web) and `dep-db3j3uvlk1mc73bopoq0` (headline worker). The remote staging branch resolves to the tested candidate. No production mutation, harvester activation or paid generation was performed.
 
 ---
 
