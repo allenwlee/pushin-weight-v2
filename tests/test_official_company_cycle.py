@@ -317,3 +317,33 @@ def test_scheduled_dispatch_persists_multiple_offering_categories_without_auto_i
     assert state.decision["offering_categories"] == ["harness", "other"]
     assert state.status == "review_needed" and state.last_error == "human_review_required"
     assert not OfficialCompanyListIntent.objects.exists()
+
+
+def test_scheduled_extractor_resumes_legacy_native_account_cursor():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from core.models import OfficialCompanyAttempt, OfficialCompanyScan
+    from core.official_company_accounts import POLICY_VERSION
+
+    at = timezone.now() - timedelta(hours=1)
+    account = Account.objects.create(
+        author_id="12345", handle="voice_lab",
+        bio="We are Voice Lab. We release our own speech models.",
+        verified_type="Business",
+    )
+    Account.objects.filter(pk=account.pk).update(last_seen_at=at)
+    OfficialCompanyScan.objects.create(
+        key="account-observations",
+        cursor=json.dumps({"at": at.isoformat(), "pk": account.author_id}),
+    )
+    runner = CycleRunner(cfg=config(), cycle_kind="scheduled", _official_company_call=accept)
+    result = runner._run_official_company_discovery(
+        run_id="legacy-cursor-cycle", deadline=runner.cfg.harvest.start_deadline(),
+    )
+    assert result["status"] == "complete" and result["attempted"] == 1
+    attempt = OfficialCompanyAttempt.objects.get()
+    assert attempt.status == "completed" and attempt.policy_version == POLICY_VERSION
+    assert attempt.decision["offering_categories"] == ["model-other"]
+    assert OfficialCompanyAccountState.objects.get(account=account).status == "review_needed"
