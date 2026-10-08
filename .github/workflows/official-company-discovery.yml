@@ -55,6 +55,7 @@ jobs:
           tests/test_official_company_accounts.py tests/test_official_company_hf.py tests/test_official_company_account_schema.py
           tests/test_official_company_registration.py tests/test_official_company_scan.py
           tests/test_official_company_cycle.py tests/test_official_company_credentials.py
+          tests/test_official_company_induction.py
           tests/test_official_company_recurring_learnings.py tests/test_official_company_requalification.py
           tests/test_official_company_list_sync.py tests/test_call_a_role_routing.py
           tests/test_targeted_extraction.py tests/test_targeted_extraction_model_route.py

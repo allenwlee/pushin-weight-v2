@@ -176,8 +176,8 @@ def test_owner_amended_candidate_prompt_is_versioned_and_pinned():
 
     from core.official_company_accounts import POLICY_VERSION, SYSTEM_PROMPT
 
-    assert POLICY_VERSION == "official-ai-product-developer-v3"
-    assert hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest() == "79c370c67f9717bd408b60210b4f8262d3b93817c03504c89f4dc135dc972c7d"
+    assert POLICY_VERSION == "official-ai-offerings-v4"
+    assert hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest() == "3b087f5ee565b361db0e859ca53261b41e331c8b025eec1733413640660fbda7"
 
 
 @pytest.mark.parametrize("signal", ["blockchain", "Web3", "web-3", "区块链", "ブロックチェーン"])

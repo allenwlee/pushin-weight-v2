@@ -61,14 +61,16 @@ def nomination(system, user, model, max_tokens):
     evidence = json.loads(user)
     quote = evidence["sources"][0]["text"]
     kind = "harness" if "harness" in quote else "agent"
-    assert "Agent/harness developers need not develop" in system
+    assert "harness" in system and "third-party" in system
     citation = {"source_id": "post:1", "quote": quote}
     return {
-        "outcome": "accepted", "organization_name": "Example Company", "development_type": kind,
-        "model_types": [], "rationale": "Supplied own-product development evidence", "contradictions": [],
-        "claims": {key: [citation] for key in ["organization", "official_account", "product_developer"]},
-        "usage": {"input_tokens": 100, "output_tokens": 100},
+        "organization_name": "Example Company", "account_presentation": "company_account",
+        "identity_rationale": "Supplied own-product development evidence", "identity_citations": [citation],
+        "products": [{"name": "Own product", "type": kind, "contribution": "own_" + kind,
+                      "rationale": "Developed product", "citations": [citation]}],
+        "uncertainties": [], "usage": {"input_tokens": 100, "output_tokens": 100},
     }
+
 
 
 def test_command_rerun_has_fixed_population_and_preserves_old_results(cohort_command):
@@ -189,3 +191,34 @@ def test_envelope_block_finishes_without_a_paid_attempt(cohort_command):
     result = cohort_command(call, manifest([a]))
     assert result["complete"] and result["failed"] == 1 and result["qualified"] == 0
     assert call.call_count == 0 and not a.attempt_records.exists()
+
+
+def test_completed_v3_cohort_report_does_not_follow_v4_or_owner_induction():
+    from core.models import OfficialCompanyScan
+    from core.official_company_requalification import COHORT_KEY
+
+    a = state(981098)
+    started = timezone.now() - timedelta(minutes=1)
+    members = [{"state_id": a.pk, "account_id": str(a.account_id), "evidence_hash": a.evidence_hash, "baseline_outcome": "review_needed"}]
+    OfficialCompanyScan.objects.create(key=COHORT_KEY, started_at=started, population=1,
+        cursor=json.dumps({"identity": "frozen", "policy_version": "official-ai-product-developer-v3", "members": members, "queued": [a.pk], "excluded": {}}))
+    old = {"outcome": "accepted", "organization_name": "Example Company", "development_type": "agent"}
+    OfficialCompanyAttempt.objects.create(state=a, evidence_hash=a.evidence_hash, claim_token="v3", model="old", policy_version="official-ai-product-developer-v3", status="completed", decision=old, reserved_usd=0, actual_usd=0)
+    before = cohort_report()
+    OfficialCompanyAttempt.objects.create(state=a, evidence_hash=a.evidence_hash, claim_token="v4", model="new", policy_version=POLICY_VERSION, status="completed", decision={"outcome": "rejected"}, reserved_usd=0, actual_usd=0)
+    OfficialCompanyAttempt.objects.create(state=a, evidence_hash=a.evidence_hash, claim_token="owner", model="owner-attestation", policy_version="owner-cohort:test", status="owner_attested", decision={"outcome": "accepted"}, reserved_usd=0, actual_usd=0)
+    a.status = "registered"
+    a.model = "owner-attestation"
+    a.save()
+    assert cohort_report() == before
+    assert before["qualified"] == 1 and before["agent"] == 1
+
+
+def test_new_offering_cohort_counts_own_services(cohort_command):
+    a = state(99701, "AI platform service")
+    def own_service(*args):
+        response = nomination(*args)
+        response["products"][0].update(type="other", contribution="own_platform_service")
+        return response
+    result = cohort_command(Mock(side_effect=own_service), manifest([a]))
+    assert result["complete"] and result["qualified"] == result["other"] == 1
