@@ -107,6 +107,101 @@ October 9 X research in the shared index.
 every consumer path. Browser JSON and a loopback mock server do not establish a
 public API contract. Native posting permission and login remain separate.
 
+### G4 session-clear handoff — October 9
+
+Owner requested this supplement before clearing `g4-mcp-scaffold-20261006`.
+This is the existing G4 continuity record, not a new implementation plan. Start
+round two with B2-G4-01/02 sharing/X and carry the unfinished MCP work under
+B2-G4-03. The full prediction/MCP offering is not automatically part of the next
+beta. No new implementation, account connection, posting or delivery endpoint
+was selected by this handoff request.
+
+**What exists and where:**
+
+- [Closed round-one MCP/API draft](../plans/2026-10-07-053244-feat-g4-mcp-plan.md):
+  requirements R1–R10, architecture KTD1–KTD5, proposed tools/events, open
+  decisions O1–O7 and future units U1–U6. The draft-planning pass completed;
+  none of those implementation units was executed in this session. Formal
+  implementation-readiness review and application tests were not performed.
+- [Offering discovery](2026-10-06-210526-g4-mcp-offering-and-scaffold.md):
+  offering/transport options and initial disclosure questions. Its technical
+  recommendations are proposals, not owner selections or current SDK guarantees.
+- Retained machine-local worktree:
+  `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g4-mcp`, branch
+  `feat/g4-mcp`, inspected at `d66d8508`. The draft is untracked there; a published copy now exists at the link above.
+  There is
+  no G4 runtime implementation, dependency installation, provider call,
+  database change, live analytics or deployed MCP server from this session.
+  Preserve the worktree. The authoritative root is also a dirty coordination
+  checkout; neither checkout is the current deployed application. This supplement is published by the later owner-authorized G4 handoff commit;
+  application implementation remains unchanged.
+
+**Technical recommendations worth retaining:** use a shared approved-output
+layer behind HTTP and a maintained Python MCP SDK, with hosted Streamable HTTP
+as the recommended offering. Keep the existing production WSGI process intact
+while evaluating a separate local MCP entry point. G5's handwritten loopback
+sample is design evidence only. Choose released SDK/protocol versions against
+the actual first clients when implementation starts.
+
+Saved reads and status polling should never start paid computation. If private
+scenarios are selected, explicitly request work through G3-owned operations,
+with authenticated ownership, idempotency and separate read/write permissions.
+Do not duplicate G3's calculations, jobs, forecast storage or cost ledger.
+Return explicit public projections rather than internal reader/database rows;
+apply current disclosure/source-use rules on cached delivery as well as creation.
+
+**Unresolved choices:** agents reading forecasts versus also submitting private
+scenario answers was asked but never answered. OAuth provider/first supported
+clients, quotas and deployment topology remain open. Distinguish omission of
+author identity from guaranteed anonymity: a source link can reveal the author.
+Named subjects, media and generated prose still need an explicit output decision.
+The inherited MCP restrictions cover metadata, errors and cached results too.
+Do not silently apply an MCP identity restriction to all website sharing, or
+assume a website-approved export is automatically MCP-approved; reconcile each
+surface with the charter. Agent support/interest writes remain a separate choice
+from reads or scenario requests; consume G3's later support-vote contract rather
+than treating the old draft event names as settled.
+
+**PostHog is a separate initial-setup task.** On October 8 the owner requested
+another session outside G1–G5 for initial setup, wanting to enter account/billing
+details once and let the agent handle routine integration and dashboards. Do not
+reopen the earlier vendor comparison as a G4 prerequisite. The scoped proposal
+was browser pageviews, stable logged-in identity, ordinary Django events and a
+starter dashboard. No PostHog installation or account access occurred here;
+another session's subsequent progress has not been checked. Its temporary
+handoff is machine-local at
+`/tmp/compound-engineering-501/ce-handoff/pushin-weight-v2-aff2eb3769a9/2026-10-08-121446-posthog-initial-setup.md`;
+it may be cleared by the OS, so this paragraph preserves the essential boundary.
+G3/G4-specific prediction/MCP events remain future integration. PostHog's
+management MCP/API for creating dashboards is distinct from its optional MCP
+analytics wrapper; ordinary browser/server events do not require that wrapper.
+
+Retain these measurement distinctions: trusted `web`/`mcp`/`api` channel and
+authenticated account identity are separate; a tool call does not prove human
+viewing or intent. Count polls/retries separately from accepted operations and
+explicit support. Use bounded metadata without private scenario answers or raw
+content. Canonical interest, computation and cost counts belong in the database,
+not an analytics delivery queue. The closed draft's detailed event names and
+visibility thresholds remain proposals.
+
+**Round-two starting point:** agree the shared content/edition/locale, chart
+state/cutoff and media-variant example with G2/G3/G5 and G1 before overlapping
+edits. G4 preserves and distributes that state; G3 validates/calculates/renders
+it. Fixed snapshots versus live charts, durable publication retention and
+recipient language behavior need explicit contracts. Reuse the October 9 X
+research in the index, then verify actual access/permissions and current rules
+within the selected work; mandatory X login remains an option, and login is
+separate from permission to publish a user-reviewed post. Recheck current
+OriginalContent and benchmark contracts: the old MCP draft predates their later
+delivery. Source-use approval for public forecasts/API/export is distinct from
+collection availability. G4-R06 still governs final MCP integration; it does not
+create a blanket wait for independent sharing design or PostHog setup.
+
+When a bounded implementation is selected, use Ollija in the intended round-two
+branch/worktree and enrich its returned plan. Keep this closed draft as source
+material and new execution in that successor. Preserve other sessions' files,
+services and G5's dirty implementation; claim only the selected G4 surfaces.
+
 ## G5 — General-page integration and release preparation
 
 **Starting assets:** accepted General design, real lower feeds, permanent Post

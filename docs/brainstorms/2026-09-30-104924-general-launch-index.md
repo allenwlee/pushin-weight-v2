@@ -69,7 +69,7 @@ successor notes; their implementation/delivery outcomes remain unchanged.
 | G1 / round 2 | Assets, graphicsed and inherited identity/acquisition work | Open for planning; no implementation claim |
 | G2 / round 2 | ja/zh_cn voices, chart editorial rules, retention and remaining editorial work | Open for planning; no implementation claim |
 | G3 / round 2 | Reusable chart engine and inherited analysis/forecast design | Open for planning; no implementation claim |
-| G4 / round 2 | Sharing/X and inherited API/MCP work | Open for planning; no implementation claim |
+| G4 / round 2 | Sharing/X and inherited API/MCP work | [Session-clear handoff](2026-10-09-110145-general-round-two.md#g4-session-clear-handoff--october-9) recorded by `g4-mcp-scaffold-20261006`; open for planning, no implementation claim |
 | G5 / round 2 | General integration and inherited local release preparation | Open for planning; preserve local code |
 
 Keep detailed new execution in the selected round-two plans. Existing independent
@@ -1409,3 +1409,11 @@ on October 1 as a separate workstream, with continuous design changes expected.
 - 2026-10-09T13:20:57+09:00 ON — G1–G5 docs publication / general-round2-docs-publish-20261009: owner requests commit-and-push of updated coordination records. Prepare a dedicated documentation branch from current main; preserve unrelated root reference work, canonical implementation checkouts and the active benchmark metric-window owner.
 
 - 2026-10-09T13:27:32+09:00 OFF — G1–G5 docs publication / general-round2-docs-publish-20261009: pushed and verified `7babf0228bf7a885931829a2c94dd0245683a64d` on `docs/general-round-two-records`; selected coordination, closure, vocabulary and learning records are remote. No merge/deployment performed. Publication claim closed; preserve other sessions and the independent metric-window owner.
+
+- 2026-10-09T14:49:14+09:00 ON — g4-mcp-scaffold-20261006 / G4 round 2: owner requests session-clear continuity in the existing handoff; own G4 section of round-two register and narrow index updates only. Preserve closed draft, other stream sections and all runtime work.
+
+- 2026-10-09T14:50:22+09:00 OFF — g4-mcp-scaffold-20261006 / G4 round 2: enriched existing G4 carry-forward handoff with exact draft/worktree state, open disclosure/auth/scenario choices, independent PostHog setup boundary and sharing/X entry point. Local links/whitespace pass; non-G4 register sections and closed G4 plan unchanged. Release own documentation claim; no new plan, implementation, account/provider action, commit/push or deployment.
+
+- 2026-10-09T14:52:33+09:00 ON — g4-mcp-scaffold-20261006 / G4 handoff publication: owner requests commit/push to main. Isolate the G4 supplement and necessary published register in .worktrees/docs/g4-handoff-main; preserve unrelated local edits and avoid merging the broader documentation branch. Commit/push only; no deployment endpoint.
+
+- 2026-10-09T14:56:57+09:00 UPDATE — g4-mcp-scaffold-20261006 / G4 handoff publication: resumed after owner confirmed charter/index merge. Reconciled only the G4 supplement, current-round pointer and publication record onto main 60181a88; all merged non-G4 content retained. Scoped document checks pass; direct commit/push endpoint continues, no application or deployment work.
