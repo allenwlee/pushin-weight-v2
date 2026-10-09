@@ -133,6 +133,13 @@ def test_hourly_replay_deduplicates_values_and_retains_corrected_partial_windows
     )
     assert partial.window_start_at == datetime(2026, 10, 7, tzinfo=UTC)
     assert partial.window_end_at is None and partial.temporal_status == "date_only"
+    assert partial.window_range is None
+    completed = MetricValue.objects.get(
+        source_metric__metric_key="tokens", period_label_date="2026-10-06"
+    )
+    assert completed.window_range.lower == datetime(2026, 10, 6, tzinfo=UTC)
+    assert completed.window_range.upper == partial.window_start_at
+    assert completed.window_range.lower_inc and not completed.window_range.upper_inc
     second = persist_source(
         contract, "opencode", "2" * 64, read(endpoint(updated="2026-10-07T12:59:18Z"))
     )

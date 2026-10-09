@@ -43,6 +43,7 @@ def test_hf_atomic_idempotent_values_do_not_invent_window_bounds():
         v.window_start_at is None
         and v.window_end_at is None
         and v.temporal_status == "unknown"
+        and v.window_range is None
         for v in values
     )
     assert all(v.observation.observed_at is not None for v in values)
@@ -126,6 +127,9 @@ def test_openrouter_keeps_exact_integer_and_completed_utc_period():
     assert str(value.integer_value) == "6458330218100"
     assert value.window_start_at == datetime(2026, 10, 5, tzinfo=UTC)
     assert value.window_end_at == datetime(2026, 10, 6, tzinfo=UTC)
+    assert value.window_range.lower == value.window_start_at
+    assert value.window_range.upper == value.window_end_at
+    assert value.window_range.lower_inc and not value.window_range.upper_inc
     assert run.source_as_of == datetime(2026, 10, 6, 0, 30, tzinfo=UTC)
     assert (
         MetricObservation.objects.get(source_subject_kind="aggregate").mapping_id
@@ -154,6 +158,7 @@ def test_arena_failure_is_atomic_and_publication_date_is_not_midnight():
     value = MetricValue.objects.get(source_metric__metric_key="rating")
     assert str(value.as_of_date) == "2026-09-25" and value.as_of_at is None
     assert value.observation.published_at is None
+    assert value.window_range is None
     data["rows"].append({**row, "model_name": "broken", "rating": 2000.0})
     failed = persist_source(contract, "arena", "f" * 64, data)
     assert failed.status == "failed" and not failed.observations.exists()

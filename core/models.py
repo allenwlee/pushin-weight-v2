@@ -35,10 +35,12 @@ from datetime import datetime, timedelta
 from typing import Any, ClassVar, Literal
 from urllib.parse import urlparse
 
-from django.contrib.postgres.indexes import GinIndex, OpClass
+from django.contrib.postgres.indexes import GinIndex, GistIndex, OpClass
 from django.db import IntegrityError, models, transaction
 from django.db.models.functions import Upper
 from django.utils import timezone
+
+from core.measurement_time import measurement_window
 
 # ============================================================================
 # Enum-family lookup tables (i18n-friendly)
@@ -7941,8 +7943,13 @@ class MetricValue(models.Model):
     source_timezone = models.CharField(max_length=64, default="unknown")
     as_of_at = models.DateTimeField(null=True)
     as_of_date = models.DateField(null=True)
-    window_start_at = models.DateTimeField(null=True)
-    window_end_at = models.DateTimeField(null=True)
+    window_start_at = models.DateTimeField(
+        null=True, db_comment="Inclusive measurement-window start; NULL means unknown, never infinity."
+    )
+    window_end_at = models.DateTimeField(
+        null=True, db_comment="Exclusive measurement-window end; NULL means unknown, never infinity."
+    )
+    window_range = measurement_window("window_start_at", "window_end_at")
     period_label_date = models.DateField(null=True)
 
     class Meta:
@@ -7952,6 +7959,11 @@ class MetricValue(models.Model):
                 fields=["source_metric", "observation"], name="idx_value_definition_obs"
             ),
             models.Index(fields=["window_end_at"], name="idx_value_window_end"),
+            GistIndex(
+                fields=["window_range"],
+                condition=models.Q(window_range__isnull=False),
+                name="idx_value_window_range",
+            ),
             models.Index(fields=["as_of_date"], name="idx_value_as_of_date"),
         ]
         constraints = [
