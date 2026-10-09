@@ -40,17 +40,13 @@ def nomination(system, user, model, max_tokens):
     source = evidence["sources"][0]
     citation = {"source_id": source["id"], "quote": source["text"]}
     return {
-        "outcome": "accepted",
-        "organization_name": "Unverified Example Lab",
-        "model_types": ["speech"],
-        "rationale": "Supplied organization and development evidence.",
-        "contradictions": [],
-        "claims": {
-            claim: [citation]
-            for claim in ["organization", "official_account", "model_developer"]
-        },
-        "usage": {"input_tokens": 100, "output_tokens": 100},
+        "organization_name": "Unverified Example Lab", "account_presentation": "company_account",
+        "identity_rationale": "Supplied organization and development evidence.", "identity_citations": [citation],
+        "products": [{"name": "Own speech model", "type": "model-other", "contribution": "original_model",
+                      "rationale": "Developed model", "citations": [citation]}],
+        "uncertainties": [], "usage": {"input_tokens": 100, "output_tokens": 100},
     }
+
 
 
 @pytest.fixture
@@ -163,15 +159,17 @@ def test_recurring_caller_uses_amended_product_rule_without_hf(recurring_cycle, 
     )
 
     def accepted(system, user, model, max_tokens):
-        assert "An AI model: proprietary/closed-weight" in system
-        assert "No HF page, public weights" in system
-        assert "Their own proprietary harness" in system
+        assert "Closed/API-only models qualify" in system
+        assert "own developed" in system or "developed system" in system
+        assert "execution" in system.lower()
         source = json.loads(user)["sources"][0]
         citation = {"source_id": source["id"], "quote": source["text"]}
         return {
-            "outcome": "accepted", "organization_name": "New Company", "development_type": kind,
-            "model_types": ["speech"] if kind == "model" else [], "rationale": "First-party own development",
-            "contradictions": [], "claims": {key: [citation] for key in ["organization", "official_account", "product_developer"]},
+            "organization_name": "New Company", "account_presentation": "company_account",
+            "identity_rationale": "First-party own development", "identity_citations": [citation],
+            "products": [{"name": "Own product", "type": "model-other" if kind == "model" else kind,
+                          "contribution": "original_model" if kind == "model" else "own_" + kind,
+                          "rationale": "Developed product", "citations": [citation]}], "uncertainties": [],
         }
 
     result = recurring_cycle(accepted)

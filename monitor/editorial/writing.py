@@ -16,6 +16,17 @@ from .grounding import (
 )
 from .selection import EDITOR_INSTRUCTIONS
 
+WRITING_PACKET_VERSION = "editorial-writing-v2"
+
+
+def writing_provenance(projected):
+    # Both system prompts already contain the complete confirmation rules.
+    return {
+        key: value
+        for key, value in source_provenance(projected).items()
+        if key != "rule"
+    }
+
 
 def editor_request(packet, cfg):
     images = list(
@@ -32,11 +43,12 @@ def editor_request(packet, cfg):
     schema = strict_schema(
         bind_editor_availability(bound_schema(Decisions, options), packet)
     )
-    payload = {"evidence": evidence, "source_provenance": source_provenance(projected)}
+    payload = {"evidence": evidence, "source_provenance": writing_provenance(projected)}
     if not (cfg.routes.get("editor") and cfg.routes["editor"].request_profile):
         payload["output_schema"] = schema
     return {
         "system": EDITOR_INSTRUCTIONS,
+        "packet_version": WRITING_PACKET_VERSION,
         "user": json.dumps(
             payload,
             ensure_ascii=False,
@@ -98,8 +110,12 @@ matching the supplied schema. Do not add facts from memory or unseen image URLs.
         },
         "cutoff": packet.get("cutoff"),
         "evidence": projected,
-        "source_provenance": source_provenance(projected),
-        "context_coverage": {key: value for key, value in packet.get("story_context", {}).items() if key in {"query_timeout", "omitted_context", "history_days", "seed_scope"}},
+        "source_provenance": writing_provenance(projected),
+        "context_coverage": {
+            key: value
+            for key, value in packet.get("story_context", {}).items()
+            if key in {"query_timeout", "omitted_context", "history_days", "seed_scope"}
+        },
         "chart_context": [
             c
             for c in packet.get("chart_context", [])
@@ -110,6 +126,7 @@ matching the supplied schema. Do not add facts from memory or unseen image URLs.
         payload["output_schema"] = schema
     return {
         "system": system,
+        "packet_version": WRITING_PACKET_VERSION,
         "user": json.dumps(
             payload,
             ensure_ascii=False,

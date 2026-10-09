@@ -1,0 +1,129 @@
+{
+  "iteration_limit": 3,
+  "source_fixture": "editorial_source_ownership.json",
+  "baseline_revision": "cae3e81c",
+  "locale_note": "Non-English cases use English voice instructions with the requested locale only for offline wire/source characterization; unavailable locale voices remain disabled.",
+  "rubric": [
+    "same schema and source labels",
+    "same owned source passages and brand options",
+    "retain uncertainty and independent-confirmation rules",
+    "no claim or numeric ownership regression",
+    "strict reduction of actual wire bytes",
+    "selection and critic stages retained"
+  ],
+  "event": {
+    "key": "frozen-platform-report",
+    "summary": "A supplied platform report",
+    "post_ids": [
+      "2106503895375851947",
+      "2106398475558482342",
+      "2106383170857791527"
+    ],
+    "brand_keys": [
+      "qwen",
+      "mistral",
+      "glm"
+    ],
+    "occurred_at": "2026-10-04T01:00:40.731920Z",
+    "chatter": true,
+    "pulse": true,
+    "importance": 70.0,
+    "reason": "Source report",
+    "change": "new",
+    "story_id": null,
+    "subject_kind": "other",
+    "person_ids": [],
+    "visual_essential": false,
+    "source_image_url": "",
+    "chart_fact_ids": [],
+    "chart_support": "unavailable",
+    "source_check": []
+  },
+  "baseline_provenance_rule": "Repeated posts in a group are one reporting source. Different groups do not establish independent confirmation.",
+  "cases": [
+    {
+      "track": "editor",
+      "locale": "en",
+      "baseline_bytes": 17113,
+      "baseline_sha256": "26d73da62c8f760fe8a4b54ace85642369dbb8eb9a0918724bb90440f431a6a5",
+      "schema_sha256": "1fae211c2ce667fd40d6bbb48038b6712f4b83b747de5f335ac7244975ee8601",
+      "source_ids": {
+        "S001": "2106503895375851947",
+        "S002": "2106398475558482342",
+        "S003": "2106383170857791527"
+      }
+    },
+    {
+      "track": "chatter",
+      "locale": "en",
+      "baseline_bytes": 15078,
+      "baseline_sha256": "ff545806033f89b92b2484f16009024fb961b0ea79330775ea150c3cb0bffb81",
+      "schema_sha256": "7c57bc496e0b5c0ad898579acb7186d7df48fd1592819a23f1cc743754d00693",
+      "source_ids": {
+        "S001": "2106503895375851947",
+        "S002": "2106398475558482342",
+        "S003": "2106383170857791527"
+      }
+    },
+    {
+      "track": "pulse",
+      "locale": "en",
+      "baseline_bytes": 14651,
+      "baseline_sha256": "72edca38e77c97346eb00c5d3f2ae644f2f75d875ddf227e800a70f45e5f3ed1",
+      "schema_sha256": "7c57bc496e0b5c0ad898579acb7186d7df48fd1592819a23f1cc743754d00693",
+      "source_ids": {
+        "S001": "2106503895375851947",
+        "S002": "2106398475558482342",
+        "S003": "2106383170857791527"
+      }
+    },
+    {
+      "track": "chatter",
+      "locale": "zh-cn",
+      "baseline_bytes": 15081,
+      "baseline_sha256": "dd36cc9a38355ef9d9463c453df0a80b8de1cae50cf4518017d3f51dd3126754",
+      "schema_sha256": "7c57bc496e0b5c0ad898579acb7186d7df48fd1592819a23f1cc743754d00693",
+      "source_ids": {
+        "S001": "2106503895375851947",
+        "S002": "2106398475558482342",
+        "S003": "2106383170857791527"
+      }
+    },
+    {
+      "track": "chatter",
+      "locale": "ja",
+      "baseline_bytes": 15078,
+      "baseline_sha256": "e797125cedb62be13c2b3d58262aba2fed8440799700735597d66424abdba7b8",
+      "schema_sha256": "7c57bc496e0b5c0ad898579acb7186d7df48fd1592819a23f1cc743754d00693",
+      "source_ids": {
+        "S001": "2106503895375851947",
+        "S002": "2106398475558482342",
+        "S003": "2106383170857791527"
+      }
+    },
+    {
+      "track": "pulse",
+      "locale": "zh-cn",
+      "baseline_bytes": 14654,
+      "baseline_sha256": "3c24a3938b6bdaa6c36b545c057ca5fd346afc7f969fbdcdd27fed411ea205be",
+      "schema_sha256": "7c57bc496e0b5c0ad898579acb7186d7df48fd1592819a23f1cc743754d00693",
+      "source_ids": {
+        "S001": "2106503895375851947",
+        "S002": "2106398475558482342",
+        "S003": "2106383170857791527"
+      }
+    },
+    {
+      "track": "pulse",
+      "locale": "ja",
+      "baseline_bytes": 14651,
+      "baseline_sha256": "16d3133cdc7c70dc05301042a5ce4dd926f0705bed0e5e6cc3d996eabdd22429",
+      "schema_sha256": "7c57bc496e0b5c0ad898579acb7186d7df48fd1592819a23f1cc743754d00693",
+      "source_ids": {
+        "S001": "2106503895375851947",
+        "S002": "2106398475558482342",
+        "S003": "2106383170857791527"
+      }
+    }
+  ]
+}

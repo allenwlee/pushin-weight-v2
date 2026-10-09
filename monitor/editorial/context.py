@@ -9,6 +9,7 @@ from django.db.models import Case, F, IntegerField, Q, Value, When, Window
 from django.db.models.functions import RowNumber, TruncMonth
 
 from core.models import Brand, Company, Post
+from monitor.packet_maker import PacketProfile, make_packet
 
 from .evidence import packet_bytes, post_evidence
 
@@ -256,7 +257,11 @@ def retrieve(cutoff, terms, cfg, *, historical=False):
                     "SELECT set_config('statement_timeout', %s, true)",
                     [f"{cfg.context_query_timeout_ms}ms"],
                 )
-            posts = list(query.prefetch_related("brands"))
+            posts = list(
+                query.prefetch_related(
+                    "brands", "enrichment_state", "classification_states"
+                )
+            )
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT set_config('statement_timeout', %s, true)", [previous]
@@ -271,6 +276,21 @@ def retrieve(cutoff, terms, cfg, *, historical=False):
 
 
 def story_packet(event, packet, cfg):
+    profile = PacketProfile.create(
+        "story-context",
+        cutoff=datetime.fromisoformat(packet["cutoff"]),
+        max_bytes=cfg.max_packet_bytes + cfg.max_story_bytes,
+        settings={
+            "configuration": cfg.model_dump(mode="json"),
+            "event": event.model_dump(mode="json"),
+        },
+    )
+    return make_packet(
+        profile, lambda: _collect_story_packet(event, packet, cfg)
+    ).payload
+
+
+def _collect_story_packet(event, packet, cfg):
     """Return anchors plus relevant background, without changing editor decisions."""
     anchors = list(
         {
@@ -287,7 +307,7 @@ def story_packet(event, packet, cfg):
             for p in Post.objects.filter(
                 pk__in=missing, created_at__lte=cutoff, fetched_at__lte=cutoff
             )
-            .prefetch_related("brands")
+            .prefetch_related("brands", "enrichment_state", "classification_states")
             .order_by("tweet_id")
         )
     anchors.sort(key=lambda p: event.post_ids.index(p["id"]))
@@ -440,7 +460,7 @@ def story_packet(event, packet, cfg):
                 fetched_at__lte=cutoff,
                 created_at__gte=cutoff - timedelta(days=cfg.context_history_days),
             )
-            .prefetch_related("brands")
+            .prefetch_related("brands", "enrichment_state", "classification_states")
             .order_by("tweet_id")[:8]
         ]
         if cfg.max_story_context_posts

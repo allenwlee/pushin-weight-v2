@@ -493,6 +493,26 @@ def build_trend_analysis_snapshot(
     evidence_policy: EvidenceSelectionPolicy = DEFAULT_EVIDENCE_SELECTION_POLICY,
     brand_cap: int = MAX_SNAPSHOT_BRANDS,
 ) -> dict[str, Any]:
+    from dataclasses import asdict
+    from monitor.packet_maker import PacketProfile, make_packet
+
+    profile = PacketProfile.create("brand-window", cutoff=_as_utc(as_of),
+        max_bytes=MAX_SNAPSHOT_BYTES, settings={"window_days": window_days,
+        "thresholds": asdict(thresholds), "evidence": asdict(evidence_policy),
+        "brand_cap": brand_cap})
+    return make_packet(profile, lambda: _collect_trend_analysis_snapshot(
+        window_days, as_of=as_of, thresholds=thresholds,
+        evidence_policy=evidence_policy, brand_cap=brand_cap)).payload
+
+
+def _collect_trend_analysis_snapshot(
+    window_days: int,
+    *,
+    as_of: datetime,
+    thresholds: TrendFactThresholds = DEFAULT_TREND_THRESHOLDS,
+    evidence_policy: EvidenceSelectionPolicy = DEFAULT_EVIDENCE_SELECTION_POLICY,
+    brand_cap: int = MAX_SNAPSHOT_BRANDS,
+) -> dict[str, Any]:
     """Build and serialize one immutable snapshot under one read-only DB view."""
     if connection.vendor != "postgresql":
         raise TrendSnapshotTransactionError("trend_snapshot_requires_postgresql")
@@ -3774,6 +3794,9 @@ def _evidence_candidate(
 
     return {
         "evidence_id": evidence_id,
+        # Private persistence binding; closed provider projections omit these.
+        "post_id": str(row["tweet_id"]),
+        "url": f"https://x.com/i/status/{row['tweet_id']}",
         "author_group_id": author_group_id,
         "source_cluster_id": source_cluster_id,
         "excerpt": excerpt,

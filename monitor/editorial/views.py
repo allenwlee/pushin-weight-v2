@@ -16,11 +16,18 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import translation
 from django.views.decorators.http import require_GET
 
-from core.models import EditorialEdition, EditorialPicture
+from core.models import EditorialPicture
 from core.staff_assets.media import media_storage
 
 from .config import load_editorial_config
-from .readers import LOCALES, TRACKS, edition_payload, feed_payload, picture_for_edition
+from .readers import (
+    LOCALES,
+    TRACKS,
+    edition_payload,
+    feed_payload,
+    find_saved_edition,
+    picture_for_edition,
+)
 
 
 def access(request):
@@ -52,14 +59,10 @@ def story(request, story_id):
     cfg = access(request)
     try:
         track, locale = filters(request)
-        query = EditorialEdition.objects.filter(story_id=story_id, track=track)
-        if request.GET.get("edition"):
-            query = query.filter(pk=UUID(request.GET["edition"]))
+        pinned = UUID(request.GET["edition"]) if request.GET.get("edition") else None
+        edition = find_saved_edition(story_id, track, locale=locale, pinned=pinned)
     except (ValueError, TypeError):
         return HttpResponseBadRequest("Invalid story selection")
-    edition = query.filter(locale=locale).order_by("-revision").first()
-    if edition is None:
-        edition = query.filter(locale="en").order_by("-revision").first()
     if edition is None:
         raise Http404
     item = edition_payload(edition, cfg)
@@ -117,12 +120,11 @@ def asset(request, story_id, picture_id, variant):
     picture = get_object_or_404(
         EditorialPicture, pk=picture_id, content_kind__in=["chatter", "pulse"]
     )
-    edition = get_object_or_404(
-        EditorialEdition,
-        pk=picture.content_id,
-        story_id=story_id,
-        track=picture.content_kind,
+    edition = find_saved_edition(
+        story_id, picture.content_kind, pinned=UUID(picture.content_id)
     )
+    if edition is None:
+        raise Http404
     eligible = picture_for_edition(edition, cfg)
     if eligible is None or eligible.pk != picture.pk:
         raise Http404

@@ -14,6 +14,7 @@ from core.models import (
     EditorialPicture,
     PersonBrandAffiliation,
 )
+from monitor.original_content import shared_storage, source_payload
 
 from .pictures import assignment_eligible
 
@@ -84,15 +85,20 @@ def asset_payload(edition, cfg, pictures=None):
 
 
 def edition_payload(edition, cfg, *, pictures=None):
-    sources = list(
-        {
-            source.get("id") or source["url"]: {
-                "url": source["url"],
-                "label": source.get("author_handle") or "X",
-            }
-            for source in edition.evidence.get("sources", [])
-            if source.get("url", "").startswith("https://x.com/")
-        }.values()
+    text = getattr(edition, "_original_content_text", None)
+    sources = (
+        source_payload(text)
+        if text is not None
+        else list(
+            {
+                source.get("id") or source["url"]: {
+                    "url": source["url"],
+                    "label": source.get("author_handle") or "X",
+                }
+                for source in edition.evidence.get("sources", [])
+                if source.get("url", "").startswith("https://x.com/")
+            }.values()
+        )
     )
     return {
         "id": str(edition.pk),
@@ -119,6 +125,12 @@ def edition_payload(edition, cfg, *, pictures=None):
 def feed_payload(cfg, *, track="chatter", locale="en", cursor="", limit=20):
     if track not in TRACKS or locale not in LOCALES:
         raise ValueError("unsupported track or locale")
+    if shared_storage():
+        from monitor.original_content_readers import shared_feed_payload
+
+        return shared_feed_payload(
+            cfg, track=track, locale=locale, cursor=cursor, limit=limit
+        )
     requested_locale = locale
     if (
         locale != "en"
@@ -205,3 +217,17 @@ def longitudinal_subject(edition):
         "evidence_cutoff": edition.evidence.get("cutoff"),
         "development_at": edition.occurred_at.isoformat(),
     }
+
+
+def find_saved_edition(story_id, track, *, locale="en", pinned=None):
+    if shared_storage():
+        from monitor.original_content_readers import shared_story
+
+        return shared_story(story_id, track, locale, pinned)
+    query = EditorialEdition.objects.filter(story_id=story_id, track=track)
+    if pinned:
+        query = query.filter(pk=pinned)
+    return (
+        query.filter(locale=locale).order_by("-revision").first()
+        or query.filter(locale="en").order_by("-revision").first()
+    )

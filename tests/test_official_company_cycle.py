@@ -32,18 +32,15 @@ def accept(system, user, model, max_tokens):
     evidence = json.loads(user)
     source = evidence["sources"][0]
     citation = {"source_id": source["id"], "quote": source["text"]}
+    assert "model-llm" in system and "model-other" in system
     return {
-        "outcome": "accepted",
-        "organization_name": "Unseen Voice Lab",
-        "model_types": ["speech"],
-        "rationale": "Consistent first-party release evidence",
-        "contradictions": [],
-        "claims": {
-            key: [citation]
-            for key in ["organization", "official_account", "model_developer"]
-        },
-        "usage": {"input_tokens": 100, "output_tokens": 100},
+        "organization_name": "Unseen Voice Lab", "account_presentation": "company_account",
+        "identity_rationale": "Consistent first-party release evidence", "identity_citations": [citation],
+        "products": [{"name": "Voice model", "type": "model-other", "contribution": "original_model",
+                      "rationale": "Own speech model", "citations": [citation]}],
+        "uncertainties": [], "usage": {"input_tokens": 100, "output_tokens": 100},
     }
+
 
 
 def test_model_positive_is_reviewed_without_registration_or_list_add():
@@ -291,3 +288,62 @@ def test_real_scheduled_cycle_reaches_discovery_once_without_changing_queries(
         assert len(result["planned_calls"]) == 7
         if enabled:
             assert result["official_company_discovery"]["attempted"] == 1
+
+
+def test_scheduled_dispatch_persists_multiple_offering_categories_without_auto_induction():
+    from core.models import OfficialCompanyListIntent
+
+    account = Account.objects.create(author_id="981099", bio="We are Control Lab. We develop our own permissions runtime and operate our AI cloud platform.")
+    state = enqueue_account(account)
+    seen = []
+
+    def screen(system, user, model, max_tokens):
+        assert "execution" in system.lower() and "third-party harness" in system
+        assert max_tokens == 4096
+        source = json.loads(user)["sources"][0]
+        citation = {"source_id": source["id"], "quote": source["text"]}
+        seen.append(system)
+        return {"organization_name": "Control Lab", "account_presentation": "company_account",
+                "identity_rationale": "Own company products", "identity_citations": [citation],
+                "products": [{"name": "Permissions runtime", "type": "harness", "contribution": "own_harness", "rationale": "Explicit controls", "citations": [citation]},
+                             {"name": "AI cloud", "type": "other", "contribution": "own_platform_service", "rationale": "Own service", "citations": [citation]}],
+                "uncertainties": [], "usage": {"input_tokens": 100, "output_tokens": 100}}
+
+    runner = CycleRunner(cfg=config(), cycle_kind="scheduled", _official_company_call=screen)
+    result = runner._run_official_company_discovery(run_id="multi-offerings", deadline=runner.cfg.harvest.start_deadline())
+    state.refresh_from_db()
+    assert result["attempted"] == 1 and len(seen) == 1
+    assert state.policy_version == "official-ai-offerings-v4"
+    assert state.decision["offering_categories"] == ["harness", "other"]
+    assert state.status == "review_needed" and state.last_error == "human_review_required"
+    assert not OfficialCompanyListIntent.objects.exists()
+
+
+def test_scheduled_extractor_resumes_legacy_native_account_cursor():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from core.models import OfficialCompanyAttempt, OfficialCompanyScan
+    from core.official_company_accounts import POLICY_VERSION
+
+    at = timezone.now() - timedelta(hours=1)
+    account = Account.objects.create(
+        author_id="12345", handle="voice_lab",
+        bio="We are Voice Lab. We release our own speech models.",
+        verified_type="Business",
+    )
+    Account.objects.filter(pk=account.pk).update(last_seen_at=at)
+    OfficialCompanyScan.objects.create(
+        key="account-observations",
+        cursor=json.dumps({"at": at.isoformat(), "pk": account.author_id}),
+    )
+    runner = CycleRunner(cfg=config(), cycle_kind="scheduled", _official_company_call=accept)
+    result = runner._run_official_company_discovery(
+        run_id="legacy-cursor-cycle", deadline=runner.cfg.harvest.start_deadline(),
+    )
+    assert result["status"] == "complete" and result["attempted"] == 1
+    attempt = OfficialCompanyAttempt.objects.get()
+    assert attempt.status == "completed" and attempt.policy_version == POLICY_VERSION
+    assert attempt.decision["offering_categories"] == ["model-other"]
+    assert OfficialCompanyAccountState.objects.get(account=account).status == "review_needed"

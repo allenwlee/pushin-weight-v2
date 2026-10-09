@@ -485,3 +485,32 @@ def test_competing_discovery_command_dispatches_nothing(monkeypatch):
     state.refresh_from_db()
     assert state.status == "pending" and not call.called
     assert not OfficialCompanyAttempt.objects.exists()
+
+
+def test_legacy_account_cursor_replays_timestamp_boundary_without_losing_ties():
+    import json
+    from uuid import UUID
+
+    from core.models import OfficialCompanyScan
+    from core.official_company_discovery import _observations
+
+    at = timezone.now() - timedelta(hours=1)
+    accounts = [
+        Account.objects.create(
+            account_key=UUID(int=i), author_id=str(200 - i),
+            bio="AI model lab", verified_type="Business",
+        )
+        for i in [1, 2, 3]
+    ]
+    Account.objects.filter(pk__in=[a.pk for a in accounts]).update(last_seen_at=at)
+    scan = OfficialCompanyScan.objects.create(
+        key="account-observations", cursor=json.dumps({"at": at.isoformat(), "pk": "198"}),
+    )
+    assert _observations("account-observations", Account, "last_seen_at", limit=2) == 2
+    scan.refresh_from_db()
+    assert json.loads(scan.cursor) == {"at": at.isoformat(), "pk": str(accounts[1].pk)}
+    assert _observations("account-observations", Account, "last_seen_at", limit=2) == 1
+    assert _observations("account-observations", Account, "last_seen_at", limit=2) == 0
+    scan.refresh_from_db()
+    assert scan.enumerated == 3
+    assert set(OfficialCompanyAccountState.objects.values_list("account_id", flat=True)) == {a.pk for a in accounts}

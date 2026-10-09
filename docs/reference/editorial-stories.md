@@ -30,6 +30,11 @@ for optional-source migration handling and the required source-reader grants.
 
 ## Normal flow
 
+Storage and accounting use the [OriginalContent contract](original-content.md).
+Compatible delivery retains legacy writes during the rollback window. Shared
+readers use citations belonging to the exact saved locale/version and display
+every safe HTTP(S) source URL. Counts measure distinct posts, not confirmations.
+
 1. A committed harvest completion queues one editorial assessment on the
    existing `trend-narratives` queue. G2 activation is independent of the older
    headline generator; there is no new scheduler or collection call.

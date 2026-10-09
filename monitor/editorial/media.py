@@ -128,6 +128,21 @@ def start_derivative(row, assessment, cfg, *, transport=https_request):
             cfg.media_cost_ceiling_usd,
             cfg,
             send,
+            request_metadata={
+                "request_hash": hashlib.sha256(
+                    json.dumps(payload, ensure_ascii=False).encode()
+                ).hexdigest(),
+                "provider": "api.minimax.io",
+                "model": "MiniMax-H3",
+                "workflow_version": "media-derivative-v1",
+                "request_packet": {
+                    "model": "MiniMax-H3",
+                    "source_media_id": str(row.source_media_id),
+                    "source_sha256": row.source_media.sha256,
+                    "duration": cfg.media_duration,
+                    "treatment": row.treatment,
+                },
+            },
         )
     except Exception:
         # Reservation failures are not sent; ledger distinguishes the two for recovery.

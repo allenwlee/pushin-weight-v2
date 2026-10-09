@@ -11,7 +11,7 @@ from time import monotonic
 from x_monitor.deepinfra import DeepInfraChatCompletionsClient, DeepInfraPermanentError
 from x_monitor.provider_http import https_request
 
-from .contracts import ProviderReplyError
+from .contracts import ProviderReplyError, digest
 from .grounding import normalize_reply, restore_sources
 from .persistence import call_once
 
@@ -231,4 +231,26 @@ def json_call(assessment, stage, route, request, cfg, *, transport=None):
         finally:
             diagnostics["elapsed_seconds"] = round(monotonic() - started, 3)
 
-    return call_once(assessment, stage, "text", ceiling, cfg, send)
+    from urllib.parse import urlsplit
+
+    return call_once(
+        assessment,
+        stage,
+        "text",
+        ceiling,
+        cfg,
+        send,
+        request_metadata={
+            "request_hash": hashlib.sha256(encoded).hexdigest(),
+            "request_packet": body,
+            "provider": urlsplit(route.endpoint).hostname,
+            "model": route.model,
+            "workflow_version": digest(
+                [cfg.model_dump(mode="json"), request.get("packet_version", "legacy")]
+            ),
+            "rates": {
+                "input_usd_per_million": route.input_usd_per_million,
+                "output_usd_per_million": route.output_usd_per_million,
+            },
+        },
+    )

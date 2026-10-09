@@ -169,7 +169,13 @@ def _observations(key, model, time_field, *, limit, account_field=None, deadline
         at = datetime.fromisoformat(cursor["at"])
         after = Q(**{time_field + "__gt": at})
         if cursor["pk"] is not None:
-            after |= Q(**{time_field: at, "pk__gt": cursor["pk"]})
+            if model is Account and str(cursor["pk"]).isdecimal():
+                # Before provider-neutral accounts, this tie breaker was a
+                # native X ID. UUID order differs, so replay the timestamp
+                # boundary once rather than skipping tied observations.
+                after |= Q(**{time_field: at})
+            else:
+                after |= Q(**{time_field: at, "pk__gt": cursor["pk"]})
         # Observation timestamps, never the post's publication date.
         observations = model.objects.filter(after).order_by(time_field, "pk")
         if account_field:

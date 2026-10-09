@@ -142,7 +142,7 @@ relations:
     - editorial_calls
     - editorial_editions
     - editorial_heroes
-    - editorial_pictures
+    - content_pictures
     - editorial_stories
     # Discovery work and encrypted owner credentials belong to one environment.
     - official_company_account_states
@@ -171,8 +171,9 @@ relations:
     - auth_user
     - auth_user_groups
     - auth_user_user_permissions
-    - brand_trend_narratives
-    - brand_trend_narrative_texts
+    - original_content
+    - original_content_texts
+    - original_content_sources
     - brand_discovery_candidate_token_evidence
     - brand_discovery_candidate_tokens
     - call_state
@@ -197,10 +198,10 @@ relations:
     - socialaccount_socialapp
     - socialaccount_socialapp_sites
     - socialaccount_socialtoken
-    - trend_narrative_provider_calls
+    - original_content_calls
     - trend_narrative_demands
-    - trend_narrative_runs
-    - trend_narrative_visible_runs
+    - original_content_runs
+    - original_content_selections
     - trend_narrative_work_slots
     - twitter_list_memberships
     - twitter_list_sync_state
@@ -226,7 +227,7 @@ relations:
     - editorial_calls
     - editorial_editions
     - editorial_heroes
-    - editorial_pictures
+    - content_pictures
     - editorial_stories
     - official_company_account_states
     - official_company_attempts
@@ -253,7 +254,8 @@ relations:
     - audience_topic_labels
     - audience_topic_schemes
     - brand_discovery_candidates
-    - brand_trend_narrative_texts
+    - original_content_texts
+    - original_content_sources
     - event_evidence
     - events
     - geopolitical_mode_keys
@@ -308,6 +310,13 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   views:
+    # Temporary writable aliases, excluded from table copies and truncation.
+    - brand_trend_narratives
+    - brand_trend_narrative_texts
+    - trend_narrative_runs
+    - trend_narrative_provider_calls
+    - trend_narrative_visible_runs
+    - editorial_pictures
     - trend_narrative_versions
   sequences:
     # Benchmark taxonomy and measurement evidence; never collection credentials.
@@ -391,10 +400,13 @@ relations:
     - trend_narrative_provider_calls_id_seq
     - trend_narrative_demands_id_seq
     - trend_narrative_runs_id_seq
+    - trend_narrative_visible_runs_id_seq
+    - original_content_sources_id_seq
     - trend_narrative_versions_id_seq
     - twitter_list_memberships_id_seq
     - untracked_brand_promotion_evidence_id_seq
   optional_source_sequences:
+    - original_content_sources_id_seq
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - source_metrics_id_seq
     - metric_observations_id_seq
@@ -463,7 +475,7 @@ scrub:
     - editorial_calls
     - editorial_editions
     - editorial_heroes
-    - editorial_pictures
+    - content_pictures
     - editorial_stories
     - official_company_account_states
     - official_company_attempts
@@ -490,8 +502,9 @@ scrub:
     - auth_user
     - auth_user_groups
     - auth_user_user_permissions
-    - brand_trend_narratives
-    - brand_trend_narrative_texts
+    - original_content
+    - original_content_texts
+    - original_content_sources
     - brand_discovery_candidate_token_evidence
     - brand_discovery_candidate_tokens
     - call_state
@@ -516,10 +529,10 @@ scrub:
     - socialaccount_socialapp
     - socialaccount_socialapp_sites
     - socialaccount_socialtoken
-    - trend_narrative_provider_calls
+    - original_content_calls
     - trend_narrative_demands
-    - trend_narrative_runs
-    - trend_narrative_visible_runs
+    - original_content_runs
+    - original_content_selections
     - trend_narrative_work_slots
     - twitter_list_memberships
     - twitter_list_sync_state

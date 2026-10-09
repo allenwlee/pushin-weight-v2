@@ -58,6 +58,10 @@ jobs:
       - name: PostgreSQL regressions (required skips fail; fake providers only)
         run: >-
           python -m pytest -q tests/test_editorial*.py
+          tests/test_original_content*.py tests/test_packet_maker*.py
+          tests/test_trend_narrative_candidates.py tests/test_trend_narrative_facts.py
+          tests/test_trend_narrative_generation.py tests/test_trend_narrative_projection.py
+          tests/test_headline_packet_projection.py tests/test_headline_0731_regressions.py
           tests/test_synthesis_tagged_text.py tests/test_deepinfra.py
           tests/test_deepinfra_factory_routing.py tests/test_trend_narrative_dispatch.py
           tests/test_trend_narrative_lifecycle.py tests/test_trend_narrative_tasks.py

@@ -16,10 +16,13 @@ source secret. Do not copy either setting to another service.
 ## One-time source reader
 
 The allowlist below covers the rare-type/HF schema, G1 identity/media tables and
-G2 editorial tables through migration 0068.
-Relations introduced after the production migration boundary at 0027 remain
-optional on the source so a staging refresh can accept an older production
-snapshot and create those relations during the shadow migration. Refresh
+shared authored-content tables through migration 0079. The source must already
+have the six canonical content base tables and seven compatibility views. A
+pre-rename source fails closed; upgrading the refresh source schema is a separate
+authorized operation, not a step this release performs automatically.
+
+Declared optional relations may be absent on a source with the compatible
+physical-name/view inventory and are created during shadow migration. Refresh
 preflight compares the source's complete table inventory with the tracked
 policy and fails closed with `source_classified_table_missing:<table>` when a
 required relation is absent; the later shadow migration does not bypass that
@@ -105,7 +108,7 @@ TO staging_refresh_reader;
 -- 18's MAINTAIN privilege permits that lock without permitting row reads.
 GRANT MAINTAIN ON
   editorial_assessments, editorial_budgets, editorial_calls,
-  editorial_editions, editorial_heroes, editorial_pictures, editorial_stories,
+  editorial_editions, editorial_heroes, content_pictures, editorial_stories,
   official_company_account_states, official_company_attempts,
   official_company_budgets, official_company_list_intents,
   official_company_owner_credentials, official_company_provider_states,
@@ -116,8 +119,8 @@ GRANT MAINTAIN ON
   hf_model_catalog_observations,
   _applied_config_snapshot, account_emailaddress, account_emailconfirmation,
   auth_group, auth_group_permissions, auth_permission, auth_user,
-  auth_user_groups, auth_user_user_permissions, brand_trend_narratives,
-  brand_trend_narrative_texts, brand_discovery_candidate_token_evidence,
+  auth_user_groups, auth_user_user_permissions, original_content,
+  original_content_texts, original_content_sources, brand_discovery_candidate_token_evidence,
   brand_discovery_candidate_tokens, call_state, django_session,
   harvest_backlog_windows, job_source_states, job_source_sync_runs,
   post_enrichment_states,
@@ -130,8 +133,8 @@ GRANT MAINTAIN ON
   rare_type_search_runs,
   socialaccount_socialaccount, socialaccount_socialapp,
   socialaccount_socialapp_sites, socialaccount_socialtoken,
-  trend_narrative_demands, trend_narrative_provider_calls, trend_narrative_runs,
-  trend_narrative_visible_runs, trend_narrative_work_slots,
+  trend_narrative_demands, original_content_calls, original_content_runs,
+  original_content_selections, trend_narrative_work_slots,
   twitter_list_memberships, twitter_list_sync_state
 TO staging_refresh_reader;
 
@@ -178,7 +181,7 @@ GRANT SELECT ON
   socialaccount_socialapp_sites_id_seq, socialaccount_socialtoken_id_seq,
   targeted_extraction_attempts_id_seq, targeted_extraction_states_id_seq,
   trend_narrative_demands_id_seq, trend_narrative_provider_calls_id_seq,
-  trend_narrative_runs_id_seq,
+  trend_narrative_runs_id_seq, trend_narrative_visible_runs_id_seq, original_content_sources_id_seq,
   trend_narrative_subjects_id_seq, trend_narrative_versions_id_seq,
   twitter_list_memberships_id_seq, untracked_brand_promotion_evidence_id_seq
 TO staging_refresh_reader;
@@ -433,8 +436,9 @@ UNION ALL SELECT 'auth_permission', count(*) FROM auth_permission
 UNION ALL SELECT 'auth_user', count(*) FROM auth_user
 UNION ALL SELECT 'auth_user_groups', count(*) FROM auth_user_groups
 UNION ALL SELECT 'auth_user_user_permissions', count(*) FROM auth_user_user_permissions
-UNION ALL SELECT 'brand_trend_narratives', count(*) FROM brand_trend_narratives
-UNION ALL SELECT 'brand_trend_narrative_texts', count(*) FROM brand_trend_narrative_texts
+UNION ALL SELECT 'original_content', count(*) FROM original_content
+UNION ALL SELECT 'original_content_texts', count(*) FROM original_content_texts
+UNION ALL SELECT 'original_content_sources', count(*) FROM original_content_sources
 UNION ALL SELECT 'brand_discovery_candidate_token_evidence', count(*) FROM brand_discovery_candidate_token_evidence
 UNION ALL SELECT 'brand_discovery_candidate_tokens', count(*) FROM brand_discovery_candidate_tokens
 UNION ALL SELECT 'hf_model_catalog_runs', count(*) FROM hf_model_catalog_runs
@@ -468,9 +472,9 @@ UNION ALL SELECT 'socialaccount_socialapp', count(*) FROM socialaccount_socialap
 UNION ALL SELECT 'socialaccount_socialapp_sites', count(*) FROM socialaccount_socialapp_sites
 UNION ALL SELECT 'socialaccount_socialtoken', count(*) FROM socialaccount_socialtoken
 UNION ALL SELECT 'trend_narrative_demands', count(*) FROM trend_narrative_demands
-UNION ALL SELECT 'trend_narrative_provider_calls', count(*) FROM trend_narrative_provider_calls
-UNION ALL SELECT 'trend_narrative_runs', count(*) FROM trend_narrative_runs
-UNION ALL SELECT 'trend_narrative_visible_runs', count(*) FROM trend_narrative_visible_runs
+UNION ALL SELECT 'original_content_calls', count(*) FROM original_content_calls
+UNION ALL SELECT 'original_content_runs', count(*) FROM original_content_runs
+UNION ALL SELECT 'original_content_selections', count(*) FROM original_content_selections
 UNION ALL SELECT 'trend_narrative_work_slots', count(*) FROM trend_narrative_work_slots
 UNION ALL SELECT 'twitter_list_memberships', count(*) FROM twitter_list_memberships
 UNION ALL SELECT 'twitter_list_sync_state', count(*) FROM twitter_list_sync_state

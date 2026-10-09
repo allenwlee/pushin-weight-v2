@@ -11,6 +11,12 @@ from core.models import (
     EditorialHero,
     EditorialStory,
 )
+from monitor.original_content import mirror_storage, shared_storage
+from monitor.original_content_backfill import (
+    import_assessment,
+    import_edition,
+    import_hero,
+)
 
 from .config import load_editorial_config
 from .context import story_packet
@@ -25,13 +31,10 @@ from .voices import load_voice
 from .writing import editor_request, validate_copy, writer_request
 
 
-def packet_identity(packet):
-    return digest(
-        {
-            k: packet[k]
-            for k in ("posts", "context", "people", "headline_leads", "chart_context")
-        }
-    )
+def packet_identity(packet, cfg):
+    from monitor.packet_maker import evidence_identity
+
+    return evidence_identity(packet, cfg.model_dump(mode="json"))
 
 
 def find_story(event):
@@ -164,6 +167,11 @@ def publish_edition(row, event, packet, track, voice, copy, model, cfg):
         if track == "chatter":
             hero.edition = edition
             hero.save(update_fields=["edition"])
+        if mirror_storage():
+            run = import_assessment(row)
+            import_edition(edition, run, legacy=not shared_storage())
+            if track == "chatter":
+                import_hero(hero)
         return edition
 
 
@@ -193,7 +201,7 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
             current = require_fence(row)
             current.packet = packet
             current.save(update_fields=["packet"])
-        identity = packet_identity(packet)
+        identity = packet_identity(packet, cfg)
         previous = (
             EditorialAssessment.objects.filter(
                 scope="editorial", state="complete", cutoff__lt=row.cutoff

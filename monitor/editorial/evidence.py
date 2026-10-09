@@ -1,10 +1,11 @@
 """Bounded original-source packets, shared with existing headline projections."""
 
-import json
 import math
 from datetime import timedelta
+from hashlib import sha256
 from urllib.parse import urlsplit
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import F, Window
 from django.db.models.functions import RowNumber, TruncHour
 
@@ -16,6 +17,7 @@ from core.models import (
     Post,
     TrendNarrativeRun,
 )
+from monitor.packet_maker import PacketProfile, encode, make_packet, packet_bytes
 from monitor.trend_narrative_packet import project_dossier, project_evidence
 
 
@@ -70,11 +72,54 @@ def post_evidence(post):
         local_parent=(getattr(post, "_editorial_parent_text", "") or "")[:4000],
         images=source_images(post),
         brand_keys=[p.brand_id for p in post.brands.all()],
+        preparation_revision=post_revision(post),
     )
     return row
 
 
+def post_revision(post):
+    def stored_fields(model):
+        return {
+            field.attname: getattr(model, field.attname)
+            for field in model._meta.concrete_fields
+        }
+
+    try:
+        enrichment = stored_fields(post.enrichment_state)
+    except ObjectDoesNotExist:
+        enrichment = None
+    return sha256(
+        encode(
+            {
+                "post": stored_fields(post),
+                "enrichment": enrichment,
+                "classification": [
+                    stored_fields(state)
+                    for state in sorted(
+                        post.classification_states.all(),
+                        key=lambda state: state.brand_id,
+                    )
+                ],
+            }
+        )
+    ).hexdigest()
+
+
 def build_packet(cutoff, cfg):
+    profile = PacketProfile.create(
+        "editorial-dispatch",
+        cutoff=cutoff,
+        max_bytes=cfg.max_packet_bytes,
+        settings=cfg.model_dump(mode="json"),
+    )
+    return make_packet(
+        profile,
+        lambda: _collect_packet(cutoff, cfg),
+        transform=lambda packet: trim_packet(packet, cfg.max_packet_bytes),
+    ).payload
+
+
+def _collect_packet(cutoff, cfg):
     base = Post.objects.filter(
         created_at__lte=cutoff,
         fetched_at__lte=cutoff,
@@ -94,7 +139,9 @@ def build_packet(cutoff, cfg):
         .filter(hour_rank__lte=max(1, math.ceil(cfg.max_posts / 24)))
         .order_by("-created_at", "tweet_id")[: cfg.max_posts]
     )
-    posts = list(sampled.prefetch_related("brands"))
+    posts = list(
+        sampled.prefetch_related("brands", "enrichment_state", "classification_states")
+    )
     brands = {b.brand_id for post in posts for b in post.brands.all()}
     context = (
         list(
@@ -103,7 +150,9 @@ def build_packet(cutoff, cfg):
             )
             .distinct()
             .order_by("-created_at", "tweet_id")
-            .prefetch_related("brands")[: cfg.max_context_posts]
+            .prefetch_related("brands", "enrichment_state", "classification_states")[
+                : cfg.max_context_posts
+            ]
         )
         if brands
         else []
@@ -211,11 +260,7 @@ def build_packet(cutoff, cfg):
             "roles_observed_now": True,
         },
     }
-    return trim_packet(packet, cfg.max_packet_bytes)
-
-
-def packet_bytes(packet):
-    return len(json.dumps(packet, ensure_ascii=False).encode())
+    return packet
 
 
 def trim_packet(packet, limit):

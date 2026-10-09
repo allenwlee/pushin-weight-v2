@@ -28,9 +28,11 @@ pytestmark = [
 ]
 
 
+@pytest.mark.parametrize("storage", ["legacy", "shared"])
 def test_source_to_paid_reservation_to_two_editions_picture_and_reader(
-    monkeypatch, client
+    monkeypatch, client, storage
 ):
+    monkeypatch.setenv("ORIGINAL_CONTENT_STORAGE", storage)
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-only")
     monkeypatch.setenv("PUSHINWEIGHT_MINIMAX_API_KEY", "project-test-only")
     person, _, _ = person_photo("blue", "founder")
@@ -106,6 +108,12 @@ def test_source_to_paid_reservation_to_two_editions_picture_and_reader(
         cfg=cfg,
     )
     assert result["published"] == 2, result
+    if storage == "shared":
+        from core.models import OriginalContentText
+
+        texts = OriginalContentText.objects.all()
+        assert texts.count() == 2
+        assert all(t.producing_call_id and t.sources.count() == 1 for t in texts)
     assert EditorialCall.objects.count() == 4
     assert len(calls) == 4
     assert (

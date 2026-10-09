@@ -5,11 +5,14 @@ from django.utils import timezone
 
 from core.models import (
     EditorialPicture,
+    OriginalContentRun,
+    OriginalContentText,
     PersonAccount,
     PersonBrandAffiliation,
     PersonMedia,
 )
 from core.staff_assets.media import fetch_public, media_storage, store_image
+from monitor.original_content import mirror_storage
 
 from .contracts import digest
 
@@ -262,4 +265,15 @@ def select_picture(
             "state": "selected" if source else "missing",
         },
     )
+    if mirror_storage():
+        run = OriginalContentRun.objects.filter(
+            source_cycle_id=f"legacy-editorial:{assessment.pk}"
+        ).first()
+        text = (
+            OriginalContentText.objects.filter(public_id=content_id).first()
+            if content_kind in {"chatter", "pulse"}
+            else None
+        )
+        EditorialPicture.objects.filter(pk=row.pk).update(run=run, text=text)
+        row.refresh_from_db()
     return row

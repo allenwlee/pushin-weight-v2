@@ -378,7 +378,7 @@ class OfficialCompanyConfig(BaseModel):
     list_sync_enabled: bool = False
     model: str = "deepseek-ai/DeepSeek-V4-Flash-0731"
     max_calls_per_cycle: int = Field(default=2, ge=0, le=20)
-    max_tokens: int = Field(default=1024, ge=128, le=4096)
+    max_tokens: int = Field(default=4096, ge=128, le=4096)
     max_input_bytes: int = Field(default=262144, ge=4096, le=1048576)
     request_timeout_seconds: int = Field(default=20, ge=5, le=60)
     lane_deadline_seconds: int = Field(default=45, ge=10, le=120)

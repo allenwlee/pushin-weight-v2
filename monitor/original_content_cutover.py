@@ -1,0 +1,178 @@
+"""Readiness and an auditable cutover timestamp; never changes service flags."""
+
+import re
+from datetime import datetime, timedelta
+
+from django.db import transaction
+from django.utils import timezone
+
+from core.models import (
+    EditorialBudget,
+    EditorialEdition,
+    EditorialHero,
+    OriginalContentRun,
+    OriginalContentSelection,
+    OriginalContentText,
+)
+from monitor.original_content import (
+    WORKFLOWS,
+    advisory_lock,
+    budget_totals,
+    citation_values,
+    shared_storage,
+)
+from monitor.original_content_backfill import backfill_original_content
+
+ADAPTER_VERSION = "original-content-storage-v1"
+CONSUMERS = frozenset({"web", "headlines", "editorial", "pictures"})
+
+# Compatible writers still need these inputs throughout the rollback window.
+LEGACY_WRITERS = (
+    "monitor.editorial.service",
+    "monitor.editorial.persistence",
+    "monitor.editorial.evidence",
+)
+
+
+def retirement_status(*, now=None):
+    now = now or timezone.now()
+    receipt = (
+        OriginalContentRun.objects.filter(
+            scope_key="migration:original-content:cutover"
+        )
+        .order_by("created_at")
+        .first()
+    )
+    started = datetime.fromisoformat(receipt.outcome["cutover_at"]) if receipt else None
+    return {
+        "ready": False,
+        "cutover_at": started.isoformat() if started else None,
+        "earliest_retirement_at": (started + timedelta(days=7)).isoformat()
+        if started
+        else None,
+        "rollback_window_elapsed": bool(started and now >= started + timedelta(days=7)),
+        "legacy_consumers": list(LEGACY_WRITERS),
+        "restore_proof_required": True,
+        "reason": "Compatible legacy writers must be removed and an encrypted restore proven before destructive retirement.",
+    }
+
+
+def validate_consumers(receipts, candidate):
+    if not re.fullmatch(r"[0-9a-f]{40}", candidate or ""):
+        raise ValueError("full candidate revision required")
+    if set(receipts) != CONSUMERS:
+        raise ValueError("missing provider or reader consumer receipt")
+    for name, receipt in receipts.items():
+        if (
+            receipt.get("revision") != candidate
+            or receipt.get("adapter_version") != ADAPTER_VERSION
+        ):
+            raise ValueError(f"incompatible consumer: {name}")
+
+
+def readiness():
+    report = backfill_original_content(apply=False)
+    missing = EditorialEdition.objects.exclude(
+        pk__in=OriginalContentText.objects.filter(public_id__isnull=False).values(
+            "public_id"
+        )
+    ).count()
+    if missing:
+        report["exceptions"].append({"kind": "unimported_editions", "count": missing})
+    for edition in EditorialEdition.objects.iterator(chunk_size=200):
+        text = (
+            OriginalContentText.objects.filter(public_id=edition.pk)
+            .select_related("narrative")
+            .prefetch_related("sources")
+            .first()
+        )
+        if text is None:
+            continue
+        content = text.narrative
+        expected = citation_values(edition.evidence.get("sources", []), legacy=True)
+        actual = list(text.sources.all())
+        copy_equal = (
+            text.headline,
+            text.secondary,
+            text.body,
+            text.locale,
+            content.story_id,
+            content.revision,
+            content.published_at,
+        ) == (
+            edition.headline,
+            edition.byline,
+            edition.article,
+            edition.locale,
+            edition.story_id,
+            edition.revision,
+            edition.published_at,
+        )
+        sources_equal = [(s.post_id, s.url_snapshot) for s in actual] == [
+            (s["post_id"], s["url_snapshot"]) for s in expected
+        ]
+        if not copy_equal or not sources_equal:
+            report["exceptions"].append(
+                {"kind": "shared_edition_parity", "id": str(edition.pk)}
+            )
+    for hero in EditorialHero.objects.filter(edition__isnull=False).select_related(
+        "edition"
+    ):
+        saved = hero.edition
+        pointer = (
+            OriginalContentSelection.objects.filter(
+                scope_key=f"featured:{WORKFLOWS[saved.track]}:{saved.locale}"
+            )
+            .select_related("text")
+            .first()
+        )
+        if pointer is None or pointer.text is None or pointer.text.public_id != saved.pk:
+            report["exceptions"].append(
+                {"kind": "shared_featured_parity", "id": hero.key}
+            )
+    for budget in EditorialBudget.objects.all():
+        totals = budget_totals("editorial", budget.day)
+        if totals != {
+            "reserved_usd": budget.reserved_usd,
+            "calls": budget.calls,
+            "media_calls": budget.media_calls,
+        }:
+            report["exceptions"].append(
+                {"kind": "shared_budget", "id": budget.day.isoformat()}
+            )
+    report["ready"] = not report["exceptions"]
+    report.update(
+        adapter_version=ADAPTER_VERSION,
+        storage="shared" if shared_storage() else "legacy",
+    )
+    return report
+
+
+def record_cutover(receipts, candidate):
+    validate_consumers(receipts, candidate)
+    if not shared_storage():
+        raise ValueError("observe shared activation before recording cutover")
+    with transaction.atomic():
+        advisory_lock("original-content-cutover")
+        report = readiness()
+        if not report["ready"]:
+            raise ValueError("cutover reconciliation is incomplete")
+        now = timezone.now()
+        run, _ = OriginalContentRun.objects.get_or_create(
+            source_cycle_id=f"storage-cutover:{candidate}",
+            workflow_key="editorial-dispatch",
+            scope_key="migration:original-content:cutover",
+            defaults={
+                "facts_as_of": now,
+                "packet_schema_version": 1,
+                "snapshot": {},
+                "execution_state": "complete",
+                "outcome": {
+                    "cutover_at": now.isoformat(),
+                    "revision": candidate,
+                    "consumers": receipts,
+                    "provider_send": False,
+                },
+            },
+        )
+        return run.outcome

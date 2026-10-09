@@ -103,6 +103,24 @@ The bounded editorial decision service that groups developments, judges each
 track's newsworthiness, and compares a worthy Chatter challenger with the aging
 current hero. Missing chart movement is not an exclusion rule.
 
+### OriginalContent
+
+The owner-selected name for authored aggregate content, including trend headlines,
+Chatter and Pulse. It is distinct from a collected source post. A saved publication
+can have a headline, byline, body and citations, with workflow provenance that stays
+stable when its public label changes. The [storage contract](docs/reference/original-content.md)
+uses headline tables with compatibility mappings and one shared citation join.
+Legacy editorial writes remain during the rollback window.
+
+### Packet-maker
+
+The shared preparation process that queries stored posts, collects relevant
+context and facts, and projects bounded evidence for a writing workflow. Preparation
+runs in code; the workflow's prompt and language-model call follow it. Different
+writing workflows can reuse preparation while retaining their own selection and
+copy requirements. Its [contract](docs/reference/original-content.md#code-only-packet-maker)
+includes immutable packets, UTF-8 bounds and revision-aware reuse.
+
 ### Story and edition
 
 A story is a stable development identity and permanent URL. An edition is an

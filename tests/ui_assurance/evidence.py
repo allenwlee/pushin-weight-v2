@@ -26,11 +26,12 @@ from tests.ui_assurance.reference import (
 )
 
 
-def load_documents(root: Path) -> tuple[AssuranceDeclaration, dict[str, Any]]:
+def load_documents(
+    root: Path,
+    declaration_path: str = "tests/fixtures/ui_assurance/declaration.json",
+) -> tuple[AssuranceDeclaration, dict[str, Any]]:
     declaration = AssuranceDeclaration.model_validate_json(
-        (root / "tests/fixtures/ui_assurance/declaration.json").read_text(
-            encoding="utf-8"
-        )
+        (root / declaration_path).read_text(encoding="utf-8")
     )
     fixture_path = root / declaration.fixture.path
     fixture_bytes = fixture_path.read_bytes()
@@ -168,9 +169,7 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
         off_ids = {row["id"] for row in off}
         only_ids = {row["id"] for row in only}
         in_window = {
-            row["id"]
-            for row in fixture["posts"]
-            if row["age_hours"] <= 365 * 24
+            row["id"] for row in fixture["posts"] if row["age_hours"] <= 365 * 24
         }
         assert off_ids.isdisjoint(only_ids)
         assert off_ids | only_ids == in_window
@@ -203,16 +202,22 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
         official = set_control(initial_state(), "role_badge", "official")
         official = set_control(official, "account_geography", "country")
         assert projection(fixture, official)["accessibility"]["metadata_order"] == [
-            "followers", "role-official", "geography"
+            "followers",
+            "role-official",
+            "geography",
         ]
         staff = set_control(initial_state(), "role_badge", "staff")
         staff = set_control(staff, "account_geography", "hierarchy")
         assert projection(fixture, staff)["accessibility"]["metadata_order"] == [
-            "followers", "geography", "role-staff"
+            "followers",
+            "geography",
+            "role-staff",
         ]
         taiwan_zh = set_control(initial_state(), "locale", "zh_cn")
         taiwan_zh = set_control(taiwan_zh, "account_geography", "taiwan")
-        assert projection(fixture, taiwan_zh)["accessibility"]["geography_label"] == "台湾"
+        assert (
+            projection(fixture, taiwan_zh)["accessibility"]["geography_label"] == "台湾"
+        )
     elif invariant_id == "feed-inspection-agrees":
         for state_name, is_open, is_pinned in (
             ("closed", False, False),
@@ -279,9 +284,7 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
         assert projection(fixture, same_state)["network"]["feed_refresh_paused"] is True
 
         released_state = set_control(same_state, "freeze_point", "other")
-        released_state = set_control(
-            released_state, "chart_hover_freeze", "released"
-        )
+        released_state = set_control(released_state, "chart_hover_freeze", "released")
         released = projection(fixture, released_state)
         assert released["accessibility"]["locale_selected"] == ["en"]
         assert released["accessibility"]["feed_title"] == "default"
@@ -336,28 +339,32 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
         def complete_feed(control: str, value: str) -> set[str]:
             selected = set_control(state, control, value)
             return {
-                *projection(
-                    fixture, set_control(selected, "unsanctioned", "off")
-                )["feed"],
-                *projection(
-                    fixture, set_control(selected, "unsanctioned", "only")
-                )["feed"],
+                *projection(fixture, set_control(selected, "unsanctioned", "off"))[
+                    "feed"
+                ],
+                *projection(fixture, set_control(selected, "unsanctioned", "only"))[
+                    "feed"
+                ],
             }
 
         assert complete_feed("post_type", "other") == {"p06"}
         assert complete_feed("post_type", "__unclassified__") == {
-            "p02", "p03", "p04", "p05",
+            "p02",
+            "p03",
+            "p04",
+            "p05",
         }
         no_product = complete_feed("product_labels", "__no_product_signal__")
         assert "p11" in no_product and "p02" not in no_product
         assert complete_feed("product_labels", "__unclassified__") == {
-            "p02", "p03", "p04", "p05",
+            "p02",
+            "p03",
+            "p04",
+            "p05",
         }
     elif invariant_id == "ui-polish-contract-agrees":
         one_day = projection(fixture, initial_state())
-        seven_day = projection(
-            fixture, set_control(initial_state(), "window", 7)
-        )
+        seven_day = projection(fixture, set_control(initial_state(), "window", 7))
         assert one_day["accessibility"]["locale_labels"] == ["en", "中文", "日本語"]
         assert one_day["accessibility"]["role_other_icon_slot"] == "empty-aligned"
         assert len(one_day["accessibility"]["taxonomy_glyphs"]) == 11
@@ -385,9 +392,7 @@ def _check_race(
         state, obsolete = settle_request(state, old, succeeded=False)
         assert not obsolete.committed and not obsolete.warning_visible
     elif fault == "aborted":
-        state, obsolete = settle_request(
-            state, old, succeeded=False, aborted=True
-        )
+        state, obsolete = settle_request(state, old, succeeded=False, aborted=True)
         assert not obsolete.committed and not obsolete.warning_visible
     elif fault == "duplicate":
         state, first = settle_request(state, old, succeeded=True)
@@ -402,9 +407,10 @@ def _check_race(
     expected_projection = projection(fixture, expected)
     assert observed_projection["controls"] == expected_projection["controls"]
     for key in ("chart_hover_freeze", "freeze_point", "locale_selected"):
-        assert observed_projection["accessibility"][key] == expected_projection[
-            "accessibility"
-        ][key]
+        assert (
+            observed_projection["accessibility"][key]
+            == expected_projection["accessibility"][key]
+        )
 
 
 def _check_seed(fixture: dict[str, Any], seed_id: str) -> None:
@@ -505,9 +511,7 @@ def _check_seed(fixture: dict[str, Any], seed_id: str) -> None:
         raise AssertionError(f"unimplemented seed: {seed_id}")
 
 
-def _check_ordered(
-    fixture: dict[str, Any], group_id: str, actions: list[str]
-) -> None:
+def _check_ordered(fixture: dict[str, Any], group_id: str, actions: list[str]) -> None:
     state = initial_state()
     for action in actions:
         state = _apply_action(state, action)
@@ -578,9 +582,7 @@ def _check_ordered(
             "chart_hover_freeze"
         )
     elif group_id == "hover-freeze-point-order":
-        assert observed["accessibility"]["freeze_point"] == last_value(
-            "freeze_point"
-        )
+        assert observed["accessibility"]["freeze_point"] == last_value("freeze_point")
     else:
         raise AssertionError(f"unimplemented ordered group: {group_id}")
 
@@ -621,8 +623,9 @@ def build_evidence(
     *,
     candidate_revision: str,
     browser_runtime: str,
+    declaration_path: str = "tests/fixtures/ui_assurance/declaration.json",
 ) -> AssuranceEvidence:
-    declaration, fixture = load_documents(root)
+    declaration, fixture = load_documents(root, declaration_path)
     declaration_data = declaration.model_dump(mode="json")
     rows = covering_rows(declaration_data)
     assert covered_tuples(declaration_data, rows) == required_tuples(declaration_data)

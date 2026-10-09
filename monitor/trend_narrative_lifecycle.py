@@ -74,6 +74,12 @@ def reserve_trend_narrative_provider_call(
                 request_hash=request_hash,
                 request_packet=request_packet,
                 reserved_at=now,
+                workflow_key="brand-window",
+                workflow_version=run.workflow_version,
+                budget_scope="headlines",
+                budget_day=now.date(),
+                provider=(request_packet.get("routing") or {}).get("provider", ""),
+                model=(request_packet.get("provider_request") or {}).get("model", ""),
             )
     except IntegrityError:
         return None
@@ -245,6 +251,7 @@ def prepare_brand_trend_narrative(
     cited_fact_ids: list[str] | None = None,
     cited_evidence_ids: list[str] | None = None,
     error_code: str = "",
+    producing_call: TrendNarrativeProviderCall | None = None,
 ) -> BrandTrendNarrative:
     """Write one immutable per-brand terminal/prepared outcome for a run."""
     if status not in BrandTrendNarrative.Status.values:
@@ -260,7 +267,7 @@ def prepare_brand_trend_narrative(
         last_good = None
         if status == BrandTrendNarrative.Status.HELD:
             visible = (
-                TrendNarrativeVisibleRun.objects.select_for_update()
+                TrendNarrativeVisibleRun.objects.select_for_update(of=("self",))
                 .filter(window_days=run.window_days)
                 .select_related("run")
                 .first()
@@ -290,6 +297,9 @@ def prepare_brand_trend_narrative(
             brand_key_snapshot=brand_key,
             brand_name_en_snapshot=brand_name_en,
             brand_name_zh_cn_snapshot=brand_name_zh_cn,
+            workflow_key="brand-window",
+            output_key=brand_key,
+            subject_key=brand_key,
             status=status,
             headline_en=headline_en,
             headline_zh_cn=headline_zh_cn,
@@ -330,6 +340,24 @@ def prepare_brand_trend_narrative(
             ]
         )
         if status == BrandTrendNarrative.Status.APPROVED:
+            from monitor.original_content import mirror_storage, citation_values
+
+            if mirror_storage():
+                from core.models import OriginalContentSource
+                from monitor.original_content_backfill import headline_citations
+
+                values = citation_values(headline_citations(outcome), legacy=False)
+                producers = [producing_call] if producing_call else [call for call in run.provider_calls.filter(stage="editor", state="completed")
+                    if brand_key in (call.request_packet or {}).get("envelope", {}).get("manifest_brand_keys", [])]
+                if len(producers) != 1:
+                    raise ValueError("headline lacks exact producing editor call")
+                if producers[0].run_id != run.pk or producers[0].state != "completed":
+                    raise ValueError("headline producing call is incomplete")
+                for text in outcome.localized_texts.all():
+                    text.public_id = uuid.uuid5(uuid.NAMESPACE_URL, f"pushinweight:headline-text:{text.pk}")
+                    text.producing_call = producers[0]
+                    text.save(update_fields=["public_id", "producing_call"])
+                    OriginalContentSource.objects.bulk_create([OriginalContentSource(text=text, **v) for v in values])
             from monitor.editorial.dispatch import dispatch_picture
 
             dispatch_picture("current_headline", outcome.pk)
@@ -353,7 +381,7 @@ def activate_trend_narrative_run(run_id: int, *, now) -> bool:
         ):
             return False
         pointer = (
-            TrendNarrativeVisibleRun.objects.select_for_update()
+            TrendNarrativeVisibleRun.objects.select_for_update(of=("self",))
             .filter(window_days=run.window_days)
             .select_related("run")
             .first()
@@ -411,16 +439,33 @@ def prune_per_brand_trend_narrative_history(
                 .values_list("pk", flat=True)[:keep_per_window]
             )
             protected = pinned_run_ids | newest_ids
-            count, _ = (
-                TrendNarrativeRun.objects.filter(
-                    window_days=window_days,
-                    created_at__lt=cutoff,
-                    status=TrendNarrativeRun.Status.SUPERSEDED,
-                )
-                .exclude(pk__in=protected)
-                .delete()
-            )
-            deleted += count
+            eligible = TrendNarrativeRun.objects.filter(
+                window_days=window_days,
+                created_at__lt=cutoff,
+                status=TrendNarrativeRun.Status.SUPERSEDED,
+            ).exclude(pk__in=protected)
+            # Shared authored history is protected from incidental run deletion.
+            # The established trend-retention policy explicitly removes only its
+            # old, unpinned children; editorial runs have no trend window.
+            from core.models import ContentPicture
+
+            picture_content_ids = [
+                int(value)
+                for value in ContentPicture.objects.filter(
+                    content_kind="current_headline"
+                ).values_list("content_id", flat=True)
+                if str(value).isdecimal()
+            ]
+            picture_run_ids = BrandTrendNarrative.objects.filter(
+                pk__in=picture_content_ids
+            ).values_list("run_id", flat=True)
+            for old_run in eligible.exclude(pk__in=picture_run_ids):
+                children, _ = BrandTrendNarrative.objects.filter(run=old_run).delete()
+                calls, _ = TrendNarrativeProviderCall.objects.filter(
+                    run=old_run
+                ).delete()
+                count, _ = old_run.delete()
+                deleted += children + calls + count
     return deleted
 
 
@@ -1225,7 +1270,9 @@ def _write_subjects(
                     except ValueError:
                         product_key = None
                     if product_key is not None:
-                        product = Product.objects.filter(product_key=product_key).first()
+                        product = Product.objects.filter(
+                            product_key=product_key
+                        ).first()
         if identity_type == TrendNarrativeSubject.IdentityType.BRAND and brand is None:
             raise ValueError("known brand subjects require an existing brand")
         if (

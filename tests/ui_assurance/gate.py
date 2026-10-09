@@ -19,6 +19,7 @@ FOCUSED_TESTS = [
     "tests/test_dashboard_each_browser.py",
     "tests/test_ui_assurance_contract.py",
     "tests/test_ui_assurance_evidence.py",
+    "tests/test_ui_assurance_candidate_binding.py",
     "tests/test_ui_assurance_reference.py",
     "tests/test_ui_assurance_browser.py",
     "tests/test_performance_declarations.py",
@@ -75,6 +76,28 @@ def _run_json(*command: str) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise TypeError(f"{command[1]} returned a non-object result")
     return payload
+
+
+def require_candidate_checkout(root: Path, revision: str) -> None:
+    head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
+    if revision != head:
+        raise ValueError("candidate revision must match the checkout HEAD")
+    subprocess.run(["git", "diff", "--quiet", "HEAD", "--"], cwd=root, check=True)
+
+
+def candidate_declaration(root: Path, revision: str) -> str:
+    """Bind unchanged controls to the clean commit actually being tested."""
+    require_candidate_checkout(root, revision)
+    data = json.loads(
+        (root / "tests/fixtures/ui_assurance/declaration.json").read_text()
+    )
+    data["source_revision"] = revision
+    path = Path(".ollija/tmp/ui-assurance-candidate-declaration.json")
+    (root / path).parent.mkdir(parents=True, exist_ok=True)
+    (root / path).write_text(json.dumps(data, indent=2) + "\n")
+    return str(path)
 
 
 def _require_candidate_performance_args(
@@ -144,6 +167,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--performance-declaration")
     args = parser.parse_args(argv)
     _require_candidate_performance_args(args, parser)
+    bound_declaration = (
+        candidate_declaration(ROOT, args.candidate_revision)
+        if args.scope == "candidate"
+        else None
+    )
 
     _run(args.bridgewright, "assurance-validate", "--project-root", str(ROOT))
     _run(args.bridgewright, "assurance-prescribe", "--project-root", str(ROOT))
@@ -177,10 +205,12 @@ def main(argv: list[str] | None = None) -> int:
     _run("node", "tests/test_pw_tz.js")
 
     if args.scope == "candidate":
+        require_candidate_checkout(ROOT, args.candidate_revision)
         evidence = build_evidence(
             ROOT,
             candidate_revision=args.candidate_revision,
             browser_runtime="playwright-chromium",
+            declaration_path=bound_declaration,
         )
         EVIDENCE_PATH.parent.mkdir(parents=True, exist_ok=True)
         EVIDENCE_PATH.unlink(missing_ok=True)
@@ -194,6 +224,8 @@ def main(argv: list[str] | None = None) -> int:
             "assurance-assess",
             "--project-root",
             str(ROOT),
+            "--declaration",
+            bound_declaration,
             "--evidence",
             str(EVIDENCE_RELATIVE_PATH),
         )

@@ -1095,8 +1095,8 @@ def test_u5_query_count_is_bounded_for_twenty_brands(django_assert_num_queries):
         _per_brand_outcome(run, brand)
     assert activate_trend_narrative_run(run.pk, now=NOW + timedelta(seconds=1))
 
-    # One extra bounded prefetch loads normalized EN/ZH-CN/JA child text.
-    with django_assert_num_queries(3):
+    # Locale text and citations each use one batched prefetch, independent of brands.
+    with django_assert_num_queries(4):
         payload = project_trend_narrative(
             1,
             locale="en",

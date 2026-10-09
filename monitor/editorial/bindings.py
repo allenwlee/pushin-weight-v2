@@ -9,6 +9,7 @@ from core.models import (
     Post,
     PostSynthesisArtifact,
 )
+from monitor.original_content import shared_storage
 
 from .config import load_editorial_config
 from .contracts import Event, digest
@@ -51,7 +52,12 @@ def narrative_posts(narrative):
 
 def content_input(kind, content_id):
     if kind in {"chatter", "pulse"}:
-        edition = EditorialEdition.objects.get(pk=content_id, track=kind)
+        if shared_storage():
+            from monitor.original_content_readers import saved_edition, text_query
+
+            edition = saved_edition(text_query(kind).get(public_id=content_id))
+        else:
+            edition = EditorialEdition.objects.get(pk=content_id, track=kind)
         return (
             Event.model_validate(edition.selection),
             {"posts": edition.evidence["sources"]},
