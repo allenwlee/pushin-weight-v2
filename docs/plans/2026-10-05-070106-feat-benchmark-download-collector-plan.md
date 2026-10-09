@@ -7,15 +7,14 @@ ollija:
   change_id: feat-benchmark-download-collector-2026-10-05-070106
   branch: feat/benchmark-download-collector
   workflow: plan
-  delivery_target: production
-  delivery_selected_by_user: true
-  delivery_route: staged
-  delivery_route_selected_by_user: false
-  staging_transport: branch
+  delivery_target: on-request
+  delivery_selected_by_user: false
 ---
 # Benchmark scores and model adoption in PostgreSQL
 
 ## Plain-English Summary
+
+**Current October 9 follow-up:** make measurement intervals self-describing in PostgreSQL. Keep nullable start/end timestamps and add a generated `window_range` that records inclusive start and exclusive end. If either endpoint is unknown, the range itself stays NULL and the other timestamp is preserved. These measurement windows never have intentionally infinite endpoints. This independently owned change supports the new G3 chart engine while retaining existing chart calculations, source clocks and historical evidence. Verify fresh and populated migrations, direct SQL boundaries, collector/read regressions and reversal in isolated PostgreSQL. The current LFG endpoint is a tested pull request; prior production grants below describe completed releases and do not authorize this migration's deployment.
 
 Compare post volume, benchmark scores, HF downloads and OpenRouter/OpenCode usage using products we identify and a taxonomy we control. Product relationships store typed parent/child links using HF's vocabulary. Named product groups, such as M-family, have explicit membership; they are not compulsory levels between brands and products. Django queries interpret successor chains and groups while company ownership and brand membership remain separate.
 
@@ -38,6 +37,62 @@ The earlier October 7 review required portable source/license attribution, accep
 The owner has now selected one combined release-response chart as the default G5 Pulse presentation: brand posts, exact-product OpenRouter tokens and net change in the selected HF rolling-download counter. Each line shows percentage change from its own average over the same first complete post-release week, with optional three-day smoothing. Zero represents that reference average, not the launch-day value. Arena score, confidence bands and reported battle counts share its date selection in a linked panel; rank remains supporting context. This October 7 selection replaces the earlier unresolved default-chart proposal, while preserving old comparison contracts and diagnostic views. U22–U23 are implemented and verified on Render staging at `e28cbda9`; the original diagnostic comparisons remain available.
 
 The latest naming decision renames the definition table from `source_metrics` to `metrics`. A metric still belongs to one data source and retains its unit, numeric type, version and state/flow semantics. This is a migration of the existing table, not another table or a change in recorded measurements. U24 is implemented and verified on isolated and populated staging PostgreSQL; the October 8 verified production release also uses `metrics`.
+
+## October 9 amendment — database-enforced measurement intervals
+
+### Current scope and delivery
+
+The owner requests LFG for the settled three-column proposal while provider data is still manageable. This amendment governs U29–U31 only. Reuse this selected plan and feature checkout. Coordinate ownership in the authoritative October 9 G1–G5 index; this is an independent measurement-storage change supporting B2-G3-01. Do not modify another stream's chart presentation, product taxonomy or migrations.
+
+**Delivery exception:** default LFG endpoint is an open PR with CI decided. Production/staging migration, activation, provider calls and schedule changes are outside this new selection. Preserve all historical release evidence below. Before any future production deployment, verify the retained recoverable live backup or take and restore a new snapshot if its recovery scope is inadequate; it may be captured hours before cutover. Serialize migration execution through the existing shared migration guard. A verified PR does not claim a live schema change.
+
+### Requirements and settled decisions
+
+- **R46:** retain `metric_values.window_start_at` and `window_end_at` as nullable finite TIMESTAMPTZ evidence. Add nullable, database-generated `window_range` TSTZRANGE. Both known means `[start,end)` with end greater than start. Either unknown means the entire generated range is SQL NULL. Preserve a separately known endpoint, source timezone, precision and period label. No missing timestamp is changed to infinity, epoch, fetch time or nominal day-end.
+- **R47:** enforce finite, nonempty, inclusive-start/exclusive-end construction inside PostgreSQL through a versioned immutable measurement-window function reusable by future generated metric columns. Reject infinity even when the other endpoint is NULL. Prevent direct SQL from supplying an independent generated value. Expose column/function comments so agents using SQL can identify the rule without application code. Existing finite/order checks remain.
+- **R48:** preserve all observations, values, identifiers, contracts, snapshots, temporal statuses and serving results. State instants/dates are unchanged. In particular HF unknown rolling cutoffs and OpenCode current-day known-start/unknown-end remain incomplete; hourly revisions and completed daily windows stay distinct. No new measurement table, extra status flag or source clock change.
+- **R49:** bound table-lock admission and migration work, measure the populated rewrite, and build the range index concurrently in a separate non-atomic migration. Verify failure leaves no partial transactional schema, index readiness, reversal/reapply and numerical/temporal preservation. Native interval queries exclude unknown ranges; they are not a substitute for date-only/state queries.
+
+**KD28 (session-settled: user-approved; Governs R46–R48):** keep the two nullable endpoints plus a generated range. Reject range-only plus unbounded endpoints/status because incomplete measurement intervals must not accidentally match containment/overlap queries. No genuine infinite endpoints are needed for these finite measurement windows; unknown counting origins remain unknown. An all-time counter does not establish minus infinity. Interpretations of ongoing affiliations/sessions belong to separate domains.
+
+**KTD7 (Governs R47/R49):** use an immutable, versioned PostgreSQL function and native Django `GeneratedField`/`DateTimeRangeField`, with a shared field factory. Do not replace a deployed function's meaning in place: changed rules require a new function version and explicit migration. Retain the current PostgreSQL/Django stack; stored generation is supported by installed Django 5.2, whereas virtual generation is not. Use a partial GiST index for non-NULL ranges. Existing scalar indexes and reader response shape remain.
+
+### Directional technical design
+
+```mermaid
+flowchart LR
+  Provider[Provider evidence] --> Writer[Existing typed writer]
+  Writer --> Start[Nullable inclusive start]
+  Writer --> End[Nullable exclusive end]
+  Start --> Rule[PostgreSQL finite interval rule v1]
+  End --> Rule
+  Rule -->|Both known and ordered| Range[Generated finite start-inclusive end-exclusive range]
+  Rule -->|Either unknown| Unknown[NULL range; retain known endpoint]
+  Rule -->|Infinity or bad order| Reject[Reject the write]
+  Range --> Query[Native containment and overlap queries]
+  Unknown --> Evidence[Existing precision and date-label readers]
+```
+
+| Table | Existing columns retained | Added column / relationship | Database meaning |
+| --- | --- | --- | --- |
+| `metric_values` | `window_start_at`, `window_end_at`, state/date/precision/zone/value/foreign-key fields | `window_range TSTZRANGE GENERATED ... STORED NULL` | Complete finite `[start,end)` or whole-range NULL; derived, never independently written |
+| `metric_observations`, `metrics`, source/identity/contract tables | All | None | Preserve effective versus retrieval/publication timing and immutable definitions |
+
+The existing two timestamp columns remain the evidence inputs. The range is always derived rather than a third independently maintained value. SQL users may read both; complete-window searches use range operators, incomplete-window review uses nullable endpoints and existing precision metadata. A partial GiST index accelerates only complete intervals. The first migration creates the function, comments and column atomically with a short lock timeout; the second builds the index outside a transaction. Adding a stored generated column rewrites this table and its existing indexes, so rehearsal duration/space are evidence required before a deployment decision. No promise of zero blocking is made.
+
+### Implementation units
+
+**U29 — reusable finite interval and MetricValue migration.** Requirements R46/R47/R49; KD28/KTD7. Files: `core/models.py`, new `core/measurement_time.py`, new numbered migrations after the confirmed leaf `0079_original_content_physical_names`, and existing persistence tests. Implement the database constructor, generated field and descriptive comments; preserve existing constraints. Split concurrent GiST index into a non-atomic migration. Set transaction-local lock/statement timeouts for the rewrite so migration settings do not leak. Reverse index before column before function, with no cascade. Execution note: inspect existing PostgreSQL persistence tests and first add/observe failing direct-SQL interval coverage. Test exact boundaries including the last fractional second, equivalent offsets, all four known/unknown endpoint combinations, raw SQL inserts/updates, ORM bulk/update paths, and infinity/bad-order failures. Prove another temporary table can reuse the constructor without application validation. Verify fresh schema and model/migration consistency.
+
+**U30 — populated preservation and regression net.** Depends U29; requirements R48/R49. Files: existing benchmark persistence/operations/series/Pulse tests and a dated flat `docs/analysis/` verification receipt; private operational scripts/archives remain untracked on fuchitalee. Read-only profile live row count/bytes/boundary shapes; clone a retained populated local provider database into a new owned rehearsal DB. Capture row/data checksums and real Pulse/report arithmetic before migration, then migrate, verify generated shape/bounds/counts/index validity and unchanged checksums/responses. Reverse and reapply the populated migration and compare original data. Test lock contention produces bounded refusal before any committed function/column; release the owned competing lock and retry once. Test raw SQL native membership/overlap excludes incomplete ranges, state values remain range-NULL and DST/offset changes retain real instants. Run the existing real collector → writer → PostgreSQL → response tests for all four sources, including partial OpenCode and unknown HF. Browser verification covers the existing combined chart and Arena panel against local stored data; no provider fetch is implied.
+
+**U31 — review, serving handoff and verified PR.** Depends U29/U30; requirements R46–R49. Update the current measurement schema reference only for affected columns/function/query examples, respecting other sessions' reference edits. Run simplification and inline code/data-migration review under the project's sequential-agent rule; identify unavailable independent coverage honestly. Reannotate this exact plan and check the managed guide before Git mutation. Commit only scoped files, push the existing feature branch, open/update its PR and finish the bounded CI/review watch. Record actual migration leaf, dataset size, rehearsal/lock evidence and rollback sequence for the future deployment review. Update the authoritative index ownership OFF entry. No production/staging mutation belongs to this unit.
+
+### Verification and completion for this follow-up
+
+Done when R46–R49 have actual PostgreSQL proof, fresh/populated/reverse/reapply migrations and source/reader regressions pass, current model state has no ungenerated migration, code/data review has no unresolved blocker, and the PR's CI/review result is decided. Preserve current public/forecast/source-use permissions and every provider schedule. Completion means ready for a separate deployment selection, not deployed.
+
+Official grounding: [PostgreSQL range boundaries and unbounded endpoints](https://www.postgresql.org/docs/18/rangetypes.html), [generated column rules](https://www.postgresql.org/docs/18/ddl-generated-columns.html), [ALTER TABLE rewrite behavior](https://www.postgresql.org/docs/18/sql-altertable.html), [Django generated fields](https://docs.djangoproject.com/en/5.2/ref/models/fields/#generatedfield), and [concurrent PostgreSQL index migrations](https://docs.djangoproject.com/en/5.2/ref/contrib/postgres/operations/). The range remains continuous TIMESTAMPTZ precision; ending at 12:59:59 would lose fractional-second events.
 
 ## October 8 production release — deployed and verified
 
@@ -885,9 +940,13 @@ for an unrelated repair.
 
 ## Goal Capsule
 
-Objective: users can compare post attention with benchmark performance and adoption, knowing which entities, units and periods each point actually represents. Means: the owner-controlled taxonomy and shared metric schema below (KD3, KD6–KD15; KTD1–KTD6), delivered in the existing isolated feature worktree. Preserve U1–U4 as historical baseline; execute future units in dependency order, not numeric order. The latest owner-authorized endpoint is verified production activation of the four selected sources and bounded benchmark charts/readers, completed in the October 8 activation checkpoint. PR #50 is merged and the recorded hosted checks cover the unchanged benchmark code. Additional product coverage and G3 forecast/trading uses remain separate decisions described in Delivery Exceptions.
+Current objective: SQL users can identify and query complete measurement windows with correct boundary semantics while incomplete source timing stays explicitly unknown. Means: R46–R49/KD28/KTD7, implemented as U29–U31 in the existing isolated feature worktree. Current endpoint: tested PR with CI decided; no new deployment grant. Existing chart/source behavior must remain unchanged.
+
+Historical feature objective: users can compare post attention with benchmark performance and adoption, knowing which entities, units and periods each point actually represents. Means: the owner-controlled taxonomy and shared metric schema below (KD3, KD6–KD15; KTD1–KTD6). Preserve U1–U28 as historical baseline. The four-source production activation and HF clock follow-up are completed releases, not authority for this migration. Additional product coverage and G3 forecast/trading uses remain separate decisions described in Delivery Exceptions.
 
 ## Delivery Exceptions
+
+**Current owner direction — October 9, metric time ranges:** LFG the settled three-column proposal in R46–R49/U29–U31. Default endpoint is verified PR. Preserve the prior completed production release and all clocks; historical production grants do not cover this new schema migration.
 
 **Latest owner direction — October 9, HF schedule:** “set it for 10:00 UTC, add a note for why, and commit/push/deploy” authorizes U28 through staged production delivery and verification. Preserve all other provider schedules, source-use/taxonomy/measurement snapshots, the separate temporary poll deadline and other sessions. Configure HF's collection clock in existing operational metadata; no time-range/schema overhaul is part of this release.
 
@@ -1463,6 +1522,7 @@ UNIQUE(run,observation_key), indexes(mapping,observed_at), (run,published_date).
 | source_timezone | VARCHAR(64) NOT NULL | Confirmed definition timezone or unknown |
 | as_of_at / as_of_date | TIMESTAMPTZ / DATE NULL | State effective instant or native date |
 | window_start_at / window_end_at | TIMESTAMPTZ NULL | Flow interval [start,end); since-origin start is the real counting origin |
+| window_range | TSTZRANGE generated stored NULL | R46–R49: complete finite `[start,end)` only; SQL NULL if either endpoint unknown; preserves original nullable inputs |
 | period_label_date | DATE NULL | Native flow-period/effective-end date label where supplied; not invented midnight |
 
 UNIQUE(observation,source_metric); indexes(definition,observation), (window_end_at), (as_of_date). CHECK exactly one numeric column nonnull; integer rejects NaN and float is finite; all stored times/dates are finite; end>start when both bounds known; as_of_at/as_of_date mutually exclusive; temporal_status allowlist. Preserve a single genuinely supplied flow boundary even when the other is unknown. Writer validates kind-specific times, definition/source/contract, native precision, signs and exact decimal admission before atomic commit; cross-table rules are not PostgreSQL CHECKs.
@@ -2039,25 +2099,11 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `production`
-- Owner selection recorded: `true`
+- Delivery target: `on-request`
+- Owner selection recorded: `false`
 - Delivery route: `staged`
 
-1. Complete implementation and the plan's verification contract.
-2. Run the configured focused checks:
-   - `pytest tests/ollija`
-3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
-    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
-    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector` without `--force`.
-    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
+Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
 
 ### Failure handling
 
