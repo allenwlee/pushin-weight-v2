@@ -80,6 +80,14 @@ or production endpoint is selected. The generated guide alone supplies no
 authority; this owner request supplies the commit/push authority. No PR, merge,
 staging or production release is required to reach the requested endpoint.
 
+**October 9 continuation:** the owner now explicitly requests “merge to main.”
+This authorizes merging the published documentation snapshot into `main`,
+including a pull request if used for the merge. The application delivery target
+remains `on-request`; no staging step or application deployment is selected.
+Use `[skip render]` on the documentation merge as required by the repository
+README. Completion is observed remote-main inclusion of this branch's candidate
+commit. Preserve newer local session handoffs and all other worktrees.
+
 # Goal
 
 The remote `docs/general-round-two-records` branch contains the current
