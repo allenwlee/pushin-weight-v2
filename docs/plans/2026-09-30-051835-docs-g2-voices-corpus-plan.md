@@ -5,6 +5,12 @@ date: 2026-09-30
 artifact_contract: ce-unified-plan/v1
 product_contract_source: docs/brainstorms/2026-09-30-104924-general-launch-charter.md
 execution: code
+status: closed
+round: 1
+closed_at: "2026-10-09T11:01:45+09:00"
+closed_by: owner
+closeout: completed-scope-with-carry-forward
+successor: docs/brainstorms/2026-10-09-110145-general-round-two.md
 deepened: 2026-10-08
 ollija:
   change_id: docs-g2-voices-corpus-2026-09-30-051835
@@ -17,6 +23,23 @@ ollija:
 ---
 # G2 editorial engine, voices and modular picture editor - Plan
 
+## Round-one closeout — October 9
+
+The owner closes this round and transfers unfinished, non-superseded G2 scope
+to [round-two G2](../brainstorms/2026-10-09-110145-general-round-two.md#g2--editorial-decisions-and-voices),
+items B2-G2-01–05. English editorial delivery and U9–U14/U16 retain their
+production receipts. Japanese/Chinese voices, U15 retirement, published-history
+retention and remaining quality/coverage decisions are carried forward.
+Graphicsed selection/creation work moves to B2-G1-01/02 through an explicit
+handoff of the existing picture/media files; no code ownership changes silently.
+
+The 24-hour rollback reevaluation remains October 9 at 16:37:56 JST; older
+seven-day receipts/report behavior are historical drift for B2-G2-03 to
+reconcile before cleanup. Closing this round does not delete storage or reset
+that clock. Keep the detailed history and open checkboxes below intact.
+See the [closeout and lessons](../analysis/2026-10-09-110145-general-round-one-closeout.md).
+Existing delivery metadata records the completed round's endpoint.
+
 ## Plain-English Summary
 
 Headlines, Chatter and Pulse will share storage for our own generated content, called `OriginalContent`, while collected posts remain source material. Each saved language/version will contain its headline, byline, optional body and exact cited posts. Its source count and every source URL will remain inspectable.
@@ -25,7 +48,7 @@ We will extend the existing headline tables and add one source-link table. Exist
 
 Storage consolidation comes first, with current writing behavior preserved. Packet-maker extraction and measured call reduction follow separately. Verification will compare saved text, citations, URLs, pictures, publication choices, costs and retries, including populated-database migration and rollback. The schema image below shows the proposed end state.
 
-The compatible release is verified on staging and production. Django uses the new model names, but the retained PostgreSQL tables still have their old physical names. The owner clarified that physical names must change too, finished the compatible production release, and now requests proceeding with its physical-name amendment and disruption assessment. U16 proposes actual renames with temporary old-name aliases so deployed versions can share the same rows during rollout. We expect a brief website restart and a bounded pause in writing jobs; collecting source posts should continue. These expectations require a staging rehearsal before production. Legacy storage remains available during the seven-day rollback window; retirement cannot run before its remaining safeguards are satisfied.
+The compatible release and U16 physical table renames are verified on staging and production. The six retained tables now have their agreed names; temporary views under the old names let compatible older code use the same rows. Full-row checksums, IDs, relationships, citations, publication pointers and budget totals survived the rename. Writing has resumed, source collection continued, and original service settings are restored. Monitoring observed about three minutes of website 502 responses across an overlapping rebuild and this deployment. The owner now selects a 24-hour rollback window, with reevaluation on October 9 at 16:37:56 JST. Legacy storage and aliases remain available until that review and the remaining cleanup safeguards are satisfied; nothing is removed automatically.
 
 ---
 
@@ -34,11 +57,19 @@ The compatible release is verified on staging and production. Django uses the ne
 - **Objective:** Operators can inspect and extend generated stories and headlines through one consistent content model, with dependable citations and resource accounting.
 - **Means:** Headline-first schema consolidation (KTD10), shared packet-maker (KTD16), and profile-specific final writing (KTD17).
 - **Authority:** Current owner instructions; G2-R43/R48/R50–R54 in the authoritative General Launch Charter; this current execution contract; historical release evidence.
-- **Endpoint:** The current owner request is `$compound-engineering:lfg this amendment to production`: implement U16, verify the unchanged integrated candidate on staging, then observe all six canonical physical table names and compatible old-name views in production, preserving data/citations/budgets and running harvesting, with writing resumed and original service settings restored. The earlier compatible-production endpoint is already complete and its receipts remain valid for their stated scope. Observe the existing seven-day safeguard before destructive retirement.
-- **Execution scope:** U16 only is active for this continuation. U9–U14 and compatible staging/production delivery are complete in the October 8 receipts below. U15 physical retirement, alias removal, column renames and new quality experiments are excluded. U1–U8 and completed October releases are historical evidence and must not be rerun.
+- **Endpoint:** U16's authorized production endpoint is complete: all six canonical physical table names and compatible old-name views were observed in production with data/citations/budgets preserved, harvesting running, writing resumed and original service settings restored. The latest owner request, “let's set it to 24 hours and reevaluate then,” changes the rollback policy and records the review checkpoint in this existing plan. It does not request another deployment or authorize removal. Earlier release receipts remain valid for their stated revision and scope.
+- **Execution scope:** U16 is complete at production revision 00d73117, as recorded below. U9–U14 and compatible staging/production delivery are also complete. U15 physical retirement, alias removal, column renames and new quality experiments remain excluded. U1–U8 and completed October releases are historical evidence and must not be rerun.
 - **Stop conditions:** Escalate a material contradiction of the owner-selected architecture or an unresolved migration discrepancy. Missing historical data must be reported, never replaced with invented evidence.
 
 ---
+
+## Rollback window and reevaluation — current owner decision
+
+The owner replaces the seven-day rollback window with **24 hours**, measured from the already recorded production cutover `2026-10-08T07:37:56.303216+00:00`. The checkpoint is **2026-10-09T07:37:56.303216+00:00**, or **October 9 at 16:37:56 JST**. Do not reset the cutover clock to the later physical rename or to this policy edit. This current decision supersedes seven-day timing and October 15 deadlines in the historical release receipts below; their observed evidence remains unchanged.
+
+At the checkpoint, perform a read-only reevaluation of the active service revisions/migration state and six canonical base tables/old-name views; natural writing and serving health; saved source counts/URLs; and provider accounting or duplicate-send discrepancies. Decide whether to keep compatibility support longer or prepare its separately scoped removal. Passing 24 hours never drops tables/views, disables mirroring, changes service flags, or marks retirement ready.
+
+The deployed `monitor/original_content_cutover.py::retirement_status` still computes seven days at application revision `00d73117`. This turn changes the plan and coordination policy only, without a redeployment. At reevaluation use the 24-hour checkpoint above; reconcile that report's code, boundary/call-chain tests and maintained runtime references to the owner-selected period before any later cleanup execution. Zero remaining legacy consumers, tested rollback, exact preservation and an encrypted backup restore proof remain required for destructive retirement. No scheduler or automatic reevaluation job is created by this plan edit.
 
 ## Product Contract
 
@@ -101,7 +132,7 @@ The committed harvest envelope dispatches queue work. Trend runs prepare brand/w
 - KTD15. **Derive daily budgets from calls plus proven carry-forward receipts.** Add pessimistic reservation/counter fields to the existing provider-call model and serialize reservation under a short PostgreSQL transaction lock per budget scope/UTC day. Preserve existing external-spend audit receipts in shared run outcomes; these are zero-send import records, not invented provider calls. Preserve the current full-ceiling charging policy, day and per-assessment call/media limits, and global in-flight protection. Imported actual usage may remain unknown; reservation is not invoice cost. Governs G2-R52.
 - KTD16. **Extract one deterministic packet-maker with adapters.** Reuse current facts, projection, evidence and relevance collectors; implement profiles and bounded enrichment as code/config. No language-model dependency belongs in preparation. Cache reuse must incorporate evidence and enrichment revisions, not just post IDs. Governs G2-R50/R53. (session-settled: user-approved — chosen over independent collectors per format: source preparation is substantially shared.)
 - KTD17. **Preserve judgement until savings are demonstrated.** The initial adapters keep current editor/rank/critic decisions. Prefer one final writing request per selected output/locale; combine selection and writing only where a frozen acceptance set proves parity. No fixed-window headline critic disappears merely to achieve a one-call slogan. Governs G2-R43/R53.
-- KTD18. **Expand, import, switch, then retire.** New fields and source links precede writer/read changes. Dual persistence uses the same accepted result in one database transaction, never duplicate provider calls. Destructive removal and breaking column changes wait until all deployed consumers use compatible mappings and the rollback window passes. U16 may rename retained physical tables earlier only with tested old-name aliases that keep the same rollback contract usable; the aliases must remain through that window. This amendment changes the rename transition mechanism, not the seven-day retention safeguard. Governs G2-R52/R54.
+- KTD18. **Expand, import, switch, then retire.** New fields and source links precede writer/read changes. Dual persistence uses the same accepted result in one database transaction, never duplicate provider calls. Destructive removal and breaking column changes wait until all deployed consumers use compatible mappings and the rollback window passes. U16 may rename retained physical tables earlier only with tested old-name aliases that keep the same rollback contract usable; the aliases must remain through that window. The owner's latest decision sets the observation window to 24 hours followed by reevaluation; elapsed time alone never authorizes removal. Governs G2-R52/R54.
 - KTD19. **Preserve the existing shared picture service.** Rename/reuse `EditorialPicture` as a generic `ContentPicture`, including atomic commentary attachments. Add optional exact-text and shared-run foreign keys; preserve non-OriginalContent attachment keys, media objects, provider task IDs and bytes. This existing table is not a second new table. Governs G2-R48/R52/R54.
 
 No bake-off is needed: the owner selected the storage mechanism, and current code establishes the reuse boundaries. Alternative implementations of citation ownership were resolved from the existing per-locale edition contract (KTD11), rather than competing designs needing development.
@@ -146,7 +177,7 @@ flowchart TB
   Compare -->|No| Repair[Resolve discrepancies; old readers stay active]
   Repair --> Import
   Compare -->|Yes| Switch[Switch storage adapters; generation unchanged]
-  Switch --> Observe[Seven-day rollback window]
+  Switch --> Observe[24-hour rollback window and reevaluation]
   Switch -->|Failure| Rollback[Switch readers back; keep dual persistence]
   Observe --> Retire[Rename and remove obsolete storage]
   Switch --> Extract[Extract packet-maker without policy changes]
@@ -155,7 +186,7 @@ flowchart TB
 
 ### Proposed Relevant Schema
 
-Table names below are the final names. They are not all present in the deployed physical schema: compatibility delivery retains the existing names through `db_table`/`db_column`. The owner's October 8 clarification requires the physical rename follow-up in U16; renaming Django classes alone does not satisfy that final requirement. No view or duplicate replacement table is introduced by the current release.
+Table names below are the final names and are now present in the deployed physical schema after0079. The six former names remain temporary, writable views of those same base tables; no replacement table or copied data was introduced. Physical column renames remain outside U16. The field descriptions below retain the broader proposed consolidation contract; maintained schema references describe the current physical columns.
 
 | Existing table | Target table/model | One row represents |
 | --- | --- | --- |
@@ -244,7 +275,7 @@ Shared selection is charged once to its dispatch run. Output-level cost inspecti
 2. **Expand compatibly.** U10 adds fields and the sole new join using existing physical table names. Introduce required workflow/scope/identity fields as nullable during mixed-version operation, then backfill and enforce their final constraints once compatible consumers own writes. Introduce application model names through explicit rename/state mappings so Django does not infer delete-and-create operations. Existing approved trend constraints remain until their replacement publication validation exists. Use historical models for data migrations, and separate schema/data operations when PostgreSQL pending-trigger behavior requires it. See [Django 5.2 migration operations](https://docs.djangoproject.com/en/5.2/ref/migration-operations/).
 3. **Import and mirror.** U11 copies frozen accepted records in resumable batches, recording old-to-new mappings in target provenance, preserving source order and timestamps. Populate missing headline locale rows from the existing parent copy before retiring those duplicated columns; preserve already saved localized rows and report conflicts. U12 dual-persists new accepted outputs and durable call state using the same result, transaction and fence. Reconcile current-day reservations under the same lock with one canonical reservation owner, not two ledgers. Deploy the compatibility readers/claim adapters to every provider-capable consumer before enabling shared ownership; an older process that still uses independent locking must finish before the flag changes.
 4. **Catch up and switch.** Import the overlap after mirror activation, then compare a transaction-consistent snapshot. Flip the storage adapter only after row, citation, route, picture, pointer and budget parity passes. Read flags select one authoritative side; they never cause LLM or harvest calls. Web/worker/operator compatibility must be observed at the same candidate before obsolete-name removal.
-5. **Keep rollback available for seven days.** Continue mirroring representable published outputs and all send/ambiguity states. On failure, select old readers/storage ownership within the compatibility release and reconcile overlap under the common claim lock. Legacy-storage dispatch in that release consults canonical imported/new call identities, preventing a second send. Do not redeploy a pre-compatibility provider process, reverse migrations or delete target data to roll back serving. New output profiles that cannot be represented in old storage stay disabled until this window ends.
+5. **Keep rollback available for 24 hours, then reevaluate.** Continue mirroring representable published outputs and all send/ambiguity states. On failure, select old readers/storage ownership within the compatibility release and reconcile overlap under the common claim lock. Legacy-storage dispatch in that release consults canonical imported/new call identities, preventing a second send. Do not redeploy a pre-compatibility provider process, reverse migrations or delete target data to roll back serving. New output profiles that cannot be represented in old storage stay disabled until the reevaluation explicitly releases this rollback restriction; neither profile activation nor cleanup is automatic.
 6. **Retire safely.** U15 checks zero legacy consumers and exact preservation before removing six obsolete tables/duplicated parent copy and renaming retained physical tables/columns. Take and restore-prove an encrypted backup with recorded retention before destructive removal. After removal, rollback is a reviewed forward fix or restored database plus reconciled publication/call overlap; simply restoring an old snapshot would lose new data and is not acceptable.
 
 Migration lock waits are bounded with an explicit timeout; a busy shared database defers the operation instead of blocking harvest indefinitely. Renames occur only after every consumer supports target names, with deployment sequencing documented for web and queue workers. Temporary mapping/resume reports are artifacts, not new database tables. Missing posts, malformed aliases, unexplained budget balances or unmappable calls remain visible discrepancies until resolved.
@@ -259,7 +290,7 @@ Atomic service checks replace constraints that cannot span locale/citation child
 
 ## Implementation Units
 
-U9–U15 define the compatible consolidation and gated retirement. U16 is the owner's later physical-name amendment, recorded as planning only. Additions keep existing U1–U8 IDs intact in the historical appendix.
+U9–U14 define the completed compatible consolidation; U15 remains gated retirement. U16 is the owner's completed physical-name amendment. Additions keep existing U1–U8 IDs intact in the historical appendix.
 
 ### U9. Capture the regression net and migration inventory
 
@@ -404,7 +435,7 @@ U9–U15 define the compatible consolidation and gated retirement. U16 is the ow
 
 **Requirements:** G2-R43/R48/R51–R54; KTD10/KTD18/KTD19.
 
-**Dependencies:** U12 plus the seven-day rollback window; U13/U14 may proceed independently before retirement.
+**Dependencies:** U12 plus the owner-selected 24-hour rollback window and reevaluation; U13/U14 may proceed independently before retirement. Reconcile the deployed retirement report's seven-day calculation before executing cleanup.
 
 **Files:** `core/models.py`, new ordered retirement migrations in `core/migrations/`, obsolete editorial imports and adapters discovered in U9, `tests/test_original_content_retirement.py` (new), `docs/reference/db-schema.md`, `docs/reference/editorial-stories.md`, `docs/reference/headline-trend-narratives.md`, `docs/deploy/render.md`, `CONCEPTS.md`, `.github/workflows/g2-editorial.yml`. Physical table renames have their own U16 migration/release contract.
 
@@ -417,11 +448,11 @@ U9–U15 define the compatible consolidation and gated retirement. U16 is the ow
 - Backup restore plus publication/call overlap reconciliation loses no saved output and authorizes no duplicate send.
 - Catalog shows one added source table and six removed obsolete editorial tables, with no dangling FK or remaining legacy consumer.
 
-**Verification:** Preservation report, backup proof and seven-day observation are complete before removal; schema/reference/CI inventories agree with the implemented end state.
+**Verification:** Preservation report, backup proof, 24-hour observation and reevaluation are complete before removal; schema/reference/CI inventories agree with the implemented end state. The retirement-report regression must cover the instant before and at the 24-hour boundary through the real management-command caller, and prove elapsed time still leaves retirement blocked while legacy consumers or restore proof remain outstanding.
 
-### U16. Physical table-name amendment — authorized through production
+### U16. Physical table-name amendment — production complete
 
-**Owner decision:** On October 8 the owner clarified that actual PostgreSQL table names must change, selected completing compatible production first, then requested immediately proceeding with the physical-name amendment and assessing disruption to other G1–G5 deployments. This pass completes the amendment and rollout design, without applying a database rename, holding another deployment or pausing a service. The compatible production authorization has reached its endpoint; this amendment does not silently start another production release.
+**Owner decision:** On October 8 the owner clarified that actual PostgreSQL table names must change, selected completing compatible production first, then requested the physical-name amendment and disruption assessment. That original planning pass applied no rename or service hold. The subsequent explicit LFG request authorized this amendment through production; the receipt below records its completed endpoint.
 
 **Current execution authority:** The later explicit LFG request selects production for U16, including implementation, scoped commits/pushes, staging verification, a bounded shared-service deployment window, the explained brief web restart and headline-worker pause/resumption, and observed physical-schema activation. Preserve concurrent G1/G5 work, source harvesting, credentials, schedules and budget policy. Alias/table deletion, physical column renames and new paid quality trials remain excluded. Run locally in the canonical G2 checkout using native inline execution; the parent owns integration, verification, review and release. Record iteration count and major changes in private receipts and final release evidence; do not rerun already completed units.
 
@@ -458,11 +489,11 @@ Inspect migration SQL and dependencies and prove no table delete/create or data 
 
 **Disruption estimate:** Reserve approximately 10–20 minutes for the coordinated production rollout and verification, inferred from recent builds/service readiness rather than measured rename performance. The rename transaction should be brief once its locks are acquired; individual article queries may wait during that lock. The web has a persistent disk and cannot use Render's zero-downtime deployment sequence: budget a short website interruption, with exact duration measured on staging. Headline/Chatter/Pulse/picture writing pauses while its worker is drained/restarted; source collection and independent jobs remain running. No blanket stop of G1–G5 work or current deployments is required while preparing this amendment. During the actual rollout, hold only deployments and shared-schema operations that can overlap. [Render's disk deployment limitation](https://render.com/docs/deploys#zero-downtime-deploys) supports the restart expectation. These are estimates and prerequisites, not observed zero-disruption proof.
 
-**Rollback and cleanup:** Before migration commit, failure rolls back all six names/aliases. After commit, prefer compatible code rollback using tested old-name views; keep canonical data and provider identities intact. A reverse rename is separately tested and requires coordinated draining of canonical-name consumers; do not reverse the earlier0075–0078 expansion or restore an old data snapshot. Keep old-name aliases through the required rollback period and until every verified consumer uses canonical names. Their later removal is separate from deleting the six legacy editorial tables; neither operation is authorized by this rename amendment. Physical base-table names are canonical even while compatibility views exist. U15's native-writer/restore-proof and production seven-day safeguards remain unchanged.
+**Rollback and cleanup:** Before migration commit, failure rolls back all six names/aliases. After commit, prefer compatible code rollback using tested old-name views; keep canonical data and provider identities intact. A reverse rename is separately tested and requires coordinated draining of canonical-name consumers; do not reverse the earlier0075–0078 expansion or restore an old data snapshot. Keep old-name aliases through the owner-selected 24-hour rollback period and reevaluation, and until every verified consumer uses canonical names. Their later removal is separate from deleting the six legacy editorial tables; neither operation is authorized by this rename amendment or the timing change. Physical base-table names are canonical even while compatibility views exist. U15's native-writer/restore-proof and preservation safeguards remain unchanged.
 
 **Regression net and completion proof:** Rehearse populated forward and reverse renames on PostgreSQL, capture before/after row and original-field checksums, verify catalog names and FK targets, and exercise the actual headline/editorial/picture writers and readers plus shared citation and budget queries. Fresh installation must produce the same final schema. Verify source counts, every URL, saved public links, last-good/featured selections, unchanged call reservations and media access. Test overlapping service versions and concurrent migration runners using the chosen rollout mechanism. Review the completed migration and rollback design before selecting its later execution endpoint.
 
-**Amendment review:** Inline data/deployment review selects temporary aliases over a bare rename because `build.sh` applies migrations before replacing running service processes. The six-name mapping matches current `Meta.db_table` values. Mixed-version writer compatibility, catalog/FK identity, refresh policy, migration concurrency, failed-lock atomicity and rollback are explicit acceptance cases. Implementation/staging tests remain unperformed for U16; earlier compatible-release test counts do not establish the rename's correctness. No independent reviewer is claimed.
+**Amendment review:** Inline data/deployment review selected temporary aliases because `build.sh` applies migrations before replacing running processes. Six new PostgreSQL regression cases cover mixed-version writes, populated forward/reverse preservation, unexpected-target rejection, failed-lock atomicity and concurrent build runners. The final integrated suite and staging rehearsal passed. The review corrected the refresh runbook to require an already-renamed source database; pre-rename sources fail closed. A CLI Grok attempt verified provider-family independence but returned no substantive review; independent corroboration is not claimed.
 
 ---
 
@@ -491,9 +522,27 @@ A later delivery follows the owner-selected endpoint and current Ollija guide. D
 
 The plan-writing request was fulfilled by the execution contract and its embedded schema image. The October 8 receipt below records subsequent implementation and staging verification.
 
-Future consolidation completes when U9–U16 satisfy their verification outcomes: all three outputs use shared content/text/citations and call provenance, all active preparation paths use packet-maker, current behavior passes its regression net, obsolete storage retires after KTD18's safeguards, and retained physical tables have the agreed names through a separately proved rollout. The current production continuation completes the compatible phase only; it does not claim U15 retirement or U16 renames. Source counts/URLs are relational and inspectable for each saved language/version. URLs, pictures, budget ceilings, uncertainty, last-good and all-brand visibility survive migration. Abandoned code is removed; references describe the actual implemented state. Paid semantic quality remains unproven unless separately evaluated.
+The current production request completes U16 alongside the earlier U9–U14 compatible phase. The retained physical tables have the agreed names, citations remain relational, and preparation uses packet-maker. U15 destructive retirement remains pending under KTD18; no old table, alias or physical column was removed by this release. Complete retirement still requires native-writer replacement, restore proof and the retention interval. Paid semantic quality remains unproven unless separately evaluated.
 
 ---
+
+## October 8 physical-name production release receipt
+
+**Endpoint:** U16 is deployed at `00d7311754cf0837004c859e73c65c740aebab4d`. Both staging services and all five existing production services were observed LIVE at this unchanged revision. Remote `main` and `staging` resolve to it. The candidate includes the concurrent G1 fixes and main 2383 analytics release through non-forced integration. The receipt commit belongs to the feature branch; it does not replace the deployed application image or trigger another main deployment.
+
+**Schema and preservation:** Django migration 0079 atomically renames six base tables and creates six writable old-name views. `original_content_sources` already had its final name. Immediately before writing resumed, all seven tables matched their pre-migration full-row hashes, row counts, base-table object IDs, incoming/outgoing foreign-key identities, indexes, owned sequences, owners and grants. Counts were 27,174 content records, 19,882 localized texts, 1,004 runs, 12,248 calls, three selections, 19 pictures and 43,568 source links. No table/view deletion, data copy, column rename, history reimport or retention-clock reset occurred. The earlier production cutover remains `2026-10-08T07:37:56.303216+00:00`; October 15 at 16:37:56 JST is the earliest retention boundary, with the other U15 safeguards still required.
+
+**Verification and rounds:** Two implementation rounds: first the atomic model/migration/view change; second the refresh-policy, sequence and reference corrections, including the reviewed source-schema precondition. The six migration cases passed on PostgreSQL on the first implementation. The final integrated suite passed 580 tests and five subtests; 328 required PostgreSQL cases executed with zero skips/errors. All 36 Ollija checks passed. Migration drift, Django checks, scoped Ruff and whitespace checks passed. Repository-wide Ruff retains unrelated historical/private-file failures and is not reported green. Current-main analytics required its declared PostHog dependency and a pinned cached SDK; its 20 tests plus five browser subtests passed after repairing that local environment. There was one application candidate for staged/production U16 delivery and no new paid headline-quality trial.
+
+**Staging rehearsal:** PostgreSQL 18.4 retained all seven full-row hashes and database identities. Actual historical 0078/current 0079 ORM paths exercised all six models, default IDs/RETURNING, get-or-create, bulk writes, conflict updates, row locks, uniqueness, protected deletes and deletion of an unused run. The fixture transaction rolled back; no synthetic article persisted. Six deployed saved-locale views preserved IDs, source counts/URLs and English fallback. Generation/public access remained disabled and both original service configurations were restored. Monitoring recorded about 54 seconds of unavailable responses before recovery. Staging has no production media disk, so that observation did not establish production restart duration.
+
+**Production operation:** The shared-service hold ran from 17:47:35 to 18:12:23 JST. The writing worker was idle with no sent calls before suspension at 08:48:28 UTC; its tested image became LIVE at 09:09:17 UTC, an approximately21-minute writing pause. Large saved JSON snapshots exceeded a 30-second aggregate checksum query; 100-row batches completed under the same statement limit. A web-restart-interrupted audit was rerun from the stable synthesis service after verifying all five service database targets and the actual web process agreed. The successful comparison preceded worker resumption. The new queue-only worker then completed native dispatch run 1006, had its OpenAI key, and matched every saved daily editorial budget. October 8 remained USD 4.968034 reserved, 33 calls and zero media calls. Original startup/build commands, automatic deployments, unsuspended states and schedules were restored; harvest remains every 15 minutes and jobs at `17 */6 * * *`.
+
+**Website and collection:** Production monitoring recorded 502 responses from 09:00:26 to 09:03:27 UTC, followed by 200 responses. This approximately-three-minute observed span includes an independent overlapping web rebuild and the candidate deployment; it is not attributed solely to rename DDL. The benchmark owner canceled their own overlapping rebuild after seeing the hold; their flags/key and new hourly cron were preserved. Natural harvest runs completed during the window with 46 and 28 insertions and zero persistence failures. Their existing degraded classification/summary status, including the cohort identity warning, remains outside this schema amendment and is not claimed repaired.
+
+**Reader and review limits:** All 57 saved language/story requests, archives, feed pointers, source counts and every URL matched the pre-migration results. All 19 picture records and 38 asset-variant responses matched; their pre-existing missing files still return 404 through both readers, so positive deployed image-byte access is not claimed. Local browser coverage included the homepage, both archives, EN/ZH-CN/JA stories, archive navigation and 390×844 layout with complete attribution. Deployed staging/production login walls were checked; external Google sign-in was not exercised. Persona review and simplification ran sequentially in the parent; the external Grok output supplied no substantive corroboration.
+
+**Evidence and cleanup:** Private authoritative-host evidence is under `.local/g2-physical-names-20261008/`, especially `release-result.json`, `preservation.json`, `production-before.json`, `production-after.json`, `reader-preservation.json`, `staging/result.json`, `final-tests.txt`, `ollija-tests.txt`, `services-final.json`, worker runtime/status probes and `harvest-continuity.json`. Live deployment IDs: web `dep-db3ln3l040hc73a4jbag`; headlines `dep-db3lqp8m7kps73f74fn0`; synthesis `dep-db3ln460tbcc73820nr0`; harvest `dep-db3ln4aj9qps738628ng`; jobs `dep-db3ln4c9v7es73diqspg`. Retain the canonical worktree: protected untracked artifacts make it dirty, and the documentation receipt advances its HEAD beyond the verified application candidate. No forced removal is authorized.
 
 ## October 8 production continuation
 
@@ -2413,6 +2462,10 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 <!-- END OLLIJA DELIVERY GUIDE -->
 
 ## Delivery Exceptions
+
+October 8 latest owner instruction: “let's set it to 24 hours and reevaluate then.” Replace the prior seven-day observation requirement with 24 hours from the existing production cutover; reevaluate October 9 at 16:37:56 JST. This follow-up records policy/checkpoint changes in the plan and authoritative charter/index only. The U16 production endpoint remains complete at00d73117; no new code/deployment, scheduler, service pause, alias/table deletion or paid call is requested. The deployed read-only retirement report still uses seven days and must be reconciled before later cleanup execution; retain native-writer, preservation, rollback and encrypted-restore requirements. Earlier seven-day receipts are historical, not a reinstated timing gate.
+
+October 8 U16 completion: the authorized staged production endpoint was observed at application `00d7311754cf0837004c859e73c65c740aebab4d`. The closing plan/charter receipt is pushed only to the feature branch, preserving that deployed image and the unchanged main/staging refs. It is documentation of the completed endpoint, not another release candidate. Retain the dirty/candidate-mismatched canonical worktree and all protected private artifacts. U15 deletion, alias removal, column renames and paid quality experiments remain excluded.
 
 October 8 active U16 LFG request: `$compound-engineering:lfg this amendment to production` supersedes the amendment's planning-only endpoint and authorizes the complete physical rename rollout, through the current staged/branch route. It includes the estimated coordinated deployment window, temporary hold of overlapping shared-service automatic deployments, brief disk-backed web restart and headline-worker drain/pause/resumption. Preserve G1 descendants and G5 work; harvesting/synthesis/jobs remain running with original schedules. Rename six retained base tables and retain six temporary old-name views; do not remove aliases/obsolete tables, rename columns, change providers/budgets/cadence, or launch a paid quality trial. The existing plan is the explicitly offered dirty artifact; the parent checkpoints that amendment/authority before ce-work so unrelated private files are never committed. The final application candidate must include then-current main through non-forced integration.
 
