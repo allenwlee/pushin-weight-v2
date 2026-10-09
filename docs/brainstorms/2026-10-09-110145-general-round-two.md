@@ -218,6 +218,181 @@ browser evidence. Preserve `.worktrees/feat/g5-general-page` and its dirty code.
 with real saved content; keep prototype, local browser and production receipts
 separate. Closing round one is not permission to remove its dirty worktree.
 
+### G5 session handoff — October 9
+
+Captured **2026-10-09 14:49 JST** for the owner's requested session reset.
+This expands G5's existing round-two record; it does not reopen round one or
+select a new implementation/release. The next session's focus is B2-G5-01–03.
+
+#### Where the work lives
+
+- **Authoritative coordination:** this register and the root
+  [charter](2026-09-30-104924-general-launch-charter.md) /
+  [index](2026-09-30-104924-general-launch-index.md) on fuchitalee. Worktree
+  copies can be older. The index carries current cross-stream ownership.
+- **G5 checkout, machine-local:**
+  `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g5-general-page`,
+  branch `feat/g5-general-page`, HEAD
+  `00d7311754cf0837004c859e73c65c740aebab4d`. Its modified and untracked files
+  contain the implementation; a fresh checkout of the branch does not contain
+  those changes. No G5 implementation commit/push or production release occurred.
+  At capture, cached `origin/main` was `671e9682`, four commits ahead of this
+  base. Refresh/reconcile that comparison when a later implementation is selected;
+  the earlier “current main” receipt means the October 9 morning integration.
+- **Closed plan:** [published round-one G5 plan](https://github.com/allenwlee/pushin-weight-v2/blob/main/docs/plans/2026-10-02-060108-feat-g5-general-page-plan.md)
+  preserves decisions, requirements and U1–U8 scope. Its closeout transfers
+  unfinished work here. Keep that historical body/checkboxes intact; detailed
+  new execution belongs in the later Ollija-selected round-two plan.
+- **Implementation map:** [General reader/URL reference](../../.worktrees/feat/g5-general-page/docs/reference/general-page.md)
+  explains current feed rules, publication access, URLs and preferences.
+  [Local implementation tracker](../../.worktrees/feat/g5-general-page/todos/2026-10-08-150837-g5-general-page-local-implementation.md)
+  holds the dated tests, corrections and snapshot history. These are retained
+  local files, not proof of remote availability.
+- **Main code in that checkout:** `monitor/general_readers.py` reads the four
+  lower feeds; `monitor/general_views.py` adapts those and the shared editorial
+  readers. `monitor/content_readers.py` / `content_views.py` serve individual
+  Posts. General's templates are `monitor/templates/monitor/general.html` and
+  `general/`; its browser behavior/styles are `monitor/static/monitor/general.js`
+  and `general.css`. `tests/test_general_*.py`, `test_content_detail.py` and
+  `tests/ui_assurance/general.py` cover the changed behavior.
+
+#### Implemented behavior and owner decisions to retain
+
+- **Four lower feeds work independently of G2 generation.** Calendar, Free
+  stuff, Jobs and Who's moving read actual classified Posts, saved commentary
+  and linked facts. Missing commentary uses the labeled source/literal-translation
+  fallback; unknown dates stay unknown. Each Open-weight panel displayed 20
+  real initial Posts in the last browser verification. Identity/extraction
+  behavior remains owned by its upstream stream.
+- **Chatter/Pulse now contain published OriginalContent.** They reuse
+  `monitor.editorial.views.access` and
+  `monitor.editorial.readers.feed_payload`, with shared storage selected in
+  the preview. Chatter uses the shared featured edition and prior distinct
+  stories; Pulse shows six saved editions. Full headline, byline and body,
+  distinct cited-Post count and every source URL are present. Sources and
+  Chatter history expand within the fixed panel; headline/archive links work.
+  These are global editorial selections, independent of lower-feed weights or
+  brand filters. Chinese/Japanese disclose English fallback in this snapshot.
+  This implementation does not add the round-two chart engine to Pulse.
+- **Atomic URLs:** `/general/` is General and `/` remains Pro.
+  `/posts/<tweet_id>/?lang=<locale>&commentary=<artifact-id>` pins saved Post
+  commentary when available. OriginalContent links use G2's existing
+  `/stories/<story-uuid>/?track=<track>&lang=<locale>&edition=<edition-uuid>`.
+  The planned `/content/` adapter is not implemented. Published-history/edition
+  retention remains B2-G2-04 plus B2-G5-02; do not describe saved story URLs as
+  proven permanent across future cleanup. The owner raised obscuring original
+  Post text for compliance but did not select a policy; source text is currently
+  accessible. G4's output restrictions and public web policy stay distinct.
+- **Accepted visual baseline:**
+  [DeepSeek/context prototype](http://100.102.74.50:58417/index.html?product=deepseek&window=context).
+  The owner rejected the ChatGPT warm-gray/font substitution at `:56887` and
+  retained the prior styling. Keep earlier `:58011` and accepted `:58417`
+  prototypes separate from the wired `:58418` page. The weight-themed heading
+  brainstorm was tabled; no replacement H2 names were selected. The research
+  journeys remain [agentic products](../research/2026-10-07-214739-agentic-product-design-patterns.html)
+  and [prediction graphs](../research/2026-10-08-095045-prediction-graph-visual-journey.html);
+  `make-visual-style-doc` is installed at user level on fuchitalee.
+- **Navigation and controls:** collapsible left navigation, login/settings,
+  locale/timezone/audience preferences, independent Open/Closed controls and
+  mobile handling are implemented. The Closed trigger deliberately displays
+  the owner's exact **“Open Weights Coming Soon!”** message, then deselects
+  Closed while preserving Open, cards and URL. Its popup sits 8px from the
+  invoking header/sidebar toggle and follows the visible control after resize.
+  Do not silently “correct” the owner-selected wording. Human/Agent retain
+  identical six outer panel rectangles; Agent capability and the masthead
+  assistant remain explicitly unavailable pending their actual integration.
+- **Domain:** the owner confirmed purchasing **pushinweight.si through
+  Namecheap** on October 9. [Registration record](../reference/domains.md).
+  DNS/Cloudflare configuration, renewal details and launch/default routing
+  remain unconfirmed or unselected; purchase is not a deployment receipt.
+
+#### Preview, isolated data and local evidence
+
+The [wired General preview](http://100.102.74.50:58418/general/?lang=en&weights=open&audience=human)
+returned HTTP 200 during this handoff, with eight saved-edition cards in the
+HTML. Its owned listener was PID `12147`, running the G5 private `.venv` and
+`manage.py runserver 0.0.0.0:58418 --noreload`. A PID is a capture-time fact;
+verify the command, directory and port before any later restart. Other sessions'
+servers and the earlier prototypes remain separate resources.
+
+The database is **`pw_g5_collected_20261009`**, local PostgreSQL 18 on
+`127.0.0.1:55436`, restored through core migration `0079`. The October 9
+06:37 JST snapshot has 306,938 Posts (last fetch 06:33:50 JST) and 19 approved
+English editions: two Chatter and 17 Pulse. It is not an automatically refreshing
+production connection. Runtime uses `ORIGINAL_CONTENT_STORAGE=shared`,
+`EDITORIAL_PUBLIC_ENABLED=true`, `EDITORIAL_ENABLED=false`; viewing does not
+generate content. The older G5 snapshot and source rehearsal database remain.
+Tests used a separate disposable PostgreSQL 17 database on the default local
+port (`pw_g5_general_20261008`, with Django's `test_` database); populated
+snapshot databases are not test targets.
+
+**Machine-local evidence directory**, relative to the G5 checkout:
+`.context/g5-original-content-20261009/`.
+
+| File | What it establishes |
+| --- | --- |
+| `render-export-receipt.json`, `data-source.json` | Successful fresh isolated restore and the frozen data counts above. The slower direct dump was canceled after this restore and its partial archive removed. Do not rerun either snapshot helper merely to resume the session. |
+| `shared-readers.json`, `live-browser.json` | Exact reader-to-page headline/byline/full-body/source/edition-link parity across 1280px/390px and EN/ZH-CN/JA; 96 displayed citation links matched, four lower feeds populated, Human/Agent rectangles equal, no overflow or JavaScript errors. |
+| `live-en-1280.png`, `live-mobile-top.png` | Visually inspected real-data desktop/mobile presentation. |
+| `affected-gate.log`, `general-assessment.json`, `local-review.json` | Code-test result, 49-obligation General browser assessment and scoped inline review. The review was not independent/external. |
+| `start_preview.py`, `preview-server.pid`, `preview-server.log` | Existing starter, captured listener and runtime log; restart only if needed under the next task's scope. |
+| `before-main-wip.tar.gz`, `before-main.patch`, `before-main-manifest.json` | Preserved G5 work before the morning main sync. The named Git stash `g5-preserve-before-current-main-20261009` was applied successfully and retained; applying it again would duplicate old work. |
+
+The unchanged product identity, recomputed during this handoff, is
+`worktree-sha256:9884c875aba3a4fedf78dfc5557cd304f2a45220aff8ae933f5e368281c01338`.
+Its affected gate recorded **279 passed, one failed, 59 subtests passed**;
+115 required PostgreSQL tests executed, with zero skips/errors. The remaining
+failure is
+`tests/test_feed_geography.py::test_japanese_geography_seed_covers_every_existing_country_and_region`
+(missing seed rows), carried into B2-G5-02 and not waived. The earlier Account
+UUID fixture failure was fixed by the morning base update. All **49 General
+browser obligations** passed. Scoped Ruff, JavaScript syntax and whitespace
+checks passed. This handoff reuses those receipts; it did not rerun the suite.
+An exact committed release candidate and representative performance verification
+remain outstanding. Earlier four-fixture timing measurements do not satisfy them.
+
+#### Round-two continuation boundary
+
+The owner's next-round direction is integration of G1 assets/graphicsed, G2
+Japanese/Chinese voices and chart editorial decisions, G3 reusable charts/state,
+and G4 sharing/API contracts. G5 owns their page/detail/mobile placement, not
+new copies of those upstream pipelines. The existing shared agreements below
+use one GLM-5.3 content item plus a second chart configuration and both Post and
+OriginalContent paths. Source counts must use actual cited support, not every
+retrieved/background item; retain the linked evidence-delivery lesson above.
+
+A suitable next planning step is to select a bounded B2-G5-01 integration using
+those interfaces while retaining B2-G5-02's regression/retention/performance
+work. This is a continuation recommendation, not a newly selected implementation.
+The index also records the independent HF-clock update and metric-window PR #56;
+recheck their actual code/schema status before consuming them. Do not assume the
+local snapshot contains later migrations or that the pending metric-window
+release is deployed.
+
+The owner subsequently selected **commit-and-push of this G5 documentation to
+main** on October 9. That endpoint covers this handoff, its charter/index links
+and the domain record. G5 application delivery remains unselected; DNS changes,
+deployment, paid generation and external posting are outside this request.
+Clearing chat leaves these files/databases on fuchitalee, but another host/clone
+will not automatically have them. Preserve the checkout, its private artifacts
+and the owned preview.
+New execution should use the current charter/index and an Ollija-selected
+round-two plan rather than reopening the closed plan.
+
+**Post-merge check, October 9 at 14:56 JST:** fetched and inspected remote main
+`60181a88be8c0887ca20033d6f9a9d24eb89152f` after PR #57 merged the earlier
+documentation snapshot. That revision contains the round-two baseline and
+B2-G5-01–03, but not this later G5 handoff or its charter/index discovery links.
+The domain-purchase note and its link are present there, but
+`docs/reference/domains.md` is not; at that revision, the link resolved only in
+the local authoritative checkout. All eight file links in this local handoff
+were checked and resolve. No handoff content was lost in the merge. This later
+owner-authorized documentation change supplies the G5 supplement, its two discovery links and
+the missing domain record. The G5 implementation remains uncommitted, at the
+source identity captured above. References into `.worktrees/` and the research
+journeys point to machine-local artifacts on fuchitalee; publishing this handoff
+does not publish those underlying files.
+
 ## Shared agreements for parallel work
 
 Agree these interfaces before overlapping code edits. G1/G2/G3/G4 own their

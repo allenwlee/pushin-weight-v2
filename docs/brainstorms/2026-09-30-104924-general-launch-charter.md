@@ -42,6 +42,16 @@ preserves the pre-rollover audit of delivered code, completed research/planning
 and locally verified work. Ending round one does not establish that every earlier charter
 requirement is implemented or that the General redesign is in production.
 
+### G5 session continuity
+
+Before resuming General-page work after the session reset, read the existing
+round-two register's [G5 session handoff](2026-10-09-110145-general-round-two.md#g5-session-handoff--october-9).
+It records the accepted design and exact control wording, local implementation,
+published-content/URL behavior, preview and isolated database, retained evidence,
+domain purchase and outstanding round-two work. The round-one plan stays closed;
+its dirty G5 worktree remains the implementation source. No delivery endpoint is
+selected by this continuity note.
+
 ### Owner-set vocabulary
 
 - **Content** is the atomic, independently addressable unit and umbrella term

@@ -70,7 +70,12 @@ successor notes; their implementation/delivery outcomes remain unchanged.
 | G2 / round 2 | ja/zh_cn voices, chart editorial rules, retention and remaining editorial work | Open for planning; no implementation claim |
 | G3 / round 2 | Reusable chart engine and inherited analysis/forecast design | Open for planning; no implementation claim |
 | G4 / round 2 | Sharing/X and inherited API/MCP work | [Session-clear handoff](2026-10-09-110145-general-round-two.md#g4-session-clear-handoff--october-9) recorded by `g4-mcp-scaffold-20261006`; open for planning, no implementation claim |
-| G5 / round 2 | General integration and inherited local release preparation | Open for planning; preserve local code |
+| G5 / round 2 | General integration and inherited local release preparation | [G5 handoff](2026-10-09-110145-general-round-two.md#g5-session-handoff--october-9) and [domain record](../reference/domains.md) included in the owner-authorized documentation publication; open for planning, preserve local code |
+
+G5's [session handoff](2026-10-09-110145-general-round-two.md#g5-session-handoff--october-9)
+in the existing round-two record preserves the local implementation, accepted
+design/controls, preview/database, exact evidence, domain purchase and remaining
+work before the session reset. The closed round-one plan remains historical.
 
 Keep detailed new execution in the selected round-two plans. Existing independent
 benchmark/company operations and all retained resources remain separately owned.
@@ -1417,3 +1422,13 @@ on October 1 as a separate workstream, with continuous design changes expected.
 - 2026-10-09T14:52:33+09:00 ON — g4-mcp-scaffold-20261006 / G4 handoff publication: owner requests commit/push to main. Isolate the G4 supplement and necessary published register in .worktrees/docs/g4-handoff-main; preserve unrelated local edits and avoid merging the broader documentation branch. Commit/push only; no deployment endpoint.
 
 - 2026-10-09T14:56:57+09:00 UPDATE — g4-mcp-scaffold-20261006 / G4 handoff publication: resumed after owner confirmed charter/index merge. Reconciled only the G4 supplement, current-round pointer and publication record onto main 60181a88; all merged non-G4 content retained. Scoped document checks pass; direct commit/push endpoint continues, no application or deployment work.
+
+- `2026-10-09T14:49:44+09:00` **ON — G5 / round 2 / g5-design-integration-01a0f6ef:** Owner requests adding session continuity to the existing G5 handoff before clearing chat. Own only the G5 continuation section in the existing round-two register and its charter/index discovery links; preserve closed round-one plan, dirty implementation, preview/database, other sessions and runtime. No implementation, Git delivery or deployment selected.
+
+- `2026-10-09T14:52:10+09:00` **OFF — G5 / round 2 / g5-design-integration-01a0f6ef:** Expanded the existing round-two register with the G5 session handoff and linked it from the charter/index. Captures accepted/rejected design choices, exact weight-notice behavior, four feeds and shared publications, Post/edition URLs and undecided source policy, domain purchase, dirty checkout/stash/evidence, owned preview and isolated snapshot, precise 279-pass/one-failure and 49-obligation evidence, and B2-G5-01–03 continuation boundaries. Read-only capture reconfirmed preview HTTP200 and unchanged source9884c875aba3; eight local links and discovery anchors verified, closed plan preserved, scoped whitespace clean. No new handoff file, plan, code/runtime/data change, commit/push or deployment; release documentation claim and preserve concurrent G4 additions.
+
+- `2026-10-09T14:57:28+09:00` **ON — G5 / round 2 / g5-design-integration-01a0f6ef:** Owner reports the coordination merge complete and resumes the requested check. Own read-only main/local comparison and a scoped handoff/index publication-status correction; preserve other handoffs, local G5 implementation and runtime. No new Git publication or deployment selected.
+
+- `2026-10-09T14:57:59+09:00` **OFF — G5 / round 2 / g5-design-integration-01a0f6ef:** Verified merged remote main `60181a88`: round-two baseline/B2-G5-01–03 present; later G5 handoff/discovery links and `docs/reference/domains.md` absent. The merged domain link therefore still needs its file published. Local handoff and all eight file links remain intact; recorded exact publication gap in existing handoff/current G5 row. No working-file checkout/reset, code/runtime/data change, commit/push or deployment. Release bounded check and preserve concurrent publication owners.
+
+- `2026-10-09T15:01:46+09:00` **ON — G5 / round 2 / g5-design-integration-01a0f6ef:** Owner explicitly requests committing and pushing the G5 handoff, its charter/index links and domain record to main. Use isolated `docs/g5-handoff-main` from current remote main, named documentation files and `[skip render]`; preserve all application/local data and other sessions. Endpoint is verified remote-main commit, with no deployment.
