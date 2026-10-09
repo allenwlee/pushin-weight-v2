@@ -88,6 +88,15 @@ Use `[skip render]` on the documentation merge as required by the repository
 README. Completion is observed remote-main inclusion of this branch's candidate
 commit. Preserve newer local session handoffs and all other worktrees.
 
+**G3 handoff follow-up:** the owner asks to “push and commit to main when done”
+after confirming G3's own-worktree rule. Publish the existing G3 round-two
+handoff with that rule and its shared index/charter pointers. Reuse this clean
+documentation worktree, advance it to current main, and preserve all other
+streams' published and local content. The endpoint is a verified non-forced
+push to `main` with `[skip render]`; no application deployment or G3
+implementation worktree creation is selected. This continuation uses the same
+publication plan and retains `delivery_target: on-request`.
+
 # Goal
 
 The remote `docs/general-round-two-records` branch contains the current
@@ -134,3 +143,19 @@ coordination snapshot and all round-one closure records, based on main
 - Completed the authoritative index publication claim and recorded its OFF
   entry. This follow-up receipt records the already verified publication.
 - No pull request, merge, staging or production deployment was performed.
+
+## G3 handoff publication — October 9 continuation
+
+Publish only the G3 handoff section and workspace instructions in the existing
+round-two register, its charter/index pointers and this continuation record.
+G3's future implementation must use its assigned worktree and record the exact
+path/branch when created; shared coordination stays in the authoritative root.
+The existing G3 historical capture and private evidence references retain their
+stated dates and machine-local limits.
+
+Verify that all non-G3 register content is byte-identical to current main,
+the new workspace anchor resolves, and the selected diff contains only these
+four Markdown files. Run scoped whitespace and annotation checks, commit with
+`[skip render]`, push to `main` without force, and confirm the candidate is on
+remote main. Record the observed receipt in the authoritative index. Preserve
+other sessions' unpublished handoffs and implementation worktrees.

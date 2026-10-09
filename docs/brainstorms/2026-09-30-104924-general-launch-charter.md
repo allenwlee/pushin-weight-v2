@@ -51,6 +51,21 @@ on collect-chinese-workers, and the boundary between filings, a lab's own
 named report, staff-role accounts, and leads. Clearing chat does not select
 a graphics implementation, a new collection, a production write, or a release.
 
+### G3 session continuity
+
+Before resuming G3 round two, read the existing register's
+[G3 session-clear handoff](2026-10-09-110145-general-round-two.md#g3-session-clear-handoff--october-9).
+It carries the chart-engine priority, delivered benchmark dependency and pending
+window migration, inherited statistical/scenario requirements, Kalshi support
+workflow, dated settlement-source research and retained local artifacts. Old
+benchmark-wait wording is historical; delivered charts are not proof of a trained
+forecast engine. Clearing chat selects no implementation or release endpoint.
+
+The [G3 workspace rule](2026-10-09-110145-general-round-two.md#round-two-working-directory--owner-decision)
+places implementation in G3's assigned round-two worktree. Read shared knowledge
+from the authoritative root; update shared coordination there and return to the
+G3 worktree for implementation. Its exact path/branch remain to be assigned.
+
 ### G5 session continuity
 
 Before resuming General-page work after the session reset, read the existing

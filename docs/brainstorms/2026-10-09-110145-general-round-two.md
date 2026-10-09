@@ -303,6 +303,297 @@ leak into a pre-release forecast. Chart implementation and forecast qualificatio
 have separate completion evidence; this rollover does not claim the old hold
 was a completed forecast implementation.
 
+### G3 session-clear handoff — October 9
+
+Owner requested this supplement before clearing g3-longitudinal-20260930.
+Round one stays closed; the [G3 design](2026-10-05-163237-g3-evidence-forecasts-markets.md)
+preserves its detailed requirements/proposals. Round two prioritizes reusable
+charts under B2-G3-01/02, with the unbuilt statistical prediction, reader
+scenario and market-candidate functions carried under B2-G3-03. The initial
+request selected continuity documentation. The owner's later October 9 request
+authorizes committing and pushing this handoff and its workspace instructions
+to main; it does not select G3 implementation or application deployment.
+
+#### Round-two working directory — owner decision
+
+The owner confirms that G3's dedicated round-two worktree is its default
+working directory, including after consulting shared knowledge. At the October
+9, 15:15 JST check, no dedicated G3 round-two worktree was registered; its exact
+branch and absolute path remain to be assigned. This documentation update
+does not create that worktree or start implementation.
+
+- When round-two work starts, locate the assigned G3 worktree or create it
+  through the repository's worktree workflow. Record its exact path, branch and
+  selected round-two plan here and in the authoritative index. Give that path
+  to every fresh G3 session.
+- Start and resume implementation there. Confirm `pwd`,
+  `git branch --show-current` and `git status --short` before editing. Keep G3
+  code changes, tests, implementation plans and new task artifacts in that
+  worktree; return there after reading material elsewhere.
+- Read shared knowledge from the authoritative root on fuchitalee:
+  `/Users/fuchitalee/development/pushin-weight-v2`. This includes its current
+  charter, index, round-two register, prior G3 research and documented lessons.
+  Older coordination copies in worktrees may be stale.
+- Shared coordination updates go into the authoritative index, charter and
+  relevant handoff section. Keep G3 implementation in its assigned worktree.
+  The benchmark collector and other streams retain their own ownership;
+  coordinate overlapping changes with their owners.
+- Preserve the old shared checkout, other worktrees and local research,
+  prototypes and evidence when clearing conversations. Untracked or ignored
+  material does not automatically appear in a newly created worktree; consult
+  its recorded source location before assuming it is missing.
+
+**Authoritative reading and delivered inputs:**
+
+- [Index](2026-09-30-104924-general-launch-index.md#current-round--round-two)
+  and [charter intake](2026-09-30-104924-general-launch-charter.md#october-9-next-round-intake):
+  current ownership, chart-engine priority and shared interfaces. G3-R01–R28
+  retain owner requirements; design proposals remain proposals.
+- [Closed G3 design](2026-10-05-163237-g3-evidence-forecasts-markets.md):
+  measurement/chart semantics, statistical pilot, reader questions, Jev and
+  Kalshi support/submission/notification contracts. Its staging-only, pending
+  U22/U23 and benchmark-wait statements are historical; use later receipts.
+- [Independent benchmark plan](../../.worktrees/feat/benchmark-download-collector/docs/plans/2026-10-05-070106-feat-benchmark-download-collector-plan.md):
+  identities, reviewed mappings, metrics, calculation/read contracts, source-use
+  permissions and actual delivery. Reuse its data/readers rather than collecting
+  again. Collection permission does not automatically permit forecasts,
+  API/export distribution or exchange use.
+- [Round-one closeout](../analysis/2026-10-09-110145-general-round-one-closeout.md)
+  and [evidence-delivery learning](../solutions/workflow-issues/2026-10-09-110145-editorial-evidence-delivery-before-voice-evaluation.md):
+  completed research differs from implemented features; inspect the inputs that
+  actually reach each consumer before judging its output.
+
+All four selected sources—**Arena, Hugging Face, OpenRouter and OpenCode**—are
+active in production. Initial reviewed comparisons are GLM 5.3 Flash and
+DeepSeek V4.1 Flash, with DeepSeek V4 Flash as Arena predecessor context.
+The October 8 [activation receipt](../../.worktrees/feat/benchmark-download-collector/docs/analysis/2026-10-08-141922-benchmark-production/2026-10-08-181800-activation.md)
+records real scheduled collection and database-backed chart/browser checks.
+The October 9 HF-clock receipt records web/benchmark cron at
+671e968290780813bdbbfb9cd0d37bb74f601c6a, core leaf
+0079_original_content_physical_names: **HF daily at 10:00 UTC**, OpenCode hourly,
+OpenRouter/Arena daily. These are saved receipts, not new deployment checks.
+HF's collection clock does not establish its counter's effective cutoff.
+
+The independently owned generated-window change reached
+[PR #56](https://github.com/allenwlee/pushin-weight-v2/pull/56), revision
+be0489e88a505ccbb7509247a73aad34f357f41b, leaf
+0081_measurement_window_index; **that schema change is not deployed in these
+receipts**. It adds finite [start, end) window_range for complete intervals;
+incomplete intervals retain known timestamps and a NULL range. Existing
+timestamp fields remain usable. Coordinate integration and reserved 0080/0081
+migration numbers with its owner, without treating this as a deployed field.
+
+No G3 implementation plan, fitted/qualified statistical forecast, scenario
+service, collected support ledger, exchange application/submission or
+notification service was built here. The owner's earlier reference to an
+existing prediction engine did not identify a verified implementation entry
+point; inspect and reuse any actual producer before designing another.
+Reassess the old benchmark hold against delivered inputs when selecting new
+work; the rollover is not evidence of a trained prediction engine.
+
+**Chart contracts to preserve:**
+
+- G2 selects the editorial comparison; G3 validates, calculates and renders;
+  G4 preserves/distributes the state; G5 embeds it. Agree product/release,
+  source metrics/series, units, window, baseline/transform, annotations, locale
+  and data cutoff, including **frozen snapshot versus live update**. Use a
+  GLM-5.3 integration case and a second configuration, exercising both Post and
+  OriginalContent. Transfer shared chart/editor file ownership before overlapping
+  edits. Preserve provenance and unavailable-data states through every consumer.
+- The release-response chart has **three percentage-change lines**: collected
+  brand posts, exact-product OR daily tokens and HF adjacent rolling-counter
+  change. Each uses its own mean over the same first complete seven-day
+  post-release interval. Default display is a trailing three-day mean; the daily
+  toggle retains the denominator. Preserve gaps and negative changes. Zero means
+  the reference average; this is not an outcome probability.
+- Arena is a separate **raw score/confidence/battles panel**, with rank context,
+  actual publication dates and the reviewed text/overall configuration without
+  style control. Score and rank differ; battles are not unique people. The
+  predecessor proxy is rank only and ends at the successor's first valid
+  evaluation; it does not invent successor scores/battles.
+- OR is provider-scoped exact-model traffic; absent top-50 rows are unavailable,
+  not zero. HF downloads are a rolling 30-day request counter; adjacent changes
+  are not daily new downloads or unique users. OpenCode describes its hosted
+  Go/free-model scope, with hourly revisions of daily UTC totals, not exact
+  hourly usage. Provider user counts cannot be added into a global audience.
+- [Cutoff-aware numeric reader](../../.worktrees/feat/benchmark-download-collector/core/benchmark_forecast_inputs.py):
+  observation/import and mapping/contract availability must precede the forecast.
+  Filter by cutoff before resolving revisions; pin source value/run/contract
+  identities. Retrospective archives remain labeled as not past-known evidence.
+  Native posts and unmapped OR denominator context are excluded: cutoff-aware
+  post features and same-scope share denominators need coordinated adapters.
+  Current code reads methodology key "comparisons"; the plan also describes
+  "comparison_presets". Verify the delivered writer/validator before generalizing;
+  preserve immutable contracts rather than silently renaming them.
+- Owner-selected histories are **15 minutes, 1 day, 7 days, 30 days and
+  360 days**: first two saved/pre-generated, longer windows asynchronous.
+  Scope may be exact model, reviewed family/predecessor or audience topic such
+  as local LLMs. History windows, chart viewport and forecast horizon differ.
+
+**Inherited statistical engine and reader scenarios:**
+
+The owner requires statistics across verified releases and their following
+30 days, including post classifications and a qualitative account of discussion
+changes. Publisher/X evidence and HF weights/repository metadata triangulate
+actual releases; repository creation alone is insufficient. Same-launch variants
+are dependent groups. Large post/measurement counts do not create independent
+release samples. The October 7 local coverage check in the design used a partial
+database projection; its empty release/classification tables do not prove that
+production is empty.
+
+The proposed pilot audits the true cohort and target coverage, then compares a
+historical baseline, one regularized model and one Bayesian model sharing
+information across publishers, with at most five substantive predictors in one
+fixed evaluation round. OR 30-day usage is a proposed first target; attention,
+usage, Arena rank/score and release timing remain separate. SQL/Django, pandas,
+SciPy, scikit-learn, PyMC and ArviZ were proposed tools, not selected/installed
+or used for fitting. The first numeric target and qualification standard remain
+open.
+
+Train only on outcomes already resolved at each forecast cutoff and test later
+releases with launch siblings together. Today's classifications/corrections
+cannot become historical features. The future reference week used in a release
+chart cannot enter a pre-release estimate. Calendar, weekday, holidays, company
+HQ and evidenced researcher work locations are candidate factors; retain unknown
+coverage and publisher confounding. No country/holiday effect was established.
+Report broad uncertainty or withhold a probability when unsupported.
+
+Owner requires **2–5 questions** and a separate **0–100% personal probability
+line** updating with answers. Jev may assess supplied factor questions
+concurrently; a learned, evaluated statistical method combines them. Do not
+add probabilities, multiply dependent factors or fabricate holiday effects.
+Crossing 50% indicates a Yes/No lean; price and fees also determine a trade's
+value. Keep canonical forecast, personal scenario, outcome vote, support for
+creation, optional trading interest and actual orders distinct.
+
+**Kalshi workflow and open operating choices:**
+
+Kalshi is the owner's selected first venue. The
+[partnership assessment](../analysis/2026-10-07-104452-g3-market-partnership-selection/README.md)
+supports a first builder/market-suggestion conversation, not an acceptance-rate
+claim, approved partnership or permission to create markets. Latest owner flow:
+**"Vote to make a market on Kalshi" → enough distinct support → versioned packet
+→ confirmed-submission notification**, followed by verified decision/listing
+updates. Support for creation is not a Yes prediction, bet or commitment to trade.
+
+G3-R28 and the design's
+[candidate section](2026-10-05-163237-g3-evidence-forecasts-markets.md#forecast-to-kalshi-market-candidate-request)
+preserve the detailed contract: one active support per account/question version;
+renewed support after material rule changes; resolution/eligibility review and
+existing-market check before arming a trigger; exact model, cutoff, deadline/
+timezone, source/configuration, edge rules and frozen aggregate demand. Private
+scenario answers/contact details are not sent by default. Use a verified
+suggestion or agreed partner route; no create-market API was established.
+Prepared/queued is not sent. Unknown delivery needs reconciliation before retry;
+notifications/live links require receipts and exact listed-rule matching.
+No reply means pending, not rejection.
+
+Open choices include support threshold/abuse policy, review owner, submission
+route/automation and notification channel. In-app first was proposed, not
+selected. Earlier supporter counts were internal ideas, not a published Kalshi
+acceptance minimum. Source-use permissions and exact non-release/not-listed/
+tie/correction outcome rules remain prerequisites for qualifying each question.
+Liquidity provision is later business research, not an authorized capital task.
+
+Legal research found **no disclaimer guaranteeing immunity from user losses**.
+Forecast claims, hypothetical trading results, referrals, personalized advice
+and execution have different implications; review the actual future workflow
+and US/EU/Japan audience. Retain dated primary research pointers:
+[CFTC intermediary guidance](https://www.cftc.gov/IndustryOversight/Intermediaries/index.htm),
+[17 CFR 4.14](https://www.ecfr.gov/current/title-17/chapter-I/part-4/subpart-A/section-4.14),
+[17 CFR 4.41](https://www.ecfr.gov/current/title-17/chapter-I/part-4/subpart-D/section-4.41)
+and [Kalshi developer agreement](https://kalshi.com/developer-agreement).
+The inspected developer agreement's facilitation restrictions and developer
+indemnity need assessment before later trading integration. These are research
+pointers, not counsel-approved terms or an approval gate for this document task.
+
+**Settlement-source research from October 8:**
+
+These primary market/rule checks were performed in the preceding conversation,
+not rechecked October 9. Verify the exact contract version before a new proposal.
+Settled precedent differs from a catalogue entry, fallback or market summary.
+
+| Source | Confirmed example and limit |
+| --- | --- |
+| OpenRouter | Kalshi [KXOPENSHARE-26OCT05-21.5](https://external-api.kalshi.com/trade-api/v2/markets/KXOPENSHARE-26OCT05-21.5), finalized with OpenAI token share 18.2. Provider-specific weekly share with specified observation time/rounding, not global AI usage. |
+| Vercel AI Gateway | Kalshi [KXDEEPVREQ-04OCT26-T9P0](https://external-api.kalshi.com/trade-api/v2/markets/KXDEEPVREQ-04OCT26-T9P0), finalized with DeepSeek request share 13.3. Usage-source precedent; Vercel remains an unselected collector candidate. |
+| Artificial Analysis | Kalshi [KXOPENINTAI-26OCT02-XIAO](https://external-api.kalshi.com/trade-api/v2/markets/KXOPENINTAI-26OCT02-XIAO), finalized open-source Intelligence Index leader Xiaomi; speech settlement also found. AA remains a disabled collector candidate. |
+| DeepSWE / Datacurve | Kalshi [KXCODEAI-26SEP30-MIMO](https://external-api.kalshi.com/trade-api/v2/markets/KXCODEAI-26SEP30-MIMO), finalized with ChatGPT as leader. Exact evaluation/identity/tie rules matter; mentions are not scores. |
+| Humanity's Last Exam | Polymarket [Claude by June 30, 2026](https://polymarket.com/event/anthropic-claude-score-on-humanitys-last-exam-by-june-30?marketSlug=will-an-anthropic-claude-model-score-at-least-50-on-humanitys-last-exam&outcomeIndex=1), resolved thresholds using Scale's HLE leaderboard. Later contracts can specify agi.safe.ai; preserve the exact source. |
+| ARC Prize / ARC-AGI-2 | Polymarket [2025 ARC-AGI-2 thresholds](https://polymarket.com/event/how-high-will-ai-score-on-arc-agi-2), resolved using ARC Prize public confirmation of private-evaluation scores. |
+| Carbon Arc | Kalshi [KXGPTAPP-26SEP07-T95](https://external-api.kalshi.com/trade-api/v2/markets/KXGPTAPP-26SEP07-T95), finalized ChatGPT app-download index 112.4: 12.4% year-over-year growth, not 112.4 million downloads or HF weights requests. |
+| Ornn | Kalshi [B200 August 7](https://kalshi.com/markets/kx/m/kxb200ws-26aug07), paid out at $5.76/hour. Infrastructure-price precedent, not model performance. |
+| Publisher announcements | Polymarket [GPT-5 release in 2024](https://polymarket.com/event/will-openai-release-gpt-5-in-2024), resolved No under its public-release evidence rules. |
+
+SWE-bench was confirmed as Kalshi series
+[KXSWEBENCH](https://external-api.kalshi.com/trade-api/v2/series/KXSWEBENCH);
+no settled instance was confirmed in this check. Epoch AI/LiveBench appeared as
+fallback/tiebreak sources in a future contract, not verified past settlement
+sources. No HF download-counter or OpenCode usage settlement precedent was
+verified in this bounded search. A leaderboard hosted on HF is not an HF
+download market. None of this research selects another collector.
+
+**Earlier evidence and fragile local state:**
+
+- [Headline sample/history](../analysis/2026-10-05-142212-g3-headline-sample/README.md):
+  varied stored examples and the activity-summary to editorial-news change.
+  Version counts are not unique stories. Headline-generator cloning/refashioning
+  belongs with G2; it was not implemented in this G3 pass.
+- [Benchmark mentions](../analysis/2026-10-05-144309-g3-benchmark-mentions/README.md),
+  [concentration](../analysis/2026-10-05-144309-g3-benchmark-mentions/concentration.md),
+  [trends](../analysis/2026-10-05-144309-g3-benchmark-mentions/trends.md) and
+  [legitimacy/traffic audit](../analysis/2026-10-05-144309-g3-benchmark-mentions/legitimacy-audit.md):
+  CursorBench is unusually account-concentrated; DeepSWE has promotional
+  contamination alongside real discussion. Arena domain visits include its
+  interactive product; bot share was not established. DeepSWE traffic was
+  unknown, not proven low. Mentions are not quality or independent endorsements.
+- [Audience geography](../analysis/2026-10-05-195203-g3-audience-geography/README.md):
+  country coverage 31.4% of source authors, not website readers, eligible
+  traders or historical researcher work locations.
+- [Listing versus order parameters](../analysis/2026-10-05-170409-g3-market-listing-and-order-parameters.md)
+  and [builder/liquidity research](../analysis/2026-10-05-210519-g3-builder-and-liquidity-programs/README.md):
+  proposal review, builder access, referrals and liquidity are separate.
+  No external application, submission or market making occurred.
+- [Interest analytics](../analysis/2026-10-06-123349-g3-interest-analytics/README.md)
+  and [PostHog/GA4 review evidence](../analysis/2026-10-06-124136-posthog-ga4-recent-reviews/skill-output/report.md):
+  separate clicks, explicit support and agent calls. Later owner-requested
+  **PostHog initial setup is an independent session**, recorded in G4's handoff
+  below; progress was not checked here. Do not restart vendor selection as a G3
+  prerequisite. Prediction/support/scenario events remain future integration;
+  canonical operation counts belong in the database.
+
+Machine-local capture: dirty authoritative root
+/Users/fuchitalee/development/pushin-weight-v2, branch
+docs/general-launch-coordination, inspected HEAD
+33f20b971b01dbb8d90939f975e5dbbd987a3d86. The owner reports the charter/index
+merged to main; remote main was observed at
+60181a88be8c0887ca20033d6f9a9d24eb89152f during that earlier handoff pass.
+This supplement was local-only at that capture; the authoritative index records
+later publication. The old root checkout lists the G3 design and research
+directories as untracked even when a snapshot has since been published.
+Preserve local research and private evidence; the handoff publication does not
+include every linked machine-local artifact. Resolve those links from the
+authoritative root when they are absent from a fresh worktree.
+
+The ignored, isolated G5-conforming prototype remains at
+/Users/fuchitalee/development/pushin-weight-v2/.context/compound-engineering/ce-prototype/2026-10-05-g3-poll-to-market/.
+Its 01-headline-poll-proposal/screens/index.html, verification.json, decisions.md
+and sample-edited-market-proposal.md preserve the design and 34 saved browser/
+asset checks. It uses illustrative probabilities and browser-local votes,
+predates the latest creation-support wording and is not the statistical engine
+or a production demand ledger. The preview was temporary; current process/port
+availability was not checked. Preserve prototype-agent /root/g3_poll_prototype
+ownership and the independent dirty G5 worktree.
+
+**Round-two orientation:** agree the shared chart example/state and bounded
+engine scope; audit actual cohort coverage before choosing forecast execution.
+On an owner-selected implementation, use Ollija in the intended round-two branch/
+worktree and enrich its returned plan. Keep the closed G3 design and root's
+historical G1 coordination plan as source material, not new execution targets.
+Reading this supplement alone grants no collection, package installation,
+database writes, external contact, further Git publication, cleanup or release
+authority; follow the current owner's selected task.
+
 ## G4 — Sharing, X and inherited API work
 
 **Starting assets:** API/MCP discovery/draft, public-output restrictions and

@@ -68,7 +68,7 @@ successor notes; their implementation/delivery outcomes remain unchanged.
 | --- | --- | --- |
 | G1 / round 2 | Assets, graphicsed and inherited identity/acquisition work | [Session-clear handoff](2026-10-09-110145-general-round-two.md#g1-session-clear-handoff--october-9) recorded for the staff-roster session; open for planning, no implementation claim |
 | G2 / round 2 | ja/zh_cn voices, chart editorial rules, retention and remaining editorial work | Open for planning; no implementation claim |
-| G3 / round 2 | Reusable chart engine and inherited analysis/forecast design | Open for planning; no implementation claim |
+| G3 / round 2 | Reusable chart engine and inherited analysis/forecast design | [Session handoff](2026-10-09-110145-general-round-two.md#g3-session-clear-handoff--october-9) records prior research and delivered inputs. [Workspace rule](2026-10-09-110145-general-round-two.md#round-two-working-directory--owner-decision): implementation uses its own G3 round-two worktree; exact path/branch remain to be assigned. Open for planning; no active implementation claim |
 | G4 / round 2 | Sharing/X and inherited API/MCP work | [Session-clear handoff](2026-10-09-110145-general-round-two.md#g4-session-clear-handoff--october-9) recorded by `g4-mcp-scaffold-20261006`; open for planning, no implementation claim |
 | G5 / round 2 | General integration and inherited local release preparation | [G5 handoff](2026-10-09-110145-general-round-two.md#g5-session-handoff--october-9) and [domain record](../reference/domains.md) included in the owner-authorized documentation publication; open for planning, preserve local code |
 
