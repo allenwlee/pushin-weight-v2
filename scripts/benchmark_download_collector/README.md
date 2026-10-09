@@ -5,8 +5,9 @@ Arena scores, uncertainty and reported battles. The database-backed Pulse page r
 crosswalk and retained measurements from PostgreSQL. Each line shows its actual
 scope, baseline date, raw value and source evidence. Missing data stays missing.
 
-The integration is available for isolated review. Production and recurring collection
-remain disabled. Source definitions share the `metrics` table; hourly OpenCode
+The integration supports isolated review and is enabled in production for the
+reviewed DeepSeek V4.1 Flash and GLM 5.3 Flash cohort. New environments require
+explicit reader and collection activation. Source definitions share the `metrics` table; hourly OpenCode
 revisions use the existing collection-run, observation and value tables. Existing X
 and HF accounts retain their separate source identities. The original diagnostic
 presets remain available alongside release-response presets.
@@ -73,6 +74,25 @@ HF net counter change is not newly generated downloads. The linked Arena panel
 shows raw score, bounds and reported battles from the same publication, with rank
 as an optional view. Unknown score anchors break comparison segments.
 
+### HF daily collection schedule
+
+HF's operational data-source metadata sets `daily_collection_hour_utc=10`, with
+`daily_collection_schedule_note` retaining the reason. The hourly UTC worker
+collects HF at the first tick from 10:00 onward, once per UTC day. If the tick is
+missed, a later tick can catch up that day; a recorded attempt, including a failed
+attempt, prevents another automatic attempt that day. The batch ID is stable for
+the daily slot. Collection health and the due command expose this hour. Sources
+without the override retain their configured polling intervals: OpenCode hourly,
+OpenRouter/Arena daily. The clock change preserves immutable measurement contracts.
+
+The October 7–8 hourly experiment found DeepSeek/GLM updates between
+09:18–10:18 UTC on the first day and 09:00–10:00 UTC on the second; Qwen updated
+earlier. The owner selected 10:00 UTC to collect near that observed refresh period.
+This is limited publication evidence from three repositories over two days.
+An update can arrive later, leaving that day's collected counter unchanged.
+The collection hour does not establish HF's 30-day counting cutoff or effective
+timezone; those remain unknown.
+
 OpenCode measurements cover Go + free traffic, including cached tokens; they exclude
 external-provider client traffic. `unique_users` and `sessions` are approximate
 daily distinct counts, never cross-model sums. Reviewed model IDs and endpoint paths
@@ -91,7 +111,8 @@ date-to-observation references. Unchanged rows reuse values; changed totals appe
 revisions, including decreases. Current-day rows have an unknown actual end time
 and remain provisional. Closed UTC days use `[00:00, next 00:00)` windows. Never sum
 successive hourly snapshots as hourly usage. Publication and retrieval freshness
-are separate. The provisional polling interval is one hour, but no schedule is enabled.
+are separate. The production worker checks OpenCode hourly; scheduling in other
+environments requires explicit activation.
 
 New reviewed presets can pin a parent measurement contract by ID and hash, reusing
 history without duplicating measured values. The chart and forecast reader validate
@@ -146,19 +167,20 @@ response; the retained four-panel layout shows Arena score. Unmapped platform
 totals absent from this response stay unavailable. Legacy snapshot reports remain
 available as a separate diagnostic input.
 
-## Disabled operations and future release
+## Collection operations
 
 Reviewed source configuration freezes polling interval, freshness thresholds,
 completed-day lag, revision recheck range and request/time/byte caps. Defaults are
 24-hour polling, 48-hour retrieval freshness, seven-day publication freshness,
 one completed-day lag and seven-day recheck. These are provisional configuration,
-not an active schedule or a promise about provider publication timing. The manual
+not a promise about provider publication timing. Production uses the existing
+dedicated benchmark cron; another environment still requires explicit activation. The manual
 command caps its requested budget at the reviewed contract's caps. `collect_benchmark_due --contract CONTRACT_UUID` reports due work without calls.
 Its `--apply` requires `BENCHMARK_COLLECTION_ENABLED=true`, an enabled DataSource
 and a reviewed contract with that source’s `scheduling_enabled=true`. It applies
 the reviewed completed-day lag and revision recheck range, and uses stable polling
-batch IDs. Owner-selected runtime activation remains required; this candidate
-registers no cron or Celery beat task.
+batch IDs. Owner-selected runtime activation remains required; these commands
+register no cron or Celery beat task.
 OpenCode instead defaults to hourly polling and two-hour freshness, and rechecks
 the full returned history. Its current-day row is retained separately from completed-day comparisons.
 
