@@ -42,6 +42,15 @@ preserves the pre-rollover audit of delivered code, completed research/planning
 and locally verified work. Ending round one does not establish that every earlier charter
 requirement is implemented or that the General redesign is in production.
 
+### G1 session continuity
+
+Before resuming G1 round two, read the existing register's
+[G1 session-clear handoff](2026-10-09-110145-general-round-two.md#g1-session-clear-handoff--october-9).
+It carries the locked staff-roster decision tree, the uncommitted filing step
+on collect-chinese-workers, and the boundary between filings, a lab's own
+named report, staff-role accounts, and leads. Clearing chat does not select
+a graphics implementation, a new collection, a production write, or a release.
+
 ### G5 session continuity
 
 Before resuming General-page work after the session reset, read the existing

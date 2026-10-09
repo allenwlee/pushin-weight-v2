@@ -58,6 +58,217 @@ saved DeepSeek/MiniMax research and explicit coverage gaps.
 portrait counts, and real consumer access to shared media. An author avatar
 fallback does not imply the depicted subject has been identity-verified.
 
+### G1 session-clear handoff — October 9
+
+Owner requested this supplement before clearing the staff-roster session.
+This is the existing G1 continuity record for B2-G1-03. It does not start
+B2-G1-01 or B2-G1-02, create an execution plan, or select a collection,
+production write, commit, or release.
+
+**What exists and where**
+
+- Collector: `/Users/fuchitalee/development/collect-chinese-workers`, branch
+  `main`, HEAD and `origin/main` both `b7b9f86`. The skill symlink is
+  `~/.agents/skills/collect-chinese-workers`. The tree is dirty and
+  uncommitted. New files: `company_collect/filings.py`,
+  `tests/test_filings.py`. Filing wiring is in `company_collect/command.py`,
+  `SKILL.md`, `README.md`, `references/company-website-run.md`, and
+  `tests/test_command.py`. Also dirty, and not to be reverted while saving
+  the filing work: `company_collect/dossier.py`,
+  `references/china-connection.md`, `references/chinese-source-access.md`.
+  The prior session recorded 55 passed on `tests/test_baidu.py`,
+  `tests/test_command.py`, `tests/test_pages.py`, and `tests/test_filings.py`
+  using `/Users/fuchitalee/development/face-matcher/.venv` with `PYTHONPATH=.`.
+  This handoff did not re-run that suite. Tests stay offline: no live
+  SerpApi, Apify, or CNINFO.
+- pymupdf is installed in that Face Matcher venv (`import pymupdf`). A
+  missing import records an error and falls back to the website walk.
+  Download cap 80MB. Accept only URLs built as `https://static.cninfo.com.cn/`
+  plus the relative `adjunctUrl`. Filing reads do not spend SerpApi.
+- This coordination checkout is `docs/general-launch-coordination` at
+  `33f20b97`, already dirty. The round-two register is untracked. Do not
+  commit this supplement unless asked. Production staff import stays a
+  separate explicit step. Only the DeepSeek dossier has been written to
+  production.
+- The older machine-local note
+  `/tmp/compound-engineering-501/ce-handoff/pushin-weight-v2-aff2eb3769a9/g1-deepseek-minimax-photo-coverage.md`
+  is a photo-coverage snapshot in OS temp. It is not this round-two handoff.
+
+**Roster rule**
+
+Input is a company or unit name. Filings are the starting point. They list
+founders and C-suite, and rarely the research team.
+
+- Unit of a listed parent: open the parent filing and keep a name only when
+  the filing itself ties that person to the unit. Do not copy the parent's
+  directors onto the unit.
+- Unit of an unlisted parent: skip filings.
+- Standalone and listed: open that company's own filing.
+- Standalone and private: no filing. Then use (1) database accounts with
+  role staff on that brand, (2) the company's own website where the same
+  line gives name and role, (3) a paper or technical report the company
+  published whose affiliation line names this company.
+
+When a filing list is read, that list plus the database seed is the staff
+list the shipped command collects. Do not add Baidu news-sentence fragments.
+When no filing matches, keep the website and Baidu walk.
+
+The filing step runs after the database seed and before any photo or Baidu
+search. Source is CNINFO (巨潮资讯网), which also hosts Hong Kong PDFs. Use
+the latest annual report, or the prospectus when no annual report exists.
+Hong Kong chapter: 董事及高级管理人员. Mainland chapter:
+董事、监事、高级管理人员和员工情况. Do not vendor ah-disclosure-kit.
+`choose_management_document` must not treat 半年度报告 as the annual report.
+Prefer Chinese over an English copy, annual over prospectus, and the latest
+announcement time.
+
+Keep founders and C-suite, including a founder who is also a non-executive
+director, an executive chairman, and the board secretary named in the
+senior-management biographies (肖磊-type 董事會秘書). Keep the filing's own
+characters. Do not convert 劉 to 刘 or invent pinyin. Drop independent
+directors, supervisors (监事), an outside company secretary at a
+corporate-services firm, and an executive director whose only office is
+director (职工董事 / 張笑涵). "創立" of a different company later in a bio is
+not founder of this company. Only the title clause through the first 。
+counts. A later sentence must not revive a dropped person (鄭程傑).
+
+Issuer versus unit is in `filing_forms`: a supplied name that matches the
+company row searches company names; a supplied name that matches a linked
+brand and not the company searches only that brand. A `qwen` request must
+not open Alibaba's management chapter. A unit with status `not_listed` gets
+the reason "this unit is not the listed issuer, so the parent company's
+management chapter is not its staff list". Latin issuer keys strip a trailing
+`-W` or `-SW`, casefold, and require length at least 4, so MINIMAX-W matches
+MiniMax and 阿里巴巴-W matches neither Alibaba nor Qwen. Do not translate
+Alibaba into 阿里巴巴. Cache a successful `filing.json` and reuse it on
+resume. Do not cache status `error` as final.
+
+Zhipu live read, prior session, not repeated after the parser landed: HK
+02513, orgId 9920000016, short name 智谱, 2025年度报告, announcement
+2026-04-19, adjunctUrl `finalpage/2026-04-19/1225124333.PDF`. Kept 劉德兵,
+張鵬, 李涓子, 王紹蘭, 肖磊, 唐傑. Dropped 張笑涵, 李家慶, 王盟, 楊強, 謝德仁,
+唐穎, 鄭程傑. Parser tests pin the keep/drop behavior; they do not replace
+that live name list. MiniMax is HK 00100, MINIMAX-W, orgId 9920000022.
+Alibaba on CNINFO is 09988 from the keyword 阿里巴巴 (orgId 9900042435);
+the keyword Alibaba, and Qwen / 通义千问 / Inclusion, returned no listing.
+
+**Next source, described and not built**
+
+After filings, take one report per lab: the latest report the lab published
+that prints individual names. Keep a person when the name is printed and the
+affiliation line names this lab. A byline that is only "Qwen Team" or
+"Gemini Team" adds nobody. Walk back to the newest earlier report that still
+prints names. The role is "author of this report" unless the report states a
+title. Alphabetical order is not a ranking. Examples already checked:
+arXiv 2309.16609 and 2407.10671 print Qwen Team, Alibaba Group authors;
+2412.15115 and 2505.09388 open as "Qwen Team" only; DeepSeek-V3 2412.19437
+prints a long named list. Staff-role X accounts come after that, to attach
+handles to people the report already named. They are not how the research
+team is discovered.
+
+**Categories recorded 2026-10-08. Recheck a listing before opening a filing.**
+
+| Lab | Shape | Filing to open |
+| --- | --- | --- |
+| MiniMax | Standalone, listed | Own annual report. HK 00100 |
+| Zhipu GLM (`glm`) | Standalone, listed | Own annual report. HK 02513 |
+| Qwen | Unit of Alibaba | Parent filing only where it names Qwen. HK 9988 / NYSE BABA |
+| ERNIE | Unit of Baidu | Parent filing only where it names the unit. HK 9888 / Nasdaq BIDU |
+| Hunyuan | Unit of Tencent | Parent filing only where it names the unit. HK 0700 |
+| MiMo | Unit of Xiaomi | Parent filing only where it names MiMo. HK 1810. The database also links `mimo` to Meituan; treat that as a bad link |
+| SenseChat | Unit of SenseTime | Parent filing only where it names the unit. HK 0020 |
+| KwaiYii (`kuaishou`) | Unit of Kuaishou | Parent filing only where it names the unit. HK 1024 |
+| DeepMind | Unit of Alphabet | Alphabet filing only where it names DeepMind. Nasdaq GOOGL. Still inside Alphabet as of the 2026-08-05 Hassabis appointment (Alphabet chief scientist and DeepMind chairman); Koray Kavukcuoglu runs the lab day to day. Isomorphic Labs is a spinout |
+| SpaceXAI | Unit of SpaceX | SpaceX S-1 and later reports, only where they name the unit. Formerly xAI; acquired 2026-02-02; renamed around 2026-07-06. SpaceX listed June 2026, Nasdaq SPCX |
+| Doubao | Unit of ByteDance | None. ByteDance is private |
+| dots | Unit of Xiaohongshu | None while unlisted. June 2026 reporting described a confidential Hong Kong filing being prepared |
+| InclusionAI | Public pages call it Ant Group's lab | None. Ant is not listed and is not the listed Alibaba company. The database stores `inclusion_ai` and `inclusionai` as their own companies. `SKILL.md` still says Qwen and Inclusion are part of Alibaba. Do not silently rewrite that sentence |
+| DeepSeek | Standalone, private | None until a public prospectus. Began inside High-Flyer. Two company nicknames, `deepseek` and `deepseek_co` |
+| Moonshot Kimi | Standalone, private | None until a public prospectus |
+| StepFun | Standalone, private | None until a public prospectus |
+| Yi / 01.AI (`yi`, `01ai`) | Standalone, private | None until a public prospectus |
+| OpenAI | Standalone, private | None. Microsoft is an investor. Do not read Microsoft's 10-K as OpenAI's staff list |
+| Anthropic | Standalone, private | None until a public prospectus. Amazon and Google are investors. Do not read their filings as Anthropic's staff list |
+| Mistral | Standalone, private, already tracked | None. French |
+
+Tracked brands are `config.yaml` `enabled_models` (21). Llama, NeMo, EXAONE,
+Sakana, and Upstage were not put through this roster pass.
+
+**Accounts, finished runs, and leads**
+
+- Qwen staff-role rows from the prior read-only check, brand `qwen`, role
+  `staff`: `@xuanmingzhangai`, `@ChujieZheng`, `@xiong_hui_chen`. Only
+  `@xuanmingzhangai` had a person row and a pending Qwen employment
+  affiliation. The company command still seeds employment and founder rows
+  joined through `brands_companies`. A `qwen` request therefore seeds
+  Alibaba. Do not switch the seed to `brands_accounts` role staff unless
+  asked.
+- The 29 seed-not-staff accounts in run `qwen.ai/2026-10-07T061107Z` came
+  from `profile-affiliation-rules-v1` and one
+  `profile-affiliation-extraction-v2` row. They are pending affiliations,
+  not the staff list. Call A (list `2067062923525275922`) is the tweet
+  harvester fan-in.
+- Do not rerun that Qwen dossier. It used the wrong roster and made no
+  personal photo search. Path:
+  `~/.local/state/collect-chinese-workers/runs/qwen.ai/2026-10-07T061107Z`.
+- Do not resume the finished Zhipu run
+  `~/.local/state/collect-chinese-workers/runs/zhipu/20261008T051014Z`
+  (`research_status` partial, `production_import` not_run). It predates the
+  filing step. It held 8 X-account staff plus five junk fragments (张鹏在电,
+  递网证实, 王玥婷已, 近期, 数据官胡). 张鹏 himself was not among the eight.
+  Do not retry Cunxiang Wang page 3 or Acer page 1. A Mac copy is
+  `/Users/allenwlee/Desktop/2026-10-08-155220-zhipu-dossier/index.html`.
+- Tyler Folkman (`@tfolkman`) remains in the Zhipu seed and that dossier.
+  The stored row is a pending employment on brand `glm` with no filing tie.
+  The owner said he has no Zhipu tie. Removing him was not authorized.
+  Do not drop him unless asked again.
+- Search default, uncommitted in `clue_from_profile`: search a staff account
+  unless the account states a birthplace or hometown outside mainland China,
+  Hong Kong, Macau, or Taiwan and the name is not Chinese or a pinyin
+  surname. An English name or a city such as Utah or London is not that
+  statement. The clue is not an ethnicity label. `origin` stays empty unless
+  a source states a birthplace.
+- Hugging Face org members are access seats. A public seat is a lead until a
+  filing or the lab's own report already names that person. Do not add those
+  members unless asked. Do not call the HF API again from this work; the
+  address was rate-limited after a large profile fetch. Valid unauthenticated
+  counts from 2026-10-08, zero errors: Qwen 193, StepFun 113, DeepSeek 37,
+  Z.ai 36, MiniMax 12. Later orgs' bucket counts from that same run are
+  invalid. inclusionAI, moonshotai, and Anthropic member lists returned 403.
+- News articles, GitHub contributor lists, job ads, and fan accounts stay in
+  a lead file. A self-written "ex lab" line on 脉脉, LinkedIn, or alphaXiv
+  becomes a staff row only when a filing or the lab's own report also names
+  that person. Leavers stay in a former pile.
+- No third-party catalog checked sells a 脉脉 profile database. SerpApi's
+  published engine list has no 脉脉 engine. Apify store search for 脉脉
+  returned zero actors; a "maimai" hit was a Thailand logistics actor.
+  Arcade-game 舞萌 APIs are the wrong product. Bright Data's public scraper
+  catalog had no maimai.cn entry. People Data Labs' published social-network
+  list has no 脉脉. No public 脉脉 profile product was found at
+  PhantomBuster, Octoparse, Coresignal, Apollo, ZoomInfo, 探迹, 励销云, or
+  典枢. `https://maimai.cn/robots.txt` allows a narrow public set (home,
+  articles, some company and community pages, brand, SEO) and then disallows
+  the rest. Member career lines are outside that set. 脉脉 itself requires a
+  registered mainland mobile number. Do not build a scraper, replay cookies
+  or access tokens, or recommend an SMS farm or an unofficial client.
+- IT桔子, 烯牛, 鲸准, and 企名片 track companies, rounds, investors, and a
+  short current team. They do not hold the departed-engineer list, and the
+  ones checked ask for a mobile number. 猎聘 and Boss直聘 are phone-signup
+  resume sites. 天眼查 and 企查查 terms refuse overseas access. Do not use
+  those registry sites from outside China, and do not suggest a VPN or a
+  fake phone to get around the terms. Usable without a Chinese number, as
+  leads only: alphaXiv alumni pages and public LinkedIn headlines.
+
+**Round-two starting point**
+
+B2-G1-01 and B2-G1-02 stay ready to plan. This session did not select assets
+or edit G2-owned picture files. B2-G1-03 continues from the roster rule
+above. The technical-report pass and a seed switch from company
+employment/founder to brand staff-role accounts are described here and are
+not implemented. Agree the shared content reference and asset selection with
+G2, G4, and G5 before implementations diverge. GLM-5.3 is the shared
+integration case. G1 supplies media.
+
 ## G2 — Editorial decisions and voices
 
 **Starting assets:** delivered English writing, source-grounding/context repair,

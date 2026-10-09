@@ -66,11 +66,18 @@ successor notes; their implementation/delivery outcomes remain unchanged.
 
 | Round-two session | Current scope | Status |
 | --- | --- | --- |
-| G1 / round 2 | Assets, graphicsed and inherited identity/acquisition work | Open for planning; no implementation claim |
+| G1 / round 2 | Assets, graphicsed and inherited identity/acquisition work | [Session-clear handoff](2026-10-09-110145-general-round-two.md#g1-session-clear-handoff--october-9) recorded for the staff-roster session; open for planning, no implementation claim |
 | G2 / round 2 | ja/zh_cn voices, chart editorial rules, retention and remaining editorial work | Open for planning; no implementation claim |
 | G3 / round 2 | Reusable chart engine and inherited analysis/forecast design | Open for planning; no implementation claim |
 | G4 / round 2 | Sharing/X and inherited API/MCP work | [Session-clear handoff](2026-10-09-110145-general-round-two.md#g4-session-clear-handoff--october-9) recorded by `g4-mcp-scaffold-20261006`; open for planning, no implementation claim |
 | G5 / round 2 | General integration and inherited local release preparation | [G5 handoff](2026-10-09-110145-general-round-two.md#g5-session-handoff--october-9) and [domain record](../reference/domains.md) included in the owner-authorized documentation publication; open for planning, preserve local code |
+
+G1's [session-clear handoff](2026-10-09-110145-general-round-two.md#g1-session-clear-handoff--october-9)
+records the staff-roster decision tree, the uncommitted issuer-versus-unit
+filing step, and the boundary between filings, a lab's own named report,
+staff-role accounts, and leads. B2-G1-01 and B2-G1-02 are not claimed done.
+Finished Qwen and Zhipu dossiers stay as they are. This supplement is in the
+existing register; no standalone artifact or release is created.
 
 G5's [session handoff](2026-10-09-110145-general-round-two.md#g5-session-handoff--october-9)
 in the existing round-two record preserves the local implementation, accepted
@@ -1432,3 +1439,6 @@ on October 1 as a separate workstream, with continuous design changes expected.
 - `2026-10-09T14:57:59+09:00` **OFF — G5 / round 2 / g5-design-integration-01a0f6ef:** Verified merged remote main `60181a88`: round-two baseline/B2-G5-01–03 present; later G5 handoff/discovery links and `docs/reference/domains.md` absent. The merged domain link therefore still needs its file published. Local handoff and all eight file links remain intact; recorded exact publication gap in existing handoff/current G5 row. No working-file checkout/reset, code/runtime/data change, commit/push or deployment. Release bounded check and preserve concurrent publication owners.
 
 - `2026-10-09T15:01:46+09:00` **ON — G5 / round 2 / g5-design-integration-01a0f6ef:** Owner explicitly requests committing and pushing the G5 handoff, its charter/index links and domain record to main. Use isolated `docs/g5-handoff-main` from current remote main, named documentation files and `[skip render]`; preserve all application/local data and other sessions. Endpoint is verified remote-main commit, with no deployment.
+- `2026-10-09T15:11:41+09:00` **ON — G1 staff-roster session:** Owner requests the existing G1 handoff added to the charter and index and pushed to main. Isolate `docs/g1-handoff-main` from current `origin/main`. Documentation only; preserve the dirty coordination checkout, the collector edits, and other sessions. No collection, production write, or deployment.
+
+- `2026-10-09T15:12:30+09:00` **OFF — G1 staff-roster session:** Added the G1 session-clear handoff to the round-two register and linked it from the charter and the current-round index row. Documentation only. No collection, production write, or deployment.
