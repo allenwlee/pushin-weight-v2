@@ -4,6 +4,7 @@ artifact_contract: ce-unified-plan/v1
 artifact_readiness: requirements-only
 product_contract_source: ollija-annotate-plan
 execution: documentation
+status: completed
 ollija:
   change_id: docs-general-round-two-records-2026-10-09-042111
   branch: docs/general-round-two-records
@@ -112,3 +113,16 @@ coordination snapshot and all round-one closure records, based on main
 5. Read the remote branch SHA and compare it with the local commit. Record the
    resulting receipt in the authoritative index/session without claiming a merge
    or deployment. Preserve other worktrees and their uncommitted work.
+
+## Publication receipt — October 9, 2026
+
+- Published commit `7babf0228bf7a885931829a2c94dd0245683a64d` to
+  `origin/docs/general-round-two-records`; `git ls-remote` confirmed the same SHA.
+- The exact committed scope was 16 Markdown documents. Named-file review,
+  whitespace checks, new-document link checks, learning frontmatter/claim checks
+  and Ollija annotation checks passed. Runtime tests were not needed or run.
+- Preserved main's newer G1 release history and glossary entries, canonical
+  implementation worktrees, unrelated root changes and the metric-window owner.
+- Completed the authoritative index publication claim and recorded its OFF
+  entry. This follow-up receipt records the already verified publication.
+- No pull request, merge, staging or production deployment was performed.

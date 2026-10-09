@@ -15,11 +15,13 @@ session log. Neither document is an implementation plan.
 
 ## Shared location
 
-**Active publication claim — October 9:** `general-round2-docs-publish-20261009`
-owns publishing the round-one closeout, round-two coordination and related
-closure/learning records to a dedicated documentation branch. Preserve this
-authoritative checkout, other sessions' edits and the active metric-window work.
-The selected endpoint is commit-and-push; implementation/release work is separate.
+**Completed publication — October 9:** `general-round2-docs-publish-20261009`
+pushed the round-one closeout, round-two coordination and related closure/learning
+records to [`docs/general-round-two-records`](https://github.com/allenwlee/pushin-weight-v2/tree/docs/general-round-two-records).
+Remote commit `7babf0228bf7a885931829a2c94dd0245683a64d` was verified after
+push. No active publication claim remains. This records commit-and-push only;
+no merge or deployment occurred. The authoritative checkout, other sessions'
+edits and the independent metric-window work remain preserved.
 
 **Completed round rollover — October 9:** `general-round2-rollover-20261009`
 closed the canonical initial G1–G5 records, preserved historical bodies and
@@ -45,8 +47,9 @@ The authoritative coordination files live on **fuchitalee**, at:
 Sessions in linked worktrees must consult and update these shared files, rather
 than maintaining divergent worktree copies. Task code and detailed task plans
 remain in their assigned worktrees. Record the actual plan/worktree location
-when adding a plan link. These new files need an authorized commit/push before
-they can be assumed present in other clones or branch snapshots.
+when adding a plan link. The round-two snapshot is published on the branch
+linked above; other clones must fetch that branch to read it. Later local edits
+require their own publication before being assumed present remotely.
 
 ## Current round — round two
 
@@ -1404,3 +1407,5 @@ on October 1 as a separate workstream, with continuous design changes expected.
 - 2026-10-09T13:09:51+09:00 ON — benchmark-time-range-20261009 / independent benchmark supporting B2-G3-01: owner invokes LFG for the three-column nullable-start/end plus generated-range migration while data is small. Claim only MetricValue/reusable measurement-time schema, numbered migrations, benchmark temporal readers/fixtures/tests, existing selected plan and scoped references. Preserve all source schedules, immutable contracts/taxonomy, G1–G5 round-two owners and other-session edits. New task endpoint is verified PR under LFG default; no new production selection inferred from the completed HF-clock task.
 
 - 2026-10-09T13:20:57+09:00 ON — G1–G5 docs publication / general-round2-docs-publish-20261009: owner requests commit-and-push of updated coordination records. Prepare a dedicated documentation branch from current main; preserve unrelated root reference work, canonical implementation checkouts and the active benchmark metric-window owner.
+
+- 2026-10-09T13:27:32+09:00 OFF — G1–G5 docs publication / general-round2-docs-publish-20261009: pushed and verified `7babf0228bf7a885931829a2c94dd0245683a64d` on `docs/general-round-two-records`; selected coordination, closure, vocabulary and learning records are remote. No merge/deployment performed. Publication claim closed; preserve other sessions and the independent metric-window owner.
