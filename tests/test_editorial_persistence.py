@@ -309,3 +309,76 @@ def test_media_receipt_survives_assessment_change_without_second_send():
         == receipt
     )
     assert EditorialCall.objects.count() == 1
+
+
+@pytest.mark.parametrize(
+    "usage",
+    [
+        {},
+        {"estimated_cost": None},
+        {"estimated_cost": True},
+        {"estimated_cost": "NaN"},
+        {"estimated_cost": "Infinity"},
+        {"estimated_cost": "-0.01"},
+        {"estimated_cost": "0.3"},
+        {"prompt_tokens": 100},
+        {"prompt_tokens": True, "completion_tokens": 20},
+        {"prompt_tokens": -1, "completion_tokens": 20},
+    ],
+)
+def test_unconfirmed_cost_keeps_full_reservation(usage):
+    from core.models import EditorialBudget
+
+    row = claim_assessment(timezone.now(), "unknown-cost")
+    cfg = EditorialConfig(daily_usd=1, assessment_usd=1, daily_calls=4)
+    call_once(
+        row,
+        "editor",
+        "text",
+        ".2",
+        cfg,
+        lambda: {"usage": usage},
+        request_metadata={
+            "rates": {"input_usd_per_million": 1, "output_usd_per_million": 1}
+        },
+    )
+    assert row.calls.get().reserved_usd == Decimal(".2")
+    assert EditorialBudget.objects.get().reserved_usd == Decimal(".2")
+
+
+def test_media_submission_does_not_release_an_unfinished_render():
+    from core.models import EditorialBudget
+
+    row = claim_assessment(timezone.now(), "media-cost")
+    cfg = EditorialConfig(
+        daily_usd=1, assessment_usd=1, daily_calls=4, media_daily_calls=1
+    )
+    call_once(
+        row,
+        "media:picture",
+        "media",
+        ".2",
+        cfg,
+        lambda: {"task_id": "pending", "usage": {"estimated_cost": 0}},
+    )
+    assert row.calls.get().reserved_usd == Decimal(".2")
+    assert EditorialBudget.objects.get().reserved_usd == Decimal(".2")
+
+
+def test_completion_refunds_the_original_budget_day_across_midnight(monkeypatch):
+    from datetime import UTC, datetime
+
+    from core.models import EditorialBudget
+
+    before = datetime(2026, 10, 10, 23, 59, tzinfo=UTC)
+    monkeypatch.setattr(timezone, "now", lambda: before)
+    row = claim_assessment(before, "midnight")
+    cfg = EditorialConfig(daily_usd=1, assessment_usd=1, daily_calls=4)
+
+    def send():
+        monkeypatch.setattr(timezone, "now", lambda: before + timedelta(minutes=2))
+        return {"usage": {"estimated_cost": ".01"}}
+
+    call_once(row, "editor", "text", ".2", cfg, send)
+    budget = EditorialBudget.objects.get()
+    assert budget.day == before.date() and budget.reserved_usd == Decimal(".01")

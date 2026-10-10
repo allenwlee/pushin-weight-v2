@@ -318,11 +318,12 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
             field: getattr(edition, field)
             for field in ("headline", "byline", "article")
         }
-    # Both factual calls reserve the full enlarged allowance before sending.
+    # The transport assertion above pins the full allowance before sending;
+    # completed calls retain only the confirmed cost in the budget ledger.
     factual_calls = EditorialCall.objects.exclude(stage__startswith="writer:chatter")
     assert factual_calls.count() == 2
-    assert all(call.reserved_usd >= Decimal("0.131072") for call in factual_calls)
-    assert EditorialBudget.objects.get().reserved_usd <= Decimal(5)
+    assert all(call.reserved_usd == Decimal("0.001") for call in factual_calls)
+    assert EditorialBudget.objects.get().reserved_usd == Decimal("0.003")
 
 
 @pytest.mark.parametrize(
