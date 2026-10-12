@@ -63,7 +63,7 @@
   "scenarios": [
     {
       "id": "homepage-desktop",
-      "route": "/?locale=en&window=365&timezone=Asia%2FTokyo",
+      "route": "/?locale=en&window=365",
       "profile": "desktop",
       "runs": 2,
       "state_seeds": [
@@ -150,7 +150,7 @@
     },
     {
       "id": "homepage-mobile",
-      "route": "/?locale=zh_hans&window=365&timezone=Asia%2FTokyo",
+      "route": "/?locale=zh_hans&window=365",
       "profile": "mobile",
       "runs": 2,
       "state_seeds": [
