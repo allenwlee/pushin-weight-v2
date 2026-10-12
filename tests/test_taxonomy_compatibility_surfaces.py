@@ -181,9 +181,12 @@ def test_feed_aliases_emit_canonical_keys_and_keep_cursor_results_equivalent(
 
 
 def test_chart_endpoints_emit_canonical_filters_and_reuse_one_cache_entry(
-    client, django_user_model, compatible_taxonomy_rows
+    client, django_user_model, compatible_taxonomy_rows, monkeypatch
 ):
     brand, _posts = compatible_taxonomy_rows
+    monkeypatch.setattr(
+        views, "_tracked_home_brand_nicknames", lambda: (brand.nickname,),
+    )
     alias_filters = _filters(OLD_TYPE, OLD_PRODUCT)
     canonical_filters = _filters(CANONICAL_TYPE, CANONICAL_PRODUCT)
 

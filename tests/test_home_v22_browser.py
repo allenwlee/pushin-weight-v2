@@ -479,6 +479,82 @@ def _why_first_browser_snapshot(
 
 
 @override_settings(STORAGES=V22_BROWSER_TEST_STORAGES)
+class PublicTrackedBrandsBrowserTests(StaticLiveServerTestCase):
+    """Real configuration and collected company rows through anonymous controls."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        from django.utils import timezone
+
+        from x_monitor.config import load_config
+
+        self.tracked = set(load_config(Path("config.yaml")).enabled_models)
+        for nickname in self.tracked:
+            Brand.objects.get_or_create(nickname=nickname, defaults={"display_name": nickname})
+        self.companies = [f"call-a-browser-company-{index:03d}" for index in range(119)]
+        Brand.objects.bulk_create([
+            Brand(nickname=nickname, display_name=nickname) for nickname in self.companies
+        ])
+        for nickname in ("deepseek", self.companies[0]):
+            post = Post.objects.create(
+                tweet_id=f"public-tracked-{nickname}",
+                text="A stored source post",
+                created_at=timezone.now() - timedelta(hours=1),
+            )
+            PostBrand.objects.create(post=post, brand_id=nickname)
+        _clear_home_pulse_cache()
+
+    def test_anonymous_menus_pulse_and_window_switches_use_configured_subjects(self):
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for viewport in (VIEWPORTS["desktop"], VIEWPORTS["mobile"]):
+                    for locale in ("en", "zh_cn", "ja"):
+                        with self.subTest(viewport=viewport, locale=locale):
+                            context = browser.new_context(viewport=viewport, timezone_id="Asia/Tokyo")
+                            try:
+                                page = context.new_page()
+                                page.goto(f"{self.live_server_url}/?locale={locale}", wait_until="networkidle")
+                                page.wait_for_function("() => window.pwFilter && window.Chart")
+                                self.assertEqual(page.locator("body").get_attribute("data-pw-locale"), locale)
+                                self.assertEqual(set(page.locator('[data-pw-filter-group="brands"]').evaluate_all(
+                                    "nodes => nodes.map(node => node.value)"
+                                )), self.tracked)
+                                page.locator('.filter-pill[data-group="brands"]').click()
+                                self.assertTrue(page.locator('[data-pw-filter-group="brands"][value="deepseek"]').is_visible())
+                                page.locator('.filter-pill[data-group="brands"]').click()
+                                for window in (1, 7, 30, 365):
+                                    if window != 1:
+                                        page.locator(f'[data-pw-window-btn="{window}"]').click()
+                                    page.wait_for_function(
+                                        "window => JSON.parse(document.querySelector('canvas[data-home]').dataset.home).window_days === window",
+                                        arg=window, timeout=12000,
+                                    )
+                                    payload = page.locator("canvas[data-home]").evaluate(
+                                        "canvas => JSON.parse(canvas.dataset.home)"
+                                    )
+                                    self.assertEqual(set(payload["series"]), self.tracked)
+                                    self.assertEqual({row["nickname"] for row in payload["pulse"]["entries"]}, self.tracked)
+                                    self.assertEqual(payload["totals"]["deepseek"], 1)
+                                    self.assertEqual(set(page.locator("[data-pw-pulse-entry]").evaluate_all(
+                                        "nodes => nodes.map(node => node.dataset.pwPulseEntry)"
+                                    )), self.tracked)
+                                    self.assertEqual(page.locator("body").get_attribute("data-pw-locale"), locale)
+                                    self.assertEqual(page.locator("[data-pw-chart]").get_attribute("data-pw-refresh-failed"), "false")
+                                    page.locator("canvas[data-home]").wait_for(state="visible")
+                                    box = page.locator("canvas[data-home]").bounding_box()
+                                    self.assertIsNotNone(box)
+                                    self.assertGreater(box["width"], 0)
+                                    self.assertGreater(box["height"], 0)
+                            finally:
+                                context.close()
+            finally:
+                browser.close()
+        self.assertEqual(Brand.objects.filter(nickname__in=self.companies).count(), 119)
+        self.assertTrue(PostBrand.objects.filter(brand_id=self.companies[0]).exists())
+
+
+@override_settings(STORAGES=V22_BROWSER_TEST_STORAGES)
 class HomeV22BrowserTests(StaticLiveServerTestCase):
     """Root-route, real-PostgreSQL browser proof for the visible shell."""
 
@@ -487,6 +563,13 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         super().setUp()
         self.fixture = fixture_from_oracle()
         seed_real_home_orm(self.fixture)
+        # The authored shell fixture deliberately includes a configured closed tier.
+        tracking = patch(
+            "monitor.views._tracked_home_brand_nicknames",
+            return_value=_HOME_CHART_BRAND_PRIORITY + ("dots",),
+        )
+        tracking.start()
+        self.addCleanup(tracking.stop)
         _clear_home_pulse_cache()
         from django.contrib.auth import get_user_model
 
@@ -4046,6 +4129,12 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             display_name_en="Taxonomy Browser",
             display_name_zh_cn="分类浏览器",
         )
+        tracking = patch(
+            "monitor.views._tracked_home_brand_nicknames",
+            return_value=_HOME_CHART_BRAND_PRIORITY + ("dots", brand.nickname),
+        )
+        tracking.start()
+        self.addCleanup(tracking.stop)
         old_types = (
             "buzz_releases",
             "performance_comparisons",

@@ -2,23 +2,37 @@
 
 Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
 
-## General-page content
+## General-page vocabulary
 
-### Atomic content unit
+### Content
 
-One independently addressable item: either an original source-platform Post
-or a published piece of PushinWeight-authored content. A post's commentary is
-derived content attached to that post. Several events, jobs or claims within
-one post do not turn it into several atomic posts.
+The atomic, independently addressable unit of the General experience and the
+umbrella term for third-party **posts** and PushinWeight **original content**.
+The two kinds remain distinguishable. Commentary on a source post belongs to
+that post; several jobs, events or claims inside it do not create additional
+atomic posts. This term does not prescribe a new database table.
 
-### OriginalContent
+### Graphics editor / graphicsed
 
-G2's shared name for a saved PushinWeight-authored output, including a trend
-headline or editorial story. It has localized text, source evidence and a
-publication history distinct from its current front-page selection. This name
-belongs to G2's ongoing shared-storage transition; the G5 checkout has not yet
-integrated that implementation. Posts and their derived commentary remain
-separate source units.
+Alternative names for **picture editor** or **pics editor**: the editorial role
+that selects or creates an appropriate image/video for content. These names
+refer to one role, not separate services.
+
+### Story evidence
+
+The source material supplied for a selected story, comprising **anchors** that
+identify the story and **retrieved background** that explains its context.
+
+Background availability does not establish that a claim is true. The material
+supplied to the writer and the sources ultimately cited remain distinguishable.
+
+### Cited support
+
+The sources actually used to support a saved piece of original content, from
+which its source count and citation links are derived.
+
+Search matches and retrieved background do not automatically become cited
+support; a repeated source is not an additional independent confirmation.
 
 ## Ollija plan guidance
 

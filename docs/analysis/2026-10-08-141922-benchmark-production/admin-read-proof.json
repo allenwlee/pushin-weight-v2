@@ -1,0 +1,30 @@
+{
+  "actual_process_sha": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8",
+  "existing_staff_user_reused_without_session_or_user_writes": true,
+  "admin_read_checks": [
+    {
+      "path": "/admin",
+      "tab": "found",
+      "status": 200,
+      "rendered_bytes": 53009
+    },
+    {
+      "path": "/admin",
+      "tab": "queue",
+      "status": 200,
+      "rendered_bytes": 72497
+    },
+    {
+      "path": "/admin",
+      "tab": "history",
+      "status": 200,
+      "rendered_bytes": 55227
+    },
+    {
+      "path": "/admin/products/<existing-proposal>/",
+      "status": 200,
+      "rendered_bytes": 64911
+    }
+  ],
+  "scope": "existing custom admin server-side rendering; no fresh OAuth browser journey"
+}

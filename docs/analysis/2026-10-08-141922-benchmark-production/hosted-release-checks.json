@@ -1,0 +1,48 @@
+{
+  "baseRefOid": "702fef5b1409953a0a8f46173f120e74506e27f8",
+  "headRefOid": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8",
+  "mergeStateStatus": "CLEAN",
+  "mergeable": "MERGEABLE",
+  "statusCheckRollup": [
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-08T03:59:33Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/allenwlee/pushin-weight-v2/actions/runs/37725015224/job/113141089075",
+      "name": "regression-net",
+      "startedAt": "2026-10-08T03:55:27Z",
+      "status": "COMPLETED",
+      "workflowName": "Benchmark and download collector"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-08T03:58:18Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/allenwlee/pushin-weight-v2/actions/runs/37725015236/job/113141089436",
+      "name": "postgres-regressions",
+      "startedAt": "2026-10-08T03:55:27Z",
+      "status": "COMPLETED",
+      "workflowName": "Editorial stories and pictures"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-08T04:01:00Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/allenwlee/pushin-weight-v2/actions/runs/37725015134/job/113141088696",
+      "name": "postgres-regressions",
+      "startedAt": "2026-10-08T03:55:27Z",
+      "status": "COMPLETED",
+      "workflowName": "Official company discovery"
+    },
+    {
+      "__typename": "CheckRun",
+      "completedAt": "2026-10-08T03:59:59Z",
+      "conclusion": "SUCCESS",
+      "detailsUrl": "https://github.com/allenwlee/pushin-weight-v2/actions/runs/37725015184/job/113141088945",
+      "name": "postgres-regressions",
+      "startedAt": "2026-10-08T03:55:27Z",
+      "status": "COMPLETED",
+      "workflowName": "Staff identity and evidence"
+    }
+  ]
+}

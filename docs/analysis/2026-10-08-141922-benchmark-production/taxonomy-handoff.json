@@ -1,0 +1,40 @@
+{
+  "deployed_revision": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8",
+  "core_migration_leaf": "0074_official_company_generic_accounts",
+  "products_by_current_type": [
+    {
+      "type": null,
+      "count": 2407
+    },
+    {
+      "type": "llm-model",
+      "count": 0
+    },
+    {
+      "type": "other-ai-model",
+      "count": 0
+    },
+    {
+      "type": "agent-harness",
+      "count": 0
+    }
+  ],
+  "current_constraint": "ck_product_type",
+  "current_type_choices": [
+    "llm-model",
+    "other-ai-model",
+    "agent-harness"
+  ],
+  "followup_type_choices_requested_by_owner": [
+    "model-llm",
+    "model-other",
+    "agent",
+    "harness",
+    "other"
+  ],
+  "implemented_followup_types_in_this_release": false,
+  "product_and_hf_catalog_fields_preserved": true,
+  "production_taxonomy_versions_count": 0,
+  "staging_taxonomy_snapshots_rewritten": false,
+  "followup_instruction": "Start from deployed main revision, add a new migration after this leaf, update ORM choices and ck_product_type together, retain existing taxonomy snapshots and frozen contracts."
+}

@@ -6,7 +6,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from core.measurement_taxonomy import require
-from core.models import MetricCollectionRun, MetricValue
+from core.models import DataSource, MetricCollectionRun, MetricValue
 
 OPERATION_LIMITS = {
     "poll_seconds": (300, 604800, 86400),
@@ -29,6 +29,15 @@ def validate_operations(settings):
         "scheduling_enabled must be boolean",
     )
     settings.setdefault("scheduling_enabled", False)
+
+
+def daily_collection_hour_utc(source):
+    hour = source.metadata.get("daily_collection_hour_utc")
+    require(
+        hour is None or (type(hour) is int and 0 <= hour <= 23),
+        "invalid daily_collection_hour_utc",
+    )
+    return hour
 
 
 def collection_health(contract, *, now=None):
@@ -105,6 +114,9 @@ def collection_health(contract, *, now=None):
             else "within_threshold",
             "effective_date_precision": "date" if effective else "unknown",
             "scheduling_enabled": config.get("scheduling_enabled", False),
+            "daily_collection_hour_utc": daily_collection_hour_utc(
+                DataSource.objects.get(pk=source)
+            ),
             "freshness_seconds": threshold,
             "publication_freshness_seconds": publication_threshold,
         }

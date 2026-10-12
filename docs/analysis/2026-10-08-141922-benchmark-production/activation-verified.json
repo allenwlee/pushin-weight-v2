@@ -1,0 +1,918 @@
+{
+  "runtime": {
+    "runtime_sha": "00d7311754cf0837004c859e73c65c740aebab4d",
+    "migration_leaf": "0079_original_content_physical_names",
+    "flags": {
+      "BENCHMARK_REVIEW_ENABLED": true,
+      "BENCHMARK_METRICS_ENABLED": true,
+      "BENCHMARK_COLLECTION_ENABLED": true
+    },
+    "contract_id": "75c4a856-385b-429a-9b03-c7e023ea6f73",
+    "contract_hash": "1c05d33280cc41b6695cf9b752c922462ee8ff4acf1f7faded9c5296cb7d08b4",
+    "taxonomy_version_id": "b7a3b8ba-9663-4c72-a8c8-3b0e93e6e991",
+    "product_counts_by_type": [
+      {
+        "type": null,
+        "count": 2404
+      },
+      {
+        "type": "llm-model",
+        "count": 3
+      }
+    ],
+    "selected_products": [
+      {
+        "product_key": "d8a9dbb6-49df-4d40-b6cd-dcbeb3bd15ff",
+        "repo_id": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "type": "llm-model"
+      },
+      {
+        "product_key": "d9fe2d84-28b7-4ba2-b7fc-d086f647b07f",
+        "repo_id": "deepseek-ai/DeepSeek-V4-Flash",
+        "type": "llm-model"
+      },
+      {
+        "product_key": "cceb45fc-f883-4b25-8c9d-aeba27ca82d6",
+        "repo_id": "zai-org/GLM-5.3-Flash",
+        "type": "llm-model"
+      }
+    ],
+    "mapping_count": 11,
+    "contract_runs": 76,
+    "contract_observations": 119564,
+    "contract_values": 354171,
+    "metric_coverage": [
+      {
+        "source_metric__source_id": "arena",
+        "source_metric__metric_key": "rank",
+        "count": 21637,
+        "first_label": null,
+        "last_label": null,
+        "first_state_date": "2023-05-08",
+        "last_state_date": "2026-10-02",
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "arena",
+        "source_metric__metric_key": "rating",
+        "count": 21637,
+        "first_label": null,
+        "last_label": null,
+        "first_state_date": "2023-05-08",
+        "last_state_date": "2026-10-02",
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "arena",
+        "source_metric__metric_key": "rating_lower",
+        "count": 21578,
+        "first_label": null,
+        "last_label": null,
+        "first_state_date": "2024-01-09",
+        "last_state_date": "2026-10-02",
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "arena",
+        "source_metric__metric_key": "rating_upper",
+        "count": 21578,
+        "first_label": null,
+        "last_label": null,
+        "first_state_date": "2024-01-09",
+        "last_state_date": "2026-10-02",
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "arena",
+        "source_metric__metric_key": "variance",
+        "count": 21578,
+        "first_label": null,
+        "last_label": null,
+        "first_state_date": "2024-01-09",
+        "last_state_date": "2026-10-02",
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "arena",
+        "source_metric__metric_key": "vote_count",
+        "count": 21578,
+        "first_label": null,
+        "last_label": null,
+        "first_state_date": "2024-01-09",
+        "last_state_date": "2026-10-02",
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "hf",
+        "source_metric__metric_key": "downloads",
+        "count": 63213,
+        "first_label": null,
+        "last_label": null,
+        "first_state_date": null,
+        "last_state_date": null,
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "hf",
+        "source_metric__metric_key": "downloads_all_time",
+        "count": 63213,
+        "first_label": null,
+        "last_label": null,
+        "first_state_date": null,
+        "last_state_date": null,
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "hf",
+        "source_metric__metric_key": "followers",
+        "count": 1430,
+        "first_label": null,
+        "last_label": null,
+        "first_state_date": "2024-10-24",
+        "last_state_date": "2026-10-06",
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "hf",
+        "source_metric__metric_key": "likes",
+        "count": 63282,
+        "first_label": null,
+        "last_label": null,
+        "first_state_date": "2026-08-26",
+        "last_state_date": "2026-10-06",
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "opencode",
+        "source_metric__metric_key": "sessions",
+        "count": 116,
+        "first_label": "2026-08-13",
+        "last_label": "2026-10-08",
+        "first_state_date": null,
+        "last_state_date": null,
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "opencode",
+        "source_metric__metric_key": "tokens",
+        "count": 116,
+        "first_label": "2026-08-13",
+        "last_label": "2026-10-08",
+        "first_state_date": null,
+        "last_state_date": null,
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "opencode",
+        "source_metric__metric_key": "unique_users",
+        "count": 116,
+        "first_label": "2026-08-13",
+        "last_label": "2026-10-08",
+        "first_state_date": null,
+        "last_state_date": null,
+        "first_state_instant": null,
+        "last_state_instant": null
+      },
+      {
+        "source_metric__source_id": "openrouter",
+        "source_metric__metric_key": "total_tokens",
+        "count": 33099,
+        "first_label": "2025-01-01",
+        "last_label": "2026-10-07",
+        "first_state_date": null,
+        "last_state_date": null,
+        "first_state_instant": null,
+        "last_state_instant": null
+      }
+    ],
+    "fresh_scheduled_runs": [
+      {
+        "id": "91dd0f61-5411-4bee-9013-cfca4f51c9da",
+        "source_id": "hf",
+        "status": "success",
+        "started_at": "2026-10-08 09:01:27.235796+00:00",
+        "observed_at": "2026-10-08 09:01:27.181939+00:00",
+        "completed_at": "2026-10-08 09:01:27.620574+00:00",
+        "request_count": 4,
+        "selected_count": 4,
+        "success_count": 4,
+        "persisted_values": 8,
+        "persisted_metrics": [
+          {
+            "source_metric__metric_key": "likes",
+            "count": 2
+          },
+          {
+            "source_metric__metric_key": "downloads",
+            "count": 2
+          },
+          {
+            "source_metric__metric_key": "followers",
+            "count": 2
+          },
+          {
+            "source_metric__metric_key": "downloads_all_time",
+            "count": 2
+          }
+        ]
+      },
+      {
+        "id": "97c1311f-6825-48a1-bba4-1e5bff85756d",
+        "source_id": "openrouter",
+        "status": "success",
+        "started_at": "2026-10-08 09:01:30.046951+00:00",
+        "observed_at": "2026-10-08 09:01:30.036147+00:00",
+        "completed_at": "2026-10-08 09:01:30.992905+00:00",
+        "request_count": 1,
+        "selected_count": 2,
+        "success_count": 2,
+        "persisted_values": 357,
+        "persisted_metrics": [
+          {
+            "source_metric__metric_key": "total_tokens",
+            "count": 357
+          }
+        ]
+      },
+      {
+        "id": "c715ad6b-134c-4a66-be16-226ac3bb5d5a",
+        "source_id": "arena",
+        "status": "success",
+        "started_at": "2026-10-08 09:01:27.661902+00:00",
+        "observed_at": "2026-10-08 09:01:27.658289+00:00",
+        "completed_at": "2026-10-08 09:01:28.938180+00:00",
+        "request_count": 2,
+        "selected_count": 3,
+        "success_count": 3,
+        "persisted_values": 2478,
+        "persisted_metrics": [
+          {
+            "source_metric__metric_key": "rating",
+            "count": 413
+          },
+          {
+            "source_metric__metric_key": "rating_upper",
+            "count": 413
+          },
+          {
+            "source_metric__metric_key": "vote_count",
+            "count": 413
+          },
+          {
+            "source_metric__metric_key": "rating_lower",
+            "count": 413
+          },
+          {
+            "source_metric__metric_key": "variance",
+            "count": 413
+          },
+          {
+            "source_metric__metric_key": "rank",
+            "count": 413
+          }
+        ]
+      },
+      {
+        "id": "844cc912-aec3-44df-b215-7df7e2f2a326",
+        "source_id": "opencode",
+        "status": "success",
+        "started_at": "2026-10-08 09:01:29.074303+00:00",
+        "observed_at": "2026-10-08 09:01:29.066281+00:00",
+        "completed_at": "2026-10-08 09:01:29.947365+00:00",
+        "request_count": 2,
+        "selected_count": 2,
+        "success_count": 2,
+        "persisted_values": 12,
+        "persisted_metrics": [
+          {
+            "source_metric__metric_key": "tokens",
+            "count": 4
+          },
+          {
+            "source_metric__metric_key": "unique_users",
+            "count": 4
+          },
+          {
+            "source_metric__metric_key": "sessions",
+            "count": 4
+          }
+        ]
+      }
+    ],
+    "configured_source_cadence_seconds": {
+      "hf": 86400,
+      "arena": 86400,
+      "opencode": 3600,
+      "openrouter": 86400
+    },
+    "openrouter_key_present": true
+  },
+  "services": {
+    "owned_web_deployments": [
+      {
+        "id": "dep-db3ln3l040hc73a4jbag",
+        "status": "live",
+        "createdAt": "2026-10-08T08:59:58.744908Z",
+        "updatedAt": "2026-10-08T09:03:43.199456Z",
+        "finishedAt": "2026-10-08T09:03:21.008718Z",
+        "revision": "00d7311754cf0837004c859e73c65c740aebab4d"
+      },
+      {
+        "id": "dep-db3lmo3ncjis73au0n60",
+        "status": "canceled",
+        "createdAt": "2026-10-08T08:59:12.937844Z",
+        "updatedAt": "2026-10-08T09:01:01.016824Z",
+        "finishedAt": "2026-10-08T09:01:01.01609Z",
+        "revision": "2383e6c4d87b46d389c526215e563fccfcb40896"
+      }
+    ],
+    "current_web_flags": {
+      "BENCHMARK_REVIEW_ENABLED": "true",
+      "BENCHMARK_METRICS_ENABLED": "true",
+      "BENCHMARK_COLLECTION_ENABLED": "true"
+    },
+    "cron_id": "crn-db3lm2ui0phs73amjs30",
+    "schedule_utc": "0 * * * *",
+    "last_successful_run_at": "2026-10-08T09:01:37Z",
+    "openrouter_key_matches_owner_suffix": true
+  },
+  "deployments": [
+    {
+      "service": "pushinweight-web",
+      "id": "srv-d9go2breo5us73cg6vqg",
+      "deployment": "dep-db3ln3l040hc73a4jbag",
+      "status": "live",
+      "revision": "00d7311754cf0837004c859e73c65c740aebab4d",
+      "schedule": null,
+      "last_successful_run": null
+    },
+    {
+      "service": "pushinweight-benchmark",
+      "id": "crn-db3lm2ui0phs73amjs30",
+      "deployment": "dep-db3ln32jnfac738gd7u0",
+      "status": "live",
+      "revision": "00d7311754cf0837004c859e73c65c740aebab4d",
+      "schedule": "0 * * * *",
+      "last_successful_run": "2026-10-08T09:01:37Z"
+    }
+  ],
+  "history_replay": {
+    "artifact": "retained-history.jsonl.gz",
+    "bytes": 3624678,
+    "sha256": "fc7333a2885650e2a842370d4de3403149f0a0240c80fecdf03372b1ae27beb1",
+    "retained_runs_by_source": {
+      "openrouter": 8,
+      "arena": 14,
+      "hf": 49,
+      "opencode": 1
+    },
+    "raw_rows_by_source": {
+      "openrouter": 32742,
+      "arena": 21224,
+      "hf": 64708,
+      "opencode": 112
+    },
+    "omitted_hf_runs_without_any_selected_repository_or_account": {
+      "hf": 3819
+    },
+    "selection": "all retained OpenRouter/Arena/OpenCode runs; HF runs containing reviewed initial products/accounts. Full raw bodies preserved for each admitted run."
+  },
+  "http": {
+    "anonymous": true,
+    "results": [
+      {
+        "preset": "deepseek-response",
+        "html_status": 200,
+        "json_status": 200,
+        "json_bytes": 785166,
+        "lines": [
+          {
+            "key": "posts",
+            "source": "x",
+            "numeric_points": 42,
+            "first_date": "2026-08-27",
+            "last_date": "2026-10-07",
+            "normalization_points_checked": 42
+          },
+          {
+            "key": "downloads",
+            "source": "hf",
+            "numeric_points": 27,
+            "first_date": "2026-09-11",
+            "last_date": "2026-10-07",
+            "normalization_points_checked": 27
+          },
+          {
+            "key": "tokens",
+            "source": "openrouter",
+            "numeric_points": 28,
+            "first_date": "2026-09-10",
+            "last_date": "2026-10-07",
+            "normalization_points_checked": 28
+          }
+        ],
+        "arena": {
+          "score_points": 13,
+          "battle_points": 13,
+          "config": "text",
+          "category": "overall"
+        }
+      },
+      {
+        "preset": "glm-response",
+        "html_status": 200,
+        "json_status": 200,
+        "json_bytes": 820245,
+        "lines": [
+          {
+            "key": "posts",
+            "source": "x",
+            "numeric_points": 43,
+            "first_date": "2026-08-12",
+            "last_date": "2026-09-23",
+            "normalization_points_checked": 43
+          },
+          {
+            "key": "downloads",
+            "source": "hf",
+            "numeric_points": 27,
+            "first_date": "2026-08-28",
+            "last_date": "2026-09-23",
+            "normalization_points_checked": 27
+          },
+          {
+            "key": "tokens",
+            "source": "openrouter",
+            "numeric_points": 29,
+            "first_date": "2026-08-26",
+            "last_date": "2026-09-23",
+            "normalization_points_checked": 29
+          }
+        ],
+        "arena": {
+          "score_points": 28,
+          "battle_points": 28,
+          "config": "text",
+          "category": "overall"
+        }
+      },
+      {
+        "preset": "deepseek-opencode-response",
+        "html_status": 200,
+        "json_status": 200,
+        "json_bytes": 1028008,
+        "lines": [
+          {
+            "key": "posts",
+            "source": "x",
+            "numeric_points": 42,
+            "first_date": "2026-08-27",
+            "last_date": "2026-10-07",
+            "normalization_points_checked": 42
+          },
+          {
+            "key": "downloads",
+            "source": "hf",
+            "numeric_points": 27,
+            "first_date": "2026-09-11",
+            "last_date": "2026-10-07",
+            "normalization_points_checked": 27
+          },
+          {
+            "key": "tokens",
+            "source": "opencode",
+            "numeric_points": 42,
+            "first_date": "2026-08-27",
+            "last_date": "2026-10-07",
+            "normalization_points_checked": 42
+          }
+        ],
+        "arena": {
+          "score_points": 13,
+          "battle_points": 13,
+          "config": "text",
+          "category": "overall"
+        }
+      },
+      {
+        "preset": "glm-opencode-response",
+        "html_status": 200,
+        "json_status": 200,
+        "json_bytes": 1052667,
+        "lines": [
+          {
+            "key": "posts",
+            "source": "x",
+            "numeric_points": 43,
+            "first_date": "2026-08-12",
+            "last_date": "2026-09-23",
+            "normalization_points_checked": 43
+          },
+          {
+            "key": "downloads",
+            "source": "hf",
+            "numeric_points": 27,
+            "first_date": "2026-08-28",
+            "last_date": "2026-09-23",
+            "normalization_points_checked": 27
+          },
+          {
+            "key": "tokens",
+            "source": "opencode",
+            "numeric_points": 42,
+            "first_date": "2026-08-13",
+            "last_date": "2026-09-23",
+            "normalization_points_checked": 42
+          }
+        ],
+        "arena": {
+          "score_points": 28,
+          "battle_points": 28,
+          "config": "text",
+          "category": "overall"
+        }
+      },
+      {
+        "preset": "deepseek",
+        "html_status": 200,
+        "json_status": 200,
+        "json_bytes": 527607,
+        "lines": [
+          {
+            "key": "posts",
+            "source": "x",
+            "numeric_points": 29,
+            "first_date": "2026-09-10",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "downloads",
+            "source": "hf",
+            "numeric_points": 29,
+            "first_date": "2026-09-10",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "tokens",
+            "source": "openrouter",
+            "numeric_points": 28,
+            "first_date": "2026-09-10",
+            "last_date": "2026-10-07"
+          },
+          {
+            "key": "score",
+            "source": "arena",
+            "numeric_points": 14,
+            "first_date": "2026-09-25",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "rank",
+            "source": "arena",
+            "numeric_points": 14,
+            "first_date": "2026-09-25",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "hf_likes",
+            "source": "hf",
+            "numeric_points": 29,
+            "first_date": "2026-09-10",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "hf_followers",
+            "source": "hf",
+            "numeric_points": 2,
+            "first_date": "2026-10-07",
+            "last_date": "2026-10-08"
+          }
+        ],
+        "arena": null
+      },
+      {
+        "preset": "glm",
+        "html_status": 200,
+        "json_status": 200,
+        "json_bytes": 835617,
+        "lines": [
+          {
+            "key": "posts",
+            "source": "x",
+            "numeric_points": 44,
+            "first_date": "2026-08-26",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "downloads",
+            "source": "hf",
+            "numeric_points": 43,
+            "first_date": "2026-08-27",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "tokens",
+            "source": "openrouter",
+            "numeric_points": 43,
+            "first_date": "2026-08-26",
+            "last_date": "2026-10-07"
+          },
+          {
+            "key": "score",
+            "source": "arena",
+            "numeric_points": 43,
+            "first_date": "2026-08-27",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "rank",
+            "source": "arena",
+            "numeric_points": 43,
+            "first_date": "2026-08-27",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "hf_likes",
+            "source": "hf",
+            "numeric_points": 43,
+            "first_date": "2026-08-27",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "hf_followers",
+            "source": "hf",
+            "numeric_points": 2,
+            "first_date": "2026-10-07",
+            "last_date": "2026-10-08"
+          }
+        ],
+        "arena": null
+      },
+      {
+        "preset": "deepseek-history",
+        "html_status": 200,
+        "json_status": 200,
+        "json_bytes": 646474,
+        "lines": [
+          {
+            "key": "posts",
+            "source": "x",
+            "numeric_points": 58,
+            "first_date": "2026-08-12",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "downloads",
+            "source": "hf",
+            "numeric_points": 29,
+            "first_date": "2026-09-10",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "tokens",
+            "source": "openrouter",
+            "numeric_points": 28,
+            "first_date": "2026-09-10",
+            "last_date": "2026-10-07"
+          },
+          {
+            "key": "score",
+            "source": "arena",
+            "numeric_points": 14,
+            "first_date": "2026-09-25",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "rank",
+            "source": "arena",
+            "numeric_points": 59,
+            "first_date": "2026-08-11",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "hf_likes",
+            "source": "hf",
+            "numeric_points": 29,
+            "first_date": "2026-09-10",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "hf_followers",
+            "source": "hf",
+            "numeric_points": 2,
+            "first_date": "2026-10-07",
+            "last_date": "2026-10-08"
+          }
+        ],
+        "arena": null
+      },
+      {
+        "preset": "glm-history",
+        "html_status": 200,
+        "json_status": 200,
+        "json_bytes": 909015,
+        "lines": [
+          {
+            "key": "posts",
+            "source": "x",
+            "numeric_points": 58,
+            "first_date": "2026-08-12",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "downloads",
+            "source": "hf",
+            "numeric_points": 43,
+            "first_date": "2026-08-27",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "tokens",
+            "source": "openrouter",
+            "numeric_points": 43,
+            "first_date": "2026-08-26",
+            "last_date": "2026-10-07"
+          },
+          {
+            "key": "score",
+            "source": "arena",
+            "numeric_points": 43,
+            "first_date": "2026-08-27",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "rank",
+            "source": "arena",
+            "numeric_points": 43,
+            "first_date": "2026-08-27",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "hf_likes",
+            "source": "hf",
+            "numeric_points": 43,
+            "first_date": "2026-08-27",
+            "last_date": "2026-10-08"
+          },
+          {
+            "key": "hf_followers",
+            "source": "hf",
+            "numeric_points": 2,
+            "first_date": "2026-10-07",
+            "last_date": "2026-10-08"
+          }
+        ],
+        "arena": null
+      }
+    ]
+  },
+  "reference_week_recomputation": [
+    {
+      "preset": "deepseek-response",
+      "reference_dates": [
+        "2026-09-11",
+        "2026-09-12",
+        "2026-09-13",
+        "2026-09-14",
+        "2026-09-15",
+        "2026-09-16",
+        "2026-09-17"
+      ],
+      "reference_means_recomputed": true
+    },
+    {
+      "preset": "glm-response",
+      "reference_dates": [
+        "2026-08-28",
+        "2026-08-29",
+        "2026-08-30",
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03"
+      ],
+      "reference_means_recomputed": true
+    },
+    {
+      "preset": "deepseek-opencode-response",
+      "reference_dates": [
+        "2026-09-11",
+        "2026-09-12",
+        "2026-09-13",
+        "2026-09-14",
+        "2026-09-15",
+        "2026-09-16",
+        "2026-09-17"
+      ],
+      "reference_means_recomputed": true
+    },
+    {
+      "preset": "glm-opencode-response",
+      "reference_dates": [
+        "2026-08-28",
+        "2026-08-29",
+        "2026-08-30",
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03"
+      ],
+      "reference_means_recomputed": true
+    }
+  ],
+  "browser": {
+    "browser-deepseek-desktop.json": {
+      "arenaPaths": 2,
+      "legend": "DEEPSEEK brand posts\nHF \u00b7 net rolling-counter change\nOpenRouter \u00b7 daily tokens",
+      "mainPaths": 3,
+      "overflow": false,
+      "title": "DeepSeek V4.1 Flash \u00b7 Pulse",
+      "width": 1280
+    },
+    "browser-deepseek-mobile.json": {
+      "arenaPaths": 2,
+      "documentWidth": 390,
+      "mainPaths": 3,
+      "title": "DeepSeek V4.1 Flash \u00b7 Pulse",
+      "width": 390
+    },
+    "browser-opencode-desktop.json": {
+      "arena": 2,
+      "legend": "DEEPSEEK brand posts\nHF \u00b7 net rolling-counter change\nOpenCode \u00b7 Go + free daily tokens",
+      "loaded": true,
+      "main": 3,
+      "url": "https://pushinweight-web.onrender.com/benchmarks/75c4a856-385b-429a-9b03-c7e023ea6f73/deepseek-opencode-response/"
+    },
+    "browser-opencode-mobile.json": {
+      "arenaPaths": 2,
+      "documentWidth": 390,
+      "series": 3,
+      "url": "https://pushinweight-web.onrender.com/benchmarks/75c4a856-385b-429a-9b03-c7e023ea6f73/deepseek-opencode-response/",
+      "viewport": 390
+    },
+    "browser-glm-desktop.json": {
+      "arenaPaths": 2,
+      "mainPaths": 3,
+      "overflow": false,
+      "title": "GLM 5.3 Flash \u00b7 Pulse"
+    },
+    "browser-glm-mobile.json": {
+      "arenaPaths": 2,
+      "documentWidth": 390,
+      "legend": "GLM brand posts\nHF \u00b7 net rolling-counter change\nOpenRouter \u00b7 daily tokens",
+      "loaded": true,
+      "series": 3,
+      "title": "GLM 5.3 Flash \u00b7 Pulse",
+      "width": 390
+    },
+    "browser-glm-opencode.json": {
+      "arenaPaths": 2,
+      "legend": "GLM brand posts\nHF \u00b7 net rolling-counter change\nOpenCode \u00b7 Go + free daily tokens",
+      "series": 3,
+      "title": "GLM 5.3 Flash \u00b7 Pulse"
+    },
+    "browser-glm-opencode-mobile.json": {
+      "arenaPaths": 2,
+      "documentWidth": 390,
+      "series": 3,
+      "width": 390
+    },
+    "browser-errors.json": {
+      "success": true,
+      "data": {
+        "errors": [],
+        "lifecycle": {
+          "effectiveLaunch": {
+            "browserLaunched": true,
+            "engine": "chrome",
+            "launchHash": 12798390076057945372
+          },
+          "launched": false,
+          "relaunchedBrowser": false,
+          "restartedBackground": false,
+          "restoreStatus": "not_configured",
+          "reused": true,
+          "saveStatus": "not_attempted"
+        }
+      },
+      "error": null
+    }
+  },
+  "remote_cleanup": {
+    "owned_uploads_removed": [],
+    "owned_remote_directory_present": false
+  },
+  "owned_browser_closed": true
+}

@@ -1,0 +1,93 @@
+[
+  {
+    "id": "srv-dao7hrjtqb8s73e7c3g0",
+    "name": "pushinweight-synthesis",
+    "type": "background_worker",
+    "branch": "main",
+    "autoDeploy": "yes",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "schedule": null,
+    "deploy": "dep-db3icu7avr4c739ua3h0",
+    "status": "live",
+    "commit": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8"
+  },
+  {
+    "id": "crn-dao7hrjtqb8s73e7c3gg",
+    "name": "pushinweight-jobs",
+    "type": "cron_job",
+    "branch": "main",
+    "autoDeploy": "yes",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "schedule": "17 */6 * * *",
+    "deploy": "dep-db3icuqj9qps73fpfmd0",
+    "status": "live",
+    "commit": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8"
+  },
+  {
+    "id": "srv-d9ufj4e417fc73d93g20",
+    "name": "pushinweight-headlines",
+    "type": "background_worker",
+    "branch": "main",
+    "autoDeploy": "yes",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "schedule": null,
+    "deploy": "dep-db3icttg1s2s73ajfa90",
+    "status": "live",
+    "commit": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8"
+  },
+  {
+    "id": "crn-d9gv94o4n6ts739tqaug",
+    "name": "pushinweight-harvest",
+    "type": "cron_job",
+    "branch": "main",
+    "autoDeploy": "yes",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "schedule": "*/15 * * * *",
+    "deploy": "dep-db3ictnlk1mc73bm3i9g",
+    "status": "live",
+    "commit": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8"
+  },
+  {
+    "id": "srv-d9go2breo5us73cg6vrg",
+    "name": "pushinweight-beat",
+    "type": "background_worker",
+    "branch": "main",
+    "autoDeploy": "yes",
+    "autoDeployTrigger": "commit",
+    "suspended": "suspended",
+    "schedule": null,
+    "deploy": "dep-d9kvd6u417fc73crueb0",
+    "status": "live",
+    "commit": "2630e0e10f239e786d78cfffb5d12698e73e397b"
+  },
+  {
+    "id": "srv-d9go2breo5us73cg6vqg",
+    "name": "pushinweight-web",
+    "type": "web_service",
+    "branch": "main",
+    "autoDeploy": "yes",
+    "autoDeployTrigger": "commit",
+    "suspended": "not_suspended",
+    "schedule": null,
+    "deploy": "dep-db3hm7gm7kps73eo2d80",
+    "status": "live",
+    "commit": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8"
+  },
+  {
+    "id": "srv-d9go2breo5us73cg6vr0",
+    "name": "pushinweight-worker",
+    "type": "background_worker",
+    "branch": "main",
+    "autoDeploy": "yes",
+    "autoDeployTrigger": "commit",
+    "suspended": "suspended",
+    "schedule": null,
+    "deploy": "dep-d9kvd6taeets73a9o97g",
+    "status": "live",
+    "commit": "2630e0e10f239e786d78cfffb5d12698e73e397b"
+  }
+]

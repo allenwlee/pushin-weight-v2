@@ -1,0 +1,19 @@
+{
+  "checked_at_utc": "2026-10-08T05:29:57.422645+00:00",
+  "actual_web_sha": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8",
+  "core_migration_leaf": "0074_official_company_generic_accounts",
+  "product_counts_by_type": [
+    {
+      "type": null,
+      "count": 2407
+    }
+  ],
+  "benchmark_flags_all_false": true,
+  "temporary_verification_files_removed": [
+    "harvest_post_ids.json",
+    "preservation-manifest.json",
+    "taxonomy-baseline.json"
+  ],
+  "temporary_directory_removed": true,
+  "new_users_or_browser_sessions_created": false
+}

@@ -1,0 +1,9 @@
+{
+  "status": "passed",
+  "database": "pw_benchmark_cutover_guard_20261008",
+  "live_writer_denied_before_any_schema_change": true,
+  "successful_cutover_in_one_transaction": true,
+  "migration_leaf": "0074_official_company_generic_accounts",
+  "source_code_changed": false,
+  "checked_at_utc": "2026-10-08T04:22:10.063091+00:00"
+}

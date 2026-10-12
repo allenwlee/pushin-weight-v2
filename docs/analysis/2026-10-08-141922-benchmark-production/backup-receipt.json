@@ -1,0 +1,39 @@
+{
+  "production": true,
+  "source_database": "pushinweight_shadow",
+  "source_postgres_id": "dpg-d9koekqjobas73fvjqng-a",
+  "source_service_id": "srv-d9go2breo5us73cg6vqg",
+  "started_at_utc": "2026-10-08T03:52:21.781434+00:00",
+  "completed_at_utc": "2026-10-08T04:10:19.244076+00:00",
+  "exit_code": 0,
+  "bytes": 1568561424,
+  "restore_verified": true,
+  "sha256": "45abf3648acdb1f0d8d3181f76b69dcc2476b640a038f47303990891548d949d",
+  "archive_list_valid": true,
+  "restore_proof": "restore-proof.json",
+  "archive_contents_proven_by_full_restore": true,
+  "restored_critical_counts": {
+    "posts": 304184,
+    "posts_brands": 382373,
+    "accounts": 92183,
+    "editorial_stories": 14,
+    "companies": 43,
+    "products": 2407,
+    "brands": 62,
+    "people": 775,
+    "twitter_list_memberships": 83,
+    "official_company_account_states": 20851,
+    "official_company_list_intents": 12
+  },
+  "archive_created_at_utc": "2026-10-08T03:52:27+00:00",
+  "snapshot_time_precision": "bounded by UTC request start and archive creation; exact exported-snapshot time was not forwarded by SSH",
+  "capture_time_window_utc": [
+    "2026-10-08T03:52:21.781434+00:00",
+    "2026-10-08T03:52:27+00:00"
+  ],
+  "archive_time_evidence": "backup-contents-utc.txt (pg_restore run with TZ=UTC)",
+  "backup_wrapper_note": "pg_dump exited 0 and archive verified; local wrapper final exit had a missing sys import, corrected without recapturing the successful archive",
+  "retention": "Retain privately on authoritative fuchitalee for this release and follow-up until an owner-approved recovery replacement exists. No automatic deletion.",
+  "restore_procedure": "Create a fresh empty PostgreSQL 18 database; pg_restore --exit-on-error --no-owner --no-acl --jobs=4 into it, verify data and configure reviewed recovery separately. Do not restore over live data.",
+  "storage": "Private release directory on authoritative fuchitalee; dump is not committed."
+}

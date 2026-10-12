@@ -1,0 +1,48 @@
+{
+  "events": [
+    {
+      "at_utc": "2026-10-08T04:25:56.552514757Z",
+      "message": "PW_CUTOVER all fourteen existing account tables locked; migrations share one transaction"
+    },
+    {
+      "at_utc": "2026-10-08T04:25:58.006681202Z",
+      "message": "  Applying core.0065_measurement_taxonomy... OK"
+    },
+    {
+      "at_utc": "2026-10-08T05:04:47.147243879Z",
+      "message": "  Applying core.0066_account_source_identity... OK"
+    },
+    {
+      "at_utc": "2026-10-08T05:04:49.247517113Z",
+      "message": "  Applying core.0067_shared_metrics... OK"
+    },
+    {
+      "at_utc": "2026-10-08T05:04:49.637298215Z",
+      "message": "  Applying core.0068_account_measurement_subject... OK"
+    },
+    {
+      "at_utc": "2026-10-08T05:04:49.638667084Z",
+      "message": "  Applying core.0069_merge_20261007_0550... OK"
+    },
+    {
+      "at_utc": "2026-10-08T05:04:49.639926551Z",
+      "message": "  Applying core.0072_merge_benchmark_main... OK"
+    },
+    {
+      "at_utc": "2026-10-08T05:04:49.652614938Z",
+      "message": "  Applying core.0073_rename_metrics... OK"
+    },
+    {
+      "at_utc": "2026-10-08T05:04:55.974772414Z",
+      "message": "  Applying core.0074_official_company_generic_accounts... OK"
+    },
+    {
+      "at_utc": "2026-10-08T05:04:55.97478752Z",
+      "message": "PW_CUTOVER committed; existing-table locks released"
+    }
+  ],
+  "existing_table_lock_duration_seconds": 2339.422,
+  "source_code_changed_by_guard": false,
+  "cron_or_workers_suspended_for_migration": false,
+  "effect": "Requests touching locked tables could wait; no zero-downtime claim."
+}

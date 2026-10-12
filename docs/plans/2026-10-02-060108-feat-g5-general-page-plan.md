@@ -30,10 +30,10 @@ and private data. This closure is not a production receipt or worktree cleanup.
 
 Remaining geography-seed regression, durable published-history/link contract,
 candidate assurance/performance, page decisions and later selected delivery
-transfer to [round-two G5](../../../../../docs/brainstorms/2026-10-09-110145-general-round-two.md#g5--general-page-integration-and-release-preparation),
+transfer to [round-two G5](../brainstorms/2026-10-09-110145-general-round-two.md#g5--general-page-integration-and-release-preparation),
 items B2-G5-01–03. The recorded 279 passing tests plus one existing Japanese
 geography-seed failure remain that exact result. See the
-[closeout and lessons](../../../../../docs/analysis/2026-10-09-110145-general-round-one-closeout.md).
+[closeout and lessons](../analysis/2026-10-09-110145-general-round-one-closeout.md).
 Keep the earlier requirements, receipts and unfinished checkboxes as history.
 
 ## Plain-English Summary

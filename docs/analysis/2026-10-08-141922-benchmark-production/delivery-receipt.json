@@ -1,0 +1,29 @@
+{
+  "verified_at_utc": "2026-10-08T05:29:02.754396+00:00",
+  "delivery_target": "production",
+  "deployed_revision": "dcbedf22d1cd70b4c0d54822980afda70b4f85c8",
+  "previous_main": "702fef5b1409953a0a8f46173f120e74506e27f8",
+  "staging_code_reused": "e28cbda9fa340db61ca4d86e738c5db08ac73260",
+  "candidate_difference_from_staging_code": "Documentation only",
+  "production_url": "https://pushinweight-web.onrender.com/",
+  "active_services_live": 5,
+  "web_and_both_worker_process_sha_verified": true,
+  "core_migration_leaf": "0074_official_company_generic_accounts",
+  "benchmark_review_enabled": false,
+  "benchmark_metrics_enabled": false,
+  "benchmark_collection_enabled": false,
+  "production_history_imported": false,
+  "public_numeric_output_forecasts_exports_trading_activated": false,
+  "live_backup_full_restore_verified": true,
+  "all_original_service_settings_restored": true,
+  "legacy_beat_worker_remain_suspended": true,
+  "manual_harvest_or_paid_source_probe_run": false,
+  "hf_poll_modified": false,
+  "remaining_operational_limitations": [
+    "Account cutover held fourteen affected tables for 2339.422 seconds; requests could wait.",
+    "Natural harvest remains degraded: pre-existing classifier/list warnings and one backlog quarantine; persistence and account-link checks pass.",
+    "Production measurement tables remain empty and feature disabled; source-use/activation decisions remain separate.",
+    "No fresh Google OAuth browser journey was tested."
+  ],
+  "evidence_scope": "Sanitized counts and verification; no provider exports, identity manifests, secrets, raw logs or database dump included."
+}
