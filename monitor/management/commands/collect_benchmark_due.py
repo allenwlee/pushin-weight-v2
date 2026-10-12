@@ -10,7 +10,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from core.benchmark_metric_operations import daily_collection_hour_utc
-from core.models import DataSource, MetricCollectionContract, MetricCollectionRun
+from core.models import CollectionRun, DataSource, MetricCollectionContract
 
 
 class Command(BaseCommand):
@@ -38,7 +38,7 @@ class Command(BaseCommand):
                 and registry.enabled
             )
             latest = (
-                MetricCollectionRun.objects.filter(contract=contract, source_id=source)
+                CollectionRun.objects.filter(contract=contract, source_id=source)
                 .order_by("-started_at")
                 .first()
             )

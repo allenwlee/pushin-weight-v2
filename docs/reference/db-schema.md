@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-08 17:13:14 JST
+Last verified: 2026-10-12 20:43:10 JST
 
-Scope: **151 application tables**, **1920 physical columns**, plus seven compatibility views. Source: integrated `feat/g2-editorial`; migration graph through `0079_original_content_physical_names`.
+Scope: **149 application tables**, **1915 physical columns**, plus nine compatibility views. Source: `feat/collection-schema-consolidation`, working tree based on `f43b2904`; migration graph through `0080_collection_schema`.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -27,14 +27,14 @@ The retired SQLite database and Graphviz image are not current schema sources.
 | [Countries and regions](#geography) | 6 | Country/region names and interpretation of account geography. |
 | [Posts and classification](#posts) | 13 | Source posts, brand attribution, classification, and supporting judgments. |
 | [Classification vocabularies and translated labels](#vocabularies) | 23 | Allowed classification concepts and their translated display labels. |
-| [Products, model releases, and Hugging Face catalog](#products) | 12 | Exact products, release claims, and catalog observations. |
+| [Products, model releases, and Hugging Face catalog](#products) | 9 | Exact products, release claims, and catalog observations. |
 | [Job listings and official career-site collection](#jobs) | 5 | Advertised roles, their sources, and career-site synchronization status. |
 | [Events and opportunities](#events) | 3 | Attendable occurrences and action-for-benefit offers. |
 | [Post translation and commentary](#translation) | 9 | Literal post translations, generated commentary, retries, and budgets. |
 | [Authored content and trend publication](#headlines) | 10 | Prepared headline text, publication pointers, work requests, and provider costs. |
 | [Compatible editorial input storage and pictures](#editorial) | 7 | Story identities, accepted editions, quarter-hour decisions, spend and optional assets. |
 | [Collection, extraction, and processing records](#processing) | 16 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
-| [Measurement subjects, metrics and observations](#measurements) | 10 | Sourced measurements and their collection state. |
+| [Measurement subjects, metrics and observations](#measurements) | 11 | Sourced measurements and their collection state. |
 | [Official-company collection](#official-companies) | 7 | Official-company account collection, attempts and spending. |
 
 For staff records, begin with **[People and job history](#people)**. A person can
@@ -133,8 +133,8 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 151 application tables appears once in this inventory and once in
-the detailed sections. Subject counts above sum to 151.
+Each of the 149 application tables appears once in this inventory and once in
+the detailed sections. Subject counts above sum to 149.
 
 | Table | Subject | What one row represents |
 | --- | --- | --- |
@@ -156,6 +156,9 @@ the detailed sections. Subject counts above sum to 151.
 | [brands_accounts](#table-brands_accounts) | [Companies, brands, and organization discovery](#organizations) | One account’s role for a brand, such as official or researcher. |
 | [brands_companies](#table-brands_companies) | [Companies, brands, and organization discovery](#organizations) | One ownership relationship between a brand and a company. |
 | [call_state](#table-call_state) | [Collection, extraction, and processing records](#processing) | One harvest cursor for a brand, call, bucket, and query combination. |
+| [collection_observations](#table-collection_observations) | [Measurement subjects, metrics and observations](#measurements) | One sourced, dated observation in a collection run. |
+| [collection_runs](#table-collection_runs) | [Measurement subjects, metrics and observations](#measurements) | One source collection run, for numeric measurements or catalog discovery. |
+| [collection_scope_runs](#table-collection_scope_runs) | [Measurement subjects, metrics and observations](#measurements) | One source scope’s pagination and ownership progress within a collection run. |
 | [companies](#table-companies) | [Companies, brands, and organization discovery](#organizations) | One company identity, including its recorded headquarters country. |
 | [companies_accounts](#table-companies_accounts) | [Companies, brands, and organization discovery](#organizations) | One account’s role for a company. |
 | [content_pictures](#table-content_pictures) | [Compatible editorial input storage and pictures](#editorial) | One optional source/derivative assignment for a content revision. |
@@ -176,9 +179,6 @@ the detailed sections. Subject counts above sum to 151.
 | [geopolitical_mode_keys](#table-geopolitical_mode_keys) | [Classification vocabularies and translated labels](#vocabularies) | One geopolitical-mode vocabulary key. |
 | [geopolitical_mode_labels](#table-geopolitical_mode_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated geopolitical-mode label. |
 | [harvest_backlog_windows](#table-harvest_backlog_windows) | [Collection, extraction, and processing records](#processing) | One bounded time window still owed collection coverage. |
-| [hf_model_catalog_namespace_runs](#table-hf_model_catalog_namespace_runs) | [Products, model releases, and Hugging Face catalog](#products) | One namespace’s enumeration state within a catalog run. |
-| [hf_model_catalog_observations](#table-hf_model_catalog_observations) | [Products, model releases, and Hugging Face catalog](#products) | One repository observation within a namespace run. |
-| [hf_model_catalog_runs](#table-hf_model_catalog_runs) | [Products, model releases, and Hugging Face catalog](#products) | One overall Hugging Face catalog collection run. |
 | [hf_orgs](#table-hf_orgs) | [Products, model releases, and Hugging Face catalog](#products) | One Hugging Face organization/user namespace linked to a company. |
 | [job_discovery_runs](#table-job_discovery_runs) | [Job listings and official career-site collection](#jobs) | One job-search query/window run, including coverage, cost, and extracted listing count. |
 | [job_listing_evidence](#table-job_listing_evidence) | [Job listings and official career-site collection](#jobs) | One source observation supporting a job listing. |
@@ -187,8 +187,6 @@ the detailed sections. Subject counts above sum to 151.
 | [job_source_sync_runs](#table-job_source_sync_runs) | [Job listings and official career-site collection](#jobs) | One attempt to synchronize an official career-site source. |
 | [measurement_subjects](#table-measurement_subjects) | [Measurement subjects, metrics and observations](#measurements) | One identity that measurements describe, optionally linked to a product, group, brand or company. |
 | [metric_collection_contracts](#table-metric_collection_contracts) | [Measurement subjects, metrics and observations](#measurements) | One versioned collection contract for a data source. |
-| [metric_collection_runs](#table-metric_collection_runs) | [Measurement subjects, metrics and observations](#measurements) | One bounded measurement collection attempt with its contract and outcome. |
-| [metric_observations](#table-metric_observations) | [Measurement subjects, metrics and observations](#measurements) | One sourced, dated observation in a collection run. |
 | [metric_types](#table-metric_types) | [Measurement subjects, metrics and observations](#measurements) | One allowed family of measurements and its interpretation. |
 | [metric_values](#table-metric_values) | [Measurement subjects, metrics and observations](#measurements) | One value for a metric in an observation. |
 | [metrics](#table-metrics) | [Measurement subjects, metrics and observations](#measurements) | One metric definition with units, scale and methodology. |
@@ -3229,107 +3227,6 @@ None declared beyond field/FK/constraint indexes.
 
 [Back to table inventory](#table-inventory)
 
-<a id="table-hf_model_catalog_runs"></a>
-
-### `hf_model_catalog_runs` — HFModelCatalogRun
-
-One overall Hugging Face catalog collection run.
-
-Model: [HFModelCatalogRun](../../core/models.py#L3026).
-
-**Primary key:** `id`.
-
-| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
-| --- | --- | --- | --- |
-| `id` | `uuid` | No | PK component. Django default: `uuid4` (not an assumed SQL default). |
-| `scope` | `jsonb` | No | Stored value. |
-| `outcome` | `varchar(40)` | No | Django default: `'pending'` (not an assumed SQL default). |
-| `invocations` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
-| `report` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `started_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
-| `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
-| `finished_at` | `timestamp with time zone` | Yes | Stored value. |
-
-**Named indexes:**
-
-None declared beyond field/FK/constraint indexes.
-
-**Named constraints:**
-
-None declared beyond primary keys, field uniqueness and foreign keys.
-
-None beyond the column-level keys, uniqueness, nullability, and type checks described above.
-
-[Back to table inventory](#table-inventory)
-
-<a id="table-hf_model_catalog_namespace_runs"></a>
-
-### `hf_model_catalog_namespace_runs` — HFModelCatalogNamespaceRun
-
-One namespace’s enumeration state within a catalog run.
-
-Model: [HFModelCatalogNamespaceRun](../../core/models.py#L3040).
-
-**Primary key:** `id`.
-
-| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
-| --- | --- | --- | --- |
-| `id` | `bigint` | No | PK; database-generated identity. |
-| `run_id` | `uuid` | No | FK → [`hf_model_catalog_runs`](#table-hf_model_catalog_runs) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
-| `namespace` | `varchar(64)` | No | Stored value. |
-| `ownership` | `jsonb` | No | Stored value. |
-| `cursor` | `text` | Yes | Stored value. |
-| `cursor_history` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
-| `enumeration_complete` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
-| `outcome` | `varchar(64)` | No | Django default: `'pending'` (not an assumed SQL default). |
-| `envelopes` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
-| `raw_count` | `bigint` | No | Django default: `0` (not an assumed SQL default). |
-
-**Named indexes:**
-
-None declared beyond field/FK/constraint indexes.
-
-**Named constraints:**
-
-- `uq_hf_catalog_run_namespace`: `CONSTRAINT "uq_hf_catalog_run_namespace" UNIQUE ("run_id", "namespace")`.
-
-[Back to table inventory](#table-inventory)
-
-<a id="table-hf_model_catalog_observations"></a>
-
-### `hf_model_catalog_observations` — HFModelCatalogObservation
-
-One repository observation within a namespace run.
-
-Model: [HFModelCatalogObservation](../../core/models.py#L3062).
-
-**Primary key:** `id`.
-
-| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
-| --- | --- | --- | --- |
-| `id` | `bigint` | No | PK; database-generated identity. |
-| `namespace_run_id` | `bigint` | No | FK → [`hf_model_catalog_namespace_runs`](#table-hf_model_catalog_namespace_runs) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `namespace_run`. |
-| `repo_key` | `varchar(256)` | No | Stored value. |
-| `repo_id` | `varchar(256)` | No | Stored value. |
-| `product_id` | `bigint` | Yes | FK → [`products`](#table-products) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `product`. |
-| `created_product` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
-| `listing` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `envelopes` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
-| `groups` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `outcome` | `varchar(64)` | No | Django default: `'pending'` (not an assumed SQL default). |
-| `observed_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
-| `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
-
-**Named indexes:**
-
-None declared beyond field/FK/constraint indexes.
-
-**Named constraints:**
-
-- `uq_hf_catalog_repo_observation`: `CONSTRAINT "uq_hf_catalog_repo_observation" UNIQUE ("namespace_run_id", "repo_key")`.
-
-[Back to table inventory](#table-inventory)
-
 <a id="table-product_groups"></a>
 
 ### `product_groups` — ProductGroup
@@ -5808,14 +5705,18 @@ adds six temporary writable views after atomically renaming their base tables:
 | `trend_narrative_visible_runs` | `original_content_selections` |
 | `editorial_pictures` | `content_pictures` |
 
+Migration 0080 also supplies writable `collection_runs` and `collection_observations` views restricted to numeric-purpose records.
+
+Migration 0080 also supplies writable `metric_collection_runs` and `metric_observations` views restricted to numeric-purpose records.
+
 These views select the unchanged columns; they contain no copied rows. Runtime
 models target canonical base tables. Table, FK, index, constraint and sequence
 identities are preserved, including existing sequence names. Lock waits are
 bounded to five seconds in both migration directions. Alias removal is separately
-scoped after the rollback period and verification of all consumers.
+scoped after verification of all consumers; there is no calendar waiting period.
 
-The column/type/index inventory above was reconciled with all 151 concrete
-`core` models and the final migration state through migration 0079. Raw SQL
+The column/type/index inventory above was reconciled with all 149 concrete
+`core` models and the final migration state through migration 0080. Raw SQL
 migrations additionally supply the account-handle expression index, the named
 account-country FK, the two explicit SQL delete actions on posts, the ICU
 collation, the person-name selection/immutability triggers, and these compatibility views. Application-level validators and
@@ -5831,6 +5732,42 @@ references](updating-reference-docs.md).
 <a id="measurements"></a>
 
 ## Measurement subjects, metrics and observations
+
+<a id="table-hf_model_catalog_namespace_runs"></a>
+
+<a id="table-collection_scope_runs"></a>
+
+### `collection_scope_runs` — CollectionScopeRun
+
+One source scope’s pagination, ownership and request progress within a collection run.
+
+Model: [CollectionScopeRun](../../core/models.py#L3026).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK; database-generated identity. |
+| `run_id` | `uuid` | No | FK → [`collection_runs`](#table-collection_runs) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
+| `scope_kind` | `varchar(32)` | No | Scope interpretation; HF uses `namespace`. Django default: `'namespace'`. |
+| `scope_key` | `varchar(256)` | No | Native source scope identity, such as an HF namespace. |
+| `ownership` | `jsonb` | No | Frozen verified ownership evidence. |
+| `cursor` | `text` | Yes | Saved next-page continuation. |
+| `cursor_history` | `jsonb` | No | Continuation values used to detect repeated cursors. Django default: `list`. |
+| `enumeration_complete` | `boolean` | No | Whether the scope listing was exhausted. Django default: `False`. |
+| `outcome` | `varchar(64)` | No | Django default: `'pending'`. |
+| `envelopes` | `jsonb` | No | Preserved request/response attempts and native revision evidence. Django default: `list`. |
+| `raw_count` | `bigint` | No | Raw returned records, including duplicates; not the distinct repository count. Django default: `0`. |
+
+**Named indexes:**
+
+None beyond field/FK/constraint indexes.
+
+**Named constraints:**
+
+- `uq_collection_run_scope`: `ALTER TABLE "collection_scope_runs" ADD CONSTRAINT "uq_collection_run_scope" UNIQUE ("run_id", "scope_kind", "scope_key")`.
+
+[Back to table inventory](#table-inventory)
 
 <a id="table-measurement_subjects"></a>
 
@@ -5905,91 +5842,118 @@ None declared beyond field/FK/constraint indexes.
 
 <a id="table-metric_collection_runs"></a>
 
-### `metric_collection_runs` — MetricCollectionRun
+<a id="table-hf_model_catalog_runs"></a>
 
-One bounded measurement collection attempt with its contract and outcome.
+<a id="table-collection_runs"></a>
 
-Model: [MetricCollectionRun](../../core/models.py#L7796).
+### `collection_runs` — CollectionRun
+
+One source collection run, for numeric measurements or catalog discovery.
+
+Model: [CollectionRun](../../core/models.py#L7755).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
-| `id` | `uuid` | No | PK component. Django default: `uuid4` (not an assumed SQL default). |
-| `batch_id` | `uuid` | No | Django default: `uuid4` (not an assumed SQL default). |
-| `contract_id` | `uuid` | No | FK → [`metric_collection_contracts`](#table-metric_collection_contracts) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `contract`. |
+| `id` | `uuid` | No | PK. Django default: `uuid4`. |
+| `batch_id` | `uuid` | No | Django default: `uuid4`. |
+| `purpose` | `varchar(16)` | No | `metric` requires a reviewed contract and lease; `catalog` requires no numeric contract. Django default: `'metric'`. SQL default: `'metric'`. |
+| `scope` | `jsonb` | No | Frozen source selection for catalog continuation. Django default: `dict`. SQL default: `{}`. |
+| `invocations` | `jsonb` | No | Append-preserved invocation budgets, counters and results. Django default: `list`. SQL default: `[]`. |
+| `report` | `jsonb` | No | Latest collection summary. Django default: `dict`. SQL default: `{}`. |
+| `updated_at` | `timestamp with time zone` | Yes | Set by Django on save; original migrated timestamp preserved, unknown prior numeric timestamps stay NULL. |
+| `contract_id` | `uuid` | Yes | FK → [`metric_collection_contracts`](#table-metric_collection_contracts) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `contract`. |
 | `source_id` | `varchar(32)` | No | FK → [`data_sources`](#table-data_sources) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source`. |
 | `ingestion_key` | `varchar(64)` | No | Field-level unique. |
-| `status` | `varchar(16)` | No | Django default: `'running'` (not an assumed SQL default). |
-| `started_at` | `timestamp with time zone` | No | Django default: `now` (not an assumed SQL default). |
-| `lease_expires_at` | `timestamp with time zone` | No | Stored value. |
+| `status` | `varchar(16)` | No | Django default: `'running'`. |
+| `started_at` | `timestamp with time zone` | No | Django default: `now`. |
+| `lease_expires_at` | `timestamp with time zone` | Yes | Stored value. |
 | `observed_at` | `timestamp with time zone` | Yes | Stored value. |
 | `completed_at` | `timestamp with time zone` | Yes | Stored value. |
 | `source_as_of` | `timestamp with time zone` | Yes | Stored value. |
-| `source_url` | `text` | No | Django default: `''` (not an assumed SQL default). |
-| `request_params` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `source_metadata` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `request_count` | `integer` | No | Django default: `0` (not an assumed SQL default). |
-| `selected_count` | `integer` | No | Django default: `0` (not an assumed SQL default). |
-| `success_count` | `integer` | No | Django default: `0` (not an assumed SQL default). |
+| `source_url` | `text` | No | Django default: `''`. |
+| `request_params` | `jsonb` | No | Django default: `dict`. |
+| `source_metadata` | `jsonb` | No | Django default: `dict`. |
+| `request_count` | `integer` | No | Django default: `0`. |
+| `selected_count` | `integer` | No | Django default: `0`. |
+| `success_count` | `integer` | No | Django default: `0`. |
 | `payload_sha256` | `varchar(64)` | Yes | Stored value. |
 | `raw_payload` | `jsonb` | Yes | Stored value. |
 | `error_code` | `varchar(64)` | Yes | Stored value. |
 
 **Named indexes:**
 
-- `idx_metric_run_outcome`: `CREATE INDEX "idx_metric_run_outcome" ON "metric_collection_runs" ("contract_id", "source_id", "status", "completed_at")`.
-- `idx_metric_run_batch`: `CREATE INDEX "idx_metric_run_batch" ON "metric_collection_runs" ("batch_id")`.
+- `idx_metric_run_outcome`: `CREATE INDEX "idx_metric_run_outcome" ON "collection_runs" ("contract_id", "source_id", "status", "completed_at")`.
+- `idx_metric_run_batch`: `CREATE INDEX "idx_metric_run_batch" ON "collection_runs" ("batch_id")`.
 
 **Named constraints:**
 
-- `ck_metric_ingestion_key`: `CONSTRAINT "ck_metric_ingestion_key" CHECK ("ingestion_key"::text ~ '^[0-9a-f]{64}$')`.
-- `ck_run_payload_hash`: `CONSTRAINT "ck_run_payload_hash" CHECK (("payload_sha256" IS NULL OR "payload_sha256"::text ~ '^[0-9a-f]{64}$'))`.
-- `ck_run_terminal`: `CONSTRAINT "ck_run_terminal" CHECK ((("completed_at" IS NULL AND "status" = 'running') OR ("completed_at" IS NOT NULL AND "status" IN ('success', 'partial', 'failed', 'aborted'))))`.
-- `ck_run_success_count`: `CONSTRAINT "ck_run_success_count" CHECK ("success_count" <= ("selected_count"))`.
+- `ck_metric_ingestion_key`: `ALTER TABLE "collection_runs" ADD CONSTRAINT "ck_metric_ingestion_key" CHECK ("ingestion_key"::text ~ '^[0-9a-f]{64}$')`.
+- `ck_run_payload_hash`: `ALTER TABLE "collection_runs" ADD CONSTRAINT "ck_run_payload_hash" CHECK (("payload_sha256" IS NULL OR "payload_sha256"::text ~ '^[0-9a-f]{64}$'))`.
+- `ck_collection_run_lifecycle`: `ALTER TABLE "collection_runs" ADD CONSTRAINT "ck_collection_run_lifecycle" CHECK ((("contract_id" IS NOT NULL AND "lease_expires_at" IS NOT NULL AND "purpose" = 'metric' AND (("completed_at" IS NULL AND "status" = 'running') OR ("completed_at" IS NOT NULL AND "status" IN ('success', 'partial', 'failed', 'aborted')))) OR ("contract_id" IS NULL AND "purpose" = 'catalog' AND (("completed_at" IS NULL AND "status" IN ('pending', 'running', 'partial', 'interrupted')) OR ("completed_at" IS NOT NULL AND "status" IN ('success', 'failed', 'aborted'))))))`.
+- `ck_run_success_count`: `ALTER TABLE "collection_runs" ADD CONSTRAINT "ck_run_success_count" CHECK ("success_count" <= ("selected_count"))`.
+
+Numeric partial is terminal and has a completion timestamp. Catalog partial/interrupted remains resumable with no completion timestamp. Catalog success/failed/aborted is terminal. Imported legacy identities remain in `source_metadata.legacy_catalog`.
 
 [Back to table inventory](#table-inventory)
 
 <a id="table-metric_observations"></a>
 
-### `metric_observations` — MetricObservation
+<a id="table-hf_model_catalog_observations"></a>
 
-One sourced, dated observation in a collection run.
+<a id="table-collection_observations"></a>
 
-Model: [MetricObservation](../../core/models.py#L7852).
+### `collection_observations` — CollectionObservation
+
+One sourced evidence record; numeric rows are immutable evidence and catalog rows retain repository enrichment progress.
+
+Model: [CollectionObservation](../../core/models.py#L7840).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `run_id` | `uuid` | No | FK → [`metric_collection_runs`](#table-metric_collection_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
+| `run_id` | `uuid` | No | FK → [`collection_runs`](#table-collection_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
+| `scope_run_id` | `bigint` | Yes | FK → [`collection_scope_runs`](#table-collection_scope_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `scope_run`. |
+| `resource_key` | `varchar(256)` | Yes | Normalized catalog resource identity within its scope. |
+| `product_id` | `bigint` | Yes | FK → [`products`](#table-products) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `product`. |
+| `created_product` | `boolean` | No | Whether this run created the linked Product. Django default: `False`. SQL default: `False`. |
+| `listing` | `jsonb` | No | Native source listing payload. Django default: `dict`. SQL default: `{}`. |
+| `envelopes` | `jsonb` | No | Preserved request/response attempts and native revision evidence. Django default: `list`. SQL default: `[]`. |
+| `groups` | `jsonb` | No | Per-group collection and projection outcomes. Django default: `dict`. SQL default: `{}`. |
+| `processing_outcome` | `varchar(64)` | Yes | Catalog enrichment outcome; independent of evidence `status`. |
+| `updated_at` | `timestamp with time zone` | Yes | Set by Django on save; original migrated timestamp preserved, unknown prior numeric timestamps stay NULL. |
 | `mapping_id` | `uuid` | Yes | FK → [`source_subject_mappings`](#table-source_subject_mappings) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `mapping`. |
 | `source_identifier` | `varchar(256)` | No | Stored value. |
 | `source_subject_kind` | `varchar(32)` | No | Stored value. |
-| `observed_at` | `timestamp with time zone` | No | Django default: `now` (not an assumed SQL default). |
-| `dimensions` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `source_metadata` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
+| `observed_at` | `timestamp with time zone` | No | Django default: `now`. |
+| `dimensions` | `jsonb` | No | Django default: `dict`. |
+| `source_metadata` | `jsonb` | No | Django default: `dict`. |
 | `observation_key` | `varchar(64)` | No | Stored value. |
-| `status` | `varchar(16)` | No | Django default: `'ok'` (not an assumed SQL default). |
+| `status` | `varchar(16)` | No | Django default: `'ok'`. |
 | `published_at` | `timestamp with time zone` | Yes | Stored value. |
 | `published_date` | `date` | Yes | Stored value. |
-| `publication_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). |
+| `publication_precision` | `varchar(16)` | No | Django default: `'unknown'`. |
 | `error_code` | `varchar(64)` | Yes | Stored value. |
 
 **Named indexes:**
 
-- `idx_observation_mapping_time`: `CREATE INDEX "idx_observation_mapping_time" ON "metric_observations" ("mapping_id", "observed_at")`.
-- `idx_observation_publication`: `CREATE INDEX "idx_observation_publication" ON "metric_observations" ("run_id", "published_date")`.
+- `idx_observation_mapping_time`: `CREATE INDEX "idx_observation_mapping_time" ON "collection_observations" ("mapping_id", "observed_at")`.
+- `idx_observation_publication`: `CREATE INDEX "idx_observation_publication" ON "collection_observations" ("run_id", "published_date")`.
 
 **Named constraints:**
 
-- `uq_metric_observation`: `CONSTRAINT "uq_metric_observation" UNIQUE ("run_id", "observation_key")`.
-- `ck_observation_key`: `CONSTRAINT "ck_observation_key" CHECK ("observation_key"::text ~ '^[0-9a-f]{64}$')`.
-- `ck_observation_kind`: `CONSTRAINT "ck_observation_kind" CHECK ("source_subject_kind" IN ('model', 'repository', 'lab', 'account', 'aggregate'))`.
-- `ck_observation_aggregate`: `CONSTRAINT "ck_observation_aggregate" CHECK (("source_subject_kind" IN ('model', 'repository', 'lab', 'account') OR "mapping_id" IS NULL))`.
-- `ck_observation_status`: `CONSTRAINT "ck_observation_status" CHECK ((("error_code" IS NULL AND "status" = 'ok') OR ("error_code" IS NOT NULL AND "status" = 'error' AND NOT ("error_code" = '' AND "error_code" IS NOT NULL))))`.
-- `ck_observation_publication`: `CONSTRAINT "ck_observation_publication" CHECK ((("publication_precision" = 'instant' AND "published_at" IS NOT NULL AND "published_date" IS NULL) OR ("publication_precision" = 'date' AND "published_at" IS NULL AND "published_date" IS NOT NULL) OR ("publication_precision" = 'unknown' AND "published_at" IS NULL AND "published_date" IS NULL)))`.
+- `uq_collection_scope_resource`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "uq_collection_scope_resource" UNIQUE ("scope_run_id", "resource_key")`.
+- `uq_metric_observation`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "uq_metric_observation" UNIQUE ("run_id", "observation_key")`.
+- `ck_observation_key`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_key" CHECK ("observation_key"::text ~ '^[0-9a-f]{64}$')`.
+- `ck_observation_kind`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_kind" CHECK ("source_subject_kind" IN ('model', 'repository', 'lab', 'account', 'aggregate'))`.
+- `ck_observation_aggregate`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_aggregate" CHECK (("source_subject_kind" IN ('model', 'repository', 'lab', 'account') OR "mapping_id" IS NULL))`.
+- `ck_observation_status`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_status" CHECK ((("error_code" IS NULL AND "status" = 'ok') OR ("error_code" IS NOT NULL AND "status" = 'error' AND NOT ("error_code" = '' AND "error_code" IS NOT NULL))))`.
+- `ck_observation_publication`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_publication" CHECK ((("publication_precision" = 'instant' AND "published_at" IS NOT NULL AND "published_date" IS NULL) OR ("publication_precision" = 'date' AND "published_at" IS NULL AND "published_date" IS NOT NULL) OR ("publication_precision" = 'unknown' AND "published_at" IS NULL AND "published_date" IS NULL)))`.
+
+Imported HF IDs are allocated above existing numeric IDs. Product evidence pointers are rewritten in the same transaction, retaining original identities in `source_metadata.legacy_catalog`. Numeric `MetricValue` references keep their original IDs. Catalog projection validates matching source, purpose and scope before mutation.
 
 [Back to table inventory](#table-inventory)
 
@@ -6032,7 +5996,7 @@ Model: [MetricValue](../../core/models.py#L7933).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `observation_id` | `bigint` | No | FK → [`metric_observations`](#table-metric_observations) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `observation`. |
+| `observation_id` | `bigint` | No | FK → [`collection_observations`](#table-collection_observations) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `observation`. |
 | `source_metric_id` | `bigint` | No | FK → [`metrics`](#table-metrics) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_metric`. |
 | `integer_value` | `numeric(30, 0)` | Yes | Stored value. |
 | `float_value` | `double precision` | Yes | Stored value. |

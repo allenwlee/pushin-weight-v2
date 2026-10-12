@@ -118,7 +118,7 @@ def test_daily_hf_schedule_dispatches_at_utc_slot_once(now, previous, due, setti
 
     from django.core.management import call_command
 
-    from core.models import DataSource, MetricCollectionRun
+    from core.models import CollectionRun, DataSource
 
     _, spec = setup_spec()
     spec["source_configuration"]["hf"]["scheduling_enabled"] = True
@@ -131,7 +131,7 @@ def test_daily_hf_schedule_dispatches_at_utc_slot_once(now, previous, due, setti
         run = persist_source(
             contract, "hf", digest("previous"), {"status": "failed", "rows": []}
         )
-        MetricCollectionRun.objects.filter(pk=run.pk).update(
+        CollectionRun.objects.filter(pk=run.pk).update(
             started_at=datetime.fromisoformat(previous)
         )
     settings.BENCHMARK_COLLECTION_ENABLED = True
@@ -214,7 +214,7 @@ def test_daily_hf_real_command_persists_once_without_provider_calls(settings):
     import httpx
     from django.core.management import call_command
 
-    from core.models import DataSource, MetricCollectionRun, MetricValue
+    from core.models import CollectionRun, DataSource, MetricValue
 
     _, spec = setup_spec()
     spec["source_configuration"]["hf"]["scheduling_enabled"] = True
@@ -250,11 +250,11 @@ def test_daily_hf_real_command_persists_once_without_provider_calls(settings):
             )
             if hour == 10:
                 # The model's default holds the original clock callable.
-                MetricCollectionRun.objects.update(started_at=timezone.now())
+                CollectionRun.objects.update(started_at=timezone.now())
         client.close()
     assert requests == ["/api/models/lab/Model"]
-    assert MetricCollectionRun.objects.get().status == "success"
-    assert MetricCollectionRun.objects.get().started_at.hour == 10
+    assert CollectionRun.objects.get().status == "success"
+    assert CollectionRun.objects.get().started_at.hour == 10
     assert MetricValue.objects.count() == 2
 
 
@@ -264,7 +264,7 @@ def test_hf_daily_override_preserves_other_provider_intervals(settings):
 
     from django.core.management import call_command
 
-    from core.models import DataSource, MetricCollectionRun
+    from core.models import CollectionRun, DataSource
 
     _, spec = setup_spec()
     spec["source_configuration"]["hf"]["scheduling_enabled"] = True
@@ -290,7 +290,7 @@ def test_hf_daily_override_preserves_other_provider_intervals(settings):
         run = persist_source(
             contract, source, digest(source), {"status": "failed", "rows": []}
         )
-        MetricCollectionRun.objects.filter(pk=run.pk).update(
+        CollectionRun.objects.filter(pk=run.pk).update(
             started_at=datetime.fromisoformat(previous)
         )
     settings.BENCHMARK_COLLECTION_ENABLED = True

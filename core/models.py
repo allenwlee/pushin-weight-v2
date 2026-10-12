@@ -3023,25 +3023,12 @@ class ProductVerificationProposal(models.Model):
         ]
 
 
-class HFModelCatalogRun(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    scope = models.JSONField()
-    outcome = models.CharField(max_length=40, default="pending")
-    invocations = models.JSONField(default=list)
-    report = models.JSONField(default=dict)
-    started_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    finished_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = "hf_model_catalog_runs"
-
-
-class HFModelCatalogNamespaceRun(models.Model):
+class CollectionScopeRun(models.Model):
     run = models.ForeignKey(
-        HFModelCatalogRun, on_delete=models.CASCADE, related_name="namespaces"
+        "CollectionRun", on_delete=models.CASCADE, related_name="scopes"
     )
-    namespace = models.CharField(max_length=64)
+    scope_kind = models.CharField(max_length=32, default="namespace")
+    scope_key = models.CharField(max_length=256)
     ownership = models.JSONField()
     cursor = models.TextField(null=True, blank=True)
     cursor_history = models.JSONField(default=list)
@@ -3051,39 +3038,11 @@ class HFModelCatalogNamespaceRun(models.Model):
     raw_count = models.BigIntegerField(default=0)
 
     class Meta:
-        db_table = "hf_model_catalog_namespace_runs"
+        db_table = "collection_scope_runs"
         constraints = (
             models.UniqueConstraint(
-                fields=["run", "namespace"], name="uq_hf_catalog_run_namespace"
-            ),
-        )
-
-
-class HFModelCatalogObservation(models.Model):
-    namespace_run = models.ForeignKey(
-        HFModelCatalogNamespaceRun,
-        on_delete=models.CASCADE,
-        related_name="observations",
-    )
-    repo_key = models.CharField(max_length=256)
-    repo_id = models.CharField(max_length=256)
-    product = models.ForeignKey(
-        Product, on_delete=models.SET_NULL, null=True, blank=True
-    )
-    created_product = models.BooleanField(default=False)
-    listing = models.JSONField(default=dict)
-    envelopes = models.JSONField(default=list)
-    groups = models.JSONField(default=dict)
-    outcome = models.CharField(max_length=64, default="pending")
-    observed_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "hf_model_catalog_observations"
-        constraints = (
-            models.UniqueConstraint(
-                fields=["namespace_run", "repo_key"],
-                name="uq_hf_catalog_repo_observation",
+                fields=["run", "scope_kind", "scope_key"],
+                name="uq_collection_run_scope",
             ),
         )
 
@@ -7793,15 +7752,22 @@ class SourceSubjectMapping(models.Model):
         ]
 
 
-class MetricCollectionRun(models.Model):
+class CollectionRun(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     batch_id = models.UUIDField(default=uuid.uuid4)
-    contract = models.ForeignKey(MetricCollectionContract, on_delete=models.PROTECT)
+    purpose = models.CharField(max_length=16, default="metric", db_default="metric")
+    scope = models.JSONField(default=dict, db_default={})
+    invocations = models.JSONField(default=list, db_default=[])
+    report = models.JSONField(default=dict, db_default={})
+    updated_at = models.DateTimeField(auto_now=True, null=True)
+    contract = models.ForeignKey(
+        MetricCollectionContract, on_delete=models.PROTECT, null=True
+    )
     source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
     ingestion_key = models.CharField(max_length=64, unique=True)
     status = models.CharField(max_length=16, default="running")
     started_at = models.DateTimeField(default=timezone.now)
-    lease_expires_at = models.DateTimeField()
+    lease_expires_at = models.DateTimeField(null=True)
     observed_at = models.DateTimeField(null=True)
     completed_at = models.DateTimeField(null=True)
     source_as_of = models.DateTimeField(null=True)
@@ -7816,7 +7782,7 @@ class MetricCollectionRun(models.Model):
     error_code = models.CharField(max_length=64, null=True)
 
     class Meta:
-        db_table = "metric_collection_runs"
+        db_table = "collection_runs"
         indexes = [
             models.Index(
                 fields=["contract", "source", "status", "completed_at"],
@@ -7835,12 +7801,34 @@ class MetricCollectionRun(models.Model):
                 name="ck_run_payload_hash",
             ),
             models.CheckConstraint(
-                condition=models.Q(status="running", completed_at__isnull=True)
-                | models.Q(
-                    status__in=["success", "partial", "failed", "aborted"],
-                    completed_at__isnull=False,
+                condition=(
+                    models.Q(
+                        purpose="metric",
+                        contract__isnull=False,
+                        lease_expires_at__isnull=False,
+                    )
+                    & (
+                        models.Q(status="running", completed_at__isnull=True)
+                        | models.Q(
+                            status__in=["success", "partial", "failed", "aborted"],
+                            completed_at__isnull=False,
+                        )
+                    )
+                )
+                | (
+                    models.Q(purpose="catalog", contract__isnull=True)
+                    & (
+                        models.Q(
+                            status__in=["pending", "running", "partial", "interrupted"],
+                            completed_at__isnull=True,
+                        )
+                        | models.Q(
+                            status__in=["success", "failed", "aborted"],
+                            completed_at__isnull=False,
+                        )
+                    )
                 ),
-                name="ck_run_terminal",
+                name="ck_collection_run_lifecycle",
             ),
             models.CheckConstraint(
                 condition=models.Q(success_count__lte=models.F("selected_count")),
@@ -7849,10 +7837,24 @@ class MetricCollectionRun(models.Model):
         ]
 
 
-class MetricObservation(models.Model):
+class CollectionObservation(models.Model):
     run = models.ForeignKey(
-        MetricCollectionRun, on_delete=models.PROTECT, related_name="observations"
+        CollectionRun, on_delete=models.PROTECT, related_name="observations"
     )
+    scope_run = models.ForeignKey(
+        CollectionScopeRun,
+        on_delete=models.PROTECT,
+        null=True,
+        related_name="observations",
+    )
+    resource_key = models.CharField(max_length=256, null=True)
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
+    created_product = models.BooleanField(default=False, db_default=False)
+    listing = models.JSONField(default=dict, db_default={})
+    envelopes = models.JSONField(default=list, db_default=[])
+    groups = models.JSONField(default=dict, db_default={})
+    processing_outcome = models.CharField(max_length=64, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     mapping = models.ForeignKey(
         SourceSubjectMapping, null=True, on_delete=models.PROTECT
     )
@@ -7869,7 +7871,7 @@ class MetricObservation(models.Model):
     error_code = models.CharField(max_length=64, null=True)
 
     class Meta:
-        db_table = "metric_observations"
+        db_table = "collection_observations"
         indexes = [
             models.Index(
                 fields=["mapping", "observed_at"], name="idx_observation_mapping_time"
@@ -7880,6 +7882,10 @@ class MetricObservation(models.Model):
         ]
         constraints = [
             models.UniqueConstraint(
+                fields=["scope_run", "resource_key"],
+                name="uq_collection_scope_resource",
+            ),
+            models.UniqueConstraint(
                 fields=["run", "observation_key"], name="uq_metric_observation"
             ),
             models.CheckConstraint(
@@ -7888,7 +7894,13 @@ class MetricObservation(models.Model):
             ),
             models.CheckConstraint(
                 condition=models.Q(
-                    source_subject_kind__in=["model", "repository", "lab", "account", "aggregate"]
+                    source_subject_kind__in=[
+                        "model",
+                        "repository",
+                        "lab",
+                        "account",
+                        "aggregate",
+                    ]
                 ),
                 name="ck_observation_kind",
             ),
@@ -7932,7 +7944,7 @@ class MetricObservation(models.Model):
 
 class MetricValue(models.Model):
     observation = models.ForeignKey(
-        MetricObservation, on_delete=models.PROTECT, related_name="values"
+        CollectionObservation, on_delete=models.PROTECT, related_name="values"
     )
     source_metric = models.ForeignKey(SourceMetric, on_delete=models.PROTECT)
     integer_value = models.DecimalField(max_digits=30, decimal_places=0, null=True)

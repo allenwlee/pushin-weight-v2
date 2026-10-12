@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from core.models import MetricCollectionRun, MetricObservation, MetricValue
+from core.models import CollectionObservation, CollectionRun, MetricValue
 from tests.test_benchmark_download_db_identity import setup_spec
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
@@ -36,7 +36,7 @@ def test_hf_atomic_idempotent_values_do_not_invent_window_bounds():
     run = persist_source(contract, "hf", "a" * 64, payload())
     assert run.status == "success"
     assert persist_source(contract, "hf", "a" * 64, payload()).pk == run.pk
-    assert MetricObservation.objects.count() == 1
+    assert CollectionObservation.objects.count() == 1
     values = list(MetricValue.objects.order_by("source_metric__metric_key"))
     assert [v.integer_value for v in values] == [10, 100]
     assert all(
@@ -70,8 +70,8 @@ def test_injected_database_write_failure_cannot_publish_success():
         pytest.raises(RuntimeError),
     ):
         persist_source(contract, "hf", "c" * 64, payload())
-    assert MetricCollectionRun.objects.get().status == "running"
-    assert not MetricObservation.objects.exists()
+    assert CollectionRun.objects.get().status == "running"
+    assert not CollectionObservation.objects.exists()
 
 
 def test_calendar_days_respect_daylight_saving_and_reject_ambiguous_times():
@@ -128,7 +128,7 @@ def test_openrouter_keeps_exact_integer_and_completed_utc_period():
     assert value.window_end_at == datetime(2026, 10, 6, tzinfo=UTC)
     assert run.source_as_of == datetime(2026, 10, 6, 0, 30, tzinfo=UTC)
     assert (
-        MetricObservation.objects.get(source_subject_kind="aggregate").mapping_id
+        CollectionObservation.objects.get(source_subject_kind="aggregate").mapping_id
         is None
     )
 
@@ -239,7 +239,7 @@ def test_source_lock_contention_and_expired_run_recovery():
             pytest.fail("contended lock was admitted")
     finally:
         other.close()
-    run = MetricCollectionRun.objects.create(
+    run = CollectionRun.objects.create(
         contract=contract,
         source_id="hf",
         ingestion_key="2" * 64,

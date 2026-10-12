@@ -93,6 +93,59 @@ def test_loads_the_tracked_exhaustive_policy() -> None:
     )
 
 
+def test_pre_merge_source_is_authorized_without_reading_legacy_catalog():
+    from scripts.staging_refresh.policy import (
+        LEGACY_CATALOG_SEQUENCES,
+        LEGACY_CATALOG_TABLES,
+        LEGACY_COLLECTION_TABLES,
+    )
+
+    policy = load_policy(POLICY_PATH)
+    current = _inspection(policy, source=True)
+    shared = frozenset(
+        {"collection_runs", "collection_observations", "collection_scope_runs"}
+    )
+    old_numeric = frozenset(LEGACY_COLLECTION_TABLES.values())
+    old = replace(
+        current,
+        base_tables=(current.base_tables - shared)
+        | LEGACY_CATALOG_TABLES
+        | old_numeric,
+        readable_tables=(current.readable_tables - shared) | old_numeric,
+        maintainable_tables=current.maintainable_tables | LEGACY_CATALOG_TABLES,
+        views=current.views - old_numeric,
+        sequences=current.sequences | LEGACY_CATALOG_SEQUENCES,
+        readable_sequences=current.sequences | LEGACY_CATALOG_SEQUENCES,
+    )
+    authorize(
+        policy,
+        action="preflight",
+        environ=_environment(policy),
+        source=old,
+        target=_inspection(policy, source=False),
+    )
+    with pytest.raises(PolicyError, match="source_excluded_table_readable"):
+        authorize(
+            policy,
+            action="preflight",
+            environ=_environment(policy),
+            source=replace(
+                old, readable_tables=old.readable_tables | LEGACY_CATALOG_TABLES
+            ),
+            target=_inspection(policy, source=False),
+        )
+    with pytest.raises(PolicyError, match="source_collection_schema_mixed"):
+        authorize(
+            policy,
+            action="preflight",
+            environ=_environment(policy),
+            source=replace(
+                current, base_tables=current.base_tables | LEGACY_CATALOG_TABLES
+            ),
+            target=_inspection(policy, source=False),
+        )
+
+
 def test_rare_type_relations_have_explicit_copy_or_scrub_policy() -> None:
     policy = load_policy(POLICY_PATH)
 
@@ -337,8 +390,8 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "metrics",
         "metric_collection_contracts",
         "source_subject_mappings",
-        "metric_collection_runs",
-        "metric_observations",
+        "collection_runs",
+        "collection_observations",
         "metric_values",
         "editorial_assessments",
         "editorial_budgets",
@@ -365,9 +418,7 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "staff_media_objects",
         "staff_provider_requests",
         "product_label_keys",
-        "hf_model_catalog_runs",
-        "hf_model_catalog_namespace_runs",
-        "hf_model_catalog_observations",
+        "collection_scope_runs",
         "product_label_labels",
         "audience_topic_concepts",
         "audience_topic_labels",
@@ -432,6 +483,8 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
     # Table renames retain owned sequence names; do not invent renamed sequences.
     sequence_prefix = {
         "metrics": "source_metrics",
+        "collection_observations": "metric_observations",
+        "collection_scope_runs": "hf_model_catalog_namespace_runs",
         "original_content_texts": "brand_trend_narrative_texts",
     }
     assert {
@@ -572,8 +625,8 @@ def test_benchmark_evidence_is_copied_with_optional_pre_migration_sources():
         "metrics",
         "metric_collection_contracts",
         "source_subject_mappings",
-        "metric_collection_runs",
-        "metric_observations",
+        "collection_runs",
+        "collection_observations",
         "metric_values",
     }
     assert tables <= policy.relations.copied_tables

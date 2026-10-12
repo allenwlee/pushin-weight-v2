@@ -1,6 +1,6 @@
 # Staging data refresh
 
-Last verified: 2026-10-07 (combined benchmark/G2 candidate policy; see release receipts for live checks).
+Last verified: 2026-10-12 (collection-schema candidate policy; see release receipts for live checks).
 
 This procedure replaces only the isolated `pushinweight_staging` database with
 a current production snapshot. It never changes the production database. The
@@ -68,9 +68,9 @@ REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM staging_refresh_reader;
 GRANT SELECT ON
   data_sources, taxonomy_versions, product_groups, product_relationships,
   product_group_memberships, measurement_subjects, subject_relationships,
-  post_subject_attributions, metric_types, source_metrics,
-  metric_collection_contracts, source_subject_mappings, metric_collection_runs,
-  metric_observations, metric_values,
+  post_subject_attributions, metric_types, metrics,
+  metric_collection_contracts, source_subject_mappings, collection_runs,
+  collection_observations, collection_scope_runs, metric_values,
   people_names, people_name_evidence, people_texts, people_text_translations,
   account_based_in_mappings, account_post_appearances,
   account_profile_snapshots, accounts, audience_topic_concepts,
@@ -115,8 +115,6 @@ GRANT MAINTAIN ON
   official_company_scans,
   people_identity_corrections, people_media, staff_collection_work,
   staff_intakes, staff_media_objects, staff_provider_requests,
-  hf_model_catalog_runs, hf_model_catalog_namespace_runs,
-  hf_model_catalog_observations,
   _applied_config_snapshot, account_emailaddress, account_emailconfirmation,
   auth_group, auth_group_permissions, auth_permission, auth_user,
   auth_user_groups, auth_user_user_permissions, original_content,
@@ -148,7 +146,7 @@ GRANT SELECT ON
   people_texts_id_seq, people_text_translations_id_seq,
   staff_collection_work_id_seq, staff_intakes_id_seq,
   staff_provider_requests_id_seq,
-  hf_model_catalog_namespace_runs_id_seq, hf_model_catalog_observations_id_seq,
+  hf_model_catalog_namespace_runs_id_seq,
   account_emailaddress_id_seq, account_emailconfirmation_id_seq,
   account_profile_snapshots_id_seq,
   auth_group_id_seq, auth_group_permissions_id_seq, auth_permission_id_seq,
@@ -441,9 +439,9 @@ UNION ALL SELECT 'original_content_texts', count(*) FROM original_content_texts
 UNION ALL SELECT 'original_content_sources', count(*) FROM original_content_sources
 UNION ALL SELECT 'brand_discovery_candidate_token_evidence', count(*) FROM brand_discovery_candidate_token_evidence
 UNION ALL SELECT 'brand_discovery_candidate_tokens', count(*) FROM brand_discovery_candidate_tokens
-UNION ALL SELECT 'hf_model_catalog_runs', count(*) FROM hf_model_catalog_runs
-UNION ALL SELECT 'hf_model_catalog_namespace_runs', count(*) FROM hf_model_catalog_namespace_runs
-UNION ALL SELECT 'hf_model_catalog_observations', count(*) FROM hf_model_catalog_observations
+UNION ALL SELECT 'collection_runs:catalog', count(*) FROM collection_runs WHERE purpose = 'catalog'
+UNION ALL SELECT 'collection_scope_runs:catalog', count(*) FROM collection_scope_runs s JOIN collection_runs r ON r.id = s.run_id WHERE r.purpose = 'catalog'
+UNION ALL SELECT 'collection_observations:catalog', count(*) FROM collection_observations o JOIN collection_runs r ON r.id = o.run_id WHERE r.purpose = 'catalog'
 UNION ALL SELECT 'call_state', count(*) FROM call_state
 UNION ALL SELECT 'django_session', count(*) FROM django_session
 UNION ALL SELECT 'harvest_backlog_windows', count(*) FROM harvest_backlog_windows
@@ -597,10 +595,27 @@ ALTER ROLE staging_refresh_reader NOLOGIN;
 Do not revoke or rotate the production application credential as part of this
 procedure.
 
-HF catalog refresh policy: Products (including rich metadata) are copied. The
-three `hf_model_catalog_*` ledger tables are excluded, optional on older sources,
-and scrubbed on staging. Copied metadata references retain their original run
-UUID and do not imply the original observations exist in staging.
+Collection refresh policy through migration 0080: Products and numeric evidence
+are copied. Shared `collection_runs` and `collection_observations` counts include
+only `purpose=metric`. Catalog observations, scope progress and runs are deleted
+in foreign-key order inside the non-serving candidate transaction, preserving
+numeric rows and shared sequence positions. Candidate validation requires zero
+catalog rows before activation. Product metadata pointers remain source evidence;
+they do not imply the original catalog observations exist in staging.
+
+For a pre-0080 source, only the two known numeric table aliases map to canonical
+count names. The three old HF ledgers remain excluded from dump data; their
+schema is migrated in the candidate. Unknown tables/views remain rejected.
+Current source grants above apply after 0080; reapply SELECT grants and revoke
+MAINTAIN on `collection_scope_runs` after its rename, before refresh preflight.
+A source reader now temporarily reads catalog payloads within shared tables for
+the private non-serving snapshot. Those rows must be scrubbed before activation;
+the mechanism does not run the collector or resume source work.
+
+The public-schema dump explicitly includes the `pg_trgm` extension required by
+the editorial search indexes. Selecting `--schema=public` alone omits that
+definition; restoration needs it before migrations run. See the
+[PostgreSQL pg_dump documentation](https://www.postgresql.org/docs/18/app-pgdump.html).
 
 ## Benchmark evidence and provider-neutral accounts
 

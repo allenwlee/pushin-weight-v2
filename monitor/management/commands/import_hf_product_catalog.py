@@ -9,9 +9,14 @@ import uuid
 import httpx
 from django.core.management.base import BaseCommand, CommandError
 
-from core.hf_catalog import check_scope, execute_catalog, resolve_scope
+from core.hf_catalog import (
+    check_scope,
+    execute_catalog,
+    resolve_catalog_run,
+    resolve_scope,
+)
 from core.hf_metadata_client import HFMetadataClient
-from core.models import Brand, BrandCompany, HFModelCatalogRun, HFOrg
+from core.models import Brand, BrandCompany, CollectionRun, HFOrg
 
 
 class Command(BaseCommand):
@@ -67,7 +72,7 @@ class Command(BaseCommand):
         try:
             if options["resume"]:
                 run_id = uuid.UUID(options["resume"])
-                run = HFModelCatalogRun.objects.get(pk=run_id)
+                run = resolve_catalog_run(run_id)
                 manifest = run.scope
                 check_scope(manifest)
             elif options["all_tracked"]:
@@ -94,7 +99,7 @@ class Command(BaseCommand):
             ValueError,
             Brand.DoesNotExist,
             HFOrg.DoesNotExist,
-            HFModelCatalogRun.DoesNotExist,
+            CollectionRun.DoesNotExist,
         ) as exc:
             raise CommandError(str(exc)) from exc
         preview = {

@@ -86,9 +86,11 @@ brand and appear in the report. HF task labels remain source metadata; all colle
 
 ## Persistence and recovery
 
-- `hf_model_catalog_runs`: frozen scope, invocation budgets/counters, report.
-- `hf_model_catalog_namespace_runs`: ownership, page responses, continuation history.
-- `hf_model_catalog_observations`: unique repository per run, original responses,
+- `collection_runs` (`CollectionRun`, `source=hf`, `purpose=catalog`): frozen scope,
+  invocation budgets/counters, report. No numeric contract or artificial values.
+- `collection_scope_runs` (`CollectionScopeRun`): namespace scope key, ownership,
+  page responses and continuation history.
+- `collection_observations` (`CollectionObservation`): unique repository per scope/run, original responses,
   group status, Product link, and creation outcome.
 
 Each page's observations, minimal Products, and next cursor commit together.
@@ -98,6 +100,23 @@ An advisory database lock allows one catalog invocation at a time, and Product
 row locks protect concurrent reviewed edits. Network requests never hold Product
 locks. An interrupted run can resume; no deletion or automatic retention is added.
 Namespace ownership changes require a new preview/run.
+
+`status=partial` or `interrupted` leaves a catalog run resumable, with no
+completion timestamp. `success` finishes it. Numeric-purpose runs retain their
+reviewed contracts, leases and terminal partial behavior. `processing_outcome`
+describes repository enrichment; observation `status` describes evidence validity.
+The HF projection adapter rejects numeric rows and mismatched parent scopes.
+
+Migration `0080_collection_schema` reuses three existing physical tables and
+retires the two HF run/observation tables. Numeric observation IDs and values stay
+fixed; imported catalog IDs are allocated above existing numeric IDs. Legacy run
+and observation IDs remain in source metadata, and Product field-source pointers
+are rewritten together. Restore reconstructs HF evidence and its original pointers;
+other-provider catalog history cannot be represented by that older schema.
+Drain old HF catalog processes before migration: only numeric old-name processes
+have writable compatibility views. The migration refuses an active catalog
+invocation and holds the catalog lock through its transaction. Run migration and restoration rehearsals in
+an isolated database before a separately authorized deployment.
 
 Staging data refresh copies Products but excludes and scrubs catalog ledgers,
 preventing a production checkpoint from masquerading as a staging run. Metadata
@@ -114,9 +133,9 @@ included `downloadsAllTime`, `childrenModelCount`, and `inferenceProviderMapping
 This verifies request serialization and payload shapes; it is not a full catalog
 import or staging-write acceptance.
 
-The standalone branch is based on `main` at `d5694e7`. It uses the existing
+The September 24 standalone acceptance branch was based on `main` at `d5694e7`. It used the existing
 integer Product ID and required unique repository ID. Rare-type verification,
-review, UUID/type additions, and cycle changes are excluded. Historical live
+review, UUID/type additions, and cycle changes were excluded. Historical live
 results below used the earlier combined checkout; standalone acceptance is
 recorded separately in the implementation review.
 
@@ -144,15 +163,14 @@ Migration `0045_hf_catalog_observations` is additive apart from widening count c
 while retaining this forward schema and its evidence if a staging defect is
 found; do not reverse the migration after collection, because the old integer
 columns cannot represent the newly supported large counts. Before collection,
-verify `hf_metadata` exists, all three ledger tables exist, and Product IDs and
+verify `hf_metadata` exists, all three collection tables exist, and Product IDs and
 relationship counts match their pre-migration values. After a bounded run:
 
 ```sql
-SELECT id, outcome, report FROM hf_model_catalog_runs ORDER BY started_at DESC LIMIT 1;
-SELECT namespace, enumeration_complete, outcome, raw_count
-FROM hf_model_catalog_namespace_runs WHERE run_id = 'RUN_UUID';
-SELECT repo_id, outcome, groups, product_id
-FROM hf_model_catalog_observations
-WHERE namespace_run_id IN
-  (SELECT id FROM hf_model_catalog_namespace_runs WHERE run_id = 'RUN_UUID');
+SELECT id, status, report FROM collection_runs
+WHERE source_id = 'hf' AND purpose = 'catalog' ORDER BY started_at DESC LIMIT 1;
+SELECT scope_key, enumeration_complete, outcome, raw_count
+FROM collection_scope_runs WHERE run_id = 'RUN_UUID';
+SELECT source_identifier, processing_outcome, groups, product_id
+FROM collection_observations WHERE run_id = 'RUN_UUID';
 ```

@@ -6,7 +6,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from core.measurement_taxonomy import require
-from core.models import DataSource, MetricCollectionRun, MetricValue
+from core.models import CollectionRun, DataSource, MetricValue
 
 OPERATION_LIMITS = {
     "poll_seconds": (300, 604800, 86400),
@@ -44,7 +44,7 @@ def collection_health(contract, *, now=None):
     now = now or timezone.now()
     result = {}
     for source, config in contract.source_configuration.items():
-        runs = MetricCollectionRun.objects.filter(
+        runs = CollectionRun.objects.filter(
             contract=contract, source_id=source
         ).only(
             "status",

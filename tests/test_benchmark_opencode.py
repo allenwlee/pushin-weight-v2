@@ -297,7 +297,7 @@ def test_real_command_chain_imports_source_rows_and_remains_inert_by_default():
 
     from django.core.management import call_command
 
-    from core.models import MetricCollectionRun, MetricValue
+    from core.models import CollectionRun, MetricValue
 
     contract = configured()
     client = httpx.Client(
@@ -316,7 +316,7 @@ def test_real_command_chain_imports_source_rows_and_remains_inert_by_default():
             apply=True,
             stdout=StringIO(),
         )
-    assert MetricCollectionRun.objects.get().status == "success"
+    assert CollectionRun.objects.get().status == "success"
     assert MetricValue.objects.count() == 6
     output = StringIO()
     call_command("collect_benchmark_due", contract=str(contract.pk), stdout=output)

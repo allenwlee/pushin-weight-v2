@@ -13,8 +13,8 @@ from django.utils import timezone
 from core.benchmark_metric_store import native_date
 from core.measurement_taxonomy import require, resolve_products
 from core.models import (
-    MetricCollectionRun,
-    MetricObservation,
+    CollectionObservation,
+    CollectionRun,
     MetricValue,
     Post,
     SourceMetric,
@@ -326,7 +326,7 @@ def metric_points(contract, line, days):
         )
     lower, upper = days[0], days[-1]
     if source == "arena":
-        prior = MetricObservation.objects.filter(
+        prior = CollectionObservation.objects.filter(
             run__contract=contract,
             run__source_id="arena",
             run__status__in=["success", "partial"],
@@ -488,7 +488,7 @@ def metric_points(contract, line, days):
         # A scoped archive may contain no tracked models at a publication.
         # Keep that publication as absence evidence without inventing a row.
         publication_runs = list(
-            MetricCollectionRun.objects.filter(
+            CollectionRun.objects.filter(
                 contract=contract,
                 source_id=source,
                 status__in=["success", "partial"],
@@ -510,7 +510,7 @@ def metric_points(contract, line, days):
                 ) <= day <= upper and revision > complete_publications.get(day, (0,)):
                     complete_publications[day] = revision
         publications = (
-            MetricObservation.objects.filter(
+            CollectionObservation.objects.filter(
                 run__contract=contract,
                 run__source_id=source,
                 run__status__in=["success", "partial"],
@@ -542,7 +542,7 @@ def metric_points(contract, line, days):
     observed_dates = set()
     if source == "openrouter":
         observed_dates = set(
-            MetricObservation.objects.filter(
+            CollectionObservation.objects.filter(
                 run__contract=contract,
                 run__source_id=source,
                 run__status__in=["success", "partial"],
@@ -701,7 +701,7 @@ def build_comparison(contract, preset_key, start_date=None, end_date=None):
         )
     latest = {}
     for run in (
-        MetricCollectionRun.objects.filter(contract=contract)
+        CollectionRun.objects.filter(contract=contract)
         .order_by("source_id", "-started_at", "-id")
         .distinct("source_id")
         .only("source_id", "status", "started_at", "completed_at", "error_code")

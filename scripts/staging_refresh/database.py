@@ -29,7 +29,12 @@ from scripts.database_lock import (
     admin_connection_parameters,
 )
 
-from .policy import DatabaseInspection, RefreshPolicy, expected_confirmation
+from .policy import (
+    LEGACY_COLLECTION_TABLES,
+    DatabaseInspection,
+    RefreshPolicy,
+    expected_confirmation,
+)
 from .receipt import (
     DatabaseComment,
     Receipt,
@@ -321,6 +326,16 @@ def _libpq_environment(
 
 
 def _table_count(cursor: Any, table: str) -> int:
+    # Catalog rows are environment-local work. Parity counts describe only the
+    # numeric evidence that survives scrubbing, including on an older source.
+    if table == "collection_runs":
+        cursor.execute("SELECT count(*) FROM collection_runs WHERE purpose = 'metric'")
+        return int(cursor.fetchone()[0])
+    if table == "collection_observations":
+        cursor.execute(
+            "SELECT count(*) FROM collection_observations o JOIN collection_runs r ON r.id = o.run_id WHERE r.purpose = 'metric'"
+        )
+        return int(cursor.fetchone()[0])
     cursor.execute(sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(table)))
     return int(cursor.fetchone()[0])
 
@@ -330,11 +345,30 @@ def _source_exact_row_counts(
     policy: RefreshPolicy,
     source_tables: frozenset[str],
 ) -> dict[str, int]:
-    return {
-        table: _table_count(cursor, table)
-        for table in policy.validation.exact_count_tables
-        if table in source_tables
-    }
+    counts = {}
+    for table in policy.validation.exact_count_tables:
+        source_table = (
+            table if table in source_tables else LEGACY_COLLECTION_TABLES.get(table)
+        )
+        if source_table in source_tables:
+            counts[table] = _table_count(cursor, source_table)
+    return counts
+
+
+def _catalog_counts(cursor: Any) -> dict[str, int]:
+    counts = {}
+    for table in (
+        "collection_observations",
+        "collection_scope_runs",
+        "collection_runs",
+    ):
+        if table == "collection_runs":
+            query = "SELECT count(*) FROM collection_runs WHERE purpose = 'catalog'"
+        else:
+            query = f"SELECT count(*) FROM {table} t JOIN collection_runs r ON r.id = t.run_id WHERE r.purpose = 'catalog'"
+        cursor.execute(query)
+        counts[f"{table}:catalog"] = int(cursor.fetchone()[0])
+    return counts
 
 
 def _translation_counts(cursor: Any, policy: RefreshPolicy) -> dict[str, int]:
@@ -445,6 +479,15 @@ def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
         table: _table_count(cursor, table)
         for table in sorted(policy.scrub.truncate_tables)
     }
+    cleared.update(_catalog_counts(cursor))
+    # Delete in foreign-key order without resetting shared numeric sequences.
+    for table in ("collection_observations", "collection_scope_runs"):
+        cursor.execute(
+            sql.SQL(
+                "DELETE FROM {} WHERE run_id IN (SELECT id FROM collection_runs WHERE purpose = 'catalog')"
+            ).format(sql.Identifier(table))
+        )
+    cursor.execute("DELETE FROM collection_runs WHERE purpose = 'catalog'")
     targets = [sql.Identifier(table) for table in sorted(policy.scrub.truncate_tables)]
     cursor.execute(
         sql.SQL("TRUNCATE TABLE {} RESTART IDENTITY CASCADE").format(
@@ -693,6 +736,7 @@ class PsycopgSnapshotAdapter:
                 table: _table_count(cursor, table)
                 for table in sorted(self.policy.scrub.truncate_tables)
             }
+            scrubbed.update(_catalog_counts(cursor))
             cursor.execute(
                 "SELECT count(*) FROM trend_narratives WHERE status = ANY(%s)",
                 [list(self.policy.scrub.retained_narrative_statuses)],
@@ -1070,10 +1114,15 @@ class SnapshotRestoreEngine:
                     "--no-owner",
                     "--no-privileges",
                     "--schema=public",
+                    # Schema selection omits extension definitions. 0069's GIN
+                    # indexes need pg_trgm during restore, before migrate runs.
+                    "--extension=pg_trgm",
                     f"--snapshot={census.snapshot_id}",
                     *(
                         f"--exclude-table-data=public.{table}"
-                        for table in sorted(self.policy.relations.excluded_tables)
+                        for table in sorted(
+                            self.policy.relations.source_excluded_tables
+                        )
                     ),
                     "--file",
                     str(artifact_path),
@@ -1379,9 +1428,7 @@ class CandidateProcessor:
         self._run_django(candidate.name, "check", "--deploy")
         self._run_django(candidate.name, "migrate", "--check")
         scrub = self.adapter.scrub_candidate(self.target_url, candidate.name)
-        census = self.adapter.inspect_candidate(
-                    self.target_url, candidate.name
-                )
+        census = self.adapter.inspect_candidate(self.target_url, candidate.name)
         self.validate(candidate, census)
         evidence: dict[str, object] = {
             "validation": "passed",
@@ -1657,9 +1704,7 @@ class LifecycleManager:
         def prepare_receipt() -> Receipt:
             self.adapter.set_allow_connections(self.target_url, candidate.name, True)
             try:
-                census = self.adapter.inspect_candidate(
-                    self.target_url, candidate.name
-                )
+                census = self.adapter.inspect_candidate(self.target_url, candidate.name)
                 CandidateProcessor(
                     policy=self.policy,
                     target_url=self.target_url,

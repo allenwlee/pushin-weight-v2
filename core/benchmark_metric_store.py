@@ -16,9 +16,9 @@ from django.utils import timezone
 from core.benchmark_metric_identity import definition_snapshot
 from core.measurement_taxonomy import digest, require
 from core.models import (
+    CollectionObservation,
+    CollectionRun,
     DataSource,
-    MetricCollectionRun,
-    MetricObservation,
     MetricValue,
     SourceMetric,
 )
@@ -553,7 +553,7 @@ def persist_source(
     require(re.fullmatch(r"[0-9a-f]{64}", ingestion_key or ""), "invalid ingestion key")
     with collection_lock(contract, source):
         now = timezone.now()
-        existing = MetricCollectionRun.objects.filter(
+        existing = CollectionRun.objects.filter(
             ingestion_key=ingestion_key
         ).first()
         if existing:
@@ -575,7 +575,7 @@ def persist_source(
             existing.error_code = "expired_lease"
             existing.save(update_fields=["status", "completed_at", "error_code"])
             return existing
-        run = MetricCollectionRun.objects.create(
+        run = CollectionRun.objects.create(
             contract=contract,
             source_id=source,
             ingestion_key=ingestion_key,
@@ -656,8 +656,8 @@ def persist_source(
         with transaction.atomic():
             successful = retained_successful
             errors = False
-            observations = MetricObservation.objects.bulk_create(
-                [MetricObservation(run=run, **data) for data, _ in prepared],
+            observations = CollectionObservation.objects.bulk_create(
+                [CollectionObservation(run=run, **data) for data, _ in prepared],
                 batch_size=1000,
             )
             MetricValue.objects.bulk_create(

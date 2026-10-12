@@ -4,7 +4,7 @@ from django.db import connection
 
 from core.hf_catalog import execute_catalog, resolve_scope
 from core.hf_metadata_client import HFMetadataClient
-from core.models import Brand, BrandCompany, Company, HFModelCatalogRun, HFOrg, Product
+from core.models import Brand, BrandCompany, CollectionRun, Company, HFOrg, Product
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
@@ -55,12 +55,15 @@ def test_full_walk_enrichment_refresh_identity_and_ambiguous_brand():
     assert not result["complete"]  # attribution remains unresolved
     assert result["unique_models"] == result["imported"] == 2
     assert result["requests"] == 6
+    saved = CollectionRun.objects.get(pk=result["run_id"])
+    assert saved.request_count == 6
+    assert saved.selected_count == saved.success_count == 2
     assert Product.objects.filter(brand__isnull=True).count() == 2
     identities = list(Product.objects.values_list("id", "repo_id"))
     again = execute_catalog(scope=manifest, hf=api())
     assert again["imported"] == 0 and again["updated"] == 2
     assert list(Product.objects.values_list("id", "repo_id")) == identities
-    assert HFModelCatalogRun.objects.count() == 2
+    assert CollectionRun.objects.count() == 2
 
 
 def test_request_cap_commits_discovery_before_pending_enrichment_and_resumes():
@@ -136,9 +139,9 @@ def test_page_failure_rolls_back_products_and_checkpoint(monkeypatch):
     with pytest.raises(RuntimeError, match="simulated crash"):
         execute_catalog(scope=scope(), hf=api())
     assert Product.objects.count() == 0
-    run = HFModelCatalogRun.objects.get()
-    assert run.namespaces.get().cursor is None
-    assert run.namespaces.get().observations.count() == 0
+    run = CollectionRun.objects.get()
+    assert run.scopes.get().cursor is None
+    assert run.scopes.get().observations.count() == 0
     monkeypatch.setattr(catalog, "persist_product", original)
     assert execute_catalog(run_id=run.pk, hf=api())["complete"]
 
@@ -154,7 +157,7 @@ def test_lock_contention_sends_no_http_or_writes():
         other.execute("SELECT pg_advisory_lock(%s)", (CATALOG_LOCK,))
         with pytest.raises(ValueError, match="already running"):
             execute_catalog(scope=manifest, hf=api(lambda r: pytest.fail("network")))
-        assert HFModelCatalogRun.objects.count() == 0
+        assert CollectionRun.objects.count() == 0
 
 
 def test_failed_detail_does_not_hide_terminal_listing_or_erase_product():
@@ -165,8 +168,8 @@ def test_failed_detail_does_not_hide_terminal_listing_or_erase_product():
     result = execute_catalog(scope=scope(), hf=api(fail_detail))
     assert result["enumeration_complete"] and not result["enrichment_complete"]
     assert Product.objects.count() == 2
-    run = HFModelCatalogRun.objects.get()
-    assert run.namespaces.get().observations.first().groups == {
+    run = CollectionRun.objects.get()
+    assert run.scopes.get().observations.first().groups == {
         "listing": "ok",
         "detail": "forbidden",
         "expanded": "ok",

@@ -42,13 +42,13 @@ def measurement():
         methodology={},
         reviewed_by="test",
     )
-    run = models.MetricCollectionRun.objects.create(
+    run = models.CollectionRun.objects.create(
         contract=contract,
         source=source,
         ingestion_key="f" * 64,
         lease_expires_at=timezone.now(),
     )
-    observation = models.MetricObservation.objects.create(
+    observation = models.CollectionObservation.objects.create(
         run=run,
         source_identifier="fixture",
         source_subject_kind="model",
