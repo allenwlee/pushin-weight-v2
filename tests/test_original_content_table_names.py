@@ -39,6 +39,16 @@ BEFORE = ("core", "0078_original_content_workflow_shape")
 AFTER = ("core", "0079_original_content_physical_names")
 
 
+@pytest.fixture(autouse=True)
+def restore_current_migration_state(transactional_db):
+    # Historical rename rehearsals must restore newer tables before DB flush.
+    targets = MigrationExecutor(connection).loader.graph.leaf_nodes()
+    try:
+        yield
+    finally:
+        MigrationExecutor(connection).migrate(targets)
+
+
 def migrate(target):
     executor = MigrationExecutor(connection)
     executor.migrate([target])

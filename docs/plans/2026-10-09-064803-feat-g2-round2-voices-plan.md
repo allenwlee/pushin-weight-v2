@@ -283,7 +283,15 @@ insufficient balance; Grok timed out at600seconds; neither produced a report.
 No actionable review finding or settled-decision conflict remains. Private
 receipts: authoritative-root `.local/g2-multilingual-production-20261013/`.
 Current main/staging advanced to b9f03bc1 during work; integrate and rerun
-current-schema checks before delivery. U4 remains pending.
+current-schema checks before delivery. The rebased implementation commit is
+29c2f5f5. The full configured editorial workflow exposed a pre-existing
+historical-rename fixture restoring0079 after0080: Django flush then leaves
+metric_collection_runs outside the current-model table set and fails on its
+FK. U3 therefore also owns only `tests/test_original_content_table_names.py`
+cleanup: preserve historical assertions, restore graph leaf targets before
+flush. A fresh database passes21rename/native/browser checks with no skips or
+errors; full/hosted checks are being repeated. No runtime/schema change.
+U4 remains pending.
 
 ### Definition of Done
 
