@@ -8444,3 +8444,9 @@ class OfficialCompanyProviderState(models.Model):
 
     class Meta:
         db_table = "official_company_provider_states"
+
+
+# Render's deployed benchmark launcher imports these names. They point to the
+# canonical models and add no tables or duplicate model registration.
+MetricCollectionRun = CollectionRun
+MetricObservation = CollectionObservation

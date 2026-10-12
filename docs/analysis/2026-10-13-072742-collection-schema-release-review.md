@@ -21,7 +21,11 @@ history. Real dump/restore tests cover both 0079 and 0080 source schemas; catalo
 work is scrubbed before candidate activation and numeric evidence is retained.
 
 Requirements R1–R9 and units U14a–c have implementation/verification evidence.
-One test-portability finding was applied: auxiliary test connections now receive
+Two findings were applied. A P1 deployment dependency appeared in the actual Render
+benchmark launcher: its out-of-repository command still imports MetricCollectionRun.
+Python aliases preserve that import without additional tables or a schedule change.
+The captured-launcher regression failed before the fix and passed afterward.
+A test-portability finding was also applied: auxiliary test connections now receive
 the configured Django database password. Import-order diagnostics introduced by
 model renaming were fixed. No actionable code finding remains. Existing model
 lint debt is unchanged (177 diagnostics before and after).
@@ -79,6 +83,12 @@ new permanent table or new job registry belongs to this release.
       "file": "tests/test_collection_schema_migration.py / tests/test_collection_schema_refresh.py",
       "finding": "Additional psycopg connections omitted the configured database password, which fails against password-authenticated test databases.",
       "fix": "Pass the existing Django database password to those test-only connections; do not print/store it."
+    },
+    {
+      "severity": "P1",
+      "file": "core/models.py / live Render pushinweight-benchmark launcher",
+      "finding": "The service-scoped hourly launcher imports MetricCollectionRun outside the repository. Removing that symbol would break scheduled collection after deployment.",
+      "fix": "Keep MetricCollectionRun and MetricObservation as import aliases for the canonical classes. Replay the vetted live launcher against real test storage; no schedule or service command change."
     }
   ],
   "verification": {
@@ -89,7 +99,8 @@ new permanent table or new job registry belongs to this release.
     "system_checks": "0 issues",
     "reference": "149 application tables / 1915 columns, exact names/types/nullability",
     "whitespace": "passed",
-    "credential_followup": "4 migration/restore checks passed, four required PostgreSQL tests and zero skips/errors"
+    "credential_followup": "4 migration/restore checks passed, four required PostgreSQL tests and zero skips/errors",
+    "live_launcher": "Captured launcher regression failed on the missing import before aliases, then passed in a 38-test collector suite with 38 required PG checks and zero skips/errors."
   },
   "coverage_limits": [
     "Review was performed in this thread; no independent reviewer/model claimed.",

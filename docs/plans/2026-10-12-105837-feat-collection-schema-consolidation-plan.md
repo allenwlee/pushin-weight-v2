@@ -80,6 +80,10 @@ Product field-source pointers using both old run and observation ID, retaining o
 provenance in imported evidence. Forward/reverse migration data paths preserve pointers,
 original field values and numeric foreign keys. Existing namespace integer IDs survive.
 
+Preserve MetricCollectionRun/MetricObservation Python import aliases because the live
+Render benchmark launcher imports the old run name. Replay that captured launcher
+against real test storage without provider calls. No schedule or service command change.
+
 Use explicit model/table renames and data migrations. Keep old numeric table-name views
 for currently compatible SQL readers during a rolling application release; these are
 views, not duplicate data tables. No new seven-day retirement delay is added to this

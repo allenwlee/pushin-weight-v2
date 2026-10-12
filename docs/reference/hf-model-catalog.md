@@ -118,6 +118,10 @@ have writable compatibility views. The migration refuses an active catalog
 invocation and holds the catalog lock through its transaction. Run migration and restoration rehearsals in
 an isolated database before a separately authorized deployment.
 
+`MetricCollectionRun` and `MetricObservation` remain Python import aliases for
+the canonical models. The existing Render benchmark launcher can therefore
+continue using its configured command and schedule after the schema rename.
+
 Staging data refresh copies Products but excludes and scrubs catalog ledgers,
 preventing a production checkpoint from masquerading as a staging run. Metadata
 observation references on copied Products refer to historical source evidence;

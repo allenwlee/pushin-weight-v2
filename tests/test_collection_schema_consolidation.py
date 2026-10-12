@@ -20,6 +20,40 @@ def source():
     )[0]
 
 
+def test_live_legacy_benchmark_launcher_uses_shared_storage(settings, monkeypatch):
+    import uuid
+    from pathlib import Path
+
+    import httpx
+
+    from core.benchmark_metric_store import persist_source
+    from tests.test_benchmark_download_persistence import configured, payload
+
+    contract = configured()
+    batch = uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        "pw-benchmark-production-bootstrap:" + str(contract.pk) + ":hf",
+    )
+    run = persist_source(contract, "hf", "9" * 64, payload(), batch_id=batch)
+    settings.BENCHMARK_COLLECTION_ENABLED = True
+
+    def no_provider_request(*args, **kwargs):
+        raise AssertionError(
+            "A retained bootstrap and disabled schedule need no request"
+        )
+
+    monkeypatch.setattr(httpx.Client, "send", no_provider_request)
+    script = (
+        Path(__file__).parent
+        / "fixtures/collection_schema/legacy_benchmark_launcher.txt"
+    ).read_text()
+    script = script.replace("75c4a856-385b-429a-9b03-c7e023ea6f73", str(contract.pk))
+    # Execute the vetted, checked-in launcher to cover its actual import/query path.
+    exec(compile(script, "legacy_benchmark_launcher.py", "exec"), {})  # noqa: S102
+    assert CollectionRun.objects.count() == 1
+    assert CollectionRun.objects.get(pk=run.pk).observations.count() == 1
+
+
 def test_existing_tables_are_consolidated_without_a_job_registry():
     tables = set(connection.introspection.table_names())
     assert {

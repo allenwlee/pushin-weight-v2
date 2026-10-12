@@ -1,0 +1,18 @@
+import os,uuid,json
+from datetime import timedelta
+os.environ.setdefault('DJANGO_SETTINGS_MODULE','project.settings')
+import django;django.setup()
+from django.conf import settings
+from django.core.management import call_command
+from django.utils import timezone
+from core.models import MetricCollectionContract,MetricCollectionRun
+assert settings.BENCHMARK_COLLECTION_ENABLED
+contract=MetricCollectionContract.objects.get(pk='75c4a856-385b-429a-9b03-c7e023ea6f73')
+for source,config in contract.source_configuration.items():
+    batch=uuid.uuid5(uuid.NAMESPACE_URL,'pw-benchmark-production-bootstrap:'+str(contract.pk)+':'+source)
+    if MetricCollectionRun.objects.filter(contract=contract,source_id=source,batch_id=batch).exists():
+        continue
+    end=timezone.now().date()-timedelta(days=config.get('completed_day_lag',1) if source=='openrouter' else 0)
+    start=end-timedelta(days=config.get('recheck_days',7)-1) if source=='openrouter' else end
+    call_command('collect_benchmark_metrics',contract=str(contract.pk),source=source,start_date=start.isoformat(),end_date=end.isoformat(),batch_id=str(batch),max_requests=config['max_requests'],max_seconds=config['max_seconds'],max_bytes=config['max_bytes'],apply=True)
+call_command('collect_benchmark_due',contract=str(contract.pk),apply=True)
