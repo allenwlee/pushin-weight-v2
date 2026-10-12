@@ -141,10 +141,10 @@
       ],
       "cache_expectations": [
         {
-          "path": "/static/pw-processing-glyphs.svg",
-          "policy": "reusable",
-          "min_max_age_seconds": 0,
-          "must_reuse": false
+          "path": "/static/pw-processing-glyphs.166447fee77e.svg",
+          "policy": "immutable",
+          "min_max_age_seconds": 31536000,
+          "must_reuse": true
         }
       ]
     },
@@ -228,10 +228,10 @@
       ],
       "cache_expectations": [
         {
-          "path": "/static/pw-processing-glyphs.svg",
-          "policy": "reusable",
-          "min_max_age_seconds": 0,
-          "must_reuse": false
+          "path": "/static/pw-processing-glyphs.166447fee77e.svg",
+          "policy": "immutable",
+          "min_max_age_seconds": 31536000,
+          "must_reuse": true
         }
       ]
     },

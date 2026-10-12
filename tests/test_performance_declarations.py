@@ -69,11 +69,26 @@ def test_performance_actions_use_inert_inspection_click() -> None:
         )
 
 
-def test_general_candidate_preserves_the_existing_pro_workloads_and_assertions() -> None:
+def test_general_candidate_preserves_pro_workloads_and_checks_immutable_assets() -> None:
+    from django.contrib.staticfiles.storage import ManifestStaticFilesStorage
+    from django.core.files.base import ContentFile
+
     baseline = _load("declaration.local-candidate.json")
     general = _load("declaration.general-candidate.json")
-
-    assert general["scenarios"][:2] == baseline["scenarios"]
+    sprite = Path(__file__).parents[1] / "monitor/static/pw-processing-glyphs.svg"
+    hashed_name = ManifestStaticFilesStorage().hashed_name(
+        sprite.name, content=ContentFile(sprite.read_bytes())
+    )
+    for actual, original in zip(general["scenarios"][:2], baseline["scenarios"]):
+        assert actual["cache_expectations"] == [{
+            "path": "/static/" + hashed_name,
+            "policy": "immutable",
+            "min_max_age_seconds": 31_536_000,
+            "must_reuse": True,
+        }]
+        comparable = copy.deepcopy(actual)
+        comparable["cache_expectations"] = original["cache_expectations"]
+        assert comparable == original
     assert {case["id"] for case in general["scenarios"][2:]} == {
         "general-desktop", "general-mobile"
     }
