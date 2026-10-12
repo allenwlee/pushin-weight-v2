@@ -1,0 +1,543 @@
+{
+  "recorded_at_utc": "2026-10-09T07:36:13.696993+00:00",
+  "branch": "feat/g2-round2-voices",
+  "source_revision": "1743234aa95e8b31d0613f313a88a4e9c60115b5",
+  "preview": "http://100.102.74.50:58423/zh-cn/index.html",
+  "new_physical_calls": 4,
+  "new_retries": 0,
+  "new_refinements": 0,
+  "prior_chinese_calls_preserved": 8,
+  "session_chinese_calls": 12,
+  "transport": "Responses API",
+  "requests": [
+    {
+      "style": "metro",
+      "requested_model": "gpt-6.1-sol",
+      "requested_reasoning": "high",
+      "response_model": "gpt-6.1-sol",
+      "status": "completed",
+      "usage": {
+        "input_tokens": 3214,
+        "input_tokens_details": {
+          "cache_write_tokens": 3211,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1853,
+        "output_tokens_details": {
+          "reasoning_tokens": 781
+        },
+        "total_tokens": 5067
+      }
+    },
+    {
+      "style": "metro",
+      "requested_model": "gpt-6-sol",
+      "requested_reasoning": "medium",
+      "response_model": "gpt-6-sol",
+      "status": "completed",
+      "usage": {
+        "input_tokens": 3214,
+        "input_tokens_details": {
+          "cache_write_tokens": 3211,
+          "cached_tokens": 0
+        },
+        "output_tokens": 664,
+        "output_tokens_details": {
+          "reasoning_tokens": 180
+        },
+        "total_tokens": 3878
+      }
+    },
+    {
+      "style": "wemedia",
+      "requested_model": "gpt-6.1-sol",
+      "requested_reasoning": "high",
+      "response_model": "gpt-6.1-sol",
+      "status": "completed",
+      "usage": {
+        "input_tokens": 3213,
+        "input_tokens_details": {
+          "cache_write_tokens": 3210,
+          "cached_tokens": 0
+        },
+        "output_tokens": 2507,
+        "output_tokens_details": {
+          "reasoning_tokens": 824
+        },
+        "total_tokens": 5720
+      }
+    },
+    {
+      "style": "wemedia",
+      "requested_model": "gpt-6-sol",
+      "requested_reasoning": "medium",
+      "response_model": "gpt-6-sol",
+      "status": "completed",
+      "usage": {
+        "input_tokens": 3213,
+        "input_tokens_details": {
+          "cache_write_tokens": 3210,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1041,
+        "output_tokens_details": {
+          "reasoning_tokens": 219
+        },
+        "total_tokens": 4254
+      }
+    }
+  ],
+  "checks": {
+    "browser-desktop-combinations.json": [
+      {
+        "style": "metro",
+        "model": "gpt-6.1-sol",
+        "headlinesExact": true,
+        "bodyBlocksExact": true,
+        "supportExact": true,
+        "rawExact": true,
+        "openingVisible": true,
+        "endingVisible": true,
+        "exactRole": true,
+        "purposeBottom": 596.5,
+        "purposeFits": true,
+        "overflow": false
+      },
+      {
+        "style": "metro",
+        "model": "gpt-6-sol",
+        "headlinesExact": true,
+        "bodyBlocksExact": true,
+        "supportExact": true,
+        "rawExact": true,
+        "openingVisible": true,
+        "endingVisible": true,
+        "exactRole": true,
+        "purposeBottom": 596.5,
+        "purposeFits": true,
+        "overflow": false
+      },
+      {
+        "style": "wemedia",
+        "model": "gpt-6.1-sol",
+        "headlinesExact": true,
+        "bodyBlocksExact": true,
+        "supportExact": true,
+        "rawExact": true,
+        "openingVisible": true,
+        "endingVisible": true,
+        "exactRole": true,
+        "purposeBottom": 596.5,
+        "purposeFits": true,
+        "overflow": false
+      },
+      {
+        "style": "wemedia",
+        "model": "gpt-6-sol",
+        "headlinesExact": true,
+        "bodyBlocksExact": true,
+        "supportExact": true,
+        "rawExact": true,
+        "openingVisible": true,
+        "endingVisible": true,
+        "exactRole": true,
+        "purposeBottom": 596.5,
+        "purposeFits": true,
+        "overflow": false
+      }
+    ],
+    "browser-mobile-combinations.json": [
+      {
+        "style": "metro",
+        "model": "gpt-6.1-sol",
+        "headlinesExact": true,
+        "rawExact": true,
+        "purposeBottom": 695.453125,
+        "purposeFits": true,
+        "overflow": false,
+        "mediaLoaded": true
+      },
+      {
+        "style": "metro",
+        "model": "gpt-6-sol",
+        "headlinesExact": true,
+        "rawExact": true,
+        "purposeBottom": 695.453125,
+        "purposeFits": true,
+        "overflow": false,
+        "mediaLoaded": true
+      },
+      {
+        "style": "wemedia",
+        "model": "gpt-6.1-sol",
+        "headlinesExact": true,
+        "rawExact": true,
+        "purposeBottom": 695.453125,
+        "purposeFits": true,
+        "overflow": false,
+        "mediaLoaded": true
+      },
+      {
+        "style": "wemedia",
+        "model": "gpt-6-sol",
+        "headlinesExact": true,
+        "rawExact": true,
+        "purposeBottom": 695.453125,
+        "purposeFits": true,
+        "overflow": false,
+        "mediaLoaded": true
+      }
+    ],
+    "browser-exact-text.json": [
+      {
+        "style": "metro",
+        "model": "gpt-6.1-sol",
+        "rawResponseVerbatim": true,
+        "allModelWordsVisible": true,
+        "visibleCharacters": 1415,
+        "sourceCharacters": 1415
+      },
+      {
+        "style": "metro",
+        "model": "gpt-6-sol",
+        "rawResponseVerbatim": true,
+        "allModelWordsVisible": true,
+        "visibleCharacters": 671,
+        "sourceCharacters": 671
+      },
+      {
+        "style": "wemedia",
+        "model": "gpt-6.1-sol",
+        "rawResponseVerbatim": true,
+        "allModelWordsVisible": true,
+        "visibleCharacters": 2111,
+        "sourceCharacters": 2111
+      },
+      {
+        "style": "wemedia",
+        "model": "gpt-6-sol",
+        "rawResponseVerbatim": true,
+        "allModelWordsVisible": true,
+        "visibleCharacters": 992,
+        "sourceCharacters": 992
+      }
+    ],
+    "browser-mobile-fold.json": {
+      "viewport": [
+        390,
+        844
+      ],
+      "purpose": {
+        "top": 125,
+        "bottom": 695.453125,
+        "scrollHeight": 568,
+        "clientHeight": 568
+      },
+      "detailsCollapsed": true,
+      "overflow": false
+    },
+    "browser-final-desktop-fold.json": {
+      "viewport": [
+        1400,
+        1000
+      ],
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "purposeScrollHeight": 474,
+      "purposeClientHeight": 474,
+      "overflow": false
+    }
+  },
+  "files": [
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/browser-desktop-combinations.json",
+      "bytes": 1072,
+      "sha256": "a3841788cfafb0a5434de2688cb37232fec3c0c23d51fe3869bdf273ace35ff9"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/browser-exact-text.json",
+      "bytes": 640,
+      "sha256": "c32eae3d9b75d5715479ee6551e90b1709b3b3d6bb19e9e5409978356ec884e6"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/browser-final-desktop-fold.json",
+      "bytes": 149,
+      "sha256": "3149d2cf10982b8262dcec5222e8ad3780905fd4456bf806b7207b090ac9edbe"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/browser-mobile-combinations.json",
+      "bytes": 724,
+      "sha256": "0f8c6c0afec6c5565f77b270a4b3d98fa1e4c1108433857a48b7e8c051c8d1d7"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/browser-mobile-fold.json",
+      "bytes": 162,
+      "sha256": "f70759c255b0b6efce639d3702e6be5d373115921407e33bb1f95d67a1aa0bf3"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/build_review.py",
+      "bytes": 23474,
+      "sha256": "7d12a3e8d953758dd1c504de7f0f74d5b36d3e735eaa4b49affc47b6d271572c"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/chonk-video-dialog.png",
+      "bytes": 394210,
+      "sha256": "df1a0d0de18471d13faed7be96a1d835457ff33eb6719e597d6d1d312e371062"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/desktop-1280x800.png",
+      "bytes": 331213,
+      "sha256": "47891b42f76d3749eaddc594c9da2f35f284cbba033baf2f206eb41fc77ba066"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/desktop-1400x1000.png",
+      "bytes": 456998,
+      "sha256": "302a243f87d65862504d07990153502e501a121aa90bfa10f3ae67c5aaae3935"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/desktop-default-full.png",
+      "bytes": 1032224,
+      "sha256": "02f5abd1ea50b70b38c7189e99b2eb6c49bab3e86b3b510df3d2c9520909fbbf"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/generate.py",
+      "bytes": 6915,
+      "sha256": "7f2987a770003c1bfcd7ee4e886a065f5b6b569e36f8d98b34fefbdcaa3656a5"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/ledger.json",
+      "bytes": 5545,
+      "sha256": "52eeedab1c89c76e055d81f3285efe65d6fe16ee4ff88160303460ecf2d2f6c6"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6-sol-medium/answer.raw.txt",
+      "bytes": 1683,
+      "sha256": "54a3e75c1e9fe55125219db4894bc2325d28145aa4e732c69d240ff08a4008b0"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6-sol-medium/prompt.zh-CN.txt",
+      "bytes": 7062,
+      "sha256": "db8bb080267b034136d76005790ad3dcbd718fb09937b961b562d3c7fa1ad7d4"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6-sol-medium/receipt.json",
+      "bytes": 1306,
+      "sha256": "edc9db28fc59b0b2529a3ce0f2ede298151a0d5f1e58092a7b679e1a5fe3112e"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6-sol-medium/request.sanitized.json",
+      "bytes": 7771,
+      "sha256": "e188fa0962fa0b1b011b33cc76deca9e545062cc35c7052ab22b6920fad00390"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6-sol-medium/response.original.json",
+      "bytes": 7733,
+      "sha256": "4356dc8ea906ca4fa8ae05c9e64f197da0742dda68ef3175ceb0b14bfe8523d5"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6.1-sol-high/answer.raw.txt",
+      "bytes": 3958,
+      "sha256": "382ae770e9d890372db9ec90f06cce203761c4192f26bb445e51a47eff057fe6"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6.1-sol-high/prompt.zh-CN.txt",
+      "bytes": 7062,
+      "sha256": "db8bb080267b034136d76005790ad3dcbd718fb09937b961b562d3c7fa1ad7d4"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6.1-sol-high/receipt.json",
+      "bytes": 1310,
+      "sha256": "c2da1d847d347b5f42ac46630773917735d4b63fe63b393f0cacfe4e5ea665a3"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6.1-sol-high/request.sanitized.json",
+      "bytes": 7771,
+      "sha256": "c433d6f5e40d0abe986f4201922d283674ead68c59f2b781dbe913a1ccb28c41"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6.1-sol-high/response.original.json",
+      "bytes": 17022,
+      "sha256": "ad8a67633e93482063699e0c800f7d13fe0acc7c66c85a609c594370184a1d06"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/mobile-390x844.png",
+      "bytes": 140056,
+      "sha256": "234952415a47e288322aec116e0edc6d28340a098081494fbc9ec24ef9f9be2b"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/mobile-default-390x844.png",
+      "bytes": 103979,
+      "sha256": "412aa12aa0e54e5c17bfb0489f723c494827b6a1f6a02f7409aead404b41f1cd"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/mobile-default-full.png",
+      "bytes": 707292,
+      "sha256": "01c750c117cc49e068bd282a4ef04629e058aa633b3dca579bf94db3f9cb2a1d"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/packet.zh-CN.md",
+      "bytes": 7015,
+      "sha256": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/prepare_display.py",
+      "bytes": 4298,
+      "sha256": "2d5888e141fc5f8f7a35a0bb2709d8210ac914935fbcdf04a03203a969285e95"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/raw-results.json",
+      "bytes": 21082,
+      "sha256": "8a1e93839d355a80309848f9029c51786f2a60730c4275695c08722796f7180e"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/translation-provenance.json",
+      "bytes": 1487,
+      "sha256": "74d7cd9e62e140f64b4248f6226c89e02570ed6e56bcdd03c44a3e083bbafeec"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wang-original-dialog.png",
+      "bytes": 469336,
+      "sha256": "6661571ce44b96a13656b1a2fc5509e95b8b6a7cc3f9c67e08df04bcea02788a"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6-sol-medium/answer.raw.txt",
+      "bytes": 2856,
+      "sha256": "0831eecfaea1c92ab2f596348562b5d55e72377f733107e1f680fc065f7c2fad"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6-sol-medium/prompt.zh-CN.txt",
+      "bytes": 7071,
+      "sha256": "ad1b1a9cedff67a9044e3966a786a343d281c3eedc0130caa6e9d755a2bce9fb"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6-sol-medium/receipt.json",
+      "bytes": 1320,
+      "sha256": "e7deab9c328f19de9b1020b579f41a146369422bf84617aa64b3df4ac0549541"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6-sol-medium/request.sanitized.json",
+      "bytes": 7780,
+      "sha256": "86cf45f98ed7427ed94e0df018179cffd258fed8c31cd420df84dba7375b9c97"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6-sol-medium/response.original.json",
+      "bytes": 10086,
+      "sha256": "e0d154a7a96f5f6f90d5e9af446a26f460b41aa6e35679b424bb87ac6aa41eb7"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6.1-sol-high/answer.raw.txt",
+      "bytes": 6093,
+      "sha256": "fb7174c5007b3dc8a3e65f4f02d8ab3644a42093f5a5d56b63bf313259254788"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6.1-sol-high/prompt.zh-CN.txt",
+      "bytes": 7071,
+      "sha256": "ad1b1a9cedff67a9044e3966a786a343d281c3eedc0130caa6e9d755a2bce9fb"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6.1-sol-high/receipt.json",
+      "bytes": 1322,
+      "sha256": "ae90abc38d431128c2e627336bdebc16d455bda64caaff0248a916fdf87c2d01"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6.1-sol-high/request.sanitized.json",
+      "bytes": 7780,
+      "sha256": "24000ee7fc1ec305636efb3d064d3bb997228799409daf8d03043340c1e81d1d"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6.1-sol-high/response.original.json",
+      "bytes": 21267,
+      "sha256": "a31190f3c52c87c673a8882417c1a1783362715a72b8e78f06a85278658ff262"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-high-full.png",
+      "bytes": 1276565,
+      "sha256": "7e4e92a7c3e98984281a277ce88751fc8e366d513eaed19f964884a1e13ef689"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/2026-10-09-162800-chatter-zhcn-local-language-review.html",
+      "bytes": 80547,
+      "sha256": "214edb35b1497248c2329db0c824c9516862be02ded045bb503dc0fdac055236"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/chonk-source-poster.jpg",
+      "bytes": 112137,
+      "sha256": "52677b47e8e5fc012f86c20bea53ea6ebb1b165ced6f5fc20606fe2f251c89a3"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/chonk-source-video.mp4",
+      "bytes": 553791,
+      "sha256": "b031bce8370f0694f2f71728a70ba4ddd48c7f05ccab7d41c8a020209d1e716e"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/index.html",
+      "bytes": 80547,
+      "sha256": "214edb35b1497248c2329db0c824c9516862be02ded045bb503dc0fdac055236"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/packet.zh-CN.md",
+      "bytes": 7015,
+      "sha256": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/raw-results.json",
+      "bytes": 21082,
+      "sha256": "8a1e93839d355a80309848f9029c51786f2a60730c4275695c08722796f7180e"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/receipts.json",
+      "bytes": 5545,
+      "sha256": "52eeedab1c89c76e055d81f3285efe65d6fe16ee4ff88160303460ecf2d2f6c6"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/samples.json",
+      "bytes": 53515,
+      "sha256": "ea7680eb7551c3d7dd46f7fc8cae5f975e327653e44b8f0770fc363b7ccc5188"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/screenshots/chonk-video-dialog.png",
+      "bytes": 394210,
+      "sha256": "df1a0d0de18471d13faed7be96a1d835457ff33eb6719e597d6d1d312e371062"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/screenshots/desktop-1280x800.png",
+      "bytes": 331213,
+      "sha256": "47891b42f76d3749eaddc594c9da2f35f284cbba033baf2f206eb41fc77ba066"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/screenshots/desktop-1400x1000.png",
+      "bytes": 456998,
+      "sha256": "302a243f87d65862504d07990153502e501a121aa90bfa10f3ae67c5aaae3935"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/screenshots/mobile-default-390x844.png",
+      "bytes": 103979,
+      "sha256": "412aa12aa0e54e5c17bfb0489f723c494827b6a1f6a02f7409aead404b41f1cd"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/screenshots/wang-original-dialog.png",
+      "bytes": 469336,
+      "sha256": "6661571ce44b96a13656b1a2fc5509e95b8b6a7cc3f9c67e08df04bcea02788a"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/translation-provenance.json",
+      "bytes": 1487,
+      "sha256": "74d7cd9e62e140f64b4248f6226c89e02570ed6e56bcdd03c44a3e083bbafeec"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/wang-editorial-poster.png",
+      "bytes": 570627,
+      "sha256": "cdf58d390135a335fc040c2f61e15cd56b4c67bf6d3bba8310e52549d67078ba"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/wang-original.jpg",
+      "bytes": 156245,
+      "sha256": "c0ddf32f548686cf725da584b8a253f20f63b2a16f98d9a59ada588d1344538e"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/2026-10-09-164200-review-record.md",
+      "bytes": 6391,
+      "sha256": "7964420ec848d88b76361e8fec573c0a51be65fc9d6bc6da1f54adc22e7a94ae"
+    }
+  ]
+}

@@ -51,6 +51,22 @@ on collect-chinese-workers, and the boundary between filings, a lab's own
 named report, staff-role accounts, and leads. Clearing chat does not select
 a graphics implementation, a new collection, a production write, or a release.
 
+### G2 session continuity
+
+Before resuming G2 round two, read the
+[existing G2 handoff in the round-two register](2026-10-09-110145-general-round-two.md#g2-session-continuity--october-9).
+It preserves the integrated OriginalContent generation baseline, English fallback
+and uncrafted locale voices, the owner's 24-hour review decision, unfinished
+retirement/publication retention, actual G5 local integration and shared-file
+handoff boundaries. Historical release/trial authority stays attached to its
+completed scope; clearing chat does not select a new implementation or release.
+
+**October12 owner scope correction:** the owner is already handling Pulse/chart-editor work in the G3 session and selects the **graphics editor** for this retained session. Keep the existing G2 session/worktree and its handoff; update the underlying coordination in place. The retained G2 session now owns B2-G1-01/02 content-asset selection and graphicsed requirements/guide: image/video choice, creation/treatment, reuse, attribution and export variants. G1 retains staff identity/acquisition and shared media/storage foundation; G3 retains current Pulse/chart work; G4/G5 retain sharing/presentation. Existing picture/media modules require a bounded editing-owner check before implementation. The former G2 next-task recommendation is superseded here. Voice choices remain locked. This responsibility change selects no paid generation, collection, posting or release.
+
+**October12 graphics-editor image requirements:** the owner explains that unfamiliar Chinese founders/researchers need visual identification. A default combines the verified portrait of a founder,CEO or researcher, the brand logo and a small name/role inscription. The portrait adopts the meme of the moment; Yan Junjie in Wang's thrift-store T-shirt is the selected example. Treatment is playful and ultimately generous toward the subject, preserving recognizability. One variant is50%portrait-left/50%logo-right with an airbrushed transition. Include the PushinWeight logo in a corner or integrated into the image. Selected caption: “Dr. Yan Junjie (闫俊杰), founder of MiniMax.” The owner authorizes this bounded sample; it is an editorial illustration, kept separate from source-attributed staff portraits. Reuse actual sourced portraits and existing brand marks; no staff import, application change or release is selected.
+
+**October12 compact variant:** the owner accepts the wide sample and requests a Twitter-profile-sized image beside betting posts. Use only a tight face crop and brand logo; bring the logo almost over the face, permitting slight overlap and partial visibility (about75%recognizable is enough), with a soft blended transition. Preserve generous tone and recognizable face; omit the wide version's body/inscription/publisher watermark in this face-and-brand-only variant. First400×400 PNG and48/64/80px square/circle review are saved with the original sample. One further built-in imagegen edit, zero repairs; original wide image and square master retained. This selects a thumbnail asset, not a betting feature or application deployment.
+
 ### G3 session continuity
 
 Before resuming G3 round two, read the existing register's
@@ -64,7 +80,22 @@ forecast engine. Clearing chat selects no implementation or release endpoint.
 The [G3 workspace rule](2026-10-09-110145-general-round-two.md#round-two-working-directory--owner-decision)
 places implementation in G3's assigned round-two worktree. Read shared knowledge
 from the authoritative root; update shared coordination there and return to the
-G3 worktree for implementation. Its exact path/branch remain to be assigned.
+G3 worktree for implementation. The October 9 startup assigned
+`/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2` on fuchitalee,
+branch `feat/g3-round2-chart-engine`; the workspace rule links its selected
+round-two plan. The first bounded scope is B2-G3-01/02 chart settings and reuse.
+
+### Official-company session continuity
+
+Before resuming related work, read the index's
+[official-company operating handoff](2026-09-30-104924-general-launch-index.md#official-company-operating-handoff--october-9).
+It carries the owner-identified personal-account removals/suppression, remaining
+list upload, frozen collection/classification audit, proposed pacing/lock work
+and machine-local evidence to preserve. These remain separate from the closed
+company-extraction release and the new G1–G5 round-two implementation scopes.
+Developing a qualifying offering does not by itself establish official company
+account identity; the three removed personal accounts are negative examples.
+Proposals are not selected implementations or new runtime permissions.
 
 ### G5 session continuity
 
@@ -95,11 +126,113 @@ selected by this continuity note.
 2. Define the editor's rules for choosing a chart and its settings for a content
    item. Specify the **chart-setter** role that sets its variables according to
    that item's subject and claims.
+   **Owner clarification, October 9:** the engine's flexibility serves the
+   Pulse editor, who can change any relevant chart parameter to accompany
+   the article. Required illustrative cases include a Mistral release post
+   spike over the appropriate time frame; 90 days of GLM buzz growth comparing
+   5.3 Flash with 5.2; Mistral versus MiniMax post counts over seven days; and
+   the percentage of posts tagged geopolitics across all models over seven
+   days. Subjects/releases, time ranges, grouping, filters, measures and
+   count-versus-percentage calculations therefore cannot be restricted to
+   the existing three-line benchmark release chart. These are illustrative
+   article claims, not verified events or measured conclusions. A geopolitics
+   tag alone does not establish nationalism; denominator/tag interpretation
+   remain to be defined with G2.
+   **Owner workflow direction, October 9:** reject iterative article/chart
+   rewrite loops because refusals, timeouts and accumulating work would grow
+   the queue. The owner proposes Pulse as a **truth-reconciler**: editor finds
+   a newsworthy item; chart-setter combines the evidence; Pulse reports claims
+   matched by our evidence or claims refuted by our evidence. A mismatch becomes
+   the reporting subject rather than triggering repeated attempts to make the
+   article and chart agree. **Owner decision:** publish findings when evidence
+   is incomplete or mixed, explaining what was checked, what it shows and
+   what remains unresolved. Support, contradiction and inconclusive evidence
+   can each produce a finished article; missing data does not establish
+   refutation. **Owner analysis decision:** use one evidence plan per claim
+   with at most **two comparisons**, all chosen before reading
+   results. Consider the set's results without adding cuts to find a favorable
+   outcome. A comparison can contain multiple model series; a separate
+   period or evidence test counts toward the two-comparison cap.
+   **Owner answers to the next batch:** reevaluate the most newsworthy Pulse
+   subject every 15-minute editorial cycle and review the preceding hour.
+   The same subject can remain while it continues to lead; a release with
+   sustained post volume over 48 hours is the owner's example, not a fixed
+   expiry or required duration. Content may change while the subject remains.
+   This describes editorial behavior, not another harvest scheduler.
+   Tagged-post percentages use **all collected relevant posts**, including
+   unclassified posts, as denominator; show classification coverage and
+   distinguish known tag absence from unknown classification.
+   If a planned comparison fails/times out, finish with available evidence
+   and explain the gap instead of adding a retry. Show the main comparison
+   chart and make the second available to open.
+   **Owner major-feature amendment:** model release announcements need a
+   distinct event treatment, particularly announcements by official accounts
+   and also other accounts when they genuinely break the news first. Show
+   a prominent vertical line on the chart with an annotation identifying
+   the release/source/time. Singular announcement posts must remain visible
+   even when surrounding discussion volume is large. This selects an event
+   layer, not a volume threshold for identifying announcements. First-report
+   versus confirmed-release handling, counting announcement posts in the
+   volume denominator and treatment of other official posts remain open.
+   **Owner editorial selection decision:** the model exercises editorial
+   judgment from supplied evidence, through a short role prompt:
+   "Based on this evidence, you are the editor of a major news organization.
+   run the story". This governs initial Pulse selection and later subject
+   retain/replace decisions. It does not select a highest-volume rule or a
+   hand-built newsworthiness score. Preserve the owner's short prompt;
+   evidence input packaging remains to be defined with G2. Execution time
+   budgets and writer-failure handling remain open.
+   **Final owner decisions, October 9:** credible breaking reports may run
+   while unconfirmed, with that status visible. Reassess every15minutes but
+   publish only when news or findings meaningfully change. Show dated
+   updates/corrections and retain accessible earlier wording. Build a working
+   local version for owner review; this grants no production delivery.
+   **G3 local implementation receipt, October 9:** B2-G3-01/02 now have a
+   [working four-example review](http://100.102.74.50:8767/pulse/) and
+   [implementation/verification record](/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
+   Delegated choices: unique announcement posts also count in totals; verified
+   official announcements and genuine original first-known reports receive
+   separate markers, with source time/precision/status and coverage limits.
+   One persisted comparison plan, no retries/recuts, bounded calls, all results
+   to writer, and terminal writer failure preserving prior editions are implemented
+   behind disabled-by-default `PULSE_CHARTS_ENABLED`. Saved chart data/settings,
+   locale and edition history are immutable; explicit live refresh returns a
+   separate result. Local examples are hypothetical and writing replies are
+   deterministic; this does not evaluate native writing quality or activate
+   production. G4 sharing, G5 embedding and B2-G3-03 remain separately owned.
+   **Superseding owner direction, October 9 evening:** Chatter reports actual
+   events; Pulse becomes prediction-led reporting. Its chart engine must both
+   track existing variables and predict them forward. After a prediction,
+   an auditor publishes actual outcome versus the original prediction.
+   The owner requests brainstorming whether Pulse editor or chart editor
+   originates the prediction/speculation; this ownership remains open.
+   Existing statistical forecast design now informs the Pulse contract;
+   historical chart/reconciliation tests do not prove forecasting accuracy.
+   Prediction formulation, measurable target/deadline, evidence challenge,
+   forecast computation and outcome audit are being separated as design
+   responsibilities in the existing G3 plan. This grants no new forecast
+   implementation, collection, scheduling or deployment authority.
+   **Owner learning amendment, October 10:** Pulse should recursively learn from
+   its audited predictions. The owner suggests classifying Pulses into buckets
+   and normalizing/abstracting their lessons for the next prediction, and requests
+   Firecrawl research into reusable open-source implementations. Learning purpose
+   is selected; exact taxonomy/library choices remain proposals. G3 recommends
+   evidence-linked, versioned lessons plus separately evaluated numerical learning,
+   using resolved outcomes, compatible targets and information available at each
+   forecast cutoff. The [research and proposal](/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/analysis/2026-10-10-084801-g3-pulse-learning-open-source-research.md)
+   distinguishes ACE/LangMem memory, GEPA optimization and Metaculus calibration
+   from demonstrated prediction improvement. No learner/forecast implementation,
+   model trial, new collection, scheduling or release is selected by this research.
+   G2 owns editorial
+   interpretation/writing, G3 valid calculation/settings and evidence output.
 3. Make a chart shareable with its settings intact. Coordinate the saved chart
    state with the content's permanent identity and language.
 4. Accompany **every content item** with an image or video. The owner-specified
    fallback order is a relevant person's picture when available, then the
    source post author's profile picture, then the relevant company logo.
+   **October 9 shared-component clarification:** G4-R33 makes photos subject-based;
+   use an author's profile only when that author is describing themselves and
+   is the subject. G1/G5 must apply this boundary to the reusable shared unit.
 5. Establish a graphicsed guide for selecting and creating assets. The handling
    of multiple source authors and the last fallback when all three choices are
    missing need decisions; a generated or branded title card is a proposal,
@@ -395,9 +528,47 @@ comprehensive requirement with a convenient subset.
   abbreviations, and industry terminology with the New York Post's irreverence,
   directness, and attention-getting writing, without excessive clickbait.
 - **G2-R02:** Use Togetter as a reference for Japanese headlines.
+  **October 9 round-two trial selection:** the owner selects **東スポ** and
+  **RocketNews24** for the two saved Wang/Le Chonk stories, with `gpt-6.1-sol`
+  at high reasoning and `gpt-6-sol` at medium reasoning. Optimize the outcome
+  independently for each publication. **Latest owner correction:** the first
+  prompt is only the editor-role sentence, with actual source material supplied
+  separately; apply the same bare-first rule to RocketNews24 and both Chinese
+  voices. Add embellishments only in a later requested round if necessary; no
+  automatic refinement. Follow the detailed saved NYPost tests and preserve each
+  original output. Reproduce native Japanese editorial styles rather than New York Post
+  style or English puns. Recreate Chatter on a standalone page's left side;
+  replace the Pulse area with a precise Japanese explanation and story context
+  for native speakers who do not follow the AI industry. Deliver to the owner's
+  local browser. This does not select production locale activation.
 - **G2-R03:** Research an appropriate Chinese voice that triangulates between
   the Variety and New York Post directions. Do not assume a literal translation
   of the English style resolves this requirement.
+  **October 9 round-two trial selection:** the owner explicitly delegates the
+  equivalent Simplified Chinese work to a subagent, using **metro dailies**
+  (Southern Metropolis Daily, Information Times and related high-energy
+  human-interest/social-drama coverage) and **WeMedia / WeChat official
+  accounts (Zimeiti)** (sensational, suspenseful smartphone-sharing headlines).
+  Use the same stories/models and local Chatter/explanation page format in
+  Chinese; optimize the native styles independently while preserving evidence,
+  attribution and uncertainty. Neither outlet inspiration nor trial authority
+  permits invented scandal, testimony or publication by those outlets.
+  **October 9 initial-trial receipt (G2-R02/R03):** four bare-role responses per
+  language are preserved and displayed, with earlier detailed runs unselected
+  and no refinements. Both native-language review pages were browser-verified
+  and opened in the owner's Chrome. [Japanese detailed record](../analysis/2026-10-09-160500-g2-ja-voices-review/2026-10-09-161500-review-record.md)
+  and [Chinese detailed record](../analysis/2026-10-09-zhcn-voices-review/2026-10-09-160653-review-record.md)
+  retain exact instructions, evidence, raw text, usage and limits. Native-reader
+  judgment, prompt embellishments and house-voice/production selection remain
+  pending; rendering checks do not qualify the writing.
+  **Later October9 owner continuation:** rerun both languages with every role/packet prose passage localized, preserving exact proper identifiers and original image with translated transcripts. New pages opened in a new Chrome window; owner requests very short above-the-fold explanations and the correct visible Chonk image on latest zh-cn. Both delivery requirements are verified. Actual earlier/native drafts were evaluated as editorial outcomes, with mixed preferences rather than a language-only causal claim; see the [current plan/evaluation receipt](../plans/2026-10-09-064803-feat-g2-round2-voices-plan.md). Native-reader qualification remains pending.
+  **Further October9 owner continuation:** try DeepSeek for both languages using the same fully local role/packet prose and four existing voices. The owner names “4.1pro”; the authenticated live catalog and official documentation list V4 Pro and V4.1 Flash only. Owner resolves the choice to **V4 Pro/high**, exact API ID `deepseek-v4-pro`, with the native photo transcript because Pro has no vision input. Preserve prior drafts. Four usable responses intended; the first Japanese call exhausted12,000 tokens in reasoning with no final article. Runtime allowance repaired to64,000 for Japanese, with one bounded recovery (five physical calls maximum/USD0.75 reservation), no prompt embellishments or editorial refinements. Latest local pages/browser delivered:three drafts and one Rocket refusal, all unchanged, with separate factual notes; JA36/CN18 browser cases pass. Previous GPT outputs/media and native-reader qualification preserved.
+  **Claude continuation October9:** owner selects Fable5.1/Opus5.5 at xhigh, fully native JA/CN plus English NYPost bare-role inputs for the same two stories. Final owner selection is exact CO2_NEW credential/workspace [private workspace identifier], replacing prior CO_NEW/Default; earlier routing/pre-request stops are preserved, zero writing calls on those pairings, no fallback. Ten calls maximum/64k output cap/USD30 conservative reservation; no refinements/retries/substitution. Extend local pages and browser review only, retain originals and Chinese official cat image. DeepSeek comparison complete: GPT6.1 stronger overall, DeepSeek WeMedia cadence promising but invented quote interpretation; no Rocket draft to assess. Native-reader acceptance remains pending. All10 calls completed normally with exact models/xhigh, zero retries; additive JA/CN five-model and EN two-model pages delivered in existing owner Chrome window. JA60/CN30combinations+60stories/EN12 checks plus raw/media/abovefold/preservation pass; original source/raw text retained. No native house-voice acceptance or production activation. DeepSeek-versus-GPT evaluation and complete receipts are linked in the same round-two plan.
+  **October9 editorial selection receipt:** the owner requests Claude JA/zh-cn evaluation, then the best actual specimens across all five tested models and earlier/native GPT variants. One bounded comparison of28selected replies, zero new generation or copy/page/browser edits. Agent overall preference is GPT6.1 Sol/high in both languages: earlier ToSpo both, native Rocket Wang/earlier Rocket Chonk; earlier Chinese6.1 Metro Wang/WeMedia both, earlier6Sol medium Metro Chonk. Chinese WeMedia Wang's luxury-discovery headline requires correction before final use. These are editorial picks for reader review, not owner acceptance or a production model/locale change. Claude and all-model detailed assessments are linked in the same round-two plan; saved sources/drafts/pages remain unchanged. The new English packet is related evidence with added context, not an identical round-one replay.
+  **October9 combined-review continuation:** owner requests one HTML with EN-versus-local prompt toggle. Completed combined JA/zh-cn/English page contains30existing replies and eight saved editorial picks, with output language/voice/model/story controls. EN/mixed indicates earlier source inputs; Chinese earlier role sentences were already Chinese. DeepSeek/Claude JA/CN EN-input states are explicitly untested, English is English-input only. Exact drafts/materials/media retained; portable HTML includes all text/images/video.252desktop/phone states, all best-pick transitions/reloads and media/download checks pass;64protected files unchanged. Combined page observed active in new Chrome tab919891953 of existing owner window919891824, four other tabs/URLs preserved. Same plan links receipt; no new generation, earlier-page rewrite, application/release or production voice activation.
+  **October9 Flash/max continuation selected:** owner requests DeepSeek V4.1 Flash at max with mostly English prompts. Authenticated direct catalog and official API docs verify alias `deepseek-flash`, current V4.1 Flash mapping, literal max effort and vision support. Five bounded first calls:JA ToSpo/Rocket,zh-cn Metro/WeChat,EN NYPost, each with both stories, existing English packet and original Wang image. English role sentence specifies output language; no added style/examples/schema/refinement.131072output tokens/call, concurrency2,USD1ceiling (USD0.816432 peak reservation), zero retries. Exact DEEPSEEK_API_KEY only, no fallback. Add new replies to combined page as EN-input specimens; preserve old snapshot/raw/media and best picks, keep untested local states explicit. Local browser endpoint only; no production model/locale/configuration activation. Completed five normal exact-alias replies:JA/CN each both stories, EN Wang only with Chonk omission displayed; zero retries/refinements. Combined35replies/six models and306browser states pass, prior30replies/media/best picks and64old protected files unchanged. Existing owner Chrome tab refreshed; six other tabs preserved. Owner-requested evaluation now complete:Flash improves on Pro attribution/coverage, but existing JA/CN GPT favorites remain. Chinese shared framing/ending asserts unconfirmed deliberate meme naming despite body qualification; EN Wang is readable but weaker than current Opus preference, Chonk absent. All35replies/page/picks unchanged, zero new generation or edits. Native-reader acceptance remains pending; same round-two plan links trial and evaluation.
+  **October12 owner lock:** after the Flash comparison, the owner says “let's lock these in going forward.” Forward editorial defaults are **GPT6.1 Sol/high for Japanese and Simplified Chinese** and **Opus5.5/xhigh for English NYPost**, based on the current English Wang preference. Preserve ToSpo/RocketNews24 and metro/WeChat as the tested reference families, with independent native expression. Preserve exact selected examples:earlier ToSpo both, native Rocket Wang/earlier Rocket Chonk; earlier Chinese6.1 Metro Wang/WeChat both, earlier6Sol/medium Metro Chonk as the specific saved-story exception. This exception is not an automatic routing policy for future subjects. Known factual repairs remain required before final use, particularly the Chinese WeChat Wang luxury-discovery headline and unsupported “没人问”. This settles forward choices without claiming native-reader certification; native feedback does not automatically reopen model comparison. Future locale-binding implementation must use these decisions. This capture changes no live provider/model/locale configuration and selects no release.
+
 - **G2-R04 (clarified by the owner on 2026-10-05):** Apply the editorial voice
   to general-page headlines and bylines, and to editorials, summaries, and
   other editorial writing built from one or more post-level commentaries,
@@ -865,6 +1036,26 @@ comparisons. G3-R13 and R15–R28 record this owner-selected direction;
 G3-R12 retains the
 implementation hold while the independent benchmark work proceeds.
 
+### Independent fork research — company prospects (October 12)
+
+The owner frames the opportunity as foreign followers of Chinese AI models
+wanting financial participation in their success, and describes prediction
+markets as, in a sense, a proxy for the companies' stock prices. This expands
+the fork's research lens from product releases to company prospects: products,
+staff moves, leadership, funding, partnerships, strategy and commercial traction.
+Treat attention-to-trading conversion and the unmet-access need as demand
+hypotheses. Existing equity exposure must be checked by company and intended
+audience; a prediction contract does not automatically confer company ownership
+or track its share price.
+
+Research must distinguish a development used as evidence from the measurable
+future outcome a contract settles on. Staff and strategy may inform commercial
+or product outcomes without every personnel announcement becoming a market.
+Assess resolvability, audience demand and incremental value over reading the
+same X posts separately. This is independent research framing; the original
+G3 release/database reconciliation and its selected plan remain separately
+owned. No implementation, listing submission or trading is selected.
+
 ### Owner requirements
 
 - **G3-R01:** Each headline on the general page needs an icon through which a
@@ -1134,6 +1325,50 @@ available external market, and poll participation does not guarantee a listing.
 
 ### Proposed first step and completion evidence
 
+**Owner priority, October 11:** before experimenting with prediction/recursive
+learning, establish reliable relevant model-release capture and categorization.
+**October 12 route selection:** start from the 21 tracked brands and their
+current product families, then verify releases within them. MiniMax M, Z's GLM
+and DeepSeek V4 are the owner's starting examples. The practical family-first
+route replaces a universal all-data/perfect-detector starting scope. Use existing
+product identity/group/source evidence and keep uncertain family mappings visible;
+family labels do not automatically confirm launches or justify new collection.
+[Initial 21-brand register](/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/analysis/2026-10-12-091100-g3-tracked-brand-family-register.md)
+is a draft built from source-qualified roles, existing catalog and narrow primary
+checks for the three seeds. It does not certify every brand's active lineup.
+
+**Current bounded inventory, October 12:** the owner selects DeepSeek, MiniMax,
+Qwen/Alibaba, Z.ai, Mistral, Kimi/Moonshot, StepFun, inclusionAI/Ant, MiMo/Xiaomi,
+Hunyuan/Tencent, NeMo/Nemotron/NVIDIA and Llama/Meta, with release dates limited
+to the rolling past sixty days. Include any model, agent, harness or other AI
+product from those companies, rather than relying on loosely named tracked
+brands or existing product types. Include public anonymous/quiet testing through
+OpenRouter/OpenCode or similar platforms. Keep public test date, known identity/
+reveal time, named launch and API/weight/code availability distinct; source
+revision time and later identity research do not prove historical public access.
+[Working release inventory](/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/research/2026-10-12-093516-g3-sixty-day-product-releases.md) records159 dated entries with qualified
+artifact/boundary dates and explicit source/owner gaps. It does not certify
+complete recall or write production data. The five proposed product kinds are
+model-llm, model-other, agent, harness and other; current Product.type still
+combines agent/harness, so category integration remains later scoped work.
+This replaces the aborted all-release-tagged-post scan and earlier three-family
+pilot cap for the current task. Next compare these expected milestones to
+retained Posts and ModelRelease/Evidence, preserving anonymous identity and
+prediction knowledge cutoffs.
+
+**HF monitoring direction, October 12:** the owner requires close monitoring of confirmed HF company accounts and their repositories to obtain an informational edge for readers. Keep X announcement, first recorded HF repository/weight revisions, public download availability and GitHub repository creation as separate clocks. The [three-date comparison](/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/research/2026-10-12-132932-g3-x-hf-github-release-dates.md) provides 19 repository histories, flags metadata-only first commits and shared GitHub code, and retains source gaps. Read-only live inspection confirms the current daily HF counter job covers only DeepSeek V4.1 Flash/GLM 5.3 Flash and two publisher accounts, collecting downloads, optional all-time downloads, likes and followers at 19:00 JST. Rich catalog refresh is manual; neither route continuously watches all tracked publishers for new repositories/weight files. Discovery/revision monitoring, polling frequency and implementation remain later scoped work; this direction grants no new provider batch, collection activation or deployment.
+
+Inspect testing-era post gaps and consider retrospective recovery; the owner
+has not selected a retrieval horizon or a new paid collection batch.
+[Read-only G3 audit](/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/analysis/2026-10-11-062415-g3-x-post-coverage-and-release-readiness.md)
+separates collection counts, classification provenance and source-backed release
+review. August 17 is a provisional collection triage boundary, not a guaranteed
+complete corpus; July/August labels lack versioned states and all 155 structured
+release candidates remain pending review at observation. Define and verify an
+eligible release/outcome cohort before treating it as training evidence. The
+existing G3 round-two plan records this ordering; no repair/backfill is executed
+by the audit, and the retained local chart work remains independently verified.
+
 After the benchmark dependency is ready and G3 implementation resumes, exercise
 one product or topic through the engine's actual integration: retrieve dated
 comparisons, supply the evidence available at a stated cutoff, save an estimate
@@ -1208,12 +1443,12 @@ timelines, reader forecasts, and eventual matching to external contracts. It
 records current collector boundaries and source definitions. Its question model,
 visual layout and sequence remain proposals, not additional owner decisions.
 The owner's later G3-R10 direction selects polls as a means of building demand.
-The [October 7 partnership assessment](../analysis/2026-10-07-104452-g3-market-partnership-selection/README.md)
+The [October 7 partnership assessment](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-07-104452-g3-market-partnership-selection/README.md)
 recommends Kalshi as the first working target under G3-R14, using a small
 information/distribution pilot and reviewable market candidates. It distinguishes
 public builder invitations from measured acceptance odds and an actual listing
 agreement; this recommendation is not an approved partnership.
-The [provider comparison](../analysis/2026-10-05-170409-g3-market-listing-and-order-parameters.md)
+The [provider comparison](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-05-170409-g3-market-listing-and-order-parameters.md)
 separates market proposals from order placement, records the current public
 requirements and identifies exact leaderboard settings as part of the contract.
 
@@ -1250,6 +1485,16 @@ Final product decisions belong in the task plan before implementation.
 
 ## G4 — Public API and MCP
 
+**Current round-two scope:** homepage/Pulse snapshot sharing and reviewed X
+distribution, B2-G4-01/02. The [selected successor plan](../../.worktrees/feat/g4-mcp/docs/plans/2026-10-09-091151-feat-g4-round2-sharing-plan.md)
+consolidates G4-R08–R34 in the existing `.worktrees/feat/g4-mcp` directory on
+`feat/g4-round2-sharing`, base `7c426c3a`. Requirements are consolidated and the
+owner-selected U1/U2 local prototype is [ready for review](http://fuchitalee:60423),
+using labelled example data. Real site integration, durable snapshots, GIF/video
+exports and X posting remain unimplemented; layout selection and upstream
+interfaces are pending. The closed Round 1 MCP draft remains source material,
+and B2-G4-03 stays carried forward. Delivery remains `on-request`.
+
 ### Owner requirements
 
 - **G4-R01:** Provide a way for users to connect agents to PushinWeight through
@@ -1278,6 +1523,212 @@ Final product decisions belong in the task plan before implementation.
   alternatives to PostHog; no vendor is selected by that comparison. Agent
   private-scenario writes and interest actions remain explicit design choices;
   planning does not authorize analytics installation or G3 activation.
+- **G4-R08 (owner sharing decision, 2026-10-09; round two):** A shared
+  story/chart opens exactly what the sender saw: the same content edition,
+  language, chart settings and saved data. Use this fixed snapshot as the
+  default shared view; opening it must not silently substitute newer content
+  or chart data. Live exploration is selected under G4-R12; G4-R20 selects snapshot-only
+  links for the first version. This requirement concerns
+  website sharing; existing API/MCP disclosure rules remain distinct.
+- **G4-R09 (owner recipient-access decision, 2026-10-09; round two):**
+  Recipients can open shared website content/chart links without signing in.
+  Optional X connection when posting is selected under G4-R16; API/MCP
+  authentication and permitted-output decisions remain separate.
+- **G4-R10 (owner time-window exploration, 2026-10-09; round two):**
+  Sharing may concern either the existing homepage activity line chart or the
+  new Pulse chart. Explore a time slider that moves a selected window backward
+  through history and adjustable durations such as one, two or three hours,
+  beyond the existing day presets. Also assess rolling windows that advance
+  with current time. The Mistral two-hour post spike is the owner's example of
+  the view to preserve. G3 owns chart settings, calculation and controls; G4
+  preserves the chosen view for sharing. Keep selected display ranges distinct
+  from source measurement windows and resolution. Detailed control design
+  remains open; recipient interaction and Live mode are selected under
+  G4-R11/R12. This discussion selects no implementation.
+
+- **G4-R11 (owner recipient-interaction decision, 2026-10-09; round two):**
+  After opening the shared view, recipients can move and resize the chart time
+  window. Provide a “Reset to shared view” action that restores the sender’s
+  saved settings and plotted data. Exploration changes the recipient’s working
+  view; preserve the original shared snapshot. This applies to both chart types
+  under G4-R10, respecting their actual measurement resolution.
+
+- **G4-R12 (owner Live-mode decision, 2026-10-09; round two):** Both
+  chart types offer a Live mode that advances the selected window with current
+  time, for example the latest two hours where measurements support that
+  resolution. Moving the window into the past pauses Live mode. Shared links
+  still open at the sender’s saved view under G4-R08/R20. Live refresh cadence
+  and detailed controls remain open; first-version links are snapshot-only.
+  This mode does not manufacture finer source measurements.
+
+- **G4-R13 (owner share-creation access decision, 2026-10-09; round two):**
+  Visitors can configure a chart and create its share link without signing in,
+  as well as open shared links anonymously under G4-R09. This selects access to
+  website link creation; X account connection and posting follow G4-R16.
+  Shared output still uses the selected saved-view behavior.
+
+- **G4-R14 (owner X media-sharing preference, 2026-10-09; round two):**
+  X sharing includes a chart image and the link to its interactive saved view;
+  an animated GIF or video is preferred over a static image. Keep the selected
+  language and saved chart state consistent across media and linked view. Exact
+  format and duration remain to be chosen; animation and publishing behavior
+  are selected under G4-R15/R16. This requirement grants no external upload
+  or post authority.
+
+- **G4-R15 (owner animation decision, 2026-10-09; round two):** Draw
+  the chart lines progressively across the selected time window, then pause
+  on the complete chart. Render the same saved series, settings and language
+  used by the linked view. Respect source resolution and unavailable points;
+  presentation playback does not add measurements. Total duration, final hold
+  time, loop behavior and exact file format remain open.
+
+- **G4-R16 (owner X publishing-flow decision, 2026-10-09; round two):**
+  Users connect X when choosing Post to X, then review the media and post text
+  and explicitly confirm publication inside PushinWeight. Also provide a media
+  download route for manual posting. X connection is optional for website use
+  and anonymous share links; this selects product behavior, not authority for
+  this agent to connect an account, upload media or publish a post.
+
+- **G4-R17 (owner caption-model selection, 2026-10-09; round two):**
+  Generate an editable suggested share caption using `dsv4-0731` from
+  DeepInfra. The existing project binding is
+  `deepseek-ai/DeepSeek-V4-Flash-0731` in root `config.yaml` and
+  `x_monitor/deepinfra.py`; use the selected provider/model explicitly, without
+  substituting an OpenRouter or other-provider route. This is a local identity
+  check, not a fresh provider-availability or caption-quality test. Caption
+  here means the accompanying editable X post text. G4-R25 requires existing
+  atomic commentary or the established Chatter/Pulse voice as its source; do
+  not invent another voice. G4-R30 selects DeepInfra only for shortening longer existing copy for X. Prompt, generation trigger, exact quotas
+  and cost bounds remain open; generation limits/reuse are selected under
+  G4-R23. No paid request is authorized by this planning decision.
+
+- **G4-R18 (owner shared-unit decision, 2026-10-09; round two):**
+  A story and its chart are one shared content unit, as displayed in Pulse.
+  Keep them together on the shared destination with their selected edition,
+  language and chart state. A homepage chart without an attached story can
+  have a standalone shared destination. G4-R22 selects combined headline,
+  excerpt and chart with a supplied sketch as design direction; detailed card
+  composition remains open. Do not split a story-associated chart from its story.
+
+- **G4-R19 (owner discoverability decision, 2026-10-09; round two):**
+  User-created shared views are accessible through their links only; do not
+  add them to a public gallery or site search. Anyone with a link can open it
+  under G4-R09. This does not change discovery of the underlying published
+  content or promise access-controlled privacy.
+
+- **G4-R20 (owner first-version sharing scope, 2026-10-09; round two):**
+  Share saved snapshots only. Do not offer a first-version share link that
+  opens directly as an updating Live chart. Recipients can switch into Live
+  exploration after opening the saved view under G4-R11/R12, and reset to
+  the saved view. This retires the open live-link choice for the selected scope.
+
+- **G4-R21 (owner first implementation scope, 2026-10-09; round two):**
+  Start with homepage charts and Pulse story/chart units. Other General
+  sections and the inherited API/MCP scope remain carried forward; they are
+  not silently included in this first sharing implementation.
+
+- **G4-R22 (owner export composition and sketch, 2026-10-09; round two):**
+  Show the headline, a brief story excerpt and the animated chart together,
+  with the complete story available through the link. Use the supplied October 9
+  17:28:41 sketch as a layout direction to develop: a left author-details rail,
+  adjacent Asset and Content areas, share/download controls at upper right,
+  and post details below. The exact author identity, Asset contents, footer
+  symbols and surface reuse are clarified by G4-R26–R29. Pulse can use a
+  different layout; exact dimensions and detailed author/classification
+  presentations remain open. The sketch does not change API/MCP output policy.
+  The original supplied image lives on allenwlee; a read-only review copy is
+  retained in the existing G4 worktree under
+  `.context/g4-round2/owner-sketch-2026-10-09-172841.png`.
+
+- **G4-R23 (owner generation-limit decision, 2026-10-09; round two):**
+  Apply limits to new caption/video generation for anonymous visitors and
+  reuse existing exports whenever possible. Define actual limits, identity/
+  abuse handling, cache identity and shared provider/concurrency/spend bounds
+  in the implementation plan. No numeric quota or paid trial is selected here.
+
+- **G4-R24 (owner correction-notice decision, 2026-10-09; round two):**
+  If the underlying story or chart data is corrected, show a correction notice
+  on the saved share linking to the updated version while preserving its
+  original chart. A correction must not silently replace the saved chart.
+  Existing source-use and withdrawal rules still apply to delivery.
+
+- **G4-R25 (owner text/voice clarification, 2026-10-09; round two):**
+  Single third-party posts use their already generated commentary. Chatter and
+  Pulse already have their established original-content voice. Preserve those
+  source texts/voices rather than introducing a new caption voice or writer.
+  G4-R30 selects the DeepInfra model only to shorten longer existing copy for
+  X; sharing does not generate fresh articles or commentary.
+
+- **G4-R26 (owner author-details boundary, 2026-10-09; round two):**
+  Do not mention author names or handles in the shared component’s author rail.
+  Show specifics such as follower count, language and country instead. Do not
+  substitute the PushinWeight byline for the source account; neither named
+  identity was selected. G4-R31/R33 settle per-source metadata and subject
+  images; observation-time display and missing values remain to be defined. This does
+  not promise anonymity when source links can identify their accounts.
+
+- **G4-R27 (owner Asset-area clarification, 2026-10-09; round two):**
+  The shared unit can include all of its relevant assets: image, video and
+  chart. Do not treat Asset as an exclusive choice between these. Pulse items
+  with a chart may need a different layout from the supplied basic sketch.
+  G1 retains asset selection/provenance, G3 chart semantics, and G5 site
+  integration; G4 owns preserving/exporting the agreed unit.
+
+- **G4-R28 (owner classification presentation, 2026-10-09; round two):**
+  For atomic posts, the bottom details show saved classifications. For an
+  aggregated OriginalContent item, show source-classification percentages,
+  for example 50% of its four sources have a classification. Exclude
+  product-type classification from this shared/public component; that dimension
+  is reserved for the future lab-focused Product offering. Use actually cited
+  source posts, keeping counting units and classification provenance explicit.
+  G4-R32 selects the dominant-percentage summary and full detail; duplicate
+  sources, multi-label totals and exact provenance binding need a contract. Do not infer classifications from dates or
+  retrieval-only background, or represent these shares as forecast probabilities.
+
+- **G4-R29 (owner component-reuse boundary, 2026-10-09; round two):**
+  Reuse the shared content-unit component across OriginalContent kinds and
+  locations on the site, with content-type/layout variants. Pulse is slightly
+  different; do not enforce identical layout across every content kind or
+  placement. Atomic-post behavior under G4-R25/R28 remains in the component
+  contract even though first sharing implementation is homepage plus Pulse.
+  G4-R34 selects bounded presentation with scrolling for long text; exact
+  heights/excerpt limits and responsive compositions remain open. Coordinate
+  G5-owned site modules before overlapping edits.
+
+- **G4-R30 (owner X-copy adaptation decision, 2026-10-09; round two):**
+  Reuse existing copy directly when it fits the X post. Use the selected
+  DeepInfra `dsv4-0731` only to shorten longer existing text, preserving its
+  existing voice and factual content. Keep the result editable before posting;
+  shortening is not fresh commentary or article generation.
+
+- **G4-R31 (owner aggregate-author presentation, 2026-10-09; round two):**
+  For Chatter/Pulse with multiple sources, provide expandable anonymous entries
+  such as Source 1 and Source 2, each with its source author’s follower count,
+  language and country. Do not combine follower counts across authors. Preserve
+  source-to-entry association without exposing names or handles.
+
+- **G4-R32 (owner compact classification display, 2026-10-09; round two):**
+  On the classification bar, show only the largest source percentage and its
+  classification; users can click for the full breakdown. Count genuinely cited
+  atomic source posts, preserving missing/unclassified coverage in detail and
+  excluding product type under G4-R28. The latest answer selects compact
+  presentation rather than showing every percentage on the bar; exact tie and
+  multi-label presentation can be resolved in the component contract.
+
+- **G4-R33 (owner subject-photo rule, 2026-10-09; round two):**
+  Accompanying photos are based on the content’s subject, not its author. Use
+  the author’s profile photo when the author is describing themselves and is
+  therefore the subject. Do not apply an unconditional source-author profile
+  fallback to this component. Coordinate this clarification with G1’s asset
+  rules; it does not authorize name/handle display in the author rail.
+
+- **G4-R34 (owner long-text presentation, 2026-10-09; round two):**
+  Keep complete saved story/commentary available, with bounded initial visible
+  text. Very long text must remain readable by scrolling to finish; visual
+  truncation is not removal of the remaining body. Feed/export excerpts stay
+  bounded; interactive card/shared-page presentation must retain a route to
+  the complete pinned text. Exact viewport heights and excerpt limits belong
+  in the prototype/implementation contract.
 
 ### Proposed first step and completion evidence
 
@@ -1335,7 +1786,7 @@ remain to be specified. Redaction alone is not a compliance determination.
   post-level commentary and one voiced headline with media per 15-minute boundary.
 - **G5-R06:** Keep the maintained prototype, uploaded sketch, reference images
   and asset provenance in the repository's existing ideation area. The
-  [G5 design reference](../ideation/2026-10-01-190859-g5-general-homepage.md)
+  [G5 design reference](/Users/fuchitalee/development/pushin-weight-v2/docs/ideation/2026-10-01-190859-g5-general-homepage.md)
   identifies the current files and distinguishes them from the original local
   prototype run. Sample stories, personnel and chart values are not production
   facts or evidence that integration is complete.
@@ -1572,7 +2023,7 @@ independent but places final integration/completion after G1, G2, G3 and G5.
 
 ## Homepage design carried forward into G5
 
-The [maintained G5 design reference](../ideation/2026-10-01-190859-g5-general-homepage.md)
+The [maintained G5 design reference](/Users/fuchitalee/development/pushin-weight-v2/docs/ideation/2026-10-01-190859-g5-general-homepage.md)
 links the current prototype, original sketch and visual references. The owner
 expects continuous revision. G5-R19 replaces the earlier Polymarket styling
 instruction with an independent identity suited to a prospective partner.
@@ -1608,12 +2059,12 @@ Language controls currently demonstrate navigation labels only.
 ## Source map
 
 - [General Launch Index](2026-09-30-104924-general-launch-index.md)
-- [Longitudinal and agentic-media research](../research/2026-09-28-111844-agentic-ai-media-advantages.md), especially section 4 and Appendix A.
-- [TwitterAPI.io compliance materials](../external_vendors/twitterapi_docs/compliance/)
-- [X compliance materials](../external_vendors/x_twitter/compliance/)
-- [G5 maintained design reference](../ideation/2026-10-01-190859-g5-general-homepage.md) — current prototype, source sketch, provenance and iteration boundaries.
-- [First-screen prototype](../ideation/mockups/2026-10-01-190859-g5-general-homepage/01-above-the-fold/screens/index.html) — maintained in place as the design evolves; sample data.
-- [Original prototype decisions and limitations](../ideation/mockups/2026-10-01-190859-g5-general-homepage/decisions.md) — preserved September 29 evidence, not the current G5 decision record.
+- [Longitudinal and agentic-media research](/Users/fuchitalee/development/pushin-weight-v2/docs/research/2026-09-28-111844-agentic-ai-media-advantages.md), especially section 4 and Appendix A.
+- [TwitterAPI.io compliance materials](../external_vendors/twitterapi_docs/compliance)
+- [X compliance materials](../external_vendors/x_twitter/compliance)
+- [G5 maintained design reference](/Users/fuchitalee/development/pushin-weight-v2/docs/ideation/2026-10-01-190859-g5-general-homepage.md) — current prototype, source sketch, provenance and iteration boundaries.
+- [First-screen prototype](/Users/fuchitalee/development/pushin-weight-v2/docs/ideation/mockups/2026-10-01-190859-g5-general-homepage/01-above-the-fold/screens/index.html) — maintained in place as the design evolves; sample data.
+- [Original prototype decisions and limitations](/Users/fuchitalee/development/pushin-weight-v2/docs/ideation/mockups/2026-10-01-190859-g5-general-homepage/decisions.md) — preserved September 29 evidence, not the current G5 decision record.
 
 - 2026-10-07T15:08:01+09:00 DECISION — official-co-production-20261006 / G1-R16: owner waives human review for verified official HF publishers with own developed/fine-tuned models. Implement evidence-bound automatic approval; other positives remain review-only. Keep independent evaluation/HF checks separate from harvest-locked registration/list writes. Canonical official-co plan U11 updated; direct production authority persists, no schema/taxonomy ownership change.
 

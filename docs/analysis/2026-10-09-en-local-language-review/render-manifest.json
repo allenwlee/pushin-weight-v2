@@ -1,0 +1,8 @@
+{
+  "responses": 2,
+  "wording_edits": false,
+  "raw_sha256": {
+    "claude-fable-5-1": "4965a79f415b3eec5dd8af70ec4bf306225e37f9fdf3ce007baef2746ed45fdd",
+    "claude-opus-5-5": "441ff6104941fb6de68105c486b3fae4fe471851268b53febf0652092feab5cf"
+  }
+}

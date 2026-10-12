@@ -1,0 +1,177 @@
+{
+  "current_url": "http://100.102.74.50:58423/zh-cn/index.html#metro/claude-opus-5-5",
+  "reader_html_sha256": "245bcbb531608c5a9d7fc5998fb23064363a08e6f34e569092b97a1932304572",
+  "served_reader_equals_local_file": true,
+  "current_record": "2026-10-09-182000-claude-xhigh-addendum.md",
+  "physical_claude_calls": 4,
+  "automatic_retries": 0,
+  "refinements": 0,
+  "missing_outputs": 0,
+  "preservation": {
+    "protected_paths": 69,
+    "unchanged_paths": 67,
+    "changed_only_named_and_canonical_reader_html": true,
+    "original_six_display_and_raw_objects_equal": true
+  },
+  "source_sha256": {
+    "packet.zh-CN.md": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df",
+    "wang-original.jpg": "c0ddf32f548686cf725da584b8a253f20f63b2a16f98d9a59ada588d1344538e",
+    "chonk-official-cat-4s.jpg": "c57c5e6cb1937b9a930769088b0f4f929cf56c2192cfd25ea12ecbab8201f1dc",
+    "chonk-source-poster.jpg": "52677b47e8e5fc012f86c20bea53ea6ebb1b165ced6f5fc20606fe2f251c89a3",
+    "chonk-source-video.mp4": "b031bce8370f0694f2f71728a70ba4ddd48c7f05ccab7d41c8a020209d1e716e"
+  },
+  "models": [
+    "gpt-6.1-sol",
+    "gpt-6-sol",
+    "deepseek-v4-pro",
+    "claude-fable-5-1",
+    "claude-opus-5-5"
+  ],
+  "style_model_combinations": 10,
+  "story_headlines": 20,
+  "browser": {
+    "viewports": [
+      [
+        1400,
+        1000
+      ],
+      [
+        1280,
+        800
+      ],
+      [
+        390,
+        844
+      ]
+    ],
+    "switch_cases": 30,
+    "individual_story_cases": 60,
+    "final_content_verbatim": true,
+    "rendered_all_model_words_exact": true,
+    "purpose_bottom_desktop": 596.5,
+    "purpose_bottom_mobile": 695.453125,
+    "media_proof": {
+      "sourcePhoto": {
+        "open": true,
+        "naturalWidth": 864,
+        "naturalHeight": 1200,
+        "src": "wang-original.jpg"
+      },
+      "officialVideo": {
+        "open": true,
+        "width": 640,
+        "height": 360,
+        "duration": 17.136327,
+        "playing": true,
+        "currentTime": 0.161415,
+        "src": null,
+        "poster": "chonk-source-poster.jpg"
+      },
+      "videoPausedAfterClose": true,
+      "cardScrollLeft": 0,
+      "titleX": 48,
+      "cardX": 28,
+      "overflowStyle": "clip",
+      "dialogClosed": true
+    },
+    "reload_cases": 10,
+    "links": [
+      {
+        "url": "2026-10-09-182000-claude-xhigh-addendum.md",
+        "status": 200
+      },
+      {
+        "url": "receipts-with-claude.json",
+        "status": 200
+      },
+      {
+        "url": "../ja/index.html",
+        "status": 200
+      },
+      {
+        "url": "../en/index.html",
+        "status": 200
+      }
+    ]
+  },
+  "new_provider_evidence": [
+    {
+      "style": "metro",
+      "model": "claude-fable-5-1",
+      "raw_response_md_sha256": "22a63b079e469f6be4f47431ebdb6f5a2bd9d76c2e05d89ec1557c95e27a0a2b",
+      "provider_response_json_sha256": "a4276e92176df278c92848616d2c35b71d42fdc50149c2b4d930e41ade0208cb",
+      "sanitized_request_sha256": "98b811e517a97247e2bf281f6d95a63b4d042e95727c7e6c6736f87499be0d6d",
+      "receipt_sha256": "535809b2234e3d5aa2780a7fd855fafb61de1f0915ac766a182b4e3d70efdc4e",
+      "provider_final_content_exact": true,
+      "provider_content_block_types": [
+        "thinking",
+        "text"
+      ],
+      "thinking_exposed_in_reader": false
+    },
+    {
+      "style": "wemedia",
+      "model": "claude-fable-5-1",
+      "raw_response_md_sha256": "a7f89b7913d7614e4c46f25a05369d5a69c7f234649844cd1b8227fda0fe0485",
+      "provider_response_json_sha256": "3fa55e2c1bfe56df9b539a994062c9ac9f79571736fcf84e887e16335f0f1e49",
+      "sanitized_request_sha256": "c2dcdf282e4c5b21b88fc8614a601d01fb0d9ad9e7d331e9c95f5a456ab70b81",
+      "receipt_sha256": "a18b6594d63bda055efde301a94ab5f3bcb0feadf2dcf9828ff8c07bba7b2234",
+      "provider_final_content_exact": true,
+      "provider_content_block_types": [
+        "thinking",
+        "text"
+      ],
+      "thinking_exposed_in_reader": false
+    },
+    {
+      "style": "metro",
+      "model": "claude-opus-5-5",
+      "raw_response_md_sha256": "cab5b9207437e09497ea854d374f4acfe778f3fe3def7bec3d7b392c0afc8178",
+      "provider_response_json_sha256": "991649fb741c8883a2d8475f1ff50d03ca85f5541bbf61c4e4978972fd867ff8",
+      "sanitized_request_sha256": "8194117ace7ef71d080b67fe18e625dafcf01ac6019b001af369c611e61cc01a",
+      "receipt_sha256": "9a11d661371bf894a576f82ac35e621feab059cdf264d57a0aac264856e8d0f1",
+      "provider_final_content_exact": true,
+      "provider_content_block_types": [
+        "thinking",
+        "text"
+      ],
+      "thinking_exposed_in_reader": false
+    },
+    {
+      "style": "wemedia",
+      "model": "claude-opus-5-5",
+      "raw_response_md_sha256": "f9d985aed787d4efb2112b68051b316ab8bfa0b100bdc48d197d2de003d4d4ec",
+      "provider_response_json_sha256": "97c691b979adf8655f0ccbf1f3acb7add7dbe5ceeae4d52e6a94758f326350b9",
+      "sanitized_request_sha256": "9f79fef1e2bb309f7f62abd94ac32b660e38fe7064e41e38372c1044523e0d2c",
+      "receipt_sha256": "b6e9f6d2a8e6775bcc9f437ba12eca3071d411c642e08934bc783fdfa3445ef2",
+      "provider_final_content_exact": true,
+      "provider_content_block_types": [
+        "thinking",
+        "text"
+      ],
+      "thinking_exposed_in_reader": false
+    }
+  ],
+  "private_evidence_root": ".local/g2-claude-local-language-20261009/zh-cn",
+  "public_files_sha256": {
+    "index.html": "245bcbb531608c5a9d7fc5998fb23064363a08e6f34e569092b97a1932304572",
+    "2026-10-09-162800-chatter-zhcn-local-language-review.html": "245bcbb531608c5a9d7fc5998fb23064363a08e6f34e569092b97a1932304572",
+    "samples-with-claude.json": "51c006707416e0c8a2309a37bda99590510174a8a5e97616fdf0382d0884edca",
+    "raw-results-with-claude.json": "111f3650daed9c01b98f374294497e172d60583ef483eae999d53e122e0b335a",
+    "receipts-with-claude.json": "60ffb950a8c9bd999e42795736b1473bb98d7e464aa4a9543163a7fec7654172",
+    "2026-10-09-182000-claude-xhigh-addendum.md": "1cd66ecab1c57854a662bc13b036e7269165bb84b74b4807b5a5407d34a09a72"
+  },
+  "screenshots_sha256": {
+    "screenshots/claude-chonk-mobile.png": "effedba75b0059d85e81e6d4f72bcb790000cbccf96125e069bec66758812e3b",
+    "screenshots/claude-fable-metro-desktop.png": "3d26cd652ae613cac1e02c3aba3ea670cae1b068b8bee4fa86c485849ae7005d",
+    "screenshots/claude-fable-wemedia-desktop.png": "0b074563f49a1c49d7d48e5332a343bf729bded98a3f5a24a23dc7dd61ed04d8",
+    "screenshots/claude-mobile-fold.png": "c7e442d3bd453f70bd45ea00632209499ea67bd6b9c8af6bd867433bde3c3fdf",
+    "screenshots/claude-opus-chonk-desktop.png": "a399308f59c924be841ea8b03f9809bd37f5c41cee0192123d39bb82eb303607",
+    "screenshots/claude-opus-metro-desktop.png": "034ed54f2c9dd14beede12d5626b669f34c09939f6042b25faa362818ce41301",
+    "screenshots/claude-opus-wemedia-desktop.png": "40861da09a58bd6d2473f475fa6bc1b623a83432a6b812b4523ec947c57a218c",
+    "screenshots/claude-opus-wemedia-mobile.png": "0b7ce4b125fb3eeeb7dfb83ec0103476e08a6ac5ceedefcbe8a6fe4d57cbd292"
+  },
+  "billing_receipt_observed": false,
+  "voice_quality_native_validated": false,
+  "wording_edits": false
+}

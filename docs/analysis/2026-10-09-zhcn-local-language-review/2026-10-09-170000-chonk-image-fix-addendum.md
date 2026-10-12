@@ -1,0 +1,11 @@
+# Latest Chinese Chonk image fix
+
+Owner requested the correct image on the latest Chinese page. The previous official-video first-frame poster was a washed-out background beneath article text; it did not clearly show the intended fat cat.
+
+The latest canonical [Chinese reader](http://100.102.74.50:58423/zh-cn/index.html) and named HTML now show the authentic official video frame at4seconds as an independent visible photo. Source: `.local/g2-zhcn-local-language-20261009/chonk-official-frame-4s.jpg`, extracted and inspected by the parent; copied without editing as `chonk-official-cat-4s.jpg`. The frame visibly shows a fat orange cat walking beside an orange4. Chinese alternative text describes that scene; caption is exactly “Mistral官方发布视频第4秒的画面”.
+
+Only Chonk hero media styling/source/alt and the hero footer caption changed. The figure now participates in page layout, preserves the whole image, and has no white gradient or blend effect. Wang imagery and the original Chonk video/first-frame playback poster remain unchanged. Original article text, responses, prompts, packet, model calls and language experiment were untouched; no new model generation.
+
+At1400×1000 the Chonk image is547.015625×300px; at390×844 it is322×181.125px. All four style/model combinations show the correct loaded640px-wide source, nonzero on-screen geometry, opacity1 and no overlay. All raw replies remain exact. Desktop/mobile screenshots were inspected. The compact explanation still ends at596.5px on both tested desktop sizes and695.453125px on mobile; no horizontal overflow. The original640×360 official video still plays for17.136327seconds with its original poster.
+
+[Image fix manifest](image-fix-manifest.json) records current HTML/image hashes, protected source-data/media hashes, per-combination browser checks and fold/playback evidence. [Desktop photo](screenshots/chonk-image-fix-desktop.png), [mobile photo](screenshots/chonk-image-fix-mobile.png), [mobile first screen](screenshots/chonk-image-fix-mobile-fold.png). The earlier verification manifest/screenshots are retained as pre-fix historical evidence; this addendum identifies the new candidate HTML. Parent handles refreshing the owner's Chrome window.

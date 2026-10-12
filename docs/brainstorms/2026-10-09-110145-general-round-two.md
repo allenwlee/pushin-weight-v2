@@ -50,13 +50,28 @@ saved DeepSeek/MiniMax research and explicit coverage gaps.
 
 | ID | Origin | Round-two work | State |
 | --- | --- | --- | --- |
-| B2-G1-01 | New owner priorities; G1-R04; existing G2 picture editor | Every content item receives image/video. Apply relevant-person picture → source author profile picture → company logo; record why the asset fits. Resolve multiple authors and all-fallbacks-missing cases. | Ready to plan |
-| B2-G1-02 | New graphicsed guide; G2-R48 picture modularity | Selection/creation/treatment guidance, reuse/caching, attribution and delivery/export variants. Explicitly hand off G2-owned picture/media files before changes; coordinate with G4 exports and G5 presentation. | Ready to plan |
+| B2-G1-01 | New owner priorities; G1-R04; existing G2 picture editor | Every content item receives image/video. Apply relevant-person picture → source author profile picture → company logo; record why the asset fits. Resolve multiple authors and all-fallbacks-missing cases. | **Owner-assigned October12:** requirements/guide now owned by retained `g2-round2-20261009` session in existing `.worktrees/feat/g2-editorial`; actual module editing ownership must be checked before implementation. G1 staff/acquisition/storage work preserved. No implementation/paid-generation/release claim |
+| B2-G1-02 | New graphicsed guide; G2-R48 picture modularity | Selection/creation/treatment guidance, reuse/caching, attribution and delivery/export variants. Explicitly hand off G2-owned picture/media files before changes; coordinate with G4 exports and G5 presentation. | **Owner-assigned October12:** requirements/guide now owned by retained `g2-round2-20261009` session in existing `.worktrees/feat/g2-editorial`; actual module editing ownership must be checked before implementation. G1 staff/acquisition/storage work preserved. No implementation/paid-generation/release claim |
 | B2-G1-03 | Unfinished G1 identity/acquisition scope and saved dossiers | Remaining portraits, names/roles and wrong-company corrections; remaining selected brands and broader Call A/database staff population; ongoing acquisition/worker activation, budget and coverage decisions. Review/import saved research only within its actual evidence and authority. | Carried forward |
 
 **Apply round-one lessons:** named-block image attribution, separate people/file/
 portrait counts, and real consumer access to shared media. An author avatar
 fallback does not imply the depicted subject has been identity-verified.
+
+### October 12 graphics-editor ownership
+
+The owner selects B2-G1-01/02 for the retained G2 session, while working on
+Pulse/chart decisions in G3. Use the existing G2 worktree/plan and preserve its
+locked writing choices and local evidence; no handoff swap is needed. G1's
+active roster/orientation claim remains in place for identity/acquisition and
+shared foundation. This session owns graphics-editor requirements and guide,
+with module-level editing coordination before code changes. Read both existing
+handoffs for their factual asset/storage/context boundaries. The October9
+“ready to plan” statements below are historical, superseded for B2-G1-01/02.
+
+**Selected default-image direction:** portrait + brand logo + small bilingual name/role inscription; the subject adopts the current meme, with playful and generous treatment. One variant splits portrait-left/logo-right50/50 with an airbrushed transition and a small PushinWeight watermark. First Yan Junjie/MiniMax camouflage-T-shirt image and prompt/record are [saved in the retained G2 worktree](../analysis/2026-10-12-112151-g2-graphics-editor/README.md). One built-in imagegen call, no repairs; actual sourced portrait/logo references,1536×1024 PNG, visual/English-OCR/browser byte checks. Chinese name checked visually. Generated illustration does not replace verified staff photographs; no staff/runtime/release changes.
+
+**Compact companion requested:** owner approves wide graphic and requests face+brand only for a small betting-post thumbnail. Enlarged logo overlaps the face edge, with softened blending and partial logo visibility acceptable. [400×400 PNG and actual48/64/80px square/circle preview](../analysis/2026-10-12-112151-g2-graphics-editor/compact.html) delivered:one further built-in imagegen edit, zero repairs;12browser cases and visual small-size checks pass. Original landscape preserved; no application/betting feature or release change.
 
 ### G1 session-clear handoff — October 9
 
@@ -276,8 +291,8 @@ shared packet preparation and OriginalContent readers/storage.
 
 | ID | Origin | Round-two work | State |
 | --- | --- | --- | --- |
-| B2-G2-01 | Unfinished ja/zh_cn voice scope; new explicit priority | Japanese and Simplified Chinese house voices with source-faithful copy, reviewed examples and bounded evaluation. Use the actual story evidence delivered to the writer. | Ready to plan |
-| B2-G2-02 | New chart-editor/chart-setter priority | Rules for deciding when/which chart supports a content item; produce the settings/evidence request that G3 validates and renders. | Ready to plan |
+| B2-G2-01 | Unfinished ja/zh_cn voice scope; new explicit priority | Japanese and Simplified Chinese house voices with source-faithful copy, reviewed examples and bounded evaluation. Use the actual story evidence delivered to the writer. | Initial and fully target-language Wang/Le Chonk trials delivered: ja 東スポ/RocketNews24; zh-cn metro dailies/Zimeiti; two requested model settings. New pages opened in new owner Chrome window, compact explanation/image verified; actual drafts compared with mixed outcomes. Native house-voice acceptance remains pending. Owner-selected V4 Pro/high fully native continuation delivered:three drafts and a Rocket refusal, plus one preserved token-cap failure/recovery, five physical calls total. JA36/CN18 browser cases pass; updated owner review tabs loaded and prior GPT results retained. DeepSeek comparison complete; Claude Fable5.1/Opus5.5 xhigh fully native JA/CN/EN continuation delivered:10normal replies, zero retries/refinements, final exact CO2_NEW/workspace selected by owner. Additive five-model JA/CN and two-model EN pages/browser verified; JA60/CN30combinations+60stories/EN12 checks pass, raw/media/compact-purpose/preservation intact. No release; native acceptance pending. Owner-requested Claude evaluation/all-model picks complete across28selected replies: agent overall GPT6.1 Sol/high both languages; earlier ToSpo both/native Rocket Wang/earlier Rocket Chonk, earlier Chinese6.1 Metro Wang/WeMedia both and earlier6Sol medium Metro Chonk. Chinese WeMedia Wang headline needs correction before final use. Detailed assessments linked in same plan; zero new generation/copy/page/browser edits, originals unchanged. Owner-requested combined HTML now delivered with30original JA/zh-cn/EN replies, EN/mixed/local toggle, explicit untested settings and eight best picks;252desktop/phone, URL/reload/media/portable checks pass,64protected inputs unchanged. Observed active in new owner Chrome tab919891953, four existing tabs/URLs preserved. No new generation or earlier-page/application/release edits; same plan links combined receipt. Owner-selected V4.1 Flash/max mostly-English continuation delivered:five exact-alias replies, JA/CN both stories, EN Wang only with explicit Chonk omission. Combined35replies/six models;306browser states, unchanged best picks, media/portable Flash downloads pass.30old replies/media and64old protected inputs preserved; existing owner review tab refreshed to CN Metro/Flash/Chonk with six other tabs unchanged. Zero retries/refinements; native quality/ranking remains pending; no release. Flash comparison now complete:better Pro attribution/coverage but existing JA/CN favorites unchanged; Chinese framing drops naming qualification, EN Wang readable but current Opus preferred/Flash Chonk omitted.35reply hashes/page/eight picks unchanged; zero new generation, draft/page/browser edits or release; native acceptance pending. **October12 owner choices locked:** future JA/zh-cn writing defaultsGPT6.1 Sol/high; English NYPost Opus5.5/xhigh based on current Wang preference. Existing eight JA/CN examples remain selected, including earlier6Sol/medium Chinese Metro Chonk exception. Known factual repairs required before final use. Reference families remain ToSpo/Rocket and metro/WeChat; native-reader certification not claimed. Actual locale bindings/live configuration not changed by decision capture. [Round-two plan](../plans/2026-10-09-064803-feat-g2-round2-voices-plan.md) |
+| B2-G2-02 | New chart-editor/chart-setter priority; superseding prediction-led Pulse and audited-learning direction | Define editorial prediction selection/origin, measurable target/deadline and requested evidence/chart settings; retain frozen cutoff and maximum two preselected comparisons. G2 owns interpretation/writing; G3 validates/calculates/forecasts/renders; later auditor compares actual outcome with the original prediction. | **Owner clarification October12:** Pulse/chart-editor work is already in the G3 session; retired as next task for this retained G2 session, which moves to graphics editor. Preserve G3 current work/plan and existing charts. |
 | B2-G2-03 | G2 U15 and explicit exclusions after U16 | Retire obsolete storage/aliases and evaluate any remaining rename/reference work only under a selected scope. Reconcile 24-hour owner rollback decision with seven-day report behavior; preserve native consumers, restore proof and records until cleanup is authorized and justified. | Carried forward |
 | B2-G2-04 | G2/G5 published-history dependency | Define durable publication/history retention for permanent content and share links. Coordinate old editions, source lists, media and selection pointers with G4/G5. | Carried forward |
 | B2-G2-05 | Remaining G2 quality/coverage decisions | Preserve open live-quality qualification, discovery/unnamed-teaser coverage, image-claim evidence and earlier undecided editorial choices. Reconcile old prototype checkboxes against delivered behavior before choosing work; no repeat of completed experiments. | Carried forward |
@@ -286,6 +301,192 @@ shared packet preparation and OriginalContent readers/storage.
 keep anchors, background and actual cited support distinct. Publication and
 storage changes preserve saved locale/version and selected-story identity.
 
+### G2 session continuity — October 9
+
+The owner requests this addition before clearing the G2 session. It supplements
+the existing handoff/register; it does not reopen round one, create a new
+implementation plan, or select a round-two release. This capture uses saved
+release receipts and local source inspection, not a fresh production audit.
+
+**Read first and preserve:** the authoritative root charter/index above; the
+[closed G2 plan](../plans/2026-09-30-051835-docs-g2-voices-corpus-plan.md),
+especially its round-one closeout, current rollback decision and October 8
+compatible/physical-name receipts; and the evidence-delivery learning linked
+above. The plan's historical unchecked boxes and delivery metadata are evidence
+of the prior round, not instructions to rerun it. New detailed execution belongs
+in a selected round-two plan through Ollija, in its intended branch/worktree.
+
+**Delivered baseline and remaining dependencies**
+
+- The last G2-observed production application is
+  `00d7311754cf0837004c859e73c65c740aebab4d`, core migration
+  `0079_original_content_physical_names`, on web, headlines, synthesis, harvest
+  and jobs. Feature HEAD `1743234aa95e8b31d0613f313a88a4e9c60115b5` is a later
+  documentation receipt. The October 9 coordination audit/local `origin/main`
+  points to `671e9682`, which adds the independent HF-clock correction. These
+  identities have different evidence scopes; verify the actual current target
+  before future delivery and preserve intervening work.
+- The six real tables are `original_content`, `original_content_texts`,
+  `original_content_runs`, `original_content_calls`,
+  `original_content_selections` and `content_pictures`.
+  `original_content_sources` is the shared cited-Post join for headlines,
+  Chatter and Pulse. Six old-name views point at those same base rows; they do
+  not duplicate content. The obsolete editorial tables remain separately.
+  U16 changed no physical columns and deleted no table/view.
+- “Existing writing engine” means the **OriginalContent-integrated** deployed
+  path. `monitor/packet_maker.py` freezes bounded preparation without provider
+  work; `monitor/editorial/service.py`, `writing.py`, `grounding.py` and
+  `persistence.py` select/write/check/save through shared storage and accounting.
+  Compatible legacy writes remain for rollback and some orchestration inputs.
+  Their presence does not mean the cutover is absent. Keep producing workflow
+  identity separate from display names: `social-brief` is Chatter,
+  `development-report` is Pulse, and `brand-window` is the trend workflow.
+  Rank/editor/critic calls were preserved; a universal single-final-call engine
+  and further call savings have not been demonstrated.
+- Saved language/version copy and citations belong to
+  `OriginalContentText`/`OriginalContentSource`. Displayed source count means
+  distinct **cited Posts**, with every URL snapshot; retrieved context is not
+  automatically cited. Existing editorial readers delegate to
+  `monitor/original_content_readers.py`. Preserve story UUID, saved-edition
+  `public_id`, revision and chosen locale; the integer database primary key is
+  not a replacement for an existing public edition URL. Page/feed reads do not
+  generate stories or reserve paid calls.
+
+**B2-G2-01/05 — voices, evidence and quality**
+
+- **October12 current writing selection:** owner locks GPT6.1 Sol/high for JA/zh-cn and Opus5.5/xhigh for English NYPost (current Wang comparison). The eight saved JA/CN picks and their variants remain exact; earlier GPT6 Sol/medium Metro Chonk is a saved-story exception. Known factual corrections remain required; raw examples are not rewritten. This supersedes pending owner choice, while native-reader certification and actual locale-binding activation are different observations. The configuration description below is the historical delivered baseline, not evidence that these new defaults are already wired into production.
+- English voice bindings are the delivered baseline. Files for Japanese and
+  Simplified Chinese already exist under `config/editorial_voices/`:
+  `chatter-ja-v1`/`chatter-zh-cn-v1` are marked `available: false`, while
+  `pulse-ja-v1`/`pulse-zh-cn-v1` are marked available with generic factual
+  instructions. Neither file presence nor Pulse's available flag proves a
+  qualified house voice. The delivered bindings select only English, and
+  ja/zh-cn readers explicitly fall back to saved English. Round two needs
+  independently reviewed
+  house voices and examples, rather than treating fallback as localized copy.
+  Public locale spelling is `zh-cn`; the charter also uses `zh_cn` as shorthand.
+  Keep original-content house voice separate from factual third-party Post
+  commentary and literal source translation.
+- Freeze the actual selected story/writer input before comparing voices. The
+  repaired collector in `monitor/editorial/context.py` retrieves relevant shared
+  brands/recent material plus bounded older named/meme history, and
+  `writer_request` in `writing.py` receives anchors and included context.
+  The old Ajax/PewDiePie trace was 49 DB keyword matches → 2 editor inputs →
+  1 writer input; those counts were matches, not independent confirmations.
+  Chonk/LECHONK months-old relevance and GLM tease/update/launch are useful
+  retrieval fixtures, with dates/uncertainty preserved. Do not mistake a lookup
+  time-window setting for evidence that actually reached the writer.
+- Current collector defaults are 240,000 packet bytes/160 recent posts,
+  96,000 selected-story bytes/24 context posts, a 180-day historical lookup and
+  1,500 ms optional-query timeout. Actual provider input also contains prompt
+  and schema bytes. Inspect effective configuration and saved wire coverage;
+  larger input alone does not establish recall or quality.
+- Keep source/actor/brand/number ownership tied to validated source spans;
+  counts, chart facts, denominators and comparisons are calculated in code.
+  Images being attached or described does not establish a usable image-claim
+  citation. Unnamed/unlinked teaser nomination, image-claim evidence and live
+  numeric/semantic quality remain open qualification work.
+- Iteration counts are separate: the October 7 source-contract loop exhausted
+  **three live iterations/five model calls** and remained **not quality-qualified**;
+  the context/attribution repair had **seven local implementation passes** and
+  118 passing tests plus a separate saved-source replay. Compatible production
+  took **three application deployment iterations**, correcting snapshot-query
+  disk exhaustion and citation-alias recovery from original saved excerpts.
+  U16 took **two implementation rounds/one release candidate**. Its 580 tests,
+  five subtests, 328 required PostgreSQL cases and 36 Ollija checks prove their
+  stated regression/migration scope, not live voice quality. Reuse the detailed
+  logs in the closed plan; do not invent a combined iteration count or revive
+  exhausted trial allowances. New evaluation needs a frozen acceptance set,
+  rubric, iteration/spend ceiling and current owner-selected scope.
+
+**B2-G2-03/04 — rollback review and lasting publication**
+
+- Owner decision: **24 hours**, measured from the unchanged production cutover
+  `2026-10-08T07:37:56.303216+00:00`; reevaluate **October 9, 16:37:56 JST**.
+  The session recorded that checkpoint without scheduling a background review;
+  it has not performed the reevaluation. Seven-day/October 15 dates in older
+  receipts are superseded. `monitor/original_content_cutover.py::retirement_status`
+  still computes seven days and always reports `ready: false`; reconcile the
+  implementation and boundary/management-command regressions before cleanup.
+  Passing the checkpoint does not authorize automatic removal or stop mirroring.
+- Remaining legacy consumers include `monitor.editorial.service`,
+  `monitor.editorial.persistence` and `monitor.editorial.evidence`. Destructive
+  retirement requires selected scope, native replacements, no remaining
+  consumers, reconciled preservation and proven encrypted backup restoration.
+  Removing old-name views, deleting obsolete editorial tables and renaming
+  physical columns are distinct changes. Keep rollback within the compatible
+  storage/claim contract; pre-compatibility provider writers or an old database
+  snapshot can lose overlap or duplicate sends.
+- Published-history retention is a separate G2/G5 dependency. Review
+  `monitor/trend_narrative_lifecycle.py` and the G5 plan's KTD11: preserve every
+  genuinely published OriginalContent version/locale/source list and permanent
+  link after feed/hero turnover, including approved trend output belonging to
+  an activated active/superseded run. Approval alone is not publication evidence.
+  Preserve media and selected pointers too; page reads must not create pins or
+  publication events. The schema rename did not certify this retention policy.
+
+**B2-G2-02 — agreements with G1/G3/G4/G5**
+
+- **October12 session allocation:** the owner handles editorial/chart requests in G3. The editorial role decides whether a chart supports a content claim and its requested evidence/settings; the calculation role validates metrics and renders. G4 owns the exact
+  shared view/language; G5 owns placement and interaction. Use the register's
+  shared content/chart agreements, one GLM5.3 item and a second configuration,
+  exercising both Post and OriginalContent. Benchmark/usage collection and
+  readers are already deployed; do not recreate them. The independent metric
+  window PR #56 (`be0489e8`) has verified-PR evidence only, with migrations
+  0080/0081 reserved; its schema is not yet claimed deployed. Coordinate actual
+  integration/migration state instead of allocating those numbers again.
+- **October12 ownership update:** graphics-editor B2-G1-01/02 requirements/guide now belong to this retained G2 session; G1 staff/media foundation remains separately owned. Existing G2
+  implementation candidates include `monitor/editorial/pictures.py`,
+  `media.py`, `bindings.py`, picture configuration and
+  `tests/test_editorial_pictures.py`. Agree a bounded file handoff before
+  overlapping edits; this record alone does not transfer ownership. Preserve
+  shared `ContentPicture`, source/subject attribution and media-call accounting.
+  At U16 verification the 19 saved picture rows were intact but their files
+  were already unavailable through both readers (404); do not report that as
+  successful deployed image-byte delivery or a new rename loss.
+- G5 has **already completed** local real published Chatter/Pulse integration
+  on October 9 via the existing shared readers/access gate. Its :58418 preview
+  uses a fresh isolated core0079 snapshot with 306,938 Posts and 19 approved
+  editions, generation disabled. Exact saved headline/byline/full body,
+  source counts and 96 displayed URLs were checked across desktop/mobile and
+  three locales. The :58011/:58417 previews and dirty G5 code remain retained.
+  Its 279-test affected result includes one existing Japanese geography-seed
+  failure; broader retention/release preparation remains open. This supersedes
+  this session's earlier suggestion that G5 still needed to refresh its old
+  snapshot; it does not establish fresh-story generation or a production
+  General release. Use the G5 plan/index receipt for the evidence boundary.
+
+**Machine-local continuity and operating boundaries**
+
+The retained G2 checkout is
+`/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-editorial`
+on **fuchitalee**. Its closed-plan amendments remain uncommitted and protected
+private/untracked artifacts remain; do not reset, clean or remove this worktree
+when clearing chat. Links into it require that machine-local checkout. Private
+evidence is under its `.local/g2-physical-names-20261008/` (full-row preservation,
+reader/citation checks, final tests and restored service settings) and
+`.local/g2-original-content-20261008/` (import/cutover receipts). Neither set is
+guaranteed present in another clone. The earlier coordination snapshot was
+published on `docs/general-round-two-records` at `7babf022` and subsequently
+merged through PR #57 to main `60181a88be8c0887ca20033d6f9a9d24eb89152f`,
+verified after the owner's pause/resume. That merge carries `[skip render]` and
+does not establish a new deployed application. These later G2 handoff notes and
+the other sessions' newer local supplements are separate from that snapshot;
+their presence in another clone must not be assumed. Resume from the current
+authoritative root file on fuchitalee while they remain unpublished.
+
+At G2 completion writing was resumed and harvesting/synthesis/jobs continued;
+no deployment/schema hold remains. Harvest stayed every 15 minutes and jobs at
+`17 */6 * * *`; headline worker remains queue-only. The owner's temporary
+two-hour-cadence idea was withdrawn. Budget/provider/cadence changes and a new
+paid quality run are not implied by clearing the session or closing round one.
+Future diagnostics resolve the database from each current service's
+`DATABASE_URL`; the old static DB pointer in memory was stale during U16.
+Never print connection strings/keys. The owner selected the OpenAI key in
+fuchitalee's untracked `~/.env.secrets` for launch; resolve only its literal
+`OPENAI_API_KEY` assignment without executing/dumping the file. Preserve all
+other project credentials and independently owned benchmark/company operations.
+
 ## G3 — Chart engine and inherited analysis
 
 **Starting assets:** deployed independent benchmark/usage collection and charts,
@@ -293,8 +494,8 @@ G3 evidence/forecast research and the GLM/DeepSeek comparison example.
 
 | ID | Origin | Round-two work | State |
 | --- | --- | --- | --- |
-| B2-G3-01 | New chart-engine priority | Generalize the release/source chart with reusable data/configuration/calculation/rendering and suitable existing homepage interactions. Define metric units, baselines, series, windows and annotations. | Ready to plan |
-| B2-G3-02 | New share-settings priority; G4/G5 handoff | Validated saved chart state, locale and data-as-of identity; explicit frozen snapshot versus live-updating behavior. Supply the same state to editor, browser and share/export consumers. | Ready to plan |
+| B2-G3-01 | New chart-engine priority | Flexible settings for the Pulse editor's article: release spikes, 90-day predecessor buzz, 7-day brand post comparisons and classification percentages. Reuse chart/data/calculation behavior; define scopes, filters, grouping, units, windows, baselines and annotations. Reader exploration is not the reason for this flexibility. | Implemented and verified locally; four hypothetical examples ready for owner review. No production activation |
+| B2-G3-02 | New share-settings priority; G4/G5 handoff | Validated saved chart state, locale and data-as-of identity; explicit frozen snapshot versus live-updating behavior. Supply the same state to editor, browser and share/export consumers. | Implemented locally: immutable edition snapshots, JS serialize/restore, numeric-export permission and explicit separate live refresh. G4 distribution and G5 embedding remain separate |
 | B2-G3-03 | Unimplemented G3 design, G3-R12 and later statistical/market requirements | Historical analysis, qualified forecast target/baselines/uncertainty, reader scenario questions, prediction record and market-candidate/support workflow. Reassess the old benchmark dependency using delivered evidence; retain unresolved statistical/threshold/submission/notification choices. | Carried forward; decisions remain |
 
 **Apply round-one lessons:** rolling downloads, exact-model usage, raw score and
@@ -302,6 +503,118 @@ rank keep their separate meanings. A post-release comparison baseline cannot
 leak into a pre-release forecast. Chart implementation and forecast qualification
 have separate completion evidence; this rollover does not claim the old hold
 was a completed forecast implementation.
+
+**October 9 requirements drill-down:** owner rejects an iterative
+draft/chart/rewrite agreement loop because of refusals, timeouts and queue
+growth. Proposed Pulse truth-reconciler flow is newsworthy item → assembled
+chart evidence → reporting that claims matched or were refuted by our evidence.
+Inconsistency supplies the story rather than forcing another rewrite cycle.
+Owner selects publishing missing/mixed evidence findings with explicit limits,
+including what was checked and what remains unresolved. Owner selects one
+upfront evidence plan with at most two predefined comparisons per claim,
+considering its results without result-driven recuts. Further owner answers:
+reevaluate Pulse's lead subject every 15-minute editorial cycle with a
+preceding-hour lookback; retain a leading subject with possible content
+updates rather than forcing a new topic each cycle. Percentages use all
+collected relevant posts, including unclassified posts. Failed comparisons
+finish with available evidence and a stated gap; the main chart is visible
+and the second comparison openable. Owner adds a distinct announcement event
+layer: official model-release announcements and genuine first-breaking
+other-account reports get prominent vertical lines and annotations so singular
+posts retain visibility amid discussion volume. First-report/confirmation
+handling and announcement counting in volume remain open, alongside time
+budgets and writer-failure policy. Owner selects model editorial judgment
+from evidence with a short major-news-organization role prompt; exact wording
+is preserved in the charter and G3 plan. Evidence packet design is next.
+G2 editorial and G3
+calculation ownership remain distinct.
+
+**Final owner decisions, October 9:** labelled credible unconfirmed breaking
+reports may run; publish only meaningful news/finding changes after quarter-hour
+reassessment; dated updates/corrections preserve accessible earlier wording.
+G3 completed B2-G3-01/02 for a working local review version in its selected
+worktree. Forecast/market work remains carried forward; no deployment selected.
+
+**Local receipt, 2026-10-09T19:03:47+09:00:** [review index](http://100.102.74.50:8767/pulse/)
+shows four hypothetical scenarios and dated/pinned earlier wording in en/ja/zh-cn.
+One chart plan, maximum two comparisons, terminal gaps, original/official release
+markers and full frozen data now reach the real saved-edition browser path.
+[Selected plan and exact checks](/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md):110 tests/8 subtests pass;
+one unchanged homepage filter test fails in isolation;67 required PostgreSQL
+tests execute with zero skips/errors. Twelve review pages and desktop/mobile
+screenshots pass with no JS errors/overflow. Fixture copy is not a native voice
+evaluation. Feature remains disabled by default. No provider calls, harvest or
+scheduler changes, commit, push or deployment occurred.
+
+Resume G3 in the same dirty worktree/branch/base. Its isolated `.venv`, task-owned
+`pw_g3_round2_20261009` database and port8767 server remain for review; other
+sessions' resources are preserved. The initial shared environment link was
+replaced locally after a missing-Pillow failure. Active file claim is released.
+Existing G2 voices, benchmark semantics and General homepage remain preserved.
+
+**Superseding owner amendment, October 9 evening:** Pulse should make predictions
+from news/evidence; Chatter reports actual events. The chart engine must track
+observed variables and forecast them forward. A later auditor must release
+an actual-outcome-versus-original-prediction report. Whether Pulse editor or
+chart editor originates the hypothesis remains a brainstorm question.
+The existing G3 plan now records that exploration, retaining the completed
+local charts as a foundation. Forecasting portions of B2-G3-03 inform this
+direction; reader scenarios/market workflows are not automatically brought into
+implementation. G5's accepted blue/white DM Sans/Newsreader prototype remains
+the requested visual baseline. No presentation code changed before this turn
+of discussion; no forecast implementation or release is selected.
+
+**Owner learning amendment, October 10:** Add recursive learning from audited
+Pulse forecasts; the owner suggests classification buckets and normalized/
+abstracted lessons and explicitly requests Firecrawl open-source research.
+The [research report](/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/analysis/2026-10-10-084801-g3-pulse-learning-open-source-research.md)
+and existing G3 plan recommend an ACE-style versioned lesson playbook with
+separate numerical learning, using Metaculus resolved-forecast calibration as a
+reference and GEPA for later bounded offline evaluation. LangMem's structured
+memory primitives are an optional dependency. Bucket taxonomy/framework choices
+are proposals; actual outcomes, compatible units, cutoff eligibility, unresolved
+states and independent release counts govern learning. Firecrawl research used
+55 observed credits; no candidate code/model trial, learner, runtime job, new
+collection or release was executed. Preserve all completed local charts, G5
+visual target, worktree/environment/preview and other stream ownership.
+
+**Owner data-readiness priority, October 11:** verify model-release capture and
+categorization before learning experiments, and investigate historical collection
+loss. [Bounded read-only audit](/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/analysis/2026-10-11-062415-g3-x-post-coverage-and-release-readiness.md)
+finds major UTC authored-date gaps through August 16; August 17 is only a steadier
+count boundary, with later attribution/intraday/recall gaps retained. July/August
+have no versioned classification states; structured release evidence begins
+September 25 and 155 extracted records remain pending review. The existing G3 plan
+now prioritizes verified releases plus a brand/interval coverage-repair map.
+Actual backfill horizon, collection/repair work and qualifying forecast cohort
+remain unexecuted; preserve both saved library research reports and local charts.
+
+**Owner route, October 12:** use a practical 21-brand → current product-family
+→ verified release approach, with MiniMax M, GLM and DeepSeek V4 as initial
+examples. The existing G3 plan records this starting scope in place of a universal
+all-data release detector. The first deliverable is a reviewable family/source
+register; old candidate rows support checking capture and duplicates. Runtime
+catalog repair, paid recovery and release remain separate work.
+The [starting family register](/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/analysis/2026-10-12-091100-g3-tracked-brand-family-register.md)
+now covers all 21 brands as draft candidates, with source-qualified official
+accounts and primary identity checks for the three owner seeds. The same plan's
+U6 next curates expected launch groups/milestones; U7 retains future caller-path
+regressions. No production grouping, release confirmation or recall qualification
+was performed by the starting pass.
+
+**Current owner scope and research result, October 12:** build release dates for
+the twelve named companies over the past sixty days, including models, agents,
+harnesses and other AI products. This replaces the interrupted all-release-tagged-
+post scan and three-family pilot cap. Anonymous community tests and quiet artifact
+publication belong in staged histories, with attribution/date uncertainty and
+later identity knowledge retained.
+[Working canonical inventory](/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/research/2026-10-12-093516-g3-sixty-day-product-releases.md) and linked JSON/CSV record159 dated
+entries, including8 qualified artifact revisions and2 boundary-day cases, plus
+16 pending decisions and44 exclusions. No complete release-recall certificate,
+classification taxonomy change or production repair. U6 next compares the
+source-backed milestones against existing Posts/releases and resolves gaps;
+U7 implementation remains evidence-dependent, and the proposed five-way product
+categories are recorded as later work.
 
 ### G3 session-clear handoff — October 9
 
@@ -317,10 +630,26 @@ to main; it does not select G3 implementation or application deployment.
 #### Round-two working directory — owner decision
 
 The owner confirms that G3's dedicated round-two worktree is its default
-working directory, including after consulting shared knowledge. At the October
-9, 15:15 JST check, no dedicated G3 round-two worktree was registered; its exact
-branch and absolute path remain to be assigned. This documentation update
-does not create that worktree or start implementation.
+working directory, including after consulting shared knowledge. The October 9
+startup request created a registered worktree through the harness's native
+worktree tool, based on then-current main `7c426c3a4d76630b17243ac5b8a3451d77efab74`:
+
+- **Session:** `g3-round2-20261009`.
+- **Default working directory:**
+  `/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2` on fuchitalee.
+- **Branch:** `feat/g3-round2-chart-engine`.
+- **Round-two plan:**
+  [reusable chart engine and saved state](/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md),
+  selected by `ollija annotate-plan`. Orientation and read-only reuse audit
+  are complete; next is the bounded B2-G3-01/02 settings contract and two
+  integration examples. No shared implementation-file claim or release
+  endpoint has been selected. B2-G3-03 remains carried forward.
+
+The native workspace is separate from the repository's `.worktrees` delivery
+area. Use this registered path for current G3 work; any later delivery
+placement follows the selected plan's guidance. Other worktrees and private
+evidence remain preserved. The shared `.venv` is linked for local tools;
+no database, secret file or other session's preview was attached.
 
 - When round-two work starts, locate the assigned G3 worktree or create it
   through the repository's worktree workflow. Record its exact path, branch and
@@ -469,7 +798,7 @@ creation, optional trading interest and actual orders distinct.
 **Kalshi workflow and open operating choices:**
 
 Kalshi is the owner's selected first venue. The
-[partnership assessment](../analysis/2026-10-07-104452-g3-market-partnership-selection/README.md)
+[partnership assessment](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-07-104452-g3-market-partnership-selection/README.md)
 supports a first builder/market-suggestion conversation, not an acceptance-rate
 claim, approved partnership or permission to create markets. Latest owner flow:
 **"Vote to make a market on Kalshi" → enough distinct support → versioned packet
@@ -535,27 +864,27 @@ download market. None of this research selects another collector.
 
 **Earlier evidence and fragile local state:**
 
-- [Headline sample/history](../analysis/2026-10-05-142212-g3-headline-sample/README.md):
+- [Headline sample/history](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-05-142212-g3-headline-sample/README.md):
   varied stored examples and the activity-summary to editorial-news change.
   Version counts are not unique stories. Headline-generator cloning/refashioning
   belongs with G2; it was not implemented in this G3 pass.
-- [Benchmark mentions](../analysis/2026-10-05-144309-g3-benchmark-mentions/README.md),
-  [concentration](../analysis/2026-10-05-144309-g3-benchmark-mentions/concentration.md),
-  [trends](../analysis/2026-10-05-144309-g3-benchmark-mentions/trends.md) and
-  [legitimacy/traffic audit](../analysis/2026-10-05-144309-g3-benchmark-mentions/legitimacy-audit.md):
+- [Benchmark mentions](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-05-144309-g3-benchmark-mentions/README.md),
+  [concentration](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-05-144309-g3-benchmark-mentions/concentration.md),
+  [trends](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-05-144309-g3-benchmark-mentions/trends.md) and
+  [legitimacy/traffic audit](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-05-144309-g3-benchmark-mentions/legitimacy-audit.md):
   CursorBench is unusually account-concentrated; DeepSWE has promotional
   contamination alongside real discussion. Arena domain visits include its
   interactive product; bot share was not established. DeepSWE traffic was
   unknown, not proven low. Mentions are not quality or independent endorsements.
-- [Audience geography](../analysis/2026-10-05-195203-g3-audience-geography/README.md):
+- [Audience geography](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-05-195203-g3-audience-geography/README.md):
   country coverage 31.4% of source authors, not website readers, eligible
   traders or historical researcher work locations.
-- [Listing versus order parameters](../analysis/2026-10-05-170409-g3-market-listing-and-order-parameters.md)
-  and [builder/liquidity research](../analysis/2026-10-05-210519-g3-builder-and-liquidity-programs/README.md):
+- [Listing versus order parameters](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-05-170409-g3-market-listing-and-order-parameters.md)
+  and [builder/liquidity research](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-05-210519-g3-builder-and-liquidity-programs/README.md):
   proposal review, builder access, referrals and liquidity are separate.
   No external application, submission or market making occurred.
-- [Interest analytics](../analysis/2026-10-06-123349-g3-interest-analytics/README.md)
-  and [PostHog/GA4 review evidence](../analysis/2026-10-06-124136-posthog-ga4-recent-reviews/skill-output/report.md):
+- [Interest analytics](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-06-123349-g3-interest-analytics/README.md)
+  and [PostHog/GA4 review evidence](/Users/fuchitalee/development/pushin-weight-v2/docs/analysis/2026-10-06-124136-posthog-ga4-recent-reviews/skill-output/report.md):
   separate clicks, explicit support and agent calls. Later owner-requested
   **PostHog initial setup is an independent session**, recorded in G4's handoff
   below; progress was not checked here. Do not restart vendor selection as a G3
@@ -599,15 +928,49 @@ authority; follow the current owner's selected task.
 **Starting assets:** API/MCP discovery/draft, public-output restrictions and
 October 9 X research in the shared index.
 
+**Current successor — October 9:** [G4 homepage/Pulse snapshot-sharing plan](../../.worktrees/feat/g4-mcp/docs/plans/2026-10-09-091151-feat-g4-round2-sharing-plan.md),
+selected by Ollija on `feat/g4-round2-sharing` at main `7c426c3a` in the existing
+`.worktrees/feat/g4-mcp` directory. G4-R08–R34 are consolidated, with fixed
+acceptance cases and upstream file-handoff boundaries. The owner selected U1/U2
+continuation: an [isolated local prototype](http://fuchitalee:60423) now compares
+Pulse with chart below/beside, plus homepage/Chatter/Post variants, using labelled
+example data. Prototype browser checks cover sliders, Reset, exact sample links,
+source/classification details, scrolling, languages and static SVG download.
+Owner layout judgment remains pending. Real site integration, durable sharing,
+GIF/video encoding, paid calls, X actions and delivery have not started; no
+Django/PostgreSQL/application assurance is claimed from these prototype checks.
+The earlier local Round 1 draft is byte-preserved (SHA-256
+`5a7c69a6574b84e809edee92a724d0798f7da94322e13664d391c743a15d6bbf`)
+and now appears modified because current main tracks a different published
+version; exclude that preservation-only change from successor code commits.
+The historical handoff below retains its original branch/state observations;
+current snapshot, anonymous access, optional X connection and shortening-only
+decisions take precedence over its earlier open options.
+
+**U1 integration findings:** G2 saved edition/source readers currently include
+named byline/source labels, and G5's Post projection includes raw source text;
+G4 must select an explicit allowed projection. G3's evolving `ChartSpec` and
+saved `edition.evidence["pulse"]` are integration inputs, not frozen schemas.
+Its current `refresh_chart` recalculates saved absolute bounds under explicit
+`latest_stored_evidence`; moving/rolling the bounds still needs a validated
+upstream operation. Public chart, numeric-export and media-export permissions
+are distinct. G1 approved subject assets and G5 component-file handoff remain
+required before product integration. The example projection and exact file/
+evidence locations are in the selected G4 plan; no shared module was changed.
+
 | ID | Origin | Round-two work | State |
 | --- | --- | --- | --- |
-| B2-G4-01 | New sharing priority | Permanent content/chart URLs, chosen locale and settings, share previews and image/video export. Preserve the chosen edition and distinguish snapshot/live chart links. | Ready to plan |
-| B2-G4-02 | Owner's X sharing/login option | Compare link sharing and native media posting; check actual API access/cost/permissions and explicit user share action. Compare mandatory X login with optional X connection; mandatory login remains an option. | Ready to plan; login choice open |
+| B2-G4-01 | New sharing priority; G4-R08–R13/R18–R34 | First implementation: homepage charts and Pulse units. Saved snapshot URLs with anonymous creation/opening and link-only discoverability. Story/chart are one Pulse-style shared unit; homepage charts can stand alone. Both chart types support movable/resizable historical windows, exploration/reset and Live mode that pauses on historical navigation, respecting source resolution. First-version share links open snapshots only; recipient exploration does not alter the original shared view. Later corrections add a notice/link without silently replacing the original chart. Reusable content-unit variants follow the sketch, with a different Pulse layout where needed and image/video/chart support. Expandable per-source author metadata omits names/handles and does not sum followers. Photos follow the subject, with profile photos for self-subject posts only. Atomic classifications and dominant aggregate percentage with click-through detail omit product type. Long text is visually bounded with complete text available by scrolling. | Owner requirements consolidated in selected successor draft; U1/U2 integration/layout work next; not implemented |
+| B2-G4-02 | Owner’s X sharing/login option; G4-R14–R17/R22/R23/R25/R30 | Chart media plus interactive link, preferring GIF/video. Lines draw progressively, then hold on the complete chart. Users optionally connect X when posting, review/edit and explicitly confirm inside PushinWeight; media download is also available. Editable captions use DeepInfra dsv4-0731 (`deepseek-ai/DeepSeek-V4-Flash-0731`). Limit new anonymous caption/video generation and reuse exports. X post text uses saved atomic commentary or the established Chatter/Pulse voice. Reuse text when it fits; DeepInfra only shortens longer copy while preserving its voice. Verify actual access/cost/permissions; define caption/animation/budget details. | Owner requirements consolidated in selected successor draft; actual account/provider access, limits and renderer choices untested |
 | B2-G4-03 | Unimplemented G4 API/MCP draft | Retain saved-output API/MCP, auth/disclosure, possible private scenario writes, analytics and integration work. Current public content/identity restrictions still apply. The sample server is a prototype; final MCP integration follows actual upstream capability availability. | Carried forward; decisions remain |
 
 **Apply round-one lessons:** exact saved outputs and permissions must survive
 every consumer path. Browser JSON and a loopback mock server do not establish a
 public API contract. Native posting permission and login remain separate.
+
+**X media research checkpoint — October 9:** Official [media best practices](https://docs.x.com/x-api/media/quickstart/best-practices) document animated GIF and video attachments. The [v2 upload guide](https://docs.x.com/x-api/media/quickstart/media-upload-chunked) returns media IDs for [post creation](https://docs.x.com/x-api/posts/create-post). Native media upload and publishing are distinct from sharing a URL or expecting an animated link preview. Format support is verified documentation, not proof of our account access or an implemented flow. No account connection, upload, paid provider call or post occurred. G4-R14–R17 select GIF/video-preferred media, progressive drawing/final hold, reviewed connected publishing plus download, and the DeepInfra caption model. Actual account access and cost remain untested.
+
+**Owner sketch — October 9:** Original operator-supplied image on allenwlee: `/Users/allenwlee/Desktop/Screenshots/Screenshot 2026-10-09 at 5.28.41 PM.png`. [Machine-local G4 review copy](../../.worktrees/feat/g4-mcp/.context/g4-round2/owner-sketch-2026-10-09-172841.png), SHA-256 `d71c77bf944a89d0ea48c84734252aa37cf7a4126a05126358cddf5fd0fd6d3f`. Inspected directly: author rail left, Asset/Content side by side, share/download top right, post details below. G4-R25–R29 clarify that author details are unnamed metadata, Asset may include image/video/chart, footer details are atomic classifications or aggregate percentages without product type, and reusable variants can give Pulse a different layout. G4-R30–R34 further select shortening-only DeepInfra use, expandable anonymous per-source metadata, dominant-percentage bar with full detail, subject-based photos/profile use for self-subject posts, and visually bounded full-text scrolling. Detailed sizes, provenance binding and responsive geometry remain implementation choices. No GUI automation or UI implementation occurred.
 
 ### G4 session-clear handoff — October 9
 
@@ -630,13 +993,13 @@ was selected by this handoff request.
   recommendations are proposals, not owner selections or current SDK guarantees.
 - Retained machine-local worktree:
   `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g4-mcp`, branch
-  `feat/g4-mcp`, inspected at `d66d8508`. The draft is untracked there; a published copy now exists at the link above.
-  There is
+  `feat/g4-mcp`, inspected at `d66d8508`. A repository copy of the closed draft is already published at `docs/plans/2026-10-07-053244-feat-g4-mcp-plan.md`; retain that published reference alongside the local working copy. The draft is untracked there; there is
   no G4 runtime implementation, dependency installation, provider call,
   database change, live analytics or deployed MCP server from this session.
   Preserve the worktree. The authoritative root is also a dirty coordination
-  checkout; neither checkout is the current deployed application. This supplement is published by the later owner-authorized G4 handoff commit;
-  application implementation remains unchanged.
+  checkout; neither checkout is the current deployed application. This G4
+  supplement was published through its owner-authorized handoff commit; later
+  local round-two additions remain separately recorded.
 
 **Technical recommendations worth retaining:** use a shared approved-output
 layer behind HTTP and a maintained Python MCP SDK, with hosted Streamable HTTP
@@ -713,7 +1076,7 @@ browser evidence. Preserve `.worktrees/feat/g5-general-page` and its dirty code.
 | ID | Origin | Round-two work | State |
 | --- | --- | --- | --- |
 | B2-G5-01 | New chart/asset/voice/sharing priorities; current local General work | Integrate G1/G2/G3/G4 components incrementally into the accepted layout and detail pages; verify desktop/mobile, all supported locales and Human/Agent geometry. | Ready to plan |
-| B2-G5-02 | Unfinished G5 release/readiness scope | Resolve the recorded Japanese geography-seed failure, durable published-history/link behavior with G2, actual candidate assurance/performance and remaining General navigation/source-display decisions. Reuse valid earlier evidence. | Carried forward |
+| B2-G5-02 | Unfinished G5 release/readiness scope | Resolve the recorded Japanese geography-seed failure, durable published-history/link behavior with G2, actual candidate assurance/performance and remaining General navigation/source-display decisions. Reuse valid earlier evidence. | Independent readiness pass complete locally: geography fixture and aging-clock regressions fixed; real-data timings recorded. Retention, exact candidate assurance/performance and page decisions remain carried forward |
 | B2-G5-03 | Existing local-only endpoint; future launch | Preserve and reconcile local work onto the eventual chosen candidate. Record any later commit/push/deployment endpoint explicitly. Default landing/domain routing, including the recorded pushinweight.si purchase, remains a selected-scope decision. | Carried forward; delivery unselected |
 
 **Apply round-one lessons:** check database → shared reader → page → recipient
@@ -791,8 +1154,8 @@ select a new implementation/release. The next session's focus is B2-G5-01–03.
   retained the prior styling. Keep earlier `:58011` and accepted `:58417`
   prototypes separate from the wired `:58418` page. The weight-themed heading
   brainstorm was tabled; no replacement H2 names were selected. The research
-  journeys remain [agentic products](../research/2026-10-07-214739-agentic-product-design-patterns.html)
-  and [prediction graphs](../research/2026-10-08-095045-prediction-graph-visual-journey.html);
+  journeys remain [agentic products](/Users/fuchitalee/development/pushin-weight-v2/docs/research/2026-10-07-214739-agentic-product-design-patterns.html)
+  and [prediction graphs](/Users/fuchitalee/development/pushin-weight-v2/docs/research/2026-10-08-095045-prediction-graph-visual-journey.html);
   `make-visual-style-doc` is installed at user level on fuchitalee.
 - **Navigation and controls:** collapsible left navigation, login/settings,
   locale/timezone/audience preferences, independent Open/Closed controls and
@@ -895,6 +1258,78 @@ source identity captured above. References into `.worktrees/` and the research
 journeys point to machine-local artifacts on fuchitalee; publishing this handoff
 does not publish those underlying files.
 
+#### Round-two session start — October 9
+
+`g5-round2-20261009` resumed at the owner's request in the existing canonical
+G5 checkout, `.worktrees/feat/g5-general-page`, on `feat/g5-general-page` at
+`00d7311754cf0837004c859e73c65c740aebab4d`. Read the authoritative index,
+charter, this handoff, the closed plan, local reader reference/tracker and the
+evidence-delivery learning. The modified/untracked application files remain
+preserved. General's recomputed product identity still matches the handoff:
+`worktree-sha256:9884c875aba3a4fedf78dfc5557cd304f2a45220aff8ae933f5e368281c01338`.
+All ten checked snapshot, reader/browser, gate/review and before-main evidence
+files are present. No test suite was rerun during orientation.
+
+The owned preview returned HTTP 200 at `/general/?lang=en&weights=open&audience=human`;
+port 58418 still belongs to PID 12147, whose command uses this G5 checkout's
+private `.venv` and `manage.py runserver 0.0.0.0:58418 --noreload`.
+These are read-only availability observations, not new browser acceptance or
+production receipts. A fresh main fetch resolves `origin/main` to `7c426c3a`
+(12 commits ahead of G5's base); the application-path difference is the independent
+HF daily-clock command and its tests, with no new core migration in that comparison.
+
+`ollija annotate-plan` confirms this exact worktree and returns the closed
+round-one plan unchanged, with `delivery_target: on-request`. Preserve it as
+history; no round-two execution plan was selected or created in this orientation.
+The next proposed bounded B2-G5-01 step is the page/detail integration contract
+for G1 assets, G2 localized writing, G3 validated chart state and G4 share views.
+Use the agreed GLM-5.3 example plus a second chart configuration, exercise both
+Post and OriginalContent, and retain exact cited support, revision/edition,
+locale and snapshot/live meaning at the rendered page and recipient boundaries.
+G5 owns placement, responsive behavior and shared Human/Agent geometry; upstream
+generation, chart calculation and sharing implementation remain with their owners.
+B2-G5-02 retains the Japanese geography-seed failure, G2 publication-retention
+proof and representative candidate assurance/performance. Application delivery
+and domain routing remain unselected. Orientation is complete; detailed new
+execution belongs in the later selected round-two plan.
+
+#### Independent G5 readiness — October 9
+
+Owner selected “ok go” on the G5 work that needs no new G1–G4 output.
+The [Ollija-selected round-two readiness plan](../../.worktrees/feat/g5-general-page/docs/plans/2026-10-09-081712-feat-g5-round2-readiness-plan.md)
+records the completed local pass. The same existing G5 worktree now uses local
+branch `feat/g5-round2-readiness`, still based on `00d73117`; all pre-existing
+dirty implementation and the closed round-one plan remain preserved.
+The branch change selected new round-two execution without reopening round one.
+The owner-required existing path overrides branch-derived relocation guidance.
+
+The geography failure was test setup: normal Django test flushes remove the
+data-migration taxonomy, and the label command correctly skips missing base
+keys. The test now restores frozen prerequisites and still checks all 249
+countries, 31 regions and repeatability. The broader run exposed a second
+aging-fixture test; its server/browser clocks are now pinned and its real-route
+assertions prove timer suspension, restoration and resumed ticking. Only those
+two test files changed; General's product identity remains `9884c875…c01338`.
+Final affected checks pass: **280 tests, 59 subtests, 115 required PostgreSQL
+tests executed, zero skips/errors; all 49 General browser obligations clean**.
+
+Read-only measurements on the retained 306,938-Post snapshot cover 20 reader
+and 12 Django route cases. Open feed-route warm medians are **14–20 ms**;
+General in EN/JA/ZH-CN is **101–102 ms**. Actual :58418 browser navigation/readiness
+warm medians are **178 ms desktop / 176 ms mobile**, with all four feeds populated,
+matching Human/Agent panel geometry, no overflow or JavaScript errors. These are
+local unsealed timings, not production latency or committed candidate assurance.
+No measured bottleneck justified a query rewrite. Future asset/chart/sharing
+insertion points and existing unavailable states are mapped in the selected plan;
+no upstream implementation is claimed.
+
+Private evidence remains in the existing G5 checkout's
+`.context/g5-round2-readiness-20261009/`. The populated snapshot and PID 12147
+preview remain intact; tests use a separate dedicated local PostgreSQL 17 database.
+G2 published-history retention, candidate assurance/performance, page/source
+decisions and actual upstream integration remain open. No commit, push, release,
+domain routing, provider, production or snapshot mutation occurred.
+
 ## Shared agreements for parallel work
 
 Agree these interfaces before overlapping code edits. G1/G2/G3/G4 own their
@@ -905,7 +1340,7 @@ time, with an explicit handoff when ownership changes.
 | --- | --- | --- |
 | Content reference | Post or OriginalContent, stable identity, saved revision/edition and locale | G2 + G5 / all |
 | Asset selection | Selected image/video, source/subject evidence, fallback reason, reusable variants | G1 / G2, G4, G5 |
-| Chart request/state | Source metrics/series, units, window, baseline/transform, annotations, locale, cutoff/as-of and snapshot/live choice | G2 editorial intent + G3 validation / G4, G5 |
+| Chart request/state | Source metrics/series, units, window, baseline/transform, annotations, locale, cutoff/as-of and snapshot/live choice | G3 session: editorial intent + validation (owner October12 allocation) / G4, G5 |
 | Share view | Exact content reference, chart state, chosen language and asset variant; recipient locale must not silently replace shared language | G4 / G3, G5 |
 
 Start with one GLM5.3 content item carried through all applicable components,
