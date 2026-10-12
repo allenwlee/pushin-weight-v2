@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from html import unescape
 from unittest.mock import patch
 
@@ -18,14 +18,77 @@ from monitor.views import (
     _build_home_pulse_payload,
     _clear_home_pulse_cache,
     _enrich_posts_with_classifications,
-    _post_to_wire,
     _home_visible_brand_rows,
     _normalize_home_filters,
+    _post_to_wire,
     _serialize_feed_row,
 )
 from x_monitor.config import HeadlineNarrativeConfig
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
+
+
+@pytest.mark.parametrize("window", (1, 7, 30, 365))
+@pytest.mark.parametrize("locale", ("en", "zh_cn", "zh_hans", "ja"))
+def test_call_a_companies_do_not_expand_public_tracked_brand_surfaces(client, window, locale):
+    from pathlib import Path
+
+    from django.utils import timezone
+
+    from x_monitor.config import load_config
+
+    tracked = set(load_config(Path("config.yaml")).enabled_models)
+    for nickname in tracked:
+        Brand.objects.get_or_create(nickname=nickname, defaults={"display_name": nickname})
+    companies = [f"call-a-company-{index:03d}" for index in range(119)]
+    Brand.objects.bulk_create([
+        Brand(nickname=nickname, display_name=nickname) for nickname in companies
+    ])
+    created_at = timezone.now() - timedelta(hours=1)
+    post = Post.objects.create(tweet_id="call-a-company-post", created_at=created_at)
+    PostBrand.objects.create(post=post, brand_id=companies[0])
+    tracked_post = Post.objects.create(tweet_id="tracked-brand-post", created_at=created_at)
+    PostBrand.objects.create(post=tracked_post, brand_id="deepseek")
+    _clear_home_pulse_cache()
+
+    response = client.get("/", {"locale": locale, "window": window}, secure=True)
+    assert response.status_code == 200
+    assert {row["nickname"] for row in response.context["brands"]} == tracked
+    assert {row["nickname"] for row in response.context["pulse"]["entries"]} == tracked
+    payload = json.loads(response.context["payload"])
+    assert set(payload["series"]) == tracked
+    assert payload["totals"]["deepseek"] == 1
+    body = response.content.decode()
+    assert 'value="deepseek"' in body
+    assert not any(f'value="{nickname}"' in body for nickname in companies)
+
+    # A crafted URL must not promote a collected company into a tracked series.
+    chart = client.get("/chart/", {
+        "locale": locale,
+        "window": window,
+        "filters": json.dumps({"brands": [companies[0]], "window": window}),
+    }, secure=True)
+    assert chart.status_code == 200
+    assert chart.json()["series"] == {}
+    assert {row["nickname"] for row in chart.json()["pulse"]["entries"]} == tracked
+    assert Brand.objects.filter(nickname__in=companies).count() == 119
+    assert PostBrand.objects.filter(post=post, brand_id=companies[0]).exists()
+
+
+def test_internal_brand_inventory_remains_broad_after_public_cache_fill(client, django_user_model):
+    Brand.objects.get_or_create(nickname="deepseek", defaults={"display_name": "DeepSeek"})
+    Brand.objects.create(nickname="call-a-only", display_name="Call A company")
+    _clear_home_pulse_cache()
+    public = client.get("/", {"locale": "en"}, secure=True)
+    assert "call-a-only" not in json.loads(public.context["payload"])["series"]
+    client.force_login(django_user_model.objects.create_user(username="internal-inventory"))
+    internal = client.get("/internal/", {"locale": "en"}, secure=True)
+    assert internal.status_code == 200
+    assert "call-a-only" in {row["nickname"] for row in internal.context["brands"]}
+    assert "call-a-only" in json.loads(internal.context["payload"])["series"]
+    public_again = client.get("/chart/", {"locale": "en"}, secure=True).json()
+    assert "call-a-only" not in public_again["series"]
+    assert "call-a-only" not in {row["nickname"] for row in public_again["pulse"]["entries"]}
 
 
 def test_step_history_remains_stored_while_only_stepfun_is_selectable() -> None:

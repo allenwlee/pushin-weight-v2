@@ -288,8 +288,8 @@ _HOME_CLOSED_BRAND_NICKNAMES: tuple[str, ...] = (
 )
 
 # Presentation order established by the chart. This is a priority list, not a
-# selectable-brand allowlist: newly onboarded database brands still render and
-# are appended alphabetically without a code change.
+# selectable-brand allowlist: remaining eligible brands are appended
+# alphabetically. Public homepage eligibility comes from configured tracking.
 _HOME_CHART_BRAND_PRIORITY: tuple[str, ...] = (
     "deepseek",
     "qwen",
@@ -371,11 +371,25 @@ def _home_visible_brand_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]
     return rows
 
 
-def _live_brand_projection(locale: str | None = None) -> list[dict[str, str]]:
+def _tracked_home_brand_nicknames() -> tuple[str, ...]:
+    from pathlib import Path
+
+    from x_monitor.config import load_config
+
+    config = load_config(Path(settings.BASE_DIR) / "config.yaml")
+    return tuple(sorted(set(config.enabled_models)))
+
+
+def _live_brand_projection(
+    locale: str | None = None, *, tracked_only: bool = False,
+) -> list[dict[str, str]]:
     """Load selectable homepage brands in the chart's presentation order."""
+    queryset = Brand.objects.filter(is_sentinel=False)
+    if tracked_only:
+        queryset = queryset.filter(nickname__in=_tracked_home_brand_nicknames())
     brands = [
         _brand_projection_fields(brand, locale)
-        for brand in Brand.objects.filter(is_sentinel=False)
+        for brand in queryset
     ]
     brands = _home_visible_brand_rows(brands)
     brands.sort(key=lambda brand: _home_chart_brand_sort_key(brand["nickname"]))
@@ -391,7 +405,7 @@ FEED_REQUEST_MAX: int = 100
 BRAND_CHART_ROW_LIMIT: int = 500
 
 _HOME_PULSE_CACHE_TTL_SECONDS = 60.0
-_HOME_PULSE_CACHE: dict[int, tuple[float, dict[str, Any]]] = {}
+_HOME_PULSE_CACHE: dict[int | tuple[int, tuple[str, ...]], tuple[float, dict[str, Any]]] = {}
 _HOME_CHART_CACHE_MAX_ENTRIES = 64
 _HOME_CHART_CACHE: OrderedDict[
     tuple[Any, ...], tuple[float, dict[str, Any]]
@@ -3491,6 +3505,7 @@ def _build_home_chart_payload(
     locale: str = "en",
     brand_projection: list[dict[str, Any]] | None = None,
     bucket_timezone: str = "UTC",
+    tracked_only: bool = False,
 ) -> dict[str, Any]:
     """Build multi-brand chart payload dict — shared by chart_json and chart_html.
 
@@ -3506,12 +3521,15 @@ def _build_home_chart_payload(
     )
     requested_at = now or _dashboard_now()
     normalized_filters = _normalize_home_filters(filters)
+    tracked_brands = _tracked_home_brand_nicknames() if tracked_only else None
     cache_key = None
     cached_payload = None
     if now is None:
         cache_key = _home_chart_cache_key(
             window_days, normalized_filters, locale, bucket_timezone
         )
+        if tracked_brands is not None:
+            cache_key += (tracked_brands,)
         cache_now = monotonic()
         with _HOME_PULSE_CACHE_LOCK:
             cached = _HOME_CHART_CACHE.get(cache_key)
@@ -3523,7 +3541,9 @@ def _build_home_chart_payload(
         if cached_payload is not None:
             return deepcopy(cached_payload)
 
-    pulse = _build_home_pulse_payload(window_days, now=requested_at)
+    pulse = _build_home_pulse_payload(
+        window_days, now=requested_at, brand_nicknames=tracked_brands,
+    )
     now = datetime.fromisoformat(pulse["computed_at"])
     local_today = now.astimezone(bucket_tzinfo).date()
     if window_days == 1:
@@ -3538,7 +3558,11 @@ def _build_home_chart_payload(
         ).astimezone(UTC)
 
     if brand_projection is None:
-        brand_projection = _live_brand_projection()
+        brand_projection = _live_brand_projection(tracked_only=tracked_only)
+    if tracked_brands is not None:
+        brand_projection = [
+            brand for brand in brand_projection if brand["nickname"] in tracked_brands
+        ]
     brand_nicknames = [brand["nickname"] for brand in brand_projection]
     projection_by_nickname = {
         brand["nickname"]: brand for brand in brand_projection
@@ -3757,7 +3781,9 @@ def _build_home_chart_payload(
     if cache_key is not None:
         with _HOME_PULSE_CACHE_LOCK:
             component_entries = (
-                _HOME_PULSE_CACHE.get(window_days),
+                _HOME_PULSE_CACHE.get(
+                    window_days if tracked_brands is None else (window_days, tracked_brands)
+                ),
                 _HOME_TOP_VOICES_CACHE.get((window_days, 3)),
             )
             cache_timestamp = min(
@@ -3798,14 +3824,16 @@ def _build_home_pulse_payload(
     window_days: int,
     *,
     now: datetime | None = None,
+    brand_nicknames: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
-    """Aggregate equal windows for every non-sentinel DB brand in one query."""
+    """Aggregate equal windows for the requested brand scope in one query."""
     if window_days not in ALLOWED_HOME_WINDOWS:
         window_days = HOME_WINDOW_DEFAULT
     now = now or _dashboard_now()
     cache_now = monotonic()
+    cache_key = window_days if brand_nicknames is None else (window_days, brand_nicknames)
     with _HOME_PULSE_CACHE_LOCK:
-        cached = _HOME_PULSE_CACHE.get(window_days)
+        cached = _HOME_PULSE_CACHE.get(cache_key)
         if cached and cache_now - cached[0] < _HOME_PULSE_CACHE_TTL_SECONDS:
             return deepcopy(cached[1])
 
@@ -3835,9 +3863,11 @@ def _build_home_pulse_payload(
             .annotate(total=Count("post_id"))
             .values("total")[:1]
         )
+        brands = Brand.objects.filter(is_sentinel=False)
+        if brand_nicknames is not None:
+            brands = brands.filter(nickname__in=brand_nicknames)
         rows = list(
-            Brand.objects
-            .filter(is_sentinel=False)
+            brands
             .values(
                 "nickname",
                 "display_name",
@@ -3880,7 +3910,7 @@ def _build_home_pulse_payload(
             "computed_at": now.isoformat(),
             "entries": entries,
         }
-        _HOME_PULSE_CACHE[window_days] = (cache_now, payload)
+        _HOME_PULSE_CACHE[cache_key] = (cache_now, payload)
         return deepcopy(payload)
 
 
@@ -3936,7 +3966,9 @@ def _multi_top_voices(
     return deepcopy(result)
 
 
-def _build_brands_context(locale: str | None = None) -> list[dict[str, Any]]:
+def _build_brands_context(
+    locale: str | None = None, *, tracked_only: bool = False,
+) -> list[dict[str, Any]]:
     """Return pre-merged brand data list for templates.
 
     Each dict has nickname, display_name, accent_color — so templates
@@ -3948,7 +3980,7 @@ def _build_brands_context(locale: str | None = None) -> list[dict[str, Any]]:
     Pulse values are intentionally absent here; they live in the chart payload
     so initial and refreshed chart/pulse projections share one timestamp.
     """
-    return _live_brand_projection(locale)
+    return _live_brand_projection(locale, tracked_only=tracked_only)
 
 
 def _partition_home_brands(
@@ -4052,7 +4084,7 @@ def home(request: HttpRequest) -> HttpResponse:
     window_days = _resolve_home_window(request, allow_cookie=False)
 
     # Pre-merged brand data for template iteration
-    brands_data = _build_brands_context(locale)
+    brands_data = _build_brands_context(locale, tracked_only=True)
     brand_nicknames = [b["nickname"] for b in brands_data]
     open_brands, closed_brands = _partition_home_brands(brands_data)
     initial_filters = {
@@ -4083,6 +4115,7 @@ def home(request: HttpRequest) -> HttpResponse:
         initial_filters,
         locale=locale,
         brand_projection=brands_data,
+        tracked_only=True,
     )
     initial_chart_payload["applied_filters"] = initial_filters
     sentiment_keys = list(
@@ -5548,6 +5581,7 @@ def chart_json(request: HttpRequest) -> JsonResponse:
         filters,
         locale=locale,
         bucket_timezone=request.GET.get("timezone", "UTC"),
+        tracked_only=True,
     )
     payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
     payload["classification_unavailable"] = {
@@ -5574,6 +5608,7 @@ def chart_html(request: HttpRequest) -> HttpResponse:
         filters,
         locale=locale,
         bucket_timezone=request.GET.get("timezone", "UTC"),
+        tracked_only=True,
     )
     payload["applied_filters"] = _applied_home_filters(requested_filters, filters)
     payload["classification_unavailable"] = {
