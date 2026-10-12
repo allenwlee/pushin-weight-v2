@@ -69,6 +69,16 @@ def test_performance_actions_use_inert_inspection_click() -> None:
         )
 
 
+def test_general_candidate_preserves_the_existing_pro_workloads_and_assertions() -> None:
+    baseline = _load("declaration.local-candidate.json")
+    general = _load("declaration.general-candidate.json")
+
+    assert general["scenarios"][:2] == baseline["scenarios"]
+    assert {case["id"] for case in general["scenarios"][2:]} == {
+        "general-desktop", "general-mobile"
+    }
+
+
 def test_performance_scenarios_seed_conflicting_locale_and_legacy_state() -> None:
     for name in ("declaration.json", "declaration.staging.json"):
         declaration = _load(name)
