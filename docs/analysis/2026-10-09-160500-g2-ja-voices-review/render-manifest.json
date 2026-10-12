@@ -1,0 +1,15 @@
+{
+  "raw_response_sha256": {
+    "rocket|gpt-6-sol": "c834dbf652b293436684a53e3a1e6163886071a1a2f096fbfa5406361c5e7617",
+    "rocket|gpt-6.1-sol": "425c140feee2b21d93e4d6647fd4c4ebb6d4d11eb47d865ee05ad352f7a9ea49",
+    "tospo|gpt-6-sol": "5ec455b57b74382389db8dba21381cffbc06673c66b6d0d5b20a831d30cd2f04",
+    "tospo|gpt-6.1-sol": "e427068c91aca4910cd0df63a3ba69aeb34ef5947bf2bfbbbf61014454bc3969"
+  },
+  "display_edits": "Markdown layout and heading/body separation only; no wording edits. One natural combined article is displayed intact for both subject tabs.",
+  "source_branch": "feat/g2-round2-voices",
+  "base_sha": "1743234aa95e8b31d0613f313a88a4e9c60115b5",
+  "topic_slots": 8,
+  "original_article_units": 7,
+  "model_responses": 4,
+  "portable_media": true
+}

@@ -1,0 +1,29 @@
+{
+  "输入语言": "简体中文；姓名、产品名、账户、网址和编号保留原样",
+  "翻译方式": "由本次执行助手整理中文译文，未另行调用翻译模型；源文与译文不并列发送",
+  "翻译范围": "背景、来源说明、每条选中帖文、事实边界、两张照片全部标签",
+  "原图处理": "原始照片未编辑；英文图中文字随图保留，完整中文转录在材料中",
+  "材料哈希": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df",
+  "原图路径": "docs/analysis/2026-10-01-192934-g2-chatter-wang/original-source.jpg",
+  "原图哈希": "c0ddf32f548686cf725da584b8a253f20f63b2a16f98d9a59ada588d1344538e",
+  "来源文件": [
+    {
+      "路径": "docs/analysis/2026-10-01-192934-g2-chatter-wang/source-evidence.md",
+      "哈希": "6b8d674474e8f6c264565ac83c8ccfa82283c620bd618045311083b016071405"
+    },
+    {
+      "路径": ".local/g2-zhcn-voices-20261009/chonk-frozen-source.json",
+      "哈希": "c57abc40aa87fbe3dcff2c89e1cccc99f90d19f5e857d155785b185808a8faea"
+    },
+    {
+      "路径": ".local/g2-zhcn-voices-20261009/bare-source-packet.json",
+      "哈希": "f1cc2e51fea85482602ddc167b614feb5dcc35c4427f2e3815ed45c5fb80c175"
+    }
+  ],
+  "传输区别": "上一轮为Codex命令行，本轮直接调用Responses接口；仅发送角色句、中文材料和同一张照片",
+  "调用限制": {
+    "最多请求数": 4,
+    "重试次数": 0,
+    "修改后重跑次数": 0
+  }
+}

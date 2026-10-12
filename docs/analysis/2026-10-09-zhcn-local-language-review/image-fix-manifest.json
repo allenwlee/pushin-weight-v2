@@ -1,0 +1,254 @@
+{
+  "recorded_at_utc": "2026-10-09T07:46:46.587733+00:00",
+  "preview": "http://100.102.74.50:58423/zh-cn/index.html",
+  "scope": "Latest Chinese Chonk hero image only",
+  "new_model_calls": 0,
+  "protected_files": {
+    "samples.json": {
+      "before": "ea7680eb7551c3d7dd46f7fc8cae5f975e327653e44b8f0770fc363b7ccc5188",
+      "after": "ea7680eb7551c3d7dd46f7fc8cae5f975e327653e44b8f0770fc363b7ccc5188",
+      "unchanged": true
+    },
+    "raw-results.json": {
+      "before": "8a1e93839d355a80309848f9029c51786f2a60730c4275695c08722796f7180e",
+      "after": "8a1e93839d355a80309848f9029c51786f2a60730c4275695c08722796f7180e",
+      "unchanged": true
+    },
+    "packet.zh-CN.md": {
+      "before": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df",
+      "after": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df",
+      "unchanged": true
+    },
+    "receipts.json": {
+      "before": "52eeedab1c89c76e055d81f3285efe65d6fe16ee4ff88160303460ecf2d2f6c6",
+      "after": "52eeedab1c89c76e055d81f3285efe65d6fe16ee4ff88160303460ecf2d2f6c6",
+      "unchanged": true
+    },
+    "translation-provenance.json": {
+      "before": "74d7cd9e62e140f64b4248f6226c89e02570ed6e56bcdd03c44a3e083bbafeec",
+      "after": "74d7cd9e62e140f64b4248f6226c89e02570ed6e56bcdd03c44a3e083bbafeec",
+      "unchanged": true
+    },
+    "chonk-source-poster.jpg": {
+      "before": "52677b47e8e5fc012f86c20bea53ea6ebb1b165ced6f5fc20606fe2f251c89a3",
+      "after": "52677b47e8e5fc012f86c20bea53ea6ebb1b165ced6f5fc20606fe2f251c89a3",
+      "unchanged": true
+    },
+    "chonk-source-video.mp4": {
+      "before": "b031bce8370f0694f2f71728a70ba4ddd48c7f05ccab7d41c8a020209d1e716e",
+      "after": "b031bce8370f0694f2f71728a70ba4ddd48c7f05ccab7d41c8a020209d1e716e",
+      "unchanged": true
+    }
+  },
+  "checks": {
+    "image-fix-desktop-combinations.json": [
+      {
+        "style": "metro",
+        "model": "gpt-6.1-sol",
+        "imageSrc": "chonk-official-cat-4s.jpg",
+        "imageNaturalWidth": 640,
+        "imageWidth": 547.015625,
+        "imageHeight": 300,
+        "imageVisible": true,
+        "figurePosition": "relative",
+        "blend": "normal",
+        "opacity": "1",
+        "filter": "none",
+        "overlayDisplay": "none",
+        "overlayBackground": "none",
+        "alt": "Mistral官方发布视频第4秒：一只胖橘猫走过橙色数字4旁边",
+        "rawResponseUnchanged": true,
+        "caption": "Mistral官方发布视频第4秒的画面",
+        "overflow": false
+      },
+      {
+        "style": "metro",
+        "model": "gpt-6-sol",
+        "imageSrc": "chonk-official-cat-4s.jpg",
+        "imageNaturalWidth": 640,
+        "imageWidth": 547.015625,
+        "imageHeight": 300,
+        "imageVisible": true,
+        "figurePosition": "relative",
+        "blend": "normal",
+        "opacity": "1",
+        "filter": "none",
+        "overlayDisplay": "none",
+        "overlayBackground": "none",
+        "alt": "Mistral官方发布视频第4秒：一只胖橘猫走过橙色数字4旁边",
+        "rawResponseUnchanged": true,
+        "caption": "Mistral官方发布视频第4秒的画面",
+        "overflow": false
+      },
+      {
+        "style": "wemedia",
+        "model": "gpt-6.1-sol",
+        "imageSrc": "chonk-official-cat-4s.jpg",
+        "imageNaturalWidth": 640,
+        "imageWidth": 547.015625,
+        "imageHeight": 300,
+        "imageVisible": true,
+        "figurePosition": "relative",
+        "blend": "normal",
+        "opacity": "1",
+        "filter": "none",
+        "overlayDisplay": "none",
+        "overlayBackground": "none",
+        "alt": "Mistral官方发布视频第4秒：一只胖橘猫走过橙色数字4旁边",
+        "rawResponseUnchanged": true,
+        "caption": "Mistral官方发布视频第4秒的画面",
+        "overflow": false
+      },
+      {
+        "style": "wemedia",
+        "model": "gpt-6-sol",
+        "imageSrc": "chonk-official-cat-4s.jpg",
+        "imageNaturalWidth": 640,
+        "imageWidth": 547.015625,
+        "imageHeight": 300,
+        "imageVisible": true,
+        "figurePosition": "relative",
+        "blend": "normal",
+        "opacity": "1",
+        "filter": "none",
+        "overlayDisplay": "none",
+        "overlayBackground": "none",
+        "alt": "Mistral官方发布视频第4秒：一只胖橘猫走过橙色数字4旁边",
+        "rawResponseUnchanged": true,
+        "caption": "Mistral官方发布视频第4秒的画面",
+        "overflow": false
+      }
+    ],
+    "image-fix-mobile-combinations.json": [
+      {
+        "style": "metro",
+        "model": "gpt-6.1-sol",
+        "imageSrc": "chonk-official-cat-4s.jpg",
+        "imageNaturalWidth": 640,
+        "imageWidth": 322,
+        "imageHeight": 181.125,
+        "imageVisible": true,
+        "overlayDisplay": "none",
+        "overlayBackground": "none",
+        "rawResponseUnchanged": true,
+        "overflow": false
+      },
+      {
+        "style": "metro",
+        "model": "gpt-6-sol",
+        "imageSrc": "chonk-official-cat-4s.jpg",
+        "imageNaturalWidth": 640,
+        "imageWidth": 322,
+        "imageHeight": 181.125,
+        "imageVisible": true,
+        "overlayDisplay": "none",
+        "overlayBackground": "none",
+        "rawResponseUnchanged": true,
+        "overflow": false
+      },
+      {
+        "style": "wemedia",
+        "model": "gpt-6.1-sol",
+        "imageSrc": "chonk-official-cat-4s.jpg",
+        "imageNaturalWidth": 640,
+        "imageWidth": 322,
+        "imageHeight": 181.125,
+        "imageVisible": true,
+        "overlayDisplay": "none",
+        "overlayBackground": "none",
+        "rawResponseUnchanged": true,
+        "overflow": false
+      },
+      {
+        "style": "wemedia",
+        "model": "gpt-6-sol",
+        "imageSrc": "chonk-official-cat-4s.jpg",
+        "imageNaturalWidth": 640,
+        "imageWidth": 322,
+        "imageHeight": 181.125,
+        "imageVisible": true,
+        "overlayDisplay": "none",
+        "overlayBackground": "none",
+        "rawResponseUnchanged": true,
+        "overflow": false
+      }
+    ],
+    "image-fix-video-check.json": {
+      "dialogOpen": true,
+      "videoWidth": 640,
+      "duration": 17.136327,
+      "playing": true,
+      "poster": "chonk-source-poster.jpg",
+      "source": "chonk-source-video.mp4"
+    },
+    "image-fix-desktop-1280-fold.json": {
+      "viewport": [
+        1280,
+        800
+      ],
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "overflow": false
+    },
+    "image-fix-desktop-1400-fold.json": {
+      "viewport": [
+        1400,
+        1000
+      ],
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "overflow": false
+    },
+    "image-fix-mobile-fold.json": {
+      "viewport": [
+        390,
+        844
+      ],
+      "purposeBottom": 695.453125,
+      "purposeFits": true,
+      "overflow": false
+    }
+  },
+  "files": [
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/index.html",
+      "bytes": 80607,
+      "sha256": "ac6ae5fd5e95a37fa813e58c4a59a35fbfa35f252955bac5a76b4df0530c066c"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/2026-10-09-162800-chatter-zhcn-local-language-review.html",
+      "bytes": 80607,
+      "sha256": "ac6ae5fd5e95a37fa813e58c4a59a35fbfa35f252955bac5a76b4df0530c066c"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/chonk-official-cat-4s.jpg",
+      "bytes": 21738,
+      "sha256": "c57c5e6cb1937b9a930769088b0f4f929cf56c2192cfd25ea12ecbab8201f1dc"
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/build_review.py",
+      "bytes": 23534,
+      "sha256": "ecfc8a40fc4aa45dec49bc136069fa03b5d87e9ef77dc69ff6cdaa0efe996b8d"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/2026-10-09-170000-chonk-image-fix-addendum.md",
+      "bytes": 2246,
+      "sha256": "63bd0f86a1aed47df643440886a0b5f854172bc9e7b4e40403204e7a9d33b68b"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/screenshots/chonk-image-fix-desktop.png",
+      "bytes": 439060,
+      "sha256": "c170534dc8606ab8a5869dc21f7c8917e98e57d4b3e97711d8b4576371a2706b"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/screenshots/chonk-image-fix-mobile.png",
+      "bytes": 177848,
+      "sha256": "1155d25b7cdbd106b18a915933a980ec0f8c5989e19e063e69a200b481111ff4"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/screenshots/chonk-image-fix-mobile-fold.png",
+      "bytes": 103979,
+      "sha256": "412aa12aa0e54e5c17bfb0489f723c494827b6a1f6a02f7409aead404b41f1cd"
+    }
+  ]
+}

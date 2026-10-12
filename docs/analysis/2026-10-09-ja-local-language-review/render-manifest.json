@@ -1,0 +1,19 @@
+{
+  "packet_sha256": "a944b14ec93717b90d2bc9c2f24cfb66bb5dd2130acc0ff6b8ccf732a05c8d86",
+  "raw_sha256": {
+    "rocket|gpt-6-sol": "8dac8c52ee4defa1298224ef20e211a94a0a9a5a1851f171d2ea59c7c5dff099",
+    "rocket|gpt-6.1-sol": "86fe6500e54d6baa0e710709eda82cd8592de8c72463b8e02e14fa1168ddeaf7",
+    "tospo|gpt-6-sol": "c2049ef8e0cad66d840b462014b918520d9f71f7fd19ec1313cc0169c70886d1",
+    "tospo|gpt-6.1-sol": "a379b67cfa5d2a46e935b7df0de49c916d1a60b2e214fb93e069516fb91cdb58",
+    "rocket|deepseek-v4-pro": "60cad628a53d9e5797e039c42ccc01ece3415fc5c5122ece92025a7ba796cc86",
+    "tospo|deepseek-v4-pro": "d71d2e669f1d790a674d24431a0667f3ab46f8c341b2b03bfe176c0c664f7904",
+    "rocket|claude-fable-5-1": "28f06d0957fac7d4e85d77caf38cfbb59fdfbeef58148e90679eb8cd2a8bf357",
+    "rocket|claude-opus-5-5": "8333df18246920220ed715522e0a5d78938992b0d54ba11e56662bb7d6e09718",
+    "tospo|claude-fable-5-1": "909ff11a2eb31fb73035b0127fb7612da34c6915664bba2820b4f3048ad0d7fe",
+    "tospo|claude-opus-5-5": "b108d9c021ba6ed3a87e174f1c042b33837a282beff5c789902d7a4b1d0e34f7"
+  },
+  "wording_edits": false,
+  "responses": 10,
+  "original_article_units": 16,
+  "rendered_article_units": 16
+}
