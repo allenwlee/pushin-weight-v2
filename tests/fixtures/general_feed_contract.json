@@ -1,0 +1,9 @@
+{
+  "sections": {"6100": "events", "6101": "opportunities", "6102": "job_listings", "6103": "personnel_changes"},
+  "closed_job": "6199",
+  "jobs_by_weights": {"open": "6102", "none": null},
+  "free_titles": {"en": "Free stuff", "zh-cn": "福利", "ja": "無料・特典"},
+  "panel_count": 6,
+  "masthead_height": 48.5,
+  "desktop_nav_width": {"rail": 48, "expanded": 224}
+}

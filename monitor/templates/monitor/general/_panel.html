@@ -1,0 +1,13 @@
+{% load i18n %}
+<section class="panel {{ feed.section }}" id="{{ feed.section }}" data-panel="{{ feed.section }}" aria-labelledby="title-{{ feed.section }}">
+  <div class="section-head"><h2 id="title-{{ feed.section }}"><svg class="icon" aria-hidden="true"><use href="#{{ feed.glyph }}"></use></svg>{{ feed.title }}</h2><button type="button" class="refresh-button" data-refresh="{{ feed.section }}" aria-label="{% translate 'Refresh' %} {{ feed.title }}">↻</button></div>
+  <div class="human-pane feed-scroll" tabindex="0" aria-label="{{ feed.title }}">
+    <div data-cards>{% include 'monitor/general/_cards.html' %}</div>
+    <button type="button" data-more="{{ feed.section }}"{% if not feed.next_cursor %} hidden{% endif %}>{% translate "More" %}</button>
+  </div>
+  <div class="agent-pane" tabindex="0"><p class="terminal-label">{{ feed.title }} / MCP</p><pre>{
+  "status": "unavailable",
+  "section": "{{ feed.section }}"
+}</pre><p>{% translate "Agent access is not available for this section yet." %}</p></div>
+  <p class="feed-status" data-feed-status role="status" hidden></p>
+</section>

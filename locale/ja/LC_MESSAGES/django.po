@@ -484,3 +484,296 @@ msgstr "固定された基準週の生データ平均に対する比率"
 #: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
 msgid "A common complete reference week is unavailable. Raw values remain inspectable."
 msgstr "全系列に共通する完全な基準週がありません。生データは確認できます。"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "%(count)s days"
+msgstr "%(count)s日"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "%(count)s hrs"
+msgstr "%(count)s時間"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "%(count)s min"
+msgstr "%(count)s分"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "A closer look"
+msgstr "詳しく見る"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Agent"
+msgstr "エージェント"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Agent access is not available for this section yet."
+msgstr "このセクションのエージェントアクセスはまだ利用できません。"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Ask what’s happening…"
+msgstr "いま何が起きている？"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Chatter"
+msgstr "話題"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Chatter is currently unavailable."
+msgstr "話題は現在利用できません。"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Close navigation"
+msgstr "ナビゲーションを閉じる"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Closed"
+msgstr "クローズド"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Commentary"
+msgstr "解説"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Commentary is shown in"
+msgstr "解説の表示言語："
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Commentary versions"
+msgstr "解説の履歴"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Copy link"
+msgstr "リンクをコピー"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Date unavailable"
+msgstr "日付不明"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Details from this source"
+msgstr "この投稿の詳細"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Ends"
+msgstr "終了"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "English"
+msgstr "英語"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Explore the current model signals in Pro."
+msgstr "現在のモデル動向は Pro で確認できます。"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Fetched"
+msgstr "取得日時"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Fetched %(time)s ago"
+msgstr "%(time)s前に取得"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Free stuff"
+msgstr "無料・特典"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "General"
+msgstr "総合"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Human"
+msgstr "人間"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "I am"
+msgstr "私は"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Jobs"
+msgstr "求人"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Just listed %(time)s ago!"
+msgstr "新着：%(time)s前に取得！"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Language"
+msgstr "言語"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Legacy commentary"
+msgstr "以前の解説"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Live: end time unavailable"
+msgstr "開催中：終了時刻不明"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Live: ends in %(time)s"
+msgstr "開催中：終了まで%(time)s"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Local"
+msgstr "現地"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "More"
+msgstr "もっと見る"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Navigation"
+msgstr "ナビゲーション"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "No matching posts yet."
+msgstr "該当する投稿はまだありません。"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Open"
+msgstr "オープン"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Open Pro"
+msgstr "Pro を開く"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Open original post"
+msgstr "元の投稿を開く"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Original source"
+msgstr "元の投稿"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Page assistant is unavailable"
+msgstr "ページアシスタントは現在利用できません"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Permanent link"
+msgstr "固定リンク"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Post"
+msgstr "投稿"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Post by"
+msgstr "投稿者"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Postponed"
+msgstr "延期"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Published"
+msgstr "公開日時"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Pulse"
+msgstr "動向"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Reading"
+msgstr "表示"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Refresh"
+msgstr "更新"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Revision"
+msgstr "版"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Saved commentary is not available for this Post."
+msgstr "この投稿には保存済みの解説がありません。"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Saved revision"
+msgstr "保存済みの版"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Saved translation"
+msgstr "保存済みの翻訳"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Settings"
+msgstr "設定"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Shown in"
+msgstr "表示言語"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Sign in"
+msgstr "ログイン"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Sign out"
+msgstr "ログアウト"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Skip to content"
+msgstr "本文へ移動"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Source text"
+msgstr "元の文章"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Start time unavailable"
+msgstr "開始時刻不明"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Starts"
+msgstr "開始"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Starts in %(time)s"
+msgstr "開始まで%(time)s"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Timezone"
+msgstr "タイムゾーン"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Toggle navigation"
+msgstr "ナビゲーションを切り替え"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Unconfirmed"
+msgstr "未確認"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Unconfirmed source claim"
+msgstr "未確認の情報"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Visit source"
+msgstr "参照先を開く"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Weights"
+msgstr "ウェイト"
+
+#: monitor/general_views.py monitor/templates/monitor/general.html monitor/templates/monitor/content/detail.html
+msgid "Who’s moving"
+msgstr "人の動き"
+
+#: monitor/general_views.py
+msgctxt "General page"
+msgid "Calendar"
+msgstr "カレンダー"
+
+#: monitor/templates/monitor/general.html
+msgid "Open Weights Coming Soon!"
+msgstr "オープンウェイト、近日公開！"
+
+#: monitor/templates/monitor/general.html
+msgid "OK"
+msgstr "OK"
+
+#: monitor/templates/monitor/general/_editorial_panel.html
+msgid "Published stories are currently unavailable."
+msgstr "公開記事は現在利用できません。"

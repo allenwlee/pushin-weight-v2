@@ -1,0 +1,19 @@
+{% load i18n %}
+<button class="nav-backdrop" data-close-nav aria-label="{% translate 'Close navigation' %}" hidden></button>
+<aside class="left-nav" id="left-navigation" aria-label="{% translate 'Navigation' %}">
+  <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="left-navigation" aria-label="{% translate 'Toggle navigation' %}">☰<span class="nav-label">Pushin' Weight</span></button>
+  <nav>
+    <a href="/general/?lang={{ locale }}" title="{% translate 'General' %}"><svg class="icon" aria-hidden="true"><use href="#mark-quiet"></use></svg><span class="nav-label">{% translate "General" %}</span></a>
+    {% for key, panel in panels.items %}<a href="#{{ key }}" title="{{ panel.title }}"><svg class="icon" aria-hidden="true"><use href="#{{ panel.glyph }}"></use></svg><span class="nav-label">{{ panel.title }}</span></a>{% endfor %}
+    <a href="/?locale={{ locale }}" title="Pro"><span class="rail-letter" aria-hidden="true">P</span><span class="nav-label">Pro</span></a>
+  </nav>
+  <div class="nav-bottom">
+    <details id="general-settings"><summary title="{% translate 'Settings' %}"><span class="rail-letter" aria-hidden="true">⚙</span><span class="nav-label">{% translate "Settings" %}</span></summary><div class="settings-drawer">
+      <h2>{% translate "Settings" %}</h2>
+      {% include 'monitor/general/_weights.html' %}
+      <div class="setting"><span class="setting-label">{% translate "I am" %}</span><div class="segmented">{% for choice in settings_links.audience %}<a href="{{ choice.url }}" data-pref="audience" data-value="{{ choice.value }}"{% if choice.active %} aria-current="true"{% endif %}>{{ choice.label }}</a>{% endfor %}</div></div>
+      {% include 'monitor/general/_settings.html' %}
+    </div></details>
+    {% if user.is_authenticated %}<form action="{% url 'account_logout' %}" method="post">{% csrf_token %}<input type="hidden" name="next" value="/general/"><button type="submit" title="{% translate 'Sign out' %}"><svg class="icon" aria-hidden="true"><use href="#icon-followers-1"></use></svg><span class="nav-label">{% translate "Sign out" %}</span></button></form>{% else %}<a href="{% url 'account_login' %}?next={{ return_path|urlencode }}" title="{% translate 'Sign in' %}"><svg class="icon" aria-hidden="true"><use href="#icon-followers-1"></use></svg><span class="nav-label">{% translate "Sign in" %}</span></a>{% endif %}
+  </div>
+</aside>

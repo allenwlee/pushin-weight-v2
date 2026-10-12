@@ -1,0 +1,40 @@
+{% load static i18n %}<!doctype html>
+<html lang="{{ locale }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>走个量 · Pushin' Weight</title><link rel="icon" href="{% static 'favicon.svg' %}">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;550;600;650;700&amp;family=Newsreader:opsz,wght@6..72,450;6..72,550&amp;family=VT323&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'monitor/general.css' %}"><script src="{% static 'monitor/general.js' %}" defer></script>
+</head><body class="general-page" data-audience="{{ state.audience }}" data-nav="rail" data-preferences-namespace="{{ preferences_namespace }}">
+{% include 'monitor/_cyber_quan_sprite.html' %}
+<a class="skip-link" href="#page-sections">{% translate "Skip to content" %}</a>
+{% include 'monitor/general/_navigation.html' %}
+<div class="general-shell">
+<header><div class="masthead">
+  <button type="button" class="mobile-nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="left-navigation" aria-label="{% translate 'Toggle navigation' %}">☰</button>
+  <a class="logo" href="/general/?lang={{ locale }}"><svg class="app-mark" aria-hidden="true"><use href="#mark-quiet"></use></svg><span class="zh">走个量</span><span class="en">Pushin'<br>Weight</span></a>
+  <div class="chat-anchor"><div class="chat-launcher"><input placeholder="{% translate 'Ask what’s happening…' %}" aria-label="{% translate 'Page assistant is unavailable' %}" disabled><button type="button" aria-label="{% translate 'Page assistant is unavailable' %}" disabled>↵</button></div></div>
+  <div class="primary-settings">
+    {% include 'monitor/general/_weights.html' %}
+    <div class="for-control"><span class="identity-prefix">{% translate "I am" %} <span data-identity-article>{% if locale == 'en' %}{% if state.audience == 'agent' %}an{% else %}a{% endif %}{% endif %}</span></span><div class="for-toggle">{% for choice in settings_links.audience %}<a href="{{ choice.url }}" data-pref="audience" data-value="{{ choice.value }}"{% if choice.active %} aria-current="true"{% endif %}><svg class="icon" aria-hidden="true"><use href="{% if choice.value == 'human' %}#icon-followers-2{% else %}#agents-b{% endif %}"></use></svg>{{ choice.label }}</a>{% endfor %}</div></div>
+  </div>
+  <div class="header-settings">{% include 'monitor/general/_settings.html' %}</div>
+  <a class="mobile-preferences" href="#general-settings" data-open-settings aria-label="{% translate 'Settings' %}">☷</a>
+</div></header>
+<main id="page-sections" tabindex="-1">
+  <div class="top-grid">
+    {% include 'monitor/general/_editorial_panel.html' with panel=editorial.chatter %}
+    {% include 'monitor/general/_editorial_panel.html' with panel=editorial.pulse %}
+  </div>
+  <div class="bottom-grid">
+    {% include 'monitor/general/_panel.html' with feed=panels.calendar %}
+    <div class="opportunities-stack">{% include 'monitor/general/_panel.html' with feed=panels.free %}{% include 'monitor/general/_panel.html' with feed=panels.jobs %}</div>
+    {% include 'monitor/general/_panel.html' with feed=panels.moving %}
+  </div>
+</main>
+</div>
+<dialog id="weights-coming-soon" class="notice-dialog" aria-labelledby="weights-coming-soon-title"{% if initial_data.closed_weights_notice %} open{% endif %}>
+  <p id="weights-coming-soon-title">{% translate "Open Weights Coming Soon!" %}</p>
+  <form method="dialog"><button type="submit" autofocus>{% translate "OK" %}</button></form>
+</dialog>
+{{ initial_data|json_script:'general-data' }}
+</body></html>

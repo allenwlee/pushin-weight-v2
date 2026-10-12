@@ -1,0 +1,267 @@
+{
+  "skill": "ce-doc-review",
+  "mode": "non-interactive",
+  "status": "complete",
+  "reviewed_at": "2026-10-08T14:51:53+09:00",
+  "document_path": "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g5-general-page/docs/plans/2026-10-02-060108-feat-g5-general-page-plan.md",
+  "document_sha256_before": "d5b04abfba87bb7433e4adbd30c0dce8722aaf1beb02a92f12b009eb48ad6d3c",
+  "document_type": "unified-plan",
+  "origin": "authoritative General Launch Charter and October 8 owner requests; product_contract_source:ollija-annotate-plan",
+  "settled_decisions": [
+    "KD1: user-directed return to :58417; rejected ChatGPT palette/fonts.",
+    "KD2: lower feeds first, G2/G3 keep Chatter/Pulse."
+  ],
+  "edit_authority": "Apply corrections to the draft implementation and verification sections needed to satisfy the established Product Contract; preserve product outcomes, constraints and settled decisions.",
+  "coverage": {
+    "execution": "Six review lenses applied sequentially in the parent session under the supplied AGENTS.md Task/Subagent mapping.",
+    "independence_verified": false,
+    "cross_model_review": "Not run: supplied AGENTS.md requires Task/Subagent work sequentially in the main thread. No outside model or messages.",
+    "product_lens": "Not activated: current product scope and design choice supplied directly by owner; no new strategic position.",
+    "packs": {
+      "roots": [],
+      "warnings": [],
+      "errors": []
+    },
+    "failed_reviewers": []
+  },
+  "confidence_check": {
+    "depth": "Deep",
+    "grounding": "Direct readers, models, routes, lifecycle and publication/retention code inspected. External allauth/Open Graph sources corroborate existing choices. No further broad research needed.",
+    "remaining_thin_sections": []
+  },
+  "original_counts": {
+    "findings": 4,
+    "P1": 1,
+    "P2": 3
+  },
+  "original_responses": [
+    {
+      "reviewer": "coherence-reviewer",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "feasibility-reviewer",
+      "findings": [
+        {
+          "id": "F1",
+          "title": "Existing reader helper is named incorrectly",
+          "severity": "P2",
+          "section": "Evidence and upstream boundaries",
+          "why_it_matters": "An executor following the named reuse point would look for a helper that does not exist.",
+          "finding_type": "error",
+          "autofix_class": "safe_auto",
+          "confidence": 100,
+          "evidence": [
+            "monitor/views.py::_enrich_feed_posts consumes it."
+          ],
+          "suggested_fix": "Replace the incorrect helper name with the existing classification-enrichment helper."
+        },
+        {
+          "id": "F3",
+          "title": "Published headline cleanup would break permanent links",
+          "severity": "P1",
+          "section": "U4 - Permanent Post and OriginalContent detail pages",
+          "why_it_matters": "A shared headline URL can return not found after retention deletes its published content, localized text and source relations.",
+          "finding_type": "error",
+          "autofix_class": "gated_auto",
+          "confidence": 100,
+          "evidence": [
+            "Every displayed Post or published OriginalContent unit has a durable first-party URL independent of feed position, category, title and current hero selection.",
+            "A trend/headline item with no existing story identity uses /content/<content_id>/ for its immutable content row, after proving it was published; no new content storage or synthetic UUID is needed."
+          ],
+          "suggested_fix": "Make preservation of all previously published content and citations a G2-owned prerequisite to the OriginalContent part of U4, verify historical publication with the workflow-specific evidence, and test old links after the real prune path runs."
+        }
+      ],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "design-lens-reviewer",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "security-lens-reviewer",
+      "findings": [],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "scope-guardian-reviewer",
+      "findings": [
+        {
+          "id": "F4",
+          "title": "Navigation unnecessarily waits for the entire G2 integration",
+          "severity": "P2",
+          "section": "U5/U6 - General shell and live-card integration",
+          "why_it_matters": "The written dependencies make otherwise independent lower panels wait for G2 OriginalContent, contradicting the agreed sequencing.",
+          "finding_type": "error",
+          "autofix_class": "gated_auto",
+          "confidence": 100,
+          "evidence": [
+            "These four feeds do not need G2's new headline/Chatter/Pulse writing pipeline.",
+            "Dependencies: U1; U4 supplies item-page shell reuse.",
+            "Dependencies: U2–U5."
+          ],
+          "suggested_fix": "Make U5/U6 depend on the Post portion of U4 only; preserve full OriginalContent integration as a completion requirement for U7."
+        }
+      ],
+      "residual_risks": [],
+      "deferred_questions": []
+    },
+    {
+      "reviewer": "adversarial-document-reviewer",
+      "findings": [
+        {
+          "id": "F2",
+          "title": "Continuation can reorder items when the clock advances",
+          "severity": "P2",
+          "section": "KTD3 - Bounded ordering at the reader",
+          "why_it_matters": "An event can move from upcoming to live between pages, moving across the continuation boundary and producing missing or repeated cards.",
+          "finding_type": "omission",
+          "autofix_class": "gated_auto",
+          "confidence": 100,
+          "evidence": [
+            "Use one response as_of, stable post-ID tie-breaks and signed cursors bound to section/filter/locale/order."
+          ],
+          "suggested_fix": "Carry the first-page as_of and fetched-at cutoff in continuation, restart on refresh, and test a start/end boundary between pages."
+        }
+      ],
+      "residual_risks": [],
+      "deferred_questions": []
+    }
+  ],
+  "resolved_findings": [
+    {
+      "id": "F1",
+      "reviewer": "feasibility-reviewer",
+      "title": "Existing reader helper is named incorrectly",
+      "severity": "P2",
+      "section": "Evidence and upstream boundaries",
+      "why_it_matters": "An executor following the named reuse point would look for a helper that does not exist.",
+      "finding_type": "error",
+      "autofix_class": "safe_auto",
+      "confidence": 100,
+      "evidence": [
+        "monitor/views.py::_enrich_feed_posts consumes it."
+      ],
+      "project_evidence": [
+        "monitor/views.py:2119 in the inspected G2 checkout defines _enrich_posts_with_classifications; its body calls read_post_content_many."
+      ],
+      "suggested_fix": "Replace the incorrect helper name with the existing classification-enrichment helper.",
+      "disposition": "Applied and verified",
+      "reason": "Concrete correction within authorized implementation/verification scope; existing contract does not resolve the cited code or sequencing mismatch."
+    },
+    {
+      "id": "F2",
+      "reviewer": "adversarial-document-reviewer",
+      "title": "Continuation can reorder items when the clock advances",
+      "severity": "P2",
+      "section": "KTD3 - Bounded ordering at the reader",
+      "why_it_matters": "An event can move from upcoming to live between pages, moving across the continuation boundary and producing missing or repeated cards.",
+      "finding_type": "omission",
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "Use one response as_of, stable post-ID tie-breaks and signed cursors bound to section/filter/locale/order."
+      ],
+      "project_evidence": [
+        "event_lifecycle and opportunity_lifecycle derive ordering state from the supplied current time; the existing plan freezes time only per response."
+      ],
+      "suggested_fix": "Carry the first-page as_of and fetched-at cutoff in continuation, restart on refresh, and test a start/end boundary between pages.",
+      "disposition": "Applied and verified",
+      "reason": "Concrete correction within authorized implementation/verification scope; existing contract does not resolve the cited code or sequencing mismatch."
+    },
+    {
+      "id": "F3",
+      "reviewer": "feasibility-reviewer",
+      "title": "Published headline cleanup would break permanent links",
+      "severity": "P1",
+      "section": "U4 - Permanent Post and OriginalContent detail pages",
+      "why_it_matters": "A shared headline URL can return not found after retention deletes its published content, localized text and source relations.",
+      "finding_type": "error",
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "Every displayed Post or published OriginalContent unit has a durable first-party URL independent of feed position, category, title and current hero selection.",
+        "A trend/headline item with no existing story identity uses /content/<content_id>/ for its immutable content row, after proving it was published; no new content storage or synthetic UUID is needed."
+      ],
+      "project_evidence": [
+        "monitor/trend_narrative_lifecycle.py:417-471 prunes superseded runs older than 90 days unless current/last-good/recent/picture pins apply, explicitly deleting child content first.",
+        "OriginalContentText and OriginalContentSource cascade from the deleted content/text.",
+        "TrendNarrativeRun activated_at is preserved when superseded; publish_content can stamp content.published_at before the trend run becomes active."
+      ],
+      "suggested_fix": "Make preservation of all previously published content and citations a G2-owned prerequisite to the OriginalContent part of U4, verify historical publication with the workflow-specific evidence, and test old links after the real prune path runs.",
+      "disposition": "Applied and verified",
+      "reason": "Concrete correction within authorized implementation/verification scope; existing contract does not resolve the cited code or sequencing mismatch."
+    },
+    {
+      "id": "F4",
+      "reviewer": "scope-guardian-reviewer",
+      "title": "Navigation unnecessarily waits for the entire G2 integration",
+      "severity": "P2",
+      "section": "U5/U6 - General shell and live-card integration",
+      "why_it_matters": "The written dependencies make otherwise independent lower panels wait for G2 OriginalContent, contradicting the agreed sequencing.",
+      "finding_type": "error",
+      "autofix_class": "gated_auto",
+      "confidence": 100,
+      "evidence": [
+        "These four feeds do not need G2's new headline/Chatter/Pulse writing pipeline.",
+        "Dependencies: U1; U4 supplies item-page shell reuse.",
+        "Dependencies: U2–U5."
+      ],
+      "project_evidence": [
+        "Post readers and existing authentication are available independently; only the OriginalContent resolver and its publication/retention policy require G2."
+      ],
+      "suggested_fix": "Make U5/U6 depend on the Post portion of U4 only; preserve full OriginalContent integration as a completion requirement for U7.",
+      "disposition": "Applied and verified",
+      "reason": "Concrete correction within authorized implementation/verification scope; existing contract does not resolve the cited code or sequencing mismatch."
+    }
+  ],
+  "actual_edits": [
+    {
+      "finding_id": "F1",
+      "change": "Replace the incorrect helper name with the existing classification-enrichment helper.",
+      "verified": true
+    },
+    {
+      "finding_id": "F2",
+      "change": "Carry the first-page as_of and fetched-at cutoff in continuation, restart on refresh, and test a start/end boundary between pages.",
+      "verified": true
+    },
+    {
+      "finding_id": "F3",
+      "change": "Make preservation of all previously published content and citations a G2-owned prerequisite to the OriginalContent part of U4, verify historical publication with the workflow-specific evidence, and test old links after the real prune path runs.",
+      "verified": true
+    },
+    {
+      "finding_id": "F4",
+      "change": "Make U5/U6 depend on the Post portion of U4 only; preserve full OriginalContent integration as a completion requirement for U7.",
+      "verified": true
+    }
+  ],
+  "document_sha256_after": "6206bd48d0af89ca3894da14c493bf2e1cc95e9fde8c12c1b032c5cef36042f3",
+  "remaining": {
+    "proposed_fixes_count": 0,
+    "decisions_count": 0,
+    "fyi_count": 0
+  },
+  "implementation_boundary": "G2 publication/retention completion is required for the OriginalContent portion; independent Post/feed/navigation work can begin after ordinary checkout reconciliation. No implementation or runtime tests were performed.",
+  "completed_at": "2026-10-08T14:57:18+09:00",
+  "fixes_applied": 4,
+  "document_checks": {
+    "ollija_annotation": "unchanged; canonical existing plan; delivery_target on-request",
+    "unique_ids": {
+      "R": 16,
+      "KTD": 11,
+      "U": 7,
+      "AE": 6
+    },
+    "application_tests": "not run (planning only)",
+    "technical_design": "Eight sketches/tables cover components, protocol, temporal decisions, data flow, lifecycle, navigation states, presentation modes and URL surface."
+  },
+  "noninteractive_result": "Document review complete (non-interactive mode). Applied 4 fixes: corrected existing reader reference; fixed continuation clock; required published-history retention and prune-path proof; separated lower-panel dependencies from G2 integration. No proposed fixes, decisions or FYI observations remain. Review complete"
+}

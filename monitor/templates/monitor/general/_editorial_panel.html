@@ -1,0 +1,22 @@
+{% load i18n %}
+<section class="panel {{ panel.track }}" id="{{ panel.track }}" aria-labelledby="title-{{ panel.track }}">
+  <div class="section-head">
+    <h2 id="title-{{ panel.track }}"><svg class="icon" aria-hidden="true"><use href="#{{ panel.glyph }}"></use></svg>{{ panel.title }}</h2>
+    {% if panel.status != 'unavailable' %}<a class="editorial-archive human-pane" href="{% url 'editorial_archive' %}?track={{ panel.track }}&amp;lang={{ locale }}">{% translate "Story archive" %} ↗</a>{% endif %}
+  </div>
+  <div class="human-pane editorial-scroll" tabindex="0" aria-label="{{ panel.title }}">
+    {% if panel.fallback %}<p class="editorial-fallback">{% translate "This story is currently available in English." %}</p>{% endif %}
+    {% for item in panel.items %}
+      {% include 'monitor/general/_editorial_story.html' %}
+    {% empty %}
+      <p class="empty-feed">{% if panel.status == 'unavailable' %}{% translate "Published stories are currently unavailable." %}{% else %}{% translate "No published stories yet." %}{% endif %}</p>
+    {% endfor %}
+    {% if panel.history %}
+      <details class="chatter-history">
+        <summary>{% translate "Previous Chatter stories" %}</summary>
+        {% for item in panel.history %}{% include 'monitor/general/_editorial_story.html' %}{% endfor %}
+      </details>
+    {% endif %}
+  </div>
+  <div class="agent-pane" tabindex="0"><p class="terminal-label">{{ panel.title }} / MCP</p><pre>{ "status": "unavailable", "section": "{{ panel.track }}" }</pre><p>{% translate "Agent access is not available for this section yet." %}</p></div>
+</section>

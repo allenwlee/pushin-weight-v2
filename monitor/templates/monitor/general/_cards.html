@@ -1,0 +1,16 @@
+{% load i18n %}
+{% for item in feed.items %}
+<article class="feed-item{% if item.person %} people-item{% endif %}" data-post-id="{{ item.id }}">
+  {% if item.person %}<div class="person-initials" aria-hidden="true">{{ item.person.initials }}</div>{% endif %}
+  <div class="feed-copy">
+    <div class="brand-pills">{% for brand in item.brands %}<a class="brand-pill" href="{{ brand.url }}">#{{ brand.name }}</a>{% endfor %}</div>
+    {% if item.person %}<h3 class="person-name"><a href="{{ item.share_url }}">{{ item.person.name }}</a></h3><p class="person-role">{{ item.person.title }} · {{ item.person.organization }} · {{ item.person.relationship }}{% if not item.person.confirmed %} · {% translate "Unconfirmed" %}{% endif %}</p>{% endif %}
+    <a class="card-link" href="{{ item.share_url }}" lang="{{ item.commentary.locale|default:feed.locale }}">{{ item.display_text }}</a>
+    <div class="card-meta">
+      <span class="card-time{% if item.recent or item.timing.state == 'live' or item.timing.state == 'open' %} is-live{% elif item.timing.state == 'upcoming' and item.timing.target %} is-upcoming{% endif %}" data-time-label data-fetched="{{ item.fetched_at }}" data-state="{{ item.timing.state|default:'' }}" data-target="{{ item.timing.target|default:'' }}" data-kind="{{ feed.section }}">{{ item.time_label }}</span>
+      {% if item.commentary.fallback %}<span>{% translate "Shown in" %} {{ item.commentary.locale }}</span>{% endif %}
+      {% if item.commentary.source == 'legacy' %}<span>{% translate "Legacy commentary" %}</span>{% elif not item.commentary.text %}<span>{% translate "Source text" %}</span>{% endif %}
+    </div>
+  </div>
+</article>
+{% empty %}<p class="empty-feed">{% translate "No matching posts yet." %}</p>{% endfor %}

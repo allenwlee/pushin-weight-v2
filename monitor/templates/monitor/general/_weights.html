@@ -1,0 +1,2 @@
+{% load i18n %}
+<div class="setting"><span class="setting-label">{% translate "Weights" %}</span><div class="segmented">{% for choice in settings_links.weights %}<a href="{{ choice.url }}" role="button" aria-pressed="{{ choice.active|yesno:'true,false' }}" data-pref="weights" data-value="{{ choice.value }}"{% if choice.value == 'closed' %} aria-haspopup="dialog" aria-controls="weights-coming-soon"{% endif %}{% if choice.active %} aria-current="true"{% endif %}>{{ choice.label }}</a>{% endfor %}</div></div>

@@ -2,6 +2,24 @@
 
 Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
 
+## General-page content
+
+### Atomic content unit
+
+One independently addressable item: either an original source-platform Post
+or a published piece of PushinWeight-authored content. A post's commentary is
+derived content attached to that post. Several events, jobs or claims within
+one post do not turn it into several atomic posts.
+
+### OriginalContent
+
+G2's shared name for a saved PushinWeight-authored output, including a trend
+headline or editorial story. It has localized text, source evidence and a
+publication history distinct from its current front-page selection. This name
+belongs to G2's ongoing shared-storage transition; the G5 checkout has not yet
+integrated that implementation. Posts and their derived commentary remain
+separate source units.
+
 ## Ollija plan guidance
 
 ### Standalone Ollija

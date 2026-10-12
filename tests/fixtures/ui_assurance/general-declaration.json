@@ -1,0 +1,123 @@
+{
+  "schema_version": "bridgewright.assurance.declaration/v1",
+  "profile": "stateful-ui-assurance/v1",
+  "source_revision": "worktree-sha256:9884c875aba3a4fedf78dfc5557cd304f2a45220aff8ae933f5e368281c01338",
+  "fixture": {
+    "path": "tests/fixtures/general_feed_contract.json",
+    "sha256": "f6578c8ae5822870bb6e99a368d85be10e5b7d16484e89db22b1fd7134425d88"
+  },
+  "generator": {
+    "name": "pushinweight-general-browser",
+    "version": "1.1",
+    "seed": 501
+  },
+  "controls": [
+    {
+      "id": "audience",
+      "kind": "single_select",
+      "values": [
+        "human",
+        "agent"
+      ],
+      "initial_value": "human",
+      "reversible": true
+    },
+    {
+      "id": "navigation",
+      "kind": "single_select",
+      "values": [
+        "rail",
+        "expanded"
+      ],
+      "initial_value": "rail",
+      "reversible": true
+    },
+    {
+      "id": "weights",
+      "kind": "single_select",
+      "values": [
+        "open",
+        "none"
+      ],
+      "initial_value": "open",
+      "reversible": true
+    },
+    {
+      "id": "locale",
+      "kind": "single_select",
+      "values": [
+        "en",
+        "zh-cn",
+        "ja"
+      ],
+      "initial_value": "en",
+      "reversible": true
+    }
+  ],
+  "coverage_groups": [
+    {
+      "id": "general-controls",
+      "controls": [
+        "audience",
+        "navigation",
+        "weights",
+        "locale"
+      ],
+      "strength": 2
+    }
+  ],
+  "ordered_groups": [
+    {
+      "id": "weights-reversal",
+      "actions": [
+        "weights:none",
+        "weights:open"
+      ],
+      "strength": 2
+    }
+  ],
+  "constraints": [],
+  "invariants": [
+    {
+      "id": "closed-weights-unavailable",
+      "projections": [
+        "controls",
+        "accessibility",
+        "feed",
+        "persistence"
+      ]
+    },
+    {
+      "id": "general-state-agrees",
+      "projections": [
+        "controls",
+        "accessibility",
+        "feed",
+        "persistence"
+      ]
+    }
+  ],
+  "races": [
+    {
+      "id": "general-latest-weights-wins",
+      "older_action": "weights:none",
+      "newer_action": "weights:open",
+      "fault": "out_of_order"
+    }
+  ],
+  "seeded_regressions": [],
+  "environments": [
+    {
+      "id": "desktop-chromium",
+      "browser_runtime": "playwright-chromium",
+      "required": true
+    }
+  ],
+  "gates": [
+    {
+      "id": "general-local",
+      "scope": "affected",
+      "required": true
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{% load static i18n %}<!doctype html>
+<html lang="{{ locale }}">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% translate "Post" %} {{ item.id }} · Pushin' Weight</title>
+  <link rel="icon" href="{% static 'favicon.svg' %}">
+  <link rel="canonical" href="{{ canonical_url }}">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="{% translate 'Post by' %} @{{ item.source.author }} · Pushin' Weight">
+  <meta property="og:description" content="{{ item.commentary.text|default:item.source.text|truncatechars:240 }}">
+  <meta property="og:url" content="{{ canonical_url }}">
+  <meta name="twitter:card" content="summary">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;550;600;650;700&amp;family=Newsreader:opsz,wght@6..72,450;6..72,550&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'monitor/general.css' %}">
+  <script src="{% static 'monitor/content.js' %}" defer></script>
+</head>
+<body class="general-page detail-page">
+{% include 'monitor/_cyber_quan_sprite.html' %}
+<header class="masthead detail-masthead">
+  <a class="logo" href="/general/?lang={{ locale }}"><svg class="icon" aria-hidden="true"><use href="#mark-quiet"></use></svg><span>走个量 <b>Pushin' Weight</b></span></a>
+  <a href="/general/?lang={{ locale }}">← {% translate "General" %}</a>
+</header>
+<main class="atomic-detail">
+  <article>
+    <header class="detail-heading">
+      <p class="eyebrow">{% translate "Post" %} · @{{ item.source.author }}</p>
+      <h1>{% translate "A closer look" %}</h1>
+      <div class="brand-pills">{% for brand in item.brands %}<a class="brand-pill" href="{{ brand.url }}">#{{ brand.name }}</a>{% endfor %}</div>
+      <p class="source-times">{% translate "Fetched" %}: <time datetime="{{ item.fetched_at }}">{{ item.fetched_at }}</time>{% if item.published_at %} · {% translate "Published" %}: <time datetime="{{ item.published_at }}">{{ item.published_at }}</time>{% endif %}</p>
+      <button type="button" data-copy-link="{{ canonical_url }}">{% translate "Copy link" %}</button>
+      <a class="permanent-link" href="{{ canonical_url }}">{% translate "Permanent link" %}</a>
+      <span data-copy-status role="status"></span>
+    </header>
+    <section class="detail-section" aria-labelledby="commentary-title">
+      <h2 id="commentary-title">{% translate "Commentary" %}</h2>
+      {% if item.commentary.source == 'legacy' %}<p class="content-note">{% translate "Legacy commentary" %}</p>{% endif %}
+      {% if item.commentary.fallback %}<p class="content-note">{% translate "Commentary is shown in" %} {% if item.commentary.locale == 'en' %}{% translate "English" %}{% elif item.commentary.locale == 'zh-cn' %}中文{% else %}日本語{% endif %}.</p>{% endif %}
+      {% if item.commentary.text %}<div class="full-copy" lang="{{ item.commentary.locale }}">{{ item.commentary.text|linebreaks }}</div>{% else %}<p>{% translate "Saved commentary is not available for this Post." %}</p>{% endif %}
+      {% if item.commentary.artifact_id %}<p class="content-note">{% translate "Saved revision" %} {{ item.commentary.artifact_id }}</p>{% endif %}
+      {% if item.revisions %}<details><summary>{% translate "Commentary versions" %}</summary><ul>{% for revision in item.revisions %}<li><a href="{{ revision.url }}">{% translate "Revision" %} {{ revision.id }} · <time datetime="{{ revision.completed_at }}">{{ revision.completed_at }}</time></a></li>{% endfor %}</ul></details>{% endif %}
+    </section>
+    <section class="detail-section" aria-labelledby="original-title">
+      <h2 id="original-title">{% translate "Original source" %}</h2>
+      <div class="full-copy">{{ item.source.text|linebreaks }}</div>
+      {% if item.source.translation.text %}<details><summary>{% translate "Saved translation" %} · {{ item.source.translation.locale }}</summary><div class="full-copy" lang="{{ item.source.translation.locale }}">{{ item.source.translation.text|linebreaks }}</div></details>{% endif %}
+      {% if item.source.url %}<a href="{{ item.source.url }}" target="_blank" rel="noopener noreferrer">{% translate "Open original post" %} ↗</a>{% endif %}
+      <div class="source-media">{% for media in item.media %}{% if media.video %}<video controls preload="none" poster="{{ media.poster }}" src="{{ media.video }}"></video>{% else %}<img src="{{ media.poster }}" alt="{{ media.alt }}" loading="lazy">{% endif %}{% endfor %}</div>
+    </section>
+    {% if item.facts %}<section class="detail-section" aria-labelledby="details-title"><h2 id="details-title">{% translate "Details from this source" %}</h2>
+      {% for fact in item.facts %}<div class="source-fact">
+        <h3>{% if fact.name %}{{ fact.name }} · {% endif %}{{ fact.title }}</h3>
+        <p>{{ fact.organization }} · {{ fact.state }}{% if fact.relationship %} · {{ fact.relationship }}{% endif %}</p>
+        {% if fact.confirmed == False %}<p class="content-note">{% translate "Unconfirmed source claim" %}</p>{% endif %}
+        {% if fact.start.value %}<p>{% translate "Starts" %}: {{ fact.start.value }} · {{ fact.start.precision }}</p>{% endif %}
+        {% if fact.end.value %}<p>{% translate "Ends" %}: {{ fact.end.value }} · {{ fact.end.precision }}</p>{% endif %}
+        {% if fact.schedule %}<p>{{ fact.schedule }}</p>{% endif %}
+        {% if fact.location %}<p>{{ fact.location }}</p>{% endif %}
+        {% if fact.eligibility %}<p>{{ fact.eligibility }}</p>{% endif %}
+        {% if fact.salary %}<p>{{ fact.salary }}</p>{% endif %}
+        {% if fact.description %}<div class="full-copy">{{ fact.description|linebreaks }}</div>{% endif %}
+        {% if fact.contact %}<p>{{ fact.contact }}</p>{% endif %}
+        {% if fact.url %}<a href="{{ fact.url }}" target="_blank" rel="noopener noreferrer">{% translate "Visit source" %} ↗</a>{% endif %}
+      </div>{% endfor %}
+    </section>{% endif %}
+  </article>
+</main>
+</body></html>
