@@ -243,8 +243,9 @@
       "state_seeds": [],
       "actions": [
         {
-          "kind": "click",
-          "target": ".pulse-published-reports > summary"
+          "kind": "press",
+          "target": ".pulse-published-reports > summary",
+          "value": "Enter"
         }
       ],
       "required_metrics": [
@@ -296,8 +297,9 @@
       "state_seeds": [],
       "actions": [
         {
-          "kind": "click",
-          "target": ".pulse-published-reports > summary"
+          "kind": "press",
+          "target": ".pulse-published-reports > summary",
+          "value": "Enter"
         }
       ],
       "required_metrics": [
