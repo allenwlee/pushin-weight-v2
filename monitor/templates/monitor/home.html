@@ -49,6 +49,7 @@
         <span class="zh">{{ app_name_zh }}</span>
         <span class="en"><span class="en-line">Pushin'</span><span class="en-line">Weight</span></span>
       </h1>
+      <a data-general-link href="{% url 'general' %}?lang={{ active_locale }}">{% translate "General" %} ↗</a>
       <nav class="window-toggle locale-toggle" aria-label="{% if is_zh_chrome %}显示语言{% elif is_ja_chrome %}表示言語{% else %}Display language{% endif %}" data-i18n-aria="locale">
         <button type="button"{% if active_locale == 'en' %} class="is-active"{% endif %}
                 data-pw-locale-btn="en">en</button>

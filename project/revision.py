@@ -17,14 +17,14 @@ def deployed_revision() -> str | None:
 
 
 class BridgewrightRevisionMiddleware:
-    """Bind homepage and its assurance probes to the deployed candidate."""
+    """Bind public reader pages and assurance probes to the deployed candidate."""
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
         response = self.get_response(request)
-        if request.path == "/":
+        if request.path in {"/", "/general/"}:
             revision = deployed_revision()
             if revision is not None:
                 response["X-Bridgewright-Revision"] = revision

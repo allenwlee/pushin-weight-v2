@@ -1,5 +1,6 @@
 """General consumes G2's saved publications and complete relational citations."""
 
+from datetime import timedelta
 from uuid import uuid4
 
 import pytest
@@ -12,6 +13,57 @@ from monitor.original_content import WORKFLOWS, publish_content
 from tests.test_original_content_models import saved_text
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
+
+
+@pytest.mark.parametrize(
+    ("locale", "forecast", "history", "projection", "audit", "learning", "reports"),
+    [
+        ("en", "Forecasts are not available yet.", "Observed history", "Forward projection", "Outcome reports", "Learning from outcomes", "Published reports"),
+        ("zh-cn", "预测尚未开放。", "历史观测", "未来预测", "结果报告", "从结果中学习", "已发布报告"),
+        ("ja", "予測はまだ利用できません。", "観測履歴", "将来予測", "結果レポート", "結果からの学習", "公開済みレポート"),
+    ],
+)
+def test_pulse_framework_is_truthful_and_localized(
+    client, monkeypatch, locale, forecast, history, projection, audit, learning, reports
+):
+    monkeypatch.setenv("ORIGINAL_CONTENT_STORAGE", "shared")
+    monkeypatch.setenv("EDITORIAL_PUBLIC_ENABLED", "false")
+    with CaptureQueriesContext(connection) as queries:
+        response = client.get(f"/general/?lang={locale}", secure=True)
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert 'class="pulse-framework"' in body
+    assert 'data-pulse-status="unavailable"' in body
+    for label in (forecast, history, projection, audit, learning, reports):
+        assert label in body
+    assert 'data-forecast-value' not in body and 'data-forecast-probability' not in body
+    assert not any(row["sql"].lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE")) for row in queries)
+
+
+def test_saved_general_edition_and_citations_survive_normal_history_cleanup(client, monkeypatch):
+    from core.models import OriginalContentRun
+    from monitor.trend_narrative_lifecycle import (
+        prune_narrative_history,
+        prune_per_brand_trend_narrative_history,
+    )
+
+    monkeypatch.setenv("ORIGINAL_CONTENT_STORAGE", "shared")
+    monkeypatch.setenv("EDITORIAL_PUBLIC_ENABLED", "true")
+    text = published_story("pulse", source_count=7)
+    old = timezone.now() - timedelta(days=120)
+    OriginalContentRun.objects.filter(pk=text.narrative.run_id).update(
+        created_at=old, activated_at=old, status="superseded"
+    )
+    assert text.narrative.run.window_days is None
+    url = f"/stories/{text.narrative.story_id}/?track=pulse&lang=en&edition={text.public_id}"
+    before = client.get(url, secure=True)
+    assert before.status_code == 200
+    prune_narrative_history(now=timezone.now(), keep_days=1, keep_per_window=1)
+    prune_per_brand_trend_narrative_history(now=timezone.now(), keep_days=1, keep_per_window=1)
+    after = client.get(url, secure=True)
+    assert after.status_code == 200
+    assert after.content == before.content
+    assert text.sources.count() == 7
 
 
 def published_story(track="chatter", locale="en", *, featured=False, source_count=7):

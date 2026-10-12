@@ -53,6 +53,8 @@ def editorial_panels(request, locale):
             "items": [],
             "history": [],
         }
+        if track == "pulse":
+            panel["framework"] = {"status": "unavailable"}
         if cfg is not None:
             feed = editorial_feed(cfg, track=track, locale=locale, limit=6)
             items = feed["items"]

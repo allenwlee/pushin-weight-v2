@@ -704,3 +704,63 @@ msgstr "确定"
 #: monitor/templates/monitor/general/_editorial_panel.html
 msgid "Published stories are currently unavailable."
 msgstr "已发布的文章暂时不可用。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Predictions"
+msgstr "预测"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Forecasts are not available yet."
+msgstr "预测尚未开放。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Each forecast will show its target, time window, sources and uncertainty."
+msgstr "每项预测将展示目标、时间范围、来源和不确定性。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Observed history"
+msgstr "历史观测"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Historical charts are not available yet."
+msgstr "历史图表尚未开放。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Forward projection"
+msgstr "未来预测"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Projected values and uncertainty ranges are not available yet."
+msgstr "预测数值和不确定性范围尚未开放。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Outcome reports"
+msgstr "结果报告"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Actual outcomes will be compared with the original forecast."
+msgstr "实际结果将与最初的预测进行比较。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Outcome reports are not available yet."
+msgstr "结果报告尚未开放。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Learning from outcomes"
+msgstr "从结果中学习"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Resolved forecasts will inform later predictions."
+msgstr "已验证的预测结果将为后续预测提供参考。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Learning summaries are not available yet."
+msgstr "学习总结尚未开放。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Published reports"
+msgstr "已发布报告"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Earlier published reports are shown here; they are not forecasts."
+msgstr "此处展示此前发布的报告，内容并非预测。"

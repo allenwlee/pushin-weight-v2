@@ -1,0 +1,30 @@
+{% load i18n %}
+<div class="pulse-framework" data-pulse-status="{{ panel.framework.status }}">
+  <div class="pulse-forecast">
+    <h3>{% translate "Predictions" %}</h3>
+    <p class="pulse-status">{% translate "Forecasts are not available yet." %}</p>
+    <p class="pulse-description">{% translate "Each forecast will show its target, time window, sources and uncertainty." %}</p>
+  </div>
+  <div class="pulse-chart-slots">
+    <section class="pulse-chart-slot" aria-labelledby="pulse-history-title">
+      <h4 id="pulse-history-title">{% translate "Observed history" %}</h4>
+      <p>{% translate "Historical charts are not available yet." %}</p>
+    </section>
+    <section class="pulse-chart-slot" aria-labelledby="pulse-projection-title">
+      <h4 id="pulse-projection-title">{% translate "Forward projection" %}</h4>
+      <p>{% translate "Projected values and uncertainty ranges are not available yet." %}</p>
+    </section>
+  </div>
+  <div class="pulse-outcomes">
+    <section aria-labelledby="pulse-audit-title">
+      <h4 id="pulse-audit-title">{% translate "Outcome reports" %}</h4>
+      <p>{% translate "Actual outcomes will be compared with the original forecast." %}</p>
+      <span class="pulse-status">{% translate "Outcome reports are not available yet." %}</span>
+    </section>
+    <section aria-labelledby="pulse-learning-title">
+      <h4 id="pulse-learning-title">{% translate "Learning from outcomes" %}</h4>
+      <p>{% translate "Resolved forecasts will inform later predictions." %}</p>
+      <span class="pulse-status">{% translate "Learning summaries are not available yet." %}</span>
+    </section>
+  </div>
+</div>

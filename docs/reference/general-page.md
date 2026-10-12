@@ -1,8 +1,8 @@
 # General page, published stories and individual Posts
 
-Last checked: 2026-10-09 06:59:27 JST. Scope: the uncommitted local G5 implementation on `feat/g5-general-page`, based on current main `00d73117`. This reference describes that implementation, not a production deployment.
+Last checked: 2026-10-12 14:41:38 JST. Scope: the General/Pulse framework implementation and its current Django reader paths. Delivery evidence belongs to the selected plan and execution tracker.
 
-General presents published Chatter/Pulse stories alongside saved announcements about events, opportunities, jobs and personnel changes. A story headline opens its saved published edition; a lower-feed card opens an individual Post page with its complete saved commentary, original source and linked facts. Reading these pages does not generate commentary, run extraction or fetch new posts.
+General presents published Chatter, a prediction-led Pulse framework and saved announcements about events, opportunities, jobs and personnel changes. A story headline opens its saved published edition; a lower-feed card opens an individual Post page with its complete saved commentary, original source and linked facts. Reading these pages does not generate commentary, run extraction or fetch new posts.
 
 ## Local review data
 
@@ -29,7 +29,17 @@ For example, `/posts/123/?lang=ja&commentary=456` identifies Post 123 and saved 
 
 The detail HTML includes its canonical URL, Open Graph title/description/URL, complete saved text, source links, available stored source media and a list of up to 20 successful saved commentary revisions. It works without JavaScript. Copying is a progressive enhancement; the permanent link remains available if clipboard access fails.
 
-Published OriginalContent cards use G2’s existing `/stories/<story-uuid>/` routes and pin the exact displayed language/version with `edition`; their publication and edition rules remain owned by the shared reader. The planned `/content/<content-id>/` adapter and publication-retention requirements remain in the [G5 plan](../plans/2026-10-02-060108-feat-g5-general-page-plan.md#url-and-detail-page-contract); this local implementation does not register `/content/` or claim its durability is verified.
+Published OriginalContent cards use G2’s existing `/stories/<story-uuid>/` routes and pin the exact displayed language/version with `edition`; their publication and edition rules remain owned by the shared reader. The shared editorial runs have no trend window, so the existing window-scoped history cleanup leaves their approved texts and citations intact. A real cleanup-to-story-route regression verifies an old saved Pulse edition and every citation. This does not freeze or publish an unfinished forecast, and it does not register a `/content/` adapter.
+
+## Pulse framework
+
+Pulse separates observed history from future projections and provides dedicated areas for a forecast, its subsequent outcome report and learning from resolved predictions. The forecast, chart, auditor and learning outputs are currently unavailable. The page states that explicitly; it displays no sample curve, predicted value, probability, resolved outcome or learning record.
+
+`monitor/general_views.py::editorial_panels` adds the Pulse availability projection without calling an engine. `general/_pulse_framework.html` renders its localized status and empty chart areas inside the existing panel scroll region. On mobile those areas stack vertically; internal scrolling exposes the complete framework without changing the outer Human/Agent geometry.
+
+Published reports opens with a native disclosure and works without JavaScript. Opening it preserves the complete saved report body and every citation. Language navigation starts a fresh page with that disclosure closed; audience changes retain its DOM state. The report archive and saved-edition links retain their existing access rules.
+
+The public `/general/` response exposes `X-Bridgewright-Revision` when the runtime supplies a valid full deployed SHA, using the existing revision middleware. Pro links to General with the current language; `/` remains Pro.
 
 ## Chatter and Pulse
 
@@ -43,7 +53,7 @@ message, without hiding the independently public lower feeds.
 
 Chatter uses G2's featured edition and up to five earlier distinct stories under
 “Previous Chatter stories.” Without a featured pointer, it uses the first saved
-edition returned by that reader. Pulse shows the six most recent saved editions.
+edition returned by that reader. Pulse keeps the six most recent saved editions under its keyboard-accessible “Published reports” disclosure. These are reports rather than forecasts.
 Each panel links to G2's archive for older publications. Neither panel generates
 new copy, changes a selection pointer or marks content published.
 

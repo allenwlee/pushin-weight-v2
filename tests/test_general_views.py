@@ -9,6 +9,20 @@ from tests.general_helpers import classified_post, saved_commentary
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
+def test_pro_links_to_the_additive_general_page(client):
+    response = client.get("/", secure=True)
+    assert response.status_code == 200
+    assert 'data-general-link' in response.content.decode()
+    assert 'href="/general/?lang=' in response.content.decode()
+    assert client.get("/general/?lang=en", secure=True).status_code == 200
+
+
+def test_general_route_exposes_its_actual_deployment_revision(client, monkeypatch):
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "d" * 40)
+    response = client.get("/general/?lang=en", secure=True)
+    assert response["X-Bridgewright-Revision"] == "d" * 40
+
+
 def test_general_is_anonymous_server_rendered_and_feed_matches_its_projection(client):
     for index, category in enumerate(
         ("events", "opportunities", "job_listings", "personnel_changes")

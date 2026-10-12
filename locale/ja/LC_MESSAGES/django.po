@@ -777,3 +777,63 @@ msgstr "OK"
 #: monitor/templates/monitor/general/_editorial_panel.html
 msgid "Published stories are currently unavailable."
 msgstr "公開記事は現在利用できません。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Predictions"
+msgstr "予測"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Forecasts are not available yet."
+msgstr "予測はまだ利用できません。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Each forecast will show its target, time window, sources and uncertainty."
+msgstr "各予測には対象、期間、情報源、不確実性を示します。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Observed history"
+msgstr "観測履歴"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Historical charts are not available yet."
+msgstr "履歴チャートはまだ利用できません。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Forward projection"
+msgstr "将来予測"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Projected values and uncertainty ranges are not available yet."
+msgstr "予測値と不確実性の範囲はまだ利用できません。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Outcome reports"
+msgstr "結果レポート"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Actual outcomes will be compared with the original forecast."
+msgstr "実際の結果を当初の予測と比較します。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Outcome reports are not available yet."
+msgstr "結果レポートはまだ利用できません。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Learning from outcomes"
+msgstr "結果からの学習"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Resolved forecasts will inform later predictions."
+msgstr "結果が確定した予測を今後の予測に役立てます。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Learning summaries are not available yet."
+msgstr "学習のまとめはまだ利用できません。"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Published reports"
+msgstr "公開済みレポート"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Earlier published reports are shown here; they are not forecasts."
+msgstr "これまでの公開済みレポートです。予測ではありません。"

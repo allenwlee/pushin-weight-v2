@@ -252,3 +252,63 @@ msgstr "relative to fixed raw reference-week means"
 #: monitor/templates/monitor/benchmark_pulse.html monitor/benchmark_views.py
 msgid "A common complete reference week is unavailable. Raw values remain inspectable."
 msgstr "A common complete reference week is unavailable. Raw values remain inspectable."
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Predictions"
+msgstr "Predictions"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Forecasts are not available yet."
+msgstr "Forecasts are not available yet."
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Each forecast will show its target, time window, sources and uncertainty."
+msgstr "Each forecast will show its target, time window, sources and uncertainty."
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Observed history"
+msgstr "Observed history"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Historical charts are not available yet."
+msgstr "Historical charts are not available yet."
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Forward projection"
+msgstr "Forward projection"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Projected values and uncertainty ranges are not available yet."
+msgstr "Projected values and uncertainty ranges are not available yet."
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Outcome reports"
+msgstr "Outcome reports"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Actual outcomes will be compared with the original forecast."
+msgstr "Actual outcomes will be compared with the original forecast."
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Outcome reports are not available yet."
+msgstr "Outcome reports are not available yet."
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Learning from outcomes"
+msgstr "Learning from outcomes"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Resolved forecasts will inform later predictions."
+msgstr "Resolved forecasts will inform later predictions."
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Learning summaries are not available yet."
+msgstr "Learning summaries are not available yet."
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Published reports"
+msgstr "Published reports"
+
+#: monitor/templates/monitor/general/_pulse_framework.html
+msgid "Earlier published reports are shown here; they are not forecasts."
+msgstr "Earlier published reports are shown here; they are not forecasts."

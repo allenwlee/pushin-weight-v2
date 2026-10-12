@@ -24,13 +24,15 @@ def test_deployed_revision_rejects_short_or_unsafe_values(monkeypatch):
     assert deployed_revision() is None
 
 
-def test_revision_header_is_scoped_to_homepage(monkeypatch):
+def test_revision_header_is_scoped_to_reader_pages(monkeypatch):
     monkeypatch.setenv("BRIDGEWRIGHT_TARGET_REVISION", "c" * 40)
     factory = RequestFactory()
     middleware = BridgewrightRevisionMiddleware(lambda request: HttpResponse("ok"))
 
     home = middleware(factory.get("/?__bridgewright_revision_probe=before"))
+    general = middleware(factory.get("/general/?lang=en"))
     static = middleware(factory.get("/static/country-flags.svg"))
 
     assert home["X-Bridgewright-Revision"] == "c" * 40
+    assert general["X-Bridgewright-Revision"] == "c" * 40
     assert "X-Bridgewright-Revision" not in static

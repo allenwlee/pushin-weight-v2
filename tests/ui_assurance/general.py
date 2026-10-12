@@ -18,9 +18,11 @@ def product_identity():
         ROOT / "core/intelligence_readers.py",
         ROOT / "monitor/post_artifacts.py",
         ROOT / "monitor/views.py",
+        ROOT / "monitor/templates/monitor/home.html",
         ROOT / "monitor/templates/monitor/_cyber_quan_sprite.html",
         ROOT / "project/settings.py",
         ROOT / "project/locale_cookie.py",
+        ROOT / "project/revision.py",
         ROOT / "pyproject.toml",
         ROOT / "uv.lock",
         ROOT / "monitor/general_readers.py",
@@ -42,6 +44,7 @@ def product_identity():
         ROOT / "monitor/static/monitor/content.js",
         ROOT / "locale/ja/LC_MESSAGES/django.mo",
         ROOT / "locale/zh_Hans/LC_MESSAGES/django.mo",
+        ROOT / "locale/en/LC_MESSAGES/django.mo",
     ]
     digest = hashlib.sha256()
     for path in paths:

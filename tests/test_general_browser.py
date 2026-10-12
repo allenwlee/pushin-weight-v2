@@ -367,6 +367,15 @@ class GeneralBrowserTests(StaticLiveServerTestCase):
                     expect(page.locator("#jobs")).not_to_have_attribute(
                         "aria-busy", "true"
                     )
+                elif key == "pulse_reports":
+                    previous_audience = state["audience"]
+                    if previous_audience == "agent":
+                        page.locator('.primary-settings [data-value="human"]').click()
+                    reports = page.locator(".pulse-published-reports")
+                    if reports.evaluate("element => element.open") != (value == "open"):
+                        reports.locator(":scope > summary").click()
+                    if previous_audience == "agent":
+                        page.locator('.primary-settings [data-value="agent"]').click()
                 else:
                     pref = "lang" if key == "locale" else key
                     locator = page.locator(
@@ -383,9 +392,17 @@ class GeneralBrowserTests(StaticLiveServerTestCase):
                         )
                     if key == "locale":
                         expect(page.locator("html")).to_have_attribute("lang", value)
+                        state["pulse_reports"] = "closed"
                 state[key] = value
 
             def check(state):
+                expect(page.locator(".pulse-framework")).to_have_attribute(
+                    "data-pulse-status", "unavailable"
+                )
+                assert page.locator("[data-forecast-value], [data-forecast-probability]").count() == 0
+                assert page.locator(".pulse-published-reports").evaluate(
+                    "element => element.open"
+                ) == (state["pulse_reports"] == "open")
                 assert (
                     page.locator("body").get_attribute("data-audience")
                     == state["audience"]
@@ -548,6 +565,15 @@ class GeneralBrowserTests(StaticLiveServerTestCase):
                         "els => els.map(e => e.getBoundingClientRect().toJSON())"
                     )
                     assert len(rectangles) == 6
+                    expect(page.locator(".pulse-framework")).to_be_visible()
+                    expect(page.locator(".pulse-framework")).to_have_attribute(
+                        "data-pulse-status", "unavailable"
+                    )
+                    reports = page.locator(".pulse-published-reports")
+                    assert not reports.evaluate("element => element.open")
+                    reports.locator(":scope > summary").focus()
+                    page.keyboard.press("Enter")
+                    assert reports.evaluate("element => element.open")
                     for track, text in publications[locale].items():
                         card = page.locator(
                             f'#{track} [data-edition-id="{text.public_id}"]'

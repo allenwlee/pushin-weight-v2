@@ -1,14 +1,14 @@
 {
   "schema_version": "bridgewright.assurance.declaration/v1",
   "profile": "stateful-ui-assurance/v1",
-  "source_revision": "worktree-sha256:9884c875aba3a4fedf78dfc5557cd304f2a45220aff8ae933f5e368281c01338",
+  "source_revision": "worktree-sha256:fd46d1f414a44633f7a2ca99ea0e3549e64326f904e3891d2264ef59bcf26cf9",
   "fixture": {
     "path": "tests/fixtures/general_feed_contract.json",
     "sha256": "f6578c8ae5822870bb6e99a368d85be10e5b7d16484e89db22b1fd7134425d88"
   },
   "generator": {
     "name": "pushinweight-general-browser",
-    "version": "1.1",
+    "version": "1.2",
     "seed": 501
   },
   "controls": [
@@ -52,6 +52,16 @@
       ],
       "initial_value": "en",
       "reversible": true
+    },
+    {
+      "id": "pulse_reports",
+      "kind": "single_select",
+      "values": [
+        "closed",
+        "open"
+      ],
+      "initial_value": "closed",
+      "reversible": true
     }
   ],
   "coverage_groups": [
@@ -61,7 +71,8 @@
         "audience",
         "navigation",
         "weights",
-        "locale"
+        "locale",
+        "pulse_reports"
       ],
       "strength": 2
     }
@@ -94,6 +105,14 @@
         "accessibility",
         "feed",
         "persistence"
+      ]
+    },
+    {
+      "id": "pulse-output-honest",
+      "projections": [
+        "controls",
+        "feed",
+        "accessibility"
       ]
     }
   ],

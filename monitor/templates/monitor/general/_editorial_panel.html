@@ -5,6 +5,12 @@
     {% if panel.status != 'unavailable' %}<a class="editorial-archive human-pane" href="{% url 'editorial_archive' %}?track={{ panel.track }}&amp;lang={{ locale }}">{% translate "Story archive" %} ↗</a>{% endif %}
   </div>
   <div class="human-pane editorial-scroll" tabindex="0" aria-label="{{ panel.title }}">
+    {% if panel.framework %}
+      {% include 'monitor/general/_pulse_framework.html' %}
+      <details class="pulse-published-reports">
+        <summary>{% translate "Published reports" %}</summary>
+        <p class="pulse-description">{% translate "Earlier published reports are shown here; they are not forecasts." %}</p>
+    {% endif %}
     {% if panel.fallback %}<p class="editorial-fallback">{% translate "This story is currently available in English." %}</p>{% endif %}
     {% for item in panel.items %}
       {% include 'monitor/general/_editorial_story.html' %}
@@ -17,6 +23,7 @@
         {% for item in panel.history %}{% include 'monitor/general/_editorial_story.html' %}{% endfor %}
       </details>
     {% endif %}
+    {% if panel.framework %}</details>{% endif %}
   </div>
   <div class="agent-pane" tabindex="0"><p class="terminal-label">{{ panel.title }} / MCP</p><pre>{ "status": "unavailable", "section": "{{ panel.track }}" }</pre><p>{% translate "Agent access is not available for this section yet." %}</p></div>
 </section>

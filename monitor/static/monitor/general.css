@@ -84,6 +84,19 @@ body[data-nav="expanded"] .nav-label { display: inline; }
 .top-empty a { color: var(--blue); }
 .editorial-scroll { min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; padding: 0 16px 16px; }
 .editorial-archive { font-size: 10px; color: var(--muted); }
+.pulse-framework { border-top: 1px solid var(--line); padding: 12px 0; }
+.pulse-forecast h3 { font: 550 27px/1.1 'Newsreader', Georgia, serif; margin: 0 0 8px; }
+.pulse-framework h4 { margin: 0 0 7px; font-size: 13px; font-weight: 650; }
+.pulse-framework p { margin: 0 0 7px; line-height: 1.5; }
+.pulse-status, .pulse-description { font-size: 12px; color: var(--muted); }
+.pulse-chart-slots, .pulse-outcomes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.pulse-chart-slots { margin: 16px 0; }
+.pulse-chart-slot { min-height: 104px; border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #fafbff; }
+.pulse-chart-slot p, .pulse-outcomes p { font-size: 12px; color: var(--muted); }
+.pulse-outcomes { border-top: 1px solid var(--line); padding-top: 12px; }
+.pulse-published-reports { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 8px; }
+.pulse-published-reports > summary { cursor: pointer; color: var(--blue); font-weight: 550; padding: 5px 0; }
+@media (max-width: 700px) { .pulse-chart-slots, .pulse-outcomes { grid-template-columns: 1fr; gap: 10px; } .pulse-chart-slot { min-height: 88px; } }
 .editorial-story { border-top: 1px solid var(--line); padding: 12px 0; overflow-wrap: anywhere; }
 .editorial-headline { font: 550 28px/1.07 'Newsreader', Georgia, serif; letter-spacing: -.4px; margin: 0 0 9px; }
 .editorial-headline a:hover { text-decoration: underline; text-decoration-color: var(--blue); text-underline-offset: 3px; }
