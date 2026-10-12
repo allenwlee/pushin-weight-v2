@@ -146,6 +146,9 @@ def test_worker_routes_native_models_and_serves_independent_saved_locales(
         assert wire["body"]["model"] == model
         assert wire["body"]["reasoning_effort"] == effort
         assert wire["timeout"] == (90 if locale == "en" else 300)
+        assert wire["body"]["max_completion_tokens"] == (
+            4096 if locale == "en" else 16384
+        )
         assert wire["body"]["service_tier"] == "default"
         voice = load_voice(cfg.voices["chatter:" + locale])
         assert wire["body"]["messages"][0]["content"].startswith(

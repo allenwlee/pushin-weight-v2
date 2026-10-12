@@ -239,7 +239,7 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
             assert endpoint == "https://api.openai.com/v1/chat/completions"
             assert key == "openai-test-only"
             assert body["reasoning_effort"] == ("medium" if locale == "en" else "high")
-            assert body["max_completion_tokens"] == 4096
+            assert body["max_completion_tokens"] == (4096 if locale == "en" else 16384)
             assert body["service_tier"] == "default"
             assert not {"max_tokens", "provider", "reasoning"} & body.keys()
         requests.append(body)
@@ -303,7 +303,7 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
     assert [
         request.get("max_tokens", request.get("max_completion_tokens"))
         for request in requests
-    ] == [65536, 4096, 4096, 4096, 65536]
+    ] == [65536, 4096, 16384, 16384, 65536]
     from monitor.headline_grounding import SOURCE_READING_RULES
 
     for request in requests:

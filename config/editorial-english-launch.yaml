@@ -58,5 +58,6 @@ locale_routes:
     model: gpt-6.1-sol
     reasoning: high
     timeout_seconds: 300
+    max_output_tokens: 16384
   chatter:zh-cn:
     <<: *native_chatter

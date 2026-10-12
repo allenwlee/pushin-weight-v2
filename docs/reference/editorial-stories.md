@@ -260,7 +260,8 @@ English Chatter uses direct OpenAI Chat Completions at
 `reasoning_effort: medium`, `max_completion_tokens: 4096`, image input and
 `service_tier: default`. Japanese and Simplified Chinese use locale route
 overrides with exact model `gpt-6.1-sol` and `reasoning_effort: high`, retaining
-the same transport, output cap, vision and service tier. Their socket timeout
+the same transport, vision and service tier, with a16,384-token native
+completion allowance that includes reasoning. English retains4,096 tokens. Their socket timeout
 is300seconds; English retains the90second route default. These are request
 timeouts, not a whole-assessment deadline; worker/lease fencing still applies.
 `writer_route` resolves

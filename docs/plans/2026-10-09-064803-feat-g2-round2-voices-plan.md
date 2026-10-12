@@ -306,7 +306,7 @@ saves ENv2 via direct6.0medium, but both6.1high native calls exceed the inherite
 90second socket timeout. Their ambiguous requests/reservations remain intact.
 
 Correct only native socket timeouts to300seconds, within the existing route
-limit; keep EN90, factual300, output4096, all caps and the worker/lease fences.
+limit; keep EN90/4096, factual300/65536, all dollar/call caps and worker/lease fences. Native output allowance is subsequently corrected below.
 Actual transport kwargs are pinned by the native caller test;85focused checks
 pass, zero required skips/errors. Stage the corrected candidate and permit one
 native-only recovery pair against the same accepted evidence, under a new
@@ -315,6 +315,25 @@ EN edition; never resend an uncertain stage in its old assessment. Combined
 stage create/text reservations for this delivery are capped atUSD1.50 across
 UTC-day rollover, with no optional-media call or further quality retry. One
 production acceptance remains bounded by the standing5/day and6-stage caps.
+
+### Native output allowance correction — October13
+
+At1b69c3bf the300second native recovery returns HTTP200 and exact configured
+models, but both replies finish withlength: all4096completion tokens are
+reasoning, with no article. Preserve all four uncertain/incomplete native
+requests and their full reservations. Keep300seconds and high effort; set only
+native max_completion_tokens to16384, matching the owner's prior native/API
+trial allowance. EN4096 and factual65536 remain intact. Current stage delivery
+reservations total0.905235. Permit one final sequential missing-native pair:
+check the full next request reservation against the totalUSD1.50 delivery
+ceiling before each send, including prior UTC-day charges; stop if a stage
+cannot fit. Successful text calls settle observed usage normally. No media,
+editor retry, model substitution, prompt rewrite or old-English regeneration.
+
+The existing source/locale/schema/served-model and duplicate/fencing checks
+remain mandatory. This is correction of inherited native runtime limits, not
+another editorial quality campaign. Reuse unchanged598regressions and rerun
+config/provider/native/token/browser/Ollija checks plus the hosted workflow.
 
 ### Definition of Done
 
