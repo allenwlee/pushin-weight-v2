@@ -4,7 +4,7 @@ artifact_contract: ce-unified-plan/v1
 artifact_readiness: execution-ready
 product_contract_source: owner push-to-main request, October 12
 execution: documentation
-status: in-progress
+status: complete
 git_publication_target: main
 git_publication_selected_by_user: true
 ollija:
@@ -111,9 +111,11 @@ machine-local evidence pointers remain explicitly machine-local.
   G1–G5 coordination is the source snapshot, not their application code.
 - Publication package:90named paths,31valid raster assets,21valid JSON files,
   three valid embedded review payloads, zero secret findings and zero new missing
-  links.45older transport/other-stream references remain explicit machine-local
+  links.48older transport/other-stream references remain explicit machine-local
   pointers; the combined HTML contains complete current drafts/prompts. The old
   native-English standalone page and verbatim packet stay in their original
   archive; current English drafts are in the combined review. Provider workspace
   identifiers are redacted in published copies; original local evidence retained.
   Staged whitespace check passes; original G2 review/config hashes unchanged.
+
+- Main content publication verified atb52881fcfd6cad263caef061d32d7ced4b19820d, 2026-10-12T14:07:38+09:00; [receipt](../analysis/2026-10-12-112151-g2-graphics-editor/publication-to-main.md). Original worktrees and private evidence preserved. Git-only endpoint achieved; documentation closeout commit follows.

@@ -4,7 +4,7 @@ artifact_contract: ce-unified-plan/v1
 artifact_readiness: execution-ready
 product_contract_source: /Users/fuchitalee/development/pushin-weight-v2/docs/brainstorms/2026-09-30-104924-general-launch-charter.md
 execution: code
-status: in-progress
+status: complete
 round: 2
 date: 2026-10-09
 ollija:
@@ -80,6 +80,8 @@ The meaningful regression scope is preservation of the existing closed plan, pro
 ## Progress
 
 ### October 12 owner-selected publication to main
+
+- Content publication committed and pushed to remote main atb52881fc, verified 2026-10-12T14:07:38+09:00. [Publication receipt](../analysis/2026-10-12-112151-g2-graphics-editor/publication-to-main.md).90explicit docs/artifact paths, no application/runtime changes; whitespace/assets/JSON/links/secrets verified. Existing source worktree/private evidence preserved. A documentation receipt commit records closeout.
 
 Owner explicitly requests “push to main” after checking whether the coordination
 changes were published. Endpoint is a documentation/assets commit and a verified
