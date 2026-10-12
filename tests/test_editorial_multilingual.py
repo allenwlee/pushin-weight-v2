@@ -47,7 +47,14 @@ def captured_worker(monkeypatch, *, bad_model_locale=None, bad_copy_locale=None)
         system = body["messages"][0]["content"]
         match = re.search(r"Write in (en|ja|zh-cn) directly", system)
         locale = match.group(1) if match else None
-        captured.append({"locale": locale, "endpoint": endpoint, "body": body})
+        captured.append(
+            {
+                "locale": locale,
+                "endpoint": endpoint,
+                "body": body,
+                "timeout": kwargs["timeout"],
+            }
+        )
         if locale is None:
             data = {
                 "events": [
@@ -138,6 +145,7 @@ def test_worker_routes_native_models_and_serves_independent_saved_locales(
         assert wire["endpoint"] == "https://api.openai.com/v1/chat/completions"
         assert wire["body"]["model"] == model
         assert wire["body"]["reasoning_effort"] == effort
+        assert wire["timeout"] == (90 if locale == "en" else 300)
         assert wire["body"]["service_tier"] == "default"
         voice = load_voice(cfg.voices["chatter:" + locale])
         assert wire["body"]["messages"][0]["content"].startswith(

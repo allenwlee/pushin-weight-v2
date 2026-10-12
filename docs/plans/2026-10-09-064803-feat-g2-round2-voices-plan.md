@@ -293,6 +293,29 @@ flush. A fresh database passes21rename/native/browser checks with no skips or
 errors; full/hosted checks are being repeated. No runtime/schema change.
 U4 remains pending.
 
+### Staging evidence and bounded correction — October13
+
+Atb1a47b45 the598local checks/365requiredPG and hosted editorial run
+38320139430 pass. Both staging services are LIVE at that exact revision.
+Fresh queued assessment16 is correctly held: background-only selected events
+lack recent anchors; numeric prose has an all-none ownership audit. No writer
+was called. A separate controlled writer acceptance replays the exact accepted
+production decision de63b0d9-05e7-45f7-a9d2-ee73c2280832, with all source and
+number guards revalidated; this is not a fresh editor success. Assessment17
+saves ENv2 via direct6.0medium, but both6.1high native calls exceed the inherited
+90second socket timeout. Their ambiguous requests/reservations remain intact.
+
+Correct only native socket timeouts to300seconds, within the existing route
+limit; keep EN90, factual300, output4096, all caps and the worker/lease fences.
+Actual transport kwargs are pinned by the native caller test;85focused checks
+pass, zero required skips/errors. Stage the corrected candidate and permit one
+native-only recovery pair against the same accepted evidence, under a new
+assessment/purpose and with current source validation. Preserve the accepted
+EN edition; never resend an uncertain stage in its old assessment. Combined
+stage create/text reservations for this delivery are capped atUSD1.50 across
+UTC-day rollover, with no optional-media call or further quality retry. One
+production acceptance remains bounded by the standing5/day and6-stage caps.
+
 ### Definition of Done
 
 All four units have evidence. Exact models/native outputs are observed;

@@ -57,5 +57,6 @@ locale_routes:
     <<: *chatter
     model: gpt-6.1-sol
     reasoning: high
+    timeout_seconds: 300
   chatter:zh-cn:
     <<: *native_chatter

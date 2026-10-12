@@ -260,7 +260,10 @@ English Chatter uses direct OpenAI Chat Completions at
 `reasoning_effort: medium`, `max_completion_tokens: 4096`, image input and
 `service_tier: default`. Japanese and Simplified Chinese use locale route
 overrides with exact model `gpt-6.1-sol` and `reasoning_effort: high`, retaining
-the same transport, output cap, vision and service tier. `writer_route` resolves
+the same transport, output cap, vision and service tier. Their socket timeout
+is300seconds; English retains the90second route default. These are request
+timeouts, not a whole-assessment deadline; worker/lease fencing still applies.
+`writer_route` resolves
 an explicit `locale_routes` binding or falls back to the track route; both
 request construction and the worker call use this resolver. An override requires
 a bound voice. These routes send no OpenRouter routing fields. See the
