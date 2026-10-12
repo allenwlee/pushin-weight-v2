@@ -1,4 +1,5 @@
-# Explicit G2 English launch profile. Select via EDITORIAL_CONFIG_PATH only after
+# Explicit G2 multilingual launch profile. The deployment path stays stable.
+# Select via EDITORIAL_CONFIG_PATH only after
 # credentials and shared storage are configured. The default profile remains off.
 # Combined text/media reservations never exceed $5 per UTC day.
 enabled: true
@@ -19,7 +20,9 @@ pictures:
   pulse: derive
 permitted_reuse: [permitted, unknown]
 voices:
-  chatter:en: chatter-en-v1
+  chatter:en: chatter-en-v2
+  chatter:ja: chatter-ja-tospo-v2
+  chatter:zh-cn: chatter-zh-cn-wemedia-v2
   pulse:en: pulse-en-v1
 routes:
   editor: &factual
@@ -38,7 +41,7 @@ routes:
   pulse:
     <<: *factual
     request_profile: editorial_writer_v1
-  chatter:
+  chatter: &chatter
     model: gpt-6-sol
     endpoint: https://api.openai.com/v1/chat/completions
     # Provision this exact variable from fuchitalee's ~/.env.secrets at launch.
@@ -49,3 +52,10 @@ routes:
     input_usd_per_million: 2.50
     output_usd_per_million: 10.00
     max_output_tokens: 4096
+locale_routes:
+  chatter:ja: &native_chatter
+    <<: *chatter
+    model: gpt-6.1-sol
+    reasoning: high
+  chatter:zh-cn:
+    <<: *native_chatter

@@ -122,7 +122,8 @@ matching the supplied schema. Do not add facts from memory or unseen image URLs.
             if c["brand_key"] in event.brand_keys
         ],
     }
-    if not (cfg.routes.get(voice.track) and cfg.routes[voice.track].request_profile):
+    route = cfg.writer_route(voice.track, voice.locale)
+    if not (route and route.request_profile):
         payload["output_schema"] = schema
     return {
         "system": system,

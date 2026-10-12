@@ -1,0 +1,9 @@
+{
+  "id": "chatter-zh-cn-wemedia-v2",
+  "version": 2,
+  "track": "chatter",
+  "locale": "zh-cn",
+  "available": true,
+  "shared_prompt": "editorial-judgment-headline-v1",
+  "publication_voice": "wemedia"
+}

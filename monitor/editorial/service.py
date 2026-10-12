@@ -234,6 +234,7 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                 e.key,
             ),
         )
+        picture_work = []
         for track, limit in (("chatter", 1), ("pulse", cfg.pulse_limit)):
             selected = 0
             for event in ordered:
@@ -276,7 +277,10 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                         f"writer:{track}:{locale}:{digest([event.key, voice.digest])}"
                     )
                     try:
-                        response = call(row, stage, fresh.routes[track], request, fresh)
+                        route = fresh.writer_route(track, locale)
+                        if route is None:
+                            raise ValueError("writer route unavailable")
+                        response = call(row, stage, route, request, fresh)
                         copy = validate_copy(
                             response["data"], event, locale, packet=contextual_packet
                         )
@@ -306,32 +310,32 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                         continue
                     accepted = True
                     outcome["published"] += 1
-                    try:
-                        picture = select_picture(
-                            event,
-                            packet,
-                            fresh,
-                            content_kind=track,
-                            content_id=edition.pk,
-                            revision=edition.fingerprint,
-                            assessment=row,
-                            visual_brief=copy.visual_brief,
-                        )
-                        if picture:
-                            picture = start_derivative(picture, row, policy_reader())
-                            if picture.state == "pending":
-                                from .dispatch import dispatch_poll
-
-                                dispatch_poll(picture.pk)
-                    except Exception as exc:  # noqa: BLE001 - persist bounded worker failure, never report success
-                        outcome["holds"].append(
-                            {
-                                "track": track,
-                                "stage": "picture",
-                                "reason": type(exc).__name__,
-                            }
-                        )
+                    picture_work.append((track, event, edition, copy.visual_brief))
                 selected += int(accepted)
+        # Reserve required locale/track text before any optional media call.
+        for track, event, edition, visual_brief in picture_work:
+            try:
+                fresh = policy_reader()
+                picture = select_picture(
+                    event,
+                    packet,
+                    fresh,
+                    content_kind=track,
+                    content_id=edition.pk,
+                    revision=edition.fingerprint,
+                    assessment=row,
+                    visual_brief=visual_brief,
+                )
+                if picture:
+                    picture = start_derivative(picture, row, policy_reader())
+                    if picture.state == "pending":
+                        from .dispatch import dispatch_poll
+
+                        dispatch_poll(picture.pk)
+            except Exception as exc:  # noqa: BLE001 - persist bounded worker failure, never report success
+                outcome["holds"].append(
+                    {"track": track, "stage": "picture", "reason": type(exc).__name__}
+                )
         finish_assessment(row, outcome)
     except Exception as exc:  # noqa: BLE001 - persist bounded worker failure, never report success
         outcome.update(status="held", error=type(exc).__name__)

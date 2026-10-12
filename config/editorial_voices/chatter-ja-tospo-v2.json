@@ -1,0 +1,9 @@
+{
+  "id": "chatter-ja-tospo-v2",
+  "version": 2,
+  "track": "chatter",
+  "locale": "ja",
+  "available": true,
+  "shared_prompt": "editorial-judgment-headline-v1",
+  "publication_voice": "tospo"
+}

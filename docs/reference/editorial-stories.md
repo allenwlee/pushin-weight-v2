@@ -1,8 +1,9 @@
 # Chatter, Pulse and the picture editor
 
 G2 turns collected posts into saved stories that readers can share and revisit.
-Chatter covers AI human interest, memes and insider news with an English
-New York Post style headline and supporting line. Pulse reports factual news.
+Chatter covers AI human interest, memes and insider news with an independent
+headline and supporting line in English, Japanese and Simplified Chinese.
+The launch voices are New York Post, 東スポ and WeMedia respectively. Pulse reports factual news.
 An important event can qualify for both. A single source post remains the
 atomic unit; its own commentary preserves its meaning and tone.
 
@@ -11,7 +12,7 @@ Generation, public access and picture bindings ship **off** in
 [`config/editorial.yaml`](../../config/editorial.yaml). Deployment and a fresh
 human quality evaluation are separate from the local implementation tests.
 
-The explicit English launch profile is
+The explicit multilingual launch profile retains the filename
 [`config/editorial-english-launch.yaml`](../../config/editorial-english-launch.yaml).
 It configures generation/public story reading and headline derivatives with a
 combined $5/day reservation ceiling. `EDITORIAL_CONFIG_PATH` selects the file
@@ -48,7 +49,7 @@ every safe HTTP(S) source URL. Counts measure distinct posts, not confirmations.
    same original evidence. Accepted editions contain a headline, supporting
    line (called `byline`), full article and source links. A byline is not an
    invented journalist's name.
-5. The optional **picture editor** selects an eligible source image. `derive`
+5. After required text for every track and locale, the optional **picture editor** selects an eligible source image. `derive`
    adds an asynchronous MiniMax H3 video; the verified source image can display
    while that task is pending. Missing imagery does not discard valid text.
 
@@ -204,21 +205,29 @@ what the editor can infer; supplying URLs alone does not inspect their pixels.
 ## Voices and routing
 
 [`config/editorial_voices/`](../../config/editorial_voices/) holds immutable JSON
-profiles. Each has `id`, `version`, `track`, `locale`, `available` and instructions.
+profiles. Each has `id`, `version`, `track`, `locale` and `available`. Instructions
+are either inline or resolved from a locked shared prompt and publication voice.
 Changing a voice means adding a version and changing the binding in
 `editorial.yaml`; no copied generation script is needed. Saved editions retain
 the profile ID, version and content hash. Existing shared editions remain intact.
 
-`chatter-en-v1` follows the successful bare-prompt direction without the five
-prior example headlines. Chinese and Japanese Chatter profiles are explicitly
-unavailable until crafted and evaluated. Pulse has factual profiles for all
-three locales; only English is bound by default. All active bindings are
+The launch binds `chatter-en-v2`, `chatter-ja-tospo-v2` and
+`chatter-zh-cn-wemedia-v2`. Their shared source is
+[`editorial-judgment-headline-v1.json`](../../config/editorial_prompts/editorial-judgment-headline-v1.json):
+the owner's locked judgment paragraph plus an explicit print-headline assignment
+in the locale's language. `chatter-ja-rocket-v2` and `chatter-zh-cn-metro-v2` are
+available alternatives, requiring an explicit binding change. Profile loading
+rejects invalid paths, unlocked contracts, missing tasks and locale mismatches
+before paid work. The saved digest includes resolved instructions and references.
+Version1 profiles and hashes remain intact for historical editions.
+Pulse has factual profiles for all three locales; only English is bound in the
+launch profile. All active bindings are
 validated before paid work, including track/locale agreement. Each locale uses
 original evidence independently; it does not translate an English draft.
 
 The `editor`, `chatter` and `pulse` routes require explicit model identifiers,
 endpoint, matching credential variable, output cap and token prices. Supported
-endpoints are OpenRouter and direct DeepInfra. `vision` is an explicit capability;
+endpoints are OpenRouter, direct DeepInfra and direct OpenAI. `vision` is an explicit capability;
 OpenRouter provider fallback is disabled. A mismatched returned model or
 truncated/invalid response is held. Rejected replies persist a fixed failure code,
 HTTP status, model-match Boolean, standard finish reason and integer token counts
@@ -233,7 +242,7 @@ supplied.
 OpenRouter requests also cap the permitted provider input/output prices at the
 configured reservation rates.
 
-The English launch profile routes editor and Pulse directly to DeepInfra as
+The launch profile routes editor and Pulse directly to DeepInfra as
 `deepseek-ai/DeepSeek-V4-Flash-0731`, using `DEEPINFRA_API_KEY` and
 `reasoning_effort: none`. The `editorial_editor_v1` and `editorial_writer_v1`
 profiles in [`x_monitor/deepinfra.py`](../../x_monitor/deepinfra.py) share the
@@ -246,10 +255,15 @@ nonnegative input/output token counts, a finite nonnegative estimated cost and
 zero or absent reported reasoning tokens. It rejects truncated/empty completions
 and duplicate JSON keys. It sends no OpenRouter provider or price-cap fields on
 those routes.
-Chatter uses direct OpenAI Chat Completions at
+English Chatter uses direct OpenAI Chat Completions at
 `https://api.openai.com/v1/chat/completions`, model `gpt-6-sol`, with
 `reasoning_effort: medium`, `max_completion_tokens: 4096`, image input and
-`service_tier: default`. It sends no OpenRouter routing fields. See the
+`service_tier: default`. Japanese and Simplified Chinese use locale route
+overrides with exact model `gpt-6.1-sol` and `reasoning_effort: high`, retaining
+the same transport, output cap, vision and service tier. `writer_route` resolves
+an explicit `locale_routes` binding or falls back to the track route; both
+request construction and the worker call use this resolver. An override requires
+a bound voice. These routes send no OpenRouter routing fields. See the
 [OpenAI request contract](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
 and [model pricing](https://developers.openai.com/api/docs/models/gpt-6-sol).
 The configured $2.50/M input reservation includes the published cache-write
@@ -263,7 +277,7 @@ before reserving/sending if the selected key is absent; it never falls back to
 OpenRouter. Neither selecting the profile nor passing offline checks provisions
 a Render credential or activates scheduled generation.
 
-The English launch profile allows **65,536 total output tokens** per DeepSeek
+The launch profile allows **65,536 total output tokens** per DeepSeek
 editor/Pulse call, including reasoning; the Chatter writer has its independent
 4,096-token allowance. The route validator permits configured allowances up to
 65,536. These are application request limits, not claims about the provider's

@@ -64,7 +64,11 @@ def test_launch_profile_has_one_combined_ceiling_and_independent_picture_modes(
     assert cfg.routes["chatter"].vision
     assert cfg.picture_mode("atomic") == "select_only"
     assert cfg.picture_mode("chatter") == cfg.picture_mode("pulse") == "derive"
-    assert set(cfg.voices) == {"chatter:en", "pulse:en"}
+    assert set(cfg.voices) == {"chatter:en", "chatter:ja", "chatter:zh-cn", "pulse:en"}
+    assert cfg.writer_route("chatter", "en") == cfg.routes["chatter"]
+    for locale in ("ja", "zh-cn"):
+        assert cfg.writer_route("chatter", locale).model == "gpt-6.1-sol"
+        assert cfg.writer_route("chatter", locale).reasoning == "high"
     monkeypatch.setenv("EDITORIAL_DAILY_USD", "1")
     monkeypatch.setenv("EDITORIAL_PUBLIC_ENABLED", "false")
     assert load_editorial_config().daily_usd == 1

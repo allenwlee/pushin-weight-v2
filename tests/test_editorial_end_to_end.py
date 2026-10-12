@@ -220,6 +220,12 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
     requests = []
 
     def transport(endpoint, key, body, **kwargs):
+        import re
+
+        match = re.search(
+            r"Write in (en|ja|zh-cn) directly", body["messages"][0]["content"]
+        )
+        locale = match.group(1) if match else "en"
         if body["model"] == "deepseek-ai/DeepSeek-V4-Flash-0731":
             assert endpoint == "https://api.deepinfra.com/v1/openai/chat/completions"
             assert key == "deepinfra-test-only"
@@ -229,10 +235,10 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
             assert kwargs["timeout"] == 300
             assert "provider" not in body and "reasoning" not in body
         else:
-            assert body["model"] == "gpt-6-sol"
+            assert body["model"] == ("gpt-6-sol" if locale == "en" else "gpt-6.1-sol")
             assert endpoint == "https://api.openai.com/v1/chat/completions"
             assert key == "openai-test-only"
-            assert body["reasoning_effort"] == "medium"
+            assert body["reasoning_effort"] == ("medium" if locale == "en" else "high")
             assert body["max_completion_tokens"] == 4096
             assert body["service_tier"] == "default"
             assert not {"max_tokens", "provider", "reasoning"} & body.keys()
@@ -261,7 +267,7 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
                 "headline": "A release",
                 "byline": "A new model for developers.",
                 "article": post.text,
-                "locale": "en",
+                "locale": locale,
                 "post_ids": [post.pk],
             }
         data = grounded_reply(body, data)
@@ -293,11 +299,11 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
         },
         cfg=cfg,
     )
-    assert result["published"] == 2, result
+    assert result["published"] == 4, result
     assert [
         request.get("max_tokens", request.get("max_completion_tokens"))
         for request in requests
-    ] == [65536, 4096, 65536]
+    ] == [65536, 4096, 4096, 4096, 65536]
     from monitor.headline_grounding import SOURCE_READING_RULES
 
     for request in requests:
@@ -323,7 +329,7 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
     factual_calls = EditorialCall.objects.exclude(stage__startswith="writer:chatter")
     assert factual_calls.count() == 2
     assert all(call.reserved_usd == Decimal("0.001") for call in factual_calls)
-    assert EditorialBudget.objects.get().reserved_usd == Decimal("0.003")
+    assert EditorialBudget.objects.get().reserved_usd == Decimal("0.005")
 
 
 @pytest.mark.parametrize(

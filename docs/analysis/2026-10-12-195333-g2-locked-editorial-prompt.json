@@ -1,0 +1,95 @@
+{
+  "version": "editorial-judgment-headline-v1",
+  "status": "owner-locked",
+  "locked_at": "2026-10-12T20:01:51+09:00",
+  "selected_after_side_conversation_boundary": true,
+  "scope": "Future editorial headline runs across all providers and model versions, in all currently supported writing languages. No production activation is selected.",
+  "instructions": {
+    "en": "You are an editor with taste and independent judgment. Choose the strongest angle and wording yourself. Use wit, wordplay or irony when it makes the headline better. Keep the facts faithful.",
+    "ja": "あなたは、編集上のセンスと独立した判断力を持つ編集者です。最もよい切り口と言い回しを自分で選んでください。見出しをよりよくする場合には、ユーモア、言葉遊び、皮肉を使ってください。事実に忠実でいてください。",
+    "zh-cn": "你是一位有品位、能独立判断的编辑。请自行选择最出色的切入角度和措辞。当幽默、文字游戏或反讽能让标题更好时，就运用它们。忠于事实。"
+  },
+  "voices": {
+    "en|nypost": {
+      "output_language": "en",
+      "publication": "New York Post",
+      "task": {
+        "en": "pretend you're the editor of the new york post. take these recent news events and create a headline for the print version of your publication:"
+      }
+    },
+    "ja|tospo": {
+      "output_language": "ja",
+      "publication": "東スポ",
+      "task": {
+        "en": "pretend you're the editor of ToSpo (Tokyo Sports). take these recent news events and create a headline for the print version of your publication:",
+        "ja": "あなたが東スポの編集者だとして、以下の最近のニュースから、紙面向けの見出しを作ってください。"
+      }
+    },
+    "ja|rocket": {
+      "output_language": "ja",
+      "publication": "ロケットニュース24",
+      "task": {
+        "en": "pretend you're the editor of RocketNews24. take these recent news events and create a print-style headline in your publication's voice:",
+        "ja": "あなたがロケットニュース24の編集者だとして、以下の最近のニュースから、媒体らしい、紙面に載せるような見出しを作ってください。"
+      }
+    },
+    "zh-cn|metro": {
+      "output_language": "zh-cn",
+      "publication": "南方都市报等都市报",
+      "task": {
+        "en": "pretend you're the editor of Southern Metropolis Daily. take these recent news events and create a headline for the print version of your publication:",
+        "zh-cn": "设想你是《南方都市报》的编辑。请根据以下近期新闻，拟一个适合报纸版面的主标题。"
+      }
+    },
+    "zh-cn|wemedia": {
+      "output_language": "zh-cn",
+      "publication": "微信公众号／自媒体",
+      "task": {
+        "en": "pretend you're the editor of a WeChat Official Account. take these recent news events and create a print-style headline in your publication's voice:",
+        "zh-cn": "设想你是一位微信公众号（自媒体）的编辑。请根据以下近期新闻，以你的账号风格拟一个醒目的主标题。"
+      }
+    }
+  },
+  "composition": {
+    "instructions": "Use the instructions paragraph in the chosen prompt language, above the voice-specific headline task.",
+    "task": "Use the explicit headline assignment in the chosen prompt language, followed by the source packet and supplied media.",
+    "output_language": "Use the voice output_language; retain the existing EN/mixed versus fully local input choice.",
+    "editorial_freedom": "The model chooses the angle, wording and suitable humor; no mandatory pun, fixed candidate count or old headline examples.",
+    "provider_routing": "Keep the existing model/provider/effort selections; these prompt texts have no model-specific override."
+  },
+  "validation": {
+    "en": "Tested in two first direct-API replies: GPT6.1 Sol/high and GPT6.0 Sol/medium.",
+    "ja": "Faithful localized prompt text saved; no new Japanese generation in this task.",
+    "zh-cn": "Faithful localized prompt text saved; no new Chinese generation in this task."
+  },
+  "writer_defaults": {
+    "en": {
+      "model": "gpt-6-sol",
+      "reasoning_effort": "medium",
+      "voices": [
+        "nypost"
+      ]
+    },
+    "ja": {
+      "model": "gpt-6.1-sol",
+      "reasoning_effort": "high",
+      "voices": [
+        "tospo",
+        "rocket"
+      ]
+    },
+    "zh-cn": {
+      "model": "gpt-6.1-sol",
+      "reasoning_effort": "high",
+      "voices": [
+        "metro",
+        "wemedia"
+      ]
+    }
+  },
+  "writer_defaults_selected_at": "2026-10-12T20:20:16+09:00",
+  "superseded_english_writer_default": {
+    "model": "claude-opus-5-5",
+    "reasoning_effort": "xhigh"
+  }
+}
