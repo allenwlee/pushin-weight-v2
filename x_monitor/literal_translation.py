@@ -55,6 +55,7 @@ def translate_batch_literal_plaintext(
     max_workers: int = 1,
     telemetry_context: dict[str, Any] | None = None,
     paragraph_tracking: bool = False,
+    chunk_size: int = LONG_POST_THRESHOLD,
     cached_chunks: Mapping[str, Mapping[str, Mapping[str, Mapping[int, str]]]] | None = None,
     on_chunk_success: Callable[..., bool] | None = None,
 ) -> list[dict[str, Any]]:
@@ -79,6 +80,7 @@ def translate_batch_literal_plaintext(
                 deadline=deadline,
                 telemetry_context=telemetry_context,
                 paragraph_tracking=paragraph_tracking,
+                chunk_size=chunk_size,
                 cached_chunks=cached_chunks,
                 on_chunk_success=on_chunk_success,
             )
@@ -97,6 +99,7 @@ def translate_batch_literal_plaintext(
                     deadline=deadline,
                     telemetry_context=telemetry_context,
                     paragraph_tracking=paragraph_tracking,
+                    chunk_size=chunk_size,
                     cached_chunks=cached_chunks,
                     on_chunk_success=on_chunk_success,
                 ),
@@ -113,6 +116,7 @@ def _translate_one(
     deadline: Any | None,
     telemetry_context: dict[str, Any] | None,
     paragraph_tracking: bool,
+    chunk_size: int,
     cached_chunks: Mapping[str, Mapping[str, Mapping[str, Mapping[int, str]]]] | None,
     on_chunk_success: Callable[..., bool] | None,
 ) -> dict[str, Any]:
@@ -147,7 +151,7 @@ def _translate_one(
         row[native_field] = source
 
     post_id = row["tweet_id"]
-    chunks = _split_translation_chunks(source) if len(source) > LONG_POST_THRESHOLD else None
+    chunks = _split_translation_chunks(source, chunk_size=chunk_size) if len(source) > LONG_POST_THRESHOLD else None
     if chunks is not None and len(chunks) > MAX_CHUNKS_PER_POST:
         row["translation_failed"] = True
         row["failure_reasons"]["post"] = "chunk_limit_exceeded"
@@ -549,20 +553,23 @@ def _parse_detected_language(text: str | None) -> str | None:
     return code if code in _LANGUAGE_DETECTION_ALLOWLIST else None
 
 
-def _split_translation_chunks(source: str) -> list[str]:
+def _split_translation_chunks(source: str, *, chunk_size: int = LONG_POST_THRESHOLD) -> list[str]:
     """Partition source without changing a character, preferring line boundaries."""
     chunks: list[str] = []
+    if not 0 < chunk_size <= LONG_POST_THRESHOLD:
+        raise ValueError("translation chunk size must be between 1 and the normal long-post threshold")
+    word_floor = int(chunk_size * .8)
     current = ""
     for line in source.splitlines(keepends=True):
-        if current and len(current) + len(line) > LONG_POST_THRESHOLD:
+        if current and len(current) + len(line) > chunk_size:
             chunks.append(current)
             current = ""
-        while len(line) > LONG_POST_THRESHOLD:
+        while len(line) > chunk_size:
             # Very long paragraphs have no paragraph boundary. Prefer a word
-            # boundary near 5k, falling back to a hard cut for unbroken text.
-            boundary = max(line.rfind(" ", 4_000, LONG_POST_THRESHOLD),
-                           line.rfind("\t", 4_000, LONG_POST_THRESHOLD))
-            cut = boundary + 1 if boundary >= 4_000 else LONG_POST_THRESHOLD
+            # boundary near the limit, falling back to a hard cut for unbroken text.
+            boundary = max(line.rfind(" ", word_floor, chunk_size),
+                           line.rfind("\t", word_floor, chunk_size))
+            cut = boundary + 1 if boundary >= word_floor else chunk_size
             chunks.append(line[:cut])
             line = line[cut:]
         current += line

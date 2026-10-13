@@ -4056,9 +4056,11 @@ class CycleRunner:
                             if short_tweets else enrichment_cfg.attempt_budget_seconds
                         )
                         current_long = long_tweets[:1]
+                        chunk_options = {"chunk_size": 2_000} if self._backfill_context is not None else {}
                         cached = load_literal_translation_chunks(
                             current_long, model=self.cfg.llm.translator_model,
                             prompt_version=CHUNK_TRANSLATION_PROMPT_VERSION,
+                            **chunk_options,
                         )
                         translation_rows.extend(translate_batch_literal_plaintext(
                             current_long, bounded_translator_client, cfg=self.cfg,
@@ -4066,6 +4068,7 @@ class CycleRunner:
                                 monotonic=self._monotonic, budget_seconds=long_budget
                             ),
                             max_workers=1, telemetry_context=telemetry,
+                            **chunk_options,
                             cached_chunks=cached,
                             on_chunk_success=lambda **kwargs: persist_literal_translation_chunk(
                                 **kwargs, expected_claim_run_id=run_id

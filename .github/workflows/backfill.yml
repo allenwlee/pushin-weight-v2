@@ -5,10 +5,14 @@ on:
     paths:
       - 'monitor/cycle.py'
       - 'monitor/backfill_resources.py'
+      - 'monitor/post_artifacts.py'
       - 'monitor/management/commands/backfill.py'
       - 'monitor/run_lock.py'
       - 'x_monitor/apify.py'
+      - 'x_monitor/literal_translation.py'
       - 'tests/test_backfill*.py'
+      - 'tests/test_literal_translation_plaintext.py'
+      - 'tests/test_translator_literal.py'
       - 'tests/test_bounded_classifier_client.py'
       - 'tests/test_cycle_cursor_wiring.py'
       - 'tests/test_cycle_run_lock.py'
@@ -69,3 +73,4 @@ jobs:
           tests/test_harvest_cursor_lifecycle.py tests/test_cycle_search_caps.py
           tests/test_cycle_error_counters.py tests/test_hybrid_harvest_regression_net.py
           tests/test_harvest_surface_regression_net.py
+          tests/test_literal_translation_plaintext.py tests/test_translator_literal.py

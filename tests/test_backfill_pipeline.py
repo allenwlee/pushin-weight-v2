@@ -176,6 +176,54 @@ def test_drained_collection_retries_only_its_enrichment(pipeline):
     assert pipeline.cohorts == [["1"], ["1"]]
 
 
+def test_enrichment_resume_visits_other_units_before_retrying_pending_unit(pipeline):
+    first, second = page("1"), page("2")
+    second["tweets"][0]["createdAt"] = "Sun Aug 09 00:20:00 +0000 2026"
+    pipeline.responses.extend([first, second])
+    options = {"since": "2026-08-09T00:00Z", "until": "2026-08-09T00:30Z",
+               "brands": "qwen", "call_ids": "B1", "max_results": 20, "max_pages": 1,
+               "batch_size": 3, "pause": 0, "stdout": StringIO(), "stderr": StringIO()}
+    call_command("backfill", **{**options, "batch_size": 2})
+    pipeline.cohorts.clear()
+    call_command("backfill", **options)
+    assert pipeline.cohorts == [["1"], ["2"]]
+    assert len(pipeline.requests) == 2
+
+
+def test_manual_long_translation_and_cache_use_same_smaller_chunks(pipeline, monkeypatch):
+    from pathlib import Path
+
+    from core.models import Post, PostEnrichmentState
+    from monitor import cycle
+    from monitor.management.commands import backfill
+    from x_monitor.config import load_config
+
+    cfg = load_config(Path("config.yaml"))
+    cfg.llm.literal_translation_v2_enabled = True
+    monkeypatch.setattr(backfill, "load_config", lambda path: cfg)
+    pipeline.responses.append(page("1"))
+    pipeline.run()
+    Post.objects.filter(pk="1").update(text="word " * 1_200, lang="en")
+    PostEnrichmentState.objects.filter(pk="1").update(classification_status="succeeded")
+    monkeypatch.setattr(cycle.CycleRunner, "_run_post_fetch", pipeline.post_fetch_method)
+    monkeypatch.setattr("x_monitor.reattribute.build_translator_client_from_env", lambda cfg: object())
+    seen = []
+    def cached(tweets, **kwargs):
+        seen.append(("cache", kwargs.get("chunk_size")))
+        return {}
+    def translated(tweets, client, **kwargs):
+        seen.append(("translation", kwargs.get("chunk_size")))
+        return []
+    monkeypatch.setattr("monitor.post_artifacts.load_literal_translation_chunks", cached)
+    monkeypatch.setattr("x_monitor.literal_translation.translate_batch_literal_plaintext", translated)
+    pipeline.run()
+    assert seen == [("cache", 2_000), ("translation", 2_000)]
+    seen.clear()
+    runner = cycle.CycleRunner(cfg=cfg)
+    pipeline.post_fetch_method(runner, [], run_id="scheduled-control", post_ids=["1"])
+    assert seen == [("cache", None), ("translation", None)]
+
+
 def test_provider_ignoring_time_bounds_cannot_finish_or_store_outside_post(pipeline):
     from core.models import Post
 

@@ -48,7 +48,8 @@ def source_text_fingerprint(text: object) -> str:
 
 
 def load_literal_translation_chunks(
-    tweets: Sequence[Mapping[str, Any]], *, model: str, prompt_version: str
+    tweets: Sequence[Mapping[str, Any]], *, model: str, prompt_version: str,
+    chunk_size: int | None = None,
 ) -> dict[str, dict[str, dict[str, dict[int, str]]]]:
     """Use only chunks matching the exact current source and deterministic split."""
     from x_monitor.literal_translation import _split_translation_chunks
@@ -58,7 +59,8 @@ def load_literal_translation_chunks(
         for tweet in tweets
     }
     chunks_by_id = {
-        post_id: _split_translation_chunks(str(tweet.get("text") or ""))
+        post_id: _split_translation_chunks(str(tweet.get("text") or ""),
+                                          **({"chunk_size": chunk_size} if chunk_size is not None else {}))
         for post_id, tweet in by_id.items()
     }
     fingerprints = {

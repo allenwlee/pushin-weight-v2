@@ -431,6 +431,7 @@ class Command(BaseCommand):
         state_file = prepared["state_file"]
         cfg = prepared["cfg"]
         failed = False
+        attempted_enrichment_units: set[str] = set()
         for attempt in range(options["batch_size"]):
             if attempt and options["pause"]:
                 if budget.remaining_seconds <= options["pause"]:
@@ -450,12 +451,14 @@ class Command(BaseCommand):
                 enrichment_pending = set(state.get("enrichment_pending_post_ids", []))
                 enrichment_units = [u for u in state["units"] if enrichment_pending.intersection(
                     u.get("enrichment_cohort_post_ids", [])
-                )]
+                ) and u["key"] not in attempted_enrichment_units]
                 if not pending and not enrichment_units:
                     failed = any(u["status"] == "blocked" for u in state["units"])
                     break
                 unit = pending[0] if pending else enrichment_units[0]
                 enrichment_only = not pending
+                if enrichment_only:
+                    attempted_enrichment_units.add(unit["key"])
                 settings.X_MONITOR_CYCLE_SINCE_TIME = unit["since_epoch"]
                 settings.X_MONITOR_CYCLE_UNTIL_TIME = unit["until_epoch"]
                 context = BackfillContext(

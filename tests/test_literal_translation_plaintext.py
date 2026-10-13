@@ -65,6 +65,34 @@ def test_native_source_is_byte_exact_and_only_other_two_locales_are_called():
     assert row["output_tokens"] == 12
 
 
+def test_smaller_manual_chunks_preserve_source_and_resume_without_provider_calls():
+    from x_monitor.literal_translation import (
+        _split_translation_chunks,
+        translate_batch_literal_plaintext,
+    )
+
+    source = "word " * 1_200
+    chunks = _split_translation_chunks(source, chunk_size=2_000)
+    assert "".join(chunks) == source
+    assert max(map(len, chunks)) <= 2_000
+    assert max(map(len, _split_translation_chunks(source))) > 2_000
+    cached = {}
+    def persist(**kwargs):
+        assert len(kwargs["source_chunk"]) <= 2_000
+        cached.setdefault("manual", {}).setdefault("en", {}).setdefault(kwargs["target_language"], {})[
+            kwargs["chunk_index"]] = kwargs["translated_text"]
+        return True
+    tweet = {"tweet_id": "manual", "text": source, "lang_detected": "en"}
+    client = PlaintextClient([TextResponse("中文" * 500)] * len(chunks)
+                            + [TextResponse("日本語" * 400)] * len(chunks))
+    first = translate_batch_literal_plaintext([tweet], client, chunk_size=2_000, on_chunk_success=persist)[0]
+    assert not first["translation_failed"]
+    second = PlaintextClient([])
+    resumed = translate_batch_literal_plaintext([tweet], second, chunk_size=2_000, cached_chunks=cached)[0]
+    assert not resumed["translation_failed"] and not second.calls
+    assert resumed["text_en"] == source
+
+
 @pytest.mark.parametrize("source_language", ["zh-Hant", "ko", "other"])
 def test_non_native_supported_source_calls_all_three_locales(source_language: str):
     from x_monitor.literal_translation import translate_batch_literal_plaintext
