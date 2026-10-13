@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from django.db import transaction
 
 from core.benchmark_metric_store import aware_instant
+from core.collection_identity import qualified_ownership
 from core.collection_jobs import register_job
 from core.measurement_taxonomy import digest, require
 from core.models import (
@@ -17,6 +18,7 @@ from core.models import (
     Product,
     SourceSubjectMapping,
 )
+from scripts.benchmark_download_collector.history import date_chunks
 
 HISTORY_SOURCES = ("github", "hf", "openrouter", "arena")
 MODEL_TYPES = {"llm-model", "other-ai-model"}
@@ -130,7 +132,10 @@ def build_cohort(*, brand_ids, cutoff, cap=100):
         "exactly 21 distinct tracked brands required",
     )
     require(
-        not any(b.casefold() == "google" for b in brand_ids),
+        not any(b.casefold() == "google" for b in brand_ids)
+        and not BrandCompany.objects.filter(
+            brand_id__in=brand_ids, company__nickname__iexact="google"
+        ).exists(),
         "Google is outside this historical cohort",
     )
     require(
@@ -319,3 +324,70 @@ def cohort_report(jobs):
         "coverage_cells": sum(b["selected_count"] for b in brands.values())
         * len(HISTORY_SOURCES),
     }
+
+
+def history_windows(start_at, cutoff, source, *, size=365):
+    start, end = (
+        aware_instant(start_at).astimezone(UTC).date(),
+        aware_instant(cutoff).astimezone(UTC).date() - timedelta(days=1),
+    )
+    gaps = []
+    if source == "openrouter" and start < datetime(2025, 1, 1, tzinfo=UTC).date():
+        floor = datetime(2025, 1, 1, tzinfo=UTC).date()
+        gaps.append(
+            {
+                "outcome": "outside_provider_coverage",
+                "start_date": start.isoformat(),
+                "end_date": min(end, floor - timedelta(days=1)).isoformat(),
+                "reason": "provider_history_floor_2025_01_01",
+            }
+        )
+        start = floor
+    return (
+        list(date_chunks(start.isoformat(), end.isoformat(), size=size))
+        if start <= end
+        else []
+    ), gaps
+
+
+def validate_model_pins(job):
+    """Frozen ownership and identifiers cannot silently follow a later edit."""
+    models = job.definition["scope"].get("models", [])
+    require(
+        isinstance(models, list) and len(models) <= 100,
+        "bounded frozen model list required",
+    )
+    keys = [row["product_key"] for row in models]
+    require(len(set(keys)) == len(keys), "duplicate frozen model")
+    products = {
+        str(p.product_key): p for p in Product.objects.filter(product_key__in=keys)
+    }
+    require(set(products) == set(keys), "frozen product no longer exists")
+    for row in models:
+        product = products[row["product_key"]]
+        require(
+            product.brand_id == job.definition["scope"]["brand_id"]
+            and product.type in {"llm-model", "other-ai-model"},
+            "frozen product ownership/type changed",
+        )
+        for pin in row.get("provider_pins", []):
+            mapping = SourceSubjectMapping.objects.select_related(
+                "subject", "publisher_account"
+            ).get(pk=pin["mapping_id"], purpose="catalog")
+            require(
+                mapping.mapping_hash == pin["mapping_hash"]
+                and mapping.subject.product_id == product.product_key,
+                "frozen mapping changed",
+            )
+            require(
+                mapping.publisher_account is not None
+                and qualified_ownership(mapping.publisher_account, mapping.subject),
+                "publisher ownership changed",
+            )
+            if mapping.source_id == "github":
+                require(
+                    mapping.publisher_account.normalized_identifier
+                    == str(mapping.identity_snapshot["owner_id"]),
+                    "native publisher identity changed",
+                )
+    return products

@@ -123,3 +123,45 @@ owned by the X/backfill session; its current staging JSON pilot proceeds indepen
 The whole nine-unit plan remains incomplete until that owner supplies actual
 scheduled/manual/backfill adapter evidence. G3's selected delivery endpoint is an
 open pull request with CI decided, not deployment or a real historical batch.
+
+## Final Review and Follow-up
+
+The final simplify/review passes used the project-required sequential inline route;
+no independent reviewer or peer-model request ran. The configured Claude CLI route
+uses a different provider credential, so it was not invoked or changed. The durable
+[review receipt](2026-10-13-225202-g3-collection-review-followup.json) records eight
+source-validated findings and their bounded corrections.
+
+New regression counterexamples failed for GitHub alias ordering, history and catalog
+resumes after public visibility changed, draft release retention, a Google company
+alias, and malformed HF pagination. They now pass. Repository aliases retain a
+separate latest reviewed name; public eligibility is rechecked before continuation;
+unpublished releases are removed from observation/page evidence while still counting
+against response budgets. Cohort exclusion follows company relations. HF history
+rejects an unparseable advertised next page. Historical orchestration is separated
+into native evidence, archive admission, publication acquisition and cohort validation
+modules while keeping its public imports.
+
+The collector workflow now runs the new shared collection/provider/history regressions
+on PostgreSQL. Its expanded lint command passes. No repository type-check command is
+configured. Repository-wide Ruff is not green because of existing findings; five new
+mutable-class annotations were corrected without changing migration operations.
+Browser testing is not applicable: this diff changes no route, view, template, browser
+interaction, script or style. Additional compounding documentation was skipped because
+the reasoning is already carried by code, tests, plan and the runtime reference.
+
+The expanded local regression net passed **398 tests, including 168 required PostgreSQL
+cases and no skips**, in 141.27 seconds. After the last related GitHub catalog fixes,
+the targeted native/provider/history suite passed **72 tests, including 34 PostgreSQL
+cases and no skips**, in 5.45 seconds. Existing migration/restore verification remains
+valid because those operations were not changed by the final catalog refinements.
+
+One initial workflow reproduction omitted DATABASE_URL; the runner correctly rejected
+it as incomplete (179 required PostgreSQL tests skipped). It is not passing evidence.
+The corrected run explicitly uses the task's isolated local PostgreSQL database.
+
+The exact configured CI test selections both pass locally after all final code
+changes: the existing collector group passed **301 tests, including 179 required
+PostgreSQL cases**, in 84.57 seconds; the new shared collection group passed
+**94 tests, including 84 required PostgreSQL cases**, in 82.47 seconds. Neither
+skipped a required database test. The expanded CI lint command passes too.

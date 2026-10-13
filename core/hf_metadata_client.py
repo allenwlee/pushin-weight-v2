@@ -375,9 +375,8 @@ class HFMetadataClient:
             ):
                 result.outcome = "malformed"
                 return result
-        response = httpx.Response(
-            200, headers={"link": result.attempts[-1].get("link", "")}
-        )
+        link = result.attempts[-1].get("link", "")
+        response = httpx.Response(200, headers={"link": link})
         next_link = response.links.get("next")
         if next_link:
             parsed = urlparse(next_link.get("url", ""))
@@ -393,6 +392,8 @@ class HFMetadataClient:
                 result.outcome = "invalid_continuation"
             else:
                 result.next_cursor = values[0]
+        elif "next" in link:
+            result.outcome = "invalid_continuation"
         return result
 
     def download_counts(self, repo_id: str) -> MetadataResponse:

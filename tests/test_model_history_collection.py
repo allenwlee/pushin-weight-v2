@@ -609,3 +609,70 @@ def test_openrouter_publication_acquisition_admits_reviewed_numeric_history():
     )
     assert value.observation.run_id in [UUID(r) for r in run.report["numeric_run_ids"]]
     assert value.observation.source_metadata["archive_snapshot_date"] == "2026-09-01"
+
+
+@pytest.mark.parametrize("resume", [False, True])
+def test_github_uses_current_reviewed_alias_and_rechecks_public_visibility(resume):
+    import httpx
+
+    from core.collection_identity import review_github_mapping
+    from scripts.benchmark_download_collector.sources import Budget
+    from tests.test_collection_identity import identities
+    from tests.test_github_catalog import responses
+
+    brand, account, subject, repo = identities()
+    source = account.data_source
+    source.enabled, source.adapter_key = True, "github-catalog-v1"
+    source.save()
+    args = {
+        "subject": subject,
+        "role": "dedicated_model",
+        "version_selector": None,
+        "evidence_url": "https://github.com/publisher/family",
+        "reviewed_by": "test",
+    }
+    mapping = review_github_mapping(repo=repo, **args)
+    renamed = repo if resume else {**repo, "full_name": "publisher/aaa"}
+    review_github_mapping(repo=renamed, **args)
+    mapping.refresh_from_db()
+    pin = {
+        "mapping_id": str(mapping.pk),
+        "mapping_hash": mapping.mapping_hash,
+        "source": "github",
+        "native_identifier": "123",
+        "identifier_scope": "repository_id",
+    }
+    job = history_job(source, brand, subject.product, pins=[pin])
+    calls = []
+    private = [False]
+    fallback = responses(renamed, calls)
+
+    def response(request):
+        if request.url.path == "/repos/" + renamed["full_name"]:
+            calls.append(str(request.url))
+            return httpx.Response(200, json={**renamed, "private": private[0]})
+        if not resume and request.url.path.startswith("/repos/publisher/family"):
+            return httpx.Response(404, json={"message": "old alias"})
+        assert not private[0], "private content endpoint was fetched after resume"
+        return fallback(request)
+
+    def budget(n):
+        return Budget(
+            httpx.Client(transport=httpx.MockTransport(response)),
+            max_requests=n,
+            max_bytes=100000,
+        )
+
+    if resume:
+        first = execute_model_history(job.pk, budget=budget(1))
+        assert first.status == "partial"
+        private[0] = True
+        run = execute_model_history(job.pk, budget=budget(10))
+        assert run.report["coverage"][0]["outcome"] == "inaccessible"
+        assert len(calls) == 2
+    else:
+        run = execute_model_history(job.pk, budget=budget(30))
+        assert (
+            run.status == "success"
+            and run.observations.filter(dimensions__kind="releases").count() == 2
+        )

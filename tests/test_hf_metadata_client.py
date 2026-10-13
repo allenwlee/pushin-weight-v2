@@ -6,6 +6,12 @@ import pytest
 from core.hf_metadata_client import HFMetadataClient
 
 
+def test_history_rejects_an_unparseable_next_link():
+    hf = client(lambda _: httpx.Response(200, json=[], headers={"link": 'rel="next"'}))
+    result = hf.history_page("lab/model", "a" * 40, "commits")
+    assert result.outcome == "invalid_continuation"
+
+
 def client(handler, **kwargs):
     return HFMetadataClient(
         httpx.Client(transport=httpx.MockTransport(handler)),

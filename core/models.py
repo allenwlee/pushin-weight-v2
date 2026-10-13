@@ -7789,7 +7789,7 @@ class CollectionJob(models.Model):
 
     class Meta:
         db_table = "collection_jobs"
-        indexes = [models.Index(fields=["state", "next_due_at"], name="idx_collection_job_due")]
+        indexes: ClassVar[list] = [models.Index(fields=["state", "next_due_at"], name="idx_collection_job_due")]
         constraints = [
             models.CheckConstraint(condition=(models.Q(purpose="metric", contract__isnull=False) | models.Q(purpose__in=["catalog", "content"], contract__isnull=True)), name="ck_collection_job_contract"),
             models.CheckConstraint(condition=models.Q(mode__in=["manual", "recurring", "historical"]), name="ck_collection_job_mode"),

@@ -61,6 +61,8 @@ def responses(repo, seen):
             return httpx.Response(
                 200, json={"id": 42, "login": "publisher", "type": "Organization"}
             )
+        if path == "/repos/" + repo["full_name"]:
+            return httpx.Response(200, json=repo)
         if path == "/orgs/publisher/repos":
             if request.url.params.get("page") == "2":
                 return httpx.Response(200, json=[])
@@ -259,3 +261,60 @@ def test_late_provider_response_cannot_write_after_reclaim():
     assert (
         CollectionObservation.objects.filter(dimensions__kind="repository").count() == 0
     )
+
+
+def test_catalog_resume_rechecks_access_before_using_cached_public_inventory():
+    obj, repo = configured()
+    seen = []
+    private = [False]
+    fallback = responses(repo, seen)
+
+    def response(request):
+        if request.url.path == "/repos/" + repo["full_name"]:
+            seen.append(str(request.url))
+            return httpx.Response(200, json={**repo, "private": private[0]})
+        assert not private[0], "content fetched from now-private cached repository"
+        return fallback(request)
+
+    first = execute_github_catalog(obj.pk, client=reader(response, 3))
+    assert first.status == "partial"
+    private[0] = True
+    run = execute_github_catalog(obj.pk, client=reader(response, 20))
+    assert (
+        run.scopes.get(scope_kind="repository_access", scope_key="123").outcome
+        == "inaccessible"
+    )
+    assert not run.observations.filter(dimensions__kind="releases").exists()
+
+
+def test_authenticated_draft_releases_never_enter_saved_public_evidence():
+    obj, repo = configured()
+    seen = []
+    fallback = responses(repo, seen)
+
+    def response(request):
+        if request.url.path == "/repos/" + repo["full_name"]:
+            return httpx.Response(200, json=repo)
+        result = fallback(request)
+        if request.url.path.endswith("/releases"):
+            return httpx.Response(
+                200,
+                json=[
+                    *result.json(),
+                    {
+                        "id": 99,
+                        "draft": True,
+                        "published_at": None,
+                        "body": "UNPUBLISHED_SENTINEL",
+                    },
+                ],
+            )
+        return result
+
+    run = execute_github_catalog(obj.pk, client=reader(response, 30))
+    assert run.status == "success"
+    assert run.observations.filter(dimensions__kind="releases").count() == 2
+    for scope in run.scopes.all():
+        assert "UNPUBLISHED_SENTINEL" not in json.dumps(scope.envelopes)
+    for row in run.observations.all():
+        assert "UNPUBLISHED_SENTINEL" not in json.dumps(row.listing)

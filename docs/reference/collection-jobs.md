@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-13 21:27:21 JST. This describes the locally tested G3
+Last verified: 2026-10-13 22:52:02 JST. This describes the locally tested G3
 implementation through migrations 0081–0082, not a deployed or activated batch.
 
 A collection job stores what to collect, from which source, for which frozen
@@ -66,6 +66,8 @@ the reviewed database service. GitHub identities use immutable numeric account
 and repository IDs; repository full names are aliases. Official company/brand
 relations qualify ownership. An employee relationship alone does not. Transfers
 need explicit review and preserve the old snapshot.
+The latest reviewed full name is kept separately from the sorted alias history,
+so renaming a repository does not change its native identity or mapping hash.
 
 Relations distinguish dedicated models, family repositories, implementation,
 recipe and agent/harness evidence. Family repositories require a version selector
@@ -102,6 +104,15 @@ in `scope.hf_archive` permit range acquisition. Selected JSON, range hashes,
 publisher, revision, actual snapshot date and retrieval time persist before optional
 numeric import. The reviewed weekly archive can be imported as a selected manifest;
 there is no acquisition adapter for an unverified weekly binary layout.
+GitHub catalog/history continuations recheck current repository visibility before
+using cached public inventory. Draft/unpublished releases are omitted from saved
+observations and page envelopes; their response items still consume the budget.
+
+`core.model_history_collection` coordinates model/source coverage. Native repository
+acquisition lives in `core.model_native_history`, sparse archive admission in
+`core.model_history_archives`, and shared provider windows in
+`core.model_history_publications`. Cohort and interval validation share
+`core.model_history_cohort`; the collection module retains its public imports.
 
 OpenRouter/Arena publication windows use shared jobs/evidence across model cells.
 OpenRouter's supported history begins in 2025; top-50 absence and `other` remain

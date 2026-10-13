@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from core.benchmark_metric_store import aware_instant, safe_payload
 from core.collection_jobs import register_job
 from core.collection_state import checkpoint_scope, claim_job, finish_run
@@ -318,6 +320,48 @@ def _publisher_inventory(claim, client, pin, items):
     return scoped.observations.filter(dimensions__kind="repository").order_by("pk")
 
 
+def _repository_access(claim, client, repository):
+    """Cached inventory cannot authorize today's public content acquisition."""
+    repo = repository.listing
+    key = str(repo["id"])
+    ownership = {"repository_id": key, "owner_id": str(repo["owner"]["id"])}
+    result = client.repository(repo["full_name"])
+    _checked_response(
+        claim,
+        result,
+        kind="repository_access",
+        key=key,
+        ownership=ownership,
+        scope=_scope(claim, "repository_access", key),
+    )
+    data = result.payload
+    require(
+        isinstance(data, dict)
+        and str(data.get("id")) == key
+        and str(data.get("owner", {}).get("id")) == ownership["owner_id"]
+        and type(data.get("private")) is bool,
+        "native repository access identity mismatch",
+    )
+    public = data["private"] is False
+    checkpoint_scope(
+        claim,
+        scope_kind="repository_access",
+        scope_key=key,
+        ownership=ownership,
+        enumeration_complete=True,
+        outcome="observed" if public else "inaccessible",
+        envelopes=[
+            {
+                "url": result.url,
+                "status": result.status,
+                "observed_at": result.observed_at.isoformat(),
+                "public": public,
+            }
+        ],
+    )
+    return public
+
+
 def _events(claim, client, repository, kind, items, limit):
     repo = repository.listing
     ownership = {"repository_id": repo["id"], "owner_id": repo["owner"]["id"]}
@@ -345,6 +389,18 @@ def _events(claim, client, repository, kind, items, limit):
             isinstance(rows, list) and len(rows) <= limit - items[0],
             "bounded evidence list required",
         )
+        raw_count = len(rows)
+        if kind == "releases":
+            require(
+                all(
+                    isinstance(row, dict) and type(row.get("draft")) is bool
+                    for row in rows
+                ),
+                "release public-status flag required",
+            )
+            rows = [row for row in rows if not row["draft"] and row.get("published_at")]
+            # Credentials used for rate limits must not retain unpublished data.
+            result = replace(result, payload=rows)
         coordinates = []
         for row in rows:
             require(isinstance(row, dict), "GitHub evidence object required")
@@ -388,10 +444,10 @@ def _events(claim, client, repository, kind, items, limit):
             envelopes=[*(scoped.envelopes if scoped else []), _envelope(result)],
             enumeration_complete=result.next_url is None,
             outcome="complete" if result.next_url is None else "pending",
-            raw_count=(scoped.raw_count if scoped else 0) + len(rows),
+            raw_count=(scoped.raw_count if scoped else 0) + raw_count,
             write=write,
         )
-        items[0] += len(rows)
+        items[0] += raw_count
     return scoped
 
 
@@ -536,6 +592,8 @@ def execute_github_catalog(job_id, *, client=None, key=None):
         for publisher in publishers:
             repositories = _publisher_inventory(claim, client, publisher, items)
             for repository in repositories:
+                if not _repository_access(claim, client, repository):
+                    continue
                 _events(
                     claim,
                     client,

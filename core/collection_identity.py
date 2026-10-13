@@ -246,5 +246,5 @@ def review_github_mapping(
             "owner_id": owner["id"],
             "observed_full_name": full_name,
         },
-        identifier_metadata={"aliases": [full_name]},
+        identifier_metadata={"aliases": [full_name], "current_full_name": full_name},
     )
