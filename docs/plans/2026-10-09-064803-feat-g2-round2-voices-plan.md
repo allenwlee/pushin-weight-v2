@@ -1590,3 +1590,15 @@ code review has no findings; reviewed supplemental evidence remains explicit
 test-only because canonical citations require real Post rows. Private code-review
 and environment-failure receipts:.local/g2-repaired-production-20261014/.
 No additional provider calls; staging/CI/main/deployment remain next.
+
+### Hosted caller-pin correction — 2026-10-14T07:09:51+09:00
+
+Staged8d8d29e8 web/worker reproduced both accepted full requests without provider
+calls; existing staging generation/public controls remained false. Hosted CI
+38474815356 passed557checks and found one stale broad caller assertion requiring
+the old headline-attribution sentence in English. Correct only that expectation:
+the complete accepted source rules apply at the independently pinned English
+request position; editor, Pulse and both native requests retain full old rules.
+No runtime/prompt/fixture/guard change. Corrected caller and full-wire regression
+checks must pass before a new candidate/CI/stage. Initial failure/diagnosis stays
+in private receipts; production promotion has not happened.
