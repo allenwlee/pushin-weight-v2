@@ -9,11 +9,12 @@ from tests.general_helpers import classified_post, saved_commentary
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
-def test_pro_links_to_the_additive_general_page(client):
-    response = client.get("/", secure=True)
+@pytest.mark.parametrize("locale", ["en", "zh_cn", "zh_hans", "ja"])
+def test_home_omits_general_navigation_but_direct_general_route_remains(client, locale):
+    response = client.get(f"/?locale={locale}", secure=True)
     assert response.status_code == 200
-    assert 'data-general-link' in response.content.decode()
-    assert 'href="/general/?lang=' in response.content.decode()
+    assert 'data-general-link' not in response.content.decode()
+    assert 'href="/general/' not in response.content.decode()
     assert client.get("/general/?lang=en", secure=True).status_code == 200
 
 

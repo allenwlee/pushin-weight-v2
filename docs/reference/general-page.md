@@ -39,7 +39,7 @@ Pulse separates observed history from future projections and provides dedicated 
 
 Published reports opens with a native disclosure and works without JavaScript. Opening it preserves the complete saved report body and every citation. Language navigation starts a fresh page with that disclosure closed; audience changes retain its DOM state. The report archive and saved-edition links retain their existing access rules.
 
-The public `/general/` response exposes `X-Bridgewright-Revision` when the runtime supplies a valid full deployed SHA, using the existing revision middleware. Pro links to General with the current language; `/` remains Pro.
+The public `/general/` response exposes `X-Bridgewright-Revision` when the runtime supplies a valid full deployed SHA, using the existing revision middleware. General is accessible at its direct route; `/` remains Pro.
 
 ## Chatter and Pulse
 
