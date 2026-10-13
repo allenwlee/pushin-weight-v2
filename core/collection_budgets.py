@@ -15,7 +15,11 @@ def invocation_budget(client, *, requests=20, seconds=120, max_bytes=8388608):
             type(value) is int and 0 < value <= maximum, "invalid invocation budget"
         )
     return Budget(
-        client, max_requests=requests, max_seconds=seconds, max_bytes=max_bytes
+        client,
+        max_requests=requests,
+        max_seconds=seconds,
+        max_bytes=max_bytes,
+        cumulative=True,
     )
 
 
@@ -29,6 +33,7 @@ def job_budget(parent, job):
         max_bytes=min(parent.max_bytes - parent.total_bytes_read, limits["bytes"]),
         clock=parent.clock,
         sleep=parent.sleep,
+        cumulative=True,
     )
     return child
 

@@ -222,3 +222,66 @@ def test_late_metric_response_cannot_write_after_job_is_paused(settings, monkeyp
     assert MetricValue.objects.count() == 0
     job.refresh_from_db()
     assert job.active_run_id is None and job.last_attempt.status == "aborted"
+
+
+def test_failed_readiness_rolls_back_scheduling_takeover(settings):
+    from django.core.management.base import CommandError
+
+    job = scheduled(settings)
+    job.source.enabled = False
+    job.source.save()
+    with pytest.raises(CommandError):
+        call_command(
+            "collection_job_state",
+            job=str(job.pk),
+            state="ready",
+            take_metric_authority=True,
+            apply=True,
+            stdout=StringIO(),
+        )
+    job.source.refresh_from_db()
+    assert "collection_job_authorities" not in job.source.metadata
+
+
+def test_existing_legacy_source_lock_prevents_paid_shared_fetch(settings, monkeypatch):
+    import psycopg
+    from django.core.management.base import CommandError
+    from django.db import connection
+
+    from core.measurement_taxonomy import digest
+
+    job = scheduled(settings)
+    factory = httpx.Client
+
+    def unexpected(request):
+        raise AssertionError("provider called while legacy source is active")
+
+    monkeypatch.setattr(
+        httpx, "Client", lambda **_: factory(transport=httpx.MockTransport(unexpected))
+    )
+    config = connection.settings_dict
+    with (
+        psycopg.connect(
+            dbname=config["NAME"],
+            host=config["HOST"],
+            port=config["PORT"],
+            user=config["USER"],
+            password=config["PASSWORD"],
+        ) as db,
+        db.cursor() as cursor,
+    ):
+        key = int(digest(["benchmark-metrics-v1", str(job.contract_id), "hf"])[:15], 16)
+        cursor.execute("SELECT pg_advisory_lock(%s)", [key])
+        with pytest.raises(CommandError, match="already running"):
+            call_command(
+                "collect_benchmark_metrics",
+                contract=str(job.contract_id),
+                source="hf",
+                start_date="2026-10-13",
+                end_date="2026-10-13",
+                job=str(job.pk),
+                apply=True,
+                stdout=StringIO(),
+            )
+    job.refresh_from_db()
+    assert job.last_attempt.status == "failed" and job.last_attempt.request_count == 0

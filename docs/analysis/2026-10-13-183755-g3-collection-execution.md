@@ -73,6 +73,53 @@ The benchmark command's job-aware path fetches outside database transactions and
 
 Evidence: forty-six scheduler/budget/state/legacy-persistence/operations tests passed, forty-two required PostgreSQL cases executed, none skipped. They exercise the actual shared command-to-benchmark-command-to-source-to-writer chain, legacy scheduling handover, UTC daily slots, cooldowns, aggregate request exhaustion and external X driver exclusion. A subsequent stale-response test explicitly pauses a job inside the transport callback and verifies that no values survive the rejected fence.
 
-## Remaining Implementation
+## U7 — Read-Only Collection Reports
 
-U7–U8 require final verification and documentation. U9 runtime integration remains owned by the X/backfill session; its current staging JSON pilot proceeds independently. The whole nine-unit plan is incomplete.
+Shared service/CLI reports distinguish attempt and success clocks, expired claims,
+empty success, unknown usage and pending scoped work. Cohort jobs without an
+optional JSON role remain visible. Reports retain date precision and bounded
+evidence references, redact credential fields and omit lease tokens.
+
+Evidence: three PostgreSQL report tests exercise actual CLI/service parity,
+separate health clocks, missing usage, scope location and legacy JSON redaction.
+
+## U8 — Schema, Copy and Compatibility Verification
+
+The copy policy classifies collection_jobs as copied/optional-source state. Its
+scrubber pauses all copied jobs, clears runtime intent and catalog/content
+attempt pointers before deleting excluded runs/scopes/observations, and retains
+numeric references. Actual PostgreSQL dump/restore/migrate/scrub tests pass from
+both older and current sources. Current readers in the older migration test now
+run after the forward migrations; historical models and writable compatibility
+aliases still verify the original merge/restore behavior.
+
+Schema census confirms exactly one added table, no retirements/renames, and a
+complete reference inventory of 150 application tables/1,935 physical columns.
+Both evidence-preserving reverse guards execute. Django checks and migration
+drift checks pass. The shared runtime/API reference and X handover describe actual
+implemented behavior, including explicit caller authority for content claims.
+
+Final refinements keep physical HF bytes cumulative, preserve the legacy source
+advisory lock before paid dispatch, roll back failed scheduling handovers, charge
+shared publication requests once, select source-dated file revisions before the
+frozen cutoff and preserve completed UTC day selection across cutoff offsets.
+Reviewed OpenRouter publications also traverse numeric admission; `other` does
+not become selected-model usage. Real HF public visibility is not inferred from
+Git commit dates.
+
+Combined verification: **394 passed; 165 required PostgreSQL cases executed,
+zero skipped**, using the isolated local database, PostgreSQL 17 dump tools and
+mock provider transports. The focused command covers shared jobs/state/identity/
+schema/migration/copy/scheduling/budgets/reports, GH, HF, cohorts/history and legacy
+benchmark/OpenCode/backfill/staging-refresh regression paths. Two initial command
+attempts used nonexistent test filenames and ran zero tests; they are not evidence.
+The corrected command passed. No live provider batch, schedule activation,
+staging/production database write or deployment occurred.
+
+## Remaining Integration
+
+G3-owned U1–U8 are locally implemented and verified. U9 runtime integration remains
+owned by the X/backfill session; its current staging JSON pilot proceeds independently.
+The whole nine-unit plan remains incomplete until that owner supplies actual
+scheduled/manual/backfill adapter evidence. G3's selected delivery endpoint is an
+open pull request with CI decided, not deployment or a real historical batch.

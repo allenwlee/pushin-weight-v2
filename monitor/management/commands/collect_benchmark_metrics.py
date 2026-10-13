@@ -3,12 +3,13 @@
 import json
 import os
 import uuid
+from contextlib import nullcontext
 
 import httpx
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
 
-from core.benchmark_metric_store import persist_source
+from core.benchmark_metric_store import collection_lock, persist_source
 from core.measurement_taxonomy import digest
 from core.models import MetricCollectionContract
 from scripts.benchmark_download_collector import sources
@@ -39,6 +40,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         claim = None
+        budget = None
         try:
             contract = MetricCollectionContract.objects.get(pk=options["contract"])
             source = options["source"]
@@ -70,10 +72,14 @@ class Command(BaseCommand):
                 )
                 return
             if options["job"]:
+                from core.benchmark_attribution import enforce_source_collection
                 from core.collection_state import claim_job, fenced_run
                 from core.models import CollectionJob
 
                 job = CollectionJob.objects.get(pk=options["job"])
+                enforce_source_collection(
+                    contract, source, isolated_review=options["isolated_review"]
+                )
                 if (
                     job.contract_id != contract.pk
                     or job.source_id != source
@@ -100,12 +106,20 @@ class Command(BaseCommand):
             key = digest([contract.contract_hash, source, str(batch), params])
             if claim is not None:
                 key = active.ingestion_key
-            with httpx.Client() as client:
+            with (
+                httpx.Client() as client,
+                (
+                    collection_lock(contract, source)
+                    if claim is not None
+                    else nullcontext()
+                ),
+            ):
                 budget = sources.Budget(
                     client,
                     max_requests=options["max_requests"],
                     max_seconds=options["max_seconds"],
                     max_bytes=options["max_bytes"],
+                    cumulative=claim is not None,
                 )
 
                 def fetch():
@@ -218,7 +232,17 @@ class Command(BaseCommand):
 
                 try:
                     finish_run(
-                        claim, status="failed", error_code="invalid_metric_execution"
+                        claim,
+                        status="failed",
+                        error_code="invalid_metric_execution",
+                        request_count=options["max_requests"] - budget.remaining
+                        if budget
+                        else 0,
+                        report={
+                            "physical_bytes_received": budget.total_bytes_read
+                            if budget
+                            else 0
+                        },
                     )
                 except StaleClaim:
                     pass

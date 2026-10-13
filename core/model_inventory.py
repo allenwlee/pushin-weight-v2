@@ -213,6 +213,7 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
             max_bytes=limits["bytes"],
         )
     limits = job.definition["budgets"]
+    budget.cumulative = True
     budget.remaining = min(budget.remaining, limits["requests"])
     budget.max_bytes = min(budget.max_bytes, limits["bytes"])
     budget.deadline = min(budget.deadline, budget.clock() + limits["seconds"])

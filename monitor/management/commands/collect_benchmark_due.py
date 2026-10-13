@@ -12,7 +12,12 @@ from django.utils import timezone
 
 from core.benchmark_metric_operations import daily_collection_hour_utc
 from core.collection_scheduling import metric_authority
-from core.models import CollectionRun, DataSource, MetricCollectionContract
+from core.models import (
+    CollectionJob,
+    CollectionRun,
+    DataSource,
+    MetricCollectionContract,
+)
 
 
 class Command(BaseCommand):
@@ -37,6 +42,14 @@ class Command(BaseCommand):
             registry = DataSource.objects.get(pk=source)
             authority = metric_authority(registry, contract.pk)
             if authority:
+                if not CollectionJob.objects.filter(
+                    pk=authority,
+                    source=registry,
+                    contract=contract,
+                    operation="collect_metrics",
+                    mode="recurring",
+                ).exists():
+                    raise CommandError("invalid metric scheduling authority identity")
                 out = StringIO()
                 call_command(
                     "collect_jobs_due",

@@ -64,6 +64,23 @@ def _native_record(run, scoped, identifier, kind, payload, *, metadata=None):
     )[0]
 
 
+def _latest_before_cutoff(observations, date_of, cutoff):
+    """Select a source-dated revision without materializing a repository history."""
+    head, order = None, None
+    for row in observations.iterator(chunk_size=100):
+        value = date_of(row)
+        if not value:
+            continue
+        try:
+            instant = aware_instant(value)
+        except (ValueError, TypeError):
+            continue
+        candidate = (instant, row.observation_key)
+        if instant < cutoff and (order is None or candidate > order):
+            head, order = row, candidate
+    return head
+
+
 def _github_history(claim, job, pins, budget, items):
     import os
 
@@ -155,7 +172,14 @@ def _github_history(claim, job, pins, budget, items):
             items,
             job.definition["budgets"]["items"],
         )
-        _pinned_metadata(claim, client, repository, commits)
+        cutoff = aware_instant(job.definition["scope"]["cutoff"])
+        head = _latest_before_cutoff(
+            commits.observations.all(),
+            lambda o: o.source_metadata.get("clocks", {}).get("committer_at"),
+            cutoff,
+        )
+        if head:
+            _pinned_metadata(claim, client, repository, commits, head=head)
         checkpoint_scope(
             claim,
             scope_kind="repository_history",
@@ -242,6 +266,29 @@ def _hf_history(claim, job, pins, budget, items):
             else:
                 revision = head.envelopes[0]["revision"]
             for kind in ("commits", "tree"):
+                if kind == "tree":
+                    commits = CollectionObservation.objects.filter(
+                        run_id=claim.run_id,
+                        source_identifier=identifier,
+                        dimensions__kind="hf_commits",
+                    )
+                    dated_head = _latest_before_cutoff(
+                        commits,
+                        lambda o: o.source_metadata.get("source_record_date"),
+                        aware_instant(job.definition["scope"]["cutoff"]),
+                    )
+                    if dated_head is None:
+                        checkpoint_scope(
+                            claim,
+                            scope_kind="hf_repository_history",
+                            scope_key=identifier + ":tree",
+                            ownership=ownership,
+                            enumeration_complete=True,
+                            outcome="history_unavailable",
+                            envelopes=[{"reason": "no_qualified_commit_at_cutoff"}],
+                        )
+                        continue
+                    revision = dated_head.listing["id"]
                 key = identifier + ":" + kind
                 scoped = (
                     CollectionRun.objects.get(pk=claim.run_id)
@@ -330,8 +377,8 @@ COVERAGE_OUTCOMES = frozenset(
 
 def history_windows(start_at, cutoff, source, *, size=365):
     start, end = (
-        aware_instant(start_at).date(),
-        aware_instant(cutoff).date() - timedelta(days=1),
+        aware_instant(start_at).astimezone(UTC).date(),
+        aware_instant(cutoff).astimezone(UTC).date() - timedelta(days=1),
     )
     gaps = []
     if source == "openrouter" and start < datetime(2025, 1, 1, tzinfo=UTC).date():
@@ -410,9 +457,10 @@ def import_selected_history(claim, manifest):
             "reviewed numeric contract pin required",
         )
         contract, _, _, _, _ = prepare_history(manifest)
-        cutoff = aware_instant(scope["cutoff"]).date()
+        cutoff = aware_instant(scope["cutoff"]).astimezone(UTC).date()
         earliest = min(
-            aware_instant(m["creation"]["at"]).date() for m in scope["models"]
+            aware_instant(m["creation"]["at"]).astimezone(UTC).date()
+            for m in scope["models"]
         )
         require(
             all(
@@ -431,6 +479,48 @@ def import_selected_history(claim, manifest):
             mappings and {str(m.subject.product_id) for m in mappings} <= selected,
             "numeric contract contains a different cohort",
         )
+        births = {
+            row["product_key"]: aware_instant(row["creation"]["at"])
+            .astimezone(UTC)
+            .date()
+            for row in scope["models"]
+        }
+        identifiers = {
+            (
+                m.external_identifier.casefold()
+                if job.source_id == "hf"
+                else m.external_identifier
+            ): str(m.subject.product_id)
+            for m in mappings
+        }
+        for snap in manifest["snapshots"]:
+            for row in snap["payload"]["rows"]:
+                field = (
+                    "repo_id"
+                    if job.source_id == "hf"
+                    else "model_permaslug"
+                    if job.source_id == "openrouter"
+                    else "model_name"
+                )
+                identifier = (
+                    row[field].casefold() if job.source_id == "hf" else row[field]
+                )
+                require(
+                    identifier in identifiers or identifier == "other",
+                    "numeric archive includes an unselected model",
+                )
+                day = datetime.fromisoformat(
+                    snap["date"]
+                    if job.source_id == "hf"
+                    else row["date"]
+                    if job.source_id == "openrouter"
+                    else row["leaderboard_publish_date"]
+                ).date()
+                if identifier in identifiers:
+                    require(
+                        births[identifiers[identifier]] <= day < cutoff,
+                        "numeric row outside frozen model interval",
+                    )
         imported = import_history(manifest, apply=True)
         require(
             imported.status in {"success", "partial"},
@@ -474,39 +564,71 @@ def import_selected_history(claim, manifest):
 
 
 def _existing_evidence(job, model, pins):
+    from django.db.models import Q
+
     selected = []
-    for pin in pins:
-        identifier = pin["native_identifier"]
-        rows = (
-            CollectionObservation.objects.filter(
-                run__source_id=job.source_id, source_identifier=identifier, status="ok"
-            )
-            .exclude(dimensions__kind="coverage")
-            .select_related("mapping__subject")
-            .order_by("-observed_at", "-pk")[:1000]
+    rows = (
+        CollectionObservation.objects.filter(
+            run__source_id=job.source_id,
+            source_identifier__in={p["native_identifier"] for p in pins},
+            status="ok",
         )
-        for row in rows:
-            if (
-                row.mapping_id
-                and str(row.mapping.subject.product_id) != model["product_key"]
-            ):
-                continue
-            selected.append(
-                {
-                    "observation_id": row.pk,
-                    "run_id": str(row.run_id),
-                    "observed_at": row.observed_at.isoformat(),
-                    "publication_precision": row.publication_precision,
-                    "published_at": row.published_at.isoformat()
-                    if row.published_at
-                    else None,
-                    "published_date": row.published_date.isoformat()
-                    if row.published_date
-                    else None,
-                    "source_metadata": row.source_metadata,
-                    "dimensions": row.dimensions,
-                }
-            )
+        .filter(
+            Q(mapping__isnull=True)
+            | Q(mapping__subject__product_id=model["product_key"])
+        )
+        .filter(Q(dimensions__kind__isnull=True) | ~Q(dimensions__kind="coverage"))
+        .order_by("-observed_at", "-pk")[:1000]
+    )
+    for row in rows:
+        native_time = (
+            row.published_at
+            or row.published_date
+            or row.source_metadata.get("source_record_date")
+            or row.source_metadata.get("clocks", {}).get("committer_at")
+            or row.source_metadata.get("archive_snapshot_date")
+        )
+        precision = "unknown"
+        if native_time:
+            if isinstance(native_time, datetime):
+                instant = native_time
+            else:
+                try:
+                    instant = aware_instant(str(native_time))
+                except ValueError:
+                    instant = None
+            if instant is not None:
+                if instant >= aware_instant(job.definition["scope"]["cutoff"]):
+                    continue
+                precision = "instant"
+            elif len(str(native_time)) == 10:
+                if (
+                    str(native_time)
+                    >= aware_instant(job.definition["scope"]["cutoff"])
+                    .astimezone(UTC)
+                    .date()
+                    .isoformat()
+                ):
+                    continue
+                precision = "date"
+        selected.append(
+            {
+                "observation_id": row.pk,
+                "run_id": str(row.run_id),
+                "observed_at": row.observed_at.isoformat(),
+                "publication_precision": row.publication_precision,
+                "published_at": row.published_at.isoformat()
+                if row.published_at
+                else None,
+                "published_date": row.published_date.isoformat()
+                if row.published_date
+                else None,
+                "source_metadata": row.source_metadata,
+                "dimensions": row.dimensions,
+                "source_time_precision": precision,
+                "source_time_before_cutoff": True if precision != "unknown" else None,
+            }
+        )
     return selected
 
 
@@ -796,7 +918,53 @@ def _publication_window(parent, budget, start, end, *, key, config):
     )
 
 
-def _publication_evidence(job, model, pins, budget, *, key):
+def _admit_publication(claim, job, publication, start, end):
+    contract_id = job.definition["scope"].get("numeric_contract_id")
+    if not contract_id:
+        return
+    identifiers = set(
+        SourceSubjectMapping.objects.filter(
+            contract_id=contract_id, purpose="metric", source_id=job.source_id
+        ).values_list("external_identifier", flat=True)
+    )
+    payload = copy.deepcopy(publication.listing)
+    field = "model_permaslug" if job.source_id == "openrouter" else "model_name"
+    payload["rows"] = [
+        r for r in payload["rows"] if r[field] in identifiers and r[field] != "other"
+    ]
+    if not payload["rows"]:
+        return
+    dataset = (
+        "openrouter/rankings-daily"
+        if job.source_id == "openrouter"
+        else "lmarena-ai/leaderboard-dataset"
+    )
+    publisher = "openrouter" if job.source_id == "openrouter" else "lmarena-ai"
+    snap = {
+        "date": end,
+        "immutable_revision": digest(publication.listing),
+        "file_path": "selected-publication.json",
+        "raw_artifact_sha256": digest(payload),
+        "payload": payload,
+        "upstream_retrieval_coordinates": publication.source_metadata,
+    }
+    import_selected_history(
+        claim,
+        {
+            "schema_version": 1,
+            "contract_id": contract_id,
+            "source": job.source_id,
+            "dataset_id": dataset,
+            "archive_publisher": publisher,
+            "artifact_kind": "selected_json",
+            "start_date": start,
+            "end_date": end,
+            "snapshots": [snap],
+        },
+    )
+
+
+def _publication_evidence(claim, job, model, pins, budget, *, key):
     scope = job.definition["scope"]
     config = scope.get("arena_config")
     if job.source_id == "arena" and config not in {"text", "text_style_control"}:
@@ -827,6 +995,7 @@ def _publication_evidence(job, model, pins, budget, *, key):
             job, budget, start, end, key=key, config=config
         )
         payload = publication.listing
+        _admit_publication(claim, job, publication, start, end)
         field = "model_permaslug" if job.source_id == "openrouter" else "model_name"
         rows = [
             r
@@ -878,6 +1047,7 @@ def execute_model_history(job_id, *, budget=None, key=None):
             max_bytes=limits["bytes"],
         )
     limits = job.definition["budgets"]
+    budget.cumulative = True
     budget.remaining = min(budget.remaining, limits["requests"])
     budget.max_bytes = min(budget.max_bytes, budget.total_bytes_read + limits["bytes"])
     budget.deadline = min(budget.deadline, budget.clock() + limits["seconds"])
@@ -885,10 +1055,12 @@ def execute_model_history(job_id, *, budget=None, key=None):
     try:
         return _execute_models(claim, job, budget, key=key, before=before)
     except (ValueError, TypeError, KeyError, HFOrg.DoesNotExist) as exc:
+        prior = CollectionRun.objects.get(pk=claim.run_id)
         return finish_run(
             claim,
             status="partial",
-            request_count=before - budget.remaining,
+            request_count=prior.request_count
+            + (before - budget.remaining if job.source_id in {"hf", "github"} else 0),
             report={
                 "stop_reason": str(exc)
                 if isinstance(exc, SourceError)
@@ -946,13 +1118,17 @@ def _execute_models(claim, job, budget, *, key, before):
             model["creation"]["at"], job.definition["scope"]["cutoff"], job.source_id
         )
         pending_native = False
+        inaccessible_reason = None
         if source_pins and job.source_id in {"hf", "github"}:
             try:
                 (_hf_history if job.source_id == "hf" else _github_history)(
                     claim, job, source_pins, budget, items
                 )
-            except SourceError:
-                pending_native = True
+            except SourceError as exc:
+                if str(exc) in {"not_found", "private", "http_404", "http_410"}:
+                    inaccessible_reason = str(exc)
+                else:
+                    pending_native = True
         evidence = _existing_evidence(job, model, source_pins)
         outcome = (
             "unmapped"
@@ -970,10 +1146,12 @@ def _execute_models(claim, job, budget, *, key, before):
         )
         if pending_native:
             outcome, reason = "partial", "bounded_native_history_pending"
+        if inaccessible_reason:
+            outcome, reason = "inaccessible", inaccessible_reason
         if source_pins and job.source_id in {"openrouter", "arena"}:
             try:
                 fetched, disposition = _publication_evidence(
-                    job, model, source_pins, budget, key=key
+                    claim, job, model, source_pins, budget, key=key
                 )
                 evidence.extend(fetched)
                 outcome, reason = disposition["outcome"], disposition["reason"]
@@ -990,6 +1168,7 @@ def _execute_models(claim, job, budget, *, key, before):
             "evidence": evidence,
             "numeric_values_inferred": False,
             "coverage_complete": False,
+            "native_evidence_reference_limit": 1000,
             "reason": reason,
         }
         checkpoint_scope(
@@ -1010,7 +1189,8 @@ def _execute_models(claim, job, budget, *, key, before):
         else "success",
         selected_count=len(coverage),
         success_count=len(coverage),
-        request_count=before - budget.remaining,
+        request_count=run.request_count
+        + (before - budget.remaining if job.source_id in {"hf", "github"} else 0),
         report={
             **run.report,
             "coverage": coverage,
@@ -1019,5 +1199,8 @@ def _execute_models(claim, job, budget, *, key, before):
             "all_requested_history_available": bool(coverage)
             and all(c["coverage_complete"] for c in coverage),
             "archive": archive_outcome,
+            "physical_requests_this_invocation": before - budget.remaining,
+            "publication_requests_accounted_in_shared_window_runs": job.source_id
+            in {"openrouter", "arena"},
         },
     )

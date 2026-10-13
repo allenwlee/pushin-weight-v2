@@ -55,6 +55,7 @@ class Budget:
         max_requests=80,
         max_seconds=180,
         max_bytes=4 * 1024 * 1024,
+        cumulative=False,
         clock=time.monotonic,
         sleep=time.sleep,
     ):
@@ -71,6 +72,7 @@ class Budget:
         self.remaining = max_requests
         self.deadline = clock() + max_seconds
         self.max_bytes = max_bytes
+        self.cumulative = cumulative
         self.opencode_bytes = 0
         self.total_bytes_read = 0
 
@@ -99,7 +101,7 @@ class Budget:
                 self.opencode_bytes += len(chunk)
             if (
                 len(content) > self.max_bytes
-                or cumulative
+                or (cumulative or self.cumulative)
                 and self.total_bytes_read > self.max_bytes
                 or opencode
                 and self.opencode_bytes > self.max_bytes
@@ -114,6 +116,8 @@ class Budget:
             raise SourceError("request_cap")
         if self.clock() >= self.deadline:
             raise SourceError("time_cap")
+        if self.cumulative and self.total_bytes_read >= self.max_bytes:
+            raise SourceError("byte_cap")
 
     def get(self, url, params, *, key=None, asset=False, opencode=False):
         if asset:
@@ -203,15 +207,21 @@ class Budget:
             max_requests=self.remaining,
             max_seconds=self.deadline - self.clock(),
             max_bytes=self.max_bytes,
+            max_total_bytes=self.max_bytes - self.total_bytes_read
+            if self.cumulative
+            else None,
             clock=self.clock,
             sleep=self.sleep,
         )
-        result = (
-            client.account_counts(repo_id, account_kind)
-            if account_kind
-            else client.download_counts(repo_id)
-        )
-        self.remaining -= len(result.attempts)
+        try:
+            result = (
+                client.account_counts(repo_id, account_kind)
+                if account_kind
+                else client.download_counts(repo_id)
+            )
+        finally:
+            self.remaining -= client.requests
+            self.total_bytes_read += client.bytes_received
         if result.outcome != "ok":
             raise SourceError(result.outcome)
         count(result.payload.get("numFollowers" if account_kind else "downloads"))

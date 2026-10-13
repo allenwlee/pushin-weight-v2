@@ -395,8 +395,8 @@ def _events(claim, client, repository, kind, items, limit):
     return scoped
 
 
-def _pinned_metadata(claim, client, repository, commits):
-    head = commits.observations.order_by("pk").first()
+def _pinned_metadata(claim, client, repository, commits, *, head=None):
+    head = head or commits.observations.order_by("pk").first()
     if head is None:
         return
     repo, revision = repository.listing, head.listing["sha"]

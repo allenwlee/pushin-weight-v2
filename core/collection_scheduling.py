@@ -134,6 +134,12 @@ def execute_due_job(job, decision, budget):
             else end
         )
         before = budget.remaining
+        preceding_attempt = job.last_attempt_id
+        from scripts.benchmark_download_collector.sources import SourceError
+
+        remaining_seconds = int(budget.deadline - budget.clock())
+        if remaining_seconds < 1:
+            raise SourceError("time_cap")
         try:
             call_command(
                 "collect_benchmark_metrics",
@@ -149,17 +155,18 @@ def execute_due_job(job, decision, budget):
                     )
                 ),
                 max_requests=min(100, before),
-                max_seconds=max(1, min(300, int(budget.deadline - budget.clock()))),
+                max_seconds=min(300, remaining_seconds),
                 max_bytes=budget.max_bytes - budget.total_bytes_read,
                 apply=True,
                 stdout=StringIO(),
             )
         finally:
             job.refresh_from_db()
-            if job.last_attempt_id:
+            if job.last_attempt_id and job.last_attempt_id != preceding_attempt:
                 budget.remaining -= job.last_attempt.request_count
                 budget.total_bytes_read += job.last_attempt.source_metadata.get(
-                    "physical_bytes_received", 0
+                    "physical_bytes_received",
+                    job.last_attempt.report.get("physical_bytes_received", 0),
                 )
         return job.last_attempt
     if job.operation == "github_catalog":
@@ -229,7 +236,9 @@ def dispatch_due(
                     and current.state == "ready"
                 ):
                     current.next_retry_at = (
-                        now + timedelta(minutes=15) if run.status != "success" else None
+                        timezone.now() + timedelta(minutes=15)
+                        if run.status != "success"
+                        else None
                     )
                     current.next_due_at = (
                         timezone.datetime.fromisoformat(decision["following_slot"])

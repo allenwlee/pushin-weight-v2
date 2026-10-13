@@ -1,6 +1,7 @@
 """Historical windows, source gaps and reviewed numbers remain attributable."""
 
 from datetime import datetime
+from uuid import UUID
 
 import pytest
 from django.utils import timezone
@@ -56,7 +57,8 @@ def history_job(
     return set_job_state(obj.pk, "ready")
 
 
-def test_native_hf_history_pins_revision_and_resumes_without_weight_download():
+@pytest.mark.parametrize("reachable", [True, False])
+def test_native_hf_history_pins_revision_and_resumes_without_weight_download(reachable):
     import httpx
 
     from core.models import DataSource, Product
@@ -86,11 +88,13 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download():
         seen.append(str(request.url))
         path = request.url.path
         if path == "/api/models/lab/model":
+            if not reachable:
+                return httpx.Response(404, json={"error": "not found"})
             return httpx.Response(
                 200, json={"id": "lab/model", "private": False, "sha": "a" * 40}
             )
-        assert path.endswith("a" * 40)
         if "/commits/" in path:
+            assert path.endswith("a" * 40)
             if request.url.params.get("cursor"):
                 return httpx.Response(200, json=[])
             return httpx.Response(
@@ -101,6 +105,7 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download():
                 },
             )
         assert "/tree/" in path
+        assert path.endswith("b" * 40), "tree must use a dated commit before the cutoff"
         return httpx.Response(
             200,
             json=[{"type": "file", "path": "weights.safetensors", "size": 10000000000}],
@@ -114,9 +119,17 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download():
         )
 
     first = execute_model_history(job.pk, budget=budget(2))
+    if not reachable:
+        assert (
+            first.status == "success"
+            and first.report["coverage"][0]["outcome"] == "inaccessible"
+        )
+        assert first.request_count == 1 and len(seen) == 1
+        return
     assert first.status == "partial"
     second = execute_model_history(job.pk, budget=budget(8))
     assert second.pk == first.pk and second.status == "success"
+    assert second.request_count == 4
     assert (
         sum(
             "/api/models/lab/model?" in url or url.endswith("/api/models/lab/model")
@@ -280,6 +293,13 @@ def test_long_campaign_splits_without_inventing_supported_openrouter_history():
         (datetime.fromisoformat(end) - datetime.fromisoformat(start)).days < 366
         for start, end in windows
     )
+
+
+def test_utc_day_selection_does_not_borrow_the_cutoff_local_calendar():
+    windows, _ = history_windows(
+        "2026-09-01T00:00:00Z", "2026-09-02T00:00:00+09:00", "openrouter"
+    )
+    assert windows == []
 
 
 def test_each_selected_model_has_a_durable_source_gap_without_synthetic_values():
@@ -486,7 +506,106 @@ def test_shared_openrouter_window_is_fetched_once_and_other_never_fills_missing_
     first = execute_model_history(jobs[0].pk, budget=budget, key="test-project")
     second = execute_model_history(jobs[1].pk, budget=budget, key="test-project")
     assert len(calls) == 1
+    assert sum(CollectionRun.objects.values_list("request_count", flat=True)) == 1
     assert first.report["coverage"][0]["outcome"] == "observed"
     assert second.report["coverage"][0]["outcome"] == "history_unavailable"
     assert second.report["coverage"][0]["evidence"][0]["matched_rows"] == []
     assert MetricValue.objects.count() == 0
+
+
+def test_openrouter_publication_acquisition_admits_reviewed_numeric_history():
+    import httpx
+
+    from core.account_identity import upsert_account
+    from core.collection_identity import review_catalog_mapping
+    from core.models import BrandAccount, Role
+    from scripts.benchmark_download_collector.sources import Budget
+    from tests.test_benchmark_download_persistence import provider_contract
+
+    contract = provider_contract("openrouter", ["total_tokens"])
+    subject = contract.mappings.get(source_id="openrouter").subject
+    source = DataSource.objects.get(pk="openrouter")
+    source.enabled = True
+    source.save()
+    account = upsert_account(
+        source="hf",
+        external_identifier="lab",
+        handle="lab",
+        account_kind="organization",
+    )
+    role, _ = Role.objects.get_or_create(key="official")
+    BrandAccount.objects.create(brand=subject.product.brand, account=account, role=role)
+    mapping = review_catalog_mapping(
+        source=source,
+        subject=subject,
+        external_identifier="lab/model",
+        source_subject_kind="model",
+        identifier_scope="rankings_permaslug",
+        publisher_account=account,
+        role="dedicated_model",
+        version_selector=None,
+        evidence_url="https://openrouter.ai/lab/model",
+        reviewed_by="test",
+        identity_snapshot={},
+    )
+    job = history_job(
+        source,
+        subject.product.brand,
+        subject.product,
+        pins=[
+            {
+                "mapping_id": str(mapping.pk),
+                "mapping_hash": mapping.mapping_hash,
+                "source": "openrouter",
+                "native_identifier": "lab/model",
+                "identifier_scope": "rankings_permaslug",
+            }
+        ],
+        extra={
+            "numeric_contract_id": str(contract.pk),
+            "cutoff": "2026-09-02T00:00:00Z",
+        },
+    )
+
+    def respond(request):
+        return httpx.Response(
+            200,
+            json={
+                "meta": {
+                    "version": "v1",
+                    "start_date": request.url.params["start_date"],
+                    "end_date": request.url.params["end_date"],
+                    "as_of": "2026-09-03T00:00:00Z",
+                },
+                "data": [
+                    {
+                        "date": "2026-09-01",
+                        "model_permaslug": "lab/model",
+                        "total_tokens": "42",
+                    },
+                    {
+                        "date": "2026-09-01",
+                        "model_permaslug": "other",
+                        "total_tokens": "999",
+                    },
+                ],
+            },
+        )
+
+    run = execute_model_history(
+        job.pk,
+        budget=Budget(
+            httpx.Client(transport=httpx.MockTransport(respond)),
+            max_requests=5,
+            max_bytes=100000,
+        ),
+        key="project-test",
+    )
+    assert run.status == "success"
+    value = MetricValue.objects.get()
+    assert (
+        value.integer_value == 42
+        and value.window_start_at.isoformat() == "2026-09-01T00:00:00+00:00"
+    )
+    assert value.observation.run_id in [UUID(r) for r in run.report["numeric_run_ids"]]
+    assert value.observation.source_metadata["archive_snapshot_date"] == "2026-09-01"
