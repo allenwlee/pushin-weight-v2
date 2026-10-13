@@ -81,6 +81,7 @@ class HFMetadataClient:
         max_requests: int,
         max_seconds: float,
         max_bytes: int = 16 * 1024 * 1024,
+        max_total_bytes: int | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
     ):
@@ -89,11 +90,15 @@ class HFMetadataClient:
             or not math.isfinite(max_seconds)
             or max_seconds <= 0
             or max_bytes < 1
+            or max_total_bytes is not None
+            and max_total_bytes < 1
         ):
             raise ValueError("HF request, time, and size budgets must be positive")
         self.client = client
         self.max_requests = max_requests
         self.max_bytes = max_bytes
+        self.max_total_bytes = max_total_bytes
+        self.bytes_received = 0
         self.sleep = sleep
         self.clock = clock
         self.started = clock()
@@ -133,15 +138,20 @@ class HFMetadataClient:
             try:
                 # Explicit auth=None defeats client-level auth. Never inherit
                 # authorization headers even from an injected caller's client.
-                request = self.client.build_request(
+                request = httpx.Request(
                     "GET",
                     f"{API}{path}",
                     params=params,
-                    headers={"Accept": "application/json"},
-                    timeout=min(30.0, max(0.001, self.deadline - self.clock())),
+                    headers={
+                        "Accept": "application/json",
+                        "User-Agent": "PushinWeight-public-metadata",
+                    },
+                    extensions={
+                        "timeout": httpx.Timeout(
+                            min(30.0, max(0.001, self.deadline - self.clock()))
+                        ).as_dict()
+                    },
                 )
-                request.headers.pop("authorization", None)
-                request.headers.pop("cookie", None)
                 with closing(
                     self.client.send(
                         request, stream=True, auth=None, follow_redirects=False
@@ -151,10 +161,15 @@ class HFMetadataClient:
                     if response.status_code == 200:
                         chunks = bytearray()
                         for chunk in response.iter_bytes():
+                            self.bytes_received += len(chunk)
                             if self.clock() >= self.deadline:
                                 envelope["outcome"] = "time_cap"
                                 break
-                            if len(chunks) + len(chunk) > self.max_bytes:
+                            if (
+                                len(chunks) + len(chunk) > self.max_bytes
+                                or self.max_total_bytes is not None
+                                and self.bytes_received > self.max_total_bytes
+                            ):
                                 envelope["outcome"] = "response_size_cap"
                                 break
                             chunks.extend(chunk)
@@ -199,8 +214,11 @@ class HFMetadataClient:
                         # is an HTTP failure, not a JSON-success parsing failure.
                         body = bytearray()
                         for chunk in response.iter_bytes():
+                            self.bytes_received += len(chunk)
                             if (
                                 len(body) + len(chunk) > self.max_bytes
+                                or self.max_total_bytes is not None
+                                and self.bytes_received > self.max_total_bytes
                                 or self.clock() >= self.deadline
                             ):
                                 envelope["error_body_truncated"] = True
@@ -266,15 +284,24 @@ class HFMetadataClient:
         return result
 
     def list_page(
-        self, namespace: str, cursor: str | None = None, *, limit: int = 100
+        self,
+        namespace: str,
+        cursor: str | None = None,
+        *,
+        limit: int = 100,
+        sort: str = "lastModified",
     ) -> MetadataResponse:
-        if not NAMESPACE.fullmatch(namespace) or not 1 <= limit <= 100:
+        if (
+            not NAMESPACE.fullmatch(namespace)
+            or not 1 <= limit <= 100
+            or sort not in {"lastModified", "createdAt"}
+        ):
             return MetadataResponse("malformed")
         params = {
             "author": namespace,
             "full": "true",
             "limit": limit,
-            "sort": "lastModified",
+            "sort": sort,
             "direction": -1,
         }
         if cursor:

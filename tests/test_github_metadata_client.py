@@ -32,6 +32,7 @@ def test_page_retains_native_ids_and_checked_next_link():
     assert result.next_url.endswith("page=2&per_page=100")
     assert result.etag == '"revision"'
     assert "authorization" not in calls[0].headers
+    assert calls[0].headers["user-agent"] == "PushinWeight-public-metadata"
 
 
 def test_untrusted_pagination_cannot_receive_credentials():

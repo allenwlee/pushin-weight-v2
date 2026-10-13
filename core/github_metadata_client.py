@@ -87,6 +87,7 @@ class GitHubMetadataClient:
         headers = {
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": API_VERSION,
+            "User-Agent": "PushinWeight-public-metadata",
         }
         if self.key:
             headers["Authorization"] = f"Bearer {self.key}"

@@ -32,6 +32,28 @@ def test_short_page_keeps_provider_continuation():
     assert len(result.payload) == 1
 
 
+def test_creation_order_is_explicit_and_legacy_modification_order_is_preserved():
+    seen = []
+
+    def response(request):
+        seen.append(request.url.params["sort"])
+        return httpx.Response(
+            200,
+            json=[
+                {
+                    "id": "lab/model",
+                    "author": "lab",
+                    "createdAt": "2026-09-01T00:00:00Z",
+                }
+            ],
+        )
+
+    hf = client(response)
+    assert hf.list_page("lab", sort="createdAt").outcome == "ok"
+    assert hf.list_page("lab").outcome == "ok"
+    assert seen == ["createdAt", "lastModified"]
+
+
 @pytest.mark.parametrize(
     "link",
     [
@@ -165,13 +187,19 @@ def test_client_credentials_are_not_sent():
     transport = httpx.Client(
         transport=httpx.MockTransport(respond),
         auth=("user", "secret"),
-        headers={"Authorization": "Bearer secret"},
+        headers={
+            "Authorization": "Bearer secret",
+            "X-Api-Key": "test-only-other-app-key",
+        },
         cookies={"session": "secret"},
+        params={"access_token": "test-only-other-app-key"},
     )
     hf = HFMetadataClient(transport, max_requests=1, max_seconds=10)
     assert hf.model_group("lab/model", "detail").outcome == "ok"
     assert "authorization" not in seen[0].headers
     assert "cookie" not in seen[0].headers
+    assert "x-api-key" not in seen[0].headers
+    assert "access_token" not in seen[0].url.params
 
 
 def test_retry_after_past_deadline_stops_without_sleep():

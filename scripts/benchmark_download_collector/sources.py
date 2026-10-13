@@ -23,6 +23,7 @@ ARENA_CONFIG = "text"
 ARENA_CONTRACT = "arena-overall-text-v1"
 ARENA_LATEST = "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset/resolve/main/text/latest-00000-of-00001.parquet"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/datasets/rankings-daily"
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 SOURCE_URLS = {
     "arena": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
     "hf": "https://huggingface.co/docs/hub/models-download-stats",
@@ -131,8 +132,14 @@ class Budget:
             parsed = urlsplit(url)
             require(url == opencode_url(parsed.path), "untrusted_opencode_url")
         else:
-            require(url in {ARENA_URL, OPENROUTER_URL}, "unsupported source URL")
-        require(not key or url == OPENROUTER_URL, "credential host mismatch")
+            require(
+                url in {ARENA_URL, OPENROUTER_URL, OPENROUTER_MODELS_URL},
+                "unsupported source URL",
+            )
+        require(
+            not key or url in {OPENROUTER_URL, OPENROUTER_MODELS_URL},
+            "credential host mismatch",
+        )
         require(not asset or not key, "asset_credentials_forbidden")
         for attempt in range(3):
             headers = {"Authorization": f"Bearer {key}"} if key else {}
@@ -561,6 +568,94 @@ def openrouter(budget, start_date, end_date, *, key, today=None):
         "as_of": meta["as_of"],
         "missing_dates": sorted(window - day_counts.keys()),
         "coverage": "top_50_public_models",
+    }
+
+
+def openrouter_catalog_page(budget, *, key, offset=0, limit=500, authors=None):
+    """Native catalog IDs and creation clocks; no inference of usage identities."""
+    require(isinstance(key, str) and key, "OpenRouter project credential required")
+    require(type(offset) is int and 0 <= offset <= 1000000, "invalid catalog offset")
+    require(type(limit) is int and 1 <= limit <= 1000, "invalid catalog page limit")
+    params = {"offset": offset, "limit": limit}
+    if authors:
+        require(
+            isinstance(authors, list)
+            and all(
+                isinstance(a, str) and re.fullmatch(r"[a-zA-Z0-9_.-]{1,128}", a)
+                for a in authors
+            ),
+            "reviewed author slugs required",
+        )
+        params["model_authors"] = ",".join(authors)
+    before = budget.remaining
+    payload = budget.get(OPENROUTER_MODELS_URL, params, key=key)
+    rows = payload.get("data")
+    require(
+        isinstance(rows, list) and len(rows) <= limit, "bounded model catalog required"
+    )
+    seen = set()
+    for row in rows:
+        require(
+            isinstance(row, dict)
+            and isinstance(row.get("id"), str)
+            and 0 < len(row["id"]) <= 256
+            and row["id"] not in seen
+            and isinstance(row.get("canonical_slug"), str)
+            and (
+                row.get("created") is None
+                or type(row["created"]) is int
+                and row["created"] >= 0
+            ),
+            "invalid native catalog model",
+        )
+        seen.add(row["id"])
+    next_link = payload.get("links", {}).get("next")
+    total = payload.get("total_count")
+    require(
+        total is None or type(total) is int and total >= offset + len(rows),
+        "invalid catalog total",
+    )
+    next_offset = None
+    if next_link:
+        parsed = urlsplit(next_link)
+        require(
+            parsed.scheme == "https"
+            and parsed.hostname == "openrouter.ai"
+            and parsed.path == "/api/v1/models"
+            and parsed.port in (None, 443)
+            and not parsed.username
+            and not parsed.password
+            and not parsed.fragment,
+            "untrusted catalog pagination",
+        )
+        from urllib.parse import parse_qs
+
+        query = parse_qs(parsed.query, strict_parsing=True)
+        require(
+            set(query) <= {"offset", "limit", "model_authors"}
+            and len(query.get("offset", [])) == 1
+            and query["offset"][0].isdigit(),
+            "invalid catalog continuation",
+        )
+        next_offset = int(query["offset"][0])
+        require(
+            next_offset > offset and next_offset <= 1000000, "catalog pagination loop"
+        )
+    elif total is not None and offset + len(rows) < total:
+        require(bool(rows), "catalog incomplete empty page")
+        next_offset = offset + len(rows)
+    elif total is None and len(rows) == limit:
+        next_offset = offset + len(rows)
+    return {
+        "rows": rows,
+        "complete": next_offset is None,
+        "next_offset": next_offset,
+        "total_count": total,
+        "observed_at": datetime.now(UTC).isoformat(),
+        "request_count": before - budget.remaining,
+        "source_url": OPENROUTER_MODELS_URL,
+        "request_params": params,
+        "catalog_ids_are_usage_ids": False,
     }
 
 
