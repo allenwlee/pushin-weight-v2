@@ -339,6 +339,62 @@ class HFMetadataClient:
             result.outcome = "invalid_continuation"
         return result
 
+    def history_page(
+        self, repo_id: str, revision: str, kind: str, cursor: str | None = None
+    ) -> MetadataResponse:
+        """Public commit/tree metadata at one immutable revision; no blobs."""
+        if (
+            not REPO_ID.fullmatch(repo_id)
+            or not re.fullmatch(r"[0-9a-f]{40}", revision)
+            or kind not in {"commits", "tree"}
+        ):
+            return MetadataResponse("malformed")
+        path = f"/models/{repo_id}/{kind}/{revision}"
+        params = {"recursive": "true", "expand": "true"} if kind == "tree" else {}
+        if cursor:
+            if not isinstance(cursor, str) or len(cursor) > 8192:
+                return MetadataResponse("invalid_continuation")
+            params["cursor"] = cursor
+        result = self._get(path, params)
+        if result.outcome != "ok":
+            return result
+        if not isinstance(result.payload, list):
+            result.outcome = "malformed"
+            return result
+        for row in result.payload:
+            if (
+                not isinstance(row, dict)
+                or kind == "commits"
+                and not re.fullmatch(r"[0-9a-f]{40}", str(row.get("id", "")))
+            ):
+                result.outcome = "malformed"
+                return result
+            if kind == "tree" and (
+                not isinstance(row.get("path"), str)
+                or row.get("type") not in {"file", "directory"}
+            ):
+                result.outcome = "malformed"
+                return result
+        response = httpx.Response(
+            200, headers={"link": result.attempts[-1].get("link", "")}
+        )
+        next_link = response.links.get("next")
+        if next_link:
+            parsed = urlparse(next_link.get("url", ""))
+            values = parse_qs(parsed.query).get("cursor", [])
+            if (
+                parsed.scheme != "https"
+                or parsed.netloc != "huggingface.co"
+                or parsed.path != "/api" + path
+                or parsed.fragment
+                or len(values) != 1
+                or not values[0]
+            ):
+                result.outcome = "invalid_continuation"
+            else:
+                result.next_cursor = values[0]
+        return result
+
     def download_counts(self, repo_id: str) -> MetadataResponse:
         """Read public rolling-30-day/all-time counters without model files."""
         if not REPO_ID.fullmatch(repo_id):

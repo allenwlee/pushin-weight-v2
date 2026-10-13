@@ -256,6 +256,12 @@ def build_cohort(*, brand_ids, cutoff, cap=100):
 def freeze_model_history(*, brand_ids, cutoff, job_key_prefix, budgets, cap=100):
     manifest = build_cohort(brand_ids=brand_ids, cutoff=cutoff, cap=cap)
     identity = digest(manifest)
+    dates = [
+        row["creation"]["at"]
+        for brand in manifest["brands"].values()
+        for row in brand["models"]
+    ]
+    global_start_at = min(dates) if dates else None
     jobs = []
     for brand in brand_ids:
         report = manifest["brands"][brand]
@@ -274,6 +280,7 @@ def freeze_model_history(*, brand_ids, cutoff, job_key_prefix, budgets, cap=100)
                 "brand_id": brand,
                 "cohort_hash": identity,
                 "cutoff": manifest["cutoff"],
+                "global_start_at": global_start_at,
                 "brand_ids": manifest["brand_ids"],
                 "cap_per_brand": cap,
                 **report,

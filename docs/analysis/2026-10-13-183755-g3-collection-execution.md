@@ -57,6 +57,14 @@ Evidence: absent cohort/inventory modules and the HF sort argument produced expe
 
 Latest combined cohort/native-inventory/HF-client/HF-catalog/GitHub-client/legacy-source run: ninety-two passed, twenty-one required PostgreSQL cases executed, none skipped. It covers company-wide caps across two namespaces, mirrors before caps, earliest creation, deterministic ties, all twenty-one reports, frozen per-source equality, family-date rejection, Google exclusion and actual adapter-to-DB paths. Source registration and all campaign jobs remain inactive by default.
 
+## U5 — Bounded History and Sparse Archive Admission
+
+HF commit/tree metadata and GitHub release/tag/commit/tree/file evidence traverse public clients and fenced database checkpoints. HF history is pinned to a recorded head revision; GitHub trees use recorded tree identities. Neither path downloads model weights. Reviewed immutable HF archive coordinates reuse range acquisition, store selected JSON and range hashes before import, and retain separate publisher/revision/snapshot/retrieval clocks. Optional numeric admission requires a real reviewed contract and its selected products. Single-snapshot chunks preserve sparse dates, explicit zero and missing fields; no daily interpolation occurs.
+
+OpenRouter/Arena publication windows are acquired through shared database jobs and projected onto reviewed provider identifiers. Repeated model jobs reuse the same window evidence. OpenRouter's pre-2025 interval and absent top-50 rows remain gaps; `other` is never assigned to a missing model. Arena requires a frozen supported text configuration. Coverage evaluations remain qualified, not assertions of complete public history.
+
+Evidence: eighteen history/acquisition/import tests passed, including eleven required PostgreSQL tests, none skipped. Native HF resume and GitHub pinned-tree call chains use mock transports. A real parquet range fixture traverses archive acquisition through numeric writing; zero persists, absent all-time remains absent under a reviewed v2 contract, and replay uses DB evidence without another request. Older required-field contracts remain unchanged. No real historical batch ran.
+
 ## Remaining Implementation
 
-U5–U8 are pending implementation and their own verification. U9 runtime integration remains owned by the X/backfill session; its current staging JSON pilot proceeds independently. The whole nine-unit plan is incomplete.
+U6–U8 are pending implementation and their own verification. U9 runtime integration remains owned by the X/backfill session; its current staging JSON pilot proceeds independently. The whole nine-unit plan is incomplete.
