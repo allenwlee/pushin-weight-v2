@@ -71,6 +71,42 @@ class Budget:
         self.deadline = clock() + max_seconds
         self.max_bytes = max_bytes
         self.opencode_bytes = 0
+        self.total_bytes_read = 0
+
+    def public_request(self, url, params=None, *, headers=None):
+        """Build independently of client cookies, default credentials and redirects."""
+        self.check()
+        self.remaining -= 1
+        return httpx.Request(
+            "GET",
+            url,
+            params=params,
+            headers=headers or {},
+            extensions={
+                "timeout": httpx.Timeout(
+                    min(20, self.deadline - self.clock())
+                ).as_dict()
+            },
+        )
+
+    def response_bytes(self, response, *, cumulative=False, opencode=False):
+        content = bytearray()
+        for chunk in response.iter_bytes(chunk_size=65536):
+            content.extend(chunk)
+            self.total_bytes_read += len(chunk)
+            if opencode:
+                self.opencode_bytes += len(chunk)
+            if (
+                len(content) > self.max_bytes
+                or cumulative
+                and self.total_bytes_read > self.max_bytes
+                or opencode
+                and self.opencode_bytes > self.max_bytes
+            ):
+                raise SourceError("response_size_cap")
+            if self.clock() >= self.deadline:
+                raise SourceError("time_cap")
+        return bytes(content)
 
     def check(self):
         if self.remaining <= 0:
@@ -99,21 +135,11 @@ class Budget:
         require(not key or url == OPENROUTER_URL, "credential host mismatch")
         require(not asset or not key, "asset_credentials_forbidden")
         for attempt in range(3):
-            self.check()
-            self.remaining -= 1
             headers = {"Authorization": f"Bearer {key}"} if key else {}
             try:
                 # Build independently: do not inherit client cookies/default credentials.
-                request = httpx.Request(
-                    "GET",
-                    url,
-                    params=None if asset else params,
-                    headers=headers,
-                    extensions={
-                        "timeout": httpx.Timeout(
-                            min(20, self.deadline - self.clock())
-                        ).as_dict()
-                    },
+                request = self.public_request(
+                    url, None if asset else params, headers=headers
                 )
                 with closing(
                     self.client.send(
@@ -131,17 +157,7 @@ class Budget:
                             response.headers.get("retry-after"), 2**attempt
                         )
                     else:
-                        content = bytearray()
-                        for chunk in response.iter_bytes(chunk_size=65536):
-                            content.extend(chunk)
-                            if opencode:
-                                self.opencode_bytes += len(chunk)
-                                if self.opencode_bytes > self.max_bytes:
-                                    raise SourceError("response_size_cap")
-                            if len(content) > self.max_bytes:
-                                raise SourceError("response_size_cap")
-                            if self.clock() >= self.deadline:
-                                raise SourceError("time_cap")
+                        content = self.response_bytes(response, opencode=opencode)
                         if asset:
                             return bytes(content)
                         try:

@@ -33,6 +33,16 @@ The GitHub review service preserves repository IDs through renames, records alia
 
 Evidence: new identity tests first failed on the absent module; a strengthened employee-account case then failed because the initial ownership check admitted any affiliation. The corrected official-role check passes. Latest focused command combines identity, existing database identity/persistence and OpenCode regressions: forty-two tests passed, with thirty-three required PostgreSQL cases executed and none skipped. Model/migration alignment and whitespace checks pass. No real publisher mapping was imported or provider queried.
 
+## U3 — Bounded GitHub Metadata and Evidence
+
+The public GitHub client uses the existing budget/transport machinery and retained official REST documentation for API version `2026-03-10`. Host/path-checked pagination, independent credential-free request construction, an optional exact project credential, per-invocation request/time/byte limits and pinned small-file reads preserve the public metadata boundary. Rate-limit responses become a durable cooldown rather than an unbounded retry queue.
+
+The collector checkpoints publisher identity, repository pages, releases, tags, commits and pinned tree/file metadata through the fenced shared writer. It retains repository creation, release publication and commit author/committer clocks separately. Family mappings do not multiply source event records. A conditional 304 reuses its matching saved page and continues pagination, retaining original payload provenance. A late response after another claim cannot write evidence or progress.
+
+The CLI inspects without writes or client construction by default. Registration creates a disabled source/paused job; there is no schedule activation. The metadata-file allowlist excludes weights and executable code.
+
+Evidence: metadata-client and catalog tests initially failed on absent modules. Existing transport characterization passed forty-one cases before its shared request/body refactor. Latest combined run passed sixty-five cases, with nineteen required PostgreSQL cases executed and none skipped. Tests exercise page-two recovery, distinct release/commit records, true source clocks, a 304 with retained inventory, rate-limit checkpoint/cooldown, stale-response rejection and command-to-client-to-database behavior. GitHub fixtures are explicitly deterministic examples derived from the documented response schema, not claimed live response captures. No real provider batch or production/staging write was run.
+
 ## Remaining Work
 
-U3–U8 are pending implementation and their own verification. U9 runtime integration remains owned by the X/backfill session; its current staging JSON pilot proceeds independently. The whole nine-unit plan is incomplete.
+U4–U8 are pending implementation and their own verification. U9 runtime integration remains owned by the X/backfill session; its current staging JSON pilot proceeds independently. The whole nine-unit plan is incomplete.
