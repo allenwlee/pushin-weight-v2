@@ -1,4 +1,4 @@
-# Replay a production Chatter writer request
+# Prodsimtest: test production Chatter writing
 
 This test reproduces the complete request that created a published Chatter
 edition. It helps distinguish an actual production result from a headline trial
@@ -103,3 +103,131 @@ downloads. The small renderer tests require no Django/database startup:
 python -m pytest -p no:django -c /dev/null --rootdir=. \
   --confcutdir=tests/editorial_replay tests/editorial_replay/test_review.py -q
 ```
+
+## Simulate earlier stories from the database
+
+The database-scenario mode selects the original Wang wardrobe correction or
+first official Mistral announcement and uses the deployed `build_packet`,
+`post_evidence` and `story_packet` collectors. It imports the actual deployed
+writer, transport, accounting and validation code on the headline worker.
+The local launcher streams the test harness over authenticated SSH; it changes
+no deployed application file and saves private evidence only on fuchitalee.
+
+Prepare a read-only fixture before a newly authorized test:
+
+```sh
+python tests/editorial_replay/run_database_scenario.py \
+  --case wang \
+  --expected-revision db5510ccc94ea326dd5f81e833a9c791e5e84d99 \
+  --run-id new-wang-en-test \
+  --output /absolute/private/path/wang-preflight.json
+```
+
+Use `--case mistral-first` for the official announcement. Inspect the frozen
+packet and request before sending. Add `--fixture <preflight-path> --execute`
+and use a new result output path for the authorized first call. The output must
+not already exist; a recorded run ID cannot be dispatched again. Global
+production guards and the USD0.25 test reservation cap apply. Test assessment
+time is today; the evidence cutoff remains historical. No publication occurs.
+
+Wang's cutoff is September24 14:45UTC, after the source was fetched at14:31.
+Mistral's cutoff is October6 13:30UTC, after its13:15 fetch. Both source posting
+and collection times must precede the cutoff. This uses today's stored database
+rows; old profile/classification revisions and archived image pixels are not
+recovered. Story nomination is the owner's choice, and the fixture records
+whether the anchor appeared in the ordinary dispatch sample. It does not test
+automatic editor ranking, queue delivery or publication. Normal retrieval
+limits, query timeouts and omissions remain visible rather than being repaired
+with manually supplied context. Writer facts come from its projected evidence,
+not editor metadata retained in the preparation snapshot.
+
+## Compare the one-sentence prompt variant
+
+The owner-selected variant adds exactly this sentence from
+`config/editorial_voices/chatter-en-v1.json`:
+
+> Write a catchy, punny, tongue-in-cheek print headline and supporting byline.
+
+Prepare it from an existing unmodified database preflight with
+`--fixture <baseline-preflight> --prepare-variant --output <new-variant-preflight>`.
+Execute that inspected variant fixture with a unique run ID. This reuses the
+same packet and user message; no new database history query runs. The harness
+proves the original full-wire hash before adding the sentence, then checks the
+complete variant request before sending. All other instructions, images, schema,
+model settings and guards remain fixed. The live production voice is unchanged.
+Earlier CLI examples used different conditions and are labelled separately.
+
+The authorized6.1/high model variant starts from that catchy/punny preflight:
+use `--fixture <6.0-style-preflight> --prepare-model-variant --output <new-preflight>`.
+It preserves the complete prompt and packet and changes the request's model
+and reasoning effort. Rates come from the deployed6.1 route; endpoint,
+credential, output allowance and timeout retain the English route's settings.
+The test checks the entire prior request after restoring the two changed fields.
+Execute the inspected fixture once with a unique run ID. This does not change
+the deployed English model selection.
+
+## Test evidence repair and headline attribution
+
+The owner-approved repair variant adds two reviewed evidence records to Wang:
+the source image's transcribed labels and a dated official identity excerpt.
+They have `platform: supplemental_evidence`, their own source URL/date, an
+explicit `evidence_role` and a hash of the reviewed text. They are not new X
+posts. The image record also retains the original post ID and image hash.
+Production's existing generic source projection and `original_text` passage
+binding represent the text of these supplemental records; the original X post
+text and attached image remain unchanged. This tests a sourced packet repair,
+not an automatic production collection or a historical database snapshot.
+
+The repair changes exactly one system-prompt sentence. Faithful attribution
+continues in the supporting line and article, and the headline must preserve
+attribution/uncertainty whenever omitting it would mislead. The catchy/punny
+sentence and6.1/high route/settings remain fixed. Mistral receives no additional
+evidence, so its variant changes only that attribution sentence.
+
+Prepare with `--prepare-repair --fixture <6.1-preflight>
+--supplements <reviewed-records.json> --output <new-repair-preflight>`, then
+execute that inspected fixture once with a unique run ID. No deployed source
+module, live voice, source database row, provider transport or copy validator
+is patched. Add the new results to the same review manifest and label the
+comparison as evidence/attribution changes. The writer sees no prior model copy
+or suggested target headline. First results and supplemental receipts remain
+private; preserve every earlier fixture and response.
+
+To compare that exact repair on6.0/medium, prepare with
+`--prepare-repair-model --fixture <successful-6.1-repair-preflight>
+--output <new-6.0-repair-preflight>`. This restores the configured English6.0
+model/effort/rates while retaining every message, evidence record, image, schema
+and other request parameter. The full request must equal the6.1 reference after
+restoring only model and reasoning. Execute the inspected fixture once using a
+unique run ID and retain the6.1 copy as its same-prompt comparison.
+
+## Keep several cases in one review
+
+Use a private JSON manifest to retain each case's own inputs and comparisons:
+
+```json
+{
+  "cases": [
+    {
+      "kind": "exact_replay",
+      "fixture": "review-preflight.json",
+      "replays": ["result.json"]
+    },
+    {
+      "kind": "database_scenario",
+      "fixture": "wang-preflight.json",
+      "result": "wang-result.json",
+      "comparison": "wang-comparison.json"
+    }
+  ]
+}
+```
+
+Paths resolve relative to the manifest. A comparison file contains `label` and
+`copy` with `headline` and `byline`; it is reference copy, not a new model run.
+Build with `build_review.py --manifest <path> --output <preview/index.html>`.
+Verify with `check_review_browser.py --manifest <path> --url <preview-url>
+--evidence <new-evidence-directory>`. Case switching must update copy, packet,
+exact request, hash and comparison together. The same selection survives a
+reload or portable HTML download. Keep every first fixture/reply unchanged and
+add new manifest entries when another test is authorized.

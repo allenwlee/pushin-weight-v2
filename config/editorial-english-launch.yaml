@@ -20,7 +20,7 @@ pictures:
   pulse: derive
 permitted_reuse: [permitted, unknown]
 voices:
-  chatter:en: chatter-en-v2
+  chatter:en: chatter-en-v3
   chatter:ja: chatter-ja-tospo-v2
   chatter:zh-cn: chatter-zh-cn-wemedia-v2
   pulse:en: pulse-en-v1

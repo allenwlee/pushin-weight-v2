@@ -41,12 +41,75 @@ def build_payload(fixture, original, replays):
         })
     packet = fixture["snapshot"]["source_packet"]
     return {
+        "kind": "exact_replay", "title": "Published Mistral · exact replay",
         "runs": runs, "defaultRun": runs[-1]["id"], "conditions": conditions,
         "wire": wire, "packet": packet,
         "sources": packet.get("posts", []) + packet.get("context", []),
         "sourceCounts": {"primary": len(packet.get("posts", [])), "context": len(packet.get("context", []))},
         "negativeControls": fixture["negative_controls"],
     }
+
+
+def build_scenario_payload(fixture, result, comparison=None):
+    wire = fixture["snapshot"]["wire_request"]
+    if hashlib.sha256(json.dumps(wire, ensure_ascii=False).encode()).hexdigest() != fixture["request_hash"]:
+        raise ValueError("scenario fixture no longer matches its wire hash")
+    conditions = {key: fixture[key] for key in (
+        "revision", "endpoint", "model", "reasoning_effort", "service_tier",
+        "max_completion_tokens", "timeout_seconds", "request_hash",
+    )}
+    if result.get("status") != "scenario_passed" or result.get("complete_request_equal") is not True:
+        raise ValueError("scenario did not pass the production writer path")
+    if any(result.get(key) != value for key, value in conditions.items()):
+        raise ValueError("scenario conditions differ from the frozen fixture")
+    if result.get("case_id") != fixture["case_id"] or result.get("returned_model") != conditions["model"]:
+        raise ValueError("scenario case or returned model differs")
+    if result.get("snapshot") != fixture["snapshot"]:
+        raise ValueError("scenario snapshot differs from the frozen fixture")
+    if result.get("test_text_publications") != 0 or result.get("published") != 0:
+        raise ValueError("scenario unexpectedly published")
+    packet = fixture["snapshot"]["source_packet"]
+    run_id = "db-" + fixture["case_id"] + "-" + str(result["assessment"])
+    return {
+        "kind": "database_scenario", "title": fixture["case_title"],
+        "runs": [{"id": run_id, "label": "Database simulation #" + str(result["assessment"]),
+                  "kind": "Test copy · unpublished", "copy": result["copy"],
+                  "call": result["test_producing_call"], "conditions": conditions,
+                  "diagnostics": result["diagnostics"], "cost": result["charged_or_reserved_usd"]}],
+        "defaultRun": run_id, "conditions": conditions, "wire": wire, "packet": packet,
+        "sources": packet.get("posts", []) + packet.get("context", []),
+        "sourceCounts": {"primary": len(packet.get("posts", [])), "context": len(packet.get("context", []))},
+        "negativeControls": fixture["negative_controls"],
+        "reconstruction": fixture["reconstruction"], "comparison": comparison,
+        "promptVariant": fixture.get("prompt_variant"),
+        "modelVariant": fixture.get("model_variant"),
+        "repairVariant": fixture.get("repair_variant"),
+    }
+
+
+def build_manifest(path):
+    manifest = json.loads(path.read_text())
+    root = path.parent
+
+    def read(name):
+        return json.loads((root / name).read_text())
+
+    cases = []
+    for case in manifest["cases"]:
+        fixture = read(case["fixture"])
+        if case["kind"] == "exact_replay":
+            original = read(case["original"]) if case.get("original") else fixture["original"]
+            payload = build_payload(fixture, original, [read(p) for p in case["replays"]])
+        elif case["kind"] == "database_scenario":
+            comparison = read(case["comparison"]) if case.get("comparison") else None
+            payload = build_scenario_payload(fixture, read(case["result"]), comparison)
+        else:
+            raise ValueError("unknown review case kind")
+        cases.append(payload)
+    ids = [run["id"] for case in cases for run in case["runs"]]
+    if not cases or len(ids) != len(set(ids)):
+        raise ValueError("review cases are empty or reuse run IDs")
+    return {"cases": cases, "defaultRun": cases[-1]["defaultRun"]}
 
 
 def render_html(payload):
@@ -63,23 +126,32 @@ def render_html(payload):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fixture", type=Path, required=True)
+    parser.add_argument("--fixture", type=Path)
+    parser.add_argument("--manifest", type=Path)
     parser.add_argument("--original", type=Path)
     parser.add_argument("--replay", type=Path, action="append", default=[])
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    fixture = json.loads(args.fixture.read_text())
-    original = json.loads(args.original.read_text()) if args.original else fixture.get("original")
-    if original is None:
-        raise ValueError("older fixture requires --original; current preflight captures it")
-    payload = build_payload(
-        fixture, original,
-        [json.loads(path.read_text()) for path in args.replay],
-    )
+    if args.manifest:
+        if args.fixture or args.original or args.replay:
+            raise ValueError("use a manifest or single-fixture arguments")
+        payload = build_manifest(args.manifest)
+    else:
+        if not args.fixture:
+            raise ValueError("provide --fixture or --manifest")
+        fixture = json.loads(args.fixture.read_text())
+        original = json.loads(args.original.read_text()) if args.original else fixture.get("original")
+        if original is None:
+            raise ValueError("older fixture requires --original; current preflight captures it")
+        payload = build_payload(
+            fixture, original,
+            [json.loads(path.read_text()) for path in args.replay],
+        )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(render_html(payload))
-    print(json.dumps({"output": str(args.output), "runs": len(payload["runs"]),
-                      "request_hash": payload["conditions"]["request_hash"]}))
+    cases = payload.get("cases", [payload])
+    print(json.dumps({"output": str(args.output), "cases": len(cases),
+                      "runs": sum(len(case["runs"]) for case in cases)}))
 
 
 if __name__ == "__main__":

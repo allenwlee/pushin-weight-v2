@@ -58,8 +58,10 @@ def verify_negative_controls(body, recorded_hash):
 
 
 def replay(args):
-    from django.db import transaction
-    from django.utils import timezone
+    from core.models import (
+        EditorialEdition,
+        OriginalContentText,
+    )
     from monitor.editorial import (
         config,
         grounding,
@@ -70,24 +72,10 @@ def replay(args):
         writing,
     )
     from monitor.editorial.config import load_editorial_config
-    from monitor.editorial.contracts import digest
-    from monitor.editorial.persistence import (
-        claim_assessment,
-        finish_assessment,
-        require_fence,
-    )
-    from monitor.editorial.providers import json_call, request_payload
+    from monitor.editorial.providers import request_payload
     from monitor.editorial.selection import validate_decisions
     from monitor.editorial.voices import load_voice
-    from monitor.editorial.writing import validate_copy, writer_request
-
-    from core.models import (
-        EditorialAssessment,
-        EditorialCall,
-        EditorialEdition,
-        OriginalContentCall,
-        OriginalContentText,
-    )
+    from monitor.editorial.writing import writer_request
 
     if os.environ.get("RENDER_SERVICE_ID") != "srv-d9ufj4e417fc73d93g20":
         raise ValueError("run on the owning production headline worker")
@@ -135,7 +123,6 @@ def replay(args):
     ceiling = ceiling.quantize(Decimal("0.000001"), rounding=ROUND_CEILING)
     if ceiling > Decimal("0.25"):
         raise ValueError("one-call test reservation exceeds USD0.25")
-    marker = "g2-production-parity-" + args.run_id
     report = {
         "status": "preflight_passed",
         "revision": revision,
@@ -184,9 +171,45 @@ def replay(args):
     }
     if not args.execute:
         return report
+    return execute_writer(report, args.run_id, cfg, route, request, event, packet,
+                          success_status="replay_passed")
+
+
+def execute_writer(report, run_id, cfg, route, request, event, packet, *, success_status):
+    """One shared test send using production accounting and validation; no publish."""
+    from django.db import transaction
+    from django.utils import timezone
+
+    from core.models import (
+        EditorialAssessment,
+        EditorialCall,
+        OriginalContentCall,
+        OriginalContentText,
+    )
+    from monitor.editorial.contracts import digest
+    from monitor.editorial.persistence import (
+        claim_assessment,
+        finish_assessment,
+        require_fence,
+    )
+    from monitor.editorial.providers import json_call
+    from monitor.editorial.writing import validate_copy
+
+    marker = "g2-production-parity-" + run_id
     if EditorialAssessment.objects.filter(source_cycle_id=marker).exists():
         raise ValueError("test already attempted; no redispatch")
-    row = claim_assessment(timezone.now(), marker, scope="g2-production-parity")
+    scope = "g2-production-parity"
+    if report.get("test_kind") == "database_scenario":
+        scope += ":" + report["case_id"]
+        if report.get("prompt_variant"):
+            scope += ":" + report["prompt_variant"]["id"]
+        if report.get("model_variant"):
+            scope += ":" + report["model_variant"]["id"]
+        if report.get("repair_variant"):
+            scope = "g2-production-parity:repair:" + report["case_id"]
+            if report.get("repair_model_variant"):
+                scope += ":" + report["repair_model_variant"]["id"]
+    row = claim_assessment(timezone.now(), marker, scope=scope)
     if row is None:
         raise ValueError("test assessment could not be claimed")
     with transaction.atomic():
@@ -195,12 +218,12 @@ def replay(args):
         owned.decisions = {"events": [event.model_dump(mode="json")]}
         owned.save(update_fields=["packet", "decisions"])
     report["assessment"] = row.pk
-    stage = f"writer:chatter:{edition.locale}:{digest([event.key, voice.digest])}"
+    stage = f"writer:chatter:{report['locale']}:{digest([event.key, report['voice']['hash']])}"
     try:
         response = json_call(row, stage, route, request, cfg)
-        result = validate_copy(response["data"], event, edition.locale, packet=packet)
+        result = validate_copy(response["data"], event, report["locale"], packet=packet)
         report.update(
-            status="replay_passed",
+            status=success_status,
             returned_model=response["model"],
             copy=result.model_dump(mode="json"),
             diagnostics=response["diagnostics"],
@@ -212,9 +235,9 @@ def replay(args):
         finish_assessment(row, {
             "status": report["status"],
             "published": 0,
-            "kind": "production-faithful writer replay; no publication",
-            "original_call": original.pk,
-            "request_hash": original.request_hash,
+            "kind": report.get("test_kind", "production-faithful writer replay") + "; no publication",
+            "original_call": report.get("original_producing_call"),
+            "request_hash": report["request_hash"],
             "error_type": report.get("error_type"),
         })
     call = EditorialCall.objects.filter(assessment=row, stage=stage).first()

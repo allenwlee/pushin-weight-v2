@@ -16,11 +16,11 @@
 <body>
 <header class="topbar"><div class="brand"><svg viewBox="0 0 25 30" aria-hidden="true"><path d="M4 10h17l2 18H2L4 10zm4 0V6a4.5 4.5 0 019 0v4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg><span>Pushin' Weight</span></div><div class="top-links"><span class="local">Local review</span><a href="https://pushinweight-web.onrender.com/general/?lang=en" target="_blank" rel="noopener">Open production ↗</a></div></header>
 <main>
-<div class="intro"><div><div class="eyebrow">G2 · writer tests</div><h1>Chatter replay review</h1><p>Read the copy, compare runs, then inspect the exact context and request the model received.</p></div><div class="run-control"><label for="run">Saved run</label><select id="run"></select></div></div>
+<div class="intro"><div><div class="eyebrow">G2 · writer tests</div><h1>Prodsimtest</h1><p>Read the copy, compare runs, then inspect the exact context and request the model received.</p></div><div class="run-control"><label for="run">Saved run</label><select id="run"></select></div></div>
 <div class="workspace">
 <section class="panel" aria-label="Selected Chatter copy"><header class="panel-head"><div class="section-name"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 13c-3-4 0-10 6-10s9 6 5 10c-2 2-5 3-8 1l-3 2 1-4m12-5c4 2 4 6 2 8l1 2-3-1-3 1"/></svg>Chatter</div><span class="tiny" id="copy-kind"></span></header><div class="copy-wrap"><h2 class="editorial-headline" id="headline"></h2><p class="support" id="support"></p><div class="copy-meta"><span id="model-label"></span><button class="text-button" id="show-sources"></button></div><div class="article" id="article"></div><div class="copy-foot"><span class="test-label" id="copy-state"></span><button class="text-button" id="copy-headline">Copy headline</button></div></div></section>
 <aside class="right panel" aria-label="Review and exact test inputs"><div class="tabbar" role="tablist" aria-label="Inspect this test"><button class="tab" role="tab" id="tab-review" aria-controls="panel-review" data-tab="review">Compare</button><button class="tab" role="tab" id="tab-packet" aria-controls="panel-packet" data-tab="packet">Context packet</button><button class="tab" role="tab" id="tab-request" aria-controls="panel-request" data-tab="request">Exact request</button><button class="tab" role="tab" id="tab-reply" aria-controls="panel-reply" data-tab="reply">Full reply</button></div><div class="tab-body">
-<section class="tab-panel" role="tabpanel" aria-labelledby="tab-review" id="panel-review"><h2>Same production conditions.</h2><p class="explanation">Every replay shown here uses the complete saved production request. The writing can still vary between calls.</p><div class="match"><span aria-hidden="true">✓</span><b>Full request hash matches</b></div><div class="conditions" id="conditions"></div><div class="compare-block"><p class="compare-label">Published baseline</p><h3 class="compare-head" id="baseline-headline"></h3><p class="compare-support" id="baseline-support"></p></div><div class="compare-block"><p class="compare-label" id="selected-label"></p><h3 class="compare-head" id="selected-headline"></h3><p class="compare-support" id="selected-support"></p></div><div class="next-run" id="run-note"></div><details><summary>Request identity and validation</summary><dl class="technical" id="technical"></dl></details></section>
+<section class="tab-panel" role="tabpanel" aria-labelledby="tab-review" id="panel-review"><h2 id="review-heading">Same production conditions.</h2><p class="explanation" id="review-explanation">Every replay shown here uses the complete saved production request. The writing can still vary between calls.</p><div class="match"><span aria-hidden="true">✓</span><b id="match-label">Full request hash matches</b></div><div class="conditions" id="conditions"></div><div class="compare-block"><p class="compare-label" id="baseline-label">Published baseline</p><h3 class="compare-head" id="baseline-headline"></h3><p class="compare-support" id="baseline-support"></p></div><div class="compare-block"><p class="compare-label" id="selected-label"></p><h3 class="compare-head" id="selected-headline"></h3><p class="compare-support" id="selected-support"></p></div><div class="next-run" id="run-note"></div><details><summary>Request identity and validation</summary><dl class="technical" id="technical"></dl></details></section>
 <section class="tab-panel" role="tabpanel" aria-labelledby="tab-packet" id="panel-packet" hidden><h2>What the writer received</h2><p class="explanation" id="packet-summary"></p><div class="notice" id="history-status"></div><div id="source-posts"></div><h3 class="history-heading">Additional context posts</h3><div id="context-posts"></div><details><summary>Complete frozen source packet</summary><pre class="code" id="packet-json"></pre></details></section>
 <section class="tab-panel" role="tabpanel" aria-labelledby="tab-request" id="panel-request" hidden><h2>The complete request</h2><p class="explanation">Exact system and user messages, including the production source-audit instructions and output schema.</p><div class="request-section"><h3 id="system-title">System message</h3><button class="text-button" id="copy-system">Copy system</button></div><pre class="code" id="system"></pre><div class="request-section"><h3>User message</h3><button class="text-button" id="copy-user">Copy user</button></div><pre class="code" id="user"></pre><details><summary>Complete API body, including image URLs and settings</summary><pre class="code" id="wire-json"></pre></details></section>
 <section class="tab-panel" role="tabpanel" aria-labelledby="tab-reply" id="panel-reply" hidden><h2>The saved reply</h2><p class="explanation">Original model copy, source checks and supported-copy fields. No editorial rewrite has been applied.</p><pre class="code" id="reply-json"></pre></section>
@@ -30,24 +30,189 @@
 </main>
 <script type="application/json" id="replay-data">__REPLAY_DATA__</script>
 <script>
-(()=>{'use strict';
-const data=JSON.parse(document.getElementById('replay-data').textContent),byId=id=>document.getElementById(id),stateKey='g2-replay-review:'+data.conditions.request_hash;
-const params=new URLSearchParams(location.search),allowedTabs=['review','packet','request','reply'];let current,activeTab;let stored='';try{stored=localStorage.getItem(stateKey)||''}catch(e){}
+(()=>{
+'use strict';
+const data=JSON.parse(document.getElementById('replay-data').textContent);
+const cases=data.cases||[data],runs=cases.flatMap(group=>group.runs);
+const byId=id=>document.getElementById(id),stateKey='g2-prodsimtest-review';
+const params=new URLSearchParams(location.search),allowedTabs=['review','packet','request','reply'];
+let current,currentCase,activeTab,system='',userText='',stored='';
+try{stored=localStorage.getItem(stateKey)||''}catch(e){}
 function text(id,value){byId(id).textContent=value==null?'':String(value)}
 function modelName(id){return id==='gpt-6-sol'?'GPT‑6.0 Sol':id==='gpt-6.1-sol'?'GPT‑6.1 Sol':id}
-function setURL(){const url=new URL(location.href);url.searchParams.set('run',current.id);url.searchParams.set('tab',activeTab);history.replaceState(null,'',url);document.documentElement.dataset.selectedRun=current.id;document.documentElement.dataset.selectedTab=activeTab;try{localStorage.setItem(stateKey,current.id)}catch(e){}}
-function selectTab(name){activeTab=allowedTabs.includes(name)?name:'review';for(const tab of document.querySelectorAll('.tab')){const selected=tab.dataset.tab===activeTab;tab.setAttribute('aria-selected',String(selected));tab.tabIndex=selected?0:-1;byId('panel-'+tab.dataset.tab).hidden=!selected}setURL()}
-function appendField(dl,key,value,mono=false){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=value;if(mono)dd.className='hash';dl.append(dt,dd)}
-function showRun(id){current=data.runs.find(run=>run.id===id)||data.runs[data.runs.length-1];byId('run').value=current.id;const copy=current.copy;text('headline',copy.headline);text('support',copy.byline);text('copy-kind',current.label);text('model-label',modelName(current.conditions.model)+' / '+current.conditions.reasoning_effort);text('copy-state',current.kind);const article=byId('article');article.replaceChildren();for(const paragraph of copy.article.split(/\n\s*\n/)){const p=document.createElement('p');p.textContent=paragraph;article.append(p)}text('show-sources','▸ Sources · '+copy.post_ids.length+(copy.post_ids.length===1?' post':' posts'));text('selected-label',current.label);text('selected-headline',copy.headline);text('selected-support',copy.byline);text('reply-json',JSON.stringify(copy,null,2));text('run-note',current.id==='original'?'This is the published article. Select a replay to read the new test copy.':'One first call; source and copy validation passed. This replay has not replaced the published article.');const technical=byId('technical');technical.replaceChildren();appendField(technical,'Request SHA‑256',current.conditions.request_hash,true);appendField(technical,'API endpoint',current.conditions.endpoint);appendField(technical,'Completion cap',current.conditions.max_completion_tokens+' tokens');appendField(technical,'Socket timeout',current.conditions.timeout_seconds+' seconds');appendField(technical,'Saved call',current.call);appendField(technical,'Validation controls',Object.keys(data.negativeControls).length+' changed-input cases rejected');appendField(technical,'Response time',current.diagnostics.elapsed_seconds+' seconds');if(current.cost)appendField(technical,'Ledger cost','$'+current.cost);setURL()}
-for(const run of data.runs){const option=document.createElement('option');option.value=run.id;option.textContent=run.label+' · '+modelName(run.conditions.model)+' / '+run.conditions.reasoning_effort;byId('run').append(option)}
-text('baseline-headline',data.runs[0].copy.headline);text('baseline-support',data.runs[0].copy.byline);const conditions=byId('conditions');for(const [label,value] of [['Model',modelName(data.conditions.model)],['Reasoning',data.conditions.reasoning_effort],['API route','Direct OpenAI'],['Source packet',data.sourceCounts.primary+' post · '+data.sourceCounts.context+' context']]){const dl=document.createElement('dl');dl.className='condition';appendField(dl,label,value);conditions.append(dl)}
-text('packet-summary',data.sourceCounts.primary+' primary source post'+(data.sourceCounts.primary===1?'':'s')+' and '+data.sourceCounts.context+' additional context posts were included in this saved packet.');const sc=data.packet.story_context||{};text('history-status',sc.query_timeout?'The saved history lookup timed out. This replay retains the packet exactly as received.':'This replay retains the historical context actually included in the original writer packet.');
-function renderSources(posts,target){if(!posts.length){const note=document.createElement('div');note.className='history-empty';note.textContent='No additional context posts were included.';target.append(note);return}for(const post of posts){const section=document.createElement('section');section.className='source-post';const heading=document.createElement('div');heading.className='source-heading';const name=document.createElement('strong');name.textContent='@'+post.author_handle;const link=document.createElement('a');const sourceURL=post.url||'https://x.com/i/status/'+post.id;if(/^https?:\/\//.test(sourceURL)){link.href=sourceURL;link.target='_blank';link.rel='noopener noreferrer';link.textContent='Original post ↗'}heading.append(name,link);section.append(heading);const meta=document.createElement('p');meta.className='source-fields';meta.textContent=post.created_at+' · '+post.id;section.append(meta);for(const [label,field] of [['Original text','original_text'],['Quoted text','stored_quote'],['Reply context','local_parent']]){if(!post[field])continue;const labelNode=document.createElement('div');labelNode.className='tiny';labelNode.textContent=label;const value=document.createElement('div');value.className='source-text';value.textContent=post[field];section.append(labelNode,value)}for(const imageURL of post.images||[]){if(!/^https:\/\//.test(imageURL))continue;const attachment=document.createElement('a');attachment.href=imageURL;attachment.target='_blank';attachment.rel='noopener noreferrer';attachment.className='source-pill';attachment.textContent='Source image ↗';section.append(attachment)}target.append(section)}}
-renderSources(data.packet.posts||[],byId('source-posts'));renderSources(data.packet.context||[],byId('context-posts'));text('packet-json',JSON.stringify(data.packet,null,2));const system=data.wire.messages[0].content,user=data.wire.messages[1].content,userText=Array.isArray(user)?user[0].text:user;text('system',system);text('system-title','System message · '+system.length.toLocaleString()+' characters');text('user',userText);text('wire-json',JSON.stringify(data.wire,null,2));text('run-count',data.runs.length+' saved results');text('revision','Production '+data.conditions.revision.slice(0,8));
-activeTab=params.get('tab')||document.documentElement.dataset.selectedTab||'review';showRun(params.get('run')||document.documentElement.dataset.selectedRun||stored||data.defaultRun);selectTab(activeTab);
-byId('run').addEventListener('change',event=>showRun(event.target.value));for(const tab of document.querySelectorAll('.tab')){tab.addEventListener('click',()=>selectTab(tab.dataset.tab));tab.addEventListener('keydown',event=>{if(!['ArrowLeft','ArrowRight'].includes(event.key))return;event.preventDefault();const next=(allowedTabs.indexOf(activeTab)+(event.key==='ArrowRight'?1:3))%4;selectTab(allowedTabs[next]);byId('tab-'+activeTab).focus()})}byId('show-sources').addEventListener('click',()=>{selectTab('packet');byId('panel-packet').scrollIntoView({behavior:'smooth',block:'start'})});
-async function copyText(value){try{if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(value)}else{const area=document.createElement('textarea');area.value=value;area.style.position='fixed';area.style.opacity='0';document.body.append(area);area.select();const ok=document.execCommand('copy');area.remove();if(!ok)throw Error('clipboard')}text('status','Copied.')}catch(e){text('status','Select the text to copy it.')}}
-byId('copy-headline').addEventListener('click',()=>copyText(current.copy.headline));byId('copy-system').addEventListener('click',()=>copyText(system));byId('copy-user').addEventListener('click',()=>copyText(userText));function download(name,contents,type){const url=URL.createObjectURL(new Blob([contents],{type})),link=document.createElement('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}byId('download-copy').addEventListener('click',()=>download('chatter-'+current.id+'.json',JSON.stringify(current.copy,null,2),'application/json'));byId('download-html').addEventListener('click',()=>download('chatter-replay-review.html','<!doctype html>\n'+document.documentElement.outerHTML,'text/html'));
+function setURL(){
+  const url=new URL(location.href);url.searchParams.set('run',current.id);url.searchParams.set('tab',activeTab);
+  history.replaceState(null,'',url);document.documentElement.dataset.selectedRun=current.id;
+  document.documentElement.dataset.selectedTab=activeTab;
+  try{localStorage.setItem(stateKey,current.id)}catch(e){}
+}
+function selectTab(name){
+  activeTab=allowedTabs.includes(name)?name:'review';
+  for(const tab of document.querySelectorAll('.tab')){
+    const selected=tab.dataset.tab===activeTab;tab.setAttribute('aria-selected',String(selected));
+    tab.tabIndex=selected?0:-1;byId('panel-'+tab.dataset.tab).hidden=!selected;
+  }
+  setURL();
+}
+function appendField(dl,key,value,mono=false){
+  const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=value;
+  if(mono)dd.className='hash';dl.append(dt,dd);
+}
+function renderSources(posts,target){
+  target.replaceChildren();
+  if(!posts.length){
+    const note=document.createElement('div');note.className='history-empty';
+    note.textContent='No additional context posts were included.';target.append(note);return;
+  }
+  for(const post of posts){
+    const section=document.createElement('section');section.className='source-post';
+    const heading=document.createElement('div');heading.className='source-heading';
+    const name=document.createElement('strong');name.textContent='@'+post.author_handle;
+    const link=document.createElement('a'),sourceURL=post.url||'https://x.com/i/status/'+post.id;
+    if(/^https?:\/\//.test(sourceURL)){
+      link.href=sourceURL;link.target='_blank';link.rel='noopener noreferrer';link.textContent=post.platform==='supplemental_evidence'?'Source evidence ↗':'Original post ↗';
+    }
+    heading.append(name,link);section.append(heading);
+    const meta=document.createElement('p');meta.className='source-fields';meta.textContent=post.created_at+' · '+post.id;
+    if(post.platform==='supplemental_evidence')meta.textContent+=' · '+post.evidence_role.kind.replaceAll('_',' ');
+    section.append(meta);
+    for(const [label,field] of [['Original text','original_text'],['Quoted text','stored_quote'],['Reply context','local_parent']]){
+      if(!post[field])continue;
+      const labelNode=document.createElement('div');labelNode.className='tiny';labelNode.textContent=label;
+      const value=document.createElement('div');value.className='source-text';value.textContent=post[field];
+      section.append(labelNode,value);
+    }
+    for(const imageURL of post.images||[]){
+      if(!/^https:\/\//.test(imageURL))continue;
+      const attachment=document.createElement('a');attachment.href=imageURL;attachment.target='_blank';
+      attachment.rel='noopener noreferrer';attachment.className='source-pill';attachment.textContent='Source image ↗';
+      section.append(attachment);
+    }
+    target.append(section);
+  }
+}
+function renderCase(group){
+  const db=group.kind==='database_scenario';
+  const variant=group.promptVariant;
+  const modelVariant=group.modelVariant;
+  const repair=group.repairVariant;
+  text('review-heading',db?group.title:'Same production conditions.');
+  text('review-explanation',repair?modelName(group.conditions.model)+' / '+group.conditions.reasoning_effort+' with relaxed headline attribution.'+(repair.supplemental_records?' Reviewed photo text and dated identity background were added to Wang’s packet.':' Mistral’s packet is unchanged.'):modelVariant?'Same frozen packet and catchy/punny prompt; GPT‑6.1 Sol/high replaces GPT‑6.0 Sol/medium.':variant?'Same frozen packet and model; one added instruction: “'+variant.line+'”':db?
+    'Production writer with a database packet. Owner-selected story; historical cutoffs applied to today’s stored rows.':
+    'Every replay uses the complete saved production request. The writing can still vary between calls.');
+  text('match-label',variant?'Variant request reproduced':db?'Frozen request reproduced':'Full request hash matches');
+  const baseline=db?group.comparison:{label:'Published baseline',copy:group.runs[0].copy};
+  byId('baseline-label').parentElement.hidden=!baseline;
+  if(baseline){
+    text('baseline-label',baseline.label);text('baseline-headline',baseline.copy.headline);
+    text('baseline-support',baseline.copy.byline);
+  }
+  const conditions=byId('conditions');conditions.replaceChildren();
+  for(const [label,value] of [['Model',modelName(group.conditions.model)],['Reasoning',group.conditions.reasoning_effort],
+    ['API route','Direct OpenAI'],['Source packet',group.sourceCounts.primary+' post · '+group.sourceCounts.context+' context']]){
+    const dl=document.createElement('dl');dl.className='condition';appendField(dl,label,value);conditions.append(dl);
+  }
+  text('packet-summary',group.sourceCounts.primary+' primary source post'+(group.sourceCounts.primary===1?'':'s')+
+    ' and '+group.sourceCounts.context+' additional context records. Evidence cutoff: '+group.packet.cutoff+'.');
+  const sc=group.packet.story_context||{};
+  text('history-status',repair&&repair.supplemental_records?'The database collector found no additional history. Two reviewed supplemental records provide source-image text and dated official identity background.':sc.query_timeout?
+    'The history lookup hit the production query timeout. The frozen packet retains that gap.':
+    db&&!(sc.terms||[]).length?'The collector found no distinctive search terms. No additional history was retrieved.':
+    'This packet retains the historical context actually included by the collector.');
+  renderSources(group.packet.posts||[],byId('source-posts'));
+  renderSources(group.packet.context||[],byId('context-posts'));
+  text('packet-json',JSON.stringify(group.packet,null,2));
+  system=group.wire.messages[0].content;
+  const user=group.wire.messages[1].content;userText=Array.isArray(user)?user[0].text:user;
+  text('system',system);text('system-title','System message · '+system.length.toLocaleString()+' characters');
+  text('user',userText);text('wire-json',JSON.stringify(group.wire,null,2));
+  text('revision','Production '+group.conditions.revision.slice(0,8));
+}
+function showRun(id){
+  current=runs.find(run=>run.id===id)||runs.find(run=>run.id===data.defaultRun)||runs[runs.length-1];
+  currentCase=cases.find(group=>group.runs.includes(current));renderCase(currentCase);
+  byId('run').value=current.id;
+  const copy=current.copy;text('headline',copy.headline);text('support',copy.byline);text('copy-kind',current.label);
+  text('model-label',modelName(current.conditions.model)+' / '+current.conditions.reasoning_effort);
+  text('copy-state',current.kind);
+  const article=byId('article');article.replaceChildren();
+  for(const paragraph of copy.article.split(/\n\s*\n/)){
+    const p=document.createElement('p');p.textContent=paragraph;article.append(p);
+  }
+  text('show-sources','▸ Sources · '+copy.post_ids.length+(currentCase.repairVariant&&currentCase.repairVariant.supplemental_records?' records':copy.post_ids.length===1?' post':' posts'));
+  text('selected-label',current.label);text('selected-headline',copy.headline);text('selected-support',copy.byline);
+  text('reply-json',JSON.stringify(copy,null,2));
+  const db=currentCase.kind==='database_scenario';
+  text('run-note',currentCase.repairVariant?'One first call; production validation passed. Evidence and attribution changes are labelled; the live production prompt is unchanged.':currentCase.modelVariant?'One first call; production validation passed. Same packet and instructions; model and reasoning changed.':currentCase.promptVariant?'One first call; production validation passed. Same database packet and settings as the locked-prompt baseline.':db?'One first call; source and copy validation passed. Earlier CLI copy used different input and instructions.':
+    current.id==='original'?'This is the published article. Select a replay to read the new test copy.':
+    'One first call; source and copy validation passed. This replay has not replaced the published article.');
+  const technical=byId('technical');technical.replaceChildren();
+  appendField(technical,'Request SHA‑256',current.conditions.request_hash,true);
+  appendField(technical,'API endpoint',current.conditions.endpoint);
+  appendField(technical,'Completion cap',current.conditions.max_completion_tokens+' tokens');
+  appendField(technical,'Socket timeout',current.conditions.timeout_seconds+' seconds');
+  appendField(technical,'Saved call',current.call);
+  appendField(technical,'Validation controls',Object.keys(currentCase.negativeControls).length+' changed-input cases rejected');
+  appendField(technical,'Response time',current.diagnostics.elapsed_seconds+' seconds');
+  if(current.cost)appendField(technical,'Ledger cost','$'+current.cost);
+  if(db){
+    if(currentCase.repairVariant)appendField(technical,'Attribution rule',currentCase.repairVariant.new_rule);
+    if(currentCase.promptVariant)appendField(technical,'Added instruction',currentCase.promptVariant.line);
+    appendField(technical,'Historical cutoff',currentCase.reconstruction.cutoff);
+    appendField(technical,'Anchor sampled',currentCase.reconstruction.anchor_in_dispatch_sample?'Yes':'No; owner nominated');
+    appendField(technical,'Reconstruction limit',currentCase.reconstruction.limits);
+  }
+  setURL();
+}
+for(const group of cases){
+  const target=cases.length>1?document.createElement('optgroup'):byId('run');
+  if(cases.length>1){target.label=group.title;byId('run').append(target)}
+  for(const run of group.runs){
+    const option=document.createElement('option');option.value=run.id;
+    option.textContent=run.label+' · '+modelName(run.conditions.model)+' / '+run.conditions.reasoning_effort;
+    target.append(option);
+  }
+}
+text('run-count',runs.length+' saved results · '+cases.length+' test case'+(cases.length===1?'':'s'));
+activeTab=params.get('tab')||document.documentElement.dataset.selectedTab||'review';
+showRun(params.get('run')||document.documentElement.dataset.selectedRun||stored||data.defaultRun);selectTab(activeTab);
+byId('run').addEventListener('change',event=>showRun(event.target.value));
+for(const tab of document.querySelectorAll('.tab')){
+  tab.addEventListener('click',()=>selectTab(tab.dataset.tab));
+  tab.addEventListener('keydown',event=>{
+    if(!['ArrowLeft','ArrowRight'].includes(event.key))return;event.preventDefault();
+    const next=(allowedTabs.indexOf(activeTab)+(event.key==='ArrowRight'?1:3))%4;
+    selectTab(allowedTabs[next]);byId('tab-'+activeTab).focus();
+  });
+}
+byId('show-sources').addEventListener('click',()=>{
+  selectTab('packet');byId('panel-packet').scrollIntoView({behavior:'smooth',block:'start'});
+});
+async function copyText(value){
+  try{
+    if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(value)}
+    else{
+      const area=document.createElement('textarea');area.value=value;area.style.position='fixed';area.style.opacity='0';
+      document.body.append(area);area.select();const ok=document.execCommand('copy');area.remove();
+      if(!ok)throw Error('clipboard');
+    }
+    text('status','Copied.');
+  }catch(e){text('status','Select the text to copy it.')}
+}
+byId('copy-headline').addEventListener('click',()=>copyText(current.copy.headline));
+byId('copy-system').addEventListener('click',()=>copyText(system));
+byId('copy-user').addEventListener('click',()=>copyText(userText));
+function download(name,contents,type){
+  const url=URL.createObjectURL(new Blob([contents],{type})),link=document.createElement('a');
+  link.href=url;link.download=name;document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+byId('download-copy').addEventListener('click',()=>{
+  download('chatter-'+current.id+'.json',JSON.stringify(current.copy,null,2),'application/json');
+});
+byId('download-html').addEventListener('click',()=>{
+  download('chatter-replay-review.html','<!doctype html>\n'+document.documentElement.outerHTML,'text/html');
+});
 })();
 </script>
 </body>
