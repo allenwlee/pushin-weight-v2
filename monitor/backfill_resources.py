@@ -98,6 +98,7 @@ class BackfillContext:
     enrichment_cohort_ids: list[str] = field(default_factory=list)
     enrichment_limit: int = 5
     api_timeout_seconds: int = 30
+    query_override: str | None = None
 
 
 def bounded_backfill_config(cfg: Any, *, enrichment_limit: int) -> Any:

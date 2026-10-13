@@ -37,6 +37,7 @@ import math
 import os
 import tempfile
 import time as _time
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -218,6 +219,8 @@ class Command(BaseCommand):
         parser.add_argument("--json", action="store_true", help="Print the final structured state.")
         parser.add_argument("--retry-blocked", action="store_true",
                             help="Explicitly retry an anomalous unit after inspecting/fixing its cause.")
+        parser.add_argument("--query", default=None,
+                            help="Frozen historical query for exactly one brand and B/C call; omit time operators.")
 
     def handle(self, *args, **options) -> None:
         previous_settings = {
@@ -299,6 +302,17 @@ class Command(BaseCommand):
         unknown = sorted(set(requested) - set(VALID_CALL_IDS))
         if unknown:
             raise CommandError("unknown --call-ids: " + ", ".join(unknown))
+        query_override = options.get("query")
+        if query_override is not None:
+            query_override = query_override.strip()
+            if not query_override or len(brands) != 1 or len(requested) != 1 or requested[0] == "A":
+                raise CommandError("--query requires exactly one brand and one B/C call")
+            if any(token in query_override.lower() for token in (
+                "since:", "until:", "since_time:", "until_time:", "since_id:", "max_id:",
+            )):
+                raise CommandError("--query must omit time operators; fixed command bounds own the interval")
+            if len(f"{query_override} since_time:{since_epoch} until_time:{until_epoch}") > 512:
+                raise CommandError("--query exceeds the provider length cap after fixed time bounds")
         state_file = _state_path(since_epoch, until_epoch, _scope_key(brands=brands, call_ids=requested))
         if options["state_dir"] is not None:
             state_file = options["state_dir"] / state_file.name
@@ -339,6 +353,8 @@ class Command(BaseCommand):
         if not calls and (brands or requested):
             raise CommandError("backfill scope selects no logical calls")
         call_ids = [call.call_id for call in calls]
+        if query_override is not None:
+            calls = [replace(call, query_string=query_override, query_length=len(query_override)) for call in calls]
         if hasattr(cfg, "model_copy"):
             from monitor.backfill_resources import bounded_backfill_config
 
@@ -355,6 +371,8 @@ class Command(BaseCommand):
             "config_digest": hashlib.sha256(json.dumps(config_value, sort_keys=True).encode()).hexdigest(),
             "database": {key: settings.DATABASES["default"].get(key) for key in ("NAME", "HOST", "USER")},
         }
+        if query_override is not None:
+            identity["query_override"] = query_override
         campaign_id = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
         state = None if options["reset"] else _load_state(state_file)
         if state and (state.get("schema_version") != 2 or state.get("campaign_id") != campaign_id):
@@ -390,6 +408,8 @@ class Command(BaseCommand):
             self.stdout.write(f"  Would execute calls: {call_ids}")
             if options["reset"]:
                 self.stdout.write("Would reset state (dry run; no file changed).")
+            if options["json"]:
+                self.stdout.write(json.dumps({"campaign_id": campaign_id, "identity": identity}, indent=2))
             return None
         _save_state(state_file, state)
         return {"cfg": cfg, "state_file": state_file, "campaign_id": campaign_id, "call_ids": call_ids}
@@ -442,6 +462,7 @@ class Command(BaseCommand):
                     budget=budget, cursor=unit["cursor"], seen_cursors=unit["seen_cursors"],
                     post_ids=unit["post_ids"], enrichment_limit=options["enrichment_limit"],
                     enrichment_cohort_ids=unit.get("enrichment_cohort_post_ids", []),
+                    query_override=state["identity"].get("query_override"),
                 )
                 started = datetime.now(UTC).isoformat()
                 try:

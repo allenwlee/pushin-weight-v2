@@ -210,6 +210,24 @@ def test_missing_persistence_receipt_cannot_commit_cursor(pipeline, monkeypatch)
     assert not state["finished"]
 
 
+def test_historical_query_is_frozen_and_reaches_shared_transport(pipeline):
+    query = '(Qwen OR Qwen3 OR "Qwen3.8" OR 通义千问) min_faves:0'
+    pipeline.responses.append(page("1", cursor="historical-model-cursor"))
+    state = pipeline.run(query=query)
+    assert pipeline.requests[0]["query"].startswith(query + " since_time:")
+    assert state["identity"]["query_override"] == query
+    assert state["identity"]["queries"] == {"B1": query}
+    with pytest.raises(CommandError, match="identity changed"):
+        pipeline.run(query='"Qwen3.8"')
+    assert len(pipeline.requests) == 1
+
+
+def test_historical_query_cannot_replace_fixed_time_bounds(pipeline):
+    with pytest.raises(CommandError, match="omit time operators"):
+        pipeline.run(query="Qwen since_time:1")
+    assert not pipeline.requests
+
+
 def test_pause_releases_writer_lock_to_another_connection(pipeline, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
 

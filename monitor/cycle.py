@@ -35,7 +35,7 @@ import threading
 import time
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -2690,6 +2690,15 @@ class CycleRunner:
             self._errors.append(f"plan: {exc}")
             return []
 
+        if self._backfill_context is not None and self._backfill_context.query_override:
+            selected = self._backfill_call_ids or []
+            if len(selected) != 1:
+                raise ValueError("a historical query override requires exactly one call")
+            query = self._backfill_context.query_override
+            calls = [
+                replace(call, query_string=query, query_length=len(query))
+                if call.call_id == selected[0] else call for call in calls
+            ]
         logger.info(
             "CycleRunner._plan_calls: %d calls planned",
             len(calls),
