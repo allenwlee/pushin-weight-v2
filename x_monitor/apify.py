@@ -81,6 +81,8 @@ class SearchPage:
     next_cursor: str | None
     received_at: datetime
     received_monotonic: float
+    clipped: bool = False
+    continuation_invalid: bool = False
 
 
 @dataclass(frozen=True)
@@ -105,6 +107,8 @@ class TwitterApiClient:
     base_url: str = TWITTERAPI_BASE
     timeout_s: int = 60
     max_retries: int = 2
+    before_request: Callable[[float], None] | None = None
+    after_response: Callable[[dict[str, Any]], None] | None = None
     # Per-instance request log. Each entry is one logical HTTP exchange
     # (one URL + params + retries collapsed into a single record). The list
     # is mutated as requests complete; copied into run.summary["http_log"]
@@ -141,6 +145,8 @@ class TwitterApiClient:
         n_attempts = 0
         for attempt in range(self.max_retries + 1):
             n_attempts = attempt + 1
+            if self.before_request is not None:
+                self.before_request(timeout_s or self.timeout_s)
             try:
                 r = requests.get(
                     url,
@@ -156,6 +162,19 @@ class TwitterApiClient:
                 raise
             if raw_sink is not None:
                 raw_sink(r.content)
+            if self.after_response is not None:
+                try:
+                    body = r.json()
+                except ValueError:
+                    body = {}
+                if not isinstance(body, dict):
+                    body = {}
+                self.after_response({
+                    "path": path, "status_code": r.status_code,
+                    "raw_results": len(body.get("tweets") or body.get("data") or []),
+                    "has_next_page": bool(body.get("has_next_page")),
+                    "attempt": n_attempts,
+                })
             if r.status_code == 401:
                 exc = TwitterApiAuthError(
                     f"TwitterAPI.io auth failed: {r.text[:200]}"
@@ -282,11 +301,11 @@ class TwitterApiClient:
         max_pages: int = 5,
         max_per_page: int = 20,
         since_time: int | None = None,
+        cursor: str | None = None,
     ) -> Iterator[SearchPage]:
         """Yield normalized pages without fetching the next page early."""
 
         n_returned = 0
-        cursor: str | None = None
         for page_number in range(1, max(1, max_pages) + 1):
             if n_returned >= max_results:
                 return
@@ -327,6 +346,8 @@ class TwitterApiClient:
                 next_cursor=next_cursor,
                 received_at=received_at,
                 received_monotonic=received_monotonic,
+                clipped=clipped,
+                continuation_invalid=bool(data.get("has_next_page")) and not bool(next_cursor),
             )
 
             if n_returned >= max_results or not continuation:
@@ -390,6 +411,7 @@ class TwitterApiClient:
         max_per_page: int = 20,
         since_time: int | None = None,
         until_time: int | None = None,
+        cursor: str | None = None,
     ) -> Iterator[SearchPage]:
         """Yield first/deep pages lazily so callers can sweep every tip first."""
 
@@ -405,6 +427,7 @@ class TwitterApiClient:
             max_pages=max_pages,
             max_per_page=max_per_page,
             since_time=since_time,
+            cursor=cursor,
         )
 
     def run_search_page_with_raw(

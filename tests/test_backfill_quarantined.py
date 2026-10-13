@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import StringIO
 from types import SimpleNamespace
 
@@ -92,6 +92,7 @@ def test_backfill_incomplete_call_remains_pending(monkeypatch, tmp_path):
     from monitor import cycle as cycle_mod
 
     monkeypatch.setattr(backfill_module, "_STATE_DIR", tmp_path)
+    monkeypatch.setattr(backfill_module, "_seconds_to_next_slot", lambda: 900)
     monkeypatch.setattr(
         cycle_mod,
         "plan_calls_for_cycle",
@@ -215,7 +216,7 @@ def test_unscoped_backfill_ignores_stale_runtime_brand_filter(
 def test_backfill_timestamp_formats_resolve_same_utc_bound(value):
     from monitor.management.commands.backfill import _parse_iso
 
-    assert _parse_iso(value) == int(datetime(2026, 8, 9, tzinfo=timezone.utc).timestamp())
+    assert _parse_iso(value) == int(datetime(2026, 8, 9, tzinfo=UTC).timestamp())
 
 
 @pytest.mark.parametrize("overrides", [
@@ -249,6 +250,7 @@ def test_backfill_requires_fixed_upper_bound_before_planning(monkeypatch):
 
 def test_atomic_checkpoint_failure_preserves_previous_state(monkeypatch, tmp_path):
     from pathlib import Path
+
     from monitor.management.commands.backfill import _save_state
 
     checkpoint = tmp_path / "campaign.json"
@@ -261,3 +263,13 @@ def test_atomic_checkpoint_failure_preserves_previous_state(monkeypatch, tmp_pat
     with pytest.raises(OSError, match="replacement unavailable"):
         _save_state(checkpoint, {"committed": 2})
     assert json.loads(checkpoint.read_text()) == {"committed": 1}
+
+
+def test_historical_list_scope_requires_frozen_population_before_provider(monkeypatch):
+    from monitor import cycle
+
+    monkeypatch.setattr(cycle, "plan_calls_for_cycle",
+                        lambda cfg: [SimpleNamespace(call_id="A")])
+    with pytest.raises(CommandError, match="frozen account-population"):
+        call_command("backfill", since="2026-08-09", until="2026-08-10",
+                     call_ids="A", stdout=StringIO())

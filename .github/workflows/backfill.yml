@@ -1,0 +1,63 @@
+name: Historical X backfill
+
+on:
+  pull_request:
+    paths:
+      - 'monitor/cycle.py'
+      - 'monitor/backfill_resources.py'
+      - 'monitor/management/commands/backfill.py'
+      - 'monitor/run_lock.py'
+      - 'x_monitor/apify.py'
+      - 'tests/test_backfill*.py'
+      - 'tests/test_bounded_classifier_client.py'
+      - 'tests/test_cycle_cursor_wiring.py'
+      - 'tests/test_cycle_run_lock.py'
+      - 'tests/conftest.py'
+      - '.github/workflows/backfill.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-backfill-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: backfill_test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: backfill_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://backfill_test:test@127.0.0.1:5432/backfill_test
+      STAFF_COLLECTION_NETWORK_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Lint recovery command, resource guard and tests
+        run: >-
+          python -m ruff check monitor/backfill_resources.py
+          monitor/management/commands/backfill.py tests/test_backfill_resources.py
+          tests/test_backfill_pipeline.py tests/test_backfill_quarantined.py
+      - name: Backfill and scheduled-path regressions (required skips fail)
+        run: >-
+          python -m pytest -q tests/test_apify.py tests/test_post_enrichment_queue.py
+          tests/test_enrichment_attempt_deadline.py tests/test_backfill_quarantined.py
+          tests/test_backfill_pipeline.py tests/test_backfill_resources.py
+          tests/test_bounded_classifier_client.py tests/test_cycle_cursor_wiring.py
+          tests/test_cycle_run_lock.py tests/test_twitterapi_caller_shape.py
