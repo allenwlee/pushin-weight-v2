@@ -9,10 +9,10 @@ round: 2
 date: 2026-10-09
 ollija:
   change_id: feat-g2-round2-voices-2026-10-09-064803
-  branch: feat/g2-multilingual-writers
+  branch: test/g2-production-replay-review
   workflow: voice-experiment
-  delivery_target: production
-  delivery_selected_by_user: true
+  delivery_target: on-request
+  delivery_selected_by_user: false
   delivery_route: staged
   delivery_route_selected_by_user: false
   staging_transport: branch
@@ -27,12 +27,12 @@ This block is generated guidance. Do not edit it directly. Correct durable facts
 - Authoritative host: `fuchitalee`
 - Authoritative repository: `/Users/fuchitalee/development/pushin-weight-v2`
 - Ollija release worktree area: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees`
-- Active worktree: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-multilingual-writers`
-- Plan: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-multilingual-writers/docs/plans/2026-10-09-064803-feat-g2-round2-voices-plan.md`
+- Active worktree: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/test/g2-production-replay-review`
+- Plan: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/test/g2-production-replay-review/docs/plans/2026-10-09-064803-feat-g2-round2-voices-plan.md`
 - Change: `feat-g2-round2-voices-2026-10-09-064803`
-- Branch: `feat/g2-multilingual-writers`
-- Staging branch and blueprint: `staging`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-multilingual-writers/render-staging.yaml`
-- Production branch and blueprint: `main`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-multilingual-writers/render.yaml`
+- Branch: `test/g2-production-replay-review`
+- Staging branch and blueprint: `staging`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/test/g2-production-replay-review/render-staging.yaml`
+- Production branch and blueprint: `main`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/test/g2-production-replay-review/render.yaml`
 - Staging URL: `https://pushinweight-staging-web.onrender.com`
 - Production URL: `https://pushinweight-web.onrender.com`
 
@@ -43,25 +43,11 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `voice-experiment`
-- Delivery target: `production`
-- Owner selection recorded: `true`
+- Delivery target: `on-request`
+- Owner selection recorded: `false`
 - Delivery route: `staged`
 
-1. Complete implementation and the plan's verification contract.
-2. Run the configured focused checks:
-   - `pytest tests/ollija`
-3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
-    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-multilingual-writers` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
-    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-multilingual-writers` without `--force`.
-    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
+Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
 
 ### Failure handling
 
@@ -1236,3 +1222,124 @@ Normal staged delivery remains selected, with no verification waiver. Stage
 web/worker auto-deploy is off: deploy the exact candidate explicitly without
 changing unrelated service triggers or pausing harvest. Scoped temporary
 staging editorial controls are recorded and restored after proof.
+
+
+## Production-faithful writer replay — October13 owner continuation
+
+### Plain-English Summary
+
+The owner identifies that earlier headline trials changed the production
+conditions. All future production-writer comparisons must retain the complete
+request and original context packet, including historical context actually
+supplied. The short prompt alone is not an adequate production proxy.
+
+Build a reusable test entry point in this retained G2 tree. Execute it on the
+deployed worker so it imports the actual production request builder, provider
+transport, configuration, source normalizer and copy validator. Reconstruct the
+Mistral English edition's immutable source snapshot, verify the entire request
+against its producing call, then make one first English replay. Save a test
+result without calling publication or changing the current edition. No new
+context collection, prompt alteration, model choice, UI or deployment is selected.
+
+### Frozen acceptance and spend
+
+- Existing edition:65a88027-6bb0-429f-85f6-6af8bad5d732; producing call12536.
+- Exact source/evidence, included history, images, full system/user messages,
+  message roles, JSON schema, API endpoint, model, reasoning, tier, token cap,
+  socket timeout and effective configuration must match the producing request.
+- Use production writer_request and request_payload; reject changed input
+  before sending. Preserve the recorded JSON text serialization only after
+  checking the rebuilt payload has identical meaning. Require the original
+  complete wire hash, not just the locked opening.
+- Use ordinary json_call/call_once, global in-flight/cost/call guards,
+  normalize_reply and validate_copy. Preserve normal credential resolution;
+  never export/print keys or fall back.
+- One fresh GPT6.0 Sol/medium call, zero automatic or quality retries;
+  conservative per-request reservation at mostUSD0.25 and existing standing
+  caps unchanged. A hold or incomplete request is retained, not silently retried.
+- No publish_edition call or public/hero/OriginalContentText changes.
+  Only isolated test assessment/provider/budget bookkeeping and local evidence.
+- Before sending, prove full comparison rejects changed instructions, message
+  roles, evidence and completion limits even when the locked opening matches.
+- Assess source faithfulness, headline/support quality and ordinary validation
+  once. A repeated model answer can differ; one replay does not establish
+  instruction length, API/CLI transport or any other factor as the cause.
+
+### Implementation and proof
+
+Owned entry point:tests/editorial_replay/production_replay.py.
+Evidence:.local/g2-production-parity-20261013/.
+Current unit:exact-request preflight and one bounded English replay. Existing
+production deployment is complete; this continuation grants no new release.
+Preserve other owners' files, source histories, old trials and published copies.
+
+
+### Production-faithful replay result — 2026-10-13T16:24:34+09:00
+
+Complete:read-only preflight rebuilt the full request at deployeddb5510cc and
+matched original producingcall12536/wirehashf6e159434251987385322edf8ff248822a6976b814263936d7e14bcc59fe8094. Exactly one
+6.0medium call returned HTTP200/stop and normal validators passed: "REPORT: MISTRAL’S ‘LE CHONK’ ENTERS THE CHAT".
+Provider assessment553/canonicalcall12567; zero retries, USD0.113545 conservative
+reservation, USD0.020645 ledger cost after usage. Zero test editions/texts; original
+English edition preserved. Four changed-instruction/role/context/cap negatives,
+actual fixture check, syntax and focusedRuff pass. Exact source/context omissions
+remain in the frozen packet; fresh retrieval/ranking/publication are outside this
+writer-stage replay. First report and executed source preserved; read-only record
+lookup correction uses exact bridge identity, zero additional provider sends.
+[Outcome report](../analysis/2026-10-13-162434-g2-production-faithful-writer-replay.md); [reusable entry point](../../tests/editorial_replay/production_replay.py).
+No quality/cause claim, model/prompt/collector/runtime/UI/Git/release change.
+Release bounded claim; retain old G2 worktree, artifacts and other owners.
+
+
+## Current commit/push and local-browser continuation — 2026-10-13T16:38:22+09:00
+
+### Plain-English Summary
+
+The owner asks to commit/push the new reusable production replay test and open a
+fresh HTML review because this workflow will be used repeatedly. Publish only
+the test, its renderer/template, focused outcome report and this same plan on
+`test/g2-production-replay-review`. Preserve all older G2 trials and other owners.
+Build a standalone local Chatter review from recorded replies without new model
+calls. Provide selectable original/replay copy, baseline comparison, readable
+source packet, exact system/user request and verified conditions. Open a fresh
+Chrome window on allenwlee; retain source/evidence/preview on fuchitalee.
+
+### Verification and endpoint
+
+Use recorded expectations, real browser desktop/mobile interactions, request
+inspection and source links. Confirm original/replay strings, complete articles,
+selection persistence and portable HTML. Run syntax/affected-file lint and the
+existing full-request positive/four negative checks. Commit named owned files,
+push the dedicated branch and verify remote SHA. Local browser URL/window must
+be observed. No application runtime change, main push or deployment is selected.
+
+### Delivery Exceptions for this continuation
+
+This is a user-selected commit-and-push plus local-browser endpoint. The earlier
+G2 production release completed atdb5510cc; its saved production guide and
+unchecked historical delivery text describe that prior candidate, not new
+staging/deployment tasks. Current managed metadata is on-request; no additional
+application delivery is selected. Keep the registered canonical test checkout and
+original dirty G2 tree for repeated tests; no production-cleanup instruction applies.
+
+
+### Review verification — 2026-10-13T17:31:11+09:00
+
+Local review implemented and verified:7pure renderer checks/zero skips/errors;
+16desktop/mobile original/replay/tab states plus source/keyboard/clipboard/JSON
+and portableHTML interactions/zero pageerrors. Expected strings come from saved
+responses.1440px/390px screenshots inspected. New preflight captures original
+copy and preserves exactwirehash; generatedHTML bytes unchanged, priorbrowser
+evidence reused. FocusedRuff/syntax pass. AutomaticDjango bootstrap initially
+failed on missingPillow in sharedrootenvironment; isolated puretests run without
+Django as documented, not a claimed application suite pass. Runtime source and
+API request unchanged; zero new paid calls. Commit named test/review/report/plan
+files only, push test/g2-production-replay-review, verify remoteSHA, then observe
+new ownerChrome window atstable58713reviewURL. Retain the canonical test checkout,
+originalG2/private evidence and owned preview for repeated tests.
+
+
+The native-created test checkout was relocated with `git worktree move` into
+the project canonical path `.worktrees/test/g2-production-replay-review` before
+Git publication. Same branch, files and plan identity; original trial tree and
+preview/evidence paths unchanged. Retain this Git-only test tree for repeat use.
