@@ -228,6 +228,24 @@ def test_historical_query_cannot_replace_fixed_time_bounds(pipeline):
     assert not pipeline.requests
 
 
+def test_zero_model_allowance_defers_before_claim_or_client_construction(pipeline, monkeypatch):
+    from core.models import PostEnrichmentState
+    from monitor.cycle import CycleRunner
+
+    monkeypatch.setattr(CycleRunner, "_run_post_fetch", pipeline.post_fetch_method)
+    def forbidden(cfg):
+        raise AssertionError("zero model allowance constructed an enrichment client")
+    monkeypatch.setattr("x_monitor.reattribute.build_translator_client_from_env", forbidden)
+    monkeypatch.setattr("x_monitor.reattribute.build_classifier_client_from_env", forbidden)
+    pipeline.responses.append(page("1"))
+    state = pipeline.run(max_llm_calls=0)
+    work = PostEnrichmentState.objects.get(pk="1")
+    assert work.translation_attempts == work.classification_attempts == 0
+    assert work.claim_run_id == ""
+    assert state["finished"] and not state["enrichment_cohort_complete"]
+    assert state["last_invocation_usage"]["llm_requests"] == 0
+
+
 def test_pause_releases_writer_lock_to_another_connection(pipeline, monkeypatch):
     from concurrent.futures import ThreadPoolExecutor
 

@@ -12,6 +12,11 @@ on:
       - 'tests/test_bounded_classifier_client.py'
       - 'tests/test_cycle_cursor_wiring.py'
       - 'tests/test_cycle_run_lock.py'
+      - 'tests/test_cycle_error_counters.py'
+      - 'tests/test_harvest_cursor_lifecycle.py'
+      - 'tests/test_cycle_search_caps.py'
+      - 'tests/test_hybrid_harvest_regression_net.py'
+      - 'tests/test_harvest_surface_regression_net.py'
       - 'tests/conftest.py'
       - '.github/workflows/backfill.yml'
   workflow_dispatch:
@@ -61,3 +66,6 @@ jobs:
           tests/test_backfill_pipeline.py tests/test_backfill_resources.py
           tests/test_bounded_classifier_client.py tests/test_cycle_cursor_wiring.py
           tests/test_cycle_run_lock.py tests/test_twitterapi_caller_shape.py
+          tests/test_harvest_cursor_lifecycle.py tests/test_cycle_search_caps.py
+          tests/test_cycle_error_counters.py tests/test_hybrid_harvest_regression_net.py
+          tests/test_harvest_surface_regression_net.py

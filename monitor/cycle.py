@@ -3817,7 +3817,11 @@ class CycleRunner:
             else None
         )
         claim_safe_envelope = enrichment_cfg.claim_safe_envelope_seconds
-        if deadline is not None and not deadline.can_start(claim_safe_envelope):
+        model_allowance_empty = (
+            self._backfill_context is not None
+            and self._backfill_context.budget.remaining_llm_calls == 0
+        )
+        if model_allowance_empty or (deadline is not None and not deadline.can_start(claim_safe_envelope)):
             deferred = PostEnrichmentState.objects.filter(
                 Q(translation_status=PostEnrichmentState.Status.PENDING)
                 | Q(classification_status=PostEnrichmentState.Status.PENDING)

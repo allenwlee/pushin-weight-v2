@@ -83,6 +83,9 @@ def test_run_post_fetch_claims_durable_state_persists_flags_and_succeeds(monkeyp
     post = Post.objects.create(tweet_id="post-fetch-success", text="DeepSeek release")
     brand = Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
     PostBrand.objects.create(post=post, brand=brand)
+    from core.models import PostTypeKey
+
+    PostTypeKey.objects.get_or_create(key="releases_updates")
     SentimentKey.objects.get_or_create(key="neutral")
     NationalismKey.objects.get_or_create(key="none")
     PostEnrichmentState.objects.create(post=post)
