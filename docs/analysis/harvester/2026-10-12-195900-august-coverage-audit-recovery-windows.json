@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "status": "proposed_windows_only",
+  "database_snapshot_at": "2026-10-12T10:58:21.05519+00:00",
+  "gap_detail_snapshot_at": "2026-10-12T11:01:46.149993+00:00",
+  "scope": "August 2026 stored X posts",
+  "windows": [
+    {
+      "priority": "major",
+      "evidence_gap_ids": [
+        6
+      ],
+      "since_utc": "2026-08-08T04:15:00+00:00",
+      "until_utc": "2026-08-10T05:45:00+00:00",
+      "since_jst": "2026-08-08T13:15:00+09:00",
+      "until_jst": "2026-08-10T14:45:00+09:00",
+      "padded_hours": 49.5,
+      "observed_insert_gap_hours": 48.74044053611111,
+      "stored_posts_inside_unpadded_gaps": 104
+    },
+    {
+      "priority": "major",
+      "evidence_gap_ids": [
+        8
+      ],
+      "since_utc": "2026-08-16T02:15:00+00:00",
+      "until_utc": "2026-08-17T06:30:00+00:00",
+      "since_jst": "2026-08-16T11:15:00+09:00",
+      "until_jst": "2026-08-17T15:30:00+09:00",
+      "padded_hours": 28.25,
+      "observed_insert_gap_hours": 27.511531680833333,
+      "stored_posts_inside_unpadded_gaps": 120
+    },
+    {
+      "priority": "major",
+      "evidence_gap_ids": [
+        1
+      ],
+      "since_utc": "2026-08-01T07:30:00+00:00",
+      "until_utc": "2026-08-02T04:15:00+00:00",
+      "since_jst": "2026-08-01T16:30:00+09:00",
+      "until_jst": "2026-08-02T13:15:00+09:00",
+      "padded_hours": 20.75,
+      "observed_insert_gap_hours": 20.00294829611111,
+      "stored_posts_inside_unpadded_gaps": 375
+    },
+    {
+      "priority": "major",
+      "evidence_gap_ids": [
+        2
+      ],
+      "since_utc": "2026-08-03T04:30:00+00:00",
+      "until_utc": "2026-08-04T05:00:00+00:00",
+      "since_jst": "2026-08-03T13:30:00+09:00",
+      "until_jst": "2026-08-04T14:00:00+09:00",
+      "padded_hours": 24.5,
+      "observed_insert_gap_hours": 23.602221874444446,
+      "stored_posts_inside_unpadded_gaps": 546
+    },
+    {
+      "priority": "major",
+      "evidence_gap_ids": [
+        3,
+        4,
+        5
+      ],
+      "since_utc": "2026-08-05T16:00:00+00:00",
+      "until_utc": "2026-08-06T12:30:00+00:00",
+      "since_jst": "2026-08-06T01:00:00+09:00",
+      "until_jst": "2026-08-06T21:30:00+09:00",
+      "padded_hours": 20.5,
+      "observed_insert_gap_hours": 19.59170141527778,
+      "stored_posts_inside_unpadded_gaps": 466
+    },
+    {
+      "priority": "smaller",
+      "evidence_gap_ids": [
+        9
+      ],
+      "since_utc": "2026-08-27T03:15:00+00:00",
+      "until_utc": "2026-08-27T06:30:00+00:00",
+      "since_jst": "2026-08-27T12:15:00+09:00",
+      "until_jst": "2026-08-27T15:30:00+09:00",
+      "padded_hours": 3.25,
+      "observed_insert_gap_hours": 2.497398519722222,
+      "stored_posts_inside_unpadded_gaps": 40
+    },
+    {
+      "priority": "smaller",
+      "evidence_gap_ids": [
+        7
+      ],
+      "since_utc": "2026-08-13T05:30:00+00:00",
+      "until_utc": "2026-08-13T07:30:00+00:00",
+      "since_jst": "2026-08-13T14:30:00+09:00",
+      "until_jst": "2026-08-13T16:30:00+09:00",
+      "padded_hours": 2.0,
+      "observed_insert_gap_hours": 1.2491218194444444,
+      "stored_posts_inside_unpadded_gaps": 62
+    }
+  ],
+  "collection_population": "Define and pin policy/brand/list scope before execution; original August source_query_id is null.",
+  "planned_credential_purpose": "on_demand",
+  "execution_authorized": false,
+  "live_cursors_may_advance": false,
+  "paid_request_allowance": null,
+  "usd_allowance": null
+}

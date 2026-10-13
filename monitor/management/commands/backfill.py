@@ -10,7 +10,7 @@ Usage:
     python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --dry-run
 
     # Run one scoped unit
-    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00
+    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --brands qwen --call-ids B1
 
     # Bound the entire invocation, including all model roles and HTTP retries
     python manage.py backfill --since 2026-08-09T00:00Z --until 2026-08-09T00:15Z \
@@ -21,10 +21,10 @@ Usage:
         --brands dots --call-ids B1 --dry-run
 
     # Resume from previous state automatically (state file keyed on since/until)
-    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00
+    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --brands qwen --call-ids B1
 
     # Reset and start over
-    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --reset
+    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --brands qwen --call-ids B1 --reset
 
 State file: data/backfill/<since_epoch>-<until_epoch>[-<scope_hash>].json
 """
