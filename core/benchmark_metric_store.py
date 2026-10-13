@@ -419,7 +419,7 @@ def prepare_rows(contract, source, payload, *, adapter=None):
         )
     mappings = {
         (m.source_subject_kind, m.identifier_scope, m.normalized_identifier): m
-        for m in contract.mappings.filter(source_id=source)
+        for m in contract.mappings.filter(purpose="metric", source_id=source)
     }
     required = {key for key, obj in definitions.items() if obj.required}
     result = []
@@ -553,9 +553,7 @@ def persist_source(
     require(re.fullmatch(r"[0-9a-f]{64}", ingestion_key or ""), "invalid ingestion key")
     with collection_lock(contract, source):
         now = timezone.now()
-        existing = CollectionRun.objects.filter(
-            ingestion_key=ingestion_key
-        ).first()
+        existing = CollectionRun.objects.filter(ingestion_key=ingestion_key).first()
         if existing:
             require(
                 existing.contract_id == contract.pk and existing.source_id == source,
@@ -582,7 +580,9 @@ def persist_source(
             lease_expires_at=now + timedelta(minutes=10),
             source_url=DataSource.objects.get(pk=source).website_url,
             **({"batch_id": batch_id} if batch_id is not None else {}),
-            selected_count=contract.mappings.filter(source_id=source).count(),
+            selected_count=contract.mappings.filter(
+                purpose="metric", source_id=source
+            ).count(),
         )
         try:
             if fetch is not None:

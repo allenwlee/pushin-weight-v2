@@ -60,7 +60,7 @@ class Command(BaseCommand):
                             "applied": False,
                             "source": source,
                             "selected_subjects": contract.mappings.filter(
-                                source_id=source
+                                purpose="metric", source_id=source
                             ).count(),
                         }
                     )
@@ -107,7 +107,7 @@ class Command(BaseCommand):
                                 ),
                             }
                             for m in contract.mappings.filter(
-                                source_id="hf"
+                                purpose="metric", source_id="hf"
                             ).select_related("subject")
                         ]
                         result = sources.hf(budget, selected)
@@ -128,7 +128,9 @@ class Command(BaseCommand):
                                         "endpoint_path"
                                     ],
                                 }
-                                for m in contract.mappings.filter(source_id=source)
+                                for m in contract.mappings.filter(
+                                    purpose="metric", source_id=source
+                                )
                             ],
                         )
                     else:

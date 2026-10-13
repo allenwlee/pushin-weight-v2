@@ -41,9 +41,9 @@ def selected_rows(contract, mapping_ids, start, end, *, cutoff=None):
     """Latest reported row per exact model/date, with a stable conflict order."""
     require(0 < len(mapping_ids) <= 100, "OpenCode mapping query budget")
     mappings = dict(
-        contract.mappings.filter(pk__in=mapping_ids, source_id="opencode").values_list(
-            "external_identifier", "pk"
-        )
+        contract.mappings.filter(
+            purpose="metric", pk__in=mapping_ids, source_id="opencode"
+        ).values_list("external_identifier", "pk")
     )
     # Project requested dates in PostgreSQL rather than loading every hourly
     # report's full reference window into Python memory.
@@ -126,7 +126,8 @@ def publication_times(contract):
 def prepare_revisions(contract, prepared, payload):
     """Compare the entire endpoint window; keep decreased historical corrections."""
     mappings = {
-        m.external_identifier: m for m in contract.mappings.filter(source_id="opencode")
+        m.external_identifier: m
+        for m in contract.mappings.filter(purpose="metric", source_id="opencode")
     }
     current = selected_rows(
         contract, [m.pk for m in mappings.values()], "0001-01-01", "9999-12-31"

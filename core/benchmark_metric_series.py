@@ -144,7 +144,7 @@ def mapping_scope(contract, line):
     )
     mappings = list(
         contract.mappings.filter(
-            source_id=source, external_identifier__in=identifiers
+            purpose="metric", source_id=source, external_identifier__in=identifiers
         ).select_related("subject")
     )
     require(len(mappings) == len(identifiers), "line mapping missing or ambiguous")

@@ -7693,8 +7693,9 @@ class MetricCollectionContract(models.Model):
 
 class SourceSubjectMapping(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    purpose = models.CharField(max_length=16, default="metric", db_default="metric")
     contract = models.ForeignKey(
-        MetricCollectionContract, on_delete=models.PROTECT, related_name="mappings"
+        MetricCollectionContract, on_delete=models.PROTECT, related_name="mappings", null=True
     )
     source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
     source_subject_kind = models.CharField(max_length=32)
@@ -7733,6 +7734,19 @@ class SourceSubjectMapping(models.Model):
                     "normalized_identifier",
                 ],
                 name="uq_source_subject_mapping",
+                condition=models.Q(purpose="metric"),
+            ),
+            models.UniqueConstraint(
+                fields=["source", "source_subject_kind", "identifier_scope", "normalized_identifier", "subject"],
+                name="uq_catalog_subject_mapping", condition=models.Q(purpose="catalog"),
+            ),
+            models.CheckConstraint(
+                condition=models.Q(purpose="metric", contract__isnull=False) | models.Q(purpose="catalog", contract__isnull=True),
+                name="ck_mapping_purpose_contract",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(purpose="metric") | (~models.Q(reviewed_by="") & ~models.Q(evidence_url="")),
+                name="ck_catalog_mapping_review",
             ),
             models.CheckConstraint(
                 condition=models.Q(

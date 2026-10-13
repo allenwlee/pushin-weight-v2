@@ -25,6 +25,14 @@ Result: nineteen passed; nineteen required PostgreSQL cases executed, none skipp
 
 The [X interface](2026-10-13-160815-g3-backfill-collection-interface.md) names the implemented functions and local evidence. The X runtime call chain is not modified or claimed verified.
 
+## U2 — Reviewed Provider Identities
+
+Catalog links now use the existing `source_subject_mappings` table with a conditional null contract and a subject-qualified unique key. Metric-purpose links retain their original contract requirement, uniqueness and hash construction. Native GitHub account IDs are admitted explicitly; publisher qualification requires an official brand/company account relation rather than an employee affiliation.
+
+The GitHub review service preserves repository IDs through renames, records aliases and reviewed ownership transfers, and supports a family repository's links to multiple canonical model subjects. A bounded import command is inert until `--apply`; admitted mappings remain available after its input file is deleted. Numeric readers explicitly filter metric-purpose mappings. Migration `0082_collection_catalog_mappings` changes no table names and creates no tables; reverse refuses to discard catalog identity evidence.
+
+Evidence: new identity tests first failed on the absent module; a strengthened employee-account case then failed because the initial ownership check admitted any affiliation. The corrected official-role check passes. Latest focused command combines identity, existing database identity/persistence and OpenCode regressions: forty-two tests passed, with thirty-three required PostgreSQL cases executed and none skipped. Model/migration alignment and whitespace checks pass. No real publisher mapping was imported or provider queried.
+
 ## Remaining Work
 
-U2–U8 are pending implementation and their own verification. U9 runtime integration remains owned by the X/backfill session; its current staging JSON pilot proceeds independently. The whole nine-unit plan is incomplete.
+U3–U8 are pending implementation and their own verification. U9 runtime integration remains owned by the X/backfill session; its current staging JSON pilot proceeds independently. The whole nine-unit plan is incomplete.

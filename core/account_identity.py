@@ -41,8 +41,16 @@ def upsert_account(
 
     if not source or not DataSource.objects.filter(pk=source).exists():
         raise ValueError("registered account source is required")
-    if source not in {"x", "hf"}:
+    if source not in {"x", "hf", "github"}:
         raise ValueError("account source identifier contract is not yet supported")
+    if source == "github" and (
+        not isinstance(external_identifier, str)
+        or not external_identifier.isascii()
+        or not external_identifier.isdigit()
+        or str(int(external_identifier)) != external_identifier
+        or int(external_identifier) <= 0
+    ):
+        raise ValueError("canonical positive GitHub native account ID required")
     if account_kind not in {"organization", "individual", "channel", "unknown"}:
         raise ValueError("unsupported account kind")
     identity = external_identifier.casefold() if source == "hf" else external_identifier

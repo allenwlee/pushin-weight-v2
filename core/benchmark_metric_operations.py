@@ -44,9 +44,7 @@ def collection_health(contract, *, now=None):
     now = now or timezone.now()
     result = {}
     for source, config in contract.source_configuration.items():
-        runs = CollectionRun.objects.filter(
-            contract=contract, source_id=source
-        ).only(
+        runs = CollectionRun.objects.filter(contract=contract, source_id=source).only(
             "status",
             "started_at",
             "completed_at",
@@ -125,9 +123,9 @@ def collection_health(contract, *, now=None):
 
             publication = publication_times(contract)
             expected = set(
-                contract.mappings.filter(source_id=source).values_list(
-                    "external_identifier", flat=True
-                )
+                contract.mappings.filter(
+                    purpose="metric", source_id=source
+                ).values_list("external_identifier", flat=True)
             )
             complete = bool(expected) and expected <= publication.keys()
             oldest = min(publication[k] for k in expected) if complete else None
