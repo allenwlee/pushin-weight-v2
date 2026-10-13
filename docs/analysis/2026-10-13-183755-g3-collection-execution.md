@@ -165,3 +165,20 @@ changes: the existing collector group passed **301 tests, including 179 required
 PostgreSQL cases**, in 84.57 seconds; the new shared collection group passed
 **94 tests, including 84 required PostgreSQL cases**, in 82.47 seconds. Neither
 skipped a required database test. The expanded CI lint command passes too.
+
+## CI Fixture Repair
+
+The first remote collector check passed its existing test group but failed one
+new cohort test before reaching the collection code: migration 0033 already seeds
+Google on a newly created database, while the regression fixture unconditionally
+inserted the same company primary key. Local reused/previously flushed test state
+had hidden that setup assumption. The failure reproduced locally with a freshly
+created PostgreSQL test database.
+
+The fixture now uses get_or_create for its prerequisite company and retains the
+original company-alias link and unchanged Google-exclusion assertion. The fresh
+database reproduction passes (one required PostgreSQL case, no skips), followed
+by all seven cohort tests (seven required PostgreSQL cases, no skips). Focused
+lint and whitespace checks pass. Application behavior and schema are unchanged.
+This is one convergent CI repair, not a weakened assertion or an infrastructure
+retry; subsequent remote checks must cover the pushed fix before CI is complete.

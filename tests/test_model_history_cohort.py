@@ -17,7 +17,7 @@ def test_google_company_alias_is_outside_the_requested_historical_scope():
     from core.model_history_cohort import build_cohort
 
     brands, cutoff, _ = inventory()
-    google = Company.objects.create(nickname="google")
+    google, _ = Company.objects.get_or_create(nickname="google")
     BrandCompany.objects.create(brand_id=brands[1], company=google)
     with pytest.raises(ValueError, match="Google"):
         build_cohort(brand_ids=brands, cutoff=cutoff)
