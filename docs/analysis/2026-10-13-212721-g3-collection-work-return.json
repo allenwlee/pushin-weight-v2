@@ -1,0 +1,343 @@
+{
+  "status": "complete",
+  "scope": "G3-owned U1-U8 only; U9 remains separately owned and the whole plan is not complete",
+  "plan_path": "docs/plans/2026-10-13-062212-feat-g3-collection-jobs-history-plan.md",
+  "source_kind": "plan",
+  "source_digest": "a75842bf4032fe1ada587dde0152e2ba4e968b461678db692673f1f6bf12c9af",
+  "changed_files": [
+    "CONCEPTS.md",
+    "README.md",
+    "config/staging_refresh.yaml",
+    "core/account_identity.py",
+    "core/benchmark_forecast_inputs.py",
+    "core/benchmark_measurement_pins.py",
+    "core/benchmark_metric_operations.py",
+    "core/benchmark_metric_series.py",
+    "core/benchmark_metric_store.py",
+    "core/benchmark_opencode.py",
+    "core/collection_budgets.py",
+    "core/collection_identity.py",
+    "core/collection_jobs.py",
+    "core/collection_reports.py",
+    "core/collection_scheduling.py",
+    "core/collection_state.py",
+    "core/github_catalog.py",
+    "core/github_metadata_client.py",
+    "core/hf_metadata_client.py",
+    "core/management/commands/collect_github_catalog.py",
+    "core/management/commands/collect_jobs_due.py",
+    "core/management/commands/collect_model_history.py",
+    "core/management/commands/collect_model_inventory.py",
+    "core/management/commands/collection_job_state.py",
+    "core/management/commands/collection_status.py",
+    "core/management/commands/plan_model_history.py",
+    "core/management/commands/review_collection_mapping.py",
+    "core/migrations/0081_collection_jobs.py",
+    "core/migrations/0082_collection_catalog_mappings.py",
+    "core/model_history_cohort.py",
+    "core/model_history_collection.py",
+    "core/model_inventory.py",
+    "core/models.py",
+    "docs/analysis/2026-10-13-160815-g3-backfill-collection-interface.md",
+    "docs/analysis/2026-10-13-183755-g3-collection-execution.md",
+    "docs/deploy/render.md",
+    "docs/operations/staging-data-refresh.md",
+    "docs/plans/2026-10-13-062212-feat-g3-collection-jobs-history-plan.md",
+    "docs/reference/collection-jobs.md",
+    "docs/reference/db-schema.md",
+    "docs/reference/hf-model-catalog.md",
+    "monitor/management/commands/backfill_opencode_history.py",
+    "monitor/management/commands/collect_benchmark_due.py",
+    "monitor/management/commands/collect_benchmark_metrics.py",
+    "scripts/benchmark_download_collector/sources.py",
+    "scripts/staging_refresh/database.py",
+    "tests/staging_refresh/test_policy.py",
+    "tests/test_collection_budgets.py",
+    "tests/test_collection_identity.py",
+    "tests/test_collection_jobs.py",
+    "tests/test_collection_reports.py",
+    "tests/test_collection_scheduling.py",
+    "tests/test_collection_schema_consolidation.py",
+    "tests/test_collection_schema_migration.py",
+    "tests/test_collection_schema_refresh.py",
+    "tests/test_collection_schema_regression_net.py",
+    "tests/test_collection_state.py",
+    "tests/test_github_catalog.py",
+    "tests/test_github_metadata_client.py",
+    "tests/test_hf_metadata_client.py",
+    "tests/test_model_history_cohort.py",
+    "tests/test_model_history_collection.py",
+    "tests/test_model_inventory.py"
+  ],
+  "u_ids_attempted": [
+    "U1",
+    "U2",
+    "U3",
+    "U4",
+    "U5",
+    "U6",
+    "U7",
+    "U8"
+  ],
+  "u_ids_completed": [
+    "U1",
+    "U2",
+    "U3",
+    "U4",
+    "U5",
+    "U6",
+    "U7",
+    "U8"
+  ],
+  "verification_results": {
+    "focused_regression": {
+      "passed": 394,
+      "required_postgresql_executed": 165,
+      "skipped": 0
+    },
+    "django_check": "passed",
+    "makemigrations_check": "no changes",
+    "diff_check": "passed"
+  },
+  "verification_evidence": [
+    {
+      "unit": "U1",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_collection_schema_consolidation.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/test_collection_schema_consolidation.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_collection_jobs.py",
+        "tests/test_collection_state.py"
+      ],
+      "red_or_characterization": "Missing shared imports initially failed; legacy storage characterization passed; claim race and cursor rollback executed.",
+      "verification_result": "included in 394 passing / 165 required PostgreSQL execution",
+      "exception_reason": null
+    },
+    {
+      "unit": "U2",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_benchmark_download_db_identity.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/test_benchmark_download_db_identity.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_collection_identity.py"
+      ],
+      "red_or_characterization": "Employee ownership assertion failed before official-role qualification was tightened.",
+      "verification_result": "included in 394 passing / 165 required PostgreSQL execution",
+      "exception_reason": null
+    },
+    {
+      "unit": "U3",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_benchmark_download_sources.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/test_benchmark_download_sources.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_github_metadata_client.py",
+        "tests/test_github_catalog.py"
+      ],
+      "red_or_characterization": "Existing transport characterization passed; strengthened tree-SHA command-chain assertion failed before correction.",
+      "verification_result": "included in 394 passing / 165 required PostgreSQL execution",
+      "exception_reason": "Provider fixtures are documentation-derived/synthetic; no live batch authorized"
+    },
+    {
+      "unit": "U4",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_hf_catalog_runner.py",
+        "tests/test_hf_metadata_client.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/test_hf_catalog_runner.py",
+        "tests/test_hf_metadata_client.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_model_history_cohort.py",
+        "tests/test_model_inventory.py"
+      ],
+      "red_or_characterization": "Missing cohort/inventory entrypoints initially failed; transport assertions caught author-filter and inherited-header bugs.",
+      "verification_result": "included in 394 passing / 165 required PostgreSQL execution",
+      "exception_reason": "Provider fixtures are documentation-derived/synthetic; no live batch authorized"
+    },
+    {
+      "unit": "U5",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_benchmark_download_history.py",
+        "tests/test_benchmark_history_acquisition.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/test_benchmark_download_history.py",
+        "tests/test_benchmark_history_acquisition.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_model_history_collection.py"
+      ],
+      "red_or_characterization": "JSON tuple checkpoint failed before normalization; native/archive/publication fixtures traverse writers; no live capture claimed.",
+      "verification_result": "included in 394 passing / 165 required PostgreSQL execution",
+      "exception_reason": "Provider fixtures are documentation-derived/synthetic; no live batch authorized"
+    },
+    {
+      "unit": "U6",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/test_benchmark_download_persistence.py",
+        "tests/test_benchmark_download_operations.py",
+        "tests/test_benchmark_backfill_commands.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/test_benchmark_download_persistence.py",
+        "tests/test_benchmark_download_operations.py",
+        "tests/test_benchmark_backfill_commands.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_collection_scheduling.py",
+        "tests/test_collection_budgets.py"
+      ],
+      "red_or_characterization": "Existing persistence/operations protected; new actual command-chain, source-lock, takeover rollback and stale-response scenarios pass.",
+      "verification_result": "included in 394 passing / 165 required PostgreSQL execution",
+      "exception_reason": null
+    },
+    {
+      "unit": "U7",
+      "behavior_changed": true,
+      "existing_tests_inspected": [],
+      "tests_used_unchanged": [],
+      "tests_added_or_changed": [
+        "tests/test_collection_reports.py"
+      ],
+      "red_or_characterization": "Service/CLI parity, redaction, health clocks and absent JSON role exercised after implementation.",
+      "verification_result": "included in 394 passing / 165 required PostgreSQL execution",
+      "exception_reason": null
+    },
+    {
+      "unit": "U8",
+      "behavior_changed": true,
+      "existing_tests_inspected": [
+        "tests/staging_refresh/",
+        "tests/test_collection_schema_migration.py"
+      ],
+      "tests_used_unchanged": [
+        "tests/staging_refresh/",
+        "tests/test_collection_schema_migration.py"
+      ],
+      "tests_added_or_changed": [
+        "tests/test_collection_schema_refresh.py",
+        "tests/test_collection_schema_regression_net.py"
+      ],
+      "red_or_characterization": "Populated older/current dump/restore/scrub, reverse guards and exact table/column census executed; outdated runtime migration-test setup failed before forward-schema correction.",
+      "verification_result": "included in 394 passing / 165 required PostgreSQL execution",
+      "exception_reason": null
+    }
+  ],
+  "implementation_engine_binding": null,
+  "requested_route": "native",
+  "actual_route": "native-inline",
+  "requested_model": null,
+  "actual_model": null,
+  "requested_effort": null,
+  "fallback_reason": null,
+  "run_id": null,
+  "unit_receipts": [
+    {
+      "unit": "U1",
+      "route": "native-inline",
+      "model": null,
+      "detached_process": false,
+      "integration": "canonical worktree",
+      "verification": "passed",
+      "canonical_commit": "66a29cbf697d5f6e10e96e5b386fefe8b62d037c",
+      "cleanup": "worktree retained for selected PR endpoint"
+    },
+    {
+      "unit": "U2",
+      "route": "native-inline",
+      "model": null,
+      "detached_process": false,
+      "integration": "canonical worktree",
+      "verification": "passed",
+      "canonical_commit": "66a29cbf697d5f6e10e96e5b386fefe8b62d037c",
+      "cleanup": "worktree retained for selected PR endpoint"
+    },
+    {
+      "unit": "U3",
+      "route": "native-inline",
+      "model": null,
+      "detached_process": false,
+      "integration": "canonical worktree",
+      "verification": "passed",
+      "canonical_commit": "66a29cbf697d5f6e10e96e5b386fefe8b62d037c",
+      "cleanup": "worktree retained for selected PR endpoint"
+    },
+    {
+      "unit": "U4",
+      "route": "native-inline",
+      "model": null,
+      "detached_process": false,
+      "integration": "canonical worktree",
+      "verification": "passed",
+      "canonical_commit": "66a29cbf697d5f6e10e96e5b386fefe8b62d037c",
+      "cleanup": "worktree retained for selected PR endpoint"
+    },
+    {
+      "unit": "U5",
+      "route": "native-inline",
+      "model": null,
+      "detached_process": false,
+      "integration": "canonical worktree",
+      "verification": "passed",
+      "canonical_commit": "66a29cbf697d5f6e10e96e5b386fefe8b62d037c",
+      "cleanup": "worktree retained for selected PR endpoint"
+    },
+    {
+      "unit": "U6",
+      "route": "native-inline",
+      "model": null,
+      "detached_process": false,
+      "integration": "canonical worktree",
+      "verification": "passed",
+      "canonical_commit": "66a29cbf697d5f6e10e96e5b386fefe8b62d037c",
+      "cleanup": "worktree retained for selected PR endpoint"
+    },
+    {
+      "unit": "U7",
+      "route": "native-inline",
+      "model": null,
+      "detached_process": false,
+      "integration": "canonical worktree",
+      "verification": "passed",
+      "canonical_commit": "66a29cbf697d5f6e10e96e5b386fefe8b62d037c",
+      "cleanup": "worktree retained for selected PR endpoint"
+    },
+    {
+      "unit": "U8",
+      "route": "native-inline",
+      "model": null,
+      "detached_process": false,
+      "integration": "canonical worktree",
+      "verification": "passed",
+      "canonical_commit": "66a29cbf697d5f6e10e96e5b386fefe8b62d037c",
+      "cleanup": "worktree retained for selected PR endpoint"
+    }
+  ],
+  "plan_checkpoint": null,
+  "blockers": [],
+  "recovery_path": "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g3-collection-jobs-history",
+  "settled_decision_conflicts": [],
+  "behavior_change": true,
+  "standalone_shipping_skipped": true,
+  "remaining_external_integration": [
+    "U9: separately owned scheduled/manual/backfill X adapter and its actual pipeline evidence"
+  ],
+  "evidence_path": "docs/analysis/2026-10-13-183755-g3-collection-execution.md"
+}

@@ -1,0 +1,762 @@
+{
+  "schema": "g3-release-three-date-comparison/v1",
+  "analysis_only": true,
+  "assembled_at": "2026-10-12T04:54:11.144055+00:00",
+  "date_display_timezone": "UTC",
+  "inventory_path": "docs/research/2026-10-12-093516-g3-sixty-day-product-releases.json",
+  "inventory_sha256": "b7e350f550103b0dfa313decc0a31349791f0232e87a0ff40e5a5cc14f84718d",
+  "inventory_window_start": "2026-08-13T00:35:16+00:00",
+  "inventory_window_end": "2026-10-12T00:35:16+00:00",
+  "hf_date_meaning": "Earliest recorded commit in currently accessible main history, not upload-server event time or first public access.",
+  "gh_date_meaning": "GitHub repository created_at, including explicitly marked shared model/code repositories, not release published_at.",
+  "counts": {
+    "model_groups_in_frozen_inventory": 43,
+    "displayed_hf_repositories": 19,
+    "represented_model_groups": 17,
+    "initial_metadata_only_repositories": 16,
+    "other_model_groups_without_reviewed_three_date_mapping": 26
+  },
+  "rows": [
+    {
+      "model": "MiniMax Music 3",
+      "release_group_id": "g3-ceee48c22194feea",
+      "x_announcement_at": "2026-08-13T16:09:48+00:00",
+      "x_announcement_post_id": "2087934657354678421",
+      "x_announcement_url": "https://x.com/MiniMax_AI/status/2087934657354678421",
+      "hf_repo_id": "MiniMaxAI/MiniMax-Music3",
+      "hf_first_recorded_commit_at": "2026-08-07T12:23:30.000Z",
+      "hf_first_recorded_commit_sha": "412039c64e9e2db3f77fd5bdbfb78a30bf7246d7",
+      "hf_first_recorded_commit_url": "https://huggingface.co/MiniMaxAI/MiniMax-Music3/commit/412039c64e9e2db3f77fd5bdbfb78a30bf7246d7",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "MiniMax-AI/MiniMax-Music3",
+      "gh_repository_kind": "model",
+      "gh_repo_created_at": "2026-08-11T08:01:03Z",
+      "gh_repo_url": "https://github.com/MiniMax-AI/MiniMax-Music3",
+      "gh_api_url": "https://api.github.com/repos/MiniMax-AI/MiniMax-Music3",
+      "note": ""
+    },
+    {
+      "model": "Qwen3.8-27B",
+      "release_group_id": "g3-b19e5b9723c62c75",
+      "x_announcement_at": "2026-08-03T02:15:04+00:00",
+      "x_announcement_post_id": "2084100707423289643",
+      "x_announcement_url": "https://x.com/Alibaba_Qwen/status/2084100707423289643",
+      "hf_repo_id": "Qwen/Qwen3.8-27B",
+      "hf_first_recorded_commit_at": "2026-08-05T08:22:59.000Z",
+      "hf_first_recorded_commit_sha": "6714f561f4c678235aa4780ba4fb904d99a3cca8",
+      "hf_first_recorded_commit_url": "https://huggingface.co/Qwen/Qwen3.8-27B/commit/6714f561f4c678235aa4780ba4fb904d99a3cca8",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "QwenLM/Qwen3.8",
+      "gh_repository_kind": "shared_family",
+      "gh_repo_created_at": "2025-09-11T05:32:39Z",
+      "gh_repo_url": "https://github.com/QwenLM/Qwen3.8",
+      "gh_api_url": "https://api.github.com/repos/QwenLM/Qwen3.8",
+      "note": "X date is the explicit upcoming-27B preannouncement; dedicated weights launch follows August14."
+    },
+    {
+      "model": "GLM-5.3",
+      "release_group_id": "g3-c3449248ae712352",
+      "x_announcement_at": "2026-08-14T05:17:49+00:00",
+      "x_announcement_post_id": "2088132965922476159",
+      "x_announcement_url": "https://x.com/Zai_org/status/2088132965922476159",
+      "hf_repo_id": "zai-org/GLM-5.3",
+      "hf_first_recorded_commit_at": "2026-08-27T17:16:19.000Z",
+      "hf_first_recorded_commit_sha": "7cda81930d6e4cef42f48555de830aa32ecdde28",
+      "hf_first_recorded_commit_url": "https://huggingface.co/zai-org/GLM-5.3/commit/7cda81930d6e4cef42f48555de830aa32ecdde28",
+      "hf_initial_contains_weights": true,
+      "hf_initial_weight_file_count": 141,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "zai-org/GLM-5",
+      "gh_repository_kind": "shared_family",
+      "gh_repo_created_at": "2026-02-09T08:17:02Z",
+      "gh_repo_url": "https://github.com/zai-org/GLM-5",
+      "gh_api_url": "https://api.github.com/repos/zai-org/GLM-5",
+      "note": "Initial HF recorded revision includes141 weight files; public-weight notice is August28, a distinct date."
+    },
+    {
+      "model": "GLM-5.3-Flash",
+      "release_group_id": "g3-9f9f492ef5978acc",
+      "x_announcement_at": "2026-08-26T14:12:36+00:00",
+      "x_announcement_post_id": "2092616204787626030",
+      "x_announcement_url": "https://x.com/Zai_org/status/2092616204787626030",
+      "hf_repo_id": "zai-org/GLM-5.3-Flash",
+      "hf_first_recorded_commit_at": "2026-08-25T06:43:14.000Z",
+      "hf_first_recorded_commit_sha": "3c7f1b4d38ec8f6eda3b1ca5536b987443e77a72",
+      "hf_first_recorded_commit_url": "https://huggingface.co/zai-org/GLM-5.3-Flash/commit/3c7f1b4d38ec8f6eda3b1ca5536b987443e77a72",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "zai-org/GLM-5",
+      "gh_repository_kind": "shared_family",
+      "gh_repo_created_at": "2026-02-09T08:17:02Z",
+      "gh_repo_url": "https://github.com/zai-org/GLM-5",
+      "gh_api_url": "https://api.github.com/repos/zai-org/GLM-5",
+      "note": "Named X announcement August26; anonymous Ox Alpha testing began August20. Shared GitHub README explicitly covers this model."
+    },
+    {
+      "model": "Qwen3.8-Flash-Next",
+      "release_group_id": "g3-941e49c2669149fb",
+      "x_announcement_at": "2026-08-26T12:34:01+00:00",
+      "x_announcement_post_id": "2092591393424515114",
+      "x_announcement_url": "https://x.com/Alibaba_Qwen/status/2092591393424515114",
+      "hf_repo_id": "Qwen/Qwen3.8-Flash-Next",
+      "hf_first_recorded_commit_at": "2026-08-26T08:17:26.000Z",
+      "hf_first_recorded_commit_sha": "34567a4712bc9766c4449e2e98e4468bfa24d915",
+      "hf_first_recorded_commit_url": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next/commit/34567a4712bc9766c4449e2e98e4468bfa24d915",
+      "hf_initial_contains_weights": true,
+      "hf_initial_weight_file_count": 131,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "QwenLM/Qwen3.8-Flash-Next",
+      "gh_repository_kind": "model",
+      "gh_repo_created_at": "2026-08-24T02:50:39Z",
+      "gh_repo_url": "https://github.com/QwenLM/Qwen3.8-Flash-Next",
+      "gh_api_url": "https://api.github.com/repos/QwenLM/Qwen3.8-Flash-Next",
+      "note": "First recorded revision already contains131 weight files."
+    },
+    {
+      "model": "Tencent Hy4 Preview",
+      "release_group_id": "g3-d913bcdf5da0b42d",
+      "x_announcement_at": "2026-08-28T06:23:31+00:00",
+      "x_announcement_post_id": "2093222928720761009",
+      "x_announcement_url": "https://x.com/TencentHunyuan/status/2093222928720761009",
+      "hf_repo_id": "tencent/Hy4-preview",
+      "hf_first_recorded_commit_at": "2026-08-27T08:52:40.000Z",
+      "hf_first_recorded_commit_sha": "7a996c909e3974958a0ef8fde0f1acf797a340d4",
+      "hf_first_recorded_commit_url": "https://huggingface.co/tencent/Hy4-preview/commit/7a996c909e3974958a0ef8fde0f1acf797a340d4",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "Tencent-Hunyuan/Hy4-preview",
+      "gh_repository_kind": "model",
+      "gh_repo_created_at": "2026-08-27T09:27:34Z",
+      "gh_repo_url": "https://github.com/Tencent-Hunyuan/Hy4-preview",
+      "gh_api_url": "https://api.github.com/repos/Tencent-Hunyuan/Hy4-preview",
+      "note": ""
+    },
+    {
+      "model": "Ling-3.0-flash-Fin",
+      "release_group_id": "g3-64179c829a19c82a",
+      "x_announcement_at": "2026-08-27T17:05:26+00:00",
+      "x_announcement_post_id": "2093022087069958492",
+      "x_announcement_url": "https://x.com/AntLingAGI/status/2093022087069958492",
+      "hf_repo_id": "inclusionAI/Ling-3.0-flash-Fin",
+      "hf_first_recorded_commit_at": "2026-09-03T06:09:53.000Z",
+      "hf_first_recorded_commit_sha": "76ccf8ef58adeb1256f272e1a8188691d06cbf69",
+      "hf_first_recorded_commit_url": "https://huggingface.co/inclusionAI/Ling-3.0-flash-Fin/commit/76ccf8ef58adeb1256f272e1a8188691d06cbf69",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": null,
+      "gh_repository_kind": "unverified",
+      "gh_repo_created_at": null,
+      "gh_repo_url": null,
+      "gh_api_url": null,
+      "note": "Publisher model card provides no dedicated GitHub model repository. Do not substitute a guessed family repository."
+    },
+    {
+      "model": "LLaDA-Image",
+      "release_group_id": "g3-b70f1d1d66fd55df",
+      "x_announcement_at": "2026-09-04T02:14:12+00:00",
+      "x_announcement_post_id": "2095696902004293744",
+      "x_announcement_url": "https://x.com/TheInclusionAI/status/2095696902004293744",
+      "hf_repo_id": "inclusionAI/LLaDA-Image",
+      "hf_first_recorded_commit_at": "2026-08-28T02:18:25.000Z",
+      "hf_first_recorded_commit_sha": "778e4747cb0602989f81c77c7b2c2e08f7daaa94",
+      "hf_first_recorded_commit_url": "https://huggingface.co/inclusionAI/LLaDA-Image/commit/778e4747cb0602989f81c77c7b2c2e08f7daaa94",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "inclusionAI/LLaDA-Image",
+      "gh_repository_kind": "shared_variants",
+      "gh_repo_created_at": "2026-08-31T07:21:37Z",
+      "gh_repo_url": "https://github.com/inclusionAI/LLaDA-Image",
+      "gh_api_url": "https://api.github.com/repos/inclusionAI/LLaDA-Image",
+      "note": ""
+    },
+    {
+      "model": "LLaDA-Image-Turbo",
+      "release_group_id": "g3-b70f1d1d66fd55df",
+      "x_announcement_at": "2026-09-04T02:14:12+00:00",
+      "x_announcement_post_id": "2095696902004293744",
+      "x_announcement_url": "https://x.com/TheInclusionAI/status/2095696902004293744",
+      "hf_repo_id": "inclusionAI/LLaDA-Image-Turbo",
+      "hf_first_recorded_commit_at": "2026-08-28T02:18:43.000Z",
+      "hf_first_recorded_commit_sha": "d92973b6dd6827138d6f4c2e92e320ec63b96255",
+      "hf_first_recorded_commit_url": "https://huggingface.co/inclusionAI/LLaDA-Image-Turbo/commit/d92973b6dd6827138d6f4c2e92e320ec63b96255",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "inclusionAI/LLaDA-Image",
+      "gh_repository_kind": "shared_variants",
+      "gh_repo_created_at": "2026-08-31T07:21:37Z",
+      "gh_repo_url": "https://github.com/inclusionAI/LLaDA-Image",
+      "gh_api_url": "https://api.github.com/repos/inclusionAI/LLaDA-Image",
+      "note": "Sibling shares announcement and GitHub code; distinct HF repository."
+    },
+    {
+      "model": "Ling-3.0-flash-VL",
+      "release_group_id": "g3-c9dd5c5f3d374dc1",
+      "x_announcement_at": "2026-09-04T18:04:10+00:00",
+      "x_announcement_post_id": "2095935971556782372",
+      "x_announcement_url": "https://x.com/AntLingAGI/status/2095935971556782372",
+      "hf_repo_id": "inclusionAI/Ling-3.0-flash-VL",
+      "hf_first_recorded_commit_at": "2026-09-04T15:24:37.000Z",
+      "hf_first_recorded_commit_sha": "967ddce37cbe52cf016ad88fdb5d3d3e10e1a944",
+      "hf_first_recorded_commit_url": "https://huggingface.co/inclusionAI/Ling-3.0-flash-VL/commit/967ddce37cbe52cf016ad88fdb5d3d3e10e1a944",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "inclusionAI/vllm-ling-v3",
+      "gh_repository_kind": "shared_runtime",
+      "gh_repo_created_at": "2026-07-13T02:53:58Z",
+      "gh_repo_url": "https://github.com/inclusionAI/vllm-ling-v3",
+      "gh_api_url": "https://api.github.com/repos/inclusionAI/vllm-ling-v3",
+      "note": "GitHub is the publisher-linked vLLM runtime repository, not a dedicated model repository. BF16/FP8 weights notice September8; FP4/INT4 September11."
+    },
+    {
+      "model": "LLaDA-UI",
+      "release_group_id": "g3-bd696c6b72d9f9b0",
+      "x_announcement_at": null,
+      "x_announcement_post_id": null,
+      "x_announcement_url": null,
+      "hf_repo_id": "inclusionAI/LLaDA-UI",
+      "hf_first_recorded_commit_at": "2026-09-15T02:20:30.000Z",
+      "hf_first_recorded_commit_sha": "f9a59c1945fc4de68f4bd667b49001cba4a1d954",
+      "hf_first_recorded_commit_url": "https://huggingface.co/inclusionAI/LLaDA-UI/commit/f9a59c1945fc4de68f4bd667b49001cba4a1d954",
+      "hf_initial_contains_weights": true,
+      "hf_initial_weight_file_count": 7,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "inclusionAI/LLaDA-UI",
+      "gh_repository_kind": "model",
+      "gh_repo_created_at": "2026-08-31T07:21:54Z",
+      "gh_repo_url": "https://github.com/inclusionAI/LLaDA-UI",
+      "gh_api_url": "https://api.github.com/repos/inclusionAI/LLaDA-UI",
+      "note": "No verified X announcement in inspected official-author evidence. Initial HF revision contains7 weight files."
+    },
+    {
+      "model": "Ming-Image-0.1-Design",
+      "release_group_id": "g3-6fee04670e964756",
+      "x_announcement_at": "2026-09-22T17:36:43+00:00",
+      "x_announcement_post_id": "2102452045374804304",
+      "x_announcement_url": "https://x.com/AntLingAGI/status/2102452045374804304",
+      "hf_repo_id": "inclusionAI/Ming-Image-0.1-Design",
+      "hf_first_recorded_commit_at": "2026-09-17T07:17:31.000Z",
+      "hf_first_recorded_commit_sha": "9fa3680951ae3fcc2e4c3eda3e4c974dcee22193",
+      "hf_first_recorded_commit_url": "https://huggingface.co/inclusionAI/Ming-Image-0.1-Design/commit/9fa3680951ae3fcc2e4c3eda3e4c974dcee22193",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "inclusionAI/Ming-Image",
+      "gh_repository_kind": "shared_variants",
+      "gh_repo_created_at": "2026-09-17T11:17:49Z",
+      "gh_repo_url": "https://github.com/inclusionAI/Ming-Image",
+      "gh_api_url": "https://api.github.com/repos/inclusionAI/Ming-Image",
+      "note": "September17 artifact history precedes September22 official X download thread; history does not prove visibility before announcement."
+    },
+    {
+      "model": "Ming-Image-0.1-Design-Layer",
+      "release_group_id": "g3-8fece75edb9a575a",
+      "x_announcement_at": "2026-09-22T17:36:43+00:00",
+      "x_announcement_post_id": "2102452045374804304",
+      "x_announcement_url": "https://x.com/AntLingAGI/status/2102452045374804304",
+      "hf_repo_id": "inclusionAI/Ming-Image-0.1-Design-Layer",
+      "hf_first_recorded_commit_at": "2026-09-17T11:36:00.000Z",
+      "hf_first_recorded_commit_sha": "4002eb32d518a95231872c3925540757156cfb0b",
+      "hf_first_recorded_commit_url": "https://huggingface.co/inclusionAI/Ming-Image-0.1-Design-Layer/commit/4002eb32d518a95231872c3925540757156cfb0b",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "inclusionAI/Ming-Image",
+      "gh_repository_kind": "shared_variants",
+      "gh_repo_created_at": "2026-09-17T11:17:49Z",
+      "gh_repo_url": "https://github.com/inclusionAI/Ming-Image",
+      "gh_api_url": "https://api.github.com/repos/inclusionAI/Ming-Image",
+      "note": ""
+    },
+    {
+      "model": "Qwen-Image-2.1",
+      "release_group_id": "g3-a8bf870f9c8155bc",
+      "x_announcement_at": "2026-09-20T13:06:39+00:00",
+      "x_announcement_post_id": "2101659302792679789",
+      "x_announcement_url": "https://x.com/Alibaba_Qwen/status/2101659302792679789",
+      "hf_repo_id": "Qwen/Qwen-Image-2.1",
+      "hf_first_recorded_commit_at": "2026-09-14T03:47:26.000Z",
+      "hf_first_recorded_commit_sha": "b0231bd097b5a2a1cde49a18de703e069d59173d",
+      "hf_first_recorded_commit_url": "https://huggingface.co/Qwen/Qwen-Image-2.1/commit/b0231bd097b5a2a1cde49a18de703e069d59173d",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "QwenLM/Qwen-Image-2.1",
+      "gh_repository_kind": "shared_variants",
+      "gh_repo_created_at": "2026-09-14T04:12:17Z",
+      "gh_repo_url": "https://github.com/QwenLM/Qwen-Image-2.1",
+      "gh_api_url": "https://api.github.com/repos/QwenLM/Qwen-Image-2.1",
+      "note": ""
+    },
+    {
+      "model": "MiMo-V2.6-Pro",
+      "release_group_id": "g3-0b3c52ead68dc8fd",
+      "x_announcement_at": "2026-09-21T20:51:03+00:00",
+      "x_announcement_post_id": "2102138559952290106",
+      "x_announcement_url": "https://x.com/XiaomiMiMo/status/2102138559952290106",
+      "hf_repo_id": "XiaomiMiMo/MiMo-V2.6-Pro-RL",
+      "hf_first_recorded_commit_at": "2026-09-21T15:39:33.000Z",
+      "hf_first_recorded_commit_sha": "c25d97fc71b84c5e6f54a0118a408a634518132f",
+      "hf_first_recorded_commit_url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Pro-RL/commit/c25d97fc71b84c5e6f54a0118a408a634518132f",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "XiaomiMiMo/MiMo",
+      "gh_repository_kind": "shared_family",
+      "gh_repo_created_at": "2025-04-26T09:31:17Z",
+      "gh_repo_url": "https://github.com/XiaomiMiMo/MiMo",
+      "gh_api_url": "https://api.github.com/repos/XiaomiMiMo/MiMo",
+      "note": "X timestamp September21 UTC is September22 in China. Publisher-linked collection identifies the RL-suffixed HF repository."
+    },
+    {
+      "model": "MiMo-V2.6-Flash",
+      "release_group_id": "g3-0b3c52ead68dc8fd",
+      "x_announcement_at": "2026-09-21T20:51:03+00:00",
+      "x_announcement_post_id": "2102138559952290106",
+      "x_announcement_url": "https://x.com/XiaomiMiMo/status/2102138559952290106",
+      "hf_repo_id": "XiaomiMiMo/MiMo-V2.6-Flash-RL",
+      "hf_first_recorded_commit_at": "2026-09-21T15:39:51.000Z",
+      "hf_first_recorded_commit_sha": "990f1a0367298a1190b23a857d5c2b32b3ded88d",
+      "hf_first_recorded_commit_url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/commit/990f1a0367298a1190b23a857d5c2b32b3ded88d",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "XiaomiMiMo/MiMo",
+      "gh_repository_kind": "shared_family",
+      "gh_repo_created_at": "2025-04-26T09:31:17Z",
+      "gh_repo_url": "https://github.com/XiaomiMiMo/MiMo",
+      "gh_api_url": "https://api.github.com/repos/XiaomiMiMo/MiMo",
+      "note": "Same launch as Pro, separate HF repository; GitHub covers multiple MiMo generations."
+    },
+    {
+      "model": "Qwen-Image-2.1-Turbo",
+      "release_group_id": "g3-1fbd661af930b01f",
+      "x_announcement_at": "2026-10-09T13:24:09+00:00",
+      "x_announcement_post_id": "2108549075218120949",
+      "x_announcement_url": "https://x.com/Alibaba_Qwen/status/2108549075218120949",
+      "hf_repo_id": "Qwen/Qwen-Image-2.1-Turbo",
+      "hf_first_recorded_commit_at": "2026-10-09T04:50:01.000Z",
+      "hf_first_recorded_commit_sha": "960b2c791307726231582cf30bf53e980d62092c",
+      "hf_first_recorded_commit_url": "https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo/commit/960b2c791307726231582cf30bf53e980d62092c",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "QwenLM/Qwen-Image-2.1",
+      "gh_repository_kind": "shared_variants",
+      "gh_repo_created_at": "2026-09-14T04:12:17Z",
+      "gh_repo_url": "https://github.com/QwenLM/Qwen-Image-2.1",
+      "gh_api_url": "https://api.github.com/repos/QwenLM/Qwen-Image-2.1",
+      "note": "Reuses September-created GitHub repository; creation does not date the October Turbo release."
+    },
+    {
+      "model": "DeepSeek-V4.1-Flash",
+      "release_group_id": "g3-a154420adbc8cd0d",
+      "x_announcement_at": "2026-09-10T06:10:09+00:00",
+      "x_announcement_post_id": "2097930608790167907",
+      "x_announcement_url": "https://x.com/deepseek_ai/status/2097930608790167907",
+      "hf_repo_id": "deepseek-ai/DeepSeek-V4.1-Flash",
+      "hf_first_recorded_commit_at": "2026-09-10T02:17:58.000Z",
+      "hf_first_recorded_commit_sha": "3fb9e068ecccc269ec94182be261cc9e4fa34048",
+      "hf_first_recorded_commit_url": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/commit/3fb9e068ecccc269ec94182be261cc9e4fa34048",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": "deepseek-ai/deepseek-recipe",
+      "gh_repository_kind": "shared_recipe",
+      "gh_repo_created_at": "2026-09-10T05:36:48Z",
+      "gh_repo_url": "https://github.com/deepseek-ai/deepseek-recipe",
+      "gh_api_url": "https://api.github.com/repos/deepseek-ai/deepseek-recipe",
+      "note": "GitHub is publisher-linked preprocessing/prompt code; README explicitly supports V4/V4.1. Do not substitute the old V2 logo repository."
+    },
+    {
+      "model": "DeepSeek-V4-Pro / 0813 API update",
+      "release_group_id": "g3-2f02760365f55e1f",
+      "x_announcement_at": "2026-08-13T11:31:22+00:00",
+      "x_announcement_post_id": "2087864585504305397",
+      "x_announcement_url": "https://x.com/deepseek_ai/status/2087864585504305397",
+      "hf_repo_id": "deepseek-ai/DeepSeek-V4-Pro",
+      "hf_first_recorded_commit_at": "2026-04-22T06:04:45.000Z",
+      "hf_first_recorded_commit_sha": "244d0147232ffc100062c94d37df5ae47a75cccd",
+      "hf_first_recorded_commit_url": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/commit/244d0147232ffc100062c94d37df5ae47a75cccd",
+      "hf_initial_contains_weights": false,
+      "hf_initial_weight_file_count": 0,
+      "hf_history_complete_at_observation": true,
+      "historical_public_visibility_proven": false,
+      "gh_repo_id": null,
+      "gh_repository_kind": "unverified",
+      "gh_repo_created_at": null,
+      "gh_repo_url": null,
+      "gh_api_url": null,
+      "note": "HF date belongs to the reused V4-Pro family repository, not a verified0813 checkpoint. August13 X announcement describes API/app availability. Dedicated model GitHub repository not verified."
+    }
+  ],
+  "other_groups": [
+    {
+      "release_group_id": "g3-0e0a8a3f018713e7",
+      "company_id": "qwen",
+      "product": "Wan Video Prime",
+      "version": "3.0",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-d8d8b8febb9fc4e9",
+      "company_id": "deepseek",
+      "product": "DeepSeek V4 Flash Vision Exp",
+      "version": "Vision-Exp",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-3cba851ba8ad4468",
+      "company_id": "qwen",
+      "product": "Qwen3.8 Flash",
+      "version": "3.8",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-c1cc8c2502186645",
+      "company_id": "qwen",
+      "product": "Qwen MT Image",
+      "version": "2.0",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-a058cfc0b6fb48a3",
+      "company_id": "qwen",
+      "product": "Qwen Flash Character",
+      "version": null,
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-78f8bb39390a205a",
+      "company_id": "llama",
+      "product": "Muse Spark",
+      "version": "1.3",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-d70df7a209711e41",
+      "company_id": "qwen",
+      "product": "Qwen Drive",
+      "version": "1.0",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-c2cd430576aa2998",
+      "company_id": "qwen",
+      "product": "Qwen3.8 Max",
+      "version": "0902",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-4cf0803719c708c2",
+      "company_id": "inclusionai",
+      "product": "Ling Flash Sante",
+      "version": "3.0",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-a07b34a27cef4975",
+      "company_id": "stepfun",
+      "product": "StepAudio",
+      "version": "3",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-d4100e3d98f1c642",
+      "company_id": "qwen",
+      "product": "HappyOyster",
+      "version": "1.0",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-f2759377f106a08d",
+      "company_id": "qwen",
+      "product": "Qwen3.8 Omni Flash",
+      "version": "3.8",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-c4c0d1dcf91e3c55",
+      "company_id": "qwen",
+      "product": "Qwen3.8 LiveTranslate",
+      "version": "3.8",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-3a20bec93b5e848d",
+      "company_id": "qwen",
+      "product": "Qwen Audio Realtime Plus",
+      "version": "3.1",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-7707e35ca4fdba03",
+      "company_id": "stepfun",
+      "product": "Step 5 Preview",
+      "version": "5",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-543b785f03bd3a46",
+      "company_id": "hunyuan",
+      "product": "Tencent Hy Image",
+      "version": "3.5 Preview",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-fa87982bf4d0b787",
+      "company_id": "qwen",
+      "product": "Qwen3.8 Omni Flash Realtime",
+      "version": "3.8",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-7cb95e6ea3b75dcf",
+      "company_id": "mimo",
+      "product": "MiMo V2.6 Pro UltraSpeed",
+      "version": "2.6",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-4f77f28f3bfcfc4a",
+      "company_id": "nemo_megatron",
+      "product": "NV Reason CT",
+      "version": null,
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-250b87f80e0c0193",
+      "company_id": "qwen",
+      "product": "Alibaba Decision Model",
+      "version": "Preview",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-f74967fe3b739b6c",
+      "company_id": "minimax",
+      "product": "MiniMax M3.1 Flash Preview",
+      "version": "3.1",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-d0c8fe7cf20ad2cf",
+      "company_id": "inclusionai",
+      "product": "Ling Flash",
+      "version": "3.1",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-65f7272218516dd8",
+      "company_id": "qwen",
+      "product": "Qwen Image Pro",
+      "version": "2.1",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-ae37b4c93a29cf8f",
+      "company_id": "mistral",
+      "product": "Mistral Large",
+      "version": "4",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-b75a03fe68915e6e",
+      "company_id": "qwen",
+      "product": "Qwen3.7 Flash",
+      "version": "3.7",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    },
+    {
+      "release_group_id": "g3-50a4e98e8a498d5b",
+      "company_id": "qwen",
+      "product": "Qwen3.8 Max",
+      "version": "3.8",
+      "status": "No reviewed three-date repository mapping in this pass; does not establish absence of weights or repository."
+    }
+  ],
+  "current_recurring_hf_collection": {
+    "observed_at": "2026-10-12T04:50:41.66726+00:00",
+    "hf_source": {
+      "id": "hf",
+      "enabled": true,
+      "daily_collection_hour_utc": 10
+    },
+    "mappings": [
+      {
+        "contract_id": "75c4a856-385b-429a-9b03-c7e023ea6f73",
+        "subject_kind": "account",
+        "external_identifier": "deepseek-ai"
+      },
+      {
+        "contract_id": "75c4a856-385b-429a-9b03-c7e023ea6f73",
+        "subject_kind": "account",
+        "external_identifier": "zai-org"
+      },
+      {
+        "contract_id": "75c4a856-385b-429a-9b03-c7e023ea6f73",
+        "subject_kind": "repository",
+        "external_identifier": "deepseek-ai/DeepSeek-V4.1-Flash"
+      },
+      {
+        "contract_id": "75c4a856-385b-429a-9b03-c7e023ea6f73",
+        "subject_kind": "repository",
+        "external_identifier": "zai-org/GLM-5.3-Flash"
+      }
+    ],
+    "latest_runs": [
+      {
+        "id": "a9fda33c-51b7-49ee-8146-f6c440dd5840",
+        "status": "success",
+        "error_code": null,
+        "started_at": "2026-10-11T10:01:02.783408+00:00",
+        "contract_id": "75c4a856-385b-429a-9b03-c7e023ea6f73",
+        "completed_at": "2026-10-11T10:01:03.371756+00:00",
+        "success_count": 4,
+        "selected_count": 4
+      },
+      {
+        "id": "a1ad8977-77c5-420e-912b-f568b6a4a581",
+        "status": "success",
+        "error_code": null,
+        "started_at": "2026-10-10T10:01:16.448949+00:00",
+        "contract_id": "75c4a856-385b-429a-9b03-c7e023ea6f73",
+        "completed_at": "2026-10-10T10:01:16.895028+00:00",
+        "success_count": 4,
+        "selected_count": 4
+      },
+      {
+        "id": "b37ccdbe-a1df-496c-a189-bedf386ea856",
+        "status": "success",
+        "error_code": null,
+        "started_at": "2026-10-09T10:00:50.574879+00:00",
+        "contract_id": "75c4a856-385b-429a-9b03-c7e023ea6f73",
+        "completed_at": "2026-10-09T10:00:51.058484+00:00",
+        "success_count": 4,
+        "selected_count": 4
+      },
+      {
+        "id": "91dd0f61-5411-4bee-9013-cfca4f51c9da",
+        "status": "success",
+        "error_code": null,
+        "started_at": "2026-10-08T09:01:27.235796+00:00",
+        "contract_id": "75c4a856-385b-429a-9b03-c7e023ea6f73",
+        "completed_at": "2026-10-08T09:01:27.620574+00:00",
+        "success_count": 4,
+        "selected_count": 4
+      },
+      {
+        "id": "e278d9c1-4eeb-4906-ae47-e136ef44acce",
+        "status": "partial",
+        "error_code": null,
+        "started_at": "2026-10-08T08:56:06.869623+00:00",
+        "contract_id": "75c4a856-385b-429a-9b03-c7e023ea6f73",
+        "completed_at": "2026-10-08T08:56:08.075117+00:00",
+        "success_count": 1,
+        "selected_count": 4
+      }
+    ],
+    "metrics": [
+      "downloads",
+      "downloads_all_time",
+      "likes",
+      "followers"
+    ],
+    "configuration": [
+      {
+        "id": "75c4a856-385b-429a-9b03-c7e023ea6f73",
+        "sources": {
+          "hf": {
+            "metrics": [
+              "downloads",
+              "downloads_all_time",
+              "likes",
+              "followers"
+            ],
+            "max_requests": 20,
+            "poll_seconds": 86300,
+            "scheduling_enabled": true
+          },
+          "arena": {
+            "metrics": [
+              "rating",
+              "rating_lower",
+              "rating_upper",
+              "vote_count",
+              "rank",
+              "variance"
+            ],
+            "max_requests": 20,
+            "poll_seconds": 86300,
+            "scheduling_enabled": true
+          },
+          "opencode": {
+            "metrics": [
+              "tokens",
+              "unique_users",
+              "sessions"
+            ],
+            "max_requests": 20,
+            "poll_seconds": 3500,
+            "scheduling_enabled": true
+          },
+          "openrouter": {
+            "metrics": [
+              "total_tokens"
+            ],
+            "max_requests": 20,
+            "poll_seconds": 86300,
+            "scheduling_enabled": true
+          }
+        }
+      }
+    ],
+    "catalog_latest_runs": [
+      {
+        "id": "21f174cd-9d0e-4a78-a97e-659ba30c2459",
+        "outcome": "partial",
+        "started_at": "2026-09-24T09:49:53.709718+00:00",
+        "finished_at": null
+      },
+      {
+        "id": "4786b08f-3752-4e0e-91aa-08ce4e9a8ae4",
+        "outcome": "complete",
+        "started_at": "2026-09-24T09:49:43.868355+00:00",
+        "finished_at": "2026-09-24T09:49:53.664948+00:00"
+      },
+      {
+        "id": "2dcc54e7-1ac3-436c-90b0-fffc057fbedd",
+        "outcome": "complete",
+        "started_at": "2026-09-24T09:49:42.849117+00:00",
+        "finished_at": "2026-09-24T09:49:43.819689+00:00"
+      }
+    ],
+    "code_revision": "fd467363421c9769ded81c0604dc6a23bf596a0f"
+  }
+}
