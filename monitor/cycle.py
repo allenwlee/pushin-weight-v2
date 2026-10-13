@@ -3993,9 +3993,9 @@ class CycleRunner:
         # The feature flag preserves the prior combined translator as the
         # rollback lane until the split literal contract passes staging.
         from x_monitor.literal_translation import (
-            CHUNK_TRANSLATION_PROMPT_VERSION,
             LITERAL_TRANSLATION_PROMPT_VERSION,
             LONG_POST_THRESHOLD,
+            chunk_translation_prompt_version,
             translate_batch_literal_plaintext,
         )
         from x_monitor.translator import translate_batch_pragmatics
@@ -4059,7 +4059,7 @@ class CycleRunner:
                         chunk_options = {"chunk_size": 2_000} if self._backfill_context is not None else {}
                         cached = load_literal_translation_chunks(
                             current_long, model=self.cfg.llm.translator_model,
-                            prompt_version=CHUNK_TRANSLATION_PROMPT_VERSION,
+                            prompt_version=chunk_translation_prompt_version(**chunk_options),
                             **chunk_options,
                         )
                         translation_rows.extend(translate_batch_literal_plaintext(

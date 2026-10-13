@@ -224,6 +224,47 @@ def test_manual_long_translation_and_cache_use_same_smaller_chunks(pipeline, mon
     assert seen == [("cache", None), ("translation", None)]
 
 
+def test_manual_chunk_layout_can_coexist_with_scheduled_cache_rows():
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from core.models import Post, PostEnrichmentState, PostTranslationChunk
+    from monitor.post_artifacts import (
+        load_literal_translation_chunks,
+        persist_literal_translation_chunk,
+        source_text_fingerprint,
+    )
+    from x_monitor.literal_translation import (
+        CHUNK_TRANSLATION_PROMPT_VERSION,
+        _split_translation_chunks,
+        chunk_translation_prompt_version,
+    )
+
+    source = "word " * 1_200
+    post = Post.objects.create(tweet_id="chunk-layout", text=source)
+    PostEnrichmentState.objects.create(post=post, claim_run_id="manual-layout",
+                                      claim_expires_at=timezone.now() + timedelta(seconds=180))
+    old = _split_translation_chunks(source)[0]
+    PostTranslationChunk.objects.create(
+        post=post, source_content_fingerprint=source_text_fingerprint(source),
+        source_chunk_fingerprint=source_text_fingerprint(old), source_language="en",
+        prompt_version=CHUNK_TRANSLATION_PROMPT_VERSION, model="test", target_language="zh-Hans",
+        chunk_index=0, translated_text="旧" * 1_000,
+    )
+    tweet = {"tweet_id": post.pk, "text": source}
+    version = chunk_translation_prompt_version(2_000)
+    assert version != CHUNK_TRANSLATION_PROMPT_VERSION
+    assert persist_literal_translation_chunk(
+        tweet=tweet, source_language="en", target_language="zh-Hans", chunk_index=0,
+        source_chunk=_split_translation_chunks(source, chunk_size=2_000)[0], translated_text="新" * 500,
+        model="test", prompt_version=version, usage={}, expected_claim_run_id="manual-layout",
+    )
+    assert PostTranslationChunk.objects.filter(post=post).count() == 2
+    cached = load_literal_translation_chunks([tweet], model="test", prompt_version=version, chunk_size=2_000)
+    assert cached[str(post.pk)]["en"]["zh-Hans"][0] == "新" * 500
+
+
 def test_provider_ignoring_time_bounds_cannot_finish_or_store_outside_post(pipeline):
     from core.models import Post
 

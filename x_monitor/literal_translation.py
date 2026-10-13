@@ -46,6 +46,13 @@ _LANGUAGE_DETECTION_ALLOWLIST = frozenset(
 )
 
 
+def chunk_translation_prompt_version(chunk_size: int = LONG_POST_THRESHOLD) -> str:
+    """Separate deterministic layouts within the existing chunk identity."""
+    if chunk_size == LONG_POST_THRESHOLD:
+        return CHUNK_TRANSLATION_PROMPT_VERSION
+    return f"{CHUNK_TRANSLATION_PROMPT_VERSION}-chars{chunk_size}"
+
+
 def translate_batch_literal_plaintext(
     tweets: list[dict[str, Any]],
     client: Any,
@@ -198,7 +205,7 @@ def _translate_one(
                             tweet=tweet, source_language=source_language,
                             target_language=target_language, chunk_index=index,
                             source_chunk=chunk, translated_text=part, model=model,
-                            prompt_version=CHUNK_TRANSLATION_PROMPT_VERSION, usage=usage,
+                            prompt_version=chunk_translation_prompt_version(chunk_size), usage=usage,
                         )
                     except Exception as exc:  # noqa: BLE001 - one post must not abort its peers.
                         logger.warning(
