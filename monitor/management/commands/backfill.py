@@ -32,6 +32,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import os
+import tempfile
 import time as _time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,16 +69,14 @@ _COMPLETE_CALL_STATUSES = frozenset({"completed", "no_results"})
 
 
 def _parse_iso(ts: str) -> int:
-    """Parse YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS to epoch seconds (UTC)."""
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
-        try:
-            dt = datetime.strptime(ts, fmt).replace(tzinfo=timezone.utc)
-            return int(dt.timestamp())
-        except ValueError:
-            continue
-    raise CommandError(
-        f"Invalid timestamp '{ts}'. Use YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS."
-    )
+    """Parse ISO dates/timestamps; unqualified timestamps mean UTC."""
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
+    except (ValueError, OverflowError) as exc:
+        raise CommandError(f"Invalid ISO timestamp '{ts}'.") from exc
 
 
 def _state_path(
@@ -109,8 +110,23 @@ def _load_state(state_file: Path) -> dict | None:
 
 
 def _save_state(state_file: Path, state: dict) -> None:
+    """Replace a fully flushed checkpoint without destroying the prior one."""
     state_file.parent.mkdir(parents=True, exist_ok=True)
-    state_file.write_text(json.dumps(state, indent=2, default=str))
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=state_file.parent,
+            prefix=f".{state_file.name}.", suffix=".tmp", delete=False,
+        ) as target:
+            temporary = Path(target.name)
+            json.dump(state, target, indent=2, default=str)
+            target.write("\n")
+            target.flush()
+            os.fsync(target.fileno())
+        temporary.replace(state_file)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def _selected_call_status(stats: dict, call_id: str) -> str:
@@ -159,7 +175,7 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--until", type=str, default=None,
-            help="Upper bound (same format). Default: now.",
+            help="Fixed upper bound (ISO format); required for historical runs.",
         )
         parser.add_argument(
             "--dry-run", action="store_true",
@@ -254,12 +270,23 @@ class Command(BaseCommand):
             return self._handle_quarantined(options)
         if not options.get("since"):
             raise CommandError("--since is required unless --quarantined is used")
+        if not options.get("until"):
+            raise CommandError("--until is required to freeze resumable historical bounds")
         since_epoch = _parse_iso(options["since"])
-        until_epoch = (
-            _parse_iso(options["until"])
-            if options["until"]
-            else int(datetime.now(timezone.utc).timestamp())
-        )
+        until_epoch = _parse_iso(options["until"])
+        if until_epoch <= since_epoch:
+            raise CommandError("--until must be later than --since")
+        for name in ("batch_size", "max_results", "max_pages"):
+            value = options.get(name)
+            if value is not None and value <= 0:
+                raise CommandError(f"--{name.replace('_', '-')} must be positive")
+        for name in ("pause", "max_llm_calls"):
+            value = options.get(name)
+            if value is not None and value < 0:
+                raise CommandError(f"--{name.replace('_', '-')} must be nonnegative")
+        margin = options["safety_margin"]
+        if not math.isfinite(margin) or margin <= 0:
+            raise CommandError("--safety-margin must be finite and positive")
         brand_filter = [
             value.strip()
             for value in str(options.get("brands") or "").split(",")

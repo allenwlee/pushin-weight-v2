@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from io import StringIO
 from types import SimpleNamespace
 
@@ -208,3 +209,55 @@ def test_unscoped_backfill_ignores_stale_runtime_brand_filter(
 
     assert observed_filters == [None]
     assert settings.X_MONITOR_CYCLE_BRAND_FILTER == "stale-brand-filter"
+
+
+@pytest.mark.parametrize("value", ["2026-08-09T00:00", "2026-08-09T00:00:00Z", "2026-08-09T09:00:00+09:00"])
+def test_backfill_timestamp_formats_resolve_same_utc_bound(value):
+    from monitor.management.commands.backfill import _parse_iso
+
+    assert _parse_iso(value) == int(datetime(2026, 8, 9, tzinfo=timezone.utc).timestamp())
+
+
+@pytest.mark.parametrize("overrides", [
+    {"until": "2026-08-08"}, {"until": "2026-08-09"},
+    {"max_results": 0}, {"max_pages": 0}, {"batch_size": 0},
+    {"pause": -1}, {"max_llm_calls": -1}, {"safety_margin": 0},
+])
+def test_invalid_backfill_limits_stop_before_planning(monkeypatch, overrides):
+    from monitor import cycle
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("invalid input reached planning")
+
+    monkeypatch.setattr(cycle, "plan_calls_for_cycle", forbidden)
+    options = {"since": "2026-08-09", "until": "2026-08-10", "dry_run": True}
+    options.update(overrides)
+    with pytest.raises(CommandError):
+        call_command("backfill", stdout=StringIO(), **options)
+
+
+def test_backfill_requires_fixed_upper_bound_before_planning(monkeypatch):
+    from monitor import cycle
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("unfrozen upper bound reached planning")
+
+    monkeypatch.setattr(cycle, "plan_calls_for_cycle", forbidden)
+    with pytest.raises(CommandError, match="--until"):
+        call_command("backfill", since="2026-08-09", dry_run=True, stdout=StringIO())
+
+
+def test_atomic_checkpoint_failure_preserves_previous_state(monkeypatch, tmp_path):
+    from pathlib import Path
+    from monitor.management.commands.backfill import _save_state
+
+    checkpoint = tmp_path / "campaign.json"
+    checkpoint.write_text('{"committed": 1}')
+
+    def fail_replace(*args, **kwargs):
+        raise OSError("replacement unavailable")
+
+    monkeypatch.setattr(Path, "replace", fail_replace)
+    with pytest.raises(OSError, match="replacement unavailable"):
+        _save_state(checkpoint, {"committed": 2})
+    assert json.loads(checkpoint.read_text()) == {"committed": 1}
