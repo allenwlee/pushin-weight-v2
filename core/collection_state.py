@@ -56,7 +56,10 @@ def claim_job(
         .get(pk=job_id)
     )
     validate_job(job)
-    require(job.state == "ready" and job.source.enabled, "job/source is not ready")
+    require(
+        job.state == "ready" and (job.purpose == "content" or job.source.enabled),
+        "job/source is not ready",
+    )
     if job.purpose == "content":
         require(manual_authorized, "content caller authorization required")
     if job.next_retry_at and job.next_retry_at > now:

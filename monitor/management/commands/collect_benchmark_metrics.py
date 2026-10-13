@@ -26,6 +26,8 @@ class Command(BaseCommand):
         parser.add_argument("--start-date", required=True)
         parser.add_argument("--end-date", required=True)
         parser.add_argument("--batch-id", default=None)
+        parser.add_argument("--job", default=None)
+        parser.add_argument("--slot", default=None)
         parser.add_argument("--apply", action="store_true")
         parser.add_argument("--isolated-review", action="store_true")
         parser.add_argument("--max-requests", type=int, default=20)
@@ -36,6 +38,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        claim = None
         try:
             contract = MetricCollectionContract.objects.get(pk=options["contract"])
             source = options["source"]
@@ -66,6 +69,27 @@ class Command(BaseCommand):
                     )
                 )
                 return
+            if options["job"]:
+                from core.collection_state import claim_job, fenced_run
+                from core.models import CollectionJob
+
+                job = CollectionJob.objects.get(pk=options["job"])
+                if (
+                    job.contract_id != contract.pk
+                    or job.source_id != source
+                    or job.operation != "collect_metrics"
+                ):
+                    raise ValueError("metric job/contract/source mismatch")
+                for flag, name in (
+                    ("max_requests", "requests"),
+                    ("max_seconds", "seconds"),
+                    ("max_bytes", "bytes"),
+                ):
+                    options[flag] = min(options[flag], job.definition["budgets"][name])
+                claim = claim_job(job.pk)
+                with fenced_run(claim) as (_, active):
+                    active.report = {**active.report, "schedule_slot": options["slot"]}
+                    active.save(update_fields=["report", "updated_at"])
             batch = (
                 uuid.UUID(options["batch_id"]) if options["batch_id"] else uuid.uuid4()
             )
@@ -74,6 +98,8 @@ class Command(BaseCommand):
                 "end_date": options["end_date"],
             }
             key = digest([contract.contract_hash, source, str(batch), params])
+            if claim is not None:
+                key = active.ingestion_key
             with httpx.Client() as client:
                 budget = sources.Budget(
                     client,
@@ -145,6 +171,13 @@ class Command(BaseCommand):
                     result["request_count"] = options["max_requests"] - budget.remaining
                     return result
 
+                fetched = fetch() if claim is not None else None
+                if (
+                    claim is not None
+                    and len(fetched.get("rows", []))
+                    > job.definition["budgets"]["items"]
+                ):
+                    raise ValueError("metric job item cap")
                 run = persist_source(
                     contract,
                     source,
@@ -157,9 +190,12 @@ class Command(BaseCommand):
                             "adapter_key"
                         ],
                         "batch_id": str(batch),
+                        "physical_bytes_received": budget.total_bytes_read,
                     },
-                    fetch=fetch,
+                    payload=fetched,
+                    fetch=fetch if claim is None else None,
                     batch_id=batch,
+                    claim=claim,
                 )
             self.stdout.write(
                 json.dumps(
@@ -177,4 +213,13 @@ class Command(BaseCommand):
                     f"Collection {run.status}: {run.error_code or 'no usable selected subjects'}"
                 )
         except (ValueError, KeyError, ObjectDoesNotExist) as exc:
+            if claim is not None:
+                from core.collection_state import StaleClaim, finish_run
+
+                try:
+                    finish_run(
+                        claim, status="failed", error_code="invalid_metric_execution"
+                    )
+                except StaleClaim:
+                    pass
             raise CommandError(str(exc)) from exc

@@ -195,7 +195,8 @@ def _hf(claim, job, budget):
 def execute_model_inventory(job_id, *, budget=None, key=None):
     job = CollectionJob.objects.get(pk=job_id)
     require(
-        job.operation == "model_inventory" and job.source_id in {"hf", "openrouter"},
+        (job.operation == "model_inventory" and job.source_id in {"hf", "openrouter"})
+        or (job.operation == "hf_catalog" and job.source_id == "hf"),
         "supported catalog inventory job required",
     )
     claim = claim_job(job_id)

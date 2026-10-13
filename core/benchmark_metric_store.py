@@ -539,6 +539,7 @@ def persist_source(
     fetch=None,
     batch_id=None,
     isolated_review=False,
+    claim=None,
 ):
     """Manual/import entry point; deterministic keys make replay a no-op."""
     require(source in contract.source_configuration, "source is outside contract")
@@ -553,7 +554,26 @@ def persist_source(
     require(re.fullmatch(r"[0-9a-f]{64}", ingestion_key or ""), "invalid ingestion key")
     with collection_lock(contract, source):
         now = timezone.now()
-        existing = CollectionRun.objects.filter(ingestion_key=ingestion_key).first()
+        if claim is not None:
+            from core.collection_state import fenced_run
+
+            require(fetch is None, "claimed writer accepts fetched data only")
+            with fenced_run(claim) as (job, run):
+                require(
+                    job.purpose == "metric"
+                    and job.contract_id == contract.pk
+                    and job.source_id == source,
+                    "claimed metric identity mismatch",
+                )
+                require(
+                    run.ingestion_key == ingestion_key,
+                    "claimed ingestion identity mismatch",
+                )
+        existing = (
+            CollectionRun.objects.filter(ingestion_key=ingestion_key).first()
+            if claim is None
+            else None
+        )
         if existing:
             require(
                 existing.contract_id == contract.pk and existing.source_id == source,
@@ -573,17 +593,44 @@ def persist_source(
             existing.error_code = "expired_lease"
             existing.save(update_fields=["status", "completed_at", "error_code"])
             return existing
-        run = CollectionRun.objects.create(
-            contract=contract,
-            source_id=source,
-            ingestion_key=ingestion_key,
-            lease_expires_at=now + timedelta(minutes=10),
-            source_url=DataSource.objects.get(pk=source).website_url,
-            **({"batch_id": batch_id} if batch_id is not None else {}),
-            selected_count=contract.mappings.filter(
+        if claim is None:
+            run = CollectionRun.objects.create(
+                contract=contract,
+                source_id=source,
+                ingestion_key=ingestion_key,
+                lease_expires_at=now + timedelta(minutes=10),
+                source_url=DataSource.objects.get(pk=source).website_url,
+                **({"batch_id": batch_id} if batch_id is not None else {}),
+                selected_count=contract.mappings.filter(
+                    purpose="metric", source_id=source
+                ).count(),
+            )
+        else:
+            run.selected_count = contract.mappings.filter(
                 purpose="metric", source_id=source
-            ).count(),
-        )
+            ).count()
+            run.source_url = DataSource.objects.get(pk=source).website_url
+            if batch_id is not None:
+                run.batch_id = batch_id
+
+        def save_result():
+            if claim is None:
+                run.save()
+                return run
+            from core.collection_state import finish_run
+
+            status, error = run.status, run.error_code
+            run.status, run.completed_at = "running", None
+            run.save()
+            return finish_run(
+                claim,
+                status=status,
+                request_count=run.request_count,
+                selected_count=run.selected_count,
+                success_count=run.success_count,
+                error_code=error,
+            )
+
         try:
             if fetch is not None:
                 require(payload is None, "supply a payload or fetch, not both")
@@ -651,9 +698,16 @@ def persist_source(
             run.status = "failed"
             run.error_code = "invalid_source_data"
             run.completed_at = timezone.now()
-            run.save()
-            return run
-        with transaction.atomic():
+            if claim is None:
+                return save_result()
+            with fenced_run(claim):
+                return save_result()
+        from contextlib import nullcontext
+
+        with (
+            transaction.atomic(),
+            fenced_run(claim) if claim is not None else nullcontext(),
+        ):
             successful = retained_successful
             errors = False
             observations = CollectionObservation.objects.bulk_create(
@@ -698,5 +752,5 @@ def persist_source(
                 else "failed"
             )
             run.completed_at = timezone.now()
-            run.save()
-        return run
+            result = save_result()
+        return result

@@ -179,7 +179,7 @@ def set_job_state(job_id, state, *, now=None):
         "terminal job cannot be reactivated",
     )
     if state == "ready":
-        require(job.source.enabled, "source is disabled")
+        require(job.purpose == "content" or job.source.enabled, "source is disabled")
         job.next_due_at = now if job.mode == "recurring" else None
     else:
         job.next_due_at = job.next_retry_at = None

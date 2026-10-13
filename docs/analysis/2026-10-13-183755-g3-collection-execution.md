@@ -65,6 +65,14 @@ OpenRouter/Arena publication windows are acquired through shared database jobs a
 
 Evidence: eighteen history/acquisition/import tests passed, including eleven required PostgreSQL tests, none skipped. Native HF resume and GitHub pinned-tree call chains use mock transports. A real parquet range fixture traverses archive acquisition through numeric writing; zero persists, absent all-time remains absent under a reviewed v2 contract, and replay uses DB evidence without another request. Older required-field contracts remain unchanged. No real historical batch ran.
 
+## U6 — Shared Dispatch and Explicit Scheduling Handover
+
+Due dispatch uses UTC slots, attempt cooldowns and shared finite request/time/byte ceilings. Numeric work retains priority. Paused registration alone preserves legacy benchmark dispatch; explicit `take_metric_authority` records the job pointer in existing DataSource metadata. Afterwards the legacy entrypoint routes through that authority, including when paused, so it cannot silently fall back. External Render-cron X jobs never enter shared due dispatch. Content claims still require explicit caller authorization and do not depend on the unrelated metric-source enabled flag.
+
+The benchmark command's job-aware path fetches outside database transactions and writes numeric observations/values under the shared claim fence. Successful writing and job pointers finish atomically; existing unregistered writer behavior and metric hashes remain valid.
+
+Evidence: forty-six scheduler/budget/state/legacy-persistence/operations tests passed, forty-two required PostgreSQL cases executed, none skipped. They exercise the actual shared command-to-benchmark-command-to-source-to-writer chain, legacy scheduling handover, UTC daily slots, cooldowns, aggregate request exhaustion and external X driver exclusion. A subsequent stale-response test explicitly pauses a job inside the transport callback and verifies that no values survive the rejected fence.
+
 ## Remaining Implementation
 
-U6–U8 are pending implementation and their own verification. U9 runtime integration remains owned by the X/backfill session; its current staging JSON pilot proceeds independently. The whole nine-unit plan is incomplete.
+U7–U8 require final verification and documentation. U9 runtime integration remains owned by the X/backfill session; its current staging JSON pilot proceeds independently. The whole nine-unit plan is incomplete.
