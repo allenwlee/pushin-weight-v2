@@ -54,18 +54,18 @@ def test_live_legacy_benchmark_launcher_uses_shared_storage(settings, monkeypatc
     assert CollectionRun.objects.get(pk=run.pk).observations.count() == 1
 
 
-def test_existing_tables_are_consolidated_without_a_job_registry():
+def test_existing_tables_remain_consolidated_with_the_shared_job_registry():
     tables = set(connection.introspection.table_names())
     assert {
         "collection_runs",
         "collection_observations",
         "collection_scope_runs",
+        "collection_jobs",
     } <= tables
     assert (
         not {
             "hf_model_catalog_runs",
             "hf_model_catalog_observations",
-            "collection_jobs",
         }
         & tables
     )
