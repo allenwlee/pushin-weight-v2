@@ -94,6 +94,7 @@ def responses(repo, seen):
                         "commit": {
                             "author": {"date": "2026-09-02T00:00:00Z"},
                             "committer": {"date": "2026-09-03T00:00:00Z"},
+                            "tree": {"sha": "c" * 40},
                         },
                     }
                     for c in ("a", "b")
@@ -102,10 +103,13 @@ def responses(repo, seen):
         if path.endswith("/tags"):
             return httpx.Response(200, json=[])
         if "/git/trees/" in path:
+            assert path.endswith("c" * 40), (
+                "tree requests must use the recorded tree SHA"
+            )
             return httpx.Response(
                 200,
                 json={
-                    "sha": "a" * 40,
+                    "sha": "c" * 40,
                     "truncated": False,
                     "tree": [
                         {

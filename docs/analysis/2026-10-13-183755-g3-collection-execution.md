@@ -45,4 +45,6 @@ Evidence: metadata-client and catalog tests initially failed on absent modules. 
 
 ## Remaining Work
 
+Mid-implementation simplification ran the ce-simplify-code reuse, quality and efficiency rubrics sequentially inline, following project AGENTS.md; no independent reviewer was invoked. One quality improvement replaces the ownership helper's nested conditional expression with explicit branches; guards, errors and behavior are preserved. Two low-value reuse/query changes were skipped because they risk weakening trust-boundary checks or changing error behavior. No repository type-check command is configured; scoped Ruff checks pass. A separate strengthened command-chain test failed on a commit SHA being used as a tree SHA; the collector now requests the explicitly recorded native tree SHA, validates the tree response and continues to pin file reads to the commit. Eighteen identity/client/catalog tests then passed, including thirteen PostgreSQL cases. This is a correctness refinement under U3, not a behavior-preserving simplification claim.
+
 U4–U8 are pending implementation and their own verification. U9 runtime integration remains owned by the X/backfill session; its current staging JSON pilot proceeds independently. The whole nine-unit plan is incomplete.

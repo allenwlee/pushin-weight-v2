@@ -40,13 +40,12 @@ def qualified_ownership(account, subject):
         return CompanyAccount.objects.filter(
             account=account, company_id=subject.company_id, role_id="official"
         ).exists()
-    brand_id = (
-        subject.brand_id
-        if subject.subject_kind == "brand"
-        else subject.product.brand_id
-        if subject.subject_kind == "product"
-        else None
-    )
+    if subject.subject_kind == "brand":
+        brand_id = subject.brand_id
+    elif subject.subject_kind == "product":
+        brand_id = subject.product.brand_id
+    else:
+        brand_id = None
     if not brand_id:
         return False
     if BrandAccount.objects.filter(

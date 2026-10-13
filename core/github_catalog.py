@@ -400,11 +400,17 @@ def _pinned_metadata(claim, client, repository, commits):
     if head is None:
         return
     repo, revision = repository.listing, head.listing["sha"]
-    ownership = {"repository_id": repo["id"], "revision": revision}
+    tree_revision = head.listing.get("commit", {}).get("tree", {}).get("sha")
+    client.revision(tree_revision)
+    ownership = {
+        "repository_id": repo["id"],
+        "revision": revision,
+        "tree_revision": tree_revision,
+    }
     key = str(repo["id"]) + ":" + revision
     scoped = _scope(claim, "repository_tree", key)
     if scoped is None or not scoped.enumeration_complete:
-        result = client.tree(repo["full_name"], revision)
+        result = client.tree(repo["full_name"], tree_revision)
         _checked_response(
             claim,
             result,
@@ -415,6 +421,7 @@ def _pinned_metadata(claim, client, repository, commits):
         )
         require(
             isinstance(result.payload, dict)
+            and result.payload.get("sha") == tree_revision
             and isinstance(result.payload.get("tree"), list),
             "file tree required",
         )
