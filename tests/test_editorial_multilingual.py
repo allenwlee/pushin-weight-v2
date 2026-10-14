@@ -142,6 +142,14 @@ def test_worker_routes_native_models_and_serves_independent_saved_locales(
     assert set(writes) == set(EXPECTED_ROUTES)
     for locale, (model, effort) in EXPECTED_ROUTES.items():
         wire = writes[locale]
+        if locale == "en":
+            from monitor.editorial.writing import HEADLINE_ATTRIBUTION_RULE
+
+            assert cfg.voices["chatter:en"] == "chatter-en-v3"
+            assert HEADLINE_ATTRIBUTION_RULE in wire["body"]["messages"][0]["content"]
+            assert "Write a catchy, punny, tongue-in-cheek print headline and supporting byline." in wire["body"]["messages"][0]["content"]
+        else:
+            assert "Preserve whose claim it is in every language and the headline." in wire["body"]["messages"][0]["content"]
         assert wire["endpoint"] == "https://api.openai.com/v1/chat/completions"
         assert wire["body"]["model"] == model
         assert wire["body"]["reasoning_effort"] == effort

@@ -9,7 +9,7 @@ round: 2
 date: 2026-10-09
 ollija:
   change_id: feat-g2-round2-voices-2026-10-09-064803
-  branch: feat/g2-multilingual-writers
+  branch: test/g2-production-replay-review
   workflow: voice-experiment
   delivery_target: production
   delivery_selected_by_user: true
@@ -27,12 +27,12 @@ This block is generated guidance. Do not edit it directly. Correct durable facts
 - Authoritative host: `fuchitalee`
 - Authoritative repository: `/Users/fuchitalee/development/pushin-weight-v2`
 - Ollija release worktree area: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees`
-- Active worktree: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-multilingual-writers`
-- Plan: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-multilingual-writers/docs/plans/2026-10-09-064803-feat-g2-round2-voices-plan.md`
+- Active worktree: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/test/g2-production-replay-review`
+- Plan: `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/test/g2-production-replay-review/docs/plans/2026-10-09-064803-feat-g2-round2-voices-plan.md`
 - Change: `feat-g2-round2-voices-2026-10-09-064803`
-- Branch: `feat/g2-multilingual-writers`
-- Staging branch and blueprint: `staging`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-multilingual-writers/render-staging.yaml`
-- Production branch and blueprint: `main`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-multilingual-writers/render.yaml`
+- Branch: `test/g2-production-replay-review`
+- Staging branch and blueprint: `staging`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/test/g2-production-replay-review/render-staging.yaml`
+- Production branch and blueprint: `main`, `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/test/g2-production-replay-review/render.yaml`
 - Staging URL: `https://pushinweight-staging-web.onrender.com`
 - Production URL: `https://pushinweight-web.onrender.com`
 
@@ -59,8 +59,8 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
 10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
 11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
-    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-multilingual-writers` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
-    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-multilingual-writers` without `--force`.
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/test/g2-production-replay-review` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/test/g2-production-replay-review` without `--force`.
     - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
@@ -1236,3 +1236,369 @@ Normal staged delivery remains selected, with no verification waiver. Stage
 web/worker auto-deploy is off: deploy the exact candidate explicitly without
 changing unrelated service triggers or pausing harvest. Scoped temporary
 staging editorial controls are recorded and restored after proof.
+
+
+## Production-faithful writer replay — October13 owner continuation
+
+### Plain-English Summary
+
+The owner identifies that earlier headline trials changed the production
+conditions. All future production-writer comparisons must retain the complete
+request and original context packet, including historical context actually
+supplied. The short prompt alone is not an adequate production proxy.
+
+Build a reusable test entry point in this retained G2 tree. Execute it on the
+deployed worker so it imports the actual production request builder, provider
+transport, configuration, source normalizer and copy validator. Reconstruct the
+Mistral English edition's immutable source snapshot, verify the entire request
+against its producing call, then make one first English replay. Save a test
+result without calling publication or changing the current edition. No new
+context collection, prompt alteration, model choice, UI or deployment is selected.
+
+### Frozen acceptance and spend
+
+- Existing edition:65a88027-6bb0-429f-85f6-6af8bad5d732; producing call12536.
+- Exact source/evidence, included history, images, full system/user messages,
+  message roles, JSON schema, API endpoint, model, reasoning, tier, token cap,
+  socket timeout and effective configuration must match the producing request.
+- Use production writer_request and request_payload; reject changed input
+  before sending. Preserve the recorded JSON text serialization only after
+  checking the rebuilt payload has identical meaning. Require the original
+  complete wire hash, not just the locked opening.
+- Use ordinary json_call/call_once, global in-flight/cost/call guards,
+  normalize_reply and validate_copy. Preserve normal credential resolution;
+  never export/print keys or fall back.
+- One fresh GPT6.0 Sol/medium call, zero automatic or quality retries;
+  conservative per-request reservation at mostUSD0.25 and existing standing
+  caps unchanged. A hold or incomplete request is retained, not silently retried.
+- No publish_edition call or public/hero/OriginalContentText changes.
+  Only isolated test assessment/provider/budget bookkeeping and local evidence.
+- Before sending, prove full comparison rejects changed instructions, message
+  roles, evidence and completion limits even when the locked opening matches.
+- Assess source faithfulness, headline/support quality and ordinary validation
+  once. A repeated model answer can differ; one replay does not establish
+  instruction length, API/CLI transport or any other factor as the cause.
+
+### Implementation and proof
+
+Owned entry point:tests/editorial_replay/production_replay.py.
+Evidence:.local/g2-production-parity-20261013/.
+Current unit:exact-request preflight and one bounded English replay. Existing
+production deployment is complete; this continuation grants no new release.
+Preserve other owners' files, source histories, old trials and published copies.
+
+
+### Production-faithful replay result — 2026-10-13T16:24:34+09:00
+
+Complete:read-only preflight rebuilt the full request at deployeddb5510cc and
+matched original producingcall12536/wirehashf6e159434251987385322edf8ff248822a6976b814263936d7e14bcc59fe8094. Exactly one
+6.0medium call returned HTTP200/stop and normal validators passed: "REPORT: MISTRAL’S ‘LE CHONK’ ENTERS THE CHAT".
+Provider assessment553/canonicalcall12567; zero retries, USD0.113545 conservative
+reservation, USD0.020645 ledger cost after usage. Zero test editions/texts; original
+English edition preserved. Four changed-instruction/role/context/cap negatives,
+actual fixture check, syntax and focusedRuff pass. Exact source/context omissions
+remain in the frozen packet; fresh retrieval/ranking/publication are outside this
+writer-stage replay. First report and executed source preserved; read-only record
+lookup correction uses exact bridge identity, zero additional provider sends.
+[Outcome report](../analysis/2026-10-13-162434-g2-production-faithful-writer-replay.md); [reusable entry point](../../tests/editorial_replay/production_replay.py).
+No quality/cause claim, model/prompt/collector/runtime/UI/Git/release change.
+Release bounded claim; retain old G2 worktree, artifacts and other owners.
+
+
+## Current commit/push and local-browser continuation — 2026-10-13T16:38:22+09:00
+
+### Plain-English Summary
+
+The owner asks to commit/push the new reusable production replay test and open a
+fresh HTML review because this workflow will be used repeatedly. Publish only
+the test, its renderer/template, focused outcome report and this same plan on
+`test/g2-production-replay-review`. Preserve all older G2 trials and other owners.
+Build a standalone local Chatter review from recorded replies without new model
+calls. Provide selectable original/replay copy, baseline comparison, readable
+source packet, exact system/user request and verified conditions. Open a fresh
+Chrome window on allenwlee; retain source/evidence/preview on fuchitalee.
+
+### Verification and endpoint
+
+Use recorded expectations, real browser desktop/mobile interactions, request
+inspection and source links. Confirm original/replay strings, complete articles,
+selection persistence and portable HTML. Run syntax/affected-file lint and the
+existing full-request positive/four negative checks. Commit named owned files,
+push the dedicated branch and verify remote SHA. Local browser URL/window must
+be observed. No application runtime change, main push or deployment is selected.
+
+### Delivery Exceptions for this continuation
+
+This is a user-selected commit-and-push plus local-browser endpoint. The earlier
+G2 production release completed atdb5510cc; its saved production guide and
+unchecked historical delivery text describe that prior candidate, not new
+staging/deployment tasks. Current managed metadata is on-request; no additional
+application delivery is selected. Keep the registered canonical test checkout and
+original dirty G2 tree for repeated tests; no production-cleanup instruction applies.
+
+
+### Review verification — 2026-10-13T17:31:11+09:00
+
+Local review implemented and verified:7pure renderer checks/zero skips/errors;
+16desktop/mobile original/replay/tab states plus source/keyboard/clipboard/JSON
+and portableHTML interactions/zero pageerrors. Expected strings come from saved
+responses.1440px/390px screenshots inspected. New preflight captures original
+copy and preserves exactwirehash; generatedHTML bytes unchanged, priorbrowser
+evidence reused. FocusedRuff/syntax pass. AutomaticDjango bootstrap initially
+failed on missingPillow in sharedrootenvironment; isolated puretests run without
+Django as documented, not a claimed application suite pass. Runtime source and
+API request unchanged; zero new paid calls. Commit named test/review/report/plan
+files only, push test/g2-production-replay-review, verify remoteSHA, then observe
+new ownerChrome window atstable58713reviewURL. Retain the canonical test checkout,
+originalG2/private evidence and owned preview for repeated tests.
+
+
+The native-created test checkout was relocated with `git worktree move` into
+the project canonical path `.worktrees/test/g2-production-replay-review` before
+Git publication. Same branch, files and plan identity; original trial tree and
+preview/evidence paths unchanged. Retain this Git-only test tree for repeat use.
+
+## Prodsimtest database scenarios — 2026-10-13T18:22:00+09:00
+
+### Plain-English Summary
+
+The owner requests the earlier Wang wardrobe story and first official Mistral
+announcement using actual database packets. Read today's stored source rows at
+the first eligible quarter-hour after collection: Wang September24 14:45UTC;
+Mistral October6 13:30UTC. Both authored and fetched timestamps must precede
+the cutoff. This reconstructs production writer inputs; it cannot recover old
+profile/classification revisions or replay the former CLI instruction layer.
+
+Use deployed build_packet, post_evidence and story_packet without altering their
+history, relevance, image or query limits. Owner nomination selects each original
+post; record whether it was in the ordinary dispatch sample. No editor ranking
+claim. Freeze packets and complete requests before executing one English
+GPT6.0 Sol/medium call per case, using the existing shared writer send, accounting,
+normalizer and validator. Historical evidence cutoff is distinct from today's
+test accounting timestamp. Preserve query timeouts and omitted context visibly.
+
+### Frozen acceptance, spend and delivery
+
+- Two original database anchors:2103127068318089313 and2107457414387622310.
+- Exactly one call per case, zero quality/automatic retries; at mostUSD0.25
+  conservative reservation each/USD0.50 total. Standing production caps stay
+  unchanged. No paid X collection, editor call or publication.
+- Verify historical source created/fetched cutoffs, full request hash, current
+  deployed code/config/voice hashes, source/image inputs and unchanged original
+  editions. Keep database reconstruction distinct from exact saved-request replay.
+- Retain existing review cohort and earlier CLI examples unchanged. Add the two
+  new cases to the same portable local review with their own packet/request.
+  Test case switching, exact copy/input strings, reload/portable selection and
+  desktop/mobile layout. Inspect screenshots and observe the existing owned
+  Chrome review window. Preserve other owners and stable preview58713.
+- Reuse this same plan and canonical test tree. Application/main/staging delivery
+  is not selected. Current endpoint is bounded tests plus local browser review.
+
+Owned files:tests/editorial_replay/database_scenario.py, run_database_scenario.py,
+shared production_replay.py execution helper and review renderer/template/checks.
+Private frozen inputs/first replies live beside the retained October13 replay
+evidence under database-scenarios/. No raw database/provider bodies in public docs.
+
+### Owner adds one style sentence — 2026-10-13T18:38:30+09:00
+
+Owner asks to add the earlier test sentence and rerun both cases. Exact sentence
+from deployed config/editorial_voices/chatter-en-v1.json and original Mistral CLI:
+“Write a catchy, punny, tongue-in-cheek print headline and supporting byline.”
+Append only this sentence after the current resolved voice opening, before the
+production writer wrapper. Keep the already frozen database packet, full user
+message/schema/images, route/model/effort/tier/output/timeout and guards fixed.
+Verify the baseline full-wire hash before applying the one-line delta, then freeze
+and match the variant request. This is a labelled test prompt variant; live voice
+configuration remains unchanged. Two additional first calls/zero retries, at most
+USD0.25 each/USD0.50 additional reservation. Retain both baseline runs and append
+variants with same-packet comparisons in the same review. Unique per-case/variant
+test assessment scopes preserve normal global accounting and in-flight guards.
+No fresh history query, X provider, editor call, publication or deployment.
+
+### Owner selects GPT6.1 Sol/high — 2026-10-13T18:48:27+09:00
+
+Owner rejects6.0 results and requests6.1 Sol/high. Two additional English first
+calls, zero retries, at mostUSD0.25 each/USD0.50 additional reservation. Reuse
+the same frozen database packets and exact catchy/punny prompt. Change only
+wire model and reasoning; use current deployed6.1 model prices from the Japanese
+route, while preserving English voice/locale, endpoint, credential, output and
+timeout settings. Verify the prior6.0 full request by restoring those two fields.
+Keep model variants labelled beside6.0 results in the same page. Standing guards
+and production English6.0 selection stay unchanged. No new context query,
+publication, application-file or deployment change. Current endpoint remains
+bounded simulations plus the local browser review.
+
+### Database/model continuation complete — 2026-10-13T18:54:45+09:00
+
+Six first English calls across locked6.0, one-line-style6.0 and same-prompt6.1
+high pairs; zero retries/publications, USD0.136673 recorded ledger cost.
+Normal validators and complete saved-request postchecks pass; original edition
+and live English model/prompt preserved. Source query/identity/image omissions
+remain visible, with no repaired input or new favorite selected.15pure tests,
+64real browser states plus6interactions and inspected desktop/mobile screenshots
+pass. Existing ownerChrome919892289 observed at6.1 Wang URL on stable58713.
+[Outcome](../analysis/2026-10-13-185445-g2-prodsimtest-database-cases.md).
+Release bounded claim; retain canonical test checkout, private first artifacts,
+owned preview and other owners. Local test changes are not committed/pushed or
+application-deployed in this continuation; priorcc75c569 publication is preserved.
+
+## Wang evidence repair and headline attribution — 2026-10-13T19:39:44+09:00
+
+### Plain-English Summary
+
+Owner approves the next recommended test: add verified source-image text and
+sourced historical identity context to Wang’s packet, then relax mandatory
+attribution in the headline for both stories on6.1/high. Retain the existing
+catchy/punny sentence and all earlier first replies. Supplemental evidence is
+explicitly labelled as reviewed image/official background; it is not a new X
+post or a historical database snapshot. Use existing generic source projection,
+span binding and copy validation. Keep the original photo and database text
+unchanged and identify every added source/observation date.
+
+### Frozen acceptance and endpoint
+
+Two first English calls/zero retries, USD0.25 maximum reservation each, existing
+production daily/call/in-flight guards. Wang labels must match the archived source
+image/hash, with agent-reviewed corrections after deterministic OCR. Identity
+background must come from a dated official source preceding the story. Prove
+Mistral packet is unchanged and only the headline-attribution sentence differs;
+Wang has the same sentence delta plus the two declared evidence additions.
+Headline attribution remains required where omission would mislead; supporting
+line/article retain faithful attribution. Keep schema, all other instructions,
+model/effort/route/tier/output/timeout and actual provider path fixed. Inspect
+source fidelity and style once without rewriting. Normal saved-request and
+no-publication postchecks, focused regressions, real desktop/mobile review and
+owner-browser verification close the task. Retain canonical tree/preview.
+No new Git endpoint, production configuration, DB source write, deployment,
+headline-only pass, multi-candidate generation or examples are selected.
+
+### Evidence/attribution round complete — 2026-10-13T19:57:47+09:00
+
+Two6.1high first calls returned THRIFT HAPPENS! and CHONK AND AWE; normal
+validators pass, zero retries/publications, USD0.059423 recorded ledger cost.
+Wang now cites reviewed price labels and Scale identity; Mistral packet remains
+unchanged. Literal prompt/data/settings delta and complete saved-request/copy
+postchecks pass.17pure tests and80browser states plus6interactions pass; the
+initial offscreen-driver click failure is retained, and wrapper visibility
+setup repaired before the complete repeat. Screenshots inspected and existing
+ownerChrome919892289 observed atdb-wang-574 onstable58713.
+[Outcome](../analysis/2026-10-13-195747-g2-prodsimtest-evidence-attribution.md).
+Local test edits retained; no new commit/push, production choice or application
+deployment selected. Release bounded claim, preserve all prior runs/resources.
+
+## Exact repaired-prompt6.0medium replay — 2026-10-13T22:34:34+09:00
+
+### Plain-English Summary
+
+Owner asks to run the improved Wang/Mistral experiment exactly on6.0 Sol/medium.
+Reuse the successful6.1/high repair preflights, including all evidence, the image,
+identity background, catchy/punny sentence and relaxed headline-attribution rule.
+Change only wire model and reasoning; use current6.0 configured rates. Two first
+English calls/zero retries, USD0.25 maximum reservation each/USD0.50 total, normal
+production guards. No new source collection/OCR, prompt edit or production choice.
+
+### Acceptance and endpoint
+
+Prove full request equality after restoring only model=gpt-6.1-sol and effort=high;
+reject any other changed instruction/source/image/schema/parameter. Run actual
+production provider/normalizer/validator and save first replies without rewriting
+or publication. Keep6.1 results as comparisons in same local review; remove
+hard-coded6.1 labels so selected model/effort displays correctly. Focused delta
+regressions, desktop/mobile copy/request/packet/condition checks, saved-request
+postchecks and observed owner browser close the task. Preserve all older runs,
+canonical test tree/preview and other owners. No new Git/application delivery.
+
+### Exact repaired6.0 replay complete — 2026-10-13T22:43:24+09:00
+
+Two first calls/zero retries/publications return THE PRICE IS WANG and
+CHONK NOW, WEIGHTS LATER. Complete requests differ from the successful6.1 pair
+only by model/effort; saved canonical requests/copy match, normal validators pass,
+USD0.046823 recorded ledger cost.18pure regressions/96desktop-mobile states plus
+6interactions and inspected screenshots pass. OwnerChrome919892289 observed at
+db-wang-587 onstable58713. [Outcome](../analysis/2026-10-13-224324-g2-prodsimtest-repaired-gpt60-medium.md).
+Retain both6.1 comparisons, all12saved results/11cases, frozen private evidence,
+canonical tree/preview and local test edits. Production voice/source tables
+preserved; no new favorite, commit/push or application delivery selected.
+Release bounded g2-repaired-gpt60-medium-20261013 claim; other owners preserved.
+
+## Accepted English prompt production lock — October 14
+
+### Plain-English Summary
+
+Owner accepts the repaired-packet6.0medium results and explicitly authorizes
+commit/push to main and deployment. Promote the exact successful English prompt:
+the catchy/punny sentence and scoped headline attribution. English uses
+GPT6.0 Sol/medium. Japanese/Chinese routes and literal prompts stay unchanged.
+Preserve the existing successful evidence packets and every earlier reply in
+prodsimtest. The reviewed Wang supplements remain test evidence: production's
+canonical citations require real Post rows, so this delivery does not fabricate
+posts or add a new automated image/identity collector or citation schema.
+
+### Requirements and bounded work
+
+- P1: Add immutable shared prompt v2 and English voice v3, preserving older
+  contracts/digests. The English task gains exactly “Write a catchy, punny,
+  tongue-in-cheek print headline and supporting byline.” after the original task.
+- P2: English v3 opts into the exact tested attribution sentence. Supporting
+  line/article stay attributed; headline keeps attribution or uncertainty when
+  omission misleads. Preserve editor/Pulse/native/historical prompt behavior.
+- P3: Bind production EN to v3; preserve6.0medium route, native6.1high,
+  transport/tier/limits, current daily/assessment/call and single-flight guards.
+- P4: Save replay harness/renderer and focused outcome records from this session.
+  Raw requests/replies/private evidence and generated previews stay ignored.
+- P5: Regression net pins the production writer/provider request to both accepted
+  full-wire hashes using frozen source packets, without few-shot headlines.
+  Actual worker orchestration/provider/validation/persistence/reader tests must
+  verify v3 while keeping native instructions and old voice digests unchanged.
+- P6: Local focused tests/lint/system/migration checks, code review, hosted
+  PostgreSQL editorial checks, staged candidate and same-SHA main/deployed
+  production verification. Production read-only construction must reproduce
+  both accepted complete requests; no extra provider call is necessary to
+  prove an unchanged request already tested successfully. No regeneration of
+  old editions or harvest/schema/scheduler/UI change.
+
+### Implementation and delivery
+
+Reuse the existing canonical test tree and same plan. Owned runtime files:
+config/editorial_prompts/editorial-judgment-headline-v2.json,
+config/editorial_voices/chatter-en-v3.json, config/editorial-english-launch.yaml,
+monitor/editorial/voices.py and writing.py. Add focused frozen-input regressions,
+update active-config/actual multilingual call-chain pins and preserve all local
+prodsimtest files/three outcome records. Evidence supplements are maintained
+explicitly in the replay fixture, not imported into production source tables.
+
+Delivery target is production, selected by the current owner. Default staged
+route applies. G5 owns a concurrent homepage-only direct release; preserve its
+work and fetch/merge latest main before staging/promotion. No force push, reset,
+staging environment/budget change, new provider batch or other session edit.
+Acceptance is exact remote/deployed candidate identity, active EN v3/model/effort,
+both accepted production-built full requests and preserved native/old editions.
+Keep private receipts on fuchitalee and the existing preview in the original G2
+tree. After success apply the repository's guarded canonical worktree cleanup.
+
+### Production-lock local verification — 2026-10-14T06:58:49+09:00
+
+EN v3/immutable shared v2 is implemented; both accepted complete wire hashes
+match. Optional attribution policy preserves all old digests and native rules;
+closed invalid-policy guard and actual multilingual provider/validator/persistence/
+reader/browser tests pass.92distinct focused tests pass across initial/targeted
+runs, zero required skips; the initial13tmp_path setup errors were a missing
+task-owned basetemp parent, repaired without source changes, then all affected
+checks passed. Shared G5 virtualenv used read-only; own disposable PostgreSQL17
+DB. Ruff, Django checks, migration-drift and whitespace checks pass. Sequential
+code review has no findings; reviewed supplemental evidence remains explicit
+test-only because canonical citations require real Post rows. Private code-review
+and environment-failure receipts:.local/g2-repaired-production-20261014/.
+No additional provider calls; staging/CI/main/deployment remain next.
+
+### Hosted caller-pin correction — 2026-10-14T07:09:51+09:00
+
+Staged8d8d29e8 web/worker reproduced both accepted full requests without provider
+calls; existing staging generation/public controls remained false. Hosted CI
+38474815356 passed557checks and found one stale broad caller assertion requiring
+the old headline-attribution sentence in English. Correct only that expectation:
+the complete accepted source rules apply at the independently pinned English
+request position; editor, Pulse and both native requests retain full old rules.
+No runtime/prompt/fixture/guard change. Corrected caller and full-wire regression
+checks must pass before a new candidate/CI/stage. Initial failure/diagnosis stays
+in private receipts; production promotion has not happened.
