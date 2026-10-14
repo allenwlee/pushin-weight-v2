@@ -83,7 +83,7 @@ relations:
     - events
     - geopolitical_mode_keys
     - geopolitical_mode_labels
-    - hf_orgs
+    - x_account_details
     - job_discovery_runs
     - job_listing_evidence
     - job_listings

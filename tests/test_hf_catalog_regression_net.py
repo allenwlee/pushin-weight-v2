@@ -1,3 +1,5 @@
+from core.publisher_accounts import publisher_links
+
 """Main-based caller chains: onboarding, classifier catalog, and headline subjects."""
 
 import threading
@@ -8,7 +10,7 @@ from django.db import close_old_connections, transaction
 from django.utils import timezone
 
 from core.hf_catalog import execute_catalog, resolve_scope
-from core.models import HFOrg, Product, TrendNarrative
+from core.models import Product, TrendNarrative
 from core.product_metadata import apply_metadata
 from monitor.cycle import _classification_tracked_brand_catalog
 from monitor.trend_narrative_lifecycle import _write_subjects
@@ -39,14 +41,14 @@ def test_onboarding_catalog_and_onboarding_rerun_preserve_identity_and_metadata(
     original.display_name = "Curated model"
     original.save(update_fields=["display_name"])
     # The fixture operator has verified this publisher; no live ownership claim.
-    HFOrg.objects.filter(pk="lab").update(confirmed=True)
+    publisher_links(source="hf", identifier="lab").update(ownership_confirmed=True)
     manifest = resolve_scope(brands=["lab"], companies=[], rules=[])
     assert execute_catalog(scope=manifest, hf=api())["complete"]
     _run(csv_path, config, policy)
     original.refresh_from_db()
     assert original.pk == Product.objects.get(repo_id="lab/model").pk
     assert original.display_name == "Curated model"
-    assert original.brand_id == original.hf_org_id == "lab"
+    assert original.brand_id == original.hf_namespace == "lab"
     assert original.siblings == [{"rfilename": "w", "size": 32}]
     assert original.downloads_all_time == 4_000_000_000
 

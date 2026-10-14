@@ -4,7 +4,9 @@ from django.db import connection
 
 from core.hf_catalog import execute_catalog, resolve_scope
 from core.hf_metadata_client import HFMetadataClient
-from core.models import Brand, BrandCompany, CollectionRun, Company, HFOrg, Product
+from core.models import Brand, BrandCompany, CollectionRun, Company, Product
+from core.publisher_accounts import publisher_links
+from tests.publisher_fixtures import hf_publisher
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
@@ -14,7 +16,7 @@ def scope(brands=("lab",)):
     for name in brands:
         brand = Brand.objects.create(nickname=name)
         BrandCompany.objects.create(brand=brand, company=company)
-    HFOrg.objects.create(namespace="lab", company=company, confirmed=True)
+    hf_publisher(namespace="lab", company=company, confirmed=True)
     return resolve_scope(brands=list(brands), companies=[], rules=[])
 
 
@@ -116,7 +118,7 @@ def test_namespace_404_does_not_become_empty_success():
 
 def test_changed_ownership_blocks_resume_before_network():
     result = execute_catalog(scope=scope(), hf=api(budget=1))
-    HFOrg.objects.update(confirmed=False)
+    publisher_links(source="hf").update(ownership_confirmed=False)
     with pytest.raises(ValueError, match="scope changed"):
         execute_catalog(
             run_id=result["run_id"], hf=api(lambda r: pytest.fail("network"))
@@ -242,7 +244,7 @@ def test_invalid_typed_field_is_recorded_and_does_not_abort_other_models():
 
 def test_one_inaccessible_namespace_does_not_suppress_another():
     scope()
-    HFOrg.objects.create(namespace="blocked", company_id="lab", confirmed=True)
+    hf_publisher(namespace="blocked", company_id="lab", confirmed=True)
     manifest = resolve_scope(brands=["lab"], companies=[], rules=[])
     result = execute_catalog(
         scope=manifest,

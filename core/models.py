@@ -29,14 +29,13 @@ Conventions:
 from __future__ import annotations
 
 import uuid
-
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, ClassVar, Literal
 from urllib.parse import urlparse
 
 from django.contrib.postgres.indexes import GinIndex, OpClass
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, models, router, transaction
 from django.db.models.functions import Upper
 from django.utils import timezone
 
@@ -475,35 +474,6 @@ class Company(models.Model):
 # ============================================================================
 # HF orgs
 # ============================================================================
-
-
-class HFOrg(models.Model):
-    account = models.OneToOneField("Account", to_field="account_key", db_column="account_key", null=True, on_delete=models.PROTECT, related_name="legacy_hf_org")
-    namespace = models.CharField(
-        max_length=64,
-        primary_key=True,
-        db_collation="case_insensitive",
-    )
-    company = models.ForeignKey(
-        Company,
-        on_delete=models.CASCADE,
-        related_name="hf_orgs",
-        db_column="company_id",
-        to_field="nickname",
-    )
-    confirmed = models.BooleanField(default=False)
-    discovered_via = models.TextField(default="curated")
-    added_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "hf_orgs"
-        ordering = ["namespace"]
-        indexes = [
-            models.Index(fields=["company"], name="idx_hf_orgs_company"),
-        ]
-
-    def __str__(self) -> str:
-        return self.namespace
 
 
 # ============================================================================
@@ -955,57 +925,19 @@ class XAccountManager(models.Manager):
         return super().create(**kwargs)
 
 
-class Account(models.Model):
-    account_key = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    data_source = models.ForeignKey("DataSource", on_delete=models.PROTECT)
-    external_identifier = models.TextField(default="")
-    normalized_identifier = models.TextField(default="", db_collation="C")
-    identifier_kind = models.CharField(max_length=32, default="provider_id")
-    normalized_handle = models.TextField(null=True, db_collation="C")
-    account_kind = models.CharField(max_length=24, default="unknown")
-    provider_metadata = models.JSONField(default=dict)
-    objects = models.Manager()
-    x = XAccountManager()
-    author_id = models.TextField(unique=True, null=True)
+class XAccountDetail(models.Model):
+    """Optional current X profile fields; historical profiles stay in snapshots."""
 
-    def save(self, *args, **kwargs):
-        from core.account_identity import normalize_account
-        normalize_account(self)
-        if kwargs.get("update_fields") is not None:
-            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"data_source", "external_identifier", "normalized_identifier", "identifier_kind", "normalized_handle", "account_kind", "author_id"}
-        return super().save(*args, **kwargs)
-
-    handle = models.TextField(
-        db_collation="C",
-        blank=True,
-        null=True,
+    account = models.OneToOneField(
+        "Account", primary_key=True, db_column="account_key",
+        on_delete=models.CASCADE, related_name="x_details",
     )
-    display_name = models.TextField(blank=True, null=True)
-    bio = models.TextField(blank=True, null=True)
-    bio_fetched_at = models.DateTimeField(blank=True, null=True)
-    verified = models.BooleanField(default=False)
-    bio_contains_brand = models.BooleanField(blank=True, null=True)
-    first_seen_at = models.DateTimeField(auto_now_add=True)
-    last_seen_at = models.DateTimeField(auto_now=True)
-    source_query_ids = models.TextField(blank=True, null=True)
-    notes = models.TextField(blank=True, null=True)
-    bio_en = models.TextField(blank=True, null=True)
-    bio_zh_cn = models.TextField(blank=True, null=True)
-    # Migration 039 — inline author metadata from tweet payloads
-    followers_count = models.IntegerField(blank=True, null=True)
-    following_count = models.IntegerField(blank=True, null=True)
     favourites_count = models.IntegerField(blank=True, null=True)
     statuses_count = models.IntegerField(blank=True, null=True)
     media_count = models.IntegerField(blank=True, null=True)
     fast_followers_count = models.IntegerField(blank=True, null=True)
     is_blue_verified = models.BooleanField(blank=True, null=True)
     verified_type = models.TextField(blank=True, null=True)
-    profile_picture = models.TextField(blank=True, null=True)
-    location = models.TextField(blank=True, null=True)
-    description = models.TextField(blank=True, null=True)
-    profile_bio_text = models.TextField(blank=True, null=True)
-    followers_fetched_at = models.DateTimeField(blank=True, null=True)
-    created_at = models.DateTimeField(blank=True, null=True)
     protected = models.BooleanField(blank=True, null=True)
     affiliate_label_badge_url = models.URLField(max_length=2048, blank=True, null=True)
     affiliate_label_description = models.TextField(blank=True, null=True)
@@ -1039,8 +971,6 @@ class Account(models.Model):
     verification_info_reason_override_verified_year = models.PositiveSmallIntegerField(
         blank=True, null=True
     )
-    unavailable = models.BooleanField(blank=True, null=True)
-    unavailable_reason = models.TextField(blank=True, null=True)
     identity_profile_label_badge_url = models.URLField(
         max_length=2048, blank=True, null=True
     )
@@ -1058,6 +988,111 @@ class Account(models.Model):
     identity_profile_label_user_label_type = models.CharField(
         max_length=128, blank=True, null=True
     )
+    account_based_in_fetched_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = "x_account_details"
+
+
+X_DETAIL_FIELDS = frozenset(
+    field.name for field in XAccountDetail._meta.concrete_fields
+    if field.name != "account"
+)
+
+
+def _x_detail_property(name):
+    def read(account):
+        pending = account.__dict__.get("_x_detail_values", {})
+        if name in pending:
+            return pending[name]
+        if account._state.adding:
+            return None
+        try:
+            return getattr(account.x_details, name)
+        except XAccountDetail.DoesNotExist:
+            return None
+
+    def write(account, value):
+        account.__dict__.setdefault("_x_detail_values", {})[name] = value
+
+    return property(read, write)
+
+
+class Account(models.Model):
+    account_key = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    data_source = models.ForeignKey("DataSource", on_delete=models.PROTECT)
+    external_identifier = models.TextField(default="")
+    normalized_identifier = models.TextField(default="", db_collation="C")
+    identifier_kind = models.CharField(max_length=32, default="provider_id")
+    normalized_handle = models.TextField(null=True, db_collation="C")
+    account_kind = models.CharField(max_length=24, default="unknown")
+    provider_metadata = models.JSONField(default=dict)
+    objects = models.Manager()
+    x = XAccountManager()
+    author_id = models.TextField(unique=True, null=True)
+
+    def save(self, *args, **kwargs):
+        alias = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        kwargs["using"] = alias
+        with transaction.atomic(using=alias):
+            from core.account_identity import normalize_account
+            normalize_account(self)
+            pending = self.__dict__.get("_x_detail_values", {})
+            requested = kwargs.get("update_fields")
+            detail_fields = set(pending) if requested is None else set(pending) & set(requested)
+            if detail_fields and self.data_source_id != "x":
+                raise ValueError("X details belong only to X accounts")
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = (set(kwargs["update_fields"]) - X_DETAIL_FIELDS) | {"data_source", "external_identifier", "normalized_identifier", "identifier_kind", "normalized_handle", "account_kind", "author_id"}
+            result = super().save(*args, **kwargs)
+            if detail_fields:
+                detail, created = XAccountDetail.objects.using(self._state.db).get_or_create(
+                    account=self, defaults={name: pending[name] for name in detail_fields}
+                )
+                if not created:
+                    for name in detail_fields:
+                        setattr(detail, name, pending[name])
+                    detail.save(using=self._state.db, update_fields=detail_fields)
+                for name in detail_fields:
+                    pending.pop(name)
+                self._state.fields_cache.pop("x_details", None)
+            return result
+
+    def refresh_from_db(self, *args, **kwargs):
+        result = super().refresh_from_db(*args, **kwargs)
+        # Loading a deferred shared field must not discard pending X evidence.
+        if kwargs.get("fields") is None:
+            self.__dict__.pop("_x_detail_values", None)
+        self._state.fields_cache.pop("x_details", None)
+        return result
+
+    handle = models.TextField(
+        db_collation="C",
+        blank=True,
+        null=True,
+    )
+    display_name = models.TextField(blank=True, null=True)
+    bio = models.TextField(blank=True, null=True)
+    bio_fetched_at = models.DateTimeField(blank=True, null=True)
+    verified = models.BooleanField(default=False)
+    bio_contains_brand = models.BooleanField(blank=True, null=True)
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    source_query_ids = models.TextField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    bio_en = models.TextField(blank=True, null=True)
+    bio_zh_cn = models.TextField(blank=True, null=True)
+    # Migration 039 — inline author metadata from tweet payloads
+    followers_count = models.IntegerField(blank=True, null=True)
+    following_count = models.IntegerField(blank=True, null=True)
+    profile_picture = models.TextField(blank=True, null=True)
+    location = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    profile_bio_text = models.TextField(blank=True, null=True)
+    followers_fetched_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    unavailable = models.BooleanField(blank=True, null=True)
+    unavailable_reason = models.TextField(blank=True, null=True)
     country = models.ForeignKey(
         Country,
         on_delete=models.PROTECT,
@@ -1076,7 +1111,6 @@ class Account(models.Model):
         blank=True,
         null=True,
     )
-    account_based_in_fetched_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = "accounts"
@@ -1363,6 +1397,12 @@ class Account(models.Model):
             unchanged_fields=tuple(sorted(set(unchanged))),
             rejected_fields=rejected,
         )
+
+
+# Payload/profile callers retain their established field names; ORM queries use
+# x_details explicitly. These properties create no columns or history records.
+for _detail_name in X_DETAIL_FIELDS:
+    setattr(Account, _detail_name, _x_detail_property(_detail_name))
 
 
 class TwitterListMembership(models.Model):
@@ -2130,6 +2170,7 @@ class CompanyAccount(models.Model):
         db_column="role_id",
         to_field="key",
     )
+    ownership_confirmed = models.BooleanField(null=True, default=None)
     added_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -2842,14 +2883,14 @@ class Product(models.Model):
         db_column="brand_id",
         to_field="nickname",
     )
-    hf_org = models.ForeignKey(
-        HFOrg,
-        on_delete=models.SET_NULL,
+    publisher_account = models.ForeignKey(
+        Account,
+        on_delete=models.PROTECT,
         blank=True,
         null=True,
         related_name="products",
-        db_column="hf_org_id",
-        to_field="namespace",
+        db_column="publisher_account_key",
+        to_field="account_key",
     )
     hf_type = models.TextField(default="model")
     display_name = models.TextField(blank=True, null=True)
@@ -2878,11 +2919,25 @@ class Product(models.Model):
     collected_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    @property
+    def hf_namespace(self):
+        publisher = self.publisher_account if self.publisher_account_id else None
+        return publisher.external_identifier if publisher and publisher.data_source_id == "hf" else None
+
+    @property
+    def publisher_ownership(self):
+        if not self.publisher_account_id:
+            return None
+        links = list(self.publisher_account.companies.all())
+        if len(links) > 1:
+            raise ValueError("conflicting publisher company ownership")
+        return links[0] if links else None
+
     class Meta:
         db_table = "products"
         indexes = [
             models.Index(fields=["brand"], name="idx_products_brand"),
-            models.Index(fields=["hf_org"], name="idx_products_hf_org_id"),
+            models.Index(fields=["publisher_account"], name="idx_products_publisher_account"),
             models.Index(
                 fields=["collected_at"], name="idx_products_collected_at"
             ),

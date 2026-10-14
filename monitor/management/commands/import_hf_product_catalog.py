@@ -16,7 +16,8 @@ from core.hf_catalog import (
     resolve_scope,
 )
 from core.hf_metadata_client import HFMetadataClient
-from core.models import Brand, BrandCompany, CollectionRun, HFOrg
+from core.models import Brand, BrandCompany, CollectionRun, CompanyAccount
+from core.publisher_accounts import get_publisher
 
 
 class Command(BaseCommand):
@@ -83,9 +84,7 @@ class Command(BaseCommand):
                         "both --brand and --confirmed-namespace are required"
                     )
                 brand = Brand.objects.get(pk=options["brand"], is_sentinel=False)
-                org = HFOrg.objects.get(
-                    pk=options["confirmed_namespace"], confirmed=True
-                )
+                org = get_publisher(source="hf", identifier=options["confirmed_namespace"], confirmed=True)
                 if not BrandCompany.objects.filter(
                     brand=brand, company_id=org.company_id
                 ).exists():
@@ -93,12 +92,12 @@ class Command(BaseCommand):
                         "Brand does not own the confirmed HF namespace; no request was sent"
                     )
                 manifest = resolve_scope(
-                    brands=[brand.pk], companies=[], namespace=org.pk
+                    brands=[brand.pk], companies=[], namespace=org.account.external_identifier
                 )
         except (
             ValueError,
             Brand.DoesNotExist,
-            HFOrg.DoesNotExist,
+            CompanyAccount.DoesNotExist,
             CollectionRun.DoesNotExist,
         ) as exc:
             raise CommandError(str(exc)) from exc

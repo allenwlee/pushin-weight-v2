@@ -4,8 +4,9 @@ import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from core.models import Brand, BrandCompany, Company, HFOrg, Post, PostBrand, Product
+from core.models import Brand, BrandCompany, Company, Post, PostBrand, Product
 from monitor.management.commands.export_benchmark_inputs import export_inputs
+from tests.publisher_fixtures import hf_publisher
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
@@ -16,18 +17,18 @@ def test_export_preserves_canonical_products_utc_counts_and_never_writes():
     beta = Brand.objects.create(nickname="beta", display_name="Beta")
     for brand in (alpha, beta):
         BrandCompany.objects.create(brand=brand, company=company)
-    org = HFOrg.objects.create(namespace="maker", company=company, confirmed=True)
+    org = hf_publisher(namespace="maker", company=company, confirmed=True)
     opened = Product.objects.create(
-        repo_id="maker/Alpha-1", brand=alpha, hf_org=org, type="llm-model"
+        repo_id="maker/Alpha-1", brand=alpha, publisher_account=org.account, type="llm-model"
     )
     closed = Product.objects.create(
         repo_id=None, display_name="Beta Closed", brand=beta, type="llm-model"
     )
     Product.objects.create(
-        repo_id="maker/private", brand=alpha, hf_org=org, type="llm-model", private=True
+        repo_id="maker/private", brand=alpha, publisher_account=org.account, type="llm-model", private=True
     )
     Product.objects.create(
-        repo_id="maker/vision", brand=alpha, hf_org=org, type="other-ai-model"
+        repo_id="maker/vision", brand=alpha, publisher_account=org.account, type="other-ai-model"
     )
     for name, time in (
         ("before", "2026-09-30T23:59:59+00:00"),

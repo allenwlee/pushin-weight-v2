@@ -53,7 +53,7 @@ def test_openrouter_model_catalog_correlates_api_only_creation_through_reviewed_
         account_kind="organization",
     )
     BrandAccount.objects.create(
-        brand_id=brands[-1], account=account, role=Role.objects.create(key="official")
+        brand_id=brands[-1], account=account, role=Role.objects.get_or_create(key="official")[0]
     )
     product = Product.objects.create(
         brand_id=brands[-1], type="llm-model", display_name="API only"

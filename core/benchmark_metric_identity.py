@@ -9,20 +9,17 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.db import transaction
 
-from core.account_identity import upsert_account
 from core.measurement_taxonomy import digest, require
 from core.models import (
-    CompanyAccount,
     DataSource,
-    HFOrg,
     MeasurementSubject,
     MetricCollectionContract,
     MetricType,
-    Role,
     SourceMetric,
     SourceSubjectMapping,
     TaxonomyVersion,
 )
+from core.publisher_accounts import get_publisher
 
 SOURCES = {
     "hf": (
@@ -345,7 +342,7 @@ def prepare_collection(spec):
             "subject outside pinned taxonomy",
         )
         subject = MeasurementSubject.objects.select_related(
-            "product__hf_org", "account"
+            "product__publisher_account", "account"
         ).get(pk=subject_key)
         kind = row["source_subject_kind"]
         if source == "opencode":
@@ -394,7 +391,7 @@ def prepare_collection(spec):
                 product.type == frozen["type"] and product.brand_id == frozen["brand"],
                 "catalog identity changed since taxonomy review",
             )
-            if product.hf_org_id and product.hf_org_id.casefold() == "google":
+            if product.hf_namespace and product.hf_namespace.casefold() == "google":
                 require(
                     product.brand_id in {"gemma", "gemini"}, "excluded Google family"
                 )
@@ -408,20 +405,20 @@ def prepare_collection(spec):
                     "HF repository identity mismatch",
                 )
                 require(
-                    product.hf_org_id and product.hf_org.confirmed,
+                    product.hf_namespace and product.publisher_ownership and product.publisher_ownership.ownership_confirmed,
                     "HF publisher ownership unconfirmed",
                 )
                 from core.models import BrandCompany
 
                 require(
                     BrandCompany.objects.filter(
-                        brand_id=product.brand_id, company_id=product.hf_org.company_id
+                        brand_id=product.brand_id, company_id=product.publisher_ownership.company_id
                     ).exists(),
                     "HF company does not own selected brand",
                 )
                 if publisher:
                     require(
-                        str(product.hf_org.account_id) == str(publisher),
+                        str(product.publisher_account_id) == str(publisher),
                         "unreviewed repository publisher link",
                     )
         if publisher:
@@ -503,33 +500,15 @@ def configure_collection(spec):
 def configure_hf_account(namespace, *, reviewed_by, evidence_url):
     require(bool(reviewed_by.strip()), "reviewed_by required")
     validate_evidence_url(evidence_url)
-    org = HFOrg.objects.select_for_update().get(pk=namespace)
-    require(org.confirmed, "namespace ownership is not confirmed")
-    account = upsert_account(
-        source="hf",
-        external_identifier=org.namespace,
-        handle=org.namespace,
-        account_kind="organization",
-        provider_metadata={
-            "ownership_evidence": evidence_url,
-            "reviewed_by": reviewed_by,
-            "discovered_via": org.discovered_via,
-            "legacy_added_at": org.added_at.isoformat(),
-        },
-    )
-    require(org.account_id in (None, account.pk), "namespace identity conflict")
-    require(
-        not CompanyAccount.objects.filter(account=account)
-        .exclude(company=org.company)
-        .exists(),
-        "conflicting HF company ownership",
-    )
-    role, _ = Role.objects.get_or_create(pk="official")
-    CompanyAccount.objects.get_or_create(
-        company=org.company, account=account, defaults={"role": role}
-    )
-    org.account = account
-    org.save(update_fields=["account"])
+    link = get_publisher(source="hf", identifier=namespace, lock=True)
+    require(link.ownership_confirmed is True, "namespace ownership is not confirmed")
+    account = link.account
+    account.provider_metadata = {
+        **account.provider_metadata,
+        "ownership_evidence": evidence_url,
+        "reviewed_by": reviewed_by,
+    }
+    account.save(update_fields=["provider_metadata"])
     return account
 
 

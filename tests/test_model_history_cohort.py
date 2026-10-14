@@ -1,3 +1,6 @@
+from core.publisher_accounts import get_publisher
+from tests.publisher_fixtures import hf_publisher
+
 """One creation-ordered cohort is frozen in DB jobs for all four providers."""
 
 from datetime import timedelta
@@ -7,7 +10,7 @@ import pytest
 from django.utils import timezone
 
 from core.model_history_cohort import cohort_report, freeze_model_history
-from core.models import Brand, BrandCompany, CollectionJob, Company, HFOrg, Product
+from core.models import Brand, BrandCompany, CollectionJob, Company, Product
 from scripts.benchmark_download_collector.sources import Budget, openrouter_catalog_page
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
@@ -28,14 +31,14 @@ def inventory():
     company = Company.objects.create(nickname="fixture-company")
     BrandCompany.objects.create(brand=brands[0], company=company)
     namespaces = [
-        HFOrg.objects.create(namespace=f"Fixture{i}", company=company, confirmed=True)
+        hf_publisher(namespace=f"Fixture{i}", company=company, confirmed=True)
         for i in range(2)
     ]
     cutoff = timezone.now()
     products = [
         Product(
             brand=brands[0],
-            hf_org=namespaces[i % 2],
+            publisher_account=namespaces[i % 2].account,
             repo_id=f"Fixture{i % 2}/Model{i}",
             type="llm-model",
             private=False,
@@ -153,11 +156,11 @@ def test_reviewed_first_party_mirror_collapses_before_cap_and_uses_earliest_crea
         account_kind="organization",
     )
     BrandAccount.objects.create(
-        brand_id=brands[0], account=account, role=Role.objects.create(key="official")
+        brand_id=brands[0], account=account, role=Role.objects.get_or_create(key="official")[0]
     )
     mirror = Product.objects.create(
         brand_id=brands[0],
-        hf_org=HFOrg.objects.get(pk="Fixture0"),
+        publisher_account=get_publisher(source="hf", identifier="Fixture0").account,
         repo_id="Fixture0/Mirror",
         type="llm-model",
         private=False,

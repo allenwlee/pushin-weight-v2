@@ -17,9 +17,9 @@ from core.models import (
     BrandCompany,
     CollectionObservation,
     CollectionRun,
-    HFOrg,
     SourceSubjectMapping,
 )
+from core.publisher_accounts import get_publisher
 from scripts.benchmark_download_collector.sources import (
     SourceError,
 )
@@ -191,7 +191,7 @@ def _hf_history(claim, job, pins, budget, items):
         for pin in pins:
             identifier = pin["native_identifier"]
             namespace = identifier.split("/", 1)[0]
-            org = HFOrg.objects.get(pk=namespace, confirmed=True)
+            org = get_publisher(source="hf", identifier=namespace, confirmed=True)
             require(
                 BrandCompany.objects.filter(
                     company_id=org.company_id,

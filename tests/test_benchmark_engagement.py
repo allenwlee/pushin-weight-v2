@@ -14,6 +14,9 @@ def engagement_spec():
     account = configure_hf_account(
         "lab", reviewed_by="fixture", evidence_url="https://huggingface.co/lab"
     )
+    # This fixture explicitly verifies organization kind, independently of ownership.
+    account.account_kind = "organization"
+    account.save(update_fields=["account_kind"])
     taxonomy = configure_taxonomy(
         {
             "reviewed_by": "fixture",

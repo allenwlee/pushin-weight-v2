@@ -29,6 +29,14 @@ required relation is absent; the later shadow migration does not bypass that
 source check. Any optional relation present on the source must have the
 declared grant.
 
+The account-extension candidate requires the source to have migration0084:
+shared publisher identities/ownership replace hf_orgs, and current X fields live
+in x_account_details. Its copied-table policy matches that schema. A pre0084
+source fails closed; deploy/migrate the source under separate authority before
+running this candidate's refresh. The X detail SELECT grant below is required
+after that table exists. Reading this runbook grants no account migration or
+permission-change authority.
+
 Application credentials remain Render-managed. The refresh reader is a
 separate least-privileged PostgreSQL login because it must see only the
 allowlisted product relations. Open an interactive owner session so the
@@ -80,7 +88,7 @@ GRANT SELECT ON
   companies_accounts, countries, country_codes_region, country_labels,
   discourse_keys, discourse_labels, django_content_type, django_migrations,
   django_site, event_evidence, events, geopolitical_mode_keys,
-  geopolitical_mode_labels, hf_orgs, job_discovery_runs,
+  geopolitical_mode_labels, x_account_details, job_discovery_runs,
   job_listing_evidence,
   job_listings, model_release_evidence, model_releases, nationalism_keys,
   nationalism_labels, national_stance_keys,

@@ -75,9 +75,8 @@ def test_reference_inventory_and_columns_match_all_concrete_application_tables()
 
 @pytest.mark.usefixtures("isolated_migration_database")
 def test_catalog_mapping_reverse_refuses_without_erasing_identity_evidence():
-    MigrationExecutor(connection).migrate(
-        [("core", "0082_collection_catalog_mappings")]
-    )
+    executor = MigrationExecutor(connection)
+    executor.migrate(executor.loader.graph.leaf_nodes("core"))
     from tests.test_collection_identity import admit, identities
 
     _, _, subject, repo = identities()

@@ -145,7 +145,7 @@ def test_default_dry_run_selects_without_http_or_writes():
         )
 
     assert (
-        Account.objects.filter(account_based_in_fetched_at__isnull=False).count() == 0
+        Account.objects.filter(x_details__account_based_in_fetched_at__isnull=False).count() == 0
     )
     assert '"mode": "dry_run"' in stdout.getvalue()
 
@@ -796,7 +796,7 @@ def test_production_chunk_checkpoint_survives_crash_and_restart(
 
     assert completed_id not in remaining_ids
     assert (
-        Account.objects.filter(account_based_in_fetched_at__isnull=False).count() == 3
+        Account.objects.filter(x_details__account_based_in_fetched_at__isnull=False).count() == 3
     )
     report = (tmp_path / "report.json").read_text()
     assert "managed-secret" not in report

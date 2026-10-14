@@ -7,7 +7,7 @@ import pytest
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 
-from core.models import Account, AccountBasedInMapping, Country, Region
+from core.models import Account, AccountBasedInMapping, Country, Region, XAccountDetail
 
 pytestmark = pytest.mark.django_db
 
@@ -47,7 +47,7 @@ def test_account_model_exposes_typed_user_about_fields():
         "based_in_region",
         "account_based_in_fetched_at",
     }
-    fields = {field.name for field in Account._meta.get_fields()}
+    fields = {field.name for model in (Account, XAccountDetail) for field in model._meta.get_fields()}
     assert expected <= fields
     assert not any("raw" in field for field in expected)
 

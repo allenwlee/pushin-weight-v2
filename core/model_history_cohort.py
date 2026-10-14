@@ -50,9 +50,9 @@ def _creation_record(product, aliases, mappings, company_ids, cutoff):
             candidate.repo_id
             and candidate.created_at
             and candidate.private is False
-            and candidate.hf_org_id
-            and candidate.hf_org.confirmed
-            and candidate.hf_org.company_id in company_ids
+            and candidate.hf_namespace
+            and candidate.publisher_ownership and candidate.publisher_ownership.ownership_confirmed
+            and candidate.publisher_ownership.company_id in company_ids
         ):
             native = aware_instant(candidate.created_at)
             if native <= cutoff:
@@ -146,7 +146,7 @@ def build_cohort(*, brand_ids, cutoff, cap=100):
     require(type(cap) is int and 1 <= cap <= 100, "model cap must be at most 100")
     products = list(
         Product.objects.filter(brand_id__in=brand_ids)
-        .select_related("hf_org")
+        .select_related("publisher_account").prefetch_related("publisher_account__companies")
         .order_by("product_key")
     )
     by_key = {p.product_key: p for p in products}

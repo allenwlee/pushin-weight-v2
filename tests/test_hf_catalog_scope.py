@@ -1,7 +1,8 @@
 import pytest
 
 from core.hf_catalog import resolve_brand, resolve_scope
-from core.models import Brand, BrandCompany, Company, HFOrg
+from core.models import Brand, BrandCompany, Company
+from tests.publisher_fixtures import hf_publisher
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
@@ -11,7 +12,7 @@ def publisher(name="lab", brands=("first",)):
     for nickname in brands:
         brand, _ = Brand.objects.get_or_create(nickname=nickname)
         BrandCompany.objects.get_or_create(brand=brand, company=company)
-    return HFOrg.objects.create(namespace=name, company=company, confirmed=True)
+    return hf_publisher(namespace=name, company=company, confirmed=True)
 
 
 def test_scope_deduplicates_and_does_not_infer_brand_from_filtered_subset():
@@ -27,7 +28,7 @@ def test_scope_deduplicates_and_does_not_infer_brand_from_filtered_subset():
 def test_scope_reports_missing_edges_and_unconfirmed_namespaces():
     Brand.objects.create(nickname="orphan")
     org = publisher()
-    org.confirmed = False
+    org.ownership_confirmed = False
     org.save()
     scope = resolve_scope(
         brands=["missing", "orphan", "first"], companies=["absent"], rules=[]
