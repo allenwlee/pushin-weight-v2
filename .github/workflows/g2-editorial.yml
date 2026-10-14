@@ -11,6 +11,8 @@ on:
       - 'config.yaml'
       - 'config/editorial*'
       - 'config/editorial_voices/**'
+      - '.claude/skills/senior-ed-read/**'
+      - '.agents/skills/senior-ed-read'
       - 'locale/**'
       - 'pyproject.toml'
       - '.github/workflows/g2-editorial.yml'

@@ -180,8 +180,11 @@ def test_worker_routes_native_models_and_serves_independent_saved_locales(
         story = client.get(payload["hero"]["url"], secure=True)
         assert story.status_code == 200 and HEADLINES[locale] in story.content.decode()
         assert post.text not in story.content.decode()
-    assert len(captured) == 4
-    assert EditorialCall.objects.count() == 4
+    assert len(captured) == 7
+    assert EditorialCall.objects.count() == 7
+    reviews = [row for row in captured if row["body"]["messages"][0]["content"].startswith("You are the senior editor")]
+    assert len(reviews) == 3
+    assert all(row["body"]["model"] == "gpt-6.1-sol" and row["body"]["reasoning_effort"] == "high" for row in reviews)
     again = service.run_editorial(
         envelope, cfg=cfg, call=lambda *args: pytest.fail("duplicate provider call")
     )
@@ -304,7 +307,7 @@ def test_optional_media_cannot_take_slots_before_all_native_writers(monkeypatch)
     monkeypatch.setattr(service, "select_picture", picture)
     _, _, _, captured, outcome = captured_worker(monkeypatch)
     assert outcome["published"] == 3, outcome
-    assert [row["locale"] for row in captured] == [None, "en", "ja", "zh-cn"]
+    assert [row["locale"] for row in captured] == [None, "en", None, "ja", None, "zh-cn", None]
     assert order == [{"en", "ja", "zh-cn"}] * 3
     assert len(outcome["holds"]) == 3
     assert all(hold["stage"] == "picture" for hold in outcome["holds"])
