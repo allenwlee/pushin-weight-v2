@@ -10,9 +10,8 @@ ollija:
   workflow: senior-editor-integration
   delivery_target: production
   delivery_selected_by_user: true
-  delivery_route: staged
-  delivery_route_selected_by_user: false
-  staging_transport: branch
+  delivery_route: direct
+  delivery_route_selected_by_user: true
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -42,20 +41,16 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - Workflow: `senior-editor-integration`
 - Delivery target: `production`
 - Owner selection recorded: `true`
-- Delivery route: `staged`
+- Delivery route: `direct`
 
 1. Complete implementation and the plan's verification contract.
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+4. On the owner-selected direct route, fetch the remote production lane: `git fetch origin refs/heads/main`.
+5. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+6. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+7. After step 6 succeeds, perform worktree cleanup as the final filesystem action:
     - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-senior-editor` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
     - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-senior-editor` without `--force`.
     - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
@@ -74,7 +69,11 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-None.
+Owner answered the pending release-route question with “deploy the push”. This
+selects the recommended direct production route for the pushed senior-editor
+change. Preserve the unrelated shared staging branch and services at fd6f9594;
+staging validation is omitted, not passed. Reuse the successful local and hosted
+checks for337f40b1 after proving the delivery-record commit changes only this plan.
 
 # Goal
 
@@ -90,7 +89,7 @@ Keep the locked writers, voice prompts, existing editions and dollar ceilings.
 Use GPT6.1 Sol/high for the separate reviewer, with no research tools or outside
 story information. The split beatwriter/copyeditor experiment remains separate.
 Verify real request/accounting/publication paths with fake providers, then deploy
-the same tested revision through staging to production and inspect active code.
+the tested implementation directly to production and inspect active code.
 
 ## Authorization and scope
 
@@ -131,7 +130,7 @@ already copied to OriginalContent.provenance. Zero tables or fields added/retire
   reviews, preserving USD5/day and USD2/assessment. Test real transport→ledger→
   mirrored publication, review holds/errors/budget exhaustion/duplicate assessment,
   all three languages and Pulse, current writer request hashes unchanged.
-- U3: simplify/review/check; update editorial reference; same-SHA staged delivery,
+- U3: simplify/review/check; update editorial reference; owner-selected direct delivery,
   runtime activation/negative-gate checks, production service identity/health.
 
 ## Verification contract / regression net
@@ -148,6 +147,6 @@ must remain a hold; do not reconcile or raise old production ledgers.
 ## Definition of Done
 
 Mandatory semantic review, durable grades/explanations, unchanged writer requests,
-meaningful tests passing; exact candidate observed on staged then production
+meaningful tests passing; exact candidate observed on production
 web/headlines/harvest with effective review route and unchanged money limits.
 Resume saved OpenAI experiment only after this endpoint; retain original G2.
