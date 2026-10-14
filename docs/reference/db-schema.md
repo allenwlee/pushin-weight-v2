@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-13 21:27:21 JST
+Last verified: 2026-10-14 20:51:00 JST (native provider-batch extension)
 
-Scope: **150 application tables**, **1935 physical columns**, plus nine compatibility views. Source: `feat/g3-collection-jobs-history`, working tree based on `851fb85f`; migration graph through `0082_collection_catalog_mappings`.
+Scope: **151 application tables**, **1975 physical columns**, plus nine compatibility views. Source: `docs/august-harvest-audit-20261012`, working tree based on `a184b99a`; migration graph through `0085_provider_batch_enrichment` (depends on `0082_collection_catalog_mappings`).
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -31,7 +31,7 @@ The retired SQLite database and Graphviz image are not current schema sources.
 | [Job listings and official career-site collection](#jobs) | 5 | Advertised roles, their sources, and career-site synchronization status. |
 | [Events and opportunities](#events) | 3 | Attendable occurrences and action-for-benefit offers. |
 | [Post translation and commentary](#translation) | 9 | Literal post translations, generated commentary, retries, and budgets. |
-| [Authored content and trend publication](#headlines) | 10 | Prepared headline text, publication pointers, work requests, and provider costs. |
+| [Authored content and trend publication](#headlines) | 11 | Prepared headline text, publication pointers, provider batches, work requests, and provider costs. |
 | [Compatible editorial input storage and pictures](#editorial) | 7 | Story identities, accepted editions, quarter-hour decisions, spend and optional assets. |
 | [Collection, extraction, and processing records](#processing) | 16 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
 | [Measurement subjects, metrics and observations](#measurements) | 12 | Sourced measurements and their collection state. |
@@ -133,8 +133,8 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 150 application tables appears once in this inventory and once in
-the detailed sections. Subject counts above sum to 150.
+Each of the 151 application tables appears once in this inventory and once in
+the detailed sections. Subject counts above sum to 151.
 
 | Table | Subject | What one row represents |
 | --- | --- | --- |
@@ -206,7 +206,7 @@ the detailed sections. Subject counts above sum to 150.
 | [official_company_scans](#table-official_company_scans) | [Official-company collection](#official-companies) | One official-company account scan and its outcome. |
 | [opportunities](#table-opportunities) | [Events and opportunities](#events) | One bounded offer in which an action can provide a benefit, optionally linked to an event. |
 | [original_content](#table-original_content) | [Authored content and trend publication](#headlines) | One prepared brand headline outcome within a run. |
-| [original_content_calls](#table-original_content_calls) | [Authored content and trend publication](#headlines) | One recorded provider attempt for ranking, editing, or reviewing headlines. |
+| [original_content_calls](#table-original_content_calls) | [Authored content and trend publication](#headlines) | One physical model attempt owned by an authored run or provider batch. |
 | [original_content_runs](#table-original_content_runs) | [Authored content and trend publication](#headlines) | One common evidence cutoff for an all-brand headline run and time window. |
 | [original_content_selections](#table-original_content_selections) | [Authored content and trend publication](#headlines) | One currently visible run for a supported time window. |
 | [original_content_sources](#table-original_content_sources) | [Authored content and trend publication](#headlines) | One distinct cited post supporting one saved locale/version, with immutable ordered URL/author/hash snapshots. |
@@ -255,6 +255,7 @@ the detailed sections. Subject counts above sum to 150.
 | [product_verification_proposals](#table-product_verification_proposals) | [Products, model releases, and Hugging Face catalog](#products) | One reviewable proposal to resolve an observed product name to a product. |
 | [products](#table-products) | [Products, model releases, and Hugging Face catalog](#products) | One model/product identity, with optional Hugging Face repository metadata. |
 | [profile_movement_candidates](#table-profile_movement_candidates) | [People and job history](#people) | One observed profile change queued for personnel-movement interpretation. |
+| [provider_batches](#table-provider_batches) | [Authored content and trend publication](#headlines) | One resumable provider group for a source collection job, with control and import progress. |
 | [rare_type_category_assignments](#table-rare_type_category_assignments) | [Collection, extraction, and processing records](#processing) | One source-backed rare-category assignment for a post and organization. |
 | [rare_type_decision_attempts](#table-rare_type_decision_attempts) | [Collection, extraction, and processing records](#processing) | One funded provider attempt for a relevance decision, with one settlement record. |
 | [rare_type_decision_processing_cycles](#table-rare_type_decision_processing_cycles) | [Collection, extraction, and processing records](#processing) | One processing time slot that funds relevance-decision attempts. |
@@ -3845,6 +3846,7 @@ Model: [PostEnrichmentState](../../core/models.py#L1571).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `post_id` | `text` | No | PK component. FK → [`posts`](#table-posts) (`tweet_id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `post`. |
+| `source_collection_job_id` | `uuid` | Yes | Current historical enrichment owner → [`collection_jobs`](#table-collection_jobs) (`id`), validated against typed membership before use. Django deletion: `PROTECT`; PostgreSQL NO ACTION, deferred. NULL belongs to the ordinary queue. This pointer is not all collection history. |
 | `translation_status` | `varchar(16)` | No | Django default: `PostEnrichmentState.Status.PENDING` (not an assumed SQL default). Choices: `pending`, `succeeded`, `failed`. |
 | `translation_attempts` | `smallint` | No | Django default: `0` (not an assumed SQL default). |
 | `translation_first_attempt_at` | `timestamp with time zone` | Yes | Stored value. |
@@ -3876,6 +3878,10 @@ Model: [PostEnrichmentState](../../core/models.py#L1571).
 None declared beyond primary keys, field uniqueness and foreign keys.
 
 None beyond the column-level keys, uniqueness, nullability, and type checks described above.
+
+Historical ownership keeps this work out of the scheduled post-fetch queue.
+Completeness is checked against persisted literal artifacts and each current
+brand's final judgment; a succeeded flag alone is insufficient.
 
 [Back to table inventory](#table-inventory)
 
@@ -4638,16 +4644,20 @@ Model: [TrendNarrativeDemand](../../core/models.py#L4052).
 
 ### `original_content_calls` — OriginalContentCall
 
-One provider attempt with its actual request identity, pessimistic reservation and completion/uncertainty state.
+One physical provider attempt with its actual request identity, pessimistic reservation and completion/uncertainty state. Its owner is exactly one authored-content run or provider batch.
 
-Model: [OriginalContentCall](../../core/models.py#L4151).
+Model: [OriginalContentCall](../../core/models.py#L4173).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `run_id` | `bigint` | No | FK → [`original_content_runs`](#table-original_content_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
+| `run_id` | `bigint` | Yes | Authored owner → [`original_content_runs`](#table-original_content_runs) (`id`). Exactly one owner must be set. Django deletion: `PROTECT`; PostgreSQL NO ACTION, deferred. Model field: `run`. |
+| `provider_batch_id` | `uuid` | Yes | Batch owner → [`provider_batches`](#table-provider_batches) (`id`). Django deletion: `PROTECT`; PostgreSQL NO ACTION, deferred. Model field: `provider_batch`. |
+| `member_post_ids` | `varchar(128)[20]` | No | Exact bounded Post identifiers used by this model request, indexed for overlapping outstanding work. Django and SQL default: `[]`. Authored calls require empty; batch calls require 1–20 members. PostgreSQL's array size declaration alone does not enforce this bound; the check below does. |
+| `import_state` | `varchar(24)` | No | Django and SQL default: `not_applicable`. Authored calls require that value; batch calls use `pending`, `applied`, `stale`, or `error`. Provider completion and validated application import are separate. |
+| `import_evidence` | `jsonb` | No | Django and SQL default: `{}`. Bounded source snapshots, role lineage and validation/import evidence. |
 | `stage` | `varchar(200)` | No | Stored value. |
 | `batch_key` | `varchar(200)` | No | Django default: `''` (not an assumed SQL default). |
 | `request_identity` | `varchar(128)` | No | Stored value. |
@@ -4686,10 +4696,14 @@ Model: [OriginalContentCall](../../core/models.py#L4151).
 - `idx_tnpc_claim_due`: `CREATE INDEX "idx_tnpc_claim_due" ON "original_content_calls" ("state", "claim_expires_at")`.
 - `idx_tnpc_run_stage`: `CREATE INDEX "idx_tnpc_run_stage" ON "original_content_calls" ("run_id", "stage")`.
 - `idx_oc_call_budget`: `CREATE INDEX "idx_oc_call_budget" ON "original_content_calls" ("budget_scope", "budget_day")`.
+- `idx_oc_call_post_members`: `CREATE INDEX "idx_oc_call_post_members" ON "original_content_calls" USING gin ("member_post_ids")`.
 
 **Named constraints:**
 
 - `uq_tnpc_run_stage_batch`: `CONSTRAINT "uq_tnpc_run_stage_batch" UNIQUE ("run_id", "stage", "batch_key")`.
+- `ck_oc_call_owner`: exactly one of `run_id` and `provider_batch_id` is non-NULL.
+- `ck_oc_call_members`: authored calls have zero members and `not_applicable` import state; batch calls have text kind, 1–20 members and one of the four batch import states above.
+- `uq_oc_batch_stage_request`: unique `(provider_batch_id, stage, batch_key)` where the batch owner is non-NULL.
 - `uq_tnpc_request_identity`: `CONSTRAINT "uq_tnpc_request_identity" UNIQUE ("request_identity")`.
 - `ck_oc_call_stage`: `CONSTRAINT "ck_oc_call_stage" CHECK ("stage" > '')`.
 - `ck_oc_reservation`: `CONSTRAINT "ck_oc_reservation" CHECK ("reserved_usd" >= 0)`.
@@ -4700,6 +4714,93 @@ Model: [OriginalContentCall](../../core/models.py#L4151).
 - `ck_tnpc_claim_shape`: `CONSTRAINT "ck_tnpc_claim_shape" CHECK ((("claim_expires_at" IS NULL AND "claim_fence" = 0 AND "claim_owner" = '' AND "claimed_at" IS NULL) OR ("claim_expires_at" > ("claimed_at") AND "claim_fence" > 0 AND "claim_owner" > '' AND "claimed_at" IS NOT NULL)))`.
 - `ck_tnpc_sent_shape`: `CONSTRAINT "ck_tnpc_sent_shape" CHECK (("legacy_import" OR ("sent_at" IS NULL AND "state" = 'reserved') OR ("error_code"::text LIKE  E'pre\\_send:%' AND "sent_at" IS NULL AND "state" = 'failed') OR ("sent_at" IS NOT NULL AND "state" IN ('sent', 'completed', 'ambiguous', 'failed'))))`.
 - `ck_tnpc_completed_shape`: `CONSTRAINT "ck_tnpc_completed_shape" CHECK (("legacy_import" OR ("completed_at" IS NULL AND "state" IN ('reserved', 'sent', 'ambiguous', 'failed')) OR ("completed_at" IS NOT NULL AND "response_hash" > '' AND "state" = 'completed')))`.
+
+Model charges occur only on these child attempts. Batch control HTTP starts are
+counted on their parent and never inserted as charged model calls. Unknown
+actual cost remains NULL with its reservation retained. SQL defaults on the
+three import/member fields allow older authored writers during additive rollout.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-provider_batches"></a>
+
+### `provider_batches` — ProviderBatch
+
+One resumable group of provider requests for a real source CollectionJob.
+The group owns external file/submission/poll/import progress; child
+OriginalContentCall rows own each physical model attempt and its cost.
+
+Model: [ProviderBatch](../../core/models.py#L4115).
+Migration: [0085_provider_batch_enrichment](../../core/migrations/0085_provider_batch_enrichment.py).
+
+**Primary key:** `id` (UUID; no generated-ID sequence).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | PK; Django-generated UUID4. |
+| `source_collection_job_id` | `uuid` | No | Source instruction → [`collection_jobs`](#table-collection_jobs) (`id`). Django deletion: `PROTECT`; PostgreSQL NO ACTION, deferred. |
+| `group_key` | `varchar(128)` | No | Stable group identity within the source job. |
+| `transport` | `varchar(16)` | No | `batch` or `direct`; direct groups have no remote batch/file identifiers. |
+| `stage` | `varchar(64)` | No | Processing stage; Django default: `enrichment`. |
+| `source_definition_hash` | `varchar(64)` | No | SHA-256 of the pinned source collection definition. |
+| `cohort_hash` | `varchar(64)` | No | SHA-256 of the exact selected Post cohort. |
+| `manifest_hash` | `varchar(64)` | No | SHA-256 of the admitted request manifest. |
+| `provider` | `varchar(80)` | No | Actual provider identity. |
+| `model` | `varchar(160)` | No | Homogeneous model for the group. |
+| `endpoint` | `varchar(128)` | No | Provider inference endpoint. |
+| `request_profile` | `varchar(80)` | No | Pinned request/prompt profile. |
+| `policy` | `jsonb` | No | Frozen models, prompts, cohort, database pins and finite campaign allowances. Django default: `{}`. |
+| `state` | `varchar(24)` | No | Durable group lifecycle; Django default: `registered`. Allowed values are listed in `ck_batch_state`. |
+| `input_file_id` | `varchar(256)` | No | Real uploaded provider file ID; Django default: empty string. |
+| `output_file_id` | `varchar(256)` | No | Real provider result file ID; Django default: empty string. |
+| `error_file_id` | `varchar(256)` | No | Real provider error file ID; Django default: empty string. |
+| `provider_batch_id` | `varchar(256)` | No | Real accepted provider batch ID; Django default: empty string. |
+| `provider_status` | `varchar(32)` | No | Last observed provider lifecycle status; Django default: empty string. |
+| `control_requests` | `integer` | No | Nonnegative control HTTP starts, including unsuccessful attempts; Django default: `0`. |
+| `control_evidence` | `jsonb` | No | Bounded recent control-call evidence; Django default: `[]`. |
+| `request_count` | `integer` | No | Nonnegative admitted physical model request count; Django default: `0`. |
+| `imported_count` | `integer` | No | Nonnegative count of reconciled model results; Django default: `0`. |
+| `import_cursor` | `varchar(256)` | No | Import progress identity; Django default: empty string. |
+| `error_code` | `varchar(64)` | No | Last bounded operational error; Django default: empty string. |
+| `deadline_at` | `timestamp with time zone` | No | Campaign admission deadline, retained across restarts. |
+| `next_poll_at` | `timestamp with time zone` | Yes | Earliest next provider check, honoring retry delay. |
+| `claim_owner` | `varchar(128)` | No | Short execution lease owner; Django default: empty string. |
+| `claim_fence` | `integer` | No | Nonnegative fencing counter rejecting stale writers; Django default: `0`. |
+| `claimed_at` | `timestamp with time zone` | Yes | Last lease acquisition time. |
+| `claim_expires_at` | `timestamp with time zone` | Yes | Short lease expiry; provider wait holds no Post or collection-run lease. |
+| `completed_at` | `timestamp with time zone` | Yes | Terminal group completion time. |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+| `updated_at` | `timestamp with time zone` | No | Set by Django on save. |
+
+Defaults above belong to Django, without permanent SQL defaults, unless explicitly
+stated otherwise. Positive integer fields additionally have PostgreSQL checks
+requiring values greater than or equal to zero. The source-job FK has its
+automatic B-tree index.
+
+**Named indexes:**
+
+- `idx_batch_job_state`: B-tree on `(source_collection_job_id, state)`.
+- `idx_batch_poll_due`: B-tree on `(state, next_poll_at)`.
+
+**Named constraints:**
+
+- `uq_batch_job_group`: unique `(source_collection_job_id, group_key)`.
+- `uq_batch_active_job_model`: partial unique `(source_collection_job_id, model)` for batch transport in the seven active states below; prevents a second outstanding file for that model/campaign.
+- `uq_batch_remote_identity`: partial unique `(provider, provider_batch_id)` when the remote ID is nonempty.
+- `ck_batch_transport`: transport is `batch` or `direct`.
+- `ck_batch_direct_ids`: direct transport requires empty input/output/error file IDs and provider batch ID.
+- `ck_batch_state`: `registered`, `uploading`, `uploaded`, `submitting`, `waiting`, `ambiguous`, `importing`, `completed`, `failed`, or `cancelled`; the first seven are active.
+- `ck_batch_hashes`: all three hash fields contain exactly 64 lowercase hexadecimal characters.
+- `ck_batch_claim_shape`: either no lease (empty owner, zero fence, NULL timestamps) or a nonempty owner, positive fence and expiry later than acquisition. Released leases retain the fencing generation and satisfy the latter shape with an already expired interval.
+
+Physical model requests are reserved before sending. Ambiguous acceptance is
+reconciled using the real file and group identity before another submission;
+expired local leases do not make outstanding remote work eligible again.
+Result validation rechecks source snapshots before using the shared publishers.
+This execution history never changes source CollectionRun success. Staging
+refresh excludes and clears batches with the call ledger and enrichment queue.
+Migration reversal refuses existing batch, typed Post or historical ownership
+evidence rather than silently discarding it.
 
 [Back to table inventory](#table-inventory)
 
@@ -5714,8 +5815,8 @@ identities are preserved, including existing sequence names. Lock waits are
 bounded to five seconds in both migration directions. Alias removal is separately
 scoped after verification of all consumers; there is no calendar waiting period.
 
-The column/type/index inventory was reconciled with all 150 concrete
-`core` models and the final migration state through migration 0082. Raw SQL
+The column/type/index inventory was reconciled with all 151 concrete
+`core` models and the final migration state through migration 0085. Raw SQL
 migrations additionally supply the account-handle expression index, the named
 account-country FK, the two explicit SQL delete actions on posts, the ICU
 collation, the person-name selection/immutability triggers, and these compatibility views. Application-level validators and
@@ -5957,9 +6058,9 @@ Numeric partial is terminal and has a completion timestamp. Catalog partial/inte
 
 ### `collection_observations` — CollectionObservation
 
-One sourced evidence record; numeric rows are immutable evidence and catalog rows retain repository enrichment progress.
+One sourced evidence record: numeric rows are immutable evidence, catalog rows retain repository enrichment progress, and typed Post rows prove collection membership.
 
-Model: [CollectionObservation](../../core/models.py#L7840).
+Model: [CollectionObservation](../../core/models.py#L7976).
 
 **Primary key:** `id`.
 
@@ -5968,6 +6069,7 @@ Model: [CollectionObservation](../../core/models.py#L7840).
 | `id` | `bigint` | No | PK; database-generated identity. |
 | `run_id` | `uuid` | No | FK → [`collection_runs`](#table-collection_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
 | `scope_run_id` | `bigint` | Yes | FK → [`collection_scope_runs`](#table-collection_scope_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `scope_run`. |
+| `post_id` | `text` | Yes | Typed Post membership → [`posts`](#table-posts) (`tweet_id`). Django deletion: `PROTECT`; PostgreSQL NO ACTION, deferred. Required exactly when subject kind is `post`; identifier must match. |
 | `resource_key` | `varchar(256)` | Yes | Normalized catalog resource identity within its scope. |
 | `product_id` | `bigint` | Yes | FK → [`products`](#table-products) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `product`. |
 | `created_product` | `boolean` | No | Whether this run created the linked Product. Django default: `False`. SQL default: `False`. |
@@ -5993,18 +6095,25 @@ Model: [CollectionObservation](../../core/models.py#L7840).
 
 - `idx_observation_mapping_time`: `CREATE INDEX "idx_observation_mapping_time" ON "collection_observations" ("mapping_id", "observed_at")`.
 - `idx_observation_publication`: `CREATE INDEX "idx_observation_publication" ON "collection_observations" ("run_id", "published_date")`.
+- `idx_observation_run_post`: `CREATE INDEX "idx_observation_run_post" ON "collection_observations" ("run_id", "post_id")`.
 
 **Named constraints:**
 
 - `uq_collection_scope_resource`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "uq_collection_scope_resource" UNIQUE ("scope_run_id", "resource_key")`.
 - `uq_metric_observation`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "uq_metric_observation" UNIQUE ("run_id", "observation_key")`.
 - `ck_observation_key`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_key" CHECK ("observation_key"::text ~ '^[0-9a-f]{64}$')`.
-- `ck_observation_kind`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_kind" CHECK ("source_subject_kind" IN ('model', 'repository', 'lab', 'account', 'aggregate'))`.
+- `ck_observation_kind`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_kind" CHECK ("source_subject_kind" IN ('model', 'repository', 'lab', 'account', 'aggregate', 'post'))`.
+- `ck_observation_post_subject`: Post kind requires a real matching `post_id`, no metric mapping/product and `created_product = false`; every other kind requires NULL `post_id`.
 - `ck_observation_aggregate`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_aggregate" CHECK (("source_subject_kind" IN ('model', 'repository', 'lab', 'account') OR "mapping_id" IS NULL))`.
 - `ck_observation_status`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_status" CHECK ((("error_code" IS NULL AND "status" = 'ok') OR ("error_code" IS NOT NULL AND "status" = 'error' AND NOT ("error_code" = '' AND "error_code" IS NOT NULL))))`.
 - `ck_observation_publication`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_publication" CHECK ((("publication_precision" = 'instant' AND "published_at" IS NOT NULL AND "published_date" IS NULL) OR ("publication_precision" = 'date' AND "published_at" IS NULL AND "published_date" IS NOT NULL) OR ("publication_precision" = 'unknown' AND "published_at" IS NULL AND "published_date" IS NULL)))`.
 
 Imported HF IDs are allocated above existing numeric IDs. Product evidence pointers are rewritten in the same transaction, retaining original identities in `source_metadata.legacy_catalog`. Numeric `MetricValue` references keep their original IDs. Catalog projection validates matching source, purpose and scope before mutation.
+
+Historical X writers save Post membership in the same fenced transaction as
+the fetched page. They reuse the real content collection run/scope and preserve
+numeric and catalog constraints. Post membership and current enrichment ownership
+have different meanings; neither replaces source Post storage or cursor/backlog rules.
 
 [Back to table inventory](#table-inventory)
 

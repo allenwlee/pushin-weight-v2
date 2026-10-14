@@ -978,6 +978,17 @@ unhealthy on existing deployed code. This is baseline evidence, not a candidate
 production health pass. Candidate remains stage-only. Exact diff and PG proof
 sent to G3; schema adjudication and native paid pilot/full-cohort proof pending.
 
+2026-10-14T20:54:00+09:00 G3 REVIEW — shared-slice adjudication returned no
+blocking findings. Its receipt is in G3's authoritative collection checkout at
+`docs/analysis/2026-10-14-203948-g3-provider-batch-shared-review.md`;78unique checks,
+62requiredPG, concurrent overlap/invalid200 recovery probes and both populated
+migration orders. Native/shared sources stayed unchanged through the subsequent
+refresh-policy repair. That repair passes120checks/6requiredPG; source-reader
+access remains MAINTAIN-only for excluded batch records. Hosted CI also exposed
+the schema reference omission; the scoped reference now has151tables/1975columns,
+all34batch fields and six added fields on existing entities. No stagedDDL or paid
+models yet. Actual stage remains0082; PR60 must coordinate before accountDDL.
+
 2026-10-14T18:21:56+09:00 ON — implementing the G3-selected persistence slice and
 native batch orchestration. Transport/shared callers tested;178 focused checks
 executed on isolated PostgreSQL (34 required database checks, zero skips/errors).
