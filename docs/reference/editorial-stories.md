@@ -7,7 +7,7 @@ The launch voices are New York Post, 東スポ and WeMedia respectively. Pulse r
 An important event can qualify for both. A single source post remains the
 atomic unit; its own commentary preserves its meaning and tone.
 
-This reference describes the candidate implementation through migration 0068.
+This reference describes the editorial implementation and selected launch profile.
 Generation, public access and picture bindings ship **off** in
 [`config/editorial.yaml`](../../config/editorial.yaml). Deployment and a fresh
 human quality evaluation are separate from the local implementation tests.
@@ -49,7 +49,11 @@ every safe HTTP(S) source URL. Counts measure distinct posts, not confirmations.
    same original evidence. Accepted editions contain a headline, supporting
    line (called `byline`), full article and source links. A byline is not an
    invented journalist's name.
-5. After required text for every track and locale, the optional **picture editor** selects an eligible source image. `derive`
+5. A separate **senior editor** reviews each mechanically valid draft against
+   the same closed source packet. It grades nine areas and gives a publication
+   verdict. Only an approved, unchanged draft can publish; see
+   [Senior editor review](#senior-editor-review).
+6. After required text for every track and locale, the optional **picture editor** selects an eligible source image. `derive`
    adds an asynchronous MiniMax H3 video; the verified source image can display
    while that task is pending. Missing imagery does not discard valid text.
 
@@ -202,6 +206,62 @@ use first-observed posting time for priority aging. It must not be presented as
 a verified launch date. Missing context or unseen source images still limit
 what the editor can infer; supplying URLs alone does not inspect their pixels.
 
+## Senior editor review
+
+[`monitor/editorial/reviewing.py`](../../monitor/editorial/reviewing.py) uses the
+literal [`senior-ed-read` skill](../../.claude/skills/senior-ed-read/SKILL.md) as
+its rubric. Every new Chatter and Pulse locale receives a separate review after
+the existing source-support and copy-consistency checks, before publication.
+The reviewer receives the untouched draft, original frozen story packet, source
+relationships, requested voice and the image inputs supplied to the writer.
+It has no research tools and cannot fill missing story facts from memory or
+linked pages. This is an automated editorial judgment, not native-reader
+certification or a jurisdiction-specific legal determination.
+
+The review grades source quality/provenance, factual fidelity/numbers,
+attribution/uncertainty/time, fairness, context/news judgment, headline,
+supporting line, body and local-language voice separately. Each section and
+substantive finding receives A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D- or F.
+Unavailable sections use a null grade and a reason. Every section, finding and
+overall grade has a one- or two-sentence English explanation. Headline and body
+are independent grades. Findings quote exact draft wording, identify an
+available source field or a gap, and distinguish optional, required and material
+changes.
+
+The result also contains an overall grade, `publish`, `revise` or `hold` verdict,
+required changes, uncertainties and strengths. A publish verdict cannot carry
+required changes, required/material findings, unavailable sections, or a C-band
+or lower grade in sources, facts, attribution or fairness. A material finding
+requires hold. Grades are not averaged. A revise/hold verdict prevents
+publication; this step does not rewrite or retry the draft. Malformed replies,
+invalid grades/explanations, invented excerpts, sources outside the packet,
+provider failures and budget exhaustion also prevent publication.
+
+Code binds the review to hashes of the full draft, packet and skill, plus cutoff,
+locale, voice and actual writer model. The saved record includes reviewer model
+and full configured route, stage keys, time and available request hash. The
+publication transaction rechecks this identity and the exact saved assessment
+record; an approval cannot be reused after changing the draft, evidence or
+reviewer route. Existing editions remain readable without retroactive review.
+
+All paid review attempts use the existing `EditorialCall` and canonical
+`OriginalContentCall` ledgers, reservations and idempotency fences. Requests and
+model JSON remain in their existing private payload fields, including rejected
+reviews. Validated reviews, including revise/hold outcomes, are saved under
+`EditorialAssessment.outcome.senior_reviews`. Accepted editions also retain
+`evidence.senior_review`, carried into `OriginalContent.provenance.evidence`
+by the existing importer. Public story payloads exclude these private records.
+No new table, field, migration, endpoint or scheduler is introduced.
+
+Enabled generation requires an explicit `reviewer` route. The launch profile
+uses direct OpenAI `gpt-6.1-sol`, high reasoning, 16,384 total completion tokens,
+vision input, a 300-second socket timeout and default service tier for every
+language and both tracks. Writer routes and literal prompts are unchanged.
+The profile permits thirteen calls per assessment: one selection, four writers,
+four reviews and up to four optional media calls. The existing combined USD5/day
+and USD2/assessment ceilings remain; the larger call allowance is not additional
+money. Extra review latency still shares the fifteen-minute assessment lease.
+
 ## Voices and routing
 
 [`config/editorial_voices/`](../../config/editorial_voices/) holds immutable JSON
@@ -211,8 +271,11 @@ Changing a voice means adding a version and changing the binding in
 `editorial.yaml`; no copied generation script is needed. Saved editions retain
 the profile ID, version and content hash. Existing shared editions remain intact.
 
-The launch binds `chatter-en-v2`, `chatter-ja-tospo-v2` and
-`chatter-zh-cn-wemedia-v2`. Their shared source is
+The launch binds `chatter-en-v3`, `chatter-ja-tospo-v2` and
+`chatter-zh-cn-wemedia-v2`. The English profile uses the locked
+[`editorial-judgment-headline-v2.json`](../../config/editorial_prompts/editorial-judgment-headline-v2.json)
+contract, including its catchy/punny sentence and scoped headline attribution.
+The native profiles' shared source is
 [`editorial-judgment-headline-v1.json`](../../config/editorial_prompts/editorial-judgment-headline-v1.json):
 the owner's locked judgment paragraph plus an explicit print-headline assignment
 in the locale's language. `chatter-ja-rocket-v2` and `chatter-zh-cn-metro-v2` are

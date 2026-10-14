@@ -96,7 +96,7 @@ def test_source_to_paid_reservation_to_two_editions_picture_and_reader(
         ),
     )
     monkeypatch.setattr("monitor.editorial.dispatch.dispatch_poll", lambda _: None)
-    cfg = active_config(public_enabled=True, assessment_calls=5)
+    cfg = active_config(public_enabled=True, assessment_calls=7)
     result = service.run_editorial(
         {
             "schema_version": 1,
@@ -114,8 +114,8 @@ def test_source_to_paid_reservation_to_two_editions_picture_and_reader(
         texts = OriginalContentText.objects.all()
         assert texts.count() == 2
         assert all(t.producing_call_id and t.sources.count() == 1 for t in texts)
-    assert EditorialCall.objects.count() == 4
-    assert len(calls) == 4
+    assert EditorialCall.objects.count() == 6
+    assert len(calls) == 6
     assert (
         EditorialHero.objects.get(key="chatter:en").edition.headline == "MODEL BEHAVIOR"
     )
@@ -146,7 +146,7 @@ def test_source_to_paid_reservation_to_two_editions_picture_and_reader(
     assert client.get(item["asset"]["url"], secure=True).status_code == 404
     assert client.get(item["url"], secure=True).status_code == 200
     assert EditorialEdition.objects.count() == 2
-    assert len(calls) == 4  # GET requests never invoke providers.
+    assert len(calls) == 6  # GET requests never invoke providers.
 
 
 def test_disable_during_writer_prevents_publication(monkeypatch):
@@ -222,6 +222,7 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
     def transport(endpoint, key, body, **kwargs):
         import re
 
+        is_review = body["messages"][0]["content"].startswith("You are the senior editor")
         match = re.search(
             r"Write in (en|ja|zh-cn) directly", body["messages"][0]["content"]
         )
@@ -235,11 +236,11 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
             assert kwargs["timeout"] == 300
             assert "provider" not in body and "reasoning" not in body
         else:
-            assert body["model"] == ("gpt-6-sol" if locale == "en" else "gpt-6.1-sol")
+            assert body["model"] == ("gpt-6-sol" if locale == "en" and not is_review else "gpt-6.1-sol")
             assert endpoint == "https://api.openai.com/v1/chat/completions"
             assert key == "openai-test-only"
-            assert body["reasoning_effort"] == ("medium" if locale == "en" else "high")
-            assert body["max_completion_tokens"] == (4096 if locale == "en" else 16384)
+            assert body["reasoning_effort"] == ("medium" if locale == "en" and not is_review else "high")
+            assert body["max_completion_tokens"] == (4096 if locale == "en" and not is_review else 16384)
             assert body["service_tier"] == "default"
             assert not {"max_tokens", "provider", "reasoning"} & body.keys()
         requests.append(body)
@@ -303,11 +304,14 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
     assert [
         request.get("max_tokens", request.get("max_completion_tokens"))
         for request in requests
-    ] == [65536, 4096, 16384, 16384, 65536]
+    ] == [65536, 4096, 16384, 16384, 16384, 16384, 16384, 65536, 16384]
     from monitor.editorial.writing import HEADLINE_ATTRIBUTION_RULE
     from monitor.headline_grounding import SOURCE_READING_RULES
 
     for index, request in enumerate(requests):
+        if request["messages"][0]["content"].startswith("You are the senior editor"):
+            assert "Every section, finding and overall grade" in request["messages"][0]["content"]
+            continue
         expected_rules = SOURCE_READING_RULES
         if index == 1:  # The English Chatter request alone opts into v3.
             assert cfg.voices["chatter:en"] == "chatter-en-v3"
@@ -334,10 +338,10 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
         }
     # The transport assertion above pins the full allowance before sending;
     # completed calls retain only the confirmed cost in the budget ledger.
-    factual_calls = EditorialCall.objects.exclude(stage__startswith="writer:chatter")
+    factual_calls = EditorialCall.objects.exclude(stage__startswith="writer:chatter").exclude(stage__startswith="senior-review:")
     assert factual_calls.count() == 2
     assert all(call.reserved_usd == Decimal("0.001") for call in factual_calls)
-    assert EditorialBudget.objects.get().reserved_usd == Decimal("0.005")
+    assert EditorialBudget.objects.get().reserved_usd == Decimal("0.009")
 
 
 @pytest.mark.parametrize(
@@ -445,7 +449,8 @@ def test_context_is_frozen_for_both_tracks_but_only_cited_posts_are_attributed(
             content = body["messages"][1]["content"]
             if isinstance(content, list):
                 content = content[0]["text"]
-            writer_inputs.append(json.loads(content))
+            if "review_identity" not in json.loads(content):
+                writer_inputs.append(json.loads(content))
             data = {
                 "headline": "CAT NEWS",
                 "byline": "A cat-themed model release.",
@@ -454,7 +459,7 @@ def test_context_is_frozen_for_both_tracks_but_only_cited_posts_are_attributed(
                 "post_ids": ["101", "103"],
             }
         grounded = grounded_reply(body, data)
-        if "events" not in grounded:
+        if "events" not in grounded and "sections" not in grounded:
             source = next(
                 p
                 for p in writer_inputs[-1]["evidence"]

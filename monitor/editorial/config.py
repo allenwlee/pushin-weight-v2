@@ -81,6 +81,7 @@ class EditorialConfig(BaseModel):
         default_factory=dict
     )
     locale_routes: dict[str, Route] = Field(default_factory=dict)
+    reviewer: Route | None = None
     voices: dict[str, str] = Field(
         default_factory=lambda: {
             "chatter:en": "chatter-en-v1",
@@ -118,8 +119,9 @@ class EditorialConfig(BaseModel):
             or not self.daily_usd
             or not self.assessment_usd
             or not self.daily_calls
+            or self.reviewer is None
         ):
-            raise ValueError("generation requires explicit routes and positive budgets")
+            raise ValueError("generation requires explicit routes, senior reviewer and positive budgets")
         if any(binding not in self.voices for binding in self.locale_routes):
             raise ValueError("locale route requires a bound voice")
         if "derive" in self.pictures.values() and (
