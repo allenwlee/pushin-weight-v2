@@ -174,6 +174,7 @@ def test_completed_import_finishes_without_new_provider_calls(pipeline):
 
 def test_lease_expiring_during_storage_rolls_back_page(pipeline, monkeypatch):
     from datetime import timedelta
+
     from django.utils import timezone
     job = ready_job(cursor="previous")
     pipeline.responses.append(page("1"))
