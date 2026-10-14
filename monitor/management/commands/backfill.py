@@ -160,6 +160,20 @@ class Command(BaseCommand):
         )
         parser.add_argument("--storage-probe", action="store_true",
                             help="Measure a job's frozen captured page using existing Post updates; no provider calls.")
+        parser.add_argument("--enrich-native", action="store_true",
+                            help="Advance stored-post enrichment through native model batches; zero X requests.")
+        parser.add_argument("--enrichment-finish-pilot", action="store_true",
+                            help="After complete persisted pilot proof, continue the existing source cohort.")
+        parser.add_argument("--enrichment-post-ids", default=None,
+                            help="Freeze at most110 pilot/control Post IDs, comma separated.")
+        parser.add_argument("--enrichment-max-usd", default=None,
+                            help="Initial finite durable campaign reservation ceiling in USD.")
+        parser.add_argument("--enrichment-max-model-requests", type=int, default=20000,
+                            help="Initial campaign model-request allowance, retained across restarts.")
+        parser.add_argument("--enrichment-max-control-requests", type=int, default=5000,
+                            help="Initial campaign upload/poll allowance, separate from model starts.")
+        parser.add_argument("--enrichment-deadline", default=None,
+                            help="Initial aware ISO deadline for the whole enrichment campaign.")
         parser.add_argument(
             "--batch", action="store_true",
             help="Collect whole historical windows with per-page checkpoints, no cron waits or inline enrichment.",
@@ -248,6 +262,42 @@ class Command(BaseCommand):
                     "since", "until", "brands", "call_ids", "query", "reset", "quarantined", "retry_blocked",
                 )):
                     raise CommandError("--collection-job owns its frozen scope; omit scope/reset options")
+                if options["enrich_native"]:
+                    from core.provider_batches import BatchAdmissionError
+                    from monitor.backfill_enrichment import (
+                        execute_enrichment,
+                        finish_pilot,
+                        policy_snapshot,
+                    )
+                    read_only = options["status"] or options["dry_run"]
+                    cfg = load_config(Path("config.yaml"))
+                    if options["enrichment_finish_pilot"] and read_only:
+                        raise CommandError("finishing the pilot is a write; omit status/dry-run")
+                    policy = None
+                    if options["enrichment_max_usd"] or options["enrichment_deadline"] or options["enrichment_post_ids"]:
+                        if not options["enrichment_max_usd"] or not options["enrichment_deadline"]:
+                            raise CommandError("initial native enrichment requires spend ceiling and deadline")
+                        deadline = datetime.fromisoformat(options["enrichment_deadline"])
+                        if deadline.tzinfo is None:
+                            raise CommandError("enrichment deadline must include its time zone")
+                        policy = policy_snapshot(max_usd=options["enrichment_max_usd"], deadline=deadline,
+                            max_model_requests=options["enrichment_max_model_requests"],
+                            max_control_requests=options["enrichment_max_control_requests"],
+                            selection=(options["enrichment_post_ids"] or "").split(",") if options["enrichment_post_ids"] else [])
+                    api_key = os.environ.get("DEEPINFRA_API_KEY", "")
+                    if not api_key and not read_only:
+                        raise CommandError("native enrichment requires DEEPINFRA_API_KEY")
+                    try:
+                        if options["enrichment_finish_pilot"]:
+                            if policy is not None:
+                                raise CommandError("pilot continuation retains its existing identities and deadline")
+                            finish_pilot(options["collection_job"], cfg=cfg)
+                        self.result = execute_enrichment(options["collection_job"], cfg=cfg,
+                                                        api_key=api_key, policy=policy, read_only=read_only)
+                    except BatchAdmissionError as exc:
+                        raise CommandError(str(exc)) from None
+                    self.stdout.write(json.dumps(self.result, sort_keys=True))
+                    return
                 from monitor.backfill_collection import benchmark_page, execute_job
 
                 if options["storage_probe"] and not (options["status"] or options["dry_run"]):
@@ -260,6 +310,8 @@ class Command(BaseCommand):
                 return
             if options["storage_probe"]:
                 raise CommandError("--storage-probe requires --collection-job")
+            if options["enrich_native"]:
+                raise CommandError("--enrich-native requires --collection-job")
             return self._handle_guarded(*args, **options)
         finally:
             for name, value in previous_settings.items():

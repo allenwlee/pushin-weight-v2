@@ -808,7 +808,7 @@ class _BoundedClassifierClient:
     @property
     def calls(self) -> int:
         with self._lock:
-            return self._calls
+            return 0 if self.deferred_requests else self._calls
 
     @property
     def request_identity(self) -> str | None:
@@ -821,6 +821,10 @@ class _BoundedClassifierClient:
         """Keep the selected request format through the shared budget guard."""
         value = getattr(self._delegate, "request_profile", None)
         return value if isinstance(value, str) and value else None
+
+    @property
+    def deferred_requests(self) -> bool:
+        return getattr(self._delegate, "deferred_requests", False) is True
 
     @property
     def remaining_calls(self) -> int | None:
@@ -874,13 +878,13 @@ class _BoundedClassifierClient:
                 self._reserved_calls -= 1
             elif self._maximum_calls is not None and self._calls + self._reserved_calls >= self._maximum_calls:
                 raise LLMCallBudgetExhausted("classifier transport cap exhausted")
-            if self._last_started is not None and self._pause_seconds:
+            if not self.deferred_requests and self._last_started is not None and self._pause_seconds:
                 wait_seconds = (
                     self._last_started + self._pause_seconds - self._monotonic()
                 )
                 if wait_seconds > 0:
                     self._sleep(wait_seconds)
-            if self._before_call is not None:
+            if self._before_call is not None and not self.deferred_requests:
                 self._before_call()
             self._calls += 1
             self._last_started = self._monotonic()
@@ -898,10 +902,10 @@ class _BoundedClassifierClient:
         try:
             response = method(**kwargs)
         except Exception as exc:
-            if self._after_call is not None:
+            if self._after_call is not None and not self.deferred_requests:
                 self._after_call(exc)
             raise
-        if self._after_call is not None:
+        if self._after_call is not None and not self.deferred_requests:
             self._after_call(response)
         return response
 
@@ -975,6 +979,7 @@ def _requeue_recent_incomplete_translations(
     candidates = PostEnrichmentState.objects.filter(
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
         created_at__gt=age_cutoff,
+        source_collection_job__isnull=True,
     )
     if post_ids is not None:
         candidates = candidates.filter(post_id__in=post_ids)
@@ -1019,6 +1024,7 @@ def _claim_enrichment_states(
     prefer_created_before: datetime | None = None,
     post_ids: set[str] | None = None,
     defer_translation_attempts: bool = False,
+    source_collection_job_id: Any | None = None,
 ) -> EnrichmentClaimBatch:
     """Quarantine exhausted debt, then claim one atomic two-lane batch.
 
@@ -1042,11 +1048,13 @@ def _claim_enrichment_states(
     ) & (Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now))
     if post_ids is not None:
         due &= Q(post_id__in=post_ids)
+    due &= Q(source_collection_job_id=source_collection_job_id)
+    age_eligible = Q(created_at__gt=age_cutoff) if source_collection_job_id is None else Q()
     current_cycle: list[PostEnrichmentState] = []
     carryover: list[PostEnrichmentState] = []
 
     with transaction.atomic():
-        expired_due = due & Q(created_at__lte=age_cutoff)
+        expired_due = due & Q(created_at__lte=age_cutoff) & Q(source_collection_job__isnull=True)
         quarantined = PostEnrichmentState.objects.filter(expired_due).update(
             translation_status=Case(
                 When(
@@ -1085,7 +1093,7 @@ def _claim_enrichment_states(
         # Transition attempt-exhausted stages before either bounded lane is
         # sliced. Otherwise terminal debt can consume a claim slot and starve
         # eligible work at the edge of the cap.
-        attempt_exhausted = due & Q(created_at__gt=age_cutoff) & (
+        attempt_exhausted = due & age_eligible & Q(source_collection_job__isnull=True) & (
             Q(
                 translation_status=PostEnrichmentState.Status.PENDING,
                 translation_attempts__gte=cfg.max_attempts,
@@ -1164,7 +1172,7 @@ def _claim_enrichment_states(
         eligible_qs = (
             PostEnrichmentState.objects.select_for_update(skip_locked=True)
             .select_related("post")
-            .filter(due, created_at__gt=age_cutoff)
+            .filter(due, age_eligible)
             .annotate(
                 _retry_priority=Case(
                     When(
@@ -1183,6 +1191,8 @@ def _claim_enrichment_states(
             )
             .order_by("-created_at", "_retry_priority", "post_id")
         )
+        if source_collection_job_id is not None:
+            eligible_qs = eligible_qs.order_by("post_id")
 
         if prefer_created_before is None:
             legacy_cap = min(
@@ -1219,7 +1229,7 @@ def _claim_enrichment_states(
                     continue
                 attempts_name = f"{prefix}_attempts"
                 first_name = f"{prefix}_first_attempt_at"
-                if prefix == "translation" and defer_translation_attempts:
+                if source_collection_job_id is not None or (prefix == "translation" and defer_translation_attempts):
                     continue
                 setattr(state, attempts_name, getattr(state, attempts_name) + 1)
                 if getattr(state, first_name) is None:
@@ -1300,8 +1310,8 @@ def _finish_enrichment_stage(
                 setattr(state, next_name, None)
                 setattr(state, error_name, "")
             else:
-                exhausted = getattr(state, f"{stage}_attempts") >= cfg.max_attempts
-                aged = state.created_at <= age_cutoff
+                exhausted = state.source_collection_job_id is None and getattr(state, f"{stage}_attempts") >= cfg.max_attempts
+                aged = state.source_collection_job_id is None and state.created_at <= age_cutoff
                 if exhausted or aged:
                     setattr(state, status_name, PostEnrichmentState.Status.FAILED)
                     setattr(
@@ -2514,6 +2524,7 @@ class CycleRunner:
         _targeted_extraction_calls: dict[str, Any] | None = None,
         _official_company_call=None,
         _official_list_client=None,
+        _post_fetch_clients: dict[str, Any] | None = None,
         _clock=None,
         _monotonic=None,
     ) -> None:
@@ -2543,6 +2554,7 @@ class CycleRunner:
         self._targeted_extraction_calls = dict(_targeted_extraction_calls or {})
         self._official_company_call = _official_company_call
         self._official_list_client = _official_list_client
+        self._post_fetch_clients = _post_fetch_clients
         self._optional_calls_remaining = cfg.targeted_extraction.max_calls_per_cycle
         # U14 keeps server-owned clocks injectable for deterministic latency
         # proof. Production defaults remain the wall/monotonic clocks.
@@ -3775,6 +3787,7 @@ class CycleRunner:
         prefer_created_before: datetime | None = None,
         post_ids: set[str] | None = None,
         repair_manifest: dict[str, dict[str, Any]] | None = None,
+        source_collection_job_id: Any | None = None,
     ) -> dict[str, Any]:
         """Drain a bounded durable translation/classification claim batch.
 
@@ -3845,7 +3858,7 @@ class CycleRunner:
                 cfg=enrichment_cfg,
                 literal_v2_enabled=self.cfg.llm.literal_translation_v2_enabled,
                 post_ids=selected_post_ids,
-            )
+            ) if source_collection_job_id is None else 0
         )
 
         claim_batch = _claim_enrichment_states(
@@ -3854,6 +3867,7 @@ class CycleRunner:
             prefer_created_before=prefer_created_before,
             post_ids=selected_post_ids,
             defer_translation_attempts=self.cfg.llm.literal_translation_v2_enabled,
+            source_collection_job_id=source_collection_job_id,
         )
         claimed_states = list(claim_batch.states)
         counters["n_enrichment_claimed"] = len(claimed_states)
@@ -3961,12 +3975,12 @@ class CycleRunner:
         )
 
         translator_client = (
-            build_translator_client_from_env(self.cfg)
+            (self._post_fetch_clients["translation"] if self._post_fetch_clients is not None else build_translator_client_from_env(self.cfg))
             if translation_tweets
             else None
         )
         classifier_client = (
-            build_classifier_client_from_env(self.cfg)
+            (self._post_fetch_clients["classification"] if self._post_fetch_clients is not None else build_classifier_client_from_env(self.cfg))
             if classification_tweets
             else None
         )
@@ -4047,6 +4061,7 @@ class CycleRunner:
                     ]
                     telemetry = {"stage": "post_fetch", "run_id": run_id}
                     translation_rows = []
+                    deferred_chunks = []
                     if short_tweets:
                         short_budget = (
                             enrichment_cfg.short_post_budget_seconds
@@ -4064,8 +4079,9 @@ class CycleRunner:
                             enrichment_cfg.long_post_budget_seconds
                             if short_tweets else enrichment_cfg.attempt_budget_seconds
                         )
-                        current_long = long_tweets[:1]
-                        chunk_options = {"chunk_size": 2_000} if self._backfill_context is not None else {}
+                        long_limit = 10 if source_collection_job_id is not None else 1
+                        current_long = long_tweets[:long_limit]
+                        chunk_options = {"chunk_size": 2_000} if self._backfill_context is not None or source_collection_job_id is not None else {}
                         cached = load_literal_translation_chunks(
                             current_long, model=self.cfg.llm.translator_model,
                             prompt_version=chunk_translation_prompt_version(**chunk_options),
@@ -4079,11 +4095,11 @@ class CycleRunner:
                             max_workers=1, telemetry_context=telemetry,
                             **chunk_options,
                             cached_chunks=cached,
-                            on_chunk_success=lambda **kwargs: persist_literal_translation_chunk(
-                                **kwargs, expected_claim_run_id=run_id
-                            ),
+                            on_chunk_success=(lambda **kwargs: deferred_chunks.append(kwargs) or True)
+                            if source_collection_job_id is not None else
+                            (lambda **kwargs: persist_literal_translation_chunk(**kwargs, expected_claim_run_id=run_id)),
                         ))
-                        if len(long_tweets) > 1:
+                        if len(long_tweets) > long_limit:
                             from x_monitor.config import EnrichmentAttemptDeadline
 
                             no_call_deadline = EnrichmentAttemptDeadline(
@@ -4092,10 +4108,12 @@ class CycleRunner:
                                 monotonic=self._monotonic,
                             )
                             translation_rows.extend(translate_batch_literal_plaintext(
-                                long_tweets[1:], bounded_translator_client, cfg=self.cfg,
+                                long_tweets[long_limit:], bounded_translator_client, cfg=self.cfg,
                                 deadline=no_call_deadline, max_workers=1,
                                 telemetry_context=telemetry,
                             ))
+                    for chunk in deferred_chunks:
+                        persist_literal_translation_chunk(**chunk, expected_claim_run_id=run_id)
                 else:
                     translation_deadline = enrichment_cfg.start_attempt_deadline(
                         monotonic=self._monotonic

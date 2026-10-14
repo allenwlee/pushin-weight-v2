@@ -653,5 +653,9 @@ class DeepInfraChatCompletionsClient:
 
     def messages_create_text(self, **kwargs: Any) -> ProviderTextResponse:
         decoded = self._send_request(self.build_request(**kwargs), timeout=kwargs.get("timeout", 60))
+        return self.parse_text_response(decoded)
+
+    def parse_text_response(self, decoded: dict[str, Any]) -> ProviderTextResponse:
+        """Validate a stored raw-text reply through the direct transport's policy."""
         usage, content = self._validated_response(decoded)
         return ProviderTextResponse(text=content, provider_usage=usage)

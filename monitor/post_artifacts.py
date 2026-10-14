@@ -122,18 +122,23 @@ def persist_literal_translation_chunk(
         return True
 
 
-def literal_translation_artifact_complete(post: Post) -> bool:
+def literal_translation_artifact_complete(post: Post, *, artifacts=None) -> bool:
     """Prove that the current source has a complete EN/ZH-CN/JA literal artifact."""
-    artifact = (
-        PostTranslationArtifact.objects.filter(
-            post=post,
-            is_current=True,
-            state=PostTranslationArtifact.State.SUCCEEDED,
-            source_content_fingerprint=source_content_fingerprint(post),
+    if artifacts is not None:
+        fingerprint = source_content_fingerprint(post)
+        artifact = next((row for row in artifacts if row.is_current and row.state == "succeeded"
+                         and row.source_content_fingerprint == fingerprint), None)
+    else:
+        artifact = (
+            PostTranslationArtifact.objects.filter(
+                post=post,
+                is_current=True,
+                state=PostTranslationArtifact.State.SUCCEEDED,
+                source_content_fingerprint=source_content_fingerprint(post),
+            )
+            .prefetch_related("texts")
+            .first()
         )
-        .prefetch_related("texts")
-        .first()
-    )
     if artifact is None:
         return False
     texts = {

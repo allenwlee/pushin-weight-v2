@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import time
@@ -134,6 +135,11 @@ def _translate_one(
     model, thinking = _translation_request_defaults(cfg)
     row = _row(tweet, lang_detected=None, failed=False)
     source_language = _declared_source_language(tweet)
+    if getattr(client, "deferred_requests", False):
+        telemetry_context = {**(telemetry_context or {}), "batch_request_context": {
+            "post_ids": [row["tweet_id"]], "stage": "translation",
+            "source_fingerprint": hashlib.sha256(source.encode()).hexdigest(),
+        }}
     if source_language is None:
         detected, usage, latency_ms, outcome = _detect_source_language(
             source[:LONG_POST_THRESHOLD] if len(source) > LONG_POST_THRESHOLD else source,
@@ -198,6 +204,8 @@ def _translate_one(
                 row["latency_ms"] += latency_ms
                 _record_call_outcome(row, target_language, outcome, chunk_index=index)
                 if part is None:
+                    if outcome == "not_sent_async_pending":
+                        continue
                     break
                 if on_chunk_success is not None:
                     try:
@@ -308,6 +316,12 @@ def _translate_target(
     context_after: str = "",
 ) -> tuple[str | None, dict[str, int | float | str | None], int, str]:
     from .translation_invariants import protect_translation_spans
+
+    if (telemetry_context or {}).get("batch_request_context"):
+        telemetry_context = {**telemetry_context, "batch_request_context": {
+            **telemetry_context["batch_request_context"], "target_language": target_language,
+            "source_language": source_language, "chunk_index": chunk_index,
+        }}
 
     payload, quantities = protect_translation_spans(source, target_language)
     if paragraph_tracking:
@@ -589,7 +603,7 @@ def _split_translation_chunks(source: str, *, chunk_size: int = LONG_POST_THRESH
 def _record_call_outcome(
     row: dict[str, Any], target: str, outcome: str, *, chunk_index: int | None = None
 ) -> None:
-    if not outcome.startswith("not_sent_"):
+    if not outcome.startswith("not_sent_") and outcome != "cached":
         row["provider_calls"] += 1
     if outcome not in {"returned", "cached"}:
         prefix = f"chunk_{chunk_index}:" if chunk_index is not None else ""
@@ -609,6 +623,7 @@ def _call_text(
 ) -> tuple[str | None, dict[str, int | float | str | None], int, str]:
     """Make one non-retrying raw-text request and retain usage on every outcome."""
     context = dict(telemetry_context or {})
+    batch_context = context.pop("batch_request_context", None)
     context["provider_host_class"] = provider_host_class(client)
     started = time.monotonic()
     kwargs: dict[str, Any] = {
@@ -616,6 +631,8 @@ def _call_text(
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     }
+    if batch_context is not None:
+        kwargs["_batch_context"] = {**batch_context, "operation": role}
     if thinking is not None:
         kwargs["thinking"] = thinking
     if getattr(client, "request_profile", None) == "deepseek_0731":
@@ -651,7 +668,7 @@ def _call_text(
             role=role,
             model=model,
             attempt=1,
-            outcome="success",
+            outcome="cached" if getattr(client, "deferred_requests", False) else "success",
             started=started,
             response=response,
             prompt=prompt,
@@ -661,8 +678,11 @@ def _call_text(
     except Exception as exc:  # noqa: BLE001 - provider transports attach usage to errors too.
         from .attribution import LLMCallBudgetExhausted
         from .deepinfra import DeepInfraPermanentError
+        from .deferred_inference import DeferredRequestPending
 
         usage = normalize_usage(getattr(exc, "provider_usage", None))
+        if isinstance(exc, DeferredRequestPending):
+            return None, usage, _elapsed_ms(started), "not_sent_async_pending"
         if isinstance(exc, LLMCallBudgetExhausted):
             return None, usage, _elapsed_ms(started), "not_sent_call_budget"
         if isinstance(exc, DeepInfraPermanentError) and str(exc) in {

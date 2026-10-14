@@ -24,7 +24,13 @@ Search whole requested windows, remember the provider cursor after every stored
 page, and collect independently of translation and classification. Fixed sleeps,
 quarter-hour admission and arbitrary five-page query caps are retired for batch
 execution. Shared fetch, attribution and Post storage remain in use. Missing
-enrichment on stored posts is a separate workload.
+enrichment on stored posts is a separate processing phase.
+The owner's October 14 requirement makes batch enrichment part of the backfiller:
+collecting posts alone no longer completes the overall task.
+The same design must handle a month or longer with bounded memory, durable progress,
+and no repeated collection or completed model work.
+Collection and Render adoption are verified; the enrichment phase remains to be implemented.
+U9 below records the new requirements and the proposed provider-batch approach.
 
 The original 15-minute probes found no new posts. The owner widened the test
 to two hours across all 21 brands; it recovered 98 new staging posts, with 48 of
@@ -41,8 +47,9 @@ scheduled seven-call path remains unchanged.
 
 ## Goal Capsule
 
-- Objective: fix the current on-demand backfiller's deficiencies and prove a
-  successful real staging recovery; owner widened U7 to two hours/all21brands.
+- Objective: recover historical X posts and finish their required enrichment through
+  the backfiller, with resumable batches suitable for a month or longer.
+  August 9 staging collection is verified; end-to-end completion now also requires U9.
 - Authority: owner's LFG fixes-and-test request; G3's approved atomic-JSON
   staging-pilot boundary, verified in both plans after the owner's check-files
   continuation. Shared schema, production collection and month campaigns remain
@@ -54,6 +61,9 @@ scheduled seven-call path remains unchanged.
   verified code and its prepared pilot contract.
 - Stop: preserve state and report a real failed/partial test or exhausted finite
   allowance; never replace the fixed window or substitute a mock for live proof.
+- Current continuation: owner requests brainstorming and adds batch enrichment and
+  month-or-longer scalability as requirements. This step changes the existing plan;
+  it does not launch model work, a month campaign, or a production transfer.
 
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -772,3 +782,217 @@ prerequisite, not renewed approval for the already authorized backfill or move.
 - 2026-10-14T05:07:11.589418+00:00 FINAL FAILURE RECEIPT PIN — Mixed valid/out-of-window provider page now retains valid saved Post IDs and actual raw count in its fenced scope envelope while its cursor remains unchanged/blocked. Real PG pin failed on missing recovered ID before repair; final focused109pass/73requiredPG/0skips/errors, alongside still-valid224/123PG regression evidence for unchanged paths. Successful4b5f1c54 adoption/paired timing retained; final source confirmation will use a zero-provider captured-page check, not a fresh date/paid run.
 
 - 2026-10-14T05:26:48.193648+00:00 FINAL SOURCE VERIFIED — fd6f9594 live on staging web/build donor; source-check job-db7gt9k9v7es73c1i610 succeeded,1660IDs reconciled,0API/models,state unchanged. CIall4green. Same18-update timing105.618s outlier; bounded diagnostic job-db7h2ajbc2fs73f6ona0 succeeded at1.714s writer/2.381s total,1.579s SQL(380statements),1.322CPU seconds,106.5MiB peak memory. Outlier unaccounted, no stable full-day/month throughput claimed. Acceptance is frozen and fulfilled; no further new-date/provider/performance batches. Remaining changes are evidence-only closeout.
+
+## U9 — Batch enrichment for month-or-longer recovery [implementation in progress]
+
+### Owner requirement and present state
+
+The October 14 owner requires enrichment in batches as part of the backfiller and requires that design to scale to a month or longer.
+The earlier collection-only acceptance remains a truthful historical receipt, but no longer establishes an end-to-end complete backfiller.
+The owner has authorized implementation and bounded staging model acceptance.
+No production import, production release or scheduler activation is authorized.
+
+At the read-only October 14 07:32 UTC comparison, the recovered August 9 cohort contains 1,660 staging posts: 239 have both durable enrichment stages succeeded and 1,421 are incomplete.
+Of the incomplete posts, 1,399 have never had an enrichment attempt and 22 have incomplete attempts.
+Production contains only five of those recovered IDs; 1,655 are missing, including all 239 with completed staging enrichment.
+These are distinct collection, enrichment, and production-presence counts.
+The 239 status successes still require persisted-output validation before any broader health-completion claim.
+
+### Required behavior
+
+| ID | Requirement |
+| --- | --- |
+| BFE-R01 | Normal backfill execution orchestrates collection and enrichment, with explicit collection-only and enrichment-only modes available for operations. |
+| BFE-R02 | Enrichment-only execution processes the exact durable recovered cohort and makes zero TwitterAPI calls. |
+| BFE-R03 | Translation and classification reuse the harvester's request builders, model routes, validators, artifact writers, and final publisher. |
+| BFE-R04 | Resume skips valid completed stages and matching saved translation chunks; changing source, context, model, or prompt invalidates reuse through canonical identity rules. |
+| BFE-R05 | Month-or-longer inputs use bounded database reads, request files, imports, and in-flight work; total cohort size cannot require loading every ID or result into memory. |
+| BFE-R06 | Database progress survives Render process replacement, including submitted provider jobs whose results are still outstanding. |
+| BFE-R07 | Historical queue policy does not expire untouched work because a campaign takes longer than the scheduled harvester's 24-hour enrichment age limit. |
+| BFE-R08 | Long posts receive a separate fair allocation and resumable chunk processing, without starving shorter posts or other long posts. |
+| BFE-R09 | Physical model requests, reserved and actual spend, retries, and unresolved submission outcomes remain accounted for across restarts. |
+| BFE-R10 | Model waits hold no global harvest writer lock or long database transaction; short fenced writes prevent duplicate ownership and stale result publication. |
+| BFE-R11 | Retry only unfinished work with bounded transient retries; permanent validation failures remain visible and do not block unrelated eligible posts. |
+| BFE-R12 | Report collection, translation, classification, submitted/waiting, retryable, and failed counts separately, plus actual throughput, tokens, and costs. |
+| BFE-R13 | Overall success requires collection to drain and required persisted enrichment to validate for the full recovered cohort; outstanding or failed work remains partial. |
+
+Canonical `context_missing` outcomes remain valid when the existing classifier contract permits them.
+Do not manufacture a sentiment, force a substantive classification, or weaken validation to turn a failure green.
+The old two-hour classifier override does not silently waive the new enrichment requirements.
+
+### Recommended approach and tradeoff
+
+Use the existing DeepInfra provider's asynchronous Batch API for large background campaigns and retain a bounded direct-processing mode for urgent repairs and immediate smoke tests.
+This is a proposed transport choice, not an implemented or owner-approved runtime change.
+Both transports must use the same prepared requests and validate/persist returned results through the same shared code.
+
+DeepInfra's [Batch API introduction](https://docs.deepinfra.com/batch/introduction) documents a 20% discount, rate limits separate from real-time inference, a 24-hour completion window, and per-file ceilings of 50,000 requests / 200 MB.
+Each file uses one model and one endpoint; a request file is a container of independent model calls, not one enormous prompt.
+Its [Batch objects reference](https://docs.deepinfra.com/batch/batch-objects) confirms that expired jobs can still have completed results.
+Import validated successes from partial provider jobs and retain unresolved requests as unfinished.
+These facts favor cost and background throughput; they do not prove faster August 9 wall-clock completion.
+Dependent translation and classification waves can each consume a provider completion window.
+
+Proposed flow:
+
+1. Read a bounded part of the durable recovered cohort and identify genuinely missing stages under the current source/model/prompt identities.
+2. Prepare language-detection requests only where needed, copy known source-language text into matching locale fields, and submit only required translations/chunks.
+3. Persist provider file/job identities before relying on them for continuation; reconcile ambiguous submissions before paying for a duplicate submission.
+4. Import translations through existing validators and artifact/chunk writers, then prepare classification inputs using the now-stored source, translations, context, and affiliations.
+5. Submit the existing two classification roles in their established groups of up to 20 posts, preserving exact request profiles and final sibling validation.
+6. Publish validated results in short transactions, retry unfinished stages, and reconcile persisted outputs before reporting the overall campaign complete.
+
+The active literal translator deliberately uses isolated post/locale/chunk requests.
+Do not combine many translations into a new prompt just to reduce request counts; bulk submission can reduce orchestration overhead without changing that contract.
+The classifier deliberately does not reuse a partial role as a completed classification: a failed sibling still requires the canonical paired retry/merge behavior.
+Batch size is bounded by requests, bytes, token budgets, and spend, independent of historical date intervals.
+Provider preparation/import can proceed in successive windows of work without waiting for an entire multi-month collection to finish.
+Use low initial in-flight file counts and grow them only from measured import memory, completion rate, and provider behavior.
+No fixed pauses apply to work ready for submission; waiting for an asynchronous provider result and backing off an observed failure are separate states.
+Bound each execution and resume from database progress instead of requiring one process to live for the whole campaign.
+[Render one-off jobs](https://render.com/docs/one-off-jobs) are terminated after 30 days; the historical data window can be longer than any one execution.
+Enrichment needs its own explicit finite allowance and asynchronous deadline; it cannot silently reset collection spend or inherit an already-expired collection deadline.
+
+### Persistence review and proposed file scope
+
+Reuse `PostEnrichmentState` for per-post stage state and existing translation artifacts/chunks and classification state/judgments for model output.
+Use shared collection records for collection instructions and recovered-cohort evidence; do not rewrite a truthful successful collection run as a failed enrichment attempt.
+Inspect `CollectionObservation` as a possible indexed per-resource cohort record with G3, rather than repeatedly copying a growing all-post-ID array.
+An asynchronous provider submission also needs durable request identity, provider file/batch IDs, import progress, and budget reservations; existing in-memory `BackfillBudget` and Render-local files are insufficient.
+G3 subsequently selected one generic ProviderBatch table (adds1, retires0),
+with the exact delegated boundary and migration slot recorded below.
+Do not create parallel backfill job/run tables or put inference attempts into collection records.
+
+Proposed implementation scope: `monitor/management/commands/backfill.py`, `monitor/backfill_collection.py`, `monitor/backfill_resources.py`, shared enrichment orchestration in `monitor/cycle.py`, shared request preparation/validation in `x_monitor/literal_translation.py` and `x_monitor/attribution.py`, and their real-caller PostgreSQL regression tests.
+The selected shared schema is being implemented in reserved0085, under G3 review.
+The current G3 collection owner supplied the October 14 Batch Enrichment Persistence Recommendation in `docs/analysis/2026-10-13-160815-g3-backfill-collection-interface.md` in the authoritative G3 checkout.
+The initial recommendation documented those schema gaps; G3's later selected-design
+section supersedes its undecided table choice. Existing observation kinds needed
+explicit Post admission and the call owner needed an enforced authored/batch XOR.
+Audit purpose-safe generalization of that existing provider-call ledger and its readers/writers; do not create a fake authored-content owner or classify a post as an aggregate to bypass constraints.
+The follow-up proposal must cover typed cohort membership, batch versus request identity, import state, cross-lane duplicate-call prevention, durable budgets, and ambiguous submissions before G3 selects shared schema/API changes.
+Preserve scheduled models/prompts, ordinary harvester age/claim policy and seven-call collection path, Post storage, live cursor/backlog rules, existing service inventory, and scheduled/on-demand TwitterAPI credential separation.
+Production transfer is a separate task from enrichment and remains unperformed.
+
+### Required proof before calling this complete
+
+The regression net must exercise the real command through shared request preparation, fake provider submission/results, PostgreSQL claims, and final publishers.
+Cover zero TwitterAPI calls in enrichment-only mode; skipping complete stages; shuffled/duplicate/partial outputs; missing/invalid classification siblings; source changes while waiting; model/token/spend admission; interrupted submission/import; lease recovery; and no global lock held while awaiting model results.
+Exercise 30- and 90-day generated cohorts to prove bounded reads/memory, fair long-post progress, restart survival, and no age-based loss of untouched historical work.
+Those are scalability tests, not permission for new paid historical collections.
+
+After implementation, a separately bounded live staging check must include short and long posts, partial translations, and the known classification-conflict case, and verify the exact current model profiles on the Batch endpoint.
+Then finish the existing August 9 incomplete cohort, preserve valid completed outputs, and validate full persisted translation/classification coverage.
+Any remaining invalid or exhausted work keeps the live result partial; a green Render exit or a provider `completed` status cannot substitute for that database proof.
+Publish measured posts/requests per minute, tokens/spend per post, peak Render memory, and import rate before estimating a full month.
+
+- 2026-10-14T16:51:56+09:00 REQUIREMENTS REOPENED — Owner requires integrated batch enrichment and month-or-longer scale. Current application remains collection-complete/enrichment-incomplete. Record provider-batch/direct-mode proposal, shared-code/storage review, and exact-cohort completion proof in this same plan; no application, model, database, scheduler, Git delivery, or production mutation.
+
+### Next implementation and August 9 verification sequence
+
+#### Selected design, authority and implementation claim — October 14
+
+The owner authorizes implementation and staging acceptance ("go"), paid LLM
+requests with accounting, zero TwitterAPI calls, and protection against server
+limits. This continues the selected staging endpoint; no production transfer,
+production release, scheduler activation or new collection window is authorized.
+G3 selects one `ProviderBatch` table (adds one, retires zero) in its authoritative
+`docs/analysis/2026-10-13-160815-g3-backfill-collection-interface.md` handoff.
+This group execution record owns real external files/submission/poll/import state,
+which neither one model request nor source collection can represent correctly.
+Reuse `OriginalContentCall` for model reservations/results with exactly one owner
+(authored run or provider batch), bounded actual Post members and import evidence;
+extend `CollectionObservation` with typed Post membership and preserve all numeric
+constraints; add historical provenance to `PostEnrichmentState`. Collection
+outcomes remain immutable. No synthetic collection run or authored owner.
+
+Active bounded ownership: this branch owns only the `ProviderBatch`,
+`OriginalContentCall`, `CollectionObservation`, and `PostEnrichmentState` model
+sections; `0085_provider_batch_enrichment` depending on existing0082; one generic
+batch persistence helper and PostgreSQL tests; and its existing shared transport,
+request preparation, cycle/backfill adapters, CLI and real-caller tests. G3 owns
+design review and later account integration. Account sections and migrations0083/
+0084 and shared collection lifecycle/scheduler policy are excluded. Send exact
+diff and required PostgreSQL evidence to G3 before staging DDL or paid acceptance.
+
+Prepare and replay the existing literal translator and fixed-slot classifier
+through a deferred client; preserve prompts/models/validators and publishers.
+Preparation transactions roll back when replies are outstanding. Persist request
+intents outside them, upload homogeneous bounded model files, wait without any
+collection/Post lease, stream responses into exact request identities, then replay
+validated results through the same publishers. Translation dependencies precede
+classifier evidence; completed stages are skipped. Partial/error/ambiguous states
+retain reservations, require reconciliation and never count as success.
+
+Resource contract: maximum2000 requests and16MiB per file, one active file per
+model for this campaign, imports bounded to100 Posts, short fenced database leases,
+minimum60-second polls with Retry-After and increasing delay on retryable failures.
+Preparation/replay performs no network calls or fixed request sleeps. Campaign
+admission ceilings include all retained request reservations: USD5 for the100-Post
+pilot and USD25 for the entire day,20000 model requests and5000 control requests;
+no automatic increases. Reserve conservative UTF-8-byte input/output-token cost
+at current standard prices before each physical attempt; record provider cost
+when supplied and label calculated or missing costs explicitly. Native pricing
+discount may lower observed cost but is not assumed for admission. Pilot deadline
+72hours accounts for dependent24-hour Batch waves, with finite3physical attempts
+per input identity; missing/invalid work remains partial on exhaustion. A timeout
+or uncertain POST is reconciled before another send. No blind retries.
+
+General campaign allowances/deadlines are explicit configurable inputs for later
+month-or-longer jobs; defaults do not reset on restart. This authorized live day
+keeps its USD5pilot/USD25whole-day,20000model/5000control ceilings and72-hour
+deadline. Larger generic input bounds do not grant a new paid month campaign.
+The source-job database-name/role pin is checked before any write or HTTP.
+
+2026-10-14T19:35:00+09:00 IMPLEMENTATION — Native preparation/submission/restart/
+import uses shared translator/classifier validators/publishers. Required isolated
+PG net37pass/0skips/errors plus33provider/caller units; populated0085-first and
+accounts-first graph proofs preserve authored calls/Post and refuse reverse with
+new evidence (PG17.9). Staging census is read-only PG18.4/0082:1660recovered,
+1421flag-incomplete,239flag-complete,198persisted-valid. All41false successes have
+only1brand state against2–6current brands; one also lacks a current complete
+literal artifact. Initial/pilot-expansion and collection-page auditing reopen
+only invalid stages, retain valid translations/judgment history and source
+collection success, and protect all untouched historical pending rows from live
+expiry. Frozen100incomplete+10genuine controls include all22previous attempts,
+knownconflict,10long posts and32declared-language buckets. No paid models/X yet.
+Additional bounded file ownership: shared artifact-completeness adapter and
+existing backfill CI workflow; no UI/browser routes affected.
+
+2026-10-14T20:30:00+09:00 LOCAL VERIFICATION — Broad450pass/187requiredPG with0
+skips/errors; fresh61pass/28requiredPG cover final native/ledger/realHTTP source.
+Source mutation between preview and reservation is refused before any network;
+actual HTTP admission callback ABI exercised by the real native transport.
+Database defaults for member IDs/import state/import evidence allow older authored
+writers to insert during additive deployment (red before fix, green afterward).
+Both populated migration orders and reverse refusal pass again after that fix.
+Inline review/simplification per AGENTS tool mapping complete; no open local
+finding. External Claude CLI resolved through MiniMax/non-project credential,
+received402 insufficient balance, and produced no review; request should have
+been blocked by provider/credential discovery. No retry or account configuration
+change; adversarial review completed inline, no independent promotion claimed.
+Production checker ran exactly twice on the same20IDs30minutes apart: both
+unhealthy on existing deployed code. This is baseline evidence, not a candidate
+production health pass. Candidate remains stage-only. Exact diff and PG proof
+sent to G3; schema adjudication and native paid pilot/full-cohort proof pending.
+
+2026-10-14T18:21:56+09:00 ON — implementing the G3-selected persistence slice and
+native batch orchestration. Transport/shared callers tested;178 focused checks
+executed on isolated PostgreSQL (34 required database checks, zero skips/errors).
+One read-only provider control preflight, zero model requests, zero TwitterAPI.
+
+The owner's next-step question identifies the already-collected August 9 UTC day as the appropriate enrichment test data.
+Use its existing staging collection job `58111a25-7e6a-4f96-893f-142a6c4b58ca` and exact recovered cohort; the 24 hours describes post creation dates, not a required worker runtime.
+The proposed asynchronous runner is not implemented, so invoking the old collection-only batch is not this test.
+
+1. Finalize the focused persistence proposal with G3: audit existing provider-call owners/readers/writers, indexed post membership, outstanding-request exclusion, durable reservations, and recovery after ambiguous provider acceptance. Implement only the selected shared extension; keep PR60 account work and migration numbering coordinated.
+2. Extract shared request preparation/response validation as needed, implement resumable provider submission/import and enrichment-only orchestration, and preserve the scheduled caller's models, profiles, semantics, and resource defaults.
+3. Run the real-caller PostgreSQL regression net, including pending work older than 24 hours, asynchronous results outliving a post lease, paired classifier failures, interruption/restart, and generated 30-/90-day cohorts.
+4. Refresh the August 9 cohort's states and freeze 100 incomplete posts for the first live check. Include all 22 previously attempted incomplete posts from the planning snapshot where still eligible, the known classifier-conflict case, and a representative mix of languages and short/long posts. Add 10 genuinely complete posts as controls that must incur zero new model calls.
+5. Before sending, freeze the deployed revision, model/prompt/request identities, exact selected IDs, finite request/token/spend allowance and a deadline suitable for asynchronous provider completion. Derive the request ceiling from missing locale/chunk/detection work and paired classification calls; retain prior spend and ambiguous reservations. Verify actual staging/database identity and required role credentials without exposing their values.
+6. Exercise the native Batch endpoint and restart while results are outstanding, then reconcile validated outputs for the selected posts. Require no duplicate model submission, no TwitterAPI calls, no unrelated-post changes, preserved valid control outputs, and unchanged harvest cursor/backlog state. Keep direct-mode checks distinct; a passing direct-only test cannot prove provider-batch behavior.
+7. If the native-batch sample succeeds, resume the remaining incomplete August 9 posts without reprocessing the successful sample or valid completed stages. Reconcile all 1,660 recovered posts and validate their required persisted outputs. A sample failure keeps the rollout partial until its cause is repaired; do not silently waive the conflict or increase retry/spend limits.
+
+Report model request count, tokens and actual/unknown cost, provider wait time versus active preparation/import time, posts per minute, peak Render memory and database import rate.
+Use those observations for day/week/month estimates only after separating fixed startup/wait overhead from volume-dependent work.
+The first live check and full-cohort continuation remain staging work; neither step copies posts to production or collects a new historical window.

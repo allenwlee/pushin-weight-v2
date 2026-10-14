@@ -186,6 +186,13 @@ class PageCheckpoint:
             with fenced_run(self.claim):
                 pass
             ids.extend(str(item["_persisted_post_id"]) for item in items if item.get("_persisted_post_id"))
+            from core.provider_batches import record_post_membership
+            record_post_membership(run, scope, ids)
+            from core.models import CollectionObservation
+            from monitor.backfill_enrichment import reopen_incomplete_successes
+            reopen_incomplete_successes(
+                run.job, CollectionObservation.objects.filter(run=run, post_id__in=ids),
+            )
             # A successful count is a stored result, including duplicate updates.
             run.success_count += result[0] + result[1]
             run.save(update_fields=["success_count", "updated_at"])

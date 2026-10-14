@@ -1079,6 +1079,7 @@ def _call_signal_with_retry(
     telemetry_context: dict[str, Any] | None = None,
     operation_kind: str = "initial",
     transport_reservation: str | None = None,
+    batch_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Call the LLM with exponential backoff (mirrors translator).
 
@@ -1101,6 +1102,8 @@ def _call_signal_with_retry(
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     }
+    if batch_context is not None:
+        create_kwargs["_batch_context"] = batch_context
     if system is not None:
         create_kwargs["system"] = system
     if temperature is not None:
@@ -1142,7 +1145,7 @@ def _call_signal_with_retry(
             call_kwargs["timeout"] = request_timeout
         try:
             response = client.messages_create(**call_kwargs)
-            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="success", started=started, response=response, prompt=telemetry_prompt, **event_context, attempt_kind=attempt_kind)
+            emit_attempt(logger, role="classification", model=create_kwargs["model"], attempt=attempt + 1, outcome="cached" if getattr(client, "deferred_requests", False) else "success", started=started, response=response, prompt=telemetry_prompt, **event_context, attempt_kind=attempt_kind)
             return response
         except LLMCallBudgetExhausted:
             raise
@@ -4260,16 +4263,24 @@ def classify_batch_pragmatics_full(
             on_batch_error(tweets, exc)
         return empty
     indexed_batches: list[tuple[list[int], list[dict[str, Any]]]] = []
-    for start in range(0, len(tweets), _CLASSIFY_BASE_BATCH_SIZE):
-        indexes = list(range(start, min(start + _CLASSIFY_BASE_BATCH_SIZE, len(tweets))))
-        batch = [tweets[index] for index in indexes]
-        kept = [
-            tweet for tweet in batch
-            if tweet.get("brand_ids")
-            and (registry_ids is None or set(tweet["brand_ids"]).issubset(registry_ids))
-        ]
-        if kept:
+    indexes: list[int] = []
+    kept: list[dict[str, Any]] = []
+    decision_count = 0
+    for index, tweet in enumerate(tweets):
+        brand_ids = tweet.get("brand_ids") or []
+        if not brand_ids or (registry_ids is not None and not set(brand_ids).issubset(registry_ids)):
+            continue
+        if kept and (
+            len(kept) >= _CLASSIFY_BASE_BATCH_SIZE
+            or (selected_0731 and decision_count + len(brand_ids) > 99)
+        ):
             indexed_batches.append((indexes, kept))
+            indexes, kept, decision_count = [], [], 0
+        indexes.append(index)
+        kept.append(tweet)
+        decision_count += len(brand_ids)
+    if kept:
+        indexed_batches.append((indexes, kept))
 
     def call_role(batch: list[dict[str, Any]], role: str, reservation: str | None = None) -> tuple[list[dict[str, Any]], str, dict[str, dict[str, Any]]]:
         fixed_contract = (
@@ -4317,6 +4328,11 @@ def classify_batch_pragmatics_full(
                 },
                 operation_kind="initial",
                 transport_reservation=reservation,
+                batch_context=({
+                    "post_ids": [item["tweet_id"] for item in payload],
+                    "stage": "classification", "role": role,
+                    "input_fingerprints": {item["tweet_id"]: item["input_context_fingerprint"] for item in payload},
+                } if getattr(anthropic_client, "deferred_requests", False) else None),
             )
             parsed = (
                 _two_role_parse_fixed_slots(

@@ -35,6 +35,7 @@ from datetime import datetime, timedelta
 from typing import Any, ClassVar, Literal
 from urllib.parse import urlparse
 
+from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.indexes import GinIndex, OpClass
 from django.db import IntegrityError, models, transaction
 from django.db.models.functions import Upper
@@ -1583,6 +1584,10 @@ class PostEnrichmentState(models.Model):
         db_column="post_id",
         to_field="tweet_id",
         primary_key=True,
+    )
+    source_collection_job = models.ForeignKey(
+        "CollectionJob", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="enrichment_states",
     )
     translation_status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.PENDING
@@ -4107,8 +4112,66 @@ class TrendNarrativeDemand(models.Model):
         ]
 
 
+class ProviderBatch(models.Model):
+    """One resumable provider group; model-call charges live on its children."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    source_collection_job = models.ForeignKey(
+        "CollectionJob", on_delete=models.PROTECT, related_name="provider_batches",
+    )
+    group_key = models.CharField(max_length=128)
+    transport = models.CharField(max_length=16)
+    stage = models.CharField(max_length=64, default="enrichment")
+    source_definition_hash = models.CharField(max_length=64)
+    cohort_hash = models.CharField(max_length=64)
+    manifest_hash = models.CharField(max_length=64)
+    provider = models.CharField(max_length=80)
+    model = models.CharField(max_length=160)
+    endpoint = models.CharField(max_length=128)
+    request_profile = models.CharField(max_length=80)
+    policy = models.JSONField(default=dict)
+    state = models.CharField(max_length=24, default="registered")
+    input_file_id = models.CharField(max_length=256, blank=True, default="")
+    output_file_id = models.CharField(max_length=256, blank=True, default="")
+    error_file_id = models.CharField(max_length=256, blank=True, default="")
+    provider_batch_id = models.CharField(max_length=256, blank=True, default="")
+    provider_status = models.CharField(max_length=32, blank=True, default="")
+    control_requests = models.PositiveIntegerField(default=0)
+    control_evidence = models.JSONField(default=list)
+    request_count = models.PositiveIntegerField(default=0)
+    imported_count = models.PositiveIntegerField(default=0)
+    import_cursor = models.CharField(max_length=256, blank=True, default="")
+    error_code = models.CharField(max_length=64, blank=True, default="")
+    deadline_at = models.DateTimeField()
+    next_poll_at = models.DateTimeField(null=True, blank=True)
+    claim_owner = models.CharField(max_length=128, blank=True, default="")
+    claim_fence = models.PositiveIntegerField(default=0)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    claim_expires_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "provider_batches"
+        indexes = [
+            models.Index(fields=["source_collection_job", "state"], name="idx_batch_job_state"),
+            models.Index(fields=["state", "next_poll_at"], name="idx_batch_poll_due"),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["source_collection_job", "group_key"], name="uq_batch_job_group"),
+            models.UniqueConstraint(fields=["source_collection_job", "model"], condition=models.Q(transport="batch", state__in=["registered", "uploading", "uploaded", "submitting", "waiting", "ambiguous", "importing"]), name="uq_batch_active_job_model"),
+            models.UniqueConstraint(fields=["provider", "provider_batch_id"], condition=models.Q(provider_batch_id__gt=""), name="uq_batch_remote_identity"),
+            models.CheckConstraint(condition=models.Q(transport__in=["batch", "direct"]), name="ck_batch_transport"),
+            models.CheckConstraint(condition=models.Q(transport="batch") | models.Q(input_file_id="", output_file_id="", error_file_id="", provider_batch_id=""), name="ck_batch_direct_ids"),
+            models.CheckConstraint(condition=models.Q(state__in=["registered", "uploading", "uploaded", "submitting", "waiting", "ambiguous", "importing", "completed", "failed", "cancelled"]), name="ck_batch_state"),
+            models.CheckConstraint(condition=models.Q(source_definition_hash__regex=r"^[0-9a-f]{64}$", cohort_hash__regex=r"^[0-9a-f]{64}$", manifest_hash__regex=r"^[0-9a-f]{64}$"), name="ck_batch_hashes"),
+            models.CheckConstraint(condition=models.Q(claimed_at__isnull=True, claim_expires_at__isnull=True, claim_owner="", claim_fence=0) | models.Q(claimed_at__isnull=False, claim_expires_at__gt=models.F("claimed_at"), claim_owner__gt="", claim_fence__gt=0), name="ck_batch_claim_shape"),
+        ]
+
+
 class OriginalContentCall(models.Model):
-    """Append-only bounded transport ledger for rank/editor/critic work."""
+    """One paid model request owned by an authored run or collection batch."""
 
     class Stage(models.TextChoices):
         RANK = "rank", "Rank"
@@ -4126,7 +4189,15 @@ class OriginalContentCall(models.Model):
         TrendNarrativeRun,
         on_delete=models.PROTECT,
         related_name="provider_calls",
+        null=True, blank=True,
     )
+    provider_batch = models.ForeignKey(
+        ProviderBatch, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="calls",
+    )
+    member_post_ids = ArrayField(models.CharField(max_length=128), size=20, default=list, db_default=[])
+    import_state = models.CharField(max_length=24, default="not_applicable", db_default="not_applicable")
+    import_evidence = models.JSONField(default=dict, db_default={})
     stage = models.CharField(max_length=200)
     batch_key = models.CharField(max_length=200, blank=True, default="")
     request_identity = models.CharField(max_length=128)
@@ -4163,6 +4234,9 @@ class OriginalContentCall(models.Model):
     class Meta:
         db_table = "original_content_calls"
         constraints = [
+            models.CheckConstraint(condition=models.Q(run__isnull=False, provider_batch__isnull=True) | models.Q(run__isnull=True, provider_batch__isnull=False), name="ck_oc_call_owner"),
+            models.CheckConstraint(condition=models.Q(provider_batch__isnull=True, member_post_ids__len=0, import_state="not_applicable") | models.Q(provider_batch__isnull=False, kind="text", member_post_ids__len__gte=1, member_post_ids__len__lte=20, import_state__in=["pending", "applied", "stale", "error"]), name="ck_oc_call_members"),
+            models.UniqueConstraint(fields=["provider_batch", "stage", "batch_key"], condition=models.Q(provider_batch__isnull=False), name="uq_oc_batch_stage_request"),
             models.UniqueConstraint(
                 fields=["run", "stage", "batch_key"],
                 name="uq_tnpc_run_stage_batch",
@@ -4207,6 +4281,7 @@ class OriginalContentCall(models.Model):
             ),
         ]
         indexes = [
+            GinIndex(fields=["member_post_ids"], name="idx_oc_call_post_members"),
             models.Index(fields=["state", "claim_expires_at"], name="idx_tnpc_claim_due"),
             models.Index(fields=["run", "stage"], name="idx_tnpc_run_stage"),
             models.Index(fields=["budget_scope", "budget_day"], name="idx_oc_call_budget"),
@@ -7910,6 +7985,10 @@ class CollectionObservation(models.Model):
     )
     resource_key = models.CharField(max_length=256, null=True)
     product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
+    post = models.ForeignKey(
+        Post, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="collection_observations",
+    )
     created_product = models.BooleanField(default=False, db_default=False)
     listing = models.JSONField(default=dict, db_default={})
     envelopes = models.JSONField(default=list, db_default=[])
@@ -7934,6 +8013,7 @@ class CollectionObservation(models.Model):
     class Meta:
         db_table = "collection_observations"
         indexes = [
+            models.Index(fields=["run", "post"], name="idx_observation_run_post"),
             models.Index(
                 fields=["mapping", "observed_at"], name="idx_observation_mapping_time"
             ),
@@ -7942,6 +8022,10 @@ class CollectionObservation(models.Model):
             ),
         ]
         constraints = [
+            models.CheckConstraint(
+                condition=(models.Q(source_subject_kind="post", post__isnull=False, source_identifier=models.F("post_id"), product__isnull=True, mapping__isnull=True, created_product=False) | (models.Q(post__isnull=True) & ~models.Q(source_subject_kind="post"))),
+                name="ck_observation_post_subject",
+            ),
             models.UniqueConstraint(
                 fields=["scope_run", "resource_key"],
                 name="uq_collection_scope_resource",
@@ -7961,6 +8045,7 @@ class CollectionObservation(models.Model):
                         "lab",
                         "account",
                         "aggregate",
+                        "post",
                     ]
                 ),
                 name="ck_observation_kind",
