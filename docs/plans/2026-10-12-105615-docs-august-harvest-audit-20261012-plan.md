@@ -7,9 +7,9 @@ execution: code
 ollija:
   change_id: docs-august-harvest-audit-20261012-2026-10-12-105615
   branch: docs/august-harvest-audit-20261012
-  workflow: plan
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  workflow: delivery
+  delivery_target: staging
+  delivery_selected_by_user: true
 ---
 # Audit August X gaps and prepare bounded historical recovery
 
@@ -19,19 +19,20 @@ The production audit confirms five substantial gaps in August 2026, including
 the nearly empty August 9. Exact evidence boundaries, padded recovery windows,
 daily counts in UTC and Japan time, and an hourly plot are saved.
 
-The next step is to repair the existing on-demand backfiller so it can recover
-small parts of those windows, remember actual progress, and yield resources to
-the normal harvester. It will keep using the same fetch, attribution, storage
-and enrichment pipeline. Live collection and G1–G5 retain their ownership and
-behavior. Missing enrichment on already-stored posts is a separate workload.
+The on-demand backfiller must treat historical recovery as a one-time batch.
+Search whole requested windows, remember the provider cursor after every stored
+page, and collect independently of translation and classification. Fixed sleeps,
+quarter-hour admission and arbitrary five-page query caps are retired for batch
+execution. Shared fetch, attribution and Post storage remain in use. Missing
+enrichment on stored posts is a separate workload.
 
-The owner authorized the fixed 15-minute staging test after cleanup. Both real
-attempts ran, but neither recovered a new post: the corrected historical query
-returned one already-stored post. The requested success condition remains unmet.
-Two replacement 15-minute samples have been prepared without paid calls and need
-the owner's selection because they change the fixed interval. Later, the same
-small units can support month campaigns. No background process or production
-release was selected. Historical search does not establish a complete X census.
+The original 15-minute probes found no new posts. The owner widened the test
+to two hours across all 21 brands; it recovered 98 new staging posts, with 48 of
+49 sampled posts having completed assessments. On October 13 the owner accepted
+the remaining pending classifier conflict as good enough and selected a 24-hour
+August 9 staging run instead of the prepared four-hour step. The classifier
+protocol remains unchanged. Collection completion, sampled enrichment results
+and actual resource use will be reported separately.
 
 Verification will exercise the management command through the shared runner,
 captured fake providers and PostgreSQL. Time bounds, credential purpose,
@@ -41,7 +42,7 @@ scheduled seven-call path remains unchanged.
 ## Goal Capsule
 
 - Objective: fix the current on-demand backfiller's deficiencies and prove a
-  successful real 15-minute Qwen/B1 recovery against staging.
+  successful real staging recovery; owner widened U7 to two hours/all21brands.
 - Authority: owner's LFG fixes-and-test request; G3's approved atomic-JSON
   staging-pilot boundary, verified in both plans after the owner's check-files
   continuation. Shared schema, production collection and month campaigns remain
@@ -79,12 +80,19 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ### Delivery scope
 
-- Workflow: `plan`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Workflow: `delivery`
+- Delivery target: `staging`
+- Owner selection recorded: `true`
 - Delivery route: `staged`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
+5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
+6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
+7. Run staging checks. Stop here if they fail.
 
 ### Failure handling
 
@@ -104,6 +112,14 @@ The October 13 LFG request authorizes implementation, commits, a pull request,
 CI and the fixed 15-minute staging pilot below. Production delivery remains
 on-request. These actions follow the owner's explicit request, not the generated
 guide's default planning authority. G3's atomic-JSON pilot agreement is settled.
+
+The October14 owner request `lfg this` explicitly selects the Render one-off
+backfiller move, staged build and observed staging execution. The following owner
+note selects assessment/reuse of G3's collection schema/API as part of that move.
+This is no production or month activation grant. G3 dependency delivery is not
+resumed by an assumption that its new migration was already deployed; coordinate
+the actual dependency handover. Keep the already authorized local Aug9batch
+progressing while preparing the Render integration.
 
 ## Scope and ownership
 
@@ -328,7 +344,44 @@ on fuchitalee. Run affected required tests after implementation; report executed
 skipped and error counts. Skips are not passing concurrency evidence. Review
 shared callers and simplicity before preparing a live run.
 
-## U7 — Successful real 15-minute recovery test [executed; unsuccessful]
+## U7 — Real recovery test [original 15-minute attempts unsuccessful; widened test authorized]
+
+**Owner amendment, October 13:** “test it over 2 hours”, then “widen it to
+21 brands”. This supersedes the pending replacement-window menu. Execute
+August 9, 2026 **00:00–02:00 UTC / 09:00–11:00 JST** against staging for exactly
+the 21 `config.yaml` enabled brands. Use all six applicable B/C keyword/handle
+calls and eight fixed 15-minute slices (48 collection units). Include a separate
+Qwen/B1 historical-name supplement over the same bounds and slices using the
+already verified `"Qwen3.8"` alias (eight further units). Retain both original
+failed pilot receipts; no full-day/month campaign, production mutation, shared
+schema, deployment or schedule change is authorized by this amendment.
+
+Freeze actual dry-run queries/config/database identities before paid execution.
+Each invocation has at most 60 physical API starts, 60 model starts, 300 seconds,
+five pages/100 primary results per unit, and five newly inserted posts per unit
+for inline enrichment. One foreground controller may resume the two campaigns
+at most **12 invocations total** (720 API and 720 model starts reserved across
+the test), serially, with pauses outside writer leases and the existing scheduled
+slot admission/reserve. No unbounded retries or new windows. Stop on blocked
+pagination, identity/schema errors, authentication/funding failures or exhaustion;
+inspect actual failures before an explicitly bounded repair/resume.
+
+At current provider prices, 720 normal 20-result pages imply a conditional
+USD2.16 search allowance; actual raw results, empty-call floors, retries and
+lookup usage must be reconciled from transport receipts, not inserts. This is
+a planning estimate, not a billing guarantee. Capture model usage when returned;
+keep unknown token/cost evidence explicit. Preserve canonical model routes and
+the literal-translation/canonical-classification acceptance contract.
+
+Success requires both campaigns' collection units drained, at least one newly
+inserted in-window post, persisted literal translation and canonical per-brand
+classification for every frozen new-post cohort, and unchanged staging
+CallState/HarvestBacklogWindow digests. Report all recovered posts outside the
+bounded cohort as pending separately. Report per-call/brand/slice inserts,
+duplicates, API/model starts, token usage, elapsed/CPU time, peak memory/threads
+and active concurrency; scale forecasts only from a meaningful measured sample.
+
+The following records the original sample and its unsuccessful execution.
 
 After cleanup, render a concrete dry-run manifest for the exact sample already
 defined in this conversation: Qwen through B1, August 9, 2026
@@ -433,7 +486,8 @@ Qwen/Qwen3/Qwen3.6/Qwen3.8/通义千问 query, same finite limits):
 
 Actual read-only dry-run identities are retained in
 `data/backfill-fixes-20261013/proposed-pilot-manifests.json`.
-Do not run either until the owner selects it. The original unsuccessful
+These proposed alternatives were superseded by the owner's two-hour/all-21-brand
+amendment in U7; do not execute them. The original unsuccessful
 receipts and campaign identities must remain intact. U7 and the overall LFG
 task are incomplete until a real approved recovery test satisfies the required
 new-post and persisted translation/classification evidence.
@@ -484,3 +538,223 @@ retains actual request/post/enrichment evidence. The original user requirement
 wins: no DONE until that 15-minute test succeeds. U8 and G3's future DB adapter
 remain deferred. Remove abandoned experimental code; preserve unrelated work.
 - 2026-10-13T15:58:09+09:00 RESUME — G3 approval verified in both files: atomic JSON staging pilot may proceed without CollectionJob. Prior coordination gate cleared; preserve G3 shared schema ownership and exact 15-minute success requirement.
+
+- 2026-10-13T09:46:31.906637+00:00 ON — Owner widened U7 to August9 00:00–02:00UTC/all21brands. Frozen dry-run manifests prepared against verified staging at f5bbe190; 48 normal B/C units plus8 historical-name Qwen units, serial execution,12 finite invocations/720API/720model starts maximum. Original failures and G3 shared-schema ownership preserved.
+
+- 2026-10-13T10:13:39.131194+00:00 EVIDENCE — Expanded test first3invocations:67new scoped posts,49API starts,49model starts,33frozen sample posts/19complete; normal collection30of48units drained. Cursor/backlog digests unchanged. Measurement-only controller now bulk-reads cohort facts and was restarted while idle; application source/frozen limits/checkpoints remain unchanged. No test failure or paid invocation was discarded.
+
+## Live-test repair and next four-hour scope
+
+The two-hour normal collection drained48units and inserted98new posts at f5bbe190. Live enrichment exposed a persistent long-post timeout (5k-character chunks against the manual30-second request limit) and first-unit starvation during enrichment-only resumption. Retain all six invocation receipts and unsuccessful model attempts. Repair visits each enrichment unit once per invocation and threads a2k chunk size through manual translation and matching cache loading; scheduled defaults stay5k/90seconds. No shared schema or model route changes. New actual-caller tests pin manual cache/translation agreement and scheduled defaults. Final repair regression net303pass/109requiredPG/0skips/errors; focused lint passes. Independent Grok review remains required before Git publication; the authorized staging test may validate the green local repair concurrently.
+
+Owner selected **four hours** next: August9 **02:00–06:00UTC /11:00–15:00JST**, all21brands, only after the current two-hour sample passes its complete cohort/collection/invariance check. Use a separate manifest/checkpoint directory and the same15-minute slices, six B/C calls plus verified historical Qwen supplement, serial300-second invocations/60API/60model starts each,12invocations total per new window. Preserve all previous evidence; no production, deployment, scheduler or schema action.
+
+- 2026-10-13T10:47:47.684087+00:00 STATUS — Live two-hour collection98new/drained; enrichment incomplete. Controller stopped after durable invocation6 for targeted timeout/fairness repairs. Current source regression303pass; independent review pending. Owner-approved next4hours recorded above, not started.
+
+- 2026-10-13T11:10:51.894904+00:00 REPAIR — Smaller2k model calls returned successfully, but live invocation7 revealed a cache unique-key collision with legacy5k chunks. Chunk layout now uses a distinct prompt-version namespace in the existing table. Two invocation7 chunks with validated2k fingerprints were relabeled in staging, with exact pre-correction backup and no translated-text/token loss. No schema or model change. Database regression pins coexistence with scheduled5k cache rows; full304pass/110requiredPG/0skips/errors. Grok4.7/xhigh attempt timed out600s without usable output; native inline review completed and peer terminal job cleaned.
+
+
+### Bounded classification diagnosis after invocation12
+
+The12-invocation controller stopped at98new inserts/48normal units drained,48of49cohort posts complete,81API and175model starts. One two-brand post (`2086263847346663470`) remains classification pending despite successful model transports; the8historical Qwen units have not started. No success or four-hour launch is claimed. Under the existing LFG fix-until-live-pass request, add exactly one diagnostic invocation, followed by at most two repair/supplement invocations only after inspecting the cause. Retain the original cumulative720API/720model allowance,10800-second wall deadline, frozen options and all prior receipts;15total invocation ceiling now includes this bounded repair. Capture private classifier role responses and publication result without changing semantic acceptance. Stop after diagnostic capture.
+
+The private checker now matches `literal_translation_artifact_complete`: current source fingerprint, succeeded/current artifact, all EN/ZH-CN/JA meaningful locale texts. Its legacy six-language helper incorrectly rejected a valid Spanish `es` artifact; preserve that legacy compatibility result separately. This strengthens translation proof from two fields to three current locale texts and does not modify product behavior.
+
+
+### Confirmed shared classifier conflict; protocol decision pending
+
+Invocation 13 captured the real selected two-role responses. Both role parsers accept them. For GLM, content returns `classified` with supported types/topics, while brand interpretation returns `unknown` sentiment and unavailable geopolitical context. `core/classification_contract.py:319` rejects a classified row with null/unknown sentiment; `x_monitor/attribution.py:4414` therefore returns the empty invalid result and no publication is attempted. The scheduled harvester shares that path. This is a semantic disagreement under the selected classifier protocol, not a remaining chunk/cache failure. Preserve strict validation and the pending post; do not insert neutral sentiment, remove an attributed brand or waive the cohort.
+
+The controller is stopped after diagnostic invocation 13. Actual cumulative use is 81 X API starts / 177 model starts, 98 newly stored posts, 48/49 complete frozen cohort posts, unchanged cursor/backlog digests. The eight historical Qwen units have not started. The owner-approved next four-hour window is prepared and waiting for current acceptance. No paid continuation is running.
+
+Proposed bounded reassessment, pending owner direction: make one additional semantic assessment only for a post whose individually valid roles cannot produce a valid combined judgment. Keep the canonical model, source/context, all expected brands and strict acceptance. Fit both requests within the existing model-start/deadline guard; save no new classification unless the complete combined result passes. Record the reassessment's prompt/request provenance. Limit to one reassessment per post per attempt; a second disagreement remains pending. Cover successful reconciliation, repeated disagreement, insufficient call/deadline budget, unchanged normal success, and actual runner publication in tests. This changes the selected two-call classifier protocol, so it is not applied without direction.
+
+Evidence: [two-hour report](../analysis/harvester/2026-10-13-204138-august-backfill-wide-pilot.md). The async owner question offers bounded reassessment then continuation, or preserving the classifier protocol and leaving the test incomplete. This is a protocol decision; August bounds, all 21 brands, staging execution and G3 JSON approval are already settled.
+
+- 2026-10-13T11:44:52.043048+00:00 OFF — Controller stopped after diagnostic13; shared classifier conflict confirmed, no protocol fix applied pending owner decision. Updated draftPR58 description with98new/48of49cohort incomplete and304tests/110requiredPG. Four-hour window remains approved/prepared but not started. Retain own dirty plan/local evidence and close only owned staging tunnel; other sessions and services preserved.
+
+
+## Owner override and 24-hour staging continuation
+
+Latest owner direction: “i'll override and call that good enough. let's instead go to 24 hours... based on our first 2 tests, will that overtax the system”. The prior classifier-protocol question is retired; do not add reassessment, invent labels, retry the last post until it passes, or recreate the earlier all-cohort gate. The two-hour receipt retains its strict incomplete result; record a separate owner acceptance. The four-hour manifest is historical/prepared only and will not run.
+
+Execute August 9, 2026 **00:00–August10 00:00UTC** / **Aug9 09:00–Aug10 09:00JST**, all 21 enabled brands, staging only. Keep six B/C calls plus the verified historical-name Qwen supplement, 15-minute slices:576normal plus96supplemental collection units. Use a fresh atomic checkpoint/manifest directory. Source remains committed6925e846; no application, classifier protocol, schema, production, scheduler or service mutation.
+
+Resource controls: one serial local controller; one X request at a time, existing maximum three model workers, per-unit writer leases and scheduled-slot admission/reserve. Each invocation retains60API/60model starts,300seconds,5pages/100results per unit and5new-post sampled enrichment; add2seconds between units outside the writer lease and60seconds minimum between invocations. Entire run stops at72invocations,1440XAPI starts,3240model starts or18hours of wall time, whichever comes first. A complete invocation's60starts must fit remaining cumulative allowance before admission. Stop on blocked pagination, command/storage/authentication errors, cursor/backlog drift, excessive local RSS (>512MiB) or PostgreSQL connection saturation (>=80%of maximum). Do not enlarge limits silently. Retain all receipts if incomplete.
+
+The two-hour measurements are118.16MiB peak local memory,43.169CPU seconds/2560.163active elapsed seconds,81XAPI/177model starts,USD0.0315 estimated X cost andUSD0.145739 known model cost with7unknown-cost requests. Twelvefold scaling suggests972X/2124model starts and8.53active hours; it includes fixed-path repair overhead and is not a throughput promise. The first15-minute probe was empty and supplies no useful volume estimate. Peak load is bounded by concurrency, while total time/credits grow. Staging harvest is suspended, so overlap with live production harvesting is not proved.
+
+For this owner-accepted collection continuation, completion means both provider campaigns drain, newly scoped posts are stored and shared cursor/backlog digests remain unchanged. Report every sampled assessment status and unfinished post without labelling pending work as completed. Do not make complete enrichment of every recovered post a gate for finishing collection; existing tests and canonical validation remain unchanged. Monthly background scheduling remains deferred.
+
+- 2026-10-13T13:24:32.877368+00:00 ON — Owner accepts2h partial assessment and selects24h instead of4h. Retire reassessment question/all-cohort barrier; prepare fresh stagedAug9 full-day manifests with finite serial/resource guards. Source6925e846 preserved; no production/schema/scheduler mutation.
+
+
+### Month-sized recovery: proposed changes, not launched
+
+Owner asks how to build toward a month. Keep the existing shared fetch/attribution/storage path and 15-minute checkpointed units. A 31-day month across the current six B/C calls contains17,856normal units; a comparable single-query historical supplement adds2,976units. Treat provider-query exhaustion as scoped evidence, not complete X coverage. Verify month-appropriate brand aliases and freeze the query/config snapshot. Historical CallA needs a frozen account population before inclusion.
+
+Add one background dispatcher with durable pause/resume/stop/status and progress. Coordinate instruction/scheduling persistence and a legitimate X-collection run purpose with G3's `CollectionJob`/shared lifecycle APIs; do not add parallel job/run tables or label X collection as catalog/metrics work. Preserve Post storage and existing cursor/backlog semantics. Interim host checkpoints remain until an approved shared integration exists.
+
+Add durable hourly/daily physical-request and spending budgets, recording admission before transport so process failure cannot reset credit allowance. Expose a manual/background model concurrency limit (start low), pauses outside writer leases, normal-harvester priority, finite leases and bounded retries. Separate collection progress from enrichment progress: an unresolved assessment cannot indefinitely hold up the month; failed provider pagination still remains explicit and cannot be marked drained. Record total units, newly stored/duplicate posts, provider cap/blocked slices, sampled/all enrichment states and measured costs.
+
+Split the month into day-sized instructions that resume the same quarter-hour slices; one process handles them serially. Use the completed24-hour measurements to choose daily budget and duty cycle. CPU/memory peaks are governed by concurrency; elapsed time, traffic and credits scale with volume. A month at the same pace may take many days. No month collection or scheduler/worker deployment is authorized or launched by this design answer.
+
+- 2026-10-13T13:37:59.466388+00:00 STATUS — Full-day controllerPID20739 running; firststaging invocation completed271.905s/6.408CPUs,29XAPI/0models,108.55MiB/2threads/1Xrequestconcurrency,11of103DBconnections.19 normal units drained and existing posts deduplicated; no command error, cursor/backlog digests unchanged. HistoricalQwen next; no full-day completion claimed. Keep tunnelSSH19742/session32290 andcontroller/session8987 alive.
+
+
+### October14 JST: inspected X transport timeout and bounded continuation
+
+The full-day controller stopped after invocation22 at2026-10-13T16:55UTC/Oct14 01:55JST. It stored323new posts (144normal/179historicalQwen), drained110/576normal and54/96Qwen units, and retained all pages. Receipt:305API/256model starts,123.97MiB peak RSS,101.263CPU seconds/6124.281active seconds,85of228sampled posts with complete persisted assessments; incomplete enrichment remains explicitly reported under the owner override. Shared cursor/backlog digests were unchanged.
+
+The last Qwen request at Aug9 13:30–13:45UTC returned no response within30seconds: ReadTimeout,0received pages,0posts,0persistence failures. Its pending unit retains a null cursor and empty IDs; the previous13:15–13:30slice had safely drained its saved continuation. There is no evidence of authentication/funding/storage/pagination corruption or local memory pressure. A fresh read-only DB/source/invariance check precedes continuation.
+
+After inspecting this exact fault, resume within the original72invocation/1440API/3240model/18hwall limits. The private controller may recover only pure first-page fetch ReadTimeout/ConnectTimeout/ConnectionError with explicit0persistence failures and an unblocked pending unit, at most two additional attempts per unit. Retain failure receipts and pause60/120seconds outside writer leases; all starts consume the original counters. Other errors still stop. This does not change application source, canonical classification or the owner-accepted pending-assessment rule. Do not reset the wall deadline or increase budgets.
+
+- 2026-10-13T21:59:52.394070+00:00 ON — Status revealed stopped24hcontroller after one30sXReadTimeout. Inspect pending checkpoint; prepare bounded retry/resume within existing caps. No schema/source/production/scheduler mutation.
+
+- 2026-10-13T22:03:49.741821+00:00 STATUS — Resumed owned controller PID20839/session42937, with original deadline and budgets. Invocation23 prioritizes the timed-out Qwen unit; new X responses returned HTTP200 at22:02UTC. Prior complete receipt:323new staging posts/164of672units drained/85of228sample assessments complete. No production writes or shared-schema/code change. Keep owned tunnel19742/session32290 and controller alive.
+
+
+### Staging rollout interrupted SSH; transport and failure accounting repaired
+
+Staging web deployments at22:01–22:04UTC and22:10–22:12UTC replaced the instances used by the owned DB tunnel. Invocation23 retried X successfully, then lost its DB connection. No production resource was changed. Fresh native SSH forwarding with keepalives is verified against the same staging PostgreSQL18.4/database/role and unchanged cursor/backlog digests. External PostgreSQL access is intentionally denied by the IP allowlist; preserve that configuration. No global SSH keys/host checking/networking change was made.
+
+The private controller had reused stale last-invocation usage when DB loss prevented checkpoint finalization. Preserve the original invocation23 receipt in diagnostics; reconcile its actual2Xresponses/8modelevents, and observe the live budget directly for future failure receipts. The interrupted batch stored2additional scoped posts before checkpoint completion. Replay the pending slice through existing Post dedup to recover bookkeeping; do not advance its cursor by hand or fabricate assessment completion. Original72/1440/3240/18hlimits and source6925e846 remain fixed.
+
+- 2026-10-13T22:25:11.702054+00:00 STATUS — Native staging SSH25418/session33409 and controllerPID25918/session19092 live. Identity18.4/stagingrole and unchanged cursor/backlog verified.323checkpointed new posts plus2verified partial-batch inserts;85of228sample complete. No deadline/budget reset; keep both owned processes alive.
+
+## Owner correction: historical batch, independent of harvest cadence
+
+The owner explicitly rejects reproducing the harvester over each quarter-hour:
+"this is not reproducing harvester * n days. it's a one time batch exercise
+without the limits of harvester". Retire fixed 15-minute slicing, two-second
+unit sleeps, sixty-second batch sleeps, scheduled-slot admission/reserve and
+five-page/100-result query stopping for the batch route. Preserve the existing
+scheduled collector and the compatibility sliced route. Payment is not a reason
+to throttle a batch. Provider response pagination still returns at most20posts;
+a month is a broad paginated query, not one physical HTTP request.
+
+TOUCH: on-demand `backfill` command, its PostgreSQL integration regression net,
+private staging controller and this plan. PRESERVE: shared CycleRunner fetch/
+attribution/persistence, normal harvest policy/cursors/backlog, model semantics,
+G3 schema and service inventory. The authorized live interval remains Aug9 UTC,
+all21brands, staging. No July/month execution or production mutation is added.
+
+Implementation-ready batch amendment:
+
+1. Add explicit `--batch` mode. One unit spans the entire supplied query window;
+   fetch one complete provider page through the real runner, persist it and
+   atomically checkpoint before asking for the next page. No per-query page cap
+   can falsely complete the query. Invocation-wide physical-request/time budgets
+   remain finite and resumable; batch admission has no cron timing dependency.
+2. Collect with zero inline model calls/cohort. Existing or newly pending
+   translation/classification is reported separately and cannot hold collection.
+3. Stop only the owned old controller between invocations. Freeze its evidence;
+   merge adjacent pending intervals independently for each exact frozen query.
+   Preserve completed intervals. Never transfer a cursor to changed bounds;
+   replay any partly persisted unit via existing Post deduplication.
+4. Continue within the original cumulative1440API/3240model/18hallowance and
+   original deadline. Remove obsolete72invocation-count coupling when each new
+   invocation is page-checkpointed batch work; do not reset spent requests.
+5. Keep retry pauses only for observed recoverable transport/database failures.
+   Reconnect and verify staging identity/invariance before replay; never advance
+   past persistence failure. Keep the staging web tunnel limitation visible.
+
+Regression net: real command→CycleRunner→TwitterAPI transport→PostgreSQL proves
+30-day bounds are preserved, no scheduled-slot query/sleep/model transport is
+used, cursor progress is saved after every page, failed later pages retain earlier
+stored pages, capped invocations resume exact cursors, shared live state stays
+unchanged, and the compatibility reserve remains enforced outside batch mode.
+Live completion: all previously drained and newly merged query intervals cover
+the pinned Aug9day, provider continuations end normally, saved distinct posts
+are reconciled, shared cursor/backlog digests stay unchanged, and enrichment is
+reported separately under the existing owner override. Prior scaling estimates
+describe the old sliced/inline route and are retired for the batch design.
+
+Batch implementation and live continuation: `--batch` is a thin mode in the
+existing command, using the same CycleRunner/TwitterAPI/attribution/Post path.
+Each page is committed and atomically checkpointed; per-query five-page stopping
+is gone. Batch collection requests no model calls or cron timing/sleeps. A
+thread-safe remaining-API property stops at invocation allowance without making
+normal budget exhaustion an error. The compatibility sliced route is preserved.
+
+Verified129tests,89requiredPostgreSQL tests executed,0skips/errors; focused Ruff
+and Django system checks pass. Initial normalization-through-kwargs failure was
+fixed by returning resolved options with preparation; a test cursor assertion
+was corrected to the documented optional first-page cursor. Both original failed
+logs remain private. Regression proof includes a real30-day query through7pages,
+per-page Post/checkpoint agreement and later-timeout/capped-invocation resumption.
+
+Owned old controller25918 stopped between invocations after42completed attempts
+(496API starts); preserve its entire manifest/state/receipts. HistoricalQwen is
+drained. Merge remaining normal intervals into6queries: C1/C2/C3/B2/B3 from
+Aug9 07:00UTC and B1 from07:15UTC, all endingAug10 00:00UTC. Verified their exact
+queries match the frozen original. New controller66296/session22824 uses the
+same owned staging SSH25418/session33409, retains original1440cumulativeAPI
+allowance and16:26:50JSTdeadline, and stores private evidence under
+`data/backfill-fixes-20261013/full-day-batch-aug09-21brands/`. The running candidate
+records baseline HEAD6925e846 plus an exact application-source digest; code is
+locally modified, not a deployed revision. Never call this an exact-SHA deploy.
+
+First real batch pages returnHTTP200, persist new Posts, and commit continuation
+without persistence failures or model starts. Current remaining latency includes
+many ORM round trips through the Japan→Oregon tunnel: one observed20-result page
+took78.7seconds, with75.9seconds to the final Post commit. Read-only pg_stat_activity
+showed client waits and no observed database-lock wait. No claim that provider
+calls alone determine runtime or that the full day is complete. G3 notified of
+command/resource/test scope and unchanged approved JSON/shared-schema boundary.
+
+## U8 — Render one-off execution with G3 collection bookkeeping
+
+Owner selected `lfg this` for the Render move, then requested incorporation of
+G3's completed collection work. Source/API inspection establishes the correct
+reuse: CollectionJob stores frozen manual content/x_backfill/historical
+instructions; CollectionRun records a claimed attempt and actual usage;
+CollectionScopeRun stores fenced per-query/page continuation. Tweets remain in
+Post and existing relationships/enrichment. No backfill-specific table is added
+or retired. G3's one planned CollectionJob table remains its owned dependency.
+
+Read-only live evidence on October14: actual database/rolepushinweight_staging,
+PostgreSQL18.4, only0080_collection_schema; collection_runs/observations/scope_runs
+exist, collection_jobs does not. Run lifecycle currently admits metric/catalog,
+not content, and run.job/lease_token are absent. Latest staging web deployment is
+b53c2e8bd7ce26688b0f93612297b391a83462e0. G3 source/API at443d13f3 implements
+0081–0082 and supports X explicitly. The G3 owner has now authorized its PR59
+deployment through a separate delegate; that session owns schema delivery.
+These are independent observations. Do not label existing stage0080 as a ready
+X-job lifecycle, misuse catalog purpose or silently deploy another owner's paused
+release. Coordinate dependency delivery and preserve current local collection.
+
+Implementation scope once the supported dependency is available:
+
+- Existing backfill command exposes a database-job route while retaining JSON
+  compatibility/import. Add a narrow monitor/backfill_collection.py adapter and
+  focused command→runner→PostgreSQL tests. Reuse core.collection_jobs/state/budgets
+  rather than copying registration, lease, cursor or finish rules.
+- Freeze exact query/bounds/brand/config identity and on-demand credential-purpose
+  name in instructions; never store credentials. Import actual committed legacy/
+  merged progress with file hashes and provenance; do not invent historical run
+  timestamps. Preserve completed prefixes and exact broad cursors.
+- Provider requests stay outside transactions. Fence the existing shared Post
+  writer and commit scope continuation atomically with that page's writes;
+  stale/paused/expired workers cannot publish or advance. Persist physical request
+  admission before transport so executor failure cannot reset paid allowance.
+- Start a separate Oregon Render one-off job from the verified staging build,
+  using its internal staging DATABASE_URL and ON_DEMAND key. Shared database
+  state becomes authoritative; JSON/logs are optional exports. No new recurring
+  scheduler, normal-harvester activation or standalone backfill service/table.
+- Verify exact build/source, database/role, source/query ownership, real page
+  persistence, pause/restart/continuation and unchanged live cursor/backlog.
+  Compare a matched captured page near the DB versus the local route; report
+  observed speed rather than extrapolating the unmeasured97%phase.
+- Finish at an observed successful Render job and reconciled authorized Aug9
+  collection, with pending enrichment explicit. If Aug9finishes locally before
+  transfer, import completed coverage and use a bounded captured-page storage
+  benchmark; do not expand to another day/month.
+
+G3 received the live discrepancy, exact file scope and API handover request.
+Render move gate: supported0081content/job schema and matching G3 API build must
+be observed in staging before a DB-job-backed paid launch. This is a runtime
+prerequisite, not renewed approval for the already authorized backfill or move.
+
+- 2026-10-14T03:55:52.423660+00:00 ON — Owner reconfirmed LFG and explicitly required TWITTERAPI_IO_ON_DEMAND_API_KEY for backfiller. G3 owner resumed PR59 deployment through its own delegate; no duplicate release or shared-schema edits here. Local batch source is preserved before DB-adapter work; current tests cover129passed/89requiredPG/0skips/errors.

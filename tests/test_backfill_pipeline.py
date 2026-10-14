@@ -164,6 +164,68 @@ def test_next_slot_reserve_defers_before_provider(pipeline, monkeypatch):
     assert not state["runs"] and not state["finished"]
 
 
+def test_batch_searches_whole_month_and_checkpoints_each_page(pipeline, monkeypatch):
+    from core.models import CallState, HarvestBacklogWindow, Post
+    from monitor.management.commands import backfill
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("one-time collection used harvest timing or model setup")
+    monkeypatch.setattr(backfill, "_seconds_to_next_slot", forbidden)
+    monkeypatch.setattr(backfill._time, "sleep", forbidden)
+    monkeypatch.setattr("x_monitor.reattribute.build_relevancy_client_from_env", forbidden)
+    checkpoints = []
+    save = backfill._save_state
+    def captured_save(path, state):
+        if state["runs"]:
+            checkpoints.append((state["units"][0]["cursor"], Post.objects.count()))
+        return save(path, state)
+    monkeypatch.setattr(backfill, "_save_state", captured_save)
+    pipeline.responses.extend(page(str(n), cursor=f"page-{n}" if n < 7 else None)
+                              for n in range(1, 8))
+    call_command("backfill", batch=True, since="2026-08-01", until="2026-08-31",
+                 brands="qwen", call_ids="B1", run_seconds=3600, pause=900,
+                 stdout=StringIO(), stderr=StringIO())
+    state = json.loads(next(pipeline.directory.glob("*.json")).read_text())
+    assert len(state["units"]) == 1 and state["finished"]
+    assert len(pipeline.requests) == 7  # No five-page query ceiling.
+    assert all("since_time:1785542400 until_time:1788134400" in r["query"]
+               for r in pipeline.requests)
+    assert [r.get("cursor", "") for r in pipeline.requests] == ["", *[f"page-{n}" for n in range(1, 7)]]
+    assert checkpoints == [(f"page-{n}" if n < 7 else None, n) for n in range(1, 8)]
+    assert state["last_invocation_usage"]["llm_requests"] == 0
+    assert pipeline.cohorts == [[]] * 7
+    assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
+
+
+def test_batch_invocation_budget_resumes_committed_page_without_restarting(pipeline):
+    pipeline.responses.extend([page("1", cursor="page-1"), page("2", cursor="page-2")])
+    partial = pipeline.run(batch=True, max_api_requests=2)
+    assert not partial["finished"] and partial["total_inserted"] == 2
+    assert partial["units"][0]["cursor"] == "page-2"
+    pipeline.responses.append(page("3"))
+    drained = pipeline.run(batch=True, max_api_requests=2)
+    assert drained["finished"] and drained["total_inserted"] == 3
+    assert pipeline.requests[-1]["cursor"] == "page-2"
+
+
+def test_batch_later_timeout_preserves_earlier_page_checkpoint(pipeline):
+    import requests
+
+    from core.models import Post
+
+    pipeline.responses.extend([page("1", cursor="stored-page"), requests.ReadTimeout("timeout")])
+    with pytest.raises(CommandError, match="attempt failed"):
+        pipeline.run(batch=True)
+    state = json.loads(next(pipeline.directory.glob("*.json")).read_text())
+    assert Post.objects.filter(pk="1").exists()
+    assert state["units"][0]["cursor"] == "stored-page"
+    assert state["units"][0]["post_ids"] == ["1"]
+    assert state["last_invocation_usage"]["api_requests"] == 2
+    pipeline.responses.append(page("2"))
+    assert pipeline.run(batch=True)["finished"]
+    assert pipeline.requests[-1]["cursor"] == "stored-page"
+
+
 def test_drained_collection_retries_only_its_enrichment(pipeline):
     pipeline.responses.append(page("1"))
     collected = pipeline.run()

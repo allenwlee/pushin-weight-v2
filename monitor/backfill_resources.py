@@ -35,6 +35,11 @@ class BackfillBudget:
         return max(0.0, self._deadline - self._clock())
 
     @property
+    def remaining_api_requests(self) -> int:
+        with self._lock:
+            return max(0, self._api_limit - self._api_requests)
+
+    @property
     def remaining_llm_calls(self) -> int:
         with self._lock:
             return max(0, self._llm_limit - self._llm_requests)

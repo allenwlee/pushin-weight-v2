@@ -6,6 +6,11 @@ The default unit is 15 minutes and the default batch is one unit. Fixed bounds,
 policy and limits must match the checkpoint to resume. No scheduler is started.
 
 Usage:
+    # One-time historical collection: whole-window searches, page checkpoints,
+    # no scheduled-slot waits or inline model processing.
+    python manage.py backfill --batch --since 2026-08-01 --until 2026-08-31 \
+        --call-ids B1,B2,B3,C1,C2,C3 --max-api-requests 500 --run-seconds 3600
+
     # Dry-run to see what would happen
     python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --dry-run
 
@@ -150,6 +155,10 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser) -> None:
         parser.add_argument(
+            "--batch", action="store_true",
+            help="Collect whole historical windows with per-page checkpoints, no cron waits or inline enrichment.",
+        )
+        parser.add_argument(
             "--since", type=str, required=False,
             help="Lower bound (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS, UTC).",
         )
@@ -175,8 +184,8 @@ class Command(BaseCommand):
             help="Comma-separated logical call IDs to run (for example B1).",
         )
         parser.add_argument(
-            "--batch-size", type=int, default=1,
-            help="Max call/time-slice units per invocation (default: 1).",
+            "--batch-size", type=int, default=None,
+            help="Max work steps per invocation (default: HTTP allowance in batch mode, otherwise 1).",
         )
         parser.add_argument(
             "--safety-margin", type=float, default=_SAFETY_MARGIN,
@@ -265,7 +274,7 @@ class Command(BaseCommand):
                 return None
             prepared = self._handle(*args, **options)
         if prepared is not None:
-            self._execute(prepared, options)
+            self._execute(prepared, prepared["options"])
 
     def _handle(self, *args, **options):
         """Prepare under a brief writer lease; execution leases each unit."""
@@ -280,16 +289,29 @@ class Command(BaseCommand):
         until_epoch = _parse_iso(options["until"])
         if until_epoch <= since_epoch:
             raise CommandError("--until must be later than --since")
+        batch = options.get("batch", False)
+        if options["batch_size"] is None:
+            options["batch_size"] = options["max_api_requests"] if batch else 1
+        if batch:
+            # A page is a durable work step, not the extent of a query. Repeat
+            # the pending unit with its committed cursor until it drains.
+            options.update(
+                slice_minutes=math.ceil((until_epoch - since_epoch) / 60),
+                max_results=20, max_pages=1, pause=0,
+                enrichment_limit=0, max_llm_calls=0,
+            )
         for name in ("batch_size", "max_results", "max_pages", "max_api_requests",
-                     "run_seconds", "slice_minutes", "enrichment_limit"):
+                     "run_seconds", "slice_minutes"):
             if options[name] <= 0:
                 raise CommandError(f"--{name.replace('_', '-')} must be positive")
+        if options["enrichment_limit"] < 0 or (not batch and options["enrichment_limit"] == 0):
+            raise CommandError("--enrichment-limit must be positive outside batch mode")
         for name in ("pause", "max_llm_calls"):
             if options[name] < 0:
                 raise CommandError(f"--{name.replace('_', '-')} must be nonnegative")
         if options["max_results"] % 20:
             raise CommandError("--max-results must be a multiple of 20 to retain complete pages")
-        if options["run_seconds"] > 780:
+        if not batch and options["run_seconds"] > 780:
             raise CommandError("--run-seconds must fit the 15-minute schedule with a 120-second reserve")
         margin = options["safety_margin"]
         if not math.isfinite(margin) or margin <= 0:
@@ -358,7 +380,7 @@ class Command(BaseCommand):
         if hasattr(cfg, "model_copy"):
             from monitor.backfill_resources import bounded_backfill_config
 
-            cfg = bounded_backfill_config(cfg, enrichment_limit=options["enrichment_limit"])
+            cfg = bounded_backfill_config(cfg, enrichment_limit=max(1, options["enrichment_limit"]))
         config_value = cfg.model_dump(mode="json") if hasattr(cfg, "model_dump") else {}
         limits = {name: options[name] for name in (
             "max_results", "max_pages", "max_api_requests", "max_llm_calls",
@@ -371,6 +393,8 @@ class Command(BaseCommand):
             "config_digest": hashlib.sha256(json.dumps(config_value, sort_keys=True).encode()).hexdigest(),
             "database": {key: settings.DATABASES["default"].get(key) for key in ("NAME", "HOST", "USER")},
         }
+        if batch:
+            identity["execution_mode"] = "batch"
         if query_override is not None:
             identity["query_override"] = query_override
         campaign_id = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
@@ -412,7 +436,8 @@ class Command(BaseCommand):
                 self.stdout.write(json.dumps({"campaign_id": campaign_id, "identity": identity}, indent=2))
             return None
         _save_state(state_file, state)
-        return {"cfg": cfg, "state_file": state_file, "campaign_id": campaign_id, "call_ids": call_ids}
+        return {"cfg": cfg, "state_file": state_file, "campaign_id": campaign_id,
+                "call_ids": call_ids, "options": options}
 
     def _execute(self, prepared, options):
         from monitor.backfill_resources import (
@@ -433,11 +458,15 @@ class Command(BaseCommand):
         failed = False
         attempted_enrichment_units: set[str] = set()
         for attempt in range(options["batch_size"]):
+            if options.get("batch", False) and (
+                not budget.remaining_api_requests or not budget.can_start(38)
+            ):
+                break
             if attempt and options["pause"]:
                 if budget.remaining_seconds <= options["pause"]:
                     break
                 _time.sleep(options["pause"])  # No writer lease while idle.
-            if _seconds_to_next_slot() <= budget.remaining_seconds + 120:
+            if not options.get("batch", False) and _seconds_to_next_slot() <= budget.remaining_seconds + 120:
                 self.stderr.write("Backfill deferred: unit deadline plus reserve does not fit before the next scheduled slot.")
                 break
             with harvest_writer_lock(execution_mode="backfill", entrypoint="management.backfill.unit") as lease:
@@ -448,6 +477,8 @@ class Command(BaseCommand):
                 if not state or state["campaign_id"] != prepared["campaign_id"]:
                     raise CommandError("Checkpoint changed before unit execution")
                 pending = [u for u in state["units"] if u["status"] == "pending"]
+                if options.get("batch", False) and not pending:
+                    break
                 enrichment_pending = set(state.get("enrichment_pending_post_ids", []))
                 enrichment_units = [u for u in state["units"] if enrichment_pending.intersection(
                     u.get("enrichment_cohort_post_ids", [])
@@ -469,7 +500,7 @@ class Command(BaseCommand):
                 )
                 started = datetime.now(UTC).isoformat()
                 try:
-                    relevancy_client = build_relevancy_client_from_env(cfg)
+                    relevancy_client = None if options.get("batch", False) else build_relevancy_client_from_env(cfg)
                     if relevancy_client is not None:
                         relevancy_client = _BoundedClassifierClient(
                             relevancy_client, maximum_calls=budget.remaining_llm_calls, pause_seconds=0,
