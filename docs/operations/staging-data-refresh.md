@@ -131,7 +131,7 @@ GRANT MAINTAIN ON
   rare_type_search_runs,
   socialaccount_socialaccount, socialaccount_socialapp,
   socialaccount_socialapp_sites, socialaccount_socialtoken,
-  trend_narrative_demands, original_content_calls, original_content_runs,
+  trend_narrative_demands, original_content_calls, provider_batches, original_content_runs,
   original_content_selections, trend_narrative_work_slots,
   twitter_list_memberships, twitter_list_sync_state
 TO staging_refresh_reader;
@@ -255,6 +255,14 @@ production schema and then create those empty relations with Django migrations.
 The source census omits validation counts only for optional relations that are
 absent at that boundary. Candidate and active-database validation still count
 the complete post-migration relation set.
+
+`provider_batches` records provider work for one environment. It is excluded
+and truncated together with `original_content_calls` and
+`post_enrichment_states`; a refresh therefore cannot resume a production
+batch or retain a call whose owning batch was discarded. It is optional on
+sources preceding migration `0085_provider_batch_enrichment`, has no generated
+ID sequence, and receives only the maintenance grant above when present.
+
 The repeatable-read source census calculates the exact idempotent seed effects
 for pending migrations `core.0033_stage1c_frontier_organization_brands` and
 `core.0049_rare_type_domain_records` from the same exported snapshot used by
@@ -471,6 +479,7 @@ UNION ALL SELECT 'socialaccount_socialapp_sites', count(*) FROM socialaccount_so
 UNION ALL SELECT 'socialaccount_socialtoken', count(*) FROM socialaccount_socialtoken
 UNION ALL SELECT 'trend_narrative_demands', count(*) FROM trend_narrative_demands
 UNION ALL SELECT 'original_content_calls', count(*) FROM original_content_calls
+UNION ALL SELECT 'provider_batches', count(*) FROM provider_batches
 UNION ALL SELECT 'original_content_runs', count(*) FROM original_content_runs
 UNION ALL SELECT 'original_content_selections', count(*) FROM original_content_selections
 UNION ALL SELECT 'trend_narrative_work_slots', count(*) FROM trend_narrative_work_slots

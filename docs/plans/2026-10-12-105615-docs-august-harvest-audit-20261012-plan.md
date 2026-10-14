@@ -29,8 +29,9 @@ The owner's October 14 requirement makes batch enrichment part of the backfiller
 collecting posts alone no longer completes the overall task.
 The same design must handle a month or longer with bounded memory, durable progress,
 and no repeated collection or completed model work.
-Collection and Render adoption are verified; the enrichment phase remains to be implemented.
-U9 below records the new requirements and the proposed provider-batch approach.
+Collection and Render adoption are verified. Native batch enrichment is implemented
+and locally verified; its staging pilot and full-day persisted outputs remain
+the acceptance work. U9 records the implementation and resource bounds.
 
 The original 15-minute probes found no new posts. The owner widened the test
 to two hours across all 21 brands; it recovered 98 new staging posts, with 48 of
@@ -61,9 +62,10 @@ scheduled seven-call path remains unchanged.
   verified code and its prepared pilot contract.
 - Stop: preserve state and report a real failed/partial test or exhausted finite
   allowance; never replace the fixed window or substitute a mock for live proof.
-- Current continuation: owner requests brainstorming and adds batch enrichment and
-  month-or-longer scalability as requirements. This step changes the existing plan;
-  it does not launch model work, a month campaign, or a production transfer.
+- Current continuation: the owner's `go` authorizes paid LLM enrichment on the
+  existing August 9 staging cohort, followed by its remaining posts after the
+  native pilot succeeds. Record physical model calls and respect server limits.
+  Zero TwitterAPI calls; no new month campaign or production transfer.
 
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -983,7 +985,8 @@ One read-only provider control preflight, zero model requests, zero TwitterAPI.
 
 The owner's next-step question identifies the already-collected August 9 UTC day as the appropriate enrichment test data.
 Use its existing staging collection job `58111a25-7e6a-4f96-893f-142a6c4b58ca` and exact recovered cohort; the 24 hours describes post creation dates, not a required worker runtime.
-The proposed asynchronous runner is not implemented, so invoking the old collection-only batch is not this test.
+The implemented asynchronous runner must exercise native provider batches;
+invoking the old collection-only batch is not this test.
 
 1. Finalize the focused persistence proposal with G3: audit existing provider-call owners/readers/writers, indexed post membership, outstanding-request exclusion, durable reservations, and recovery after ambiguous provider acceptance. Implement only the selected shared extension; keep PR60 account work and migration numbering coordinated.
 2. Extract shared request preparation/response validation as needed, implement resumable provider submission/import and enrichment-only orchestration, and preserve the scheduled caller's models, profiles, semantics, and resource defaults.

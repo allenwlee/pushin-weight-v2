@@ -221,6 +221,7 @@ def test_per_brand_headline_graph_is_environment_local_state() -> None:
     policy = load_policy(POLICY_PATH)
     runtime_tables = {
         "original_content_runs",
+        "provider_batches",
         "original_content",
         "trend_narrative_work_slots",
         "original_content_calls",
@@ -378,6 +379,7 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
     policy = load_policy(POLICY_PATH)
 
     assert {
+        "provider_batches",
         "data_sources",
         "taxonomy_versions",
         "product_groups",

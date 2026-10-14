@@ -198,6 +198,7 @@ relations:
     - socialaccount_socialapp_sites
     - socialaccount_socialtoken
     - original_content_calls
+    - provider_batches
     - trend_narrative_demands
     - original_content_runs
     - original_content_selections
@@ -205,6 +206,7 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    - provider_batches
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - data_sources
     - taxonomy_versions
@@ -468,6 +470,7 @@ relations:
 
 scrub:
   truncate_tables:
+    - provider_batches
     - editorial_assessments
     - editorial_budgets
     - editorial_calls
