@@ -229,3 +229,18 @@ def test_collection_configuration_change_is_rejected_before_claim(pipeline, monk
     with pytest.raises(ValueError, match="configuration changed"):
         run(job)
     assert not pipeline.requests and not CollectionRun.objects.exists()
+
+
+def test_blocked_page_retains_valid_post_evidence_without_advancing_cursor(pipeline):
+    job = ready_job(cursor="previous")
+    body = page("1", cursor="unsafe-next")
+    outside = page("outside")["tweets"][0]
+    outside["createdAt"] = "Mon Aug 10 00:10:00 +0000 2026"
+    body["tweets"].append(outside)
+    pipeline.responses.append(body)
+    result = run(job)
+    scope = CollectionRun.objects.get(pk=result["run_id"]).scopes.get()
+    assert scope.outcome == "blocked" and scope.cursor == "previous"
+    assert result["recovered_post_ids"] == ["1"]
+    assert scope.raw_count == 2
+    assert Post.objects.filter(pk="1").exists() and not Post.objects.filter(pk="outside").exists()

@@ -149,14 +149,16 @@ class PageCheckpoint:
 
     def _checkpoint(self, progress, *, write=None, post_ids=None):
         blocked = progress.get("reason") in BLOCKED_REASONS
-        advanced = progress.get("pages_received", 0) > 0 and not blocked
+        received = progress.get("pages_received", 0) > 0
+        advanced = received and not blocked
         drained = advanced and progress.get("drained") is True
         envelopes = list(self.scoped.envelopes)
-        if advanced:
+        if received:
             envelopes.append({
                 "observed_at": datetime.now(UTC).isoformat(),
                 "post_ids": post_ids if post_ids is not None else [], "pages_received": progress["pages_received"],
                 "collection_drained": drained,
+                "reason": progress.get("reason"),
             })
         self.scoped = checkpoint_scope(
             self.claim, scope_key=self.scoped.scope_key, scope_kind="x_query",
@@ -166,7 +168,7 @@ class PageCheckpoint:
             outcome="blocked" if blocked else ("complete" if drained else "pending"),
             enumeration_complete=drained, envelopes=envelopes, write=write,
             raw_count=self.scoped.raw_count + (
-                self.budget.snapshot()["api_responses"][-1]["raw_results"] if advanced else 0
+                self.budget.snapshot()["api_responses"][-1]["raw_results"] if received else 0
             ),
         )
         self.written = True
