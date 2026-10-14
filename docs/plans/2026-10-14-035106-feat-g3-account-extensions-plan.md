@@ -10,8 +10,8 @@ ollija:
   workflow: plan
   delivery_target: production
   delivery_selected_by_user: true
-  delivery_route: staged
-  staging_transport: branch
+  delivery_route: direct
+  delivery_route_selected_by_user: true
 ---
 # Share account identity with justified source details
 
@@ -21,15 +21,15 @@ Keep one account identity for every platform. Move the 33 X-only current-profile
 
 The result adds one table (`x_account_details`) and retires one (`hf_orgs`). Existing company-account links, account snapshots, crosswalks and collection evidence retain their identity and history. No HF, GitHub or YouTube detail table is justified by the present account requirements.
 
-PR59 deploys first in a delegated stream. This account branch starts from its implementation revision and follows separately to an open PR with CI decided. Migration tests must prove field and relationship preservation on PostgreSQL; this request does not select account production deployment.
+PR59 was delivered first. Account implementation reached PR60 with PostgreSQL preservation evidence. The owner's later instruction, “approved, deploy to production,” selects the account production endpoint, with the bounded pauses, backup restoration and recovery described below.
 
-PR59 is now live at `948f05ad`; PR60 is open at `bed348d7` with four CI checks passed. The deployment and recovery section below prepares a future account rollout. Expect 10–20 minutes of interruption and reserve a 30-minute maintenance window, subject to a staging rehearsal. These are planning estimates. Production stays available during preparation; the production migration starts only after a fresh, restorable backup and an explicit rollout instruction.
+Current production remains `2e0274cf` on schema0082. PR60's integrated candidate `56649f96` has four successful hosted checks and192 local regressions passed. The owner now selects “direct production”; shared staging and its independent0085 native pilot are excluded from this release. A full production-scale isolated rehearsal has restored the1.17GB snapshot, exercised account migrations and verified the supported reverse. The dump alone took10m27s and restoration1m43s; the earlier10–20-minute interruption estimate is superseded. Reserve40–60minutes for the cutover, including the fresh dump/restore, complete comparison, runtime controls and serial builds; that total remains an estimate. Production remains available during preparation.
 
 ## Goal Capsule
 
 **Objective:** new data sources reuse account identity and ownership without duplicating platform account tables, while current collection and evidence behavior remains correct.
 **Means:** explicit one-to-one X details, generic publisher references, and migration of HF ownership into existing links.
-**Done:** account implementation, preservation/regression verification, code review, remote PR and CI decision are evidenced, and the requested future cutover/recovery procedure is saved. Executing that rollout is a separate, later-authorized endpoint.
+**Done:** account implementation/review/CI evidence is retained, and the now-authorized rollout reaches the exact production revision, preservation/restart checks and natural scheduled harvest required by the Rollout Exit Criteria. The implementation PR alone is an intermediate result for this continuation.
 
 ## Product Contract
 
@@ -95,7 +95,7 @@ flowchart LR
 
 Keeping all33 X fields in Account is workable but leaves source-specific storage in the shared core. Separate complete platform account tables split existing relationships. Creating HF/GH/YT detail tables now lacks distinct typed requirements. Existing snapshots are historical evidence, not a replacement for atomic current-profile projection.
 
-Removing columns is a coordinated code/schema cutover: account production deployment must plan compatibility with processes still running old code. No account production migration occurs in this run. Avoid deletion or truncation of source evidence and keep unknown source dates unknown. Native HF identities remain namespace-qualified and case-normalized, GitHub native numeric identities remain unchanged.
+Removing columns requires a coordinated code/schema cutover: old application processes must remain stopped across migration. The production rollout is authorized; route selection and the execution gates below still precede its migration. Avoid deletion or truncation of source evidence and keep unknown source dates unknown. Native HF identities remain namespace-qualified and case-normalized, GitHub native numeric identities remain unchanged.
 
 ## Implementation Units
 
@@ -140,7 +140,45 @@ Removing columns is a coordinated code/schema cutover: account production deploy
 
 ## Deployment and Recovery Plan
 
-Prepared October 14 at the owner's request. No account deployment, service suspension, backup, migration or restore has been performed by this planning pass. `delivery_target` remains `on-request`. A later rollout instruction selects its endpoint and must be recorded before executing these steps.
+### Active execution — October 14 production continuation
+
+Owner approved production. [The rollout receipt](../analysis/2026-10-14-210132-g3-pr60-production-rollout.md)
+records actual observations; historical preparation wording below does not
+cancel that current grant. C0 confirmed main/live rollback SHA `2e0274cf`,
+production schema 0082/PostgreSQL18.4 and six active services. Candidate `56649f96`
+incorporates current main; 192 local regressions passed (113 required PostgreSQL,
+zero skips/errors). All four current-head hosted checks passed. Conflict checks pass;
+28 HF identities are expected to be admitted. Final quiesced baselines remain.
+
+Shared staging now actually carries 0085 at the backfill owner's `54afc330` and
+is occupied by its native pilot. No shared-stage mutation is allowed here. The
+owner selected direct production at2026-10-14T13:16:05Z. The isolated PostgreSQL18 rehearsal is
+complete: exact1.17GB dump/restore, populated forward/reverse/forward, actual
+service-role HTTPS application reads, typed preservation and161 prior-table
+fingerprints passed. The private cluster and evidence are retained; production
+remains live at2e0274cf/schema0082 before the cutover. The later C3 dump must be fresh after writer
+drain. Next: freeze the final candidate/documentation,
+then verify supported runtime maintenance transitions before live migration.
+
+The concrete runtime-control procedure must accommodate Render refusing deploys
+for suspended services. Keep PostgreSQL and the broker up. Disable automatic
+deploys and close cron schedules to new launches, then drain existing work.
+Use web maintenance mode to close public admission. A temporary web start command
+uses only the standard-library maintenance responder for any old SHA and execs
+the recorded original Gunicorn command only on the frozen candidate SHA. Apply
+that command with a deploy-only transition of the existing build, then verify
+old Gunicorn processes exited and no old application DB transaction remains.
+Workers drain before suspension. Their temporary start-command guards idle on
+an old SHA and exec the original command only on the frozen candidate. These
+guards allow safe resume/build without reopening an old application binary on
+the changed schema. Cron schedules remain closed until their candidate builds
+are verified. Test the supported transitions while schema is still 0082 before
+migrating; missing controls stop the cutover. No collector or provider settings
+change. Save and restore every original command/schedule/maintenance/auto-deploy
+setting; the guards hold no business state and are removed from configuration
+after runtime SHA/code/schema agreement is proved.
+
+The following procedure was originally prepared October14 before release authority. The later production instruction and current execution state above supersede that historical planning-only boundary. No account production pause or migration has occurred yet; the completed rehearsal uses an isolated restored copy.
 
 ### Known State and Sources
 
@@ -177,7 +215,7 @@ Use one dated Markdown execution receipt under `docs/analysis/`, on the authorit
 | Checkpoint | Work and required evidence | Expected timing |
 |---|---|---|
 | C0 — preparation | Rollout authority/route, frozen candidate/base/rollback SHAs, clean current-head checks, service inventory, staging ownership, backup/restore tooling and scratch target ready | Before production interruption |
-| C1 — staging rehearsal | Target 0082 baseline, service drain, full backup/restore proof, serial candidate build, migrations, preservation and restart checks | Measure all stages; production remains running |
+| C1 — selected isolated rehearsal | Production-copy0082 baseline, full backup/restore, migrations, preservation and reverse/forward proof; old-schema live runtime transitions checked before DDL | Database rehearsal completed; shared staging excluded by owner-selected direct route |
 | C2 — production pause | In-flight work completes; new requests/jobs/builds prevented; all target writers absent | Production interruption begins at first service restriction |
 | C3 — production recovery point | Fresh quiesced production dump, checksum, successful scratch restore and baseline comparisons | Measure; do not infer from a previous backup |
 | C4 — first candidate build | One migration-owning service build; exact candidate and database binding | Measure build separately from migrations |
@@ -197,7 +235,7 @@ If a phase shows no progress for 60 seconds, capture its current deploy/log/DB w
 3. Prepare an isolated PostgreSQL restore target and compatible dump/restore client versions. It must support the actual production server version (last reported PostgreSQL 18.4); local migration tests on 17.9 do not prove that recovery path. Verify access, storage capacity, dump transfer and candidate/old-code execution before the window. Never use production or another session's staging database as the scratch restore target.
 4. Inventory all runtime readers/writers and deploys. Record service ID/type, branch, SHA, command, DB name, schedule, suspension/auto-deploy state and non-secret activation controls. Prevent automatic and queued builds from crossing the migration boundary; merging before this protection is in place can start migrations against active old runtimes. Rehearse a supported way to build/install the candidate while old runtimes remain stopped: if a service must resume to deploy, prove that cannot reopen old request admission or scheduled work before migration. Missing controls stop preparation before the production pause; do not improvise by resuming old services on a changed schema. Do not apply a Blueprint just to perform this cutover.
 5. Run read-only old-schema conflict checks covering every X field in migration 0083 and every HF namespace/link in migration 0084. Refuse non-X accounts with non-NULL X evidence, mismatched source-qualified HF identities, conflicting company ownership or reserved discovery-provenance collisions. Preserve unknown/null/false/zero; do not repair contradictory data silently.
-6. Rehearse C2–C7 against representative staging data after its owner releases that environment. Preserve the X staging pilot and its evidence. Disable provider work for validation; a code/schema proof needs no new paid calls. Test the supported reverse path on the isolated restored copy before production. Capture timings, exact field/identity/history comparisons and recovery results. A small fixture or CI run is not this scale rehearsal.
+6. Under the owner's selected direct route, reuse the completed full production-copy PostgreSQL18 rehearsal and supported reverse proof. Shared staging and its X/native pilot are excluded. Verify the live maintenance transitions while production still has0082 before migrating. Use the fresh quiesced C3 copy for final data comparisons. No new provider calls are needed for code/schema proof. Retain actual timings and field/identity/history comparisons; fixtures/CI alone do not replace the completed production-scale restore.
 
 ### C2–C3: Drain and Prove the Production Backup
 
@@ -309,19 +347,28 @@ For this follow-up, R9 is satisfied by the reviewed, saved deployment/recovery s
 
 ## Delivery Exceptions
 
+Owner route selection,2026-10-14T13:16:05Z: “direct production.”
+This explicitly selects `delivery_route: direct` and retires the shared-staging
+branch/deploy/rehearsal gates for this release. The completed isolated full
+production-copy rehearsal supplies migration/recovery evidence. Preserve the
+independent0085/native controller. Fresh C3 backup/restore, writer drain, runtime
+transition verification, serialized migration build, preservation and natural
+harvest proof remain required. This is the existing production grant continued
+through its selected route; no further release approval is needed.
+
 Owner continuation, 2026-10-14T12:01:32Z: “approved, deploy to production.”
 This selects PR60 account deployment through verified production, including the
 planned bounded six-service pause/resume, backup/isolated restore and recovery
-operations. The default staged route remains selected; no checks are waived.
+operations. The later direct-route selection above supersedes the initial staged default.
 Session `g3-pr60-production-20261014` owns this plan and account rollout only.
 Shared staging is currently claimed by the independent backfill/native pilot;
 contact was sent to its owner thread before any staging mutation. Preserve its
 0085 source, staged data and controls. Prepare C0 while production remains live;
 do not fold that sibling migration into this account release.
 
-Owner request: “subagent: ok deploy pr59; main agent lfg on accounts work.” Account LFG uses the default PR/CI endpoint, with delivery_target on-request; PR59 deployment has a separate owner and plan. No account production grant, provider batch or collector activation is inferred. No further scope approval/menu is needed for this already-authorized implementation. Execution is native in the main agent; project task mapping keeps account review/research sequential rather than dispatching independent agents.
+Historical implementation request: “subagent: ok deploy pr59; main agent lfg on accounts work.” That initial account LFG reached its default PR/CI endpoint; PR59 had a separate deployment owner/plan. The subsequent production grant at the start of this section supersedes the initial on-request delivery boundary. Provider batches and collector activation remain outside this release. Execution is native in the main agent; project task mapping keeps account review/research sequential rather than dispatching independent agents.
 
-Owner follow-up asks to save deployment pauses, timing and diagnosis/recovery into this same plan, then confirms the need for a live-production backup before executing. This authorizes the plan edit only. Account code/PR delivery remains complete at the recorded revision; runtime pause, backup/restore, staging/production rollout and Git publication of this documentation await their actual task instruction. Default future rollout is staged. The plan's proposed writer pauses are distinct from the historical same-cycle zero-disruption procedure, whose continuity contract does not authorize this incompatible schema cutover.
+The earlier follow-up saved pauses, timing and recovery, including the mandatory live-production backup. That planning-only boundary was superseded by the production instruction and explicit direct-route selection. Shared staging carries the independent0085 pilot and is preserved. The account writer pauses differ from the historical same-cycle procedure, which is unsuitable for this incompatible schema cutover.
 
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -351,20 +398,16 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - Workflow: `plan`
 - Delivery target: `production`
 - Owner selection recorded: `true`
-- Delivery route: `staged`
+- Delivery route: `direct`
 
 1. Complete implementation and the plan's verification contract.
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+4. On the owner-selected direct route, fetch the remote production lane: `git fetch origin refs/heads/main`.
+5. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+6. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+7. After step 6 succeeds, perform worktree cleanup as the final filesystem action:
     - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g3-account-extensions` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
     - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g3-account-extensions` without `--force`.
     - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
