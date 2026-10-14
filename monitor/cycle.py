@@ -3669,7 +3669,7 @@ class CycleRunner:
         self,
         items: list[dict[str, Any]],
     ) -> tuple[int, int, int, int]:
-        context = self._backfill_context
+        context = getattr(self, "_backfill_context", None)
         if context is not None and context.page_writer is not None:
             return context.page_writer(self, items, self._persist_items_orm)
         return self._persist_items_orm(items)
