@@ -23,6 +23,11 @@ REAL_FACTORY = TwitterApiClient.__dict__["from_env"]
 pipeline = pytest.fixture(name="pipeline")(captured_pipeline.__wrapped__)
 
 
+@pytest.fixture(autouse=True)
+def on_demand_test_environment(monkeypatch):
+    monkeypatch.setenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", "test-only-on-demand")
+
+
 def ready_job(*, requests=1, maximum=20, cursor=None, complete=False, probe=False):
     cfg = bounded_backfill_config(load_config(Path("config.yaml")), enrichment_limit=1)
     source, _ = DataSource.objects.get_or_create(id="x", defaults={"name": "X", "source_type": "social"})

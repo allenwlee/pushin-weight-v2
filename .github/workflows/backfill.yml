@@ -5,6 +5,8 @@ on:
     paths:
       - 'monitor/cycle.py'
       - 'monitor/backfill_resources.py'
+      - 'monitor/backfill_collection.py'
+      - 'core/collection*.py'
       - 'monitor/post_artifacts.py'
       - 'monitor/management/commands/backfill.py'
       - 'monitor/run_lock.py'
@@ -61,6 +63,7 @@ jobs:
       - name: Lint recovery command, resource guard and tests
         run: >-
           python -m ruff check monitor/backfill_resources.py
+          monitor/backfill_collection.py tests/test_backfill_collection.py
           monitor/management/commands/backfill.py tests/test_backfill_resources.py
           tests/test_backfill_pipeline.py tests/test_backfill_quarantined.py
       - name: Backfill and scheduled-path regressions (required skips fail)
@@ -68,6 +71,7 @@ jobs:
           python -m pytest -q tests/test_apify.py tests/test_post_enrichment_queue.py
           tests/test_enrichment_attempt_deadline.py tests/test_backfill_quarantined.py
           tests/test_backfill_pipeline.py tests/test_backfill_resources.py
+          tests/test_backfill_collection.py tests/test_collection_jobs.py tests/test_collection_state.py
           tests/test_bounded_classifier_client.py tests/test_cycle_cursor_wiring.py
           tests/test_cycle_run_lock.py tests/test_twitterapi_caller_shape.py
           tests/test_harvest_cursor_lifecycle.py tests/test_cycle_search_caps.py
