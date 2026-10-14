@@ -259,3 +259,32 @@ def test_direct_429_defers_retry_and_keeps_prior_reservations(native):
     assert OriginalContentCall.objects.filter(
         state="failed", reserved_usd__gt=0
     ).exists()
+
+
+def test_invalid_cached_reply_is_retained_and_only_that_request_is_retried(native):
+    from x_monitor.deepinfra import GEMMA_4_31B_MODEL
+
+    provider = DirectProvider()
+    original = provider.transport
+    invalid = []
+
+    def once(body, timeout):
+        reply = original(body, timeout)
+        with provider.lock:
+            if body["model"] == GEMMA_4_31B_MODEL and not invalid:
+                invalid.append(True)
+                reply["model"] = "wrong-model"
+        return reply
+
+    provider.transport = once
+    for turn in range(15):
+        result = run_direct(native, provider, initial=turn == 0)
+        if result["status"] == "completed":
+            break
+    assert result["status"] == "completed"
+    rejected = OriginalContentCall.objects.get(error_code="cached_response_validation_failed")
+    assert rejected.state == "completed" and rejected.response_payload["model"] == "wrong-model"
+    attempts = OriginalContentCall.objects.filter(request_hash=rejected.request_hash)
+    assert attempts.count() == 2
+    assert attempts.exclude(pk=rejected.pk).get().import_state == "applied"
+    assert all(call.reserved_usd > 0 for call in attempts)

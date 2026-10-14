@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import inspect
 import json
 import threading
@@ -40,7 +41,11 @@ from core.provider_batches import (
 from monitor.backfill_resources import bounded_backfill_config
 from monitor.cycle import CycleRunner, _parse_published_classifications
 from monitor.post_artifacts import literal_translation_artifact_complete
-from x_monitor.deepinfra import DEEPSEEK_0731_MODEL, GEMMA_4_31B_MODEL
+from x_monitor.deepinfra import (
+    DEEPSEEK_0731_MODEL,
+    GEMMA_4_31B_MODEL,
+    DeepInfraPermanentError,
+)
 from x_monitor.deepinfra_batch import (
     BatchHTTPError,
     BatchProtocolError,
@@ -278,6 +283,35 @@ def _classifier_ready(body):
     return False
 
 
+def _cached_reply_valid(call, client, source):
+    """Use the canonical response and literal validators before offering a cache hit."""
+    from x_monitor.literal_translation import (
+        _parse_detected_language,
+        _restore_and_validate,
+        _split_translation_chunks,
+    )
+    from x_monitor.translation_invariants import protect_translation_spans
+
+    try:
+        if call.provenance["response_kind"] == "json":
+            client.parse_response(call.response_payload)
+            return True
+        text = client.parse_text_response(call.response_payload).text
+        context = call.provenance["context"]
+        if context.get("operation") == "post_literal_language_detection":
+            return _parse_detected_language(text) is not None
+        if hashlib.sha256(source.encode()).hexdigest() != context["source_fingerprint"]:
+            raise BatchAdmissionError("cached_translation_source_mismatch")
+        if context.get("chunk_index") is not None:
+            source = _split_translation_chunks(source, chunk_size=2000)[context["chunk_index"]]
+        target = context["target_language"]
+        _, quantities = protect_translation_spans(source, target)
+        text, _, _ = _restore_and_validate(source, target, text, quantities, {}, 0)
+        return text is not None
+    except DeepInfraPermanentError:
+        return False
+
+
 def prepare_page(job, ids, cfg, *, delegates=None):
     """Replay exact shared callers; missing replies roll back every Post write."""
     own_historical_posts(job, ids)
@@ -299,13 +333,18 @@ def prepare_page(job, ids, cfg, *, delegates=None):
         ).values_list("request_hash", flat=True)
     )
     prepared, consumed, missing = {}, set(), set()
+    rejected = set()
+    sources = dict(Post.objects.filter(pk__in=ids).values_list("pk", "text"))
     lock = threading.Lock()
 
     def resolve(identity, body, kind, context):
         with lock:
             if identity in cached:
-                consumed.add(cached[identity].pk)
-                return cached[identity].response_payload
+                call = cached[identity]
+                if _cached_reply_valid(call, delegates[context["stage"]], sources[call.member_post_ids[0]]):
+                    consumed.add(call.pk)
+                    return call.response_payload
+                rejected.add(call.pk)
             missing.add(identity)
             if identity not in outstanding and (
                 context["stage"] != "classification" or _classifier_ready(body)
@@ -381,6 +420,22 @@ def prepare_page(job, ids, cfg, *, delegates=None):
                 call.save(
                     update_fields=["import_state", "import_evidence", "updated_at"]
                 )
+    # A missing dependency rolls back Post publication, not evidence that a
+    # particular saved reply failed validation. Otherwise it would replay forever.
+    if rejected:
+        with transaction.atomic():
+            CollectionJob.objects.select_for_update().get(pk=job.pk)
+            for call in OriginalContentCall.objects.select_for_update().filter(
+                pk__in=rejected, state="completed", import_state__in=["pending", "applied"],
+            ):
+                call.import_state = "error"
+                call.error_code = "cached_response_validation_failed"
+                call.import_evidence = {
+                    **call.import_evidence, "validation": "failed",
+                    "reason": "canonical_cached_reply_rejected",
+                    "validated_at": timezone.now().isoformat(),
+                }
+                call.save(update_fields=["import_state", "error_code", "import_evidence", "updated_at"])
     return list(prepared.values()), result, bool(missing)
 
 
@@ -732,7 +787,7 @@ def execute_enrichment(
                 continue
             prepared, _, _ = prepare_page(job, pending, cfg, delegates=delegates)
             requests.extend(prepared)
-            if len(requests) >= 2000:
+            if len(requests) >= (direct_concurrency * 2 if transport == "direct" else 2000):
                 break
         for batch_id in _register_requests(
             job, requests, policy, cfg,

@@ -15,6 +15,32 @@ class TextResponse:
         self.provider_usage = usage
 
 
+@pytest.mark.parametrize("source", [
+    ("tutututututu/Tutu-MiniMax-H3-AudioVideo-20to8-NFE-LoRA\nhttps://example.test/model\n"
+     "tutu-t8-minimax-h3-av-20to8-nfe-lora-step000100-bf16-comfyui.safetensors"),
+    ("MiniMax H3\nQwen Image 3 Pro\nElevenLabs\nRTX Pro 6000 96GB\nLocal AI\n\n"
+     "„Seven Minutes Before Dawn”\n@MiniMax_AI\nhttps://example.test/art"),
+])
+def test_unchanged_model_identifiers_and_short_versioned_names_use_real_translator(source):
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    # API language hints can be wrong for identifiers; they must remain exact.
+    client = PlaintextClient([TextResponse(source)] * 3)
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "identifiers", "text": source, "lang": "it"}], client,
+    )[0]
+    assert not row["translation_failed"]
+    assert row["text_en"] == row["text_zh_cn"] == row["text_ja"] == source
+
+
+def test_model_filename_does_not_allow_unchanged_surrounding_english_prose():
+    from x_monitor.literal_translation import _is_untranslated_copy
+
+    source = "model-step0100.safetensors\nWe compared the new model against the previous release and found several changes in its output quality."
+    assert _is_untranslated_copy(source, source, "ja")
+    assert _is_untranslated_copy(source, source, "zh-Hans")
+
+
 class PlaintextClient:
     def __init__(
         self, replies: list[object], *, request_profile: str | None = None

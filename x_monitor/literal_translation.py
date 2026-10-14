@@ -444,6 +444,24 @@ def _is_untranslated_copy(source: str, translated: str, target_language: str) ->
     # Explicit pronunciation spellings are intentionally copied, not prose.
     prose, _ = protect_translation_spans(source, target_language)
     prose = re.sub(r"```[\s\S]*?```|`[^`]*`|https?://\S+|[@#][\w]+", "", prose)
+    # Bare model identifiers are often posted without Markdown code fences.
+    prose = re.sub(
+        r"(?<!\S)(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]*[-_0-9][A-Za-z0-9._-]+"
+        r"|[A-Za-z0-9._-]+\.(?:safetensors|gguf|ggml|onnx|pth|pt|bin))(?!\S)",
+        "", prose,
+    )
+    lines = []
+    for line in prose.splitlines():
+        tokens = line.split()
+        versioned_name = (
+            1 <= len(tokens) <= 6
+            and any(re.search(r"\d", token) for token in tokens)
+            and all(re.fullmatch(r"(?:[A-Z][A-Za-z0-9.+_-]*|\d[A-Za-z0-9.+_-]*)", token)
+                    for token in tokens)
+        )
+        if not versioned_name:
+            lines.append(line)
+    prose = "\n".join(lines)
     cjk = len(re.findall(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]", prose))
     if target_language == "en":
         return cjk >= 20
