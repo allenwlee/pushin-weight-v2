@@ -30,6 +30,13 @@ def test_enabled_generation_requires_explicit_routes_and_budgets():
         EditorialConfig(enabled=True)
 
 
+def test_enabled_generation_cannot_omit_the_senior_reviewer():
+    from tests.editorial_support import active_config
+
+    with pytest.raises(ValueError, match="senior reviewer"):
+        active_config(reviewer=None)
+
+
 def test_voice_is_versioned_independent_of_provider_and_atomic_tone():
     voice = load_voice("chatter-en-v1")
     assert voice.locale == "en" and voice.track == "chatter"

@@ -7,7 +7,8 @@ public_enabled: true
 daily_usd: 5
 assessment_usd: 2
 daily_calls: 384
-assessment_calls: 6
+# Editor + four writers + four senior reviews + up to four optional media calls.
+assessment_calls: 13
 media_daily_calls: 4
 # Six seconds at $0.08/s is $0.48; reserve extra for encoded-duration variance.
 media_cost_ceiling_usd: 0.60
@@ -61,3 +62,5 @@ locale_routes:
     max_output_tokens: 16384
   chatter:zh-cn:
     <<: *native_chatter
+reviewer:
+  <<: *native_chatter

@@ -11,12 +11,30 @@ from monitor.editorial.config import EditorialConfig, Route
 from monitor.editorial.contracts import Event
 
 
+def senior_approval():
+    """A controlled semantic-review reply; never a live provider."""
+    return {
+        "sections": {
+            key: {"grade": "A-", "reason": "The draft is clear and supported by the supplied sources.", "findings": []}
+            for key in ("sources", "facts", "attribution_time", "fairness", "context",
+                        "headline", "supporting_line", "body", "local_voice")
+        },
+        "overall_grade": "A-",
+        "overall_reason": "The supplied evidence supports publication of this draft.",
+        "verdict": "publish", "required_changes": [], "uncertainties": ["Native-reader certification was not performed."],
+        "strengths": ["Clear attribution."],
+    }
+
+
 def grounded_reply(body, data):
     """A fake provider selects real labels/passages from the captured request."""
     content = body["messages"][1]["content"]
     if isinstance(content, list):
         content = content[0]["text"]
-    evidence = json.loads(content)["evidence"]
+    payload = json.loads(content)
+    if "review_identity" in payload:
+        return senior_approval()
+    evidence = payload["evidence"]
     sources = evidence["posts"] if isinstance(evidence, dict) else evidence
     source = sources[0]
     entries = data.get("events", [data])
@@ -125,9 +143,11 @@ def active_config(**overrides):
         "daily_usd": 10,
         "assessment_usd": 5,
         "daily_calls": 10,
+        "assessment_calls": 13,
         "media_daily_calls": 2,
         "media_cost_ceiling_usd": 1,
         "routes": {k: route for k in ("editor", "chatter", "pulse")},
+        "reviewer": route,
         "pictures": {"chatter": "derive"},
     }
     values.update(overrides)
