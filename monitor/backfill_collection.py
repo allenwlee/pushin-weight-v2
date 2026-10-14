@@ -50,7 +50,12 @@ BLOCKED_REASONS = frozenset({
 
 
 def config_digest(cfg):
-    return hashlib.sha256(json.dumps(cfg.model_dump(mode="json"), sort_keys=True).encode()).hexdigest()
+    # This route selects only B/C collection and admits zero model calls.
+    # Inactive downstream lanes must not invalidate a saved provider cursor.
+    value = cfg.model_dump(mode="json", exclude={
+        "headline_narrative", "synthesis", "llm", "targeted_extraction", "discovery",
+    })
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
 def validate_scope(job, cfg):

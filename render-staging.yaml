@@ -36,8 +36,6 @@ services:
         fromDatabase:
           name: pushinweight-staging-db
           property: connectionString
-      - key: TWITTERAPI_IO_ON_DEMAND_API_KEY
-        sync: false
       - key: CELERY_BROKER_URL
         fromService:
           type: keyvalue

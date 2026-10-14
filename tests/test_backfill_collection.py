@@ -209,3 +209,23 @@ def test_storage_probe_updates_same_page_without_http_or_new_posts(pipeline):
     assert report["provider_requests"] == report["model_requests"] == 0
     assert report["updated_posts"] == 1 and Post.objects.count() == 1
     assert len(pipeline.requests) == before
+
+
+def test_headline_revision_does_not_change_batch_collection_identity(pipeline, monkeypatch):
+    job = ready_job()
+    monkeypatch.setenv("X_MONITOR_HEADLINE_CONTROL_REVISION", "unrelated-headline-release")
+    pipeline.responses.append(page("1"))
+    assert run(job)["collection_drained"]
+
+
+def test_collection_configuration_change_is_rejected_before_claim(pipeline, monkeypatch):
+    job = ready_job()
+    original = load_config
+    def changed(path):
+        cfg = original(path)
+        cfg.enabled_models = ["qwen"]
+        return cfg
+    monkeypatch.setattr("monitor.backfill_collection.load_config", changed)
+    with pytest.raises(ValueError, match="configuration changed"):
+        run(job)
+    assert not pipeline.requests and not CollectionRun.objects.exists()
