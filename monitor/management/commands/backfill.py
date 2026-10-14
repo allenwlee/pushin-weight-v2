@@ -155,6 +155,12 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser) -> None:
         parser.add_argument(
+            "--collection-job", type=str,
+            help="Execute a ready, frozen X backfill CollectionJob; progress lives in PostgreSQL.",
+        )
+        parser.add_argument("--storage-probe", action="store_true",
+                            help="Measure a job's frozen captured page using existing Post updates; no provider calls.")
+        parser.add_argument(
             "--batch", action="store_true",
             help="Collect whole historical windows with per-page checkpoints, no cron waits or inline enrichment.",
         )
@@ -237,6 +243,23 @@ class Command(BaseCommand):
             for name in _RUNTIME_SETTING_NAMES
         }
         try:
+            if options.get("collection_job"):
+                if any(options.get(key) for key in (
+                    "since", "until", "brands", "call_ids", "query", "reset", "quarantined", "retry_blocked",
+                )):
+                    raise CommandError("--collection-job owns its frozen scope; omit scope/reset options")
+                from monitor.backfill_collection import benchmark_page, execute_job
+
+                if options["storage_probe"] and not (options["status"] or options["dry_run"]):
+                    self.result = benchmark_page(options["collection_job"])
+                else:
+                    self.result = execute_job(
+                        options["collection_job"], read_only=options["status"] or options["dry_run"],
+                    )
+                self.stdout.write(json.dumps(self.result, sort_keys=True))
+                return
+            if options["storage_probe"]:
+                raise CommandError("--storage-probe requires --collection-job")
             return self._handle_guarded(*args, **options)
         finally:
             for name, value in previous_settings.items():

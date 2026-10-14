@@ -174,6 +174,7 @@ class TwitterApiClient:
                     "raw_results": len(body.get("tweets") or body.get("data") or []),
                     "has_next_page": bool(body.get("has_next_page")),
                     "attempt": n_attempts,
+                    "response_bytes": len(r.content),
                 })
             if r.status_code == 401:
                 exc = TwitterApiAuthError(

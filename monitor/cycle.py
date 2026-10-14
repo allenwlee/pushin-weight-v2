@@ -3669,6 +3669,15 @@ class CycleRunner:
         self,
         items: list[dict[str, Any]],
     ) -> tuple[int, int, int, int]:
+        context = self._backfill_context
+        if context is not None and context.page_writer is not None:
+            return context.page_writer(self, items, self._persist_items_orm)
+        return self._persist_items_orm(items)
+
+    def _persist_items_orm(
+        self,
+        items: list[dict[str, Any]],
+    ) -> tuple[int, int, int, int]:
         """Persist attributed items via Django ORM.
 
         For each item: upsert Account → upsert Post → persist attribution
