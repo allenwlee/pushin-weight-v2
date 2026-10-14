@@ -605,9 +605,7 @@ def advance_batch(batch_id, *, client_factory=None, api_key):
         release_batch(claim)
 
 
-def _register_requests(
-    job, requests, policy, cfg, *, transport="batch", direct_concurrency=32
-):
+def _register_requests(job, requests, policy, cfg, *, transport="batch"):
     models = defaultdict(list)
     for request in requests:
         models[request["body"]["model"]].append(request)
@@ -621,8 +619,6 @@ def _register_requests(
         members = sorted(members, key=lambda r: r["hash"])
         selected, file_bytes = [], 0
         group_limit = policy["max_file_requests"]
-        if transport == "direct":
-            group_limit = min(group_limit, direct_concurrency * 2)
         for request in members:
             size = len(
                 encode_requests(
@@ -791,7 +787,7 @@ def execute_enrichment(
                 break
         for batch_id in _register_requests(
             job, requests, policy, cfg,
-            transport=transport, direct_concurrency=direct_concurrency,
+            transport=transport,
         ):
             advance(ProviderBatch.objects.get(pk=batch_id))
     states = PostEnrichmentState.objects.filter(

@@ -227,18 +227,55 @@ def test_direct_32_requests_overlap_without_worker_database_connections(native):
     provider = DirectProvider()
     original = provider.transport
     barrier = threading.Barrier(32)
+    first_wave = [0]
     from x_monitor.deepinfra import GEMMA_4_31B_MODEL
 
     def simultaneous(body, timeout):
         assert connection.connection is None
         if body["model"] == GEMMA_4_31B_MODEL:
-            barrier.wait(timeout=10)
+            with provider.lock:
+                wait = first_wave[0] < 32
+                first_wave[0] += 1
+            if wait:
+                barrier.wait(timeout=10)
         return original(body, timeout)
 
     provider.transport = simultaneous
     result = run_direct(native, provider, initial=True, concurrency=32)
     assert provider.peak == 32
     assert result["direct_model_requests_sent"] == provider.sent
+
+
+def test_direct_drains_ready_waves_before_repeating_database_preparation(native):
+    provider = DirectProvider()
+    result = run_direct(native, provider, initial=True, concurrency=1)
+    assert result["model_requests_sent"] == result["model_requests_reserved"] == 6
+    assert result["active_batches"] == 0
+    assert provider.peak == 1
+    assert run_direct(native, provider)["status"] == "completed"
+
+
+def test_direct_advancement_still_bounds_total_waves_and_persists_unstarted_calls(native):
+    from django.db import transaction
+
+    from core.models import Post, PostBrand, PostEnrichmentState
+    from core.provider_batches import record_post_membership
+    from x_monitor.deepinfra import GEMMA_4_31B_MODEL
+
+    job = native[0]
+    ids = [f"drain-{index}" for index in range(8)]
+    Post.objects.bulk_create([Post(tweet_id=identifier, text="I tried Qwen today.", lang="en") for identifier in ids])
+    PostBrand.objects.bulk_create([PostBrand(post_id=identifier, brand_id="qwen") for identifier in ids])
+    PostEnrichmentState.objects.bulk_create([PostEnrichmentState(post_id=identifier) for identifier in ids])
+    with transaction.atomic():
+        record_post_membership(job.runs.get(), None, ids)
+    provider = DirectProvider()
+    run_direct(native, provider, initial=True, concurrency=1)
+    group = ProviderBatch.objects.get(model=GEMMA_4_31B_MODEL)
+    assert group.calls.filter(state="completed").count() == 8
+    assert group.calls.filter(state="reserved").count() == 12
+    assert group.state == "registered"
+    assert provider.peak == 1
 
 
 def test_direct_429_defers_retry_and_keeps_prior_reservations(native):

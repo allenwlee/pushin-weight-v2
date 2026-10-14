@@ -27,6 +27,21 @@ def validate_concurrency(value):
 
 
 def advance_direct(batch_id, *, api_key, concurrency=32, client_factory=None):
+    """Drain at most eight bounded waves before preparing another Post page."""
+    validate_concurrency(concurrency)
+    for _ in range(8):
+        _advance_direct_wave(
+            batch_id, api_key=api_key, concurrency=concurrency,
+            client_factory=client_factory,
+        )
+        group = ProviderBatch.objects.only("state", "next_poll_at").get(pk=batch_id)
+        if group.state != "registered" or (
+            group.next_poll_at and group.next_poll_at > timezone.now()
+        ):
+            return
+
+
+def _advance_direct_wave(batch_id, *, api_key, concurrency, client_factory):
     """Send one wave; workers only perform HTTP, the controller owns DB writes.
 
     Sent requests without a saved reply remain ambiguous after interruption.
