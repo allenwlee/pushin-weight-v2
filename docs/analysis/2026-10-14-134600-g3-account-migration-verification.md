@@ -33,6 +33,12 @@ The new staging-refresh policy intentionally requires source migration0084 and t
 
 Browser scope mapping: no template, view, route, asset or frontend interaction changed. Standalone browser acceptance has no affected visual route to execute; this is not a browser-pass claim. Existing product-review and account/profile call-chain regressions were executed. All public forecast/chart/YouTube/GitHub source activation work remains separate.
 
+## Frozen HF scope correction
+
+A linked HF account can have a different equivalent namespace capitalization and independent discovery metadata. The populated preservation fixture reproduced an incorrect frozen-scope change (linkedlab versus LinkedLab). Publisher presentation/evidence helpers now retain original HFOrg namespace/discovery values while the source-qualified normalized identity still matches; independent account metadata survives. Changed identities use their current provider identifier rather than an obsolete alias. Reserved provenance-key collisions refuse migration atomically instead of overwriting existing metadata.
+
+The strengthened HF migration/catalog/cohort-identity suite passed41 tests/35 required PostgreSQL tests with0 skips/errors; the additional provenance-collision test passed1 required PostgreSQL test. These checks cover the correction after the initial candidate's four CI checks passed; the corrected published revision receives its own CI run.
+
 ## Separate PR59 production delivery
 
 Delegate verified PR59 merged and all six active production services at948f05ad0c42837ecfe4082539bf34dcea9d7a88; migrations0081/0082 and shared API present. All2,057,227 staging and369,169 preexisting production numeric rows unchanged. No collector activation; legacy services remain suspended. Existing collection plan and backfill interface hold full live receipts. This does not establish production account-migration readiness.

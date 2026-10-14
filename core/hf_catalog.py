@@ -15,6 +15,7 @@ from django.db import DataError, connection, transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from core.account_identity import publisher_discovery_label, publisher_identifier
 from core.hf_metadata_client import INVENTORY_VERSION, NAMESPACE, REPO_ID
 from core.measurement_taxonomy import digest
 from core.models import (
@@ -81,24 +82,24 @@ def resolve_scope(*, brands=None, companies=None, namespace=None, rules=None):
                 gaps.append(
                     {
                         "company": company,
-                        "namespace": org.account.external_identifier,
+                        "namespace": publisher_identifier(org.account),
                         "reason": "unconfirmed_namespace",
                     }
                 )
                 continue
-            if not NAMESPACE.fullmatch(org.account.external_identifier):
+            if not NAMESPACE.fullmatch(publisher_identifier(org.account)):
                 raise ValueError("invalid stored HF namespace")
             entries.append(
                 {
-                    "namespace": org.account.external_identifier,
+                    "namespace": publisher_identifier(org.account),
                     "company": company,
                     "brands": sorted(
                         BrandCompany.objects.filter(
                             company_id=company, brand__is_sentinel=False
                         ).values_list("brand_id", flat=True)
                     ),
-                    "ownership_evidence": org.account.provider_metadata.get("discovered_via", "curated"),
-                    "source_url": f"https://huggingface.co/{org.account.external_identifier}",
+                    "ownership_evidence": publisher_discovery_label(org.account),
+                    "source_url": f"https://huggingface.co/{publisher_identifier(org.account)}",
                 }
             )
     entries.sort(key=lambda row: row["namespace"].casefold())
@@ -231,7 +232,7 @@ def persist_product(observation, entry, rules, payload, group):
     product = Product.objects.select_for_update().get(pk=product.pk)
     if (
         product.hf_type != "model"
-        or (product.hf_namespace and product.hf_namespace.casefold() != org.account.external_identifier.casefold())
+        or (product.hf_namespace and product.hf_namespace.casefold() != publisher_identifier(org.account).casefold())
         or (product.brand_id and product.brand_id not in brands)
     ):
         observation.processing_outcome = "owner_conflict"

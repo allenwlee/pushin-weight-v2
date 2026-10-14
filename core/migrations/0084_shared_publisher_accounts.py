@@ -60,12 +60,18 @@ def migrate_publishers(apps, schema_editor):
         metadata = dict(account.provider_metadata)
         metadata.setdefault("discovered_via", org.discovered_via)
         metadata.setdefault("legacy_added_at", org.added_at.isoformat())
-        metadata["namespace_discovery_evidence"] = {
+        evidence = {
             "namespace": org.namespace,
             "previous_account_key": str(org.account_id) if org.account_id else None,
             "discovered_via": org.discovered_via,
             "added_at": org.added_at.isoformat(),
         }
+        if (
+            "namespace_discovery_evidence" in metadata
+            and metadata["namespace_discovery_evidence"] != evidence
+        ):
+            raise RuntimeError("HF discovery provenance conflict")
+        metadata["namespace_discovery_evidence"] = evidence
         Account.objects.using(alias).filter(pk=account.pk).update(
             provider_metadata=metadata
         )

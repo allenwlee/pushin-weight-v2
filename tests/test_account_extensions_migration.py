@@ -110,7 +110,13 @@ def test_hf_retirement_preserves_linked_and_pending_publishers_and_products():
     old = executor.loader.project_state(X_DETAILS).apps
     company = old.get_model("core", "Company").objects.create(nickname="migration-lab")
     account = historical_account(
-        old, "LinkedLab", "hf", provider_metadata={"independent": "keep"}
+        old,
+        "linkedlab",
+        "hf",
+        provider_metadata={
+            "independent": "keep",
+            "discovered_via": "independent discovery",
+        },
     )
     stamp = datetime(2026, 7, 1, tzinfo=UTC)
     Org = old.get_model("core", "HFOrg")
@@ -152,6 +158,13 @@ def test_hf_retirement_preserves_linked_and_pending_publishers_and_products():
         assert candidate.account_kind == "unknown"
         assert candidate.created_at is None
         assert candidate.first_seen_at == stamp
+        from core.hf_catalog import resolve_scope
+        from core.models import Product as CurrentProduct
+
+        scope = resolve_scope(brands=[], companies=[company.pk], rules=[])
+        assert scope["namespaces"][0]["namespace"] == "LinkedLab"
+        assert scope["namespaces"][0]["ownership_evidence"] == "reviewed"
+        assert CurrentProduct.objects.get(pk=products[0].pk).hf_namespace == "LinkedLab"
         for original, publisher, confirmed in zip(
             products, (existing, candidate), (True, False)
         ):
@@ -204,4 +217,34 @@ def test_hf_identity_conflict_refuses_retirement_atomically():
         }
     finally:
         old.get_model("core", "HFOrg").objects.filter(pk=org.pk).update(account=None)
+        MigrationExecutor(connection).migrate(latest)
+
+
+@pytest.mark.usefixtures("isolated_migration_database")
+def test_hf_provenance_collision_refuses_retirement_without_overwriting_metadata():
+    target = [("core", "0084_shared_publisher_accounts")]
+    executor = MigrationExecutor(connection)
+    latest = executor.loader.graph.leaf_nodes()
+    MigrationExecutor(connection).migrate(X_DETAILS)
+    old = executor.loader.project_state(X_DETAILS).apps
+    company = old.get_model("core", "Company").objects.create(nickname="migration-lab")
+    original = {"namespace_discovery_evidence": {"independent": "keep"}}
+    account = historical_account(old, "Publisher", "hf", provider_metadata=original)
+    old.get_model("core", "HFOrg").objects.create(
+        namespace="Publisher", company=company, account=account
+    )
+    try:
+        with pytest.raises(RuntimeError, match="provenance conflict"):
+            MigrationExecutor(connection).migrate(target)
+        assert (
+            old.get_model("core", "Account")
+            .objects.get(pk=account.pk)
+            .provider_metadata
+            == original
+        )
+        assert "hf_orgs" in connection.introspection.table_names()
+    finally:
+        old.get_model("core", "Account").objects.filter(pk=account.pk).update(
+            provider_metadata={}
+        )
         MigrationExecutor(connection).migrate(latest)

@@ -2921,8 +2921,10 @@ class Product(models.Model):
 
     @property
     def hf_namespace(self):
+        from core.account_identity import publisher_identifier
+
         publisher = self.publisher_account if self.publisher_account_id else None
-        return publisher.external_identifier if publisher and publisher.data_source_id == "hf" else None
+        return publisher_identifier(publisher) if publisher and publisher.data_source_id == "hf" else None
 
     @property
     def publisher_ownership(self):
