@@ -41,7 +41,9 @@ class Command(BaseCommand):
                     "external_identifier": m.external_identifier,
                     "endpoint_path": m.identifier_metadata["endpoint_path"],
                 }
-                for m in contract.mappings.filter(source_id="opencode")
+                for m in contract.mappings.filter(
+                    purpose="metric", source_id="opencode"
+                )
             ]
             with httpx.Client(trust_env=False) as client:
                 budget = Budget(

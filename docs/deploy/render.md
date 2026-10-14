@@ -1,5 +1,12 @@
 # Render runbook — Pushin Weight v2
 
+The shared collection-job candidate is described in
+[Collection jobs](../reference/collection-jobs.md). Migrations 0081–0082 add one
+table and alter existing run/mapping fields; registering jobs does not activate
+sources, provider batches or schedules. `collect_jobs_due --execute` requires a
+separate scheduler activation. The existing fifteen-minute X cron remains the
+only harvest scheduler, and its runtime receipt adapter has separate ownership.
+
 For compatible OriginalContent storage delivery, follow the
 [storage controls and cutover contract](../reference/original-content.md#controls-cutover-and-rollback).
 Deploy compatible consumers before backfill/activation; keep legacy writers and

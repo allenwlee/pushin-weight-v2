@@ -1,5 +1,9 @@
 # HF model Product catalog
 
+For frozen creation-ordered inventories and database-backed campaign jobs, see
+[Collection jobs](collection-jobs.md). This document describes the existing manual
+lastModified catalog entrypoint, which remains available independently.
+
 The manual collector creates one Product per public model repository on a
 confirmed Hugging Face publisher account. It includes old models, adapters,
 and quantizations. It refreshes existing Products without changing their stable

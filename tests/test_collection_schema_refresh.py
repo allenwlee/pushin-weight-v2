@@ -6,6 +6,7 @@ import subprocess
 import sys
 import uuid
 from dataclasses import replace
+from getpass import getuser
 from pathlib import Path
 from urllib.parse import quote
 
@@ -53,6 +54,56 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
         source_subject_kind="repository",
         observation_key="7" * 64,
     )
+    jobs = []
+    if not legacy_source:
+        from core.collection_jobs import register_job, set_job_state
+        from core.collection_state import claim_job
+        from core.models import DataSource
+
+        limits = {"requests": 5, "seconds": 60, "bytes": 100000, "items": 100}
+        definition = {
+            "version": 1,
+            "scope": {},
+            "schedule": {"kind": "manual", "driver": "manual"},
+            "budgets": limits,
+        }
+        metric_job = register_job(
+            job_key="copied-numeric",
+            source=numeric.source,
+            purpose="metric",
+            operation="collect_metrics",
+            mode="manual",
+            contract=numeric.contract,
+            definition=definition,
+        )
+        numeric.job = metric_job
+        numeric.save(update_fields=["job"])
+        metric_job.last_attempt = metric_job.last_success = numeric
+        metric_job.save()
+        catalog_job = register_job(
+            job_key="copied-catalog",
+            source=numeric.source,
+            purpose="catalog",
+            operation="hf_catalog",
+            mode="manual",
+            definition=definition,
+        )
+        catalog.job = catalog_job
+        catalog.save(update_fields=["job"])
+        catalog_job.active_run = catalog_job.last_attempt = catalog
+        catalog_job.save()
+        xsource = DataSource.objects.get(pk="x")
+        content_job = register_job(
+            job_key="copied-content",
+            source=xsource,
+            purpose="content",
+            operation="x_backfill",
+            mode="historical",
+            definition=definition,
+        )
+        set_job_state(content_job.pk, "ready")
+        claim_job(content_job.pk, manual_authorized=True)
+        jobs = [metric_job.pk, catalog_job.pk, content_job.pk]
     if legacy_source:
         MigrationExecutor(connection).migrate(
             [("core", "0079_original_content_physical_names")]
@@ -66,7 +117,7 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
     )
     source_name = connection.settings_dict["NAME"]
     assert source_name.startswith("test_pw_migration_")
-    user = quote(connection.settings_dict["USER"], safe="")
+    user = quote(connection.settings_dict["USER"] or getuser(), safe="")
     password = connection.settings_dict["PASSWORD"]
     if password:
         user += ":" + quote(password, safe="")
@@ -154,6 +205,19 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
             assert cursor.fetchone()[0] == numeric.pk
             cursor.execute("SELECT integer_value FROM metric_values")
             assert cursor.fetchone()[0] == 4_000_000_000
+            if jobs:
+                cursor.execute(
+                    "SELECT state, active_run_id, last_attempt_id, last_success_id FROM collection_jobs WHERE id = %s",
+                    [jobs[0]],
+                )
+                assert cursor.fetchone() == ("paused", None, numeric.pk, numeric.pk)
+                cursor.execute(
+                    "SELECT state, active_run_id, last_attempt_id, last_success_id FROM collection_jobs WHERE id = ANY(%s)",
+                    [jobs[1:]],
+                )
+                assert all(
+                    row == ("paused", None, None, None) for row in cursor.fetchall()
+                )
     finally:
         with connection.cursor() as cursor:
             cursor.execute(f'DROP DATABASE "{destination}"')

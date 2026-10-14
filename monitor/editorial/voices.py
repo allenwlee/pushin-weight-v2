@@ -3,6 +3,7 @@
 import json
 import re
 from pathlib import Path
+from typing import Literal
 
 from django.conf import settings
 from pydantic import BaseModel, ConfigDict
@@ -20,6 +21,7 @@ class Voice(BaseModel):
     instructions: str = ""
     shared_prompt: str | None = None
     publication_voice: str | None = None
+    headline_attribution: Literal["supporting_copy"] | None = None
 
     @property
     def digest(self):

@@ -7693,8 +7693,9 @@ class MetricCollectionContract(models.Model):
 
 class SourceSubjectMapping(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    purpose = models.CharField(max_length=16, default="metric", db_default="metric")
     contract = models.ForeignKey(
-        MetricCollectionContract, on_delete=models.PROTECT, related_name="mappings"
+        MetricCollectionContract, on_delete=models.PROTECT, related_name="mappings", null=True
     )
     source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
     source_subject_kind = models.CharField(max_length=32)
@@ -7733,6 +7734,19 @@ class SourceSubjectMapping(models.Model):
                     "normalized_identifier",
                 ],
                 name="uq_source_subject_mapping",
+                condition=models.Q(purpose="metric"),
+            ),
+            models.UniqueConstraint(
+                fields=["source", "source_subject_kind", "identifier_scope", "normalized_identifier", "subject"],
+                name="uq_catalog_subject_mapping", condition=models.Q(purpose="catalog"),
+            ),
+            models.CheckConstraint(
+                condition=models.Q(purpose="metric", contract__isnull=False) | models.Q(purpose="catalog", contract__isnull=True),
+                name="ck_mapping_purpose_contract",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(purpose="metric") | (~models.Q(reviewed_by="") & ~models.Q(evidence_url="")),
+                name="ck_catalog_mapping_review",
             ),
             models.CheckConstraint(
                 condition=models.Q(
@@ -7752,9 +7766,45 @@ class SourceSubjectMapping(models.Model):
         ]
 
 
+class CollectionJob(models.Model):
+    """Immutable collection instructions and mutable coordination pointers."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    job_key = models.CharField(max_length=128, unique=True)
+    source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
+    purpose = models.CharField(max_length=16)
+    operation = models.CharField(max_length=64)
+    mode = models.CharField(max_length=16)
+    contract = models.ForeignKey(MetricCollectionContract, null=True, on_delete=models.PROTECT)
+    definition = models.JSONField()
+    definition_sha256 = models.CharField(max_length=64)
+    state = models.CharField(max_length=16, default="paused")
+    next_due_at = models.DateTimeField(null=True)
+    next_retry_at = models.DateTimeField(null=True)
+    active_run = models.ForeignKey("CollectionRun", null=True, on_delete=models.SET_NULL, related_name="active_jobs")
+    last_attempt = models.ForeignKey("CollectionRun", null=True, on_delete=models.SET_NULL, related_name="attempt_jobs")
+    last_success = models.ForeignKey("CollectionRun", null=True, on_delete=models.SET_NULL, related_name="successful_jobs")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "collection_jobs"
+        indexes: ClassVar[list] = [models.Index(fields=["state", "next_due_at"], name="idx_collection_job_due")]
+        constraints = [
+            models.CheckConstraint(condition=(models.Q(purpose="metric", contract__isnull=False) | models.Q(purpose__in=["catalog", "content"], contract__isnull=True)), name="ck_collection_job_contract"),
+            models.CheckConstraint(condition=models.Q(mode__in=["manual", "recurring", "historical"]), name="ck_collection_job_mode"),
+            models.CheckConstraint(condition=models.Q(state__in=["paused", "ready", "completed", "cancelled"]), name="ck_collection_job_state"),
+            models.CheckConstraint(condition=models.Q(state="ready") | models.Q(next_due_at__isnull=True, next_retry_at__isnull=True), name="ck_collection_job_idle_dates"),
+            models.CheckConstraint(condition=models.Q(definition_sha256__regex=r"^[0-9a-f]{64}$"), name="ck_collection_job_hash"),
+            models.CheckConstraint(condition=~models.Q(job_key=""), name="ck_collection_job_key"),
+        ]
+
+
 class CollectionRun(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     batch_id = models.UUIDField(default=uuid.uuid4)
+    job = models.ForeignKey(CollectionJob, null=True, on_delete=models.PROTECT, related_name="runs")
+    lease_token = models.UUIDField(null=True)
     purpose = models.CharField(max_length=16, default="metric", db_default="metric")
     scope = models.JSONField(default=dict, db_default={})
     invocations = models.JSONField(default=list, db_default=[])
@@ -7827,8 +7877,19 @@ class CollectionRun(models.Model):
                             completed_at__isnull=False,
                         )
                     )
+                )
+                | (
+                    models.Q(purpose="content", contract__isnull=True)
+                    & (
+                        models.Q(status="running", completed_at__isnull=True)
+                        | models.Q(status__in=["success", "partial", "failed", "aborted"], completed_at__isnull=False)
+                    )
                 ),
                 name="ck_collection_run_lifecycle",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(job__isnull=True) | ~models.Q(status="running") | models.Q(lease_token__isnull=False, lease_expires_at__isnull=False),
+                name="ck_collection_run_job_lease",
             ),
             models.CheckConstraint(
                 condition=models.Q(success_count__lte=models.F("selected_count")),

@@ -362,12 +362,17 @@ def _catalog_counts(cursor: Any) -> dict[str, int]:
         "collection_scope_runs",
         "collection_runs",
     ):
-        if table == "collection_runs":
-            query = "SELECT count(*) FROM collection_runs WHERE purpose = 'catalog'"
-        else:
-            query = f"SELECT count(*) FROM {table} t JOIN collection_runs r ON r.id = t.run_id WHERE r.purpose = 'catalog'"
-        cursor.execute(query)
-        counts[f"{table}:catalog"] = int(cursor.fetchone()[0])
+        for purpose in ("catalog", "content"):
+            if table == "collection_runs":
+                query = "SELECT count(*) FROM collection_runs WHERE purpose = %s"
+            else:
+                query = f"SELECT count(*) FROM {table} t JOIN collection_runs r ON r.id = t.run_id WHERE r.purpose = %s"
+            cursor.execute(query, [purpose])
+            counts[f"{table}:{purpose}"] = int(cursor.fetchone()[0])
+    cursor.execute(
+        "SELECT count(*) FROM collection_jobs WHERE state <> 'paused' OR active_run_id IS NOT NULL OR next_due_at IS NOT NULL OR next_retry_at IS NOT NULL"
+    )
+    counts["collection_jobs:runtime_intent"] = int(cursor.fetchone()[0])
     return counts
 
 
@@ -480,14 +485,19 @@ def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
         for table in sorted(policy.scrub.truncate_tables)
     }
     cleared.update(_catalog_counts(cursor))
+    cursor.execute(
+        "UPDATE collection_jobs SET state = 'paused', active_run_id = NULL, next_due_at = NULL, next_retry_at = NULL, last_attempt_id = CASE WHEN last_attempt_id IN (SELECT id FROM collection_runs WHERE purpose = 'metric') THEN last_attempt_id ELSE NULL END, last_success_id = CASE WHEN last_success_id IN (SELECT id FROM collection_runs WHERE purpose = 'metric') THEN last_success_id ELSE NULL END"
+    )
     # Delete in foreign-key order without resetting shared numeric sequences.
     for table in ("collection_observations", "collection_scope_runs"):
         cursor.execute(
             sql.SQL(
-                "DELETE FROM {} WHERE run_id IN (SELECT id FROM collection_runs WHERE purpose = 'catalog')"
+                "DELETE FROM {} WHERE run_id IN (SELECT id FROM collection_runs WHERE purpose IN ('catalog', 'content'))"
             ).format(sql.Identifier(table))
         )
-    cursor.execute("DELETE FROM collection_runs WHERE purpose = 'catalog'")
+    cursor.execute(
+        "DELETE FROM collection_runs WHERE purpose IN ('catalog', 'content')"
+    )
     targets = [sql.Identifier(table) for table in sorted(policy.scrub.truncate_tables)]
     cursor.execute(
         sql.SQL("TRUNCATE TABLE {} RESTART IDENTITY CASCADE").format(

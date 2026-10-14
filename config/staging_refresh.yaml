@@ -46,6 +46,7 @@ relations:
     - metrics
     - metric_collection_contracts
     - source_subject_mappings
+    - collection_jobs
     - collection_runs
     - collection_observations
     - collection_scope_runs
@@ -217,6 +218,7 @@ relations:
     - metrics
     - metric_collection_contracts
     - source_subject_mappings
+    - collection_jobs
     - collection_runs
     - collection_observations
     - collection_scope_runs
@@ -549,6 +551,7 @@ validation:
     - metrics
     - metric_collection_contracts
     - source_subject_mappings
+    - collection_jobs
     - collection_runs
     - collection_observations
     - metric_values

@@ -390,6 +390,7 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "metrics",
         "metric_collection_contracts",
         "source_subject_mappings",
+        "collection_jobs",
         "collection_runs",
         "collection_observations",
         "metric_values",

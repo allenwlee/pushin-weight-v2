@@ -368,6 +368,24 @@ same already-generated run.
 
 ## Provider measurements
 
+### Model history cohort
+
+A dated, fixed selection of canonical models whose history is being collected or compared.
+Membership records the selection rule, model identities, date basis and cutoff so a resumed collection uses the same models.
+Provider coverage gaps do not remove a model from the selection.
+
+### Provider crosswalk
+
+A reviewed link between a provider's identifier and our canonical product, account or other measurement subject.
+The link records ownership and evidence; matching display names alone does not establish identity.
+A family repository can support several model versions without making those versions one product.
+
+### Collection job
+
+Reviewed instructions for a collection, including its source, scope, schedule and limits.
+Execution records describe what happened when those instructions were attempted, while scoped checkpoints record committed progress for recovery.
+This separates the intended collection from its individual attempts.
+
 ### Reference week
 
 The earliest seven consecutive completed post-launch dates for which all three

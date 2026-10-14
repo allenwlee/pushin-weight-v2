@@ -304,10 +304,18 @@ def test_launch_profile_sends_current_deepseek_allowance_through_real_editor(
         request.get("max_tokens", request.get("max_completion_tokens"))
         for request in requests
     ] == [65536, 4096, 16384, 16384, 65536]
+    from monitor.editorial.writing import HEADLINE_ATTRIBUTION_RULE
     from monitor.headline_grounding import SOURCE_READING_RULES
 
-    for request in requests:
-        assert SOURCE_READING_RULES in request["messages"][0]["content"]
+    for index, request in enumerate(requests):
+        expected_rules = SOURCE_READING_RULES
+        if index == 1:  # The English Chatter request alone opts into v3.
+            assert cfg.voices["chatter:en"] == "chatter-en-v3"
+            expected_rules = expected_rules.replace(
+                "Preserve whose claim it is in every language and the headline.",
+                HEADLINE_ATTRIBUTION_RULE,
+            )
+        assert expected_rules in request["messages"][0]["content"]
         content = request["messages"][1]["content"]
         if isinstance(content, list):
             content = content[0]["text"]

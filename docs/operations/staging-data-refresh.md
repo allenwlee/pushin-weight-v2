@@ -69,7 +69,7 @@ GRANT SELECT ON
   data_sources, taxonomy_versions, product_groups, product_relationships,
   product_group_memberships, measurement_subjects, subject_relationships,
   post_subject_attributions, metric_types, metrics,
-  metric_collection_contracts, source_subject_mappings, collection_runs,
+  metric_collection_contracts, source_subject_mappings, collection_jobs, collection_runs,
   collection_observations, collection_scope_runs, metric_values,
   people_names, people_name_evidence, people_texts, people_text_translations,
   account_based_in_mappings, account_post_appearances,
@@ -597,10 +597,13 @@ procedure.
 
 Collection refresh policy through migration 0080: Products and numeric evidence
 are copied. Shared `collection_runs` and `collection_observations` counts include
-only `purpose=metric`. Catalog observations, scope progress and runs are deleted
+only `purpose=metric`. Job definitions are copied with `state=paused`, no due/retry
+date and no active claim. Attempt/success pointers to retained numeric runs survive;
+pointers to excluded catalog/content runs are cleared before deletion. Catalog and
+content observations, scope progress and runs are deleted
 in foreign-key order inside the non-serving candidate transaction, preserving
 numeric rows and shared sequence positions. Candidate validation requires zero
-catalog rows before activation. Product metadata pointers remain source evidence;
+catalog/content rows and no job runtime intent before activation. Product metadata pointers remain source evidence;
 they do not imply the original catalog observations exist in staging.
 
 For a pre-0080 source, only the two known numeric table aliases map to canonical

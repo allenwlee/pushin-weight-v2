@@ -176,6 +176,9 @@ def test_populated_merge_restore_and_replay_preserve_history_and_references(
     Run = new.get_model("core", "CollectionRun")
     Observation = new.get_model("core", "CollectionObservation")
     imported_run = Run.objects.get(purpose="catalog")
+    # Runtime consumers target the current schema; historical models above
+    # still characterize 0080 and the legacy writable aliases below.
+    migrate([("core", "0082_collection_catalog_mappings")])
     from core.hf_catalog import resolve_catalog_run
 
     assert resolve_catalog_run(run_id).pk == imported_run.pk

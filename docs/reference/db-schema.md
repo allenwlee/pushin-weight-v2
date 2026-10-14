@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-12 20:43:10 JST
+Last verified: 2026-10-13 21:27:21 JST
 
-Scope: **149 application tables**, **1915 physical columns**, plus nine compatibility views. Source: `feat/collection-schema-consolidation`, working tree based on `f43b2904`; migration graph through `0080_collection_schema`.
+Scope: **150 application tables**, **1935 physical columns**, plus nine compatibility views. Source: `feat/g3-collection-jobs-history`, working tree based on `851fb85f`; migration graph through `0082_collection_catalog_mappings`.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -34,7 +34,7 @@ The retired SQLite database and Graphviz image are not current schema sources.
 | [Authored content and trend publication](#headlines) | 10 | Prepared headline text, publication pointers, work requests, and provider costs. |
 | [Compatible editorial input storage and pictures](#editorial) | 7 | Story identities, accepted editions, quarter-hour decisions, spend and optional assets. |
 | [Collection, extraction, and processing records](#processing) | 16 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
-| [Measurement subjects, metrics and observations](#measurements) | 11 | Sourced measurements and their collection state. |
+| [Measurement subjects, metrics and observations](#measurements) | 12 | Sourced measurements and their collection state. |
 | [Official-company collection](#official-companies) | 7 | Official-company account collection, attempts and spending. |
 
 For staff records, begin with **[People and job history](#people)**. A person can
@@ -133,8 +133,8 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 149 application tables appears once in this inventory and once in
-the detailed sections. Subject counts above sum to 149.
+Each of the 150 application tables appears once in this inventory and once in
+the detailed sections. Subject counts above sum to 150.
 
 | Table | Subject | What one row represents |
 | --- | --- | --- |
@@ -156,6 +156,7 @@ the detailed sections. Subject counts above sum to 149.
 | [brands_accounts](#table-brands_accounts) | [Companies, brands, and organization discovery](#organizations) | One account’s role for a brand, such as official or researcher. |
 | [brands_companies](#table-brands_companies) | [Companies, brands, and organization discovery](#organizations) | One ownership relationship between a brand and a company. |
 | [call_state](#table-call_state) | [Collection, extraction, and processing records](#processing) | One harvest cursor for a brand, call, bucket, and query combination. |
+| [collection_jobs](#table-collection_jobs) | [Measurement subjects, metrics and observations](#measurements) | One immutable instruction with mutable coordination pointers. |
 | [collection_observations](#table-collection_observations) | [Measurement subjects, metrics and observations](#measurements) | One sourced, dated observation in a collection run. |
 | [collection_runs](#table-collection_runs) | [Measurement subjects, metrics and observations](#measurements) | One source collection run, for numeric measurements or catalog discovery. |
 | [collection_scope_runs](#table-collection_scope_runs) | [Measurement subjects, metrics and observations](#measurements) | One source scope’s pagination and ownership progress within a collection run. |
@@ -5705,8 +5706,6 @@ adds six temporary writable views after atomically renaming their base tables:
 | `trend_narrative_visible_runs` | `original_content_selections` |
 | `editorial_pictures` | `content_pictures` |
 
-Migration 0080 also supplies writable `collection_runs` and `collection_observations` views restricted to numeric-purpose records.
-
 Migration 0080 also supplies writable `metric_collection_runs` and `metric_observations` views restricted to numeric-purpose records.
 
 These views select the unchanged columns; they contain no copied rows. Runtime
@@ -5715,8 +5714,8 @@ identities are preserved, including existing sequence names. Lock waits are
 bounded to five seconds in both migration directions. Alias removal is separately
 scoped after verification of all consumers; there is no calendar waiting period.
 
-The column/type/index inventory above was reconciled with all 149 concrete
-`core` models and the final migration state through migration 0080. Raw SQL
+The column/type/index inventory was reconciled with all 150 concrete
+`core` models and the final migration state through migration 0082. Raw SQL
 migrations additionally supply the account-handle expression index, the named
 account-country FK, the two explicit SQL delete actions on posts, the ICU
 collation, the person-name selection/immutability triggers, and these compatibility views. Application-level validators and
@@ -5732,6 +5731,53 @@ references](updating-reference-docs.md).
 <a id="measurements"></a>
 
 ## Measurement subjects, metrics and observations
+
+Collection instructions, execution attempts, scoped progress, source observations
+and numeric values are described in [Collection jobs](collection-jobs.md).
+
+<a id="table-collection_jobs"></a>
+
+### `collection_jobs` — CollectionJob
+
+One immutable source collection instruction with mutable state and run pointers.
+The definition contains frozen selections, schedules and budgets; it is hashed
+with source, purpose, operation, mode and contract. Registration creates paused
+instructions and does not activate a source or scheduler.
+
+Model: [CollectionJob](../../core/models.py#L7769). **Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | PK; Django default `uuid4`, no SQL default. |
+| `job_key` | `varchar(128)` | No | Unique immutable operator/campaign key. |
+| `source_id` | `varchar(32)` | No | FK → [`data_sources`](#table-data_sources); Django `PROTECT`, PostgreSQL deferred NO ACTION. |
+| `purpose` | `varchar(16)` | No | `metric`, `catalog` or `content`. |
+| `operation` | `varchar(64)` | No | Validated adapter operation. |
+| `mode` | `varchar(16)` | No | `manual`, `historical` or `recurring`. |
+| `contract_id` | `uuid` | Yes | FK → [`metric_collection_contracts`](#table-metric_collection_contracts); required only for metric purpose. Django `PROTECT`, PostgreSQL deferred NO ACTION. |
+| `definition` | `jsonb` | No | Immutable versioned instruction; contains no credentials. |
+| `definition_sha256` | `varchar(64)` | No | SHA-256 of instruction identity. |
+| `state` | `varchar(16)` | No | `paused`, `ready`, `completed`, `cancelled`; Django default `paused`, no SQL default. |
+| `next_due_at` | `timestamp with time zone` | Yes | Next recurring dispatch opportunity. |
+| `next_retry_at` | `timestamp with time zone` | Yes | Failed/yielded attempt cooldown, separate from success. |
+| `active_run_id` | `uuid` | Yes | FK → [`collection_runs`](#table-collection_runs); active claim. Django `SET_NULL`, PostgreSQL deferred NO ACTION. |
+| `last_attempt_id` | `uuid` | Yes | FK → [`collection_runs`](#table-collection_runs); most recent claimed attempt. Django `SET_NULL`, PostgreSQL deferred NO ACTION. |
+| `last_success_id` | `uuid` | Yes | FK → [`collection_runs`](#table-collection_runs); latest successful attempt. Django `SET_NULL`, PostgreSQL deferred NO ACTION. |
+| `created_at` | `timestamp with time zone` | No | Django `auto_now_add`; instruction registration time. |
+| `updated_at` | `timestamp with time zone` | No | Django `auto_now`; coordination update time. |
+
+**Named indexes and constraints:** `idx_collection_job_due` indexes `(state,
+next_due_at)`. Field-level uniqueness on `job_key` uses
+`collection_jobs_job_key_key`. Foreign-key indexes are generated by Django.
+`ck_collection_job_contract` enforces metric/nonmetric contract separation;
+`ck_collection_job_mode` and `ck_collection_job_state` enforce the listed choices;
+`ck_collection_job_idle_dates` requires null due/retry dates outside ready state;
+`ck_collection_job_hash` requires 64 lowercase hexadecimal characters;
+`ck_collection_job_key` forbids an empty key. Application services validate
+definition hashes, allowed operations and matching source/purpose/contract on
+all pointed-to runs. Reverse migration refuses while job/content evidence exists.
+
+[Back to table inventory](#table-inventory)
 
 <a id="table-hf_model_catalog_namespace_runs"></a>
 
@@ -5848,7 +5894,9 @@ None declared beyond field/FK/constraint indexes.
 
 ### `collection_runs` — CollectionRun
 
-One source collection run, for numeric measurements or catalog discovery.
+One source collection run for numeric measurements, catalog discovery or content
+invocation accounting. Catalog partial runs resume; content attempts remain
+separate terminal receipts. Legacy numeric runs may have no job.
 
 Model: [CollectionRun](../../core/models.py#L7755).
 
@@ -5858,7 +5906,9 @@ Model: [CollectionRun](../../core/models.py#L7755).
 | --- | --- | --- | --- |
 | `id` | `uuid` | No | PK. Django default: `uuid4`. |
 | `batch_id` | `uuid` | No | Django default: `uuid4`. |
-| `purpose` | `varchar(16)` | No | `metric` requires a reviewed contract and lease; `catalog` requires no numeric contract. Django default: `'metric'`. SQL default: `'metric'`. |
+| `job_id` | `uuid` | Yes | FK → [`collection_jobs`](#table-collection_jobs); Django `PROTECT`, PostgreSQL deferred NO ACTION. |
+| `lease_token` | `uuid` | Yes | Rotating execution token; late responses cannot use a replaced claim. |
+| `purpose` | `varchar(16)` | No | `metric` requires a reviewed contract and lease; `catalog`/`content` require no numeric contract. Django default: `'metric'`. SQL default: `'metric'`. |
 | `scope` | `jsonb` | No | Frozen source selection for catalog continuation. Django default: `dict`. SQL default: `{}`. |
 | `invocations` | `jsonb` | No | Append-preserved invocation budgets, counters and results. Django default: `list`. SQL default: `[]`. |
 | `report` | `jsonb` | No | Latest collection summary. Django default: `dict`. SQL default: `{}`. |
@@ -5891,7 +5941,8 @@ Model: [CollectionRun](../../core/models.py#L7755).
 
 - `ck_metric_ingestion_key`: `ALTER TABLE "collection_runs" ADD CONSTRAINT "ck_metric_ingestion_key" CHECK ("ingestion_key"::text ~ '^[0-9a-f]{64}$')`.
 - `ck_run_payload_hash`: `ALTER TABLE "collection_runs" ADD CONSTRAINT "ck_run_payload_hash" CHECK (("payload_sha256" IS NULL OR "payload_sha256"::text ~ '^[0-9a-f]{64}$'))`.
-- `ck_collection_run_lifecycle`: `ALTER TABLE "collection_runs" ADD CONSTRAINT "ck_collection_run_lifecycle" CHECK ((("contract_id" IS NOT NULL AND "lease_expires_at" IS NOT NULL AND "purpose" = 'metric' AND (("completed_at" IS NULL AND "status" = 'running') OR ("completed_at" IS NOT NULL AND "status" IN ('success', 'partial', 'failed', 'aborted')))) OR ("contract_id" IS NULL AND "purpose" = 'catalog' AND (("completed_at" IS NULL AND "status" IN ('pending', 'running', 'partial', 'interrupted')) OR ("completed_at" IS NOT NULL AND "status" IN ('success', 'failed', 'aborted'))))))`.
+- `ck_collection_run_lifecycle`: `CHECK ((((contract_id IS NOT NULL) AND (lease_expires_at IS NOT NULL) AND ((purpose)::text = 'metric'::text) AND (((completed_at IS NULL) AND ((status)::text = 'running'::text)) OR ((completed_at IS NOT NULL) AND ((status)::text = ANY ((ARRAY['success'::character varying, 'partial'::character varying, 'failed'::character varying, 'aborted'::character varying])::text[]))))) OR ((contract_id IS NULL) AND ((purpose)::text = 'catalog'::text) AND (((completed_at IS NULL) AND ((status)::text = ANY ((ARRAY['pending'::character varying, 'running'::character varying, 'partial'::character varying, 'interrupted'::character varying])::text[]))) OR ((completed_at IS NOT NULL) AND ((status)::text = ANY ((ARRAY['success'::character varying, 'failed'::character varying, 'aborted'::character varying])::text[]))))) OR ((contract_id IS NULL) AND ((purpose)::text = 'content'::text) AND (((completed_at IS NULL) AND ((status)::text = 'running'::text)) OR ((completed_at IS NOT NULL) AND ((status)::text = ANY ((ARRAY['success'::character varying, 'partial'::character varying, 'failed'::character varying, 'aborted'::character varying])::text[])))))))`.
+- `ck_collection_run_job_lease`: `CHECK (((job_id IS NULL) OR (NOT ((status)::text = 'running'::text)) OR ((lease_expires_at IS NOT NULL) AND (lease_token IS NOT NULL))))`.
 - `ck_run_success_count`: `ALTER TABLE "collection_runs" ADD CONSTRAINT "ck_run_success_count" CHECK ("success_count" <= ("selected_count"))`.
 
 Numeric partial is terminal and has a completion timestamp. Catalog partial/interrupted remains resumable with no completion timestamp. Catalog success/failed/aborted is terminal. Imported legacy identities remain in `source_metadata.legacy_catalog`.
@@ -6118,7 +6169,9 @@ Model: [PostSubjectAttribution](../../core/models.py#L7566).
 
 ### `source_subject_mappings` — SourceSubjectMapping
 
-One external source identifier mapped to a measurement subject.
+One reviewed external source identifier mapped to a measurement subject. Catalog
+relations can represent a family repository shared by multiple models; they do
+not automatically admit numeric measurements under a metric contract.
 
 Model: [SourceSubjectMapping](../../core/models.py#L7735).
 
@@ -6127,7 +6180,8 @@ Model: [SourceSubjectMapping](../../core/models.py#L7735).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `uuid` | No | PK component. Django default: `uuid4` (not an assumed SQL default). |
-| `contract_id` | `uuid` | No | FK → [`metric_collection_contracts`](#table-metric_collection_contracts) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `contract`. |
+| `contract_id` | `uuid` | Yes | FK → [`metric_collection_contracts`](#table-metric_collection_contracts) (`id`); required for metric, null for catalog purpose. Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `contract`. |
+| `purpose` | `varchar(16)` | No | `metric` or `catalog`; Django and SQL default `metric`. |
 | `source_id` | `varchar(32)` | No | FK → [`data_sources`](#table-data_sources) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source`. |
 | `source_subject_kind` | `varchar(32)` | No | Stored value. |
 | `identifier_scope` | `varchar(128)` | No | Django default: `''` (not an assumed SQL default). |
@@ -6149,7 +6203,10 @@ Model: [SourceSubjectMapping](../../core/models.py#L7735).
 
 **Named constraints:**
 
-- `uq_source_subject_mapping`: `CONSTRAINT "uq_source_subject_mapping" UNIQUE ("contract_id", "source_id", "source_subject_kind", "identifier_scope", "normalized_identifier")`.
+- `uq_source_subject_mapping`: conditional unique index on `(contract_id, source_id, source_subject_kind, identifier_scope, normalized_identifier)` for `purpose=metric`.
+- `uq_catalog_subject_mapping`: conditional unique index on `(source_id, source_subject_kind, identifier_scope, normalized_identifier, subject_id)` for `purpose=catalog`.
+- `ck_mapping_purpose_contract`: metric requires a contract; catalog requires none.
+- `ck_catalog_mapping_review`: catalog requires a nonempty reviewer and evidence URL.
 - `ck_mapping_subject_kind`: `CONSTRAINT "ck_mapping_subject_kind" CHECK ("source_subject_kind" IN ('repository', 'model', 'lab', 'account'))`.
 - `ck_mapping_identifier`: `CONSTRAINT "ck_mapping_identifier" CHECK ((NOT ("external_identifier" = '') AND NOT ("normalized_identifier" = '')))`.
 - `ck_mapping_hash`: `CONSTRAINT "ck_mapping_hash" CHECK ("mapping_hash"::text ~ '^[0-9a-f]{64}$')`.

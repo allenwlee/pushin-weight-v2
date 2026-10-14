@@ -1,0 +1,1321 @@
+{
+  "schema": "g3-family-verification-register/v1",
+  "analysis_only": true,
+  "owner_route": "tracked_brands_then_current_product_families_then_release_evidence",
+  "assembled_at": "2026-10-12T00:18:44.753412+00:00",
+  "product_observation_at": "2026-10-12T00:14:18.131944+00:00",
+  "role_observation_at": "2026-10-12T00:16:38.2178+00:00",
+  "source_revision": "7c426c3a4d76630b17243ac5b8a3451d77efab74",
+  "scope_brands": [
+    "minimax",
+    "qwen",
+    "deepseek",
+    "glm",
+    "mimo",
+    "moonshot_kimi",
+    "inclusionai",
+    "mistral",
+    "stepfun",
+    "ernie",
+    "hunyuan",
+    "llama",
+    "nemo_megatron",
+    "doubao",
+    "yi",
+    "sensechat",
+    "exaone",
+    "kuaishou",
+    "sakana_ai",
+    "upstage",
+    "dots"
+  ],
+  "priority_seeds": [
+    "minimax",
+    "glm",
+    "deepseek"
+  ],
+  "product_groups_observed": 0,
+  "brands": [
+    {
+      "brand_id": "minimax",
+      "candidate_product_lines": [
+        "M text",
+        "H video",
+        "Music"
+      ],
+      "priority_seed": true,
+      "review_state": "seed_identity_primary_supported_launch_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 21,
+      "catalog_examples": [
+        {
+          "product_key": "b3240199-cf5b-4831-b045-3759b51efb1e",
+          "repo_id": "MiniMaxAI/MiniMax-Music3",
+          "type": null
+        },
+        {
+          "product_key": "3500f81f-e21f-4478-ac04-f3231dafb43b",
+          "repo_id": "MiniMaxAI/MiniMax-H3",
+          "type": null
+        },
+        {
+          "product_key": "d8ca08bc-a582-40ed-91e9-dccd6d70a00b",
+          "repo_id": "MiniMaxAI/MiniMax-M3-MXFP8",
+          "type": null
+        },
+        {
+          "product_key": "605aa600-9e77-45e0-9c19-84bbb999db21",
+          "repo_id": "MiniMaxAI/MiniMax-M3",
+          "type": null
+        },
+        {
+          "product_key": "cfe8666e-8568-4206-afe0-603bbf23a6af",
+          "repo_id": "MiniMaxAI/MiniMax-M2.7",
+          "type": null
+        },
+        {
+          "product_key": "df0a1384-f179-4335-aa2d-ae1bd7d8025e",
+          "repo_id": "MiniMaxAI/MiniMax-M2.5",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "Hailuo_AI"
+        },
+        {
+          "source": "x",
+          "handle": "MiniMaxAgent"
+        },
+        {
+          "source": "x",
+          "handle": "MiniMax_AI"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "MiniMaxAI",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": [
+        {
+          "url": "https://www.minimax.io/m-plan",
+          "supports": "Current advertised M3.1 Flash Preview identity/access; no release-date inference"
+        }
+      ]
+    },
+    {
+      "brand_id": "qwen",
+      "candidate_product_lines": [
+        "Qwen text",
+        "Qwen Coder",
+        "Qwen VL",
+        "Qwen Image"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 468,
+      "catalog_examples": [
+        {
+          "product_key": "b365c71d-db0d-434f-8730-1452590b050f",
+          "repo_id": "Qwen/Qwen-Image-2.1-PE-I2I",
+          "type": null
+        },
+        {
+          "product_key": "2fa1485b-da13-427b-a050-6e7a50ea058d",
+          "repo_id": "Qwen/Qwen-Image-2.1-PE-T2I",
+          "type": null
+        },
+        {
+          "product_key": "97b183e1-d883-45ab-bf99-be03d788281e",
+          "repo_id": "Qwen/Qwen-Image-2.1",
+          "type": null
+        },
+        {
+          "product_key": "9e759b96-9bbe-44ac-9532-e3337e8bdb31",
+          "repo_id": "Qwen/Qwen-Drive-1.0-4B",
+          "type": null
+        },
+        {
+          "product_key": "792ed5f1-d376-4a28-ad7a-d8b1cc10c437",
+          "repo_id": "Qwen/Qwen3.8-Flash-Next-FP8",
+          "type": null
+        },
+        {
+          "product_key": "f9daa37f-ad8b-4fb9-8aab-20bbcecad5cf",
+          "repo_id": "Qwen/Qwen3.8-Flash-Next",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "Ali_TongyiLab"
+        },
+        {
+          "source": "x",
+          "handle": "Alibaba_Qwen"
+        },
+        {
+          "source": "x",
+          "handle": "Alibaba_Wan"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "Qwen",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "deepseek",
+      "candidate_product_lines": [
+        "V4 / V4.1 text and multimodal"
+      ],
+      "priority_seed": true,
+      "review_state": "seed_identity_primary_supported_launch_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 105,
+      "catalog_examples": [
+        {
+          "product_key": "d8a9dbb6-49df-4d40-b6cd-dcbeb3bd15ff",
+          "repo_id": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "type": "llm-model"
+        },
+        {
+          "product_key": "b18f7ff7-393b-4f41-8c70-15aff356c36b",
+          "repo_id": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+          "type": null
+        },
+        {
+          "product_key": "20d66250-db05-40bf-8fda-94b610bed0c7",
+          "repo_id": "deepseek-ai/DeepSeek-V4-Pro-0813",
+          "type": null
+        },
+        {
+          "product_key": "38442a57-735a-451a-9b28-474ea713820f",
+          "repo_id": "deepseek-ai/DeepSeek-V4-Flash-0731",
+          "type": null
+        },
+        {
+          "product_key": "a9e08954-4fed-4d77-b363-200d38f1f3ad",
+          "repo_id": "deepseek-ai/eagle3_gemma4_12b_ttt7",
+          "type": null
+        },
+        {
+          "product_key": "acff7120-1b74-4e32-ae0a-bdc4bfae21d5",
+          "repo_id": "deepseek-ai/eagle3_qwen3_14b_ttt7",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "hf",
+          "handle": "deepseek-ai"
+        },
+        {
+          "source": "x",
+          "handle": "deepseek_ai"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "deepseek-ai",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": [
+        {
+          "url": "https://api-docs.deepseek.com/updates/",
+          "supports": "Dated V4 family API milestones; API aliases may change model identity"
+        }
+      ]
+    },
+    {
+      "brand_id": "glm",
+      "candidate_product_lines": [
+        "GLM text and multimodal"
+      ],
+      "priority_seed": true,
+      "review_state": "seed_identity_primary_supported_launch_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 61,
+      "catalog_examples": [
+        {
+          "product_key": "246f20c6-7171-465d-a2d7-5a6a91864335",
+          "repo_id": "zai-org/GLM-5.3-Flash-BF16",
+          "type": null
+        },
+        {
+          "product_key": "7bbedc61-9941-49ff-9900-c7a07b109d3f",
+          "repo_id": "zai-org/GLM-5.3-BF16",
+          "type": null
+        },
+        {
+          "product_key": "cceb45fc-f883-4b25-8c9d-aeba27ca82d6",
+          "repo_id": "zai-org/GLM-5.3-Flash",
+          "type": "llm-model"
+        },
+        {
+          "product_key": "6504e32e-fa9f-4d48-a193-e41d238568fb",
+          "repo_id": "zai-org/GLM-5.3",
+          "type": null
+        },
+        {
+          "product_key": "d0d901e5-cace-4e34-91cf-dd5d4891aefa",
+          "repo_id": "zai-org/GLM-5.2",
+          "type": null
+        },
+        {
+          "product_key": "b6c3e7ab-c5cf-406c-b99a-a257266497a8",
+          "repo_id": "zai-org/GLM-5.2-FP8",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "hf",
+          "handle": "zai-org"
+        },
+        {
+          "source": "x",
+          "handle": "Zai_org"
+        },
+        {
+          "source": "x",
+          "handle": "ZhihuFrontier"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "THUDM",
+          "confirmed": true
+        },
+        {
+          "namespace": "zai-org",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": [
+        {
+          "url": "https://huggingface.co/zai-org/GLM-5.3-Flash",
+          "supports": "Publisher-owned GLM-5.3-Flash and GLM-5 series identity; launch instant pending"
+        },
+        {
+          "url": "https://z.ai/blog/glm-5.3-flash",
+          "supports": "Linked announcement URL; content unavailable through this reader"
+        }
+      ]
+    },
+    {
+      "brand_id": "mimo",
+      "candidate_product_lines": [
+        "MiMo V"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 28,
+      "catalog_examples": [
+        {
+          "product_key": "d2a28243-b021-4d52-bc44-a402f0a6ddd9",
+          "repo_id": "XiaomiMiMo/MiMo-V2.6-Distill-Qwen-9B",
+          "type": null
+        },
+        {
+          "product_key": "587b7d24-7c7a-452d-9532-626f08b9817d",
+          "repo_id": "XiaomiMiMo/MiMo-V2.6-Flash-RL",
+          "type": null
+        },
+        {
+          "product_key": "359f052d-e045-4e94-bcca-2b68115ee345",
+          "repo_id": "XiaomiMiMo/MiMo-V2.6-Pro-RL",
+          "type": null
+        },
+        {
+          "product_key": "a8932085-5c3f-478a-9199-1bfafcec1c98",
+          "repo_id": "XiaomiMiMo/MiMo-V2.5-DFlash",
+          "type": null
+        },
+        {
+          "product_key": "c70ea4ae-86a7-49d1-b855-801c26aa8483",
+          "repo_id": "XiaomiMiMo/MiMo-V2.5-Pro-FP4-DFlash",
+          "type": null
+        },
+        {
+          "product_key": "8c693005-840b-49e5-b6db-f5bb4a65d05c",
+          "repo_id": "XiaomiMiMo/MiMo-V2.5",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "Xiaomi"
+        },
+        {
+          "source": "x",
+          "handle": "XiaomiMiMo"
+        },
+        {
+          "source": "x",
+          "handle": "XiaomiMiMoDevs"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "XiaomiMiMo",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "moonshot_kimi",
+      "candidate_product_lines": [
+        "Kimi K",
+        "Kimi Linear"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 19,
+      "catalog_examples": [
+        {
+          "product_key": "80d0cedc-4776-46af-a285-7a1ff0e51573",
+          "repo_id": "moonshotai/Kimi-K3",
+          "type": null
+        },
+        {
+          "product_key": "13ce4f79-10cd-4cec-85d2-4e448b51cba8",
+          "repo_id": "moonshotai/Kimi-K2.7-Code",
+          "type": null
+        },
+        {
+          "product_key": "9d0d3920-6e85-47a3-bfff-766dde523840",
+          "repo_id": "moonshotai/Kimi-K2.6",
+          "type": null
+        },
+        {
+          "product_key": "1a007afb-6885-42f5-bdc9-c4f661600244",
+          "repo_id": "moonshotai/Kimi-K2.5",
+          "type": null
+        },
+        {
+          "product_key": "97246ea6-af03-476e-9d6c-8a5d3da99e21",
+          "repo_id": "moonshotai/Kimi-K2-Thinking",
+          "type": null
+        },
+        {
+          "product_key": "f7573743-c7c2-4d28-818d-5f457d196fbf",
+          "repo_id": "moonshotai/Kimi-Linear-48B-A3B-Base",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "Kimi_Moonshot"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "moonshotai",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "inclusionai",
+      "candidate_product_lines": [
+        "Ling",
+        "Ring",
+        "Ming"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 212,
+      "catalog_examples": [
+        {
+          "product_key": "78d8eab2-8383-4608-bd61-a8db01b184d4",
+          "repo_id": "inclusionAI/AI-Transparency",
+          "type": null
+        },
+        {
+          "product_key": "99e054d4-a5f0-44bd-b1be-e9abe1de7fe9",
+          "repo_id": "inclusionAI/Ming-Image-0.1-Design-Layer",
+          "type": null
+        },
+        {
+          "product_key": "02752201-9e2a-4fcd-8f37-9e5ee52608a9",
+          "repo_id": "inclusionAI/Ming-Image-0.1-Design",
+          "type": null
+        },
+        {
+          "product_key": "56c4a2ac-1819-464f-83d2-971940b1b902",
+          "repo_id": "inclusionAI/Realtime-Venus",
+          "type": null
+        },
+        {
+          "product_key": "2e96da43-700c-44ce-ae67-c9bc17e4183b",
+          "repo_id": "inclusionAI/Step-3.7-Flash-singprobe",
+          "type": null
+        },
+        {
+          "product_key": "0d4d5066-9081-4583-b659-5e250a985a86",
+          "repo_id": "inclusionAI/Qwen3.8-27B-singprobe",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "AntLingAGI"
+        },
+        {
+          "source": "x",
+          "handle": "TheInclusionAI"
+        },
+        {
+          "source": "x",
+          "handle": "robbyant_brain"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "inclusionAI",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "mistral",
+      "candidate_product_lines": [
+        "Large",
+        "Medium",
+        "Small",
+        "Codestral",
+        "Magistral",
+        "Ministral",
+        "Voxtral"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 75,
+      "catalog_examples": [
+        {
+          "product_key": "c17a0e7f-bae3-494f-90d7-04579fccba83",
+          "repo_id": "mistralai/Shieldstral-1.0-3B",
+          "type": null
+        },
+        {
+          "product_key": "e70dca3b-6460-42dd-8c7c-93924b0fd2fb",
+          "repo_id": "mistralai/Leanstral-1.5-119B-A6B",
+          "type": null
+        },
+        {
+          "product_key": "93ff5db3-eeec-47f4-8f1e-ed3df7dc330d",
+          "repo_id": "mistralai/Mistral-Medium-3.5-128B-EAGLE",
+          "type": null
+        },
+        {
+          "product_key": "f5f8de67-7c88-46d4-a1c5-65fa52d82cc1",
+          "repo_id": "mistralai/Mistral-Medium-3.5-128B",
+          "type": null
+        },
+        {
+          "product_key": "c3e87d70-984a-41cc-a908-7086d8088767",
+          "repo_id": "mistralai/Leanstral-2603",
+          "type": null
+        },
+        {
+          "product_key": "4d50cb73-2d1a-49a6-8c99-d90ab6e938c8",
+          "repo_id": "mistralai/Mistral-Small-4-119B-2603-eagle",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "MistralAI"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "mistralai",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "stepfun",
+      "candidate_product_lines": [
+        "Step",
+        "Step Audio",
+        "Step Video"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 45,
+      "catalog_examples": [
+        {
+          "product_key": "70806f3c-ccee-4832-b27a-1145d64c5047",
+          "repo_id": "stepfun-ai/Step-3.7-Flash-GGUF",
+          "type": null
+        },
+        {
+          "product_key": "d6714735-3dd7-4fa5-a3a6-128b9a915ea8",
+          "repo_id": "stepfun-ai/Step-3.7-Flash-NVFP4",
+          "type": null
+        },
+        {
+          "product_key": "d07b7e7c-c6b5-49f6-9f52-457bb4cacedf",
+          "repo_id": "stepfun-ai/Step-3.7-Flash-FP8",
+          "type": null
+        },
+        {
+          "product_key": "d14af954-478e-4e50-bb4d-bc418c11add1",
+          "repo_id": "stepfun-ai/Step-3.7-Flash",
+          "type": null
+        },
+        {
+          "product_key": "90843d2a-a10b-4abc-adc9-d2ce709cff32",
+          "repo_id": "stepfun-ai/Step-3.5-Flash-Base",
+          "type": null
+        },
+        {
+          "product_key": "c0623f7e-e557-4c4c-b0f0-0df545ccf495",
+          "repo_id": "stepfun-ai/Step-3.5-Flash-Base-Midtrain",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "StepFun_ai"
+        },
+        {
+          "source": "x",
+          "handle": "stepfunai"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "stepfun-ai",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "ernie",
+      "candidate_product_lines": [
+        "ERNIE text",
+        "ERNIE Image"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 30,
+      "catalog_examples": [
+        {
+          "product_key": "8515a027-4601-4776-a85d-d33acca200bf",
+          "repo_id": "baidu/ERNIE-Image-Aes",
+          "type": null
+        },
+        {
+          "product_key": "be83a7b0-ed92-49aa-b9d9-fd26bb1e200d",
+          "repo_id": "baidu/ERNIE-Image",
+          "type": null
+        },
+        {
+          "product_key": "2e8e288c-babd-49eb-bdb9-c0cd74b73741",
+          "repo_id": "baidu/ERNIE-Image-Turbo",
+          "type": null
+        },
+        {
+          "product_key": "e4533302-b428-49dd-89b1-c71fa52d2528",
+          "repo_id": "baidu/ERNIE-4.5-VL-28B-A3B-Thinking",
+          "type": null
+        },
+        {
+          "product_key": "b82ca609-d2e5-4c2f-a684-a759c0ac5460",
+          "repo_id": "baidu/ERNIE-4.5-21B-A3B-Thinking",
+          "type": null
+        },
+        {
+          "product_key": "5d044312-2847-4384-8778-2e6dae7e0017",
+          "repo_id": "baidu/ERNIE-4.5-300B-A47B-2Bits-TP4-Paddle",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "ErnieforDevs"
+        },
+        {
+          "source": "x",
+          "handle": "PaddlePaddle"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "baidu",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "hunyuan",
+      "candidate_product_lines": [
+        "Hunyuan / Hy text",
+        "Hunyuan Image",
+        "Hunyuan Video",
+        "Hunyuan 3D / World"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 160,
+      "catalog_examples": [
+        {
+          "product_key": "971e3f2c-7cb1-457a-96d2-2748ed7e4d3a",
+          "repo_id": "tencent/WeVisDoc-4B",
+          "type": null
+        },
+        {
+          "product_key": "bc52e709-a1e3-4091-819d-1786684e0801",
+          "repo_id": "tencent/WeVisDoc-2B",
+          "type": null
+        },
+        {
+          "product_key": "ed493042-08b8-49a5-8d37-4eca79fca8c3",
+          "repo_id": "tencent/Simple-Attention-Sparsification",
+          "type": null
+        },
+        {
+          "product_key": "e162e93a-759a-46ad-8019-bb365fd42c1f",
+          "repo_id": "tencent/EVIE-8B",
+          "type": null
+        },
+        {
+          "product_key": "02206b6f-1841-4e9d-bd20-3ac589ffc174",
+          "repo_id": "tencent/EVIE-4.5B",
+          "type": null
+        },
+        {
+          "product_key": "0979c4ad-cebf-44a6-855f-6a8a536196d6",
+          "repo_id": "tencent/Hy4-preview-FP8",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "TencentHunyuan"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "tencent",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "llama",
+      "candidate_product_lines": [
+        "Llama",
+        "Llama Guard / Prompt Guard"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 70,
+      "catalog_examples": [
+        {
+          "product_key": "3a780c51-321f-4b8d-88d8-8094cd049a9f",
+          "repo_id": "meta-llama/Llama-Prompt-Guard-2-86M",
+          "type": null
+        },
+        {
+          "product_key": "f77897ec-35be-4cde-b6c4-5843479e87d4",
+          "repo_id": "meta-llama/Llama-Prompt-Guard-2-22M",
+          "type": null
+        },
+        {
+          "product_key": "aa5bd366-66ff-45bc-a1cf-8b30c4c90dcd",
+          "repo_id": "meta-llama/Llama-Guard-4-12B",
+          "type": null
+        },
+        {
+          "product_key": "0c42b371-9b92-4658-bbc2-74554fd24dec",
+          "repo_id": "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8-Original",
+          "type": null
+        },
+        {
+          "product_key": "07af9737-81ad-452b-b246-2a46e1b91c5d",
+          "repo_id": "meta-llama/Llama-4-Maverick-17B-128E-Instruct-Original",
+          "type": null
+        },
+        {
+          "product_key": "10d64da9-8637-41bd-9ab0-e9fc1eababd5",
+          "repo_id": "meta-llama/Llama-4-Maverick-17B-128E-Original",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "AIatMeta"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "meta-llama",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "nemo_megatron",
+      "candidate_product_lines": [
+        "Nemotron"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 100,
+      "catalog_examples": [
+        {
+          "product_key": "446976c6-42a0-4289-a2c6-a2ccf86dda15",
+          "repo_id": "nvidia/DeepSeek-V4.1-Flash-NVFP4",
+          "type": null
+        },
+        {
+          "product_key": "e0a2f442-b3ee-48c0-b819-2b8ed716dfc9",
+          "repo_id": "nvidia/RT-DETR-Hand-Detector-v1",
+          "type": null
+        },
+        {
+          "product_key": "6ade36f1-3611-4c68-9d12-82dab2cbb431",
+          "repo_id": "nvidia/c-foundationstereo-s",
+          "type": null
+        },
+        {
+          "product_key": "8a864f31-bc77-42e6-b4e2-4c076db74ea7",
+          "repo_id": "nvidia/foundationpose",
+          "type": null
+        },
+        {
+          "product_key": "8d81e236-9f67-4ab7-ad26-0f08e0e1c154",
+          "repo_id": "nvidia/GLM-5.3-NVFP4",
+          "type": null
+        },
+        {
+          "product_key": "f9b50d43-4018-4921-9ab3-ceee8012bb92",
+          "repo_id": "nvidia/DeepSeek-V4-Pro-0813-nvfp4-DSpark",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "NVIDIAAI"
+        },
+        {
+          "source": "x",
+          "handle": "NVIDIAAIDev"
+        },
+        {
+          "source": "x",
+          "handle": "NVIDIARTXSpark"
+        },
+        {
+          "source": "x",
+          "handle": "nvidia"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "nvidia",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "doubao",
+      "candidate_product_lines": [
+        "Doubao / Seed: primary lineup check required"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 0,
+      "catalog_examples": [],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "BytePlusGlobal"
+        },
+        {
+          "source": "x",
+          "handle": "bytedanceoss"
+        },
+        {
+          "source": "x",
+          "handle": "doubaoAi"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "ByteDance",
+          "confirmed": true
+        },
+        {
+          "namespace": "bytedance-research",
+          "confirmed": true
+        },
+        {
+          "namespace": "ByteDance-Seed",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "yi",
+      "candidate_product_lines": [
+        "Yi",
+        "Yi Coder",
+        "Yi VL"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 28,
+      "catalog_examples": [
+        {
+          "product_key": "fec10db8-8af8-4edb-a568-3f8feb85ef1b",
+          "repo_id": "01-ai/Yi-Coder-9B-Chat",
+          "type": null
+        },
+        {
+          "product_key": "eaa64457-4245-4b66-b0e8-654ebd071d4f",
+          "repo_id": "01-ai/Yi-Coder-1.5B-Chat",
+          "type": null
+        },
+        {
+          "product_key": "5b1dec17-b8f7-4f0e-a5cb-274d93441ac8",
+          "repo_id": "01-ai/Yi-Coder-1.5B",
+          "type": null
+        },
+        {
+          "product_key": "933a522f-1043-45d2-8c7d-f85af1755ab4",
+          "repo_id": "01-ai/Yi-Coder-9B",
+          "type": null
+        },
+        {
+          "product_key": "6456c737-41c8-4cca-bb23-e11196269197",
+          "repo_id": "01-ai/Yi-1.5-9B-Chat-16K",
+          "type": null
+        },
+        {
+          "product_key": "0b20e6ef-e0d3-4dc1-a9a7-7d1423c5570d",
+          "repo_id": "01-ai/Yi-1.5-34B-Chat-16K",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "01AI_Yi"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "01-ai",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "sensechat",
+      "candidate_product_lines": [
+        "SenseChat / SenseNova: primary lineup check required"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 0,
+      "catalog_examples": [],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "SenseTime_AI"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "sensenova",
+          "confirmed": true
+        },
+        {
+          "namespace": "SenseTime",
+          "confirmed": false
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "exaone",
+      "candidate_product_lines": [
+        "EXAONE",
+        "K-EXAONE"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 50,
+      "catalog_examples": [
+        {
+          "product_key": "c8d84484-5fba-4279-9d26-128d443e9e50",
+          "repo_id": "LGAI-EXAONE/K-EXAONE-2.0-750B-A37B-DSpark",
+          "type": null
+        },
+        {
+          "product_key": "c7fdf763-67ff-4587-8486-ef81b7540d8f",
+          "repo_id": "LGAI-EXAONE/K-EXAONE-2.0-750B-A37B-NVFP4",
+          "type": null
+        },
+        {
+          "product_key": "0ed96fb2-4e22-41ae-9cb6-4b7817d84e90",
+          "repo_id": "LGAI-EXAONE/K-EXAONE-2.0-750B-A37B-FP8",
+          "type": null
+        },
+        {
+          "product_key": "c4e9b554-ed32-4289-8265-0e487ac83ab1",
+          "repo_id": "LGAI-EXAONE/K-EXAONE-2.0-750B-A37B",
+          "type": null
+        },
+        {
+          "product_key": "81f11b54-c270-4b88-8535-3ea498d37193",
+          "repo_id": "LGAI-EXAONE/EXAONE-4.5-33B-AWQ",
+          "type": null
+        },
+        {
+          "product_key": "19363ddf-57f4-4104-82d1-07d35c41b070",
+          "repo_id": "LGAI-EXAONE/EXAONE-4.5-33B-GGUF",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "LG_AI_Research"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "LGAI-EXAONE",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "kuaishou",
+      "candidate_product_lines": [
+        "KAT",
+        "HiPO",
+        "KwaiYii / Kling: primary lineup check required"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 14,
+      "catalog_examples": [
+        {
+          "product_key": "361e6990-642e-4477-a8cd-23b47c88d25d",
+          "repo_id": "Kwaipilot/KAT-Coder-V2.5-Dev",
+          "type": null
+        },
+        {
+          "product_key": "9a53d6c4-ab3d-4e76-b6c6-4691ad371f63",
+          "repo_id": "Kwaipilot/HiPO-1.7B",
+          "type": null
+        },
+        {
+          "product_key": "579bb6a5-71a8-4346-a295-a7c586094ee1",
+          "repo_id": "Kwaipilot/KAT-Dev-72B-Exp-FP8",
+          "type": null
+        },
+        {
+          "product_key": "3d20a1f0-1833-4c4e-8602-b547cacd7b24",
+          "repo_id": "Kwaipilot/KAT-Dev-FP8",
+          "type": null
+        },
+        {
+          "product_key": "7f92675c-7a09-40dd-b16d-5d3b95d9fb4c",
+          "repo_id": "Kwaipilot/KAT-Dev-72B-Exp",
+          "type": null
+        },
+        {
+          "product_key": "360b57a6-f5bd-4397-9976-d9dac226b869",
+          "repo_id": "Kwaipilot/HiPO-8B",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "Kling_ai"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "Kwaipilot",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "sakana_ai",
+      "candidate_product_lines": [
+        "TinySwallow",
+        "Additional research model lines: review required"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 49,
+      "catalog_examples": [
+        {
+          "product_key": "85b29c41-8649-4db4-bd38-2fdaaeb498c2",
+          "repo_id": "SakanaAI/fwpkm-l12-gdn-pkm6-fwpkm2_10",
+          "type": null
+        },
+        {
+          "product_key": "ec924a6b-54d9-4f7d-a380-8734676365cd",
+          "repo_id": "SakanaAI/fwpkm-l12-gdn_fa-pkm6-fwpkm2_10-pswa0.9",
+          "type": null
+        },
+        {
+          "product_key": "9dbfc4b2-35e5-4b62-bbc2-40eb12877234",
+          "repo_id": "SakanaAI/fwpkm-l12-gdn_swa-pkm6-fwpkm2_10",
+          "type": null
+        },
+        {
+          "product_key": "1a5004c3-586d-43d6-aecb-d256754766e0",
+          "repo_id": "SakanaAI/fwpkm-l12-gdn_swa-pkm2_6_10",
+          "type": null
+        },
+        {
+          "product_key": "f468b0c3-6cbb-49b0-a17a-51efab8e26e8",
+          "repo_id": "SakanaAI/fwpkm-l12-gdn_fa-pkm2_6_10",
+          "type": null
+        },
+        {
+          "product_key": "824d1f42-9ded-4d30-baa3-964f7dea80a6",
+          "repo_id": "SakanaAI/fwpkm-l12-gdn-pkm2_6_10",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "SakanaAILabs"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "SakanaAI",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "upstage",
+      "candidate_product_lines": [
+        "Solar / Solar Pro / Solar Open"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 26,
+      "catalog_examples": [
+        {
+          "product_key": "2a1c55a9-cca5-4870-bada-965f9cb990ac",
+          "repo_id": "upstage/solar-pro4-tokenizer",
+          "type": null
+        },
+        {
+          "product_key": "5cb8dd70-8e86-44a6-8210-2f2ff4ddfc96",
+          "repo_id": "upstage/Solar-Open2-250B",
+          "type": null
+        },
+        {
+          "product_key": "8129cc61-6bb6-4014-abf2-236b3ac63a11",
+          "repo_id": "upstage/TinySolar-187m-4k",
+          "type": null
+        },
+        {
+          "product_key": "2dcb8653-d8d1-4404-bb79-d69f41efa0cd",
+          "repo_id": "upstage/TinySolar-111m-4k",
+          "type": null
+        },
+        {
+          "product_key": "b15e2738-a85b-4320-a50b-a2101232df56",
+          "repo_id": "upstage/solar-pro3-tokenizer",
+          "type": null
+        },
+        {
+          "product_key": "3a33cb89-d7f6-4d6b-b669-cf17c7cbc768",
+          "repo_id": "upstage/Solar-Open-100B",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "upstageai"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "upstage",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    },
+    {
+      "brand_id": "dots",
+      "candidate_product_lines": [
+        "dots note",
+        "dots OCR",
+        "dots TTS",
+        "dots LLM / VLM"
+      ],
+      "priority_seed": false,
+      "review_state": "catalog_candidate_primary_review_pending",
+      "active_lineup_verified": false,
+      "stored_product_count": 17,
+      "catalog_examples": [
+        {
+          "product_key": "8d7063f2-4bd3-4e40-9be7-06760bbc5ea0",
+          "repo_id": "dots-studio/dots.tts-mf-2steps",
+          "type": null
+        },
+        {
+          "product_key": "430ad513-f955-45b4-a38c-b9a2fd420e9e",
+          "repo_id": "dots-studio/dots.tts-mf-2steps-stts",
+          "type": null
+        },
+        {
+          "product_key": "667d050f-3c07-44b1-a3a0-33c7b9eb0b68",
+          "repo_id": "dots-studio/dots.tts-mf-1step",
+          "type": null
+        },
+        {
+          "product_key": "d4452899-c2f3-457a-ba78-3f35b90cf878",
+          "repo_id": "dots-studio/dots3-note-prev-fp8",
+          "type": null
+        },
+        {
+          "product_key": "9eae5d7b-f5e8-42b0-8381-856ca5017f08",
+          "repo_id": "dots-studio/dots3-note-prev",
+          "type": null
+        },
+        {
+          "product_key": "9c231faa-7075-4c56-8788-c0cf3620b0b2",
+          "repo_id": "dots-studio/dots.tts.edit",
+          "type": null
+        }
+      ],
+      "official_accounts": [
+        {
+          "source": "x",
+          "handle": "dotsstudioai"
+        }
+      ],
+      "publisher_namespaces": [
+        {
+          "namespace": "dots-studio",
+          "confirmed": true
+        }
+      ],
+      "primary_checks": []
+    }
+  ],
+  "launch_event_fields": [
+    "brand",
+    "product_line",
+    "generation",
+    "exact_variant",
+    "milestone_kind",
+    "source_url",
+    "source_post_id",
+    "announcement_at",
+    "announcement_precision",
+    "availability_at",
+    "availability_precision",
+    "first_local_observed_at",
+    "review_state"
+  ],
+  "deepseek_reference_events": [
+    {
+      "date": "2026-04-24",
+      "precision": "day",
+      "milestone": "V4-Pro and V4-Flash API availability"
+    },
+    {
+      "date": "2026-07-31",
+      "precision": "day",
+      "milestone": "V4-Flash public-beta/post-training update"
+    },
+    {
+      "date": "2026-08-13",
+      "precision": "day",
+      "milestone": "V4-Pro general availability"
+    },
+    {
+      "date": "2026-08-21",
+      "precision": "day",
+      "milestone": "V4-Flash-Vision-Exp API availability"
+    },
+    {
+      "date": "2026-09-10",
+      "precision": "day",
+      "milestone": "V4.1-Flash API release"
+    }
+  ],
+  "constraints": [
+    "Catalog examples are not canonical family assignments",
+    "Publisher namespaces do not prove origin for every hosted repo",
+    "New quantization/package is not automatically an independent launch",
+    "API preview, API general availability and weight publication stay separate",
+    "Unknown exact timestamps stay unknown",
+    "Source lookup occurs at actual local observation time",
+    "No database/catalog/classifier/harvester mutation in this pass"
+  ]
+}

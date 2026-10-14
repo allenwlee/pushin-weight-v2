@@ -14,7 +14,7 @@ def evidence_selection(contract, mapping_ids, cutoff):
     """Follow frozen history pins while retaining today's identity review boundary."""
     from core.benchmark_measurement_pins import measurement_contract
 
-    mappings = contract.mappings.all()
+    mappings = contract.mappings.filter(purpose="metric")
     if mapping_ids is not None:
         require(0 < len(mapping_ids) <= 1000, "bounded mapping selection required")
         mappings = mappings.filter(pk__in=mapping_ids)

@@ -371,6 +371,7 @@ Graphviz schema and legacy SQLite file are read-only historical artifacts.
 - [Live query composition](docs/reference/twitterapi-live-queries-by-model.md)
 - [Database schema](docs/reference/db-schema.md)
 - [HF catalog collection, shared storage and recovery](docs/reference/hf-model-catalog.md)
+- [Collection jobs, reviewed provider identities and history](docs/reference/collection-jobs.md)
 - [Staff intake, evidence and reviewed corrections](docs/operations/staff-collection.md)
 - [Lookup tables](docs/reference/lookup-tables.md)
 - [Classifier prompts](docs/reference/classifier-prompts.md)
