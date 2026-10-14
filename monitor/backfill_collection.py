@@ -28,7 +28,13 @@ from core.collection_state import (
     import_scope_checkpoints,
 )
 from core.measurement_taxonomy import require
-from core.models import CollectionJob, CollectionScopeRun, Post, PostEnrichmentState
+from core.models import (
+    CollectionJob,
+    CollectionObservation,
+    CollectionScopeRun,
+    Post,
+    PostEnrichmentState,
+)
 from monitor.backfill_resources import (
     BackfillBudget,
     BackfillBudgetExhausted,
@@ -230,7 +236,7 @@ def _report(job, run_id):
         post_id__in=ids, translation_status="succeeded", classification_status="succeeded",
     ).count()
     requests = job.runs.aggregate(total=Sum("request_count"))["total"] or 0
-    return {
+    report = {
         "job_id": str(job.pk), "run_id": str(run_id),
         "credential_purpose": TwitterApiCredentialPurpose.ON_DEMAND.value,
         "collection_drained": bool(rows) and all(row.enumeration_complete for row in rows),
@@ -240,6 +246,14 @@ def _report(job, run_id):
         "cumulative_api_requests": job.definition["scope"]["prior_api_requests"] + requests,
         "provider_billing": None,
     }
+    members = set(CollectionObservation.objects.filter(
+        run__job=job, source_subject_kind="post",
+    ).values_list("post_id", flat=True))
+    if members == set(ids):
+        # The typed ledger is complete. Later enrichment can read this scalar
+        # without materializing the compatibility receipt or every member ID.
+        report["post_membership"] = {"version": 1, "distinct_posts": len(ids)}
+    return report
 
 
 def execute_job(job_id, *, read_only=False):

@@ -17,6 +17,7 @@ from django.utils import timezone
 from core.models import (
     CollectionJob,
     CollectionObservation,
+    CollectionRun,
     OriginalContentCall,
     Post,
     PostEnrichmentState,
@@ -767,9 +768,31 @@ def adopt_completed_membership(job):
     """Adopt genuine pre-0085 stored-page evidence without rewriting history."""
     if job.state != "completed" or not job.last_success_id:
         return
-    run = job.last_success
+    run = CollectionRun.objects.only("id", "job_id", "status", "purpose").get(
+        pk=job.last_success_id
+    )
     if run.job_id != job.pk or run.status != "success" or run.purpose != "content":
         raise BatchAdmissionError("historical_membership_success_run_mismatch")
+    marker = CollectionRun.objects.filter(pk=run.pk).values_list(
+        "report__post_membership", flat=True
+    ).get()
+    if marker is not None:
+        if (
+            not isinstance(marker, dict)
+            or marker.get("version") != 1
+            or type(marker.get("distinct_posts")) is not int
+            or marker["distinct_posts"] < 0
+        ):
+            raise BatchAdmissionError("historical_membership_marker_invalid")
+        count = (
+            CollectionObservation.objects.filter(run__job=job, source_subject_kind="post")
+            .values("post_id")
+            .distinct()
+            .count()
+        )
+        if count != marker["distinct_posts"]:
+            raise BatchAdmissionError("historical_typed_membership_count_changed")
+        return
     reported = run.report.get("recovered_post_ids")
     if not isinstance(reported, list) or len(reported) > 100000:
         raise BatchAdmissionError("historical_membership_legacy_receipt_invalid")

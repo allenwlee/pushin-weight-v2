@@ -6114,6 +6114,11 @@ Historical X writers save Post membership in the same fenced transaction as
 the fetched page. They reuse the real content collection run/scope and preserve
 numeric and catalog constraints. Post membership and current enrichment ownership
 have different meanings; neither replaces source Post storage or cursor/backlog rules.
+New X collection reports certify complete membership across the job's real
+attempts with `post_membership = {version: 1, distinct_posts: N}` after matching
+the typed rows to stored-page evidence. Enrichment reads this scalar and checks
+the distinct database count without loading the compatibility Post-ID array.
+Older reports retain bounded, exact page-receipt reconciliation.
 
 [Back to table inventory](#table-inventory)
 

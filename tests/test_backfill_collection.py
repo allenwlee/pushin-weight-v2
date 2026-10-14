@@ -86,6 +86,7 @@ def test_database_job_resumes_exact_page_and_preserves_previous_attempt(pipeline
     assert second["collection_drained"]
     assert second["cumulative_api_requests"] == 5  # three actual imported starts plus two live starts
     assert second["recovered_post_ids"] == ["1", "2"]
+    assert second["post_membership"] == {"version": 1, "distinct_posts": 2}
     assert second["enrichment_pending_count"] == 2
     old_scope.refresh_from_db()
     assert old_scope.cursor == "second-page" and not old_scope.enumeration_complete
@@ -93,6 +94,15 @@ def test_database_job_resumes_exact_page_and_preserves_previous_attempt(pipeline
     assert pipeline.requests[0]["query"] == pipeline.requests[1]["query"]
     assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
     assert not list(pipeline.directory.glob("*.json"))
+
+
+def test_complete_page_report_certifies_typed_membership(pipeline):
+    job = ready_job()
+    pipeline.responses.append(page("1"))
+    report = run(job)
+    assert report["collection_drained"]
+    assert report["post_membership"] == {"version": 1, "distinct_posts": 1}
+    assert CollectionRun.objects.get(pk=report["run_id"]).status == "success"
 
 
 def test_page_failure_rolls_back_all_posts_and_keeps_cursor(pipeline, monkeypatch):

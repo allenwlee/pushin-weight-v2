@@ -51,12 +51,12 @@ scheduled seven-call path remains unchanged.
 - Objective: recover historical X posts and finish their required enrichment through
   the backfiller, with resumable batches suitable for a month or longer.
   August 9 staging collection is verified; end-to-end completion now also requires U9.
-- Authority: owner's LFG fixes-and-test request; G3's approved atomic-JSON
-  staging-pilot boundary, verified in both plans after the owner's check-files
-  continuation. Shared schema, production collection and month campaigns remain
-  outside this run.
-- Means: shared CycleRunner, finite page units and invocation budgets, atomic
-  host checkpoints, exact-ID enrichment and a staged provider-backed pilot.
+- Authority: owner's LFG fixes-and-test request and October 14 `go`; G3's
+  adjudicated ProviderBatch extension is in scope. Production collection,
+  production release/import and new month campaigns remain outside this run.
+- Means: shared CycleRunner, durable collection scope checkpoints, typed Post
+  membership, bounded native provider groups and physical-call accounting,
+  exact-cohort enrichment and a staged provider-backed pilot.
 - Execution: inline, sequential work on this existing canonical branch. The
   parent owns review, PR/CI and live pilot proof; implementation returns locally
   verified code and its prepared pilot contract.
@@ -785,7 +785,7 @@ prerequisite, not renewed approval for the already authorized backfill or move.
 
 - 2026-10-14T05:26:48.193648+00:00 FINAL SOURCE VERIFIED — fd6f9594 live on staging web/build donor; source-check job-db7gt9k9v7es73c1i610 succeeded,1660IDs reconciled,0API/models,state unchanged. CIall4green. Same18-update timing105.618s outlier; bounded diagnostic job-db7h2ajbc2fs73f6ona0 succeeded at1.714s writer/2.381s total,1.579s SQL(380statements),1.322CPU seconds,106.5MiB peak memory. Outlier unaccounted, no stable full-day/month throughput claimed. Acceptance is frozen and fulfilled; no further new-date/provider/performance batches. Remaining changes are evidence-only closeout.
 
-## U9 — Batch enrichment for month-or-longer recovery [implementation in progress]
+## U9 — Batch enrichment for month-or-longer recovery [native staging acceptance running]
 
 ### Owner requirement and present state
 
@@ -822,10 +822,12 @@ Canonical `context_missing` outcomes remain valid when the existing classifier c
 Do not manufacture a sentiment, force a substantive classification, or weaken validation to turn a failure green.
 The old two-hour classifier override does not silently waive the new enrichment requirements.
 
-### Recommended approach and tradeoff
+### Selected approach and tradeoff
 
-Use the existing DeepInfra provider's asynchronous Batch API for large background campaigns and retain a bounded direct-processing mode for urgent repairs and immediate smoke tests.
-This is a proposed transport choice, not an implemented or owner-approved runtime change.
+The implemented native phase uses DeepInfra's asynchronous Batch API, selected
+under the owner's `go` and verified through first submission on staging. Existing
+bounded direct processing remains separate; this acceptance performs native
+batches and does not silently fall back to direct calls.
 Both transports must use the same prepared requests and validate/persist returned results through the same shared code.
 
 DeepInfra's [Batch API introduction](https://docs.deepinfra.com/batch/introduction) documents a 20% discount, rate limits separate from real-time inference, a 24-hour completion window, and per-file ceilings of 50,000 requests / 200 MB.
@@ -835,7 +837,7 @@ Import validated successes from partial provider jobs and retain unresolved requ
 These facts favor cost and background throughput; they do not prove faster August 9 wall-clock completion.
 Dependent translation and classification waves can each consume a provider completion window.
 
-Proposed flow:
+Implemented flow:
 
 1. Read a bounded part of the durable recovered cohort and identify genuinely missing stages under the current source/model/prompt identities.
 2. Prepare language-detection requests only where needed, copy known source-language text into matching locale fields, and submit only required translations/chunks.
@@ -855,24 +857,34 @@ Bound each execution and resume from database progress instead of requiring one 
 [Render one-off jobs](https://render.com/docs/one-off-jobs) are terminated after 30 days; the historical data window can be longer than any one execution.
 Enrichment needs its own explicit finite allowance and asynchronous deadline; it cannot silently reset collection spend or inherit an already-expired collection deadline.
 
-### Persistence review and proposed file scope
+### Persistence review and implemented file scope
 
 Reuse `PostEnrichmentState` for per-post stage state and existing translation artifacts/chunks and classification state/judgments for model output.
 Use shared collection records for collection instructions and recovered-cohort evidence; do not rewrite a truthful successful collection run as a failed enrichment attempt.
-Inspect `CollectionObservation` as a possible indexed per-resource cohort record with G3, rather than repeatedly copying a growing all-post-ID array.
+G3 selected indexed, typed Post membership on `CollectionObservation`; this
+records each actual stored page under its real collection run and scope.
 An asynchronous provider submission also needs durable request identity, provider file/batch IDs, import progress, and budget reservations; existing in-memory `BackfillBudget` and Render-local files are insufficient.
 G3 subsequently selected one generic ProviderBatch table (adds1, retires0),
 with the exact delegated boundary and migration slot recorded below.
 Do not create parallel backfill job/run tables or put inference attempts into collection records.
 
-Proposed implementation scope: `monitor/management/commands/backfill.py`, `monitor/backfill_collection.py`, `monitor/backfill_resources.py`, shared enrichment orchestration in `monitor/cycle.py`, shared request preparation/validation in `x_monitor/literal_translation.py` and `x_monitor/attribution.py`, and their real-caller PostgreSQL regression tests.
-The selected shared schema is being implemented in reserved0085, under G3 review.
+Implemented scope: `monitor/management/commands/backfill.py`,
+`monitor/backfill_collection.py`, `monitor/backfill_enrichment.py`,
+`core/provider_batches.py`, shared enrichment orchestration in `monitor/cycle.py`,
+shared request preparation/validation in `x_monitor/deferred_inference.py`,
+`x_monitor/deepinfra_batch.py`, `x_monitor/deepinfra.py`,
+`x_monitor/literal_translation.py` and `x_monitor/attribution.py`, and their
+real-caller PostgreSQL regression tests. The selected four model sections and
+reserved0085 passed G3 adjudication and are applied on staging. Refresh policy,
+its runbook/tests, the scoped schema reference and CI are aligned.
 The current G3 collection owner supplied the October 14 Batch Enrichment Persistence Recommendation in `docs/analysis/2026-10-13-160815-g3-backfill-collection-interface.md` in the authoritative G3 checkout.
 The initial recommendation documented those schema gaps; G3's later selected-design
 section supersedes its undecided table choice. Existing observation kinds needed
 explicit Post admission and the call owner needed an enforced authored/batch XOR.
 Audit purpose-safe generalization of that existing provider-call ledger and its readers/writers; do not create a fake authored-content owner or classify a post as an aggregate to bypass constraints.
-The follow-up proposal must cover typed cohort membership, batch versus request identity, import state, cross-lane duplicate-call prevention, durable budgets, and ambiguous submissions before G3 selects shared schema/API changes.
+The selected implementation covers typed cohort membership, distinct group and
+physical request identities, import state, cross-lane duplicate-call prevention,
+durable budgets and ambiguous submission recovery.
 Preserve scheduled models/prompts, ordinary harvester age/claim policy and seven-call collection path, Post storage, live cursor/backlog rules, existing service inventory, and scheduled/on-demand TwitterAPI credential separation.
 Production transfer is a separate task from enrichment and remains unperformed.
 
@@ -988,6 +1000,59 @@ access remains MAINTAIN-only for excluded batch records. Hosted CI also exposed
 the schema reference omission; the scoped reference now has151tables/1975columns,
 all34batch fields and six added fields on existing entities. No stagedDDL or paid
 models yet. Actual stage remains0082; PR60 must coordinate before accountDDL.
+
+2026-10-14T21:21:00+09:00 LIVE NATIVE ACCEPTANCE — all five hosted checks passed
+exact candidate54afc330; that unchanged revision is observed live on staging web
+and jobs donor. Actual stage0082+0085 has34batch columns, expected owner checks/
+indexes and old-writer defaults. Source1660, cursors/backlog and authored23 call
+hashes match the pre-migration baseline. A real old authored INSERT omitting new
+columns passes, rolled back without sequence advance. Staging web returns302.
+Only the donor received projectDeepInfra key and literal-v2 flag; web stays
+provider-free, cron schedules/suspension and production remain untouched.
+
+Native job01/job-db7n162j9qps73d1gcbg submitted317Gemma translation/detection
+requests, reservingUSD0.313038;28.507active wall seconds/3.937CPU/168.11MiB peak.
+Native job02/job-db7n2dt9fdbs73er0crg recovered the same group in a separate
+process: no repeated submission,317sent,3control requests,5.416active wall/
+1.404CPU/169.81MiB peak. Both processes exited successfully but the pilot remains
+PARTIAL: providervalidating,0returned results,100incomplete+10completecontrols,
+0TwitterAPI. No live Post claims remain during provider wait. Unknown billed
+cost is retained, not reported as zero. Public provider caps50krequests/200MB/
+100concurrent batches; this account had0existing batches at preflight. Actual
+Render plan-crn-003 is0.5CPU/512MB; observed process peaks remain below it.
+
+Deadline-bounded Render acceptance controller job-db7n5prbc2fs73fptl1g follows
+the same pinned110selection and policy; waits close all database connections.
+It calls the existing execute/import/publish/verification helpers, only expands
+via finish_pilot after110persisted outputs pass, retains all charges and the
+original72-hour deadline, then requires1660valid outputs underUSD25. Model/
+control/attempt/file ceilings are unchanged. This private verification program
+does not create another job table or activate a scheduler. First advance keeps
+the same317requests/USD0.313038,4controls,169.18MiB; waiting on real provider
+results. Live native pilot and full-day acceptance are not yet passed.
+
+2026-10-14T21:42:00+09:00 SCALE REPAIR — completed-source adoption loaded the
+entire compatibility receipt and rejected more than100000IDs, even when typed
+membership already existed. New X reports certify exact typed job membership
+across genuine attempts with a scalar version/count after reconciliation; native
+resume selects only source identity/status/purpose and that scalar, validates
+SQL DISTINCT membership count, and retains bounded legacy adoption for old
+reports. Red tests catch whole-Report selection and the misplaced legacy cap;
+final43checks/43requiredPG/0skips pass, including oversized unused receipt,
+changed-count refusal, real page certification and interrupted-attempt resumption.
+Focused Ruff/whitespace pass. Exact delta sent to G3; no schema/cost/model change.
+Running Render54afc330/controller remains unchanged; this follow-up is not yet
+deployed. Latest live result8controls,317sent/0returned,USD0.313038reserved,
+170.82MiB peak; native acceptance remains PARTIAL awaiting provider results.
+
+2026-10-14T21:45:00+09:00 G3 SCALE ADJUDICATION — no blocking findings;
+33additional required PostgreSQL checks executed by G3 with0skips/errors.
+Native typed resume avoids receipt materialization; collection reporting and
+legacy fallback still materialize IDs. The100001-entry test proves projection/
+guard behavior, not a100kunique-Post throughput or writer-memory benchmark.
+Preserve this limit in later month estimates. Approved follow-up is published
+on the feature branch with fresh CI; active paid pilot/controller remains on
+54afc330 and is not yet passed. No new collection or production action.
 
 2026-10-14T18:21:56+09:00 ON — implementing the G3-selected persistence slice and
 native batch orchestration. Transport/shared callers tested;178 focused checks

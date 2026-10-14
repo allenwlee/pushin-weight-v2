@@ -24,7 +24,11 @@ from core.models import (
     ProviderBatch,
 )
 from core.provider_batches import record_post_membership
-from monitor.backfill_enrichment import execute_enrichment, policy_snapshot
+from monitor.backfill_enrichment import (
+    adopt_completed_membership,
+    execute_enrichment,
+    policy_snapshot,
+)
 from tests.test_backfill_collection import ready_job
 from tests.test_u18_runtime_0731 import FixedSlotTransport
 from x_monitor.config import load_config
@@ -410,6 +414,47 @@ def test_legacy_completed_collection_membership_is_adopted_without_rewriting_out
         ).count()
         == 2
     )
+
+
+def test_typed_membership_resume_does_not_load_oversized_legacy_receipt(native):
+    job, _, _, _ = native
+    run = job.runs.get()
+    run.status, run.completed_at = "success", timezone.now()
+    run.report = {
+        "post_membership": {"version": 1, "distinct_posts": 2},
+        "recovered_post_ids": ["unused-legacy-array"] * 100001,
+    }
+    run.save()
+    job.state, job.last_success = "completed", run
+    job.next_due_at, job.next_retry_at = None, None
+    job.save()
+    job.refresh_from_db()
+
+    def forbid_full_report(execute, sql, params, many, context):
+        if '"collection_runs"."report"' in sql:
+            assert "->" in sql, "typed resume materialized the complete receipt"
+        return execute(sql, params, many, context)
+
+    with connection.execute_wrapper(forbid_full_report):
+        adopt_completed_membership(job)
+    assert CollectionObservation.objects.filter(run=run, post__isnull=False).count() == 2
+    assert not OriginalContentCall.objects.exists()
+
+
+def test_typed_membership_count_drift_is_refused_before_provider_work(native):
+    from core.provider_batches import BatchAdmissionError
+
+    job, _, _, _ = native
+    run = job.runs.get()
+    run.status, run.completed_at = "success", timezone.now()
+    run.report = {"post_membership": {"version": 1, "distinct_posts": 3}}
+    run.save()
+    job.state, job.last_success = "completed", run
+    job.next_due_at, job.next_retry_at = None, None
+    job.save()
+    with pytest.raises(BatchAdmissionError, match="typed_membership_count_changed"):
+        adopt_completed_membership(job)
+    assert not OriginalContentCall.objects.exists()
 
 
 def test_database_pin_prevents_writes_and_provider_calls(native):
