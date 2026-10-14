@@ -30,8 +30,10 @@ collecting posts alone no longer completes the overall task.
 The same design must handle a month or longer with bounded memory, durable progress,
 and no repeated collection or completed model work.
 Collection and Render adoption are verified. Native batch enrichment is implemented
-and locally verified; its staging pilot and full-day persisted outputs remain
-the acceptance work. U9 records the implementation and resource bounds.
+and locally verified. On October 15 the owner selects ordinary DeepInfra API calls
+for immediate staging results, retaining native Batch for later production work.
+The staging pilot and full-day persisted outputs remain the acceptance work.
+Both transports share request preparation, saved replies, validation and persistence.
 
 The original 15-minute probes found no new posts. The owner widened the test
 to two hours across all 21 brands; it recovered 98 new staging posts, with 48 of
@@ -55,7 +57,7 @@ scheduled seven-call path remains unchanged.
   adjudicated ProviderBatch extension is in scope. Production collection,
   production release/import and new month campaigns remain outside this run.
 - Means: shared CycleRunner, durable collection scope checkpoints, typed Post
-  membership, bounded native provider groups and physical-call accounting,
+  membership, bounded provider work and physical-call accounting,
   exact-cohort enrichment and a staged provider-backed pilot.
 - Execution: inline, sequential work on this existing canonical branch. The
   parent owns review, PR/CI and live pilot proof; implementation returns locally
@@ -64,7 +66,8 @@ scheduled seven-call path remains unchanged.
   allowance; never replace the fixed window or substitute a mock for live proof.
 - Current continuation: the owner's `go` authorizes paid LLM enrichment on the
   existing August 9 staging cohort, followed by its remaining posts after the
-  native pilot succeeds. Record physical model calls and respect server limits.
+  persisted pilot succeeds using the owner's selected ordinary API transport.
+  Record physical model calls and measured server use.
   Zero TwitterAPI calls; no new month campaign or production transfer.
 
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
@@ -119,6 +122,17 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 <!-- END OLLIJA DELIVERY GUIDE -->
 
 ## Delivery Exceptions
+
+October 15 owner selection: use ordinary DeepInfra API calls for the present
+staging enrichment; native Batch acceptance is superseded for this run. Preserve
+the native implementation for future explicitly selected work. The owner challenges
+four-call concurrency as unnecessarily conservative: start at32 adjustable
+in-flight calls, measure throughput/memory/errors, and raise concurrency when
+evidence supports it. No fixed pause between successful ordinary requests.
+Retain all prior replies, unknown charges, USD5 pilot/USD25 full-day ceilings,
+20000 model starts,5000 control starts,3 attempts/input and the original72-hour
+deadline. Reconcile the cancelled six-request native classifier group before
+replacing its outstanding work. No new tables/migrations or production authority.
 
 The October 13 LFG request authorizes implementation, commits, a pull request,
 CI and the fixed 15-minute staging pilot below. Production delivery remains
@@ -785,7 +799,7 @@ prerequisite, not renewed approval for the already authorized backfill or move.
 
 - 2026-10-14T05:26:48.193648+00:00 FINAL SOURCE VERIFIED — fd6f9594 live on staging web/build donor; source-check job-db7gt9k9v7es73c1i610 succeeded,1660IDs reconciled,0API/models,state unchanged. CIall4green. Same18-update timing105.618s outlier; bounded diagnostic job-db7h2ajbc2fs73f6ona0 succeeded at1.714s writer/2.381s total,1.579s SQL(380statements),1.322CPU seconds,106.5MiB peak memory. Outlier unaccounted, no stable full-day/month throughput claimed. Acceptance is frozen and fulfilled; no further new-date/provider/performance batches. Remaining changes are evidence-only closeout.
 
-## U9 — Batch enrichment for month-or-longer recovery [native staging acceptance running]
+## U9 — Batch enrichment for month-or-longer recovery [ordinary API transport selected; implementation active]
 
 ### Owner requirement and present state
 
@@ -824,10 +838,13 @@ The old two-hour classifier override does not silently waive the new enrichment 
 
 ### Selected approach and tradeoff
 
-The implemented native phase uses DeepInfra's asynchronous Batch API, selected
-under the owner's `go` and verified through first submission on staging. Existing
-bounded direct processing remains separate; this acceptance performs native
-batches and does not silently fall back to direct calls.
+The owner explicitly selects ordinary DeepInfra calls on October15 for immediate
+staging results, replacing native-only acceptance. Integrate direct execution
+into the existing durable enrichment runner with32 configurable concurrent HTTP
+requests (maximum128 for this implementation), bounded request waves, and imports
+on the controller's database connection. No database transaction spans HTTP.
+The existing asynchronous Batch transport remains explicitly selectable for
+future background production work. This task grants no production activation.
 Both transports must use the same prepared requests and validate/persist returned results through the same shared code.
 
 DeepInfra's [Batch API introduction](https://docs.deepinfra.com/batch/introduction) documents a 20% discount, rate limits separate from real-time inference, a 24-hour completion window, and per-file ceilings of 50,000 requests / 200 MB.
@@ -895,7 +912,7 @@ Cover zero TwitterAPI calls in enrichment-only mode; skipping complete stages; s
 Exercise 30- and 90-day generated cohorts to prove bounded reads/memory, fair long-post progress, restart survival, and no age-based loss of untouched historical work.
 Those are scalability tests, not permission for new paid historical collections.
 
-After implementation, a separately bounded live staging check must include short and long posts, partial translations, and the known classification-conflict case, and verify the exact current model profiles on the Batch endpoint.
+After implementation, a separately bounded live staging check must include short and long posts, partial translations, and the known classification-conflict case, and verify the exact current model profiles through the selected ordinary API endpoint.
 Then finish the existing August 9 incomplete cohort, preserve valid completed outputs, and validate full persisted translation/classification coverage.
 Any remaining invalid or exhausted work keeps the live result partial; a green Render exit or a provider `completed` status cannot substitute for that database proof.
 Publish measured posts/requests per minute, tokens/spend per post, peak Render memory, and import rate before estimating a full month.
@@ -1075,3 +1092,169 @@ invoking the old collection-only batch is not this test.
 Report model request count, tokens and actual/unknown cost, provider wait time versus active preparation/import time, posts per minute, peak Render memory and database import rate.
 Use those observations for day/week/month estimates only after separating fixed startup/wait overhead from volume-dependent work.
 The first live check and full-cohort continuation remain staging work; neither step copies posts to production or collects a new historical window.
+
+2026-10-14T22:27:00+09:00 OWNER CANCEL / INSPECT / RERUN — owner rejects the
+317-request validating stall and explicitly authorizes cancellation, inspection
+and rerun. Render controller job-db7n5prbc2fs73fptl1g is confirmed cancelled at
+13:22:13UTC. Provider POST cancellation was accepted at13:23:40UTC; initial
+inspection remains cancelling, with no errors/counts/usage/results or processing
+start. The retrieved0.967MB input matches all317durable canonical packets exactly;
+unique identities, one Gemma model and matching endpoint/method verified. Do not
+invent a provider-side cause or call this pilot passed. Count all control starts
+and retain317sent/unknown charges/USD0.313038reservation/originalUSD5/25/72h bounds.
+After terminal cancellation and reconciliation, rerun one existing canonical
+request as a native diagnostic batch before re-admitting the full selection.
+No direct fallback, new collection, source/schema/production/cron changes. Source
+54afc330 remains pinned for runtime; reviewed9b66c5e6 stays feature-only.
+
+2026-10-14T22:46:00+09:00 INSPECTION / BOUNDED RECOVERY — one separately recorded
+direct diagnostic uses the exact original Gemma request body and succeeds in
+4.052seconds,206input/2output tokens, provider-reported estimateUSD0.000019;
+USD0.000179reserved. This is a comparison call, not a completed Post/pilot or
+native proof. Totals318model starts/USD0.313217reserved; original317costs remain
+unknown. Actual source report, cursors/backlog, outside-pilotPost fields and10
+valid controls are unchanged;0control model calls and0livePostclaims.16transport
+checks pass. The12-minute local cancellation watch ends with provider still
+cancelling, and submits0replacement requests. No invented app fix or provider
+root cause: the same body works directly; the stall is in the provider batch path.
+
+Prepare one Render recovery continuation at the same54afc330, reusing the
+existing claim/control/reservation/import/strict-parser/execute/finish helpers.
+Wait at most30minutes for terminal old cancellation, polling every5minutes
+without live database connections or Post claims. Import actual terminal outputs
+before admitting exactly1failed original request; retain all prior charges and
+original deadline/limits. Cancel that native diagnostic if still outstanding
+after10minutes and stop without a full retry. A strict valid reply permits the
+existing110pilot/full1660continuation; later native validating groups stop with
+cancellation after15minutes without results. Native queue behavior is not an
+acceptance waiver. Private flow harness verifies: stuck cancellation sends0new
+models; stuck probe sends1and cancels; successful probe hands off with1submission.
+Owner was offered normalAPI/fourparallel versus tiny native retry as an optional
+route preference; no reply yet. Preserve the existing native contract while that
+choice remains pending. No source/schema/production/cron mutation.
+
+2026-10-14T22:49:00+09:00 RECOVERY RUNNING — donor remains observed live54afc330;
+guarded Render job-db7og8uk1f9s738fmm2g started13:48:19UTC onplan-crn-003 and is
+running. The prior job is cancelled. Actual old provider cancellation is still
+pending; no new native submission or full enrichment rerun has occurred yet.
+Its limits and guarded sequence above are explicit; no full/native success is
+claimed from the normal diagnostic or the new job's running state.
+
+2026-10-14T23:20:00+09:00 RECOVERY STOPPED / EXTERNAL BLOCKER — guarded job
+job-db7og8uk1f9s738fmm2g exits failed14:18:52UTC at its30-minute guard with
+`cancellation_pending_after_bounded_wait_no_replacement_submitted`. Logs contain
+no replacement submission. Latest provider receipt remains cancelling without
+counts/usage/results; actual stage14:19:47UTC ledger retains317original sent/
+pending calls and1completed direct diagnostic,37counted controlHTTP,USD0.313217
+reserved/USD0.000019provider estimate/317unknown costs,100pending pilot posts.
+No owned Render controller remains running. No retry/budget reset, direct full
+fallback or acceptance waiver is applied. Cancellation acknowledgment is not
+terminal-cancellation proof, and a failed guard is not a successful rerun.
+Provider finalization is needed for the existing native rerun; optional normal
+API/fourparallel route preference remains unanswered. Existing authorization
+and staging cohort/schema ownership persist; no production changes/imports.
+
+2026-10-15T05:52:00+09:00 PROVIDER FINALIZATION OBSERVED — owner asks for best
+guess; one counted status GET at20:48:54UTC confirms remote cancelled. Actual
+provider timestamps: created12:08:51UTC, cancel requested13:23:40UTC, cancelled
+14:14:04UTC (50minutes24seconds after request), with no processing-start, request
+counts, model, usage or output/error files. The previous recovery's last GET was
+14:14:00.529UTC, approximately3.5seconds before finalization; it then stopped at
+14:18:52UTC without a final GET. Earlier pending statements describe the last
+received state, not the provider's actual state at that later stop.
+
+Best-supported inference is a delayed/stalled provider batch validation queue;
+the exact internal cause remains unknown. Initial75-minute wait alone does not
+establish provider failure: DeepInfra documents a24-hour batch window. One
+working direct request does not prove all317individual requests are accepted.
+Repair only the private recovery watcher to recheck status at the cancellation
+deadline;4fake-control-flow cases pass, including finalization between the last
+interval poll and deadline. No application/schema/model/prompt changes. Confirmed
+final cancellation removes the external prerequisite for the already-authorized
+one-original-request native rerun, still on frozen54afc330 with unchanged
+source/control/financial/deadline guards. No new full cohort, normal-API fallback,
+TwitterAPI or production authority is inferred from the owner's question.
+
+2026-10-15T06:28:00+09:00 FIRECRAWL CONTRACT AUDIT — owner explicitly invokes
+Firecrawl for the provider docs.11credits used (308to297), at most2concurrent
+operations: official Batch introduction/endpoints/objects, Files API, Chat
+overview/reference, account rate limits and reasoning; one model API page,
+one old-rate-route404 and one URL map. Cache is ignored under.firecrawl/. No
+paid inference experiment is added by this documentation audit; the already
+authorized native continuation is independent.
+
+Required wire contract matches our caller and retrieved uploaded data: JSONL
+unique custom IDs, POST, matching/v1/chat/completions, one model/file, upload
+purpose=batch, persisted input_file_id and completion_window=24h, allowed
+metadata key/value lengths. No file-ready wait or special batch credential is
+required by the docs. Optional input/output expiry parameters default30days;
+omitting them does not prevent execution. Current translation max_tokens<=4291
+and classifier4096 are below the documented typical16384cap; DeepSeek0731
+reasoning_effort=none is explicitly documented and correctly supplied. Batch
+limits50krequests/200MB/100concurrent files are distinct from standard200concurrent
+requests/model. The generic account page's"batch jobs" advice is for bulk ordinary
+requests; use the specific native Batch contract for native File/Batch calls.
+
+Remaining gaps / required follow-ups before claiming month-scale completeness:
+
+- Timing:24-hour provider completion window means our10/15-minute test watchdogs
+  are chosen operator stop limits, not documented API failure thresholds. Model,
+  counts and usage can be null while validating. Initial75-minute wait alone
+  did not prove an outage. Warn/recheck provider state before a timeout decision;
+  the private cancellation deadline recheck is fixed, the later short native
+  validation guard remains a separate chosen test bound.
+- Diagnostics: persist bounded provider errors(code/line/param/message), request
+  counts, aggregate usage and transition timestamps. Current code retains status,
+  final child responses/usage and generic errors, but loses rich parent polling
+  metadata and per-line failure details. Reuse existing ProviderBatch.control_evidence
+  and OriginalContentCall.import_evidence/response records; no new table is proposed.
+- File resources: provider account cap is2GBtotal including response files, not
+  just200MBperfile. Default30-day retention can accumulate multiple historical
+  months collected in one week. Check account occupancy, shorten deliberate
+  retention or clean only our fully imported/reconciled files; preserve other
+  jobs/apps and files needed for uncertain submissions or partial-result recovery.
+- Cancellation/expiration: asynchronous termination can retain partial outputs;
+  import both success/error files before retry. Existing importer handles both;
+  operator cancellation currently uses the private transport rather than a
+  first-class management-command path. Cancellation50m24s is observed latency,
+  not a documented normal/failure limit. Keep all unknown charges reserved.
+
+Primary evidence: https://docs.deepinfra.com/batch/introduction ;
+https://docs.deepinfra.com/batch/batch-endpoints ;
+https://docs.deepinfra.com/batch/batch-objects ;
+https://docs.deepinfra.com/batch/file-endpoints ;
+https://docs.deepinfra.com/chat/overview ;
+https://docs.deepinfra.com/chat/reasoning ;
+https://docs.deepinfra.com/account/rate-limits .
+
+Native rerun actual observations:1request groupa7f81a20 completes at20:56:50UTC
+(about3minutes observed), then319request group9b3b4480 completes at21:03:36UTC
+(about6m36s observed), followed by8Gemma requests completing21:09:59UTC. All296
+distinct original request bodies have a successful native counterpart across
+the tiny and large reruns; this is strong evidence against a missing required
+field or malformed original body. Initial provider queue/validation delay is
+the strongest remaining inference, not a confirmed internal root cause.
+DeepSeek's6classification requests were in_progress with0completed/0failed and
+zero aggregate usage at21:19UTC; no hidden reasoning-setting error found in docs.
+Pilot/full1660persisted acceptance remains pending. At21:14UTC:652submitted,
+329responses(1direct diagnostic,328native translation),USD0.702825reserved/
+USD0.063314provider estimates,317original unknown charges retained,0TwitterAPI.
+Runtime remains frozen54afc330/job-db7une3l550s73df711g, originalUSD5/25/72h bounds;
+no app/schema/production/cron change or new historical collection.
+
+2026-10-15T06:39:00+09:00 AUDIT CLOSEOUT / LIVE LIMIT — docs audit complete;
+remaining diagnostics, cancellation-command/file housekeeping follow-ups are
+identified, not implemented or waived. At21:36:51UTC actual stage still reports
+652submitted/329responses,100pending pilot posts,1active DeepSeek6-request group
+in_progress;USD0.702825reserved/USD0.063314provider estimates. The pilot is not
+passed. Source/group schema/caller code remains54afc330, no additional model
+experiment, TwitterAPI or production mutation. Guarded v2controller continues
+under retained ownership; native body/transport proof is distinct from full
+persisted translation/classification completion.
+
+
+2026-10-15T07:25:14+09:00 DIRECT IMPLEMENTATION — Owner selects normal DeepInfra API for immediate staging results; native Batch retained for future selection. Old controller job-db7une3l550s73df711g is observed cancelled22:11:38UTC. Six-request classifier group is now provider-cancelled and reconciled through the shared importer (six error replies, no successes); all prior reservations/deadline preserved. G3 confirms no overlapping edits and no schema changes needed.
+
+Implementation uses existing ProviderBatch transport=direct, existing call admission/fences/importer and exact shared CycleRunner replay. HTTP-only threads send at most32 calls by default (configurable1–128); one bounded wave/model advances at a time, no DB transaction spans HTTP, successful waves have no fixed sleep. Reserved calls resume; interrupted sent/unknown calls remain ambiguous and are never automatically resubmitted. Explicit429/5xx receipts back off30s and retain reservations; original3-attempt cap remains. Native cached replies keep their logical identities and report their actual transport; controls cannot incur calls.
+
+Verification: initial two direct tests fail before implementation at missing transport wiring. After implementation the broad focused suite passes118checks, including49required PostgreSQL checks with0skips/errors. Final eight direct PostgreSQL checks pass with0skips/errors and cover real command/publishers,32 simultaneous HTTP starts with no worker DB connections, admission before HTTP, read-only status, native-reply reuse, unknown-response resume,429 backoff and spending refusal. The earlier timeout test incorrectly rejected legitimate unstarted reservations; corrected it to allow those once while asserting unknown sent requests are never repeated. Inline reuse, quality, efficiency and risk review follows the repository sequential tool mapping; no independent cross-model receipt is claimed. No live normal enrichment calls yet; staging pilot/day acceptance remains pending.

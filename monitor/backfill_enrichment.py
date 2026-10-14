@@ -1,4 +1,4 @@
-"""Native batch enrichment of stored collection members, without X requests."""
+"""Resumable enrichment of stored members over native or ordinary model HTTP."""
 
 from __future__ import annotations
 
@@ -287,7 +287,7 @@ def prepare_page(job, ids, cfg, *, delegates=None):
             member_post_ids__overlap=ids,
             state="completed",
             import_state__in=["pending", "applied"],
-        ).order_by("reserved_at")
+        ).select_related("provider_batch").order_by("reserved_at")
     )
     cached = {call.request_hash: call for call in calls}
     outstanding = set(
@@ -325,7 +325,11 @@ def prepare_page(job, ids, cfg, *, delegates=None):
     if any(client is None for client in delegates.values()):
         raise BatchAdmissionError("enrichment_role_credentials_missing")
     clients = {
-        stage: DeferredInferenceClient(client, resolve=resolve)
+        stage: DeferredInferenceClient(
+            client,
+            resolve=resolve,
+            reply_transport=lambda identity: cached[identity].provider_batch.transport,
+        )
         for stage, client in delegates.items()
     }
     bounded = bounded_backfill_config(cfg, enrichment_limit=len(ids))
@@ -546,7 +550,9 @@ def advance_batch(batch_id, *, client_factory=None, api_key):
         release_batch(claim)
 
 
-def _register_requests(job, requests, policy, cfg):
+def _register_requests(
+    job, requests, policy, cfg, *, transport="batch", direct_concurrency=32
+):
     models = defaultdict(list)
     for request in requests:
         models[request["body"]["model"]].append(request)
@@ -559,6 +565,9 @@ def _register_requests(job, requests, policy, cfg):
         # Stable order bounds both the uploaded manifest and request membership.
         members = sorted(members, key=lambda r: r["hash"])
         selected, file_bytes = [], 0
+        group_limit = policy["max_file_requests"]
+        if transport == "direct":
+            group_limit = min(group_limit, direct_concurrency * 2)
         for request in members:
             size = len(
                 encode_requests(
@@ -567,7 +576,7 @@ def _register_requests(job, requests, policy, cfg):
                 )
             )
             if (
-                len(selected) >= policy["max_file_requests"]
+                len(selected) >= group_limit
                 or file_bytes + size > policy["max_file_bytes"]
             ):
                 if not selected:
@@ -600,7 +609,7 @@ def _register_requests(job, requests, policy, cfg):
             batch = ProviderBatch.objects.create(
                 source_collection_job=job,
                 group_key=group_key,
-                transport="batch",
+                transport=transport,
                 source_definition_hash=job.definition_sha256,
                 cohort_hash=digest(
                     sorted({p for r in selected for p in r["context"]["post_ids"]})
@@ -629,7 +638,25 @@ def execute_enrichment(
     delegates=None,
     client_factory=None,
     read_only=False,
+    transport="batch",
+    direct_concurrency=32,
+    direct_client_factory=None,
 ):
+    from monitor.backfill_direct import advance_direct, validate_concurrency
+
+    if transport not in {"batch", "direct"}:
+        raise BatchAdmissionError("enrichment_transport_invalid")
+    validate_concurrency(direct_concurrency)
+
+    def advance(group):
+        if group.transport == "direct":
+            advance_direct(
+                group.pk, api_key=api_key, concurrency=direct_concurrency,
+                client_factory=direct_client_factory,
+            )
+        else:
+            advance_batch(group.pk, client_factory=client_factory, api_key=api_key)
+
     job = CollectionJob.objects.get(pk=job_id)
     if (
         job.source_id != "x"
@@ -676,7 +703,7 @@ def execute_enrichment(
                 :2
             ]
         ):
-            advance_batch(batch.pk, client_factory=client_factory, api_key=api_key)
+            advance(batch)
         requests = []
         after = ""
         work = observations.filter(
@@ -707,8 +734,11 @@ def execute_enrichment(
             requests.extend(prepared)
             if len(requests) >= 2000:
                 break
-        for batch_id in _register_requests(job, requests, policy, cfg):
-            advance_batch(batch_id, client_factory=client_factory, api_key=api_key)
+        for batch_id in _register_requests(
+            job, requests, policy, cfg,
+            transport=transport, direct_concurrency=direct_concurrency,
+        ):
+            advance(ProviderBatch.objects.get(pk=batch_id))
     states = PostEnrichmentState.objects.filter(
         post__collection_observations__in=observations
     ).distinct()
@@ -744,6 +774,8 @@ def execute_enrichment(
         "model_requests_reserved": calls.count(),
         "model_requests_sent": calls.exclude(sent_at=None).count(),
         "model_responses_received": calls.filter(state="completed").count(),
+        "ambiguous_model_requests": calls.filter(state="ambiguous").count(),
+        "direct_model_requests_sent": calls.filter(provider_batch__transport="direct").exclude(sent_at=None).count(),
         "cost_unknown_requests": calls.filter(actual_usd=None)
         .exclude(state="reserved")
         .count(),

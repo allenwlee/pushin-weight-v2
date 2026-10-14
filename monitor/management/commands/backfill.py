@@ -162,6 +162,10 @@ class Command(BaseCommand):
                             help="Measure a job's frozen captured page using existing Post updates; no provider calls.")
         parser.add_argument("--enrich-native", action="store_true",
                             help="Advance stored-post enrichment through native model batches; zero X requests.")
+        parser.add_argument("--enrich-direct", action="store_true",
+                            help="Advance stored-post enrichment through ordinary DeepInfra calls; zero X requests.")
+        parser.add_argument("--enrichment-concurrency", type=int, default=32,
+                            help="Ordinary API calls in flight,1–128 (default32).")
         parser.add_argument("--enrichment-finish-pilot", action="store_true",
                             help="After complete persisted pilot proof, continue the existing source cohort.")
         parser.add_argument("--enrichment-post-ids", default=None,
@@ -262,7 +266,9 @@ class Command(BaseCommand):
                     "since", "until", "brands", "call_ids", "query", "reset", "quarantined", "retry_blocked",
                 )):
                     raise CommandError("--collection-job owns its frozen scope; omit scope/reset options")
-                if options["enrich_native"]:
+                if options["enrich_native"] or options["enrich_direct"]:
+                    if options["enrich_native"] and options["enrich_direct"]:
+                        raise CommandError("select one enrichment transport")
                     from core.provider_batches import BatchAdmissionError
                     from monitor.backfill_enrichment import (
                         execute_enrichment,
@@ -293,7 +299,9 @@ class Command(BaseCommand):
                                 raise CommandError("pilot continuation retains its existing identities and deadline")
                             finish_pilot(options["collection_job"], cfg=cfg)
                         self.result = execute_enrichment(options["collection_job"], cfg=cfg,
-                                                        api_key=api_key, policy=policy, read_only=read_only)
+                                                        api_key=api_key, policy=policy, read_only=read_only,
+                                                        transport="direct" if options["enrich_direct"] else "batch",
+                                                        direct_concurrency=options["enrichment_concurrency"])
                     except BatchAdmissionError as exc:
                         raise CommandError(str(exc)) from None
                     self.stdout.write(json.dumps(self.result, sort_keys=True))
@@ -310,8 +318,8 @@ class Command(BaseCommand):
                 return
             if options["storage_probe"]:
                 raise CommandError("--storage-probe requires --collection-job")
-            if options["enrich_native"]:
-                raise CommandError("--enrich-native requires --collection-job")
+            if options["enrich_native"] or options["enrich_direct"]:
+                raise CommandError("enrichment requires --collection-job")
             return self._handle_guarded(*args, **options)
         finally:
             for name, value in previous_settings.items():

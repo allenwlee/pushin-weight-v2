@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from collections.abc import Callable
 from typing import Any
 
@@ -31,9 +32,12 @@ class DeferredInferenceClient:
         resolve: Callable[
             [str, dict[str, Any], str, dict[str, Any]], dict[str, Any] | None
         ],
+        reply_transport: Callable[[str], str] | None = None,
     ) -> None:
         self._delegate = delegate
         self._resolve = resolve
+        self._reply_transport = reply_transport or (lambda identity: "batch")
+        self._local = threading.local()
 
     @property
     def request_profile(self):
@@ -68,15 +72,16 @@ class DeferredInferenceClient:
         reply = self._resolve(identity, body, kind, context)
         if reply is None:
             raise DeferredRequestPending("asynchronous_model_reply_pending")
+        self._local.transport = self._reply_transport(identity)
         return reply
 
     def messages_create(self, **kwargs: Any):
         result = self._delegate.parse_response(self._reply("json", kwargs))
         result.provider_usage = {
             **result.provider_usage,
-            "selected_endpoint": "batch",
+            "selected_endpoint": self._local.transport,
             "request_identity": self.request_identity,
-            "data_collection": "deepinfra-batch",
+            "data_collection": "deepinfra-" + self._local.transport,
             "replayed": True,
         }
         return result
@@ -87,9 +92,9 @@ class DeferredInferenceClient:
             text=result.text,
             provider_usage={
                 **result.provider_usage,
-                "selected_endpoint": "batch",
+                "selected_endpoint": self._local.transport,
                 "request_identity": self.request_identity,
-                "data_collection": "deepinfra-batch",
+                "data_collection": "deepinfra-" + self._local.transport,
                 "replayed": True,
             },
         )

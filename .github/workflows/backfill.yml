@@ -7,6 +7,7 @@ on:
       - 'monitor/backfill_resources.py'
       - 'monitor/backfill_collection.py'
       - 'monitor/backfill_enrichment.py'
+      - 'monitor/backfill_direct.py'
       - 'core/provider_batches.py'
       - 'core/models.py'
       - 'core/migrations/**'
@@ -74,6 +75,7 @@ jobs:
           python -m ruff check monitor/backfill_resources.py
           monitor/backfill_collection.py tests/test_backfill_collection.py
           monitor/backfill_enrichment.py core/provider_batches.py
+          monitor/backfill_direct.py tests/test_backfill_direct_enrichment.py
           x_monitor/deepinfra_batch.py x_monitor/deferred_inference.py
           tests/test_backfill_native_enrichment.py tests/test_provider_batches.py tests/test_deepinfra_batch.py
           monitor/management/commands/backfill.py tests/test_backfill_resources.py
@@ -85,6 +87,7 @@ jobs:
           tests/test_backfill_pipeline.py tests/test_backfill_resources.py
           tests/test_backfill_collection.py tests/test_collection_jobs.py tests/test_collection_state.py
           tests/test_backfill_native_enrichment.py tests/test_provider_batches.py
+          tests/test_backfill_direct_enrichment.py
           tests/test_deepinfra_batch.py tests/test_deepinfra.py
           tests/test_original_content_models.py tests/test_original_content_backfill.py
           tests/test_cycle_plaintext_translation.py

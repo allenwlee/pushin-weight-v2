@@ -84,6 +84,9 @@ data/*.test*
 # Worktree isolation
 .worktrees/
 
+# Local documentation scrape cache
+.firecrawl/
+
 # Local staff-library pilot storage
 .local/staff-media/
 .local/benchmark-*/
