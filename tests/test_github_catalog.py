@@ -173,6 +173,53 @@ def test_two_page_inventory_resumes_and_distinct_events_keep_native_clocks():
     assert MetricValue.objects.count() == 0
 
 
+def test_native_repository_commit_pagination_checkpoints_and_resumes():
+    obj, repo = configured()
+    seen = []
+    ordinary = responses(repo, seen)
+    continuation = (
+        "https://api.github.com/repositories/123/commits?per_page=100&page=2"
+    )
+
+    def response(request):
+        if request.url.path in {
+            "/repos/publisher/family/commits",
+            "/repositories/123/commits",
+        }:
+            seen.append(str(request.url))
+            second = request.url.path == "/repositories/123/commits"
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "sha": ("b" if second else "a") * 40,
+                        "commit": {
+                            "author": {"date": "2026-09-02T00:00:00Z"},
+                            "tree": {"sha": "c" * 40},
+                        },
+                    }
+                ],
+                headers={} if second else {"Link": f'<{continuation}>; rel="next"'},
+            )
+        return ordinary(request)
+
+    first = execute_github_catalog(obj.pk, client=reader(response, 7))
+    assert first.status == "partial" and first.error_code == "request_cap"
+    scope = first.scopes.get(scope_key="123:commits")
+    assert scope.cursor == continuation and not scope.enumeration_complete
+    original = first.observations.get(dimensions__kind="commits")
+    assert original.listing["sha"] == "a" * 40
+
+    second = execute_github_catalog(obj.pk, client=reader(response, 20))
+    assert second.pk == first.pk and second.status == "success"
+    assert second.observations.filter(dimensions__kind="commits").count() == 2
+    original.refresh_from_db()
+    assert original.listing["sha"] == "a" * 40
+    assert seen.count(continuation) == 1
+    assert sum("/repos/publisher/family/commits?" in url for url in seen) == 1
+    assert MetricValue.objects.count() == 0
+
+
 def test_dry_run_command_never_constructs_provider_or_writes(monkeypatch):
     obj, _ = configured()
     monkeypatch.setattr(

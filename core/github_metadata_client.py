@@ -22,7 +22,7 @@ METADATA_FILES = frozenset(
 )
 NAME = r"[A-Za-z0-9_.-]{1,100}"
 ENDPOINT = re.compile(
-    rf"/(?:users/{NAME}|(?:orgs|users)/{NAME}/repos|repos/{NAME}/{NAME}(?:/(?:releases|tags|commits|git/trees/[0-9a-f]{{40,64}}|contents/(?:README\.md|config\.json|model_index\.json|generation_config\.json)))?)"
+    rf"/(?:users/{NAME}|(?:orgs|users)/{NAME}/repos|repos/{NAME}/{NAME}(?:/(?:releases|tags|commits|git/trees/[0-9a-f]{{40,64}}|contents/(?:README\.md|config\.json|model_index\.json|generation_config\.json)))?|repositories/[1-9][0-9]*/(?:releases|tags|commits))"
 )
 
 
@@ -82,7 +82,7 @@ class GitHubMetadataClient:
                 )
         return url
 
-    def get(self, url, *, params=None, etag=None):
+    def get(self, url, *, params=None, etag=None, pagination_paths=None):
         self.checked_url(url)
         headers = {
             "Accept": "application/vnd.github+json",
@@ -124,7 +124,8 @@ class GitHubMetadataClient:
                 next_url = response.links.get("next", {}).get("url")
                 if next_url:
                     require(
-                        urlsplit(next_url).path == urlsplit(url).path,
+                        urlsplit(next_url).path
+                        in (pagination_paths or {urlsplit(url).path}),
                         "untrusted pagination path",
                     )
                     try:
@@ -203,17 +204,29 @@ class GitHubMetadataClient:
         )
         return f"{API}/repos/{full_name}"
 
-    def events(self, full_name, kind, *, next_url=None, per_page=100):
+    def events(
+        self, full_name, kind, *, repository_id=None, next_url=None, per_page=100
+    ):
         require(
             kind in {"releases", "tags", "commits"}, "unsupported GitHub evidence kind"
         )
         endpoint = self.repo_url(full_name) + "/" + kind
+        paths = {urlsplit(endpoint).path}
+        if repository_id is not None:
+            require(
+                type(repository_id) is int and repository_id > 0,
+                "native repository ID required",
+            )
+            # GitHub's Link header can switch from the name to its stable ID.
+            paths.add(f"/repositories/{repository_id}/{kind}")
         require(
-            next_url is None or urlsplit(next_url).path == urlsplit(endpoint).path,
+            next_url is None or urlsplit(next_url).path in paths,
             "pagination scope mismatch",
         )
         return self.get(
-            next_url or endpoint, params=None if next_url else {"per_page": per_page}
+            next_url or endpoint,
+            params=None if next_url else {"per_page": per_page},
+            pagination_paths=paths,
         )
 
     def tree(self, full_name, revision):

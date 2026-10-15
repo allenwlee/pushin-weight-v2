@@ -373,6 +373,7 @@ def _events(claim, client, repository, kind, items, limit):
         result = client.events(
             repo["full_name"],
             kind,
+            repository_id=repo["id"],
             next_url=scoped.cursor if scoped else None,
             per_page=min(100, limit - items[0]),
         )
