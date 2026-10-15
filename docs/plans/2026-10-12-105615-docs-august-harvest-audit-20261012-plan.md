@@ -8,12 +8,18 @@ ollija:
   change_id: docs-august-harvest-audit-20261012-2026-10-12-105615
   branch: docs/august-harvest-audit-20261012
   workflow: delivery
-  delivery_target: staging
+  delivery_target: production
   delivery_selected_by_user: true
 ---
 # Audit August X gaps and prepare bounded historical recovery
 
 ## Plain-English Summary
+
+October15 owner continuation selects production readiness and observed production
+deployment of the verified backfiller. Integrate current G3 accounts, add safe
+pause/drain/resume, verify the combined release in staging, then deploy it without
+launching another campaign or transferring staging Posts. The successful1660-Post
+August9 cohort and all saved request/cost evidence remain preserved.
 
 The production audit confirms five substantial gaps in August 2026, including
 the nearly empty August 9. Exact evidence boundaries, padded recovery windows,
@@ -33,8 +39,9 @@ Collection and Render adoption are verified. Native batch enrichment is implemen
 and locally verified. On October 15 the owner selects ordinary DeepInfra API calls
 for immediate staging results, retaining native Batch for later production work.
 The 110-post staging pilot passed canonical persisted-output verification on
-October 15 at23:13:59UTC. Its already authorized continuation is processing the
-remaining posts in the 1660-post August9 cohort; full-day acceptance is pending.
+October 14 at23:13:59UTC. Full1660-post August9 enrichment passed on October15
+at01:24:32UTC; independent read-only verification at01:27:33UTC confirms0pending
+and0invalid persisted outputs. Both normal staging services run exact4a3328b2.
 Both transports share request preparation, saved replies, validation and persistence.
 
 The original 15-minute probes found no new posts. The owner widened the test
@@ -98,7 +105,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `delivery`
-- Delivery target: `staging`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 - Delivery route: `staged`
 
@@ -110,6 +117,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/docs/august-harvest-audit-20261012` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/docs/august-harvest-audit-20261012` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -124,6 +138,14 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 <!-- END OLLIJA DELIVERY GUIDE -->
 
 ## Delivery Exceptions
+
+October15 latest owner `lfg` accepts all four production-readiness steps described
+immediately before it: integrate G3, fix stopping/resuming, verify the combined
+version in staging, deploy and verify production. Delivery target is production,
+through the normal staged route. This supersedes earlier staging-only endpoint
+statements for this continuation. It does not authorize a new August/July campaign,
+Aug9 Post transfer, scheduled-credential use, production harvest pause, unrelated
+service changes or a billing upgrade. Existing source collection remains immutable.
 
 October 15 owner selection: use ordinary DeepInfra API calls for the present
 staging enrichment; native Batch acceptance is superseded for this run. Preserve
@@ -1353,3 +1375,226 @@ whole-day planning budget is2–3hours and30days60–90hours at similar volume
 completed locally before Render adoption; no fresh all-Render day collection was
 timed. The matched storage probe is not a full-day benchmark. Existing cached
 replies and lumpy publication also limit extrapolation; report actual final proof.
+
+2026-10-15T09:38:00+09:00 REPAIR SOURCE / BUILD QUOTA / ONE-OFF RESUME —
+Candidate4a3328b2f464a3670e91bc9804fe3fbae3841ea9 is verified on remote feature
+and staging refs. Hosted38660640917 passes433checks,203requiredPostgreSQL,
+0skips/errors; local final42PostgreSQL/36Ollija and Ruff passed. Configuration pin
+remains034f95d49bc4916bd2e52dd738c050a341b2b2d4b33f960fd8e29c59a0e44ffa.
+
+Both automatic service builds fail immediately: Render workspace exhausted its
+build pipeline minutes for this billing period. Webdep-db81ujjm8hqs73bn69f0 and
+donordep-db81ujjm8hqs73bn6bo0 are failures, not deployments. No billing/plan or
+production setting was changed, and no empty commit/repeated build was attempted.
+Normal exact-candidate service delivery remains blocked; web/donor live basee00.
+G3 and its production-release fork were notified of the shared quota failure.
+
+The already authorized staging test can use a separate one-off job from that
+existing immutable image. The launcher verifies envbasee00 and the old module
+hash before replacing only its job-local `monitor/backfill_enrichment.py` with
+the exact reviewed4a3328b2file, prior to any Django/module imports. Git confirms
+this is the only runtime-source difference; models/dependencies/schema/prompts
+are unchanged. New module SHA256:
+`8aa627674419f90ec8f643f0fe866dfb328fab889bc5774b751df7c60b92db39`.
+Each result attests the Render base, runtime candidate and `verified_module_overlay`
+mode. This does not claim the service is deployed at4a3328b2 or waive that delivery
+requirement. Source preflightjob-db81vtbncjis73eadihg succeeds00:36:52UTC, verifies
+1660source members/1078pending and unchanged pin, with0modelHTTP/0Postwrites.
+
+After exact433-check hosted success and terminal-old-job checks, full-day
+controllerjob-db820lij9qps73bb8hrg was created00:37:42UTC using the same verified
+source artifact. It retains32concurrency, original deadline/USD25/call/attempt
+ceilings, historical replies and unknown charges. No TwitterAPI/new collection,
+production transfer, new service or scheduler. Full-cohort acceptance is pending.
+
+2026-10-15T09:39:07+09:00 LIVE REPLAY PROGRESS — The verified-source controller
+is running and its first five original20-post packets publish19+20+20+20+20
+complete outputs through the existing canonical path, with0new model intents.
+Fresh read-only snapshot:681stored-complete/979pending, model starts unchanged1929,
+saved responses1605, no active provider groups, unchanged reservationUSD2.354417
+and provider estimateUSD0.444665. The remaining pending work still needs full
+canonical verification; cached-only progress is not a new steady inference rate.
+
+2026-10-15T10:18:10+09:00 OWNER INFRASTRUCTURE SUPPORT SCOPE — Owner explicitly
+requested removing production web's legacy persistent-disk attachment as soon as
+safe, reviewing Render billing, immediately suspending unused scrolls/web and
+scrolls-worker, and copying scrolls-db to fuchitalee before suspending that DB.
+These are bounded infrastructure operations; the backfill code delivery target
+remains staging. No production code promotion, schema mutation, service resize,
+workspace Pro upgrade or unrelated service suspension is authorized. Owner manually
+raised the build spend cap to USD10/month; retire the prior agent USD5-purchase
+step and do not change the cap again.
+
+Scrolls web srv-d5o82j24d50c73c4f7o0 and worker srv-d5o82j24d50c73c4f7ng are
+confirmed suspended at01:11:48/49UTC. DB dpg-d5o829q4d50c73c4f230-a is confirmed
+suspended at01:18:10UTC only after full custom-format pg_dump, successful isolated
+local PostgreSQL18 restore, all60table/456553row counts and content hash-sum
+matches with UTC normalization, and fresh unchanged-source verification.
+Backup on authoritative fuchitalee:
+`/Users/fuchitalee/backups/render/scrolls-db/2026-10-15/scrolls-db.pgdump`;
+59657333bytes, SHA256a1c64f805f136cd6043f3a6e1a5dd834e4114f74987eb2fd5c78f8ceb6a4e6f2.
+Local restore cluster stopped, files retained. No data or credentials were deleted.
+Private operation receipts/scripts: `~/.local/share/render-operations/2026-10-15-cost-cleanup/`.
+
+Production already uses PrivateR2Storage for both aliases, correcting the earlier
+inference from mount metadata. G1 coordination found no new consumer in its
+thread and confirms full-disk retention must include unreferenced dossiers.
+Safety work must archive/hash-check every disk file, verify current referenced
+R2 objects and no disk consumers, preserve current9cad8 production revision, and
+establish restart/recovery before deleting dsk-db0qshid0e5s73cr29ng from web only.
+Render's delete API destroys the disk, not just a reversible detach; keep the
+full archive on fuchitalee. No R2 object/DB deletion. Pending until verified.
+
+Backfill remains active independently:01:15:56UTC1660cohort,1449stored complete,
+211pending,3354modelstarts/3030saved replies,1historical ambiguous call,0Xcalls.
+Full-day acceptance remains pending.
+
+2026-10-15T10:25:15+09:00 INFRASTRUCTURE RESULTS — Owner's build cap change
+unblocks normal staging builds. Exact4a3328b2 is observed live on staging web
+at01:24:34UTC(dep-db82llpsrm7s738g0pig) and jobs donor at01:24:34UTC
+(dep-db82m1gm7kps73cq8tc0). Cron API rejected commitId without starting a build;
+branch-only retry first verified remote staging4a3328b2 and returned that exact
+candidate. No empty commit, main push or current-controller handover.
+
+Full production disk archive verifies all78files/40860456bytes, including
+unreferenced dossiers; source hashes unchanged through archive,0open disk FDs.
+Read-only/no-disk production9cad8 image job-db82m13ncjis73ecreh0 succeeds01:24:05UTC:
+35/35staffobjects,20060954bytes, identical inventory digest,0errors/copies;
+editorial alias reads the pinned historical probe,0generated referenced objects,
+both aliases PrivateR2Storage/durable. Prior read-only probe failed on assuming
+an old probe payload had the new schema key; all retained, corrected verification
+uses its archived exact digest. No application/data repair was needed.
+Production disk dsk-db0qshid0e5s73cr29ng deleted with HTTP204 after all guards;
+metadata disk:null,lookup404,webHTTP200 at01:25:15UTC. Full archive/receipt:
+`/Users/fuchitalee/backups/render/pushinweight-production-media/2026-10-15/`.
+The old running namespace still showed its mount after API removal, so a necessary
+same-revision restart was requested via REST200; final runtime detach/health proof
+is pending. Preserve production9cad8 and all R2/DB data; no other prod service action.
+
+2026-10-15T10:24:32+09:00 FULL-DAY CONTROLLER SUCCESS —
+job-db820lij9qps73bb8hrg finishes succeeded01:24:32UTC. Its final
+DIRECT_DAY_VERIFIED at4a3328b2 reports1660cohort,0pending,0invalid persisted
+outputs,0active groups, unchanged controls/cursors/backlog/source evidence.
+Actual current-controller wall2780.414seconds(46m20s),CPU277.670seconds,
+peak310.75MiB on0.5CPU/512MB. This resumed previously purchased/saved work;
+it is not a fresh end-to-end collection/enrichment benchmark. Historical cumulative
+ledger3587modelstarts/3263saved replies,2936ordinary modelstarts,80controls;
+provider estimateUSD0.953286,reservedUSD4.596895,324unknown-cost calls including
+cancelled native work/one reconciled ambiguous lost-response call. These are not
+final invoices. ZeroTwitterAPI enrichment calls; originalUSD25/deadline retained.
+Independent fresh read-only canonical verification after normal4a deployment is
+pending. No new campaign/production transfer/month run is authorized.
+
+2026-10-15T10:27:33+09:00 INDEPENDENT FINAL ACCEPTANCE — Fresh read-only
+canonical verification against staging after its normal4a3328b2deployment passes:
+1660source members,0pending,0invalid outputs,0active groups,0TwitterAPI calls.
+Saved `data/backfill-fixes-20261013/full-day-independent-verification.json` and
+terminal markers. No paid retries were needed for this verification. The source
+collection/full-cohort enrichment acceptance for this fixed staging day is complete.
+PR58 description now carries final evidence and the remaining main/G3 merge
+conflict; no production backfill promotion or future campaign is implied.
+The manual-handover fence-revocation regression remains a named follow-up before
+relying on automatic handovers, not a performed/passed check in this run.
+
+2026-10-15T10:29:00+09:00 DISK CLEANUP COMPLETE — Production restart retains
+9cad8f6b9ce4085cd68d3f31316f800cf8037477 and actual new ready instancefl552.
+Live process confirms media root absent and no mounted legacy disk. Read-only
+runtime verification successfully reads a hash-matching staff image and the exact
+archived editorial probe from R2; siteHTTP200 after restart. API disk:null and
+removed disk404 persist. No R2 files, Posts, production database, harvest or other
+production service were changed. Safety backups/receipts stay on fuchitalee.
+
+Cost review: Scrolls pause removes an estimatedUSD38/month in ongoing compute
+at published list rates; retained database storage remains separate. Remaining
+always-on compute estimatesUSD80/month excluding storage, cron/one-off jobs,
+builds, bandwidth and adjustments. Actual full invoice/unbilled review is incomplete:
+MacBook SSH stopped responding after included-usage read; optional connectivity
+question pending. OwnerUSD10/month build cap retained; no agent purchase/upgrade.
+Full private analysis `~/.local/share/render-operations/2026-10-15-cost-cleanup/billing-review.md`.
+
+## Production-readiness continuation — October15 (U10–U13)
+
+### Requirements and fixed boundaries
+
+- R10: combine G3 main9cad8 account updates0083/0084 with existing backfill0085;
+  preserve Account identity/writers, collections and all1660staging outputs.
+- R11: a durable campaign pause prevents fresh admission. Drain already-sent
+  calls while permitting response import; only acknowledge cancellation safety
+  after revoking every old processing fence under the same admission lock.
+  Resume keeps completed responses, unstarted reservations, unknown charges,
+  original budgets/deadline and source membership. Stale workers cannot send.
+- R12: real PostgreSQL/caller regressions demonstrate the previously missing
+  stale-worker and in-flight drain behavior; combined staging schema and existing
+  canonical cohort pass. No new paid collection/enrichment is needed for readiness.
+- R13: observe the same reviewed candidate deployed in production, schema/current
+  writers compatible, natural harvest unaffected, and manual batch role has the
+  on-demand TwitterAPI purpose plus expected LLM access. Read-only/zero-provider
+  readiness only; no new job instruction, recovery launch or staging-data import.
+
+### Persistence and file scope
+
+Reuse CollectionJob/Run/ScopeRun/Observation, the approved ProviderBatch execution
+record and OriginalContentCall ledger. Put mutable enrichment control in the first
+ProviderBatch.policy for the campaign, separate from immutable source instructions
+and request identity. Existing data has an implicit active control state. This
+adds0tables/0columns for stopping;0085's previously approved ProviderBatch adds1
+execution table/retire0. G3 account migrations and0085 require an empty dependency
+merge migration after ownership confirmation. No alternate backfill job/run table.
+
+U10 — integrate G3 and database histories. Merge main on this existing feature
+branch; preserve both sides of docs/reference/db-schema.md and regenerate only
+its documented schema inventory as needed. G3 must confirm0086ownership/name
+before adding the merge migration. Verify migration orders from0084and0085 in
+isolated PostgreSQL18; no reapplication of existing production account migrations.
+Files: core/models.py (merge only), core/migrations/0086_*.py, schema reference,
+existing focused migration tests and staging-refresh documents brought by main.
+
+U11 — safe enrichment pause/drain/resume. Files: core/provider_batches.py,
+monitor/backfill_direct.py, monitor/backfill_enrichment.py,
+monitor/management/commands/backfill.py, tests/test_backfill_direct_enrichment.py,
+tests/test_provider_batches.py and tests/test_backfill_native_enrichment.py.
+Use one consistent CollectionJob→ProviderBatch row-lock order for admission and
+control. The canonical first ProviderBatch.policy stores paused state, audit
+reason/actor/time and bounded history. No DB/network lock spans provider wait.
+Pause blocks new claims/reservations/model or control POST admission, allows
+existing response imports, reports draining while calls are sent, and revokes
+owner/fence only once sent calls are zero in the checked transaction. The public
+backfill command exposes pause/resume/status with explicit source job and reason;
+read-only paths need no provider keys. Operator cancels the old Render job only
+once pause reports safe, verifies it terminal, then resumes. Never claim a force
+kill can recover a lost remote reply or automatically retry ambiguous work.
+Tests must first fail for stale worker before sent admission, then cover an
+in-flight fake provider reply saved during pause, no remaining-wave starts,
+resumption without repeated completed calls, unchanged budgets/source/cursors,
+unknown-response refusal and concurrent pause/admission using separate connections.
+Native transport remains supported; pausing must not fabricate remote cancellation.
+
+U12 — integrated assurance and staging. Run the backfill CI regression set,
+required PostgreSQL tests with0skips/errors, G3 account/migration tests, Ollija,
+focused lint/system/schema drift checks. Reuse completed433/203 evidence only for
+unchanged paths; new combined code needs its relevant checks. Simplify and review
+per LFG; preserve named residuals. Push existing PR58 branch, stage exact candidate
+without force, verify web/jobs revisions, schema and1660canonical outputs with
+zero provider calls. Test control on the existing completed campaign only through
+an audited pause/resume that preserves outputs/budgets/history; real active/inflight
+cases belong to isolated fake-provider PostgreSQL caller tests.
+
+U13 — production delivery and readiness. After staged acceptance/CI, merge the
+existing PR58 through the authorized ordinary Git route. Preserve unrelated main
+changes and all runtime commands/schedules/flags. Additive0085plus merge migration
+runs serialized through existing migration tooling, with bounded database lock
+wait; production accounts already applied. Read-only before/after counts and
+old-writer/default checks must prove existing Post/account/authored records remain
+valid. Verify actual production candidate and required services, healthy web/media,
+manual-job credential purpose availability and expected enrichment model settings.
+No unrequested harvest pause or paid provider probe. Backfill instructions and
+new month/remaining-August collection remain unlaunched. Record and preserve
+source receipts before any guarded final linked-worktree cleanup.
+
+### Definition of done
+
+All R10–R13 have observed evidence: combined code/migrations pass, stop/drain/resume
+regressions pass, unchanged1660staging cohort validates, current PR58 resolves,
+CI is decided and exact production revision plus zero-provider batch readiness
+are observed. Report any unmet gate as unmet; never substitute a green process
+exit or staging success for production verification.
