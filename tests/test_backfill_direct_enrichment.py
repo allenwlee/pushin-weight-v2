@@ -91,6 +91,80 @@ def test_direct_real_callers_publish_and_reuse_without_file_requests(native):
     assert provider.sent == sent
 
 
+def test_completed_classifier_packets_survive_changed_pending_page(native, monkeypatch):
+    """A changed page must consume saved packets before regrouping their cases."""
+    from django.db import transaction
+
+    from core.models import CollectionRun, Post, PostBrand, PostEnrichmentState
+    from core.provider_batches import record_post_membership
+    from monitor import backfill_enrichment as enrichment
+
+    job, _, _, _ = native
+    run = CollectionRun.objects.get(job=job)
+
+    def add_members(ids):
+        for identifier in ids:
+            post = Post.objects.create(
+                tweet_id=identifier, text="I tried Qwen today.", lang="en"
+            )
+            PostBrand.objects.create(post=post, brand_id="qwen")
+            PostEnrichmentState.objects.create(post=post)
+        with transaction.atomic():
+            record_post_membership(run, None, ids)
+
+    add_members([f"native-{i:02}" for i in range(3, 23)])
+    provider = DirectProvider()
+    run_direct(native, provider, initial=True, concurrency=32)
+    # The final two-case packet can already publish; preserve those complete
+    # Posts while the earlier twenty-case packet remains ready for replay.
+    complete = list(Post.objects.order_by("pk").values_list("pk", flat=True))[20:]
+    _, _, missing = enrichment.prepare_page(job, complete, native[1], delegates=native[2])
+    assert not missing
+    before = list(Post.objects.filter(pk__in=complete).order_by("pk").values())
+    saved = list(OriginalContentCall.objects.filter(
+        stage="classification", state="completed", import_state="pending",
+    ).values_list("pk", "response_hash"))
+    assert saved
+    unused = OriginalContentCall.objects.filter(
+        stage="classification", member_post_ids=complete, import_state="applied",
+    ).first()
+    assert unused is not None
+    # A retained reply for already-complete members must not block fresh work,
+    # and must not be cleared just to make admission succeed.
+    unused.import_state = "pending"
+    unused.save(update_fields=["import_state"])
+    sent = provider.sent
+
+    # BEFORE: this earlier ID shifts the classifier's twenty-case packets and
+    # admission refuses buying the already completed overlapping member work.
+    add_members(["native-0"])
+    original_register = enrichment._register_requests
+
+    def register(job, requests, *args, **kwargs):
+        assert PostEnrichmentState.objects.exclude(pk="native-0").filter(
+            translation_status="succeeded", classification_status="succeeded",
+        ).count() == 22
+        assert all(r["context"]["post_ids"] == ["native-0"] for r in requests)
+        return original_register(job, requests, *args, **kwargs)
+
+    monkeypatch.setattr(enrichment, "_register_requests", register)
+    for _ in range(5):
+        result = run_direct(native, provider, concurrency=32)
+        if result["status"] == "completed":
+            break
+    assert result["status"] == "completed", json.dumps(result)
+    assert result["cohort_count"] == 23
+    assert result["persisted_output_invalid_count"] == 0
+    assert provider.sent == sent + 4  # Only the newly added Post needs inference.
+    assert list(Post.objects.filter(pk__in=complete).order_by("pk").values()) == before
+    unused.refresh_from_db()
+    assert unused.import_state == "pending"
+    for identifier, response_hash in saved:
+        call = OriginalContentCall.objects.get(pk=identifier)
+        assert call.import_state == "applied"
+        assert call.response_hash == response_hash
+
+
 def test_direct_invalid_concurrency_refused_before_paid_work(native):
     from core.provider_batches import BatchAdmissionError
 

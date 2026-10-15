@@ -32,7 +32,9 @@ and no repeated collection or completed model work.
 Collection and Render adoption are verified. Native batch enrichment is implemented
 and locally verified. On October 15 the owner selects ordinary DeepInfra API calls
 for immediate staging results, retaining native Batch for later production work.
-The staging pilot and full-day persisted outputs remain the acceptance work.
+The 110-post staging pilot passed canonical persisted-output verification on
+October 15 at23:13:59UTC. Its already authorized continuation is processing the
+remaining posts in the 1660-post August9 cohort; full-day acceptance is pending.
 Both transports share request preparation, saved replies, validation and persistence.
 
 The original 15-minute probes found no new posts. The owner widened the test
@@ -799,7 +801,7 @@ prerequisite, not renewed approval for the already authorized backfill or move.
 
 - 2026-10-14T05:26:48.193648+00:00 FINAL SOURCE VERIFIED — fd6f9594 live on staging web/build donor; source-check job-db7gt9k9v7es73c1i610 succeeded,1660IDs reconciled,0API/models,state unchanged. CIall4green. Same18-update timing105.618s outlier; bounded diagnostic job-db7h2ajbc2fs73f6ona0 succeeded at1.714s writer/2.381s total,1.579s SQL(380statements),1.322CPU seconds,106.5MiB peak memory. Outlier unaccounted, no stable full-day/month throughput claimed. Acceptance is frozen and fulfilled; no further new-date/provider/performance batches. Remaining changes are evidence-only closeout.
 
-## U9 — Batch enrichment for month-or-longer recovery [ordinary API transport selected; implementation active]
+## U9 — Batch enrichment for month-or-longer recovery [ordinary API pilot passed; full day active]
 
 ### Owner requirement and present state
 
@@ -1281,3 +1283,73 @@ Add canonical cached-response validation before replay and persist rejection evi
 
 
 2026-10-15T08:26:10+09:00 ORDINARY THROUGHPUT REPAIR — Live full-day peak208.78MiB with32in-flight cap, while repeated Post preparation between64-call groups consumes53–77seconds/advance. Restore the existing2000request/16MiB durable manifest bound for ordinary transport; send at most8waves per advancement, each capped at32HTTP (adjustable1–128), releasing/reacquiring the fenced parent between waves. Stop waves on ambiguity, provider backoff, terminal group or campaign deadline; no prompt/model/configuration-pin/schema/budget change. Two first local test commands accidentally overlapped on the same task-owned local PG DB and produced flush/deadlock collisions; both are retained as non-green environment evidence. Serial rerun41requiredPG passes0skips/errors. Pins cover eager small-wave drain,8-wave ceiling, durable unstarted calls,32overlap/no workerDB, admission, ambiguity,429, native cache reuse and real publishers. Prepare a guarded handover: hold only this campaign/parent admission locks, require0sent/ambiguous requests, cancel only owned old runner and verify terminal before release, then resume new exactrevision with all reservations/responses/costs/deadline retained. Do not interrupt inference or reset state.
+
+
+2026-10-15T08:36:40+09:00 DRAIN DELIVERY / SAFE HANDOVER — Exacte00ade10def8b238d80b874902a1b22fd47f0540 is remote feature/staging and observed live on webdep-db80vcmk1f9s73e1csm0 / donordep-db80vcmk1f9s73e1cug0. Hosted38654150810 passes432checks/202requiredPG0skips/errors. Original controller kept running on immutable278d during build. First handover probe met a busy campaign row and exited on500ms lock timeout with no cancellation; retry handles only that expected contention. Verified campaign/parent admission barrier and0sent/ambiguous calls, cancelled only job-db80p0avcj2c73fooh60, observed terminal before releasing locks; all unstarted reservations/responses preserved,0in-flight interruptions. New_e00controller resumes32in-flight,≤8waves/advance with same configuration pin/profiles/budgets/deadline; no schema/production changes. Read-only first100pending frontier has0longposts, so no inferred long-post starvation defect is claimed. Full1660canonical acceptance still pending.
+
+
+2026-10-15T08:52:45+09:00 HANDOVER CORRECTION / EXPLICIT UNKNOWN RECONCILIATION — Later audit finds call1282marked sent23:35:41.327,2.118s after oldRenderjob terminal timestamp23:35:39.209;0sent was true at the barrier query, but the handover did not prevent a later send marker. Cancellation grace/clock ordering is an inference, not proven provider execution. Old call has no response and reservedUSD0.001683; direct remote outcome remainsunknown. First replacement fails on retained lease until23:40:41; startup now waits without SQL transaction/modelHTTP. Next e00job marks that call ambiguous and stops after preview, as designed. General response/literal validators remain strict.
+
+G3 requires preserving ambiguous state/reservation and no fabricated provider failure. Confirmed old/newcontrollers terminal, then explicitly reconcile only call1282under original paid staging/max3 authority and campaign/parent/call locks: state remainsambiguous, remote outcomeunknown, import_stateerror with operator reason/actor/time, originalstate and planned next identity. Packet/response(empty)/hashes/charges/actualUSDNone unchanged. Budget check includes both reservations, nextattempt2≤3, sameUSD25/20000request/originaldeadline. Parent locallyfailed for lost controller response; provider_status is unchanged. Initial operator guard expected{} although schema correctly storesNULL; it failed before writes and rolled back. Corrected no-response check acceptsNULL and{}. Reconciliation succeeded with0modelcalls; replacementidentitycd92ebcd0626ae1af4397eaf3ccae96583a6caf95ff0b6ae605d4852c19b386d. Private controller blocks only unreconciled ambiguous/pending work; totalunknown history remainsreported. No schema/model/prompt/source-data/cursor changes or fabricatedsuccess. Futurehandover must revoke processing fences while still holding barrier and test stale resume refused beforeHTTP; currenttask will finish without another unnecessaryhandover.
+
+2026-10-15T09:05:00+09:00 FULL-DAY PROGRESS — The current controller is
+`job-db81b98u01pc738hhaig`, started23:52:05UTC on exacte00ade10. At00:03:37UTC,
+392 of1660posts have both stored stages succeeded,1268remain pending; this is
+progress, not full-cohort canonical acceptance. Physical ledger totals1712sent,
+1388responses, USD2.074686reserved/USD0.377173provider estimates include all
+historical native/cancelled calls. The324unknown-cost calls include the one
+operator-reconciled ambiguous response; none is silently priced at zero.
+Second advance408.070wall/37.615CPU seconds, peak257.23MiB on0.5CPU/512MB;
+32in-flight is an application choice, not a Render-imposed request count.
+Source/control/cursor/backlog checks continue to pass; zeroTwitterAPI.
+
+The cached-only diagnostic `job-db81etpsrm7s738bo450` checks the actual literal
+translator on the first100pending posts using201saved replies, with provider
+HTTP forbidden and no Post writers. It finishes in0.256wall/0.155CPU seconds;
+the only failure is two missing target-language replies for2086280648650629293,
+not a new copy-validator rejection. Missing replies are prepared by the ordinary
+controller; no additional model requests were made by the diagnostic.
+
+2026-10-15T09:28:00+09:00 REGROUPING REPAIR — Full-day controller stopped at
+00:12:05UTC after `model_member_work_already_outstanding`, with582stored-complete
+and1078pending posts,1929physical model starts/1605saved responses, USD2.354417
+reserved/USD0.444665provider estimates. No new ambiguous request or active parent;
+the previously reconciled unknown remains retained. Peak261.01MiB. This is an
+adapter failure, not evidence of a Render CPU/memory or provider concurrency cap.
+
+The bounded zero-HTTP/all-writes-rolled-back Render diagnosis
+`job-db81pgdg1s2s738mva5g` finds18overlaps after pending100-post pages shift
+classifier twenty-case packets. Their per-member fingerprints still match saved,
+completed/pending calls. Replaying one original20-post packet through the existing
+canonical `prepare_page` yields19successes,1pending,0missing and0new model intents.
+TOUCH only `monitor/backfill_enrichment.py`, its real-caller regression and this
+plan; PRESERVE shared admission guard/schema, source/configuration pin, prompts,
+models, budgets/deadline, native/direct transport and Post publishers. G3 informed.
+
+Before fresh paging, consume up to20unique original classifier packets selected
+from at most40saved call rows that overlap still-pending classifier members.
+Unused replies for already-complete members stay recorded without blocking new
+work. Unconsumed packets retain their original identity, raw reply and pending
+state; defer fresh regrouping while needed cached packets remain. If a canonical
+replay has no missing dependencies but does not consume a needed packet, report
+`cached_classifier_packet_not_consumed` instead of looping indefinitely. Reuse the
+same canonical writer/validation rather than synthesizing responses or clearing
+pending evidence to buy overlapping work. No shared storage changes or new tables.
+A23-post actual-caller regression fails with the live admission error before the
+fix, then completes all23canonical outputs with only4new calls for the added Post
+and all saved reply hashes preserved. Complete control Post fields remain exact;
+an unneeded pending reply is preserved without blocking new work. Final focused
+42PostgreSQL checks pass,0skips/errors;36Ollija checks and Ruff pass. Inline review
+covers bounded queries, canonical replay, completed-member preservation, retained
+orphan evidence, failure reporting and unchanged admission/budgets/schema.
+Hosted/staging proof of this repair is pending.
+
+Owner estimate questions: current ordinary enrichment already caps32in flight;
+setting the same cap again provides no speedup. In the latest running interval,
+298→582stored-complete posts over1123.236seconds gives about15.2posts/minute,
+roughly71minutes for1078remaining if that pace holds after repair. Provisional
+whole-day planning budget is2–3hours and30days60–90hours at similar volume
+(about50000Posts), not a measured end-to-end/month guarantee. August9fetching
+completed locally before Render adoption; no fresh all-Render day collection was
+timed. The matched storage probe is not a full-day benchmark. Existing cached
+replies and lumpy publication also limit extrapolation; report actual final proof.

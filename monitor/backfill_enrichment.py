@@ -11,6 +11,7 @@ from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
+from django.contrib.postgres.expressions import ArraySubquery
 from django.db import connection, transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
@@ -439,6 +440,40 @@ def prepare_page(job, ids, cfg, *, delegates=None):
     return list(prepared.values()), result, bool(missing)
 
 
+def _replay_pending_classifier_packets(job, cfg, *, selection, delegates, limit):
+    """Consume paid replies in their original packets before regrouping Posts."""
+    pending = PostEnrichmentState.objects.filter(
+        source_collection_job=job, classification_status="pending",
+    ).order_by().values("post_id")
+    replies = OriginalContentCall.objects.filter(
+        provider_batch__source_collection_job=job,
+        stage="classification", state="completed", import_state="pending",
+        member_post_ids__overlap=ArraySubquery(pending),
+    )
+    if selection:
+        replies = replies.filter(member_post_ids__overlap=selection)
+    packets = list(replies.order_by("reserved_at").values_list(
+        "member_post_ids", flat=True,
+    )[:40])
+    requests, seen = [], set()
+    for ids in packets:
+        packet = tuple(sorted(ids))
+        if packet in seen:
+            continue
+        seen.add(packet)
+        prepared, _, missing = prepare_page(job, list(packet), cfg, delegates=delegates)
+        requests.extend(prepared)
+        if not missing and replies.filter(member_post_ids=list(packet)).exists():
+            # The canonical caller no longer consumes this saved context. Keep
+            # its evidence and report it instead of deferring fresh work forever.
+            raise BatchAdmissionError("cached_classifier_packet_not_consumed")
+        if len(seen) >= 20 or len(requests) >= limit:
+            break
+    # A saved packet may still need another reply. Keep its identity and let
+    # those dependencies finish instead of buying a differently packed copy.
+    return requests, replies.exists()
+
+
 def _update(claim, **values):
     with fenced_batch(claim, allow_expired_deadline=True) as batch:
         for key, value in values.items():
@@ -755,13 +790,16 @@ def execute_enrichment(
             ]
         ):
             advance(batch)
-        requests = []
+        request_limit = direct_concurrency * 2 if transport == "direct" else 2000
+        requests, cached_packets_remain = _replay_pending_classifier_packets(
+            job, cfg, selection=selection, delegates=delegates, limit=request_limit,
+        )
         after = ""
         work = observations.filter(
             Q(post__enrichment_state__translation_status="pending")
             | Q(post__enrichment_state__classification_status="pending")
         )
-        for _ in range(20):
+        for _ in range(0 if cached_packets_remain else 20):
             ids = list(
                 work.filter(post_id__gt=after)
                 .order_by("post_id")
@@ -783,7 +821,7 @@ def execute_enrichment(
                 continue
             prepared, _, _ = prepare_page(job, pending, cfg, delegates=delegates)
             requests.extend(prepared)
-            if len(requests) >= (direct_concurrency * 2 if transport == "direct" else 2000):
+            if len(requests) >= request_limit:
                 break
         for batch_id in _register_requests(
             job, requests, policy, cfg,
