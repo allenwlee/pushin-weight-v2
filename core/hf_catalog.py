@@ -15,6 +15,7 @@ from django.db import DataError, connection, transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from core.account_identity import publisher_discovery_label, publisher_identifier
 from core.hf_metadata_client import INVENTORY_VERSION, NAMESPACE, REPO_ID
 from core.measurement_taxonomy import digest
 from core.models import (
@@ -25,10 +26,10 @@ from core.models import (
     CollectionScopeRun,
     Company,
     DataSource,
-    HFOrg,
     Product,
 )
 from core.product_metadata import apply_metadata
+from core.publisher_accounts import get_publisher, publisher_links
 
 FRONTIER_COMPANIES = ("openai", "anthropic", "google", "xai")
 CATALOG_LOCK = 6842060924
@@ -71,34 +72,34 @@ def resolve_scope(*, brands=None, companies=None, namespace=None, rules=None):
         if not Company.objects.filter(pk=company).exists():
             gaps.append({"company": company, "reason": "missing_company"})
             continue
-        orgs = HFOrg.objects.filter(company_id=company)
+        orgs = publisher_links(source="hf", company_id=company)
         if namespace:
-            orgs = orgs.filter(namespace=namespace)
+            orgs = orgs.filter(account__normalized_identifier=namespace.casefold())
         if not orgs.exists():
             gaps.append({"company": company, "reason": "missing_namespace"})
         for org in orgs:
-            if not org.confirmed:
+            if not org.ownership_confirmed:
                 gaps.append(
                     {
                         "company": company,
-                        "namespace": org.pk,
+                        "namespace": publisher_identifier(org.account),
                         "reason": "unconfirmed_namespace",
                     }
                 )
                 continue
-            if not NAMESPACE.fullmatch(org.pk):
+            if not NAMESPACE.fullmatch(publisher_identifier(org.account)):
                 raise ValueError("invalid stored HF namespace")
             entries.append(
                 {
-                    "namespace": org.pk,
+                    "namespace": publisher_identifier(org.account),
                     "company": company,
                     "brands": sorted(
                         BrandCompany.objects.filter(
                             company_id=company, brand__is_sentinel=False
                         ).values_list("brand_id", flat=True)
                     ),
-                    "ownership_evidence": org.discovered_via,
-                    "source_url": f"https://huggingface.co/{org.pk}",
+                    "ownership_evidence": publisher_discovery_label(org.account),
+                    "source_url": f"https://huggingface.co/{publisher_identifier(org.account)}",
                 }
             )
     entries.sort(key=lambda row: row["namespace"].casefold())
@@ -208,14 +209,14 @@ def persist_product(observation, entry, rules, payload, group):
         or observation.scope_run.run_id != observation.run_id
     ):
         raise ValueError("HF catalog projection requires matching catalog evidence")
-    org = HFOrg.objects.select_for_update().get(pk=entry["namespace"])
+    org = get_publisher(source="hf", identifier=entry["namespace"], lock=True)
     brands = sorted(
         BrandCompany.objects.select_for_update()
         .filter(company_id=org.company_id, brand__is_sentinel=False)
         .values_list("brand_id", flat=True)
     )
     if (
-        not org.confirmed
+        not org.ownership_confirmed
         or org.company_id != entry["company"]
         or brands != entry["brands"]
     ):
@@ -223,7 +224,7 @@ def persist_product(observation, entry, rules, payload, group):
     product, created = Product.objects.get_or_create(
         repo_id=observation.source_identifier,
         defaults={
-            "hf_org": org,
+            "publisher_account": org.account,
             "brand_id": resolve_brand(observation.source_identifier, entry, rules),
             "display_name": observation.source_identifier.split("/", 1)[1],
         },
@@ -231,7 +232,7 @@ def persist_product(observation, entry, rules, payload, group):
     product = Product.objects.select_for_update().get(pk=product.pk)
     if (
         product.hf_type != "model"
-        or (product.hf_org_id and product.hf_org_id.casefold() != org.pk.casefold())
+        or (product.hf_namespace and product.hf_namespace.casefold() != publisher_identifier(org.account).casefold())
         or (product.brand_id and product.brand_id not in brands)
     ):
         observation.processing_outcome = "owner_conflict"
@@ -242,11 +243,11 @@ def persist_product(observation, entry, rules, payload, group):
     observation.processing_outcome = (
         "complete" if groups_complete(observation.groups) else "pending"
     )
-    if not product.hf_org_id:
-        product.hf_org = org
+    if not product.publisher_account_id:
+        product.publisher_account = org.account
     if not product.brand_id:
         product.brand_id = resolve_brand(observation.source_identifier, entry, rules)
-    product.save(update_fields=["brand", "hf_org", "updated_at"])
+    product.save(update_fields=["brand", "publisher_account", "updated_at"])
     try:
         with transaction.atomic():
             apply_metadata(

@@ -3,6 +3,30 @@
 from django.db import transaction
 
 
+def _namespace_discovery(account):
+    evidence = account.provider_metadata.get("namespace_discovery_evidence", {})
+    if (
+        account.data_source_id == "hf"
+        and isinstance(evidence, dict)
+        and isinstance(evidence.get("namespace"), str)
+        and evidence["namespace"].casefold() == account.normalized_identifier
+    ):
+        return evidence
+    return {}
+
+
+def publisher_identifier(account):
+    """Preserve a migrated namespace's presentation while its identity matches."""
+    return _namespace_discovery(account).get("namespace", account.external_identifier)
+
+
+def publisher_discovery_label(account):
+    """Keep namespace evidence separate from independent account provenance."""
+    return _namespace_discovery(account).get(
+        "discovered_via", account.provider_metadata.get("discovered_via", "curated")
+    )
+
+
 def normalize_account(account):
     # An explicit legacy author_id is the X adapter boundary, not a generic default.
     if not account.data_source_id and account.author_id is not None:

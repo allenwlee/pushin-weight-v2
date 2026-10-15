@@ -245,8 +245,8 @@ def _census_digest(rows: list[tuple[str, int]]) -> str:
 
 
 def _classify_accounts(queryset, manifest: dict[str, Any]) -> Classification:
-    normalized = queryset.exclude(account_based_in__isnull=True).exclude(
-        account_based_in=""
+    normalized = queryset.exclude(x_details__account_based_in__isnull=True).exclude(
+        x_details__account_based_in=""
     )
     mappings = {
         item["value"]: (item["country_code"], item["region_key"])
@@ -255,13 +255,13 @@ def _classify_accounts(queryset, manifest: dict[str, Any]) -> Classification:
     explicit_unresolved = set(manifest["explicit_unresolved_values"])
 
     census_rows = list(
-        normalized.values("account_based_in")
+        normalized.values("x_details__account_based_in")
         .annotate(row_count=Count("author_id"))
-        .order_by("account_based_in")
-        .values_list("account_based_in", "row_count")
+        .order_by("x_details__account_based_in")
+        .values_list("x_details__account_based_in", "row_count")
     )
     state_rows = normalized.values(
-        "account_based_in", "country_id", "based_in_region_id"
+        "x_details__account_based_in", "country_id", "based_in_region_id"
     ).annotate(row_count=Count("author_id"))
 
     totals: Counter[str] = Counter()
@@ -269,7 +269,7 @@ def _classify_accounts(queryset, manifest: dict[str, Any]) -> Classification:
     unknown_values: set[str] = set()
     would_change = 0
     for raw, country_id, region_id, row_count in state_rows.values_list(
-        "account_based_in", "country_id", "based_in_region_id", "row_count"
+        "x_details__account_based_in", "country_id", "based_in_region_id", "row_count"
     ):
         target = mappings.get(raw)
         if target is not None:
@@ -430,8 +430,8 @@ class Command(BaseCommand):
             }
             unresolved = set(manifest["explicit_unresolved_values"])
             candidates = account_queryset.exclude(
-                account_based_in__isnull=True
-            ).exclude(account_based_in="")
+                x_details__account_based_in__isnull=True
+            ).exclude(x_details__account_based_in="")
             for account in candidates.iterator(chunk_size=options["chunk_size"]):
                 target_pair = mappings.get(account.account_based_in)
                 if target_pair is None and account.account_based_in in unresolved:

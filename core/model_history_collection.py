@@ -30,7 +30,7 @@ from core.models import (
     CollectionJob,
     CollectionObservation,
     CollectionRun,
-    HFOrg,
+    CompanyAccount,
 )
 from scripts.benchmark_download_collector.sources import (
     Budget,
@@ -159,7 +159,7 @@ def execute_model_history(job_id, *, budget=None, key=None):
     before = budget.remaining
     try:
         return _execute_models(claim, job, budget, key=key, before=before)
-    except (ValueError, TypeError, KeyError, HFOrg.DoesNotExist) as exc:
+    except (ValueError, TypeError, KeyError, CompanyAccount.DoesNotExist) as exc:
         prior = CollectionRun.objects.get(pk=claim.run_id)
         return finish_run(
             claim,

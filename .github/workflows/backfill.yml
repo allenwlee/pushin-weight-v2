@@ -34,6 +34,8 @@ on:
       - 'tests/test_hybrid_harvest_regression_net.py'
       - 'tests/test_harvest_surface_regression_net.py'
       - 'tests/conftest.py'
+      - 'tests/test_account*.py'
+      - 'tests/test_publisher_accounts.py'
       - '.github/workflows/backfill.yml'
   workflow_dispatch:
 
@@ -76,6 +78,8 @@ jobs:
           monitor/backfill_collection.py tests/test_backfill_collection.py
           monitor/backfill_enrichment.py core/provider_batches.py
           monitor/backfill_direct.py tests/test_backfill_direct_enrichment.py
+          tests/test_backfill_enrichment_control.py tests/test_backfill_account_merge_migration.py
+          tests/test_account_user_about_model.py
           x_monitor/deepinfra_batch.py x_monitor/deferred_inference.py
           tests/test_backfill_native_enrichment.py tests/test_provider_batches.py tests/test_deepinfra_batch.py
           monitor/management/commands/backfill.py tests/test_backfill_resources.py
@@ -88,6 +92,7 @@ jobs:
           tests/test_backfill_collection.py tests/test_collection_jobs.py tests/test_collection_state.py
           tests/test_backfill_native_enrichment.py tests/test_provider_batches.py
           tests/test_backfill_direct_enrichment.py
+          tests/test_backfill_enrichment_control.py tests/test_backfill_account_merge_migration.py
           tests/test_deepinfra_batch.py tests/test_deepinfra.py
           tests/test_original_content_models.py tests/test_original_content_backfill.py
           tests/test_cycle_plaintext_translation.py
@@ -97,3 +102,6 @@ jobs:
           tests/test_cycle_error_counters.py tests/test_hybrid_harvest_regression_net.py
           tests/test_harvest_surface_regression_net.py
           tests/test_literal_translation_plaintext.py tests/test_translator_literal.py
+          tests/test_account_extensions.py tests/test_account_extensions_migration.py
+          tests/test_publisher_accounts.py tests/test_collection_schema_regression_net.py
+          tests/test_account_user_about_model.py

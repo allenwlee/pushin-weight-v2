@@ -10,6 +10,9 @@ on:
       - 'monitor/management/commands/import_hf_backfill.py'
       - 'core/hf_metadata_client.py'
       - 'core/account_identity.py'
+      - 'core/publisher_accounts.py'
+      - 'tests/test_account_extensions*.py'
+      - 'tests/test_publisher_accounts.py'
       - 'core/intelligence_readers.py'
       - 'monitor/management/commands/load_seed.py'
       - 'tests/test_load_seed_account_observation.py'
@@ -120,3 +123,11 @@ jobs:
           tests/test_github_metadata_client.py tests/test_github_catalog.py
           tests/test_model_history_cohort.py tests/test_model_inventory.py
           tests/test_model_history_collection.py tests/test_hf_catalog_runner.py
+      - name: Shared account extension and migration preservation
+        run: >-
+          python -m pytest -q tests/test_account_extensions.py
+          tests/test_account_extensions_migration.py tests/test_publisher_accounts.py
+          tests/test_account_user_about_model.py tests/test_account_field_freshness.py
+          tests/test_hf_catalog_scope.py tests/test_hf_catalog_regression_net.py
+          tests/test_onboard_brand.py tests/test_reconcile_account_geography.py
+          tests/test_backfill_account_based_in.py

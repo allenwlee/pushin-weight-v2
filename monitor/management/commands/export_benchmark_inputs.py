@@ -40,7 +40,7 @@ def export_inputs(brand_ids, start_date, end_date):
             Product.objects.filter(
                 brand_id__in=brand_ids, type="llm-model", hf_type="model"
             )
-            .select_related("hf_org")
+            .select_related("publisher_account").prefetch_related("publisher_account__companies")
             .order_by("product_key")
         )
         rows = (
@@ -77,9 +77,9 @@ def export_inputs(brand_ids, start_date, end_date):
                     "brand_id": p.brand_id,
                     "label": p.display_name or p.repo_id or str(p.product_key),
                     "repo_id": p.repo_id,
-                    "hf_namespace": p.hf_org_id,
-                    "hf_confirmed": bool(p.hf_org and p.hf_org.confirmed),
-                    "hf_company_id": p.hf_org.company_id if p.hf_org else None,
+                    "hf_namespace": p.hf_namespace,
+                    "hf_confirmed": bool(p.publisher_ownership and p.publisher_ownership.ownership_confirmed),
+                    "hf_company_id": p.publisher_ownership.company_id if p.publisher_ownership else None,
                 }
                 for p in products
                 if p.private is not True and p.disabled is not True

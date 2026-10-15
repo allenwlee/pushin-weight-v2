@@ -27,9 +27,12 @@ from core.models import (
 )
 from core.provider_batches import (
     BatchAdmissionError,
+    assert_enrichment_admission,
     claim_batch,
     control_start,
     digest,
+    enrichment_control_status,
+    enrichment_policy_definition,
     fenced_batch,
     import_response,
     mark_submitting,
@@ -681,7 +684,8 @@ def _register_requests(job, requests, policy, cfg, *, transport="batch"):
         with transaction.atomic():
             CollectionJob.objects.select_for_update().get(pk=job.pk)
             existing = job.provider_batches.order_by("created_at").first()
-            if existing and existing.policy != policy:
+            assert_enrichment_admission(job.pk)
+            if existing and enrichment_policy_definition(existing.policy) != enrichment_policy_definition(policy):
                 raise BatchAdmissionError("enrichment_policy_changed")
             if ProviderBatch.objects.filter(
                 source_collection_job=job, model=model, state__in=ACTIVE_STATES
@@ -761,7 +765,7 @@ def execute_enrichment(
     if existing:
         if (
             policy is not None
-            and (policy | {"configuration_pin": pin}) != existing.policy
+            and enrichment_policy_definition(policy | {"configuration_pin": pin}) != enrichment_policy_definition(existing.policy)
         ):
             raise BatchAdmissionError("enrichment_policy_changed")
         policy = existing.policy
@@ -771,7 +775,8 @@ def execute_enrichment(
         policy = policy | {"configuration_pin": pin}
     if policy is None and not read_only:
         raise BatchAdmissionError("enrichment_policy_required")
-    if not read_only:
+    control = enrichment_control_status(job.pk)
+    if not read_only and not control["processing_paused"]:
         adopt_completed_membership(job)
     observations = CollectionObservation.objects.filter(
         run__job=job, source_subject_kind="post"
@@ -781,53 +786,57 @@ def execute_enrichment(
         observations = observations.filter(post_id__in=selection)
         if observations.values("post_id").distinct().count() != len(selection):
             raise BatchAdmissionError("pilot_selection_membership_missing")
-    if not read_only:
-        if existing is None:
-            reopen_incomplete_successes(job, observations)
-        for batch in list(
-            job.provider_batches.filter(state__in=ACTIVE_STATES).order_by("created_at")[
-                :2
-            ]
-        ):
-            advance(batch)
-        request_limit = direct_concurrency * 2 if transport == "direct" else 2000
-        requests, cached_packets_remain = _replay_pending_classifier_packets(
-            job, cfg, selection=selection, delegates=delegates, limit=request_limit,
-        )
-        after = ""
-        work = observations.filter(
-            Q(post__enrichment_state__translation_status="pending")
-            | Q(post__enrichment_state__classification_status="pending")
-        )
-        for _ in range(0 if cached_packets_remain else 20):
-            ids = list(
-                work.filter(post_id__gt=after)
-                .order_by("post_id")
-                .values_list("post_id", flat=True)
-                .distinct()[:100]
+    if not read_only and not control["processing_paused"]:
+        try:
+            if existing is None:
+                reopen_incomplete_successes(job, observations)
+            for batch in list(
+                job.provider_batches.filter(state__in=ACTIVE_STATES).order_by("created_at")[
+                    :2
+                ]
+            ):
+                advance(batch)
+            request_limit = direct_concurrency * 2 if transport == "direct" else 2000
+            requests, cached_packets_remain = _replay_pending_classifier_packets(
+                job, cfg, selection=selection, delegates=delegates, limit=request_limit,
             )
-            if not ids:
-                break
-            after = ids[-1]
-            pending = list(
-                PostEnrichmentState.objects.filter(pk__in=ids)
-                .exclude(
-                    translation_status="succeeded",
-                    classification_status="succeeded",
+            after = ""
+            work = observations.filter(
+                Q(post__enrichment_state__translation_status="pending")
+                | Q(post__enrichment_state__classification_status="pending")
+            )
+            for _ in range(0 if cached_packets_remain else 20):
+                ids = list(
+                    work.filter(post_id__gt=after)
+                    .order_by("post_id")
+                    .values_list("post_id", flat=True)
+                    .distinct()[:100]
                 )
-                .values_list("post_id", flat=True)
-            )
-            if not pending:
-                continue
-            prepared, _, _ = prepare_page(job, pending, cfg, delegates=delegates)
-            requests.extend(prepared)
-            if len(requests) >= request_limit:
-                break
-        for batch_id in _register_requests(
-            job, requests, policy, cfg,
-            transport=transport,
-        ):
-            advance(ProviderBatch.objects.get(pk=batch_id))
+                if not ids:
+                    break
+                after = ids[-1]
+                pending = list(
+                    PostEnrichmentState.objects.filter(pk__in=ids)
+                    .exclude(
+                        translation_status="succeeded",
+                        classification_status="succeeded",
+                    )
+                    .values_list("post_id", flat=True)
+                )
+                if not pending:
+                    continue
+                prepared, _, _ = prepare_page(job, pending, cfg, delegates=delegates)
+                requests.extend(prepared)
+                if len(requests) >= request_limit:
+                    break
+            for batch_id in _register_requests(
+                job, requests, policy, cfg,
+                transport=transport,
+            ):
+                advance(ProviderBatch.objects.get(pk=batch_id))
+        except BatchAdmissionError as exc:
+            if str(exc) != "enrichment_paused":
+                raise
     states = PostEnrichmentState.objects.filter(
         post__collection_observations__in=observations
     ).distinct()
@@ -845,7 +854,9 @@ def execute_enrichment(
     ).count()
     cohort_count = observations.values("post_id").distinct().count()
     invalid = verify_cohort(observations)[1] if pending_count == 0 else None
+    control = enrichment_control_status(job.pk)
     return {
+        **control,
         "phase": "enrichment",
         "source_collection_job": str(job.pk),
         "twitterapi_requests": 0,

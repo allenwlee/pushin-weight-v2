@@ -14,7 +14,7 @@ def proxy_spec():
     successor, spec = setup_spec()
     previous = Product.objects.create(
         repo_id="lab/Previous",
-        hf_org=successor.hf_org,
+        publisher_account=successor.publisher_account,
         brand=successor.brand,
         type="llm-model",
         private=False,

@@ -15,8 +15,8 @@ from datetime import timedelta
 from decimal import ROUND_UP, Decimal
 from typing import Any
 
-from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db import connection, transaction
+from django.db.models import Count, F, Q, Sum
 from django.utils import timezone
 
 from core.models import (
@@ -36,6 +36,113 @@ class BatchAdmissionError(RuntimeError):
 
 class StaleBatchClaim(RuntimeError):
     pass
+
+
+def enrichment_paused(job_id):
+    """The oldest execution record owns mutable campaign control, not instructions."""
+    policy = (
+        ProviderBatch.objects.filter(source_collection_job_id=job_id)
+        .order_by("created_at", "pk").values_list("policy", flat=True).first()
+    )
+    return bool((policy or {}).get("processing_control", {}).get("paused", False))
+
+
+def assert_enrichment_admission(job_id):
+    # Call while holding the CollectionJob row, before committing a paid start.
+    if enrichment_paused(job_id):
+        raise BatchAdmissionError("enrichment_paused")
+
+
+def enrichment_policy_definition(policy):
+    """Operator control is mutable; all request/budget/configuration pins remain fixed."""
+    return {k: v for k, v in policy.items() if k != "processing_control"}
+
+
+def enrichment_control_status(job_id):
+    job = CollectionJob.objects.get(pk=job_id)
+    if (job.source_id, job.purpose, job.operation) != ("x", "content", "x_backfill"):
+        raise BatchAdmissionError("enrichment_requires_real_x_backfill_job")
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT current_database(),current_user")
+        name, role = cursor.fetchone()
+    if job.definition.get("scope", {}).get("database") != {"name": name, "user": role}:
+        raise BatchAdmissionError("enrichment_database_identity_mismatch")
+    batches = job.provider_batches.all()
+    first = batches.order_by("created_at", "pk").first()
+    control = (first.policy if first else {}).get("processing_control", {})
+    sent = OriginalContentCall.objects.filter(provider_batch__source_collection_job=job,
+                                               state="sent").count()
+    claims = batches.filter(claim_expires_at__gt=timezone.now()).count()
+    # Local stopping must never masquerade as remote native-batch cancellation.
+    native = batches.filter(transport="batch", state__in=[
+        "uploading", "uploaded", "submitting", "waiting", "ambiguous", "importing",
+    ]).count()
+    paused = bool(control.get("paused", False))
+    return {
+        "source_collection_job": str(job.pk),
+        "processing_paused": paused,
+        "sent_outstanding": sent,
+        "active_processing_claims": claims,
+        "native_groups_outstanding": native,
+        "safe_to_cancel": paused and sent == 0 and claims == 0 and native == 0,
+        "control_generation": control.get("generation", 0),
+    }
+
+
+def set_enrichment_control(job_id, *, action, actor, reason):
+    """Pause admission, drain paid work, revoke old claims, then permit cancellation.
+
+    Reissue pause after draining, cancel only the old owned runner, verify it is
+    terminal, then resume. No external call or wait occurs inside this transaction.
+    """
+    if action not in {"pause", "resume"} or not actor.strip() or not reason.strip():
+        raise BatchAdmissionError("enrichment_control_requires_action_actor_reason")
+    if len(actor) > 160 or len(reason) > 1000:
+        raise BatchAdmissionError("enrichment_control_audit_too_large")
+    with transaction.atomic():
+        job = CollectionJob.objects.select_for_update().get(pk=job_id)
+        status = enrichment_control_status(job.pk)
+        batches = job.provider_batches.all()
+        first = batches.select_for_update().order_by("created_at", "pk").first()
+        if first is None:
+            raise BatchAdmissionError("enrichment_not_registered")
+        paused = action == "pause"
+        if paused and status["native_groups_outstanding"]:
+            raise BatchAdmissionError("native_batch_requires_remote_drain")
+        if action == "resume" and not status["processing_paused"]:
+            return status
+        if action == "resume" and status["processing_paused"] and (
+            status["sent_outstanding"] or status["native_groups_outstanding"]
+        ):
+            raise BatchAdmissionError("enrichment_not_drained")
+        now = timezone.now()
+        revoked = 0
+        if status["sent_outstanding"] == 0 and status["native_groups_outstanding"] == 0:
+            revoked = batches.filter(claim_expires_at__gt=now).update(
+                claim_fence=F("claim_fence") + 1, claim_expires_at=now,
+            )
+        previous = first.policy.get("processing_control", {})
+        event = {"action": action, "actor": actor.strip(), "reason": reason.strip(),
+                 "at": now.isoformat(), "revoked_claims": revoked}
+        first.policy = first.policy | {"processing_control": {
+            "paused": paused,
+            "generation": previous.get("generation", 0) + (paused != status["processing_paused"]),
+            "history": [*previous.get("history", [])[-19:], event],
+        }}
+        first.save(update_fields=["policy", "updated_at"])
+        return enrichment_control_status(job.pk)
+
+
+@contextmanager
+def _locked_batch(batch_id):
+    """Every admission/control path locks campaign before group, consistently."""
+    with transaction.atomic():
+        job_id = ProviderBatch.objects.values_list("source_collection_job_id", flat=True).get(pk=batch_id)
+        job = CollectionJob.objects.select_for_update().get(pk=job_id)
+        batch = ProviderBatch.objects.select_for_update().get(pk=batch_id)
+        if batch.source_collection_job_id != job.pk:
+            raise StaleBatchClaim("batch_source_definition_changed")
+        yield job, batch
 
 
 def digest(value: Any) -> str:
@@ -130,8 +237,8 @@ class BatchClaim:
 def claim_batch(batch_id, *, owner, seconds=180):
     if not owner or len(owner) > 128 or not 1 <= seconds <= 300:
         raise BatchAdmissionError("invalid_batch_claim")
-    with transaction.atomic():
-        batch = ProviderBatch.objects.select_for_update().get(pk=batch_id)
+    with _locked_batch(batch_id) as (job, batch):
+        assert_enrichment_admission(job.pk)
         now = timezone.now()
         if batch.claim_expires_at and batch.claim_expires_at > now:
             if batch.claim_owner == owner:
@@ -154,13 +261,8 @@ def claim_batch(batch_id, *, owner, seconds=180):
 
 
 @contextmanager
-def fenced_batch(claim, *, allow_expired_deadline=False):
-    with transaction.atomic():
-        batch = (
-            ProviderBatch.objects.select_for_update()
-            .select_related("source_collection_job")
-            .get(pk=claim.batch_id)
-        )
+def fenced_batch(claim, *, allow_expired_deadline=False, for_start=False):
+    with _locked_batch(claim.batch_id) as (job, batch):
         now = timezone.now()
         if (
             batch.claim_owner != claim.owner
@@ -169,7 +271,6 @@ def fenced_batch(claim, *, allow_expired_deadline=False):
             or batch.claim_expires_at <= now
         ):
             raise StaleBatchClaim("batch_claim_stale")
-        job = batch.source_collection_job
         if (
             job.source_id != "x"
             or job.purpose != "content"
@@ -178,6 +279,8 @@ def fenced_batch(claim, *, allow_expired_deadline=False):
             raise StaleBatchClaim("batch_source_definition_changed")
         if not allow_expired_deadline and batch.deadline_at <= now:
             raise BatchAdmissionError("batch_deadline_exhausted")
+        if for_start:
+            assert_enrichment_admission(job.pk)
         yield batch
 
 
@@ -190,7 +293,7 @@ def release_batch(claim):
 
 
 def control_start(claim, method, path):
-    with fenced_batch(claim, allow_expired_deadline=method == "GET") as batch:
+    with fenced_batch(claim, allow_expired_deadline=method == "GET", for_start=method != "GET") as batch:
         CollectionJob.objects.select_for_update().get(pk=batch.source_collection_job_id)
         count = (
             ProviderBatch.objects.filter(
@@ -249,7 +352,7 @@ def reserve_requests(claim, requests):
     requests = list(requests)
     if not 0 < len(requests) <= 2000:
         raise BatchAdmissionError("batch_request_limit")
-    with fenced_batch(claim) as batch:
+    with fenced_batch(claim, for_start=True) as batch:
         job = CollectionJob.objects.select_for_update().get(
             pk=batch.source_collection_job_id
         )
@@ -382,7 +485,7 @@ def reserve_requests(claim, requests):
 
 
 def mark_submitting(claim):
-    with fenced_batch(claim) as batch:
+    with fenced_batch(claim, for_start=True) as batch:
         if batch.state != "uploaded" or not batch.input_file_id:
             raise BatchAdmissionError("batch_not_uploaded")
         now = timezone.now()

@@ -7,9 +7,18 @@ import pytest
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 
-from core.models import Account, AccountBasedInMapping, Country, Region
+from core.models import Account, AccountBasedInMapping, Country, Region, XAccountDetail
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
+
+
+@pytest.fixture(autouse=True)
+def geography_targets():
+    """Transaction tests flush migration seeds; declare this module's inputs."""
+    Country.objects.get_or_create(code="US", defaults={"m49_code": "840"})
+    Country.objects.get_or_create(code="HK", defaults={"m49_code": "344"})
+    Region.objects.get_or_create(key="europe")
+    Region.objects.get_or_create(key="eastern-europe-non-eu")
 
 
 def test_account_model_exposes_typed_user_about_fields():
@@ -47,7 +56,7 @@ def test_account_model_exposes_typed_user_about_fields():
         "based_in_region",
         "account_based_in_fetched_at",
     }
-    fields = {field.name for field in Account._meta.get_fields()}
+    fields = {field.name for model in (Account, XAccountDetail) for field in model._meta.get_fields()}
     assert expected <= fields
     assert not any("raw" in field for field in expected)
 

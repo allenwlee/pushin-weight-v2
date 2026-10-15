@@ -3,6 +3,23 @@
 Rules for AI agents (and humans) working in this repo. Honor these unless
 explicitly told otherwise.
 
+<!-- BEGIN SCHEMA FIRST -->
+## Schema-first database design
+
+**Inspect existing entities, relationships and storage before deciding where a new field belongs.**
+
+Before proposing storage for a new feature or source, read `core/models.py`, the
+relevant `core/migrations/`, and existing write/read paths. Use `CONCEPTS.md` and
+`docs/reference/db-schema.md` for orientation, verifying them against code.
+Prefer existing shared entities and collection storage or a justified extension.
+Legacy source-specific or repetitive tables are not conventions to copy. A new
+table needs a distinct record meaning and a concrete explanation of why existing
+storage is unsuitable; record its relationships and table additions/retirements
+in the existing plan or change description. Apply M19 in the
+[avoiding-recurring-mistakes skill](.claude/skills/avoiding-recurring-mistakes/SKILL.md).
+This is a schema-review rule, not a blanket ban on new tables or an approval gate.
+<!-- END SCHEMA FIRST -->
+
 For reference-document work, read and follow
 [the updating-reference-docs skill](.claude/skills/updating-reference-docs/SKILL.md).
 The same canonical skill is exposed at `.agents/skills/updating-reference-docs`

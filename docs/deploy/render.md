@@ -242,6 +242,51 @@ resolved database identity on every service after sync and manually inject the
 same managed credential through Render if a service did not update. Never
 commit a connection string to source control.
 
+### Historical X batch jobs and safe handover
+
+Historical backfill uses a Render one-off job created from the deployed
+`pushinweight-harvest` revision. The one-off has its own process and compute;
+the recurring `run_cycle --scheduled` command and schedule stay unchanged.
+The backfill command selects `TWITTERAPI_IO_ON_DEMAND_API_KEY` explicitly.
+Use the existing Render-managed credentials rather than copying them to the
+web or careers-job service. Staging acceptance uses its existing manual donor.
+
+Collection instructions and page checkpoints live in the shared collection
+tables. Enrichment uses `ProviderBatch` and `OriginalContentCall`, retaining
+saved replies, reservations, unknown costs and the original campaign limits.
+Ordinary inference defaults to 32 simultaneous requests per one-off. Collection
+page writes coordinate with the normal harvester; HTTP runs outside that lock.
+
+For an ordinary-API enrichment handover, run these commands against the
+campaign's pinned database, substituting its collection-job UUID:
+
+```bash
+python manage.py backfill --collection-job JOB_UUID --enrichment-control status
+python manage.py backfill --collection-job JOB_UUID --enrichment-control pause \
+  --enrichment-actor OPERATOR --enrichment-reason 'controller handover'
+```
+
+Pause immediately blocks new paid admission. Already-sent requests may finish
+and save their replies. Reissue pause until it reports `safe_to_cancel: true`:
+sent calls, active processing claims and outstanding remote native groups must
+all be zero. The pause transaction revokes old processing fences at that
+barrier. Cancel only the owned old Render one-off and verify its terminal state
+before resuming:
+
+```bash
+python manage.py backfill --collection-job JOB_UUID --enrichment-control resume \
+  --enrichment-actor OPERATOR --enrichment-reason 'old controller is terminal'
+```
+
+Resume retains the original budget/deadline and reuses paid replies. It does
+not resolve unknown remote outcomes. Inspect ambiguous calls before any
+explicit retry. Active native Batch work rejects a local pause with
+`native_batch_requires_remote_drain`; drain or explicitly reconcile that remote
+work first. Status and control commands require no provider credentials.
+
+Verified with PostgreSQL caller regressions on 2026-10-15. This procedure does
+not launch a campaign or transfer staging Posts to production.
+
 ### Database credential rotation
 
 Use Render-managed users rather than `CREATE USER` or `ALTER ROLE`. A newly

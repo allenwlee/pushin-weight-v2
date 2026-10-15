@@ -166,6 +166,12 @@ class Command(BaseCommand):
                             help="Advance stored-post enrichment through ordinary DeepInfra calls; zero X requests.")
         parser.add_argument("--enrichment-concurrency", type=int, default=32,
                             help="Ordinary API calls in flight,1–128 (default32).")
+        parser.add_argument("--enrichment-control", choices=["status", "pause", "resume"],
+                            help="Inspect or control enrichment admission; pause must report safe_to_cancel before stopping its runner.")
+        parser.add_argument("--enrichment-actor", default="",
+                            help="Operator identity required for pause/resume audit.")
+        parser.add_argument("--enrichment-reason", default="",
+                            help="Operator reason required for pause/resume audit.")
         parser.add_argument("--enrichment-finish-pilot", action="store_true",
                             help="After complete persisted pilot proof, continue the existing source cohort.")
         parser.add_argument("--enrichment-post-ids", default=None,
@@ -266,6 +272,31 @@ class Command(BaseCommand):
                     "since", "until", "brands", "call_ids", "query", "reset", "quarantined", "retry_blocked",
                 )):
                     raise CommandError("--collection-job owns its frozen scope; omit scope/reset options")
+                if options.get("enrichment_control"):
+                    from core.provider_batches import (
+                        BatchAdmissionError,
+                        enrichment_control_status,
+                        set_enrichment_control,
+                    )
+                    action = options["enrichment_control"]
+                    if options["enrich_native"] or options["enrich_direct"] or options["enrichment_finish_pilot"]:
+                        raise CommandError("enrichment control is separate from execution")
+                    if action != "status" and (options["status"] or options["dry_run"]):
+                        raise CommandError("pause/resume are writes; select enrichment-control status")
+                    if action != "status" and (not options["enrichment_actor"].strip() or not options["enrichment_reason"].strip()):
+                        raise CommandError("--enrichment-actor and --enrichment-reason are required")
+                    try:
+                        self.result = (
+                            enrichment_control_status(options["collection_job"])
+                            if action == "status" else set_enrichment_control(
+                                options["collection_job"], action=action,
+                                actor=options["enrichment_actor"], reason=options["enrichment_reason"],
+                            )
+                        )
+                    except BatchAdmissionError as exc:
+                        raise CommandError(str(exc)) from None
+                    self.stdout.write(json.dumps(self.result, sort_keys=True))
+                    return
                 if options["enrich_native"] or options["enrich_direct"]:
                     if options["enrich_native"] and options["enrich_direct"]:
                         raise CommandError("select one enrichment transport")
@@ -318,6 +349,8 @@ class Command(BaseCommand):
                 return
             if options["storage_probe"]:
                 raise CommandError("--storage-probe requires --collection-job")
+            if options.get("enrichment_control"):
+                raise CommandError("enrichment control requires --collection-job")
             if options["enrich_native"] or options["enrich_direct"]:
                 raise CommandError("enrichment requires --collection-job")
             return self._handle_guarded(*args, **options)

@@ -62,9 +62,10 @@ scheduled seven-call path remains unchanged.
 - Objective: recover historical X posts and finish their required enrichment through
   the backfiller, with resumable batches suitable for a month or longer.
   August 9 staging collection is verified; end-to-end completion now also requires U9.
-- Authority: owner's LFG fixes-and-test request and October 14 `go`; G3's
-  adjudicated ProviderBatch extension is in scope. Production collection,
-  production release/import and new month campaigns remain outside this run.
+- Authority: owner's original fixes-and-test request, October 14 `go`, and
+  October15 `lfg` for production readiness/deployment; G3's adjudicated
+  ProviderBatch extension is in scope. Production collection/import and new
+  month campaigns remain outside this run.
 - Means: shared CycleRunner, durable collection scope checkpoints, typed Post
   membership, bounded provider work and physical-call accounting,
   exact-cohort enrichment and a staged provider-backed pilot.
@@ -1539,12 +1540,13 @@ ProviderBatch.policy for the campaign, separate from immutable source instructio
 and request identity. Existing data has an implicit active control state. This
 adds0tables/0columns for stopping;0085's previously approved ProviderBatch adds1
 execution table/retire0. G3 account migrations and0085 require an empty dependency
-merge migration after ownership confirmation. No alternate backfill job/run table.
+merge migration coordinated with G3. No alternate backfill job/run table.
 
 U10 — integrate G3 and database histories. Merge main on this existing feature
 branch; preserve both sides of docs/reference/db-schema.md and regenerate only
-its documented schema inventory as needed. G3 must confirm0086ownership/name
-before adding the merge migration. Verify migration orders from0084and0085 in
+its documented schema inventory as needed. Notify central G3 of bounded0086
+ownership under this owner-authorized continuation, preserve G3's reserved name
+and empty operations, and resolve any actual competing edit. Verify migration orders from0084and0085 in
 isolated PostgreSQL18; no reapplication of existing production account migrations.
 Files: core/models.py (merge only), core/migrations/0086_*.py, schema reference,
 existing focused migration tests and staging-refresh documents brought by main.
@@ -1598,3 +1600,46 @@ regressions pass, unchanged1660staging cohort validates, current PR58 resolves,
 CI is decided and exact production revision plus zero-provider batch readiness
 are observed. Report any unmet gate as unmet; never substitute a green process
 exit or staging success for production verification.
+
+### U10–U11 implementation/local verification receipt — October15
+
+Integrated main9cad8 in this task's branch; preserve G3 source migrations.
+The reserved0086_merge_account_provider_batch is dependencies0084+0085 with
+empty operations. Central G3 notified of bounded integration; PR60 release fork
+reports no overlap objection and its prior reserved name/dependencies match.
+No control table/column added. Schema metadata and actual isolated PostgreSQL18
+agree:151core tables/1971physical columns (virtual composite keys excluded).
+
+Six new caller control tests cover revoked pre-send claims, separate-connection
+in-flight drain/import, resumed canonical completion without duplicate sends,
+CLI key-free status/control, retained ambiguous costs and native pause refusal.
+The initial four control tests failed before implementation; focused48passed.
+Combined regression suite476passed,246requiredPostgreSQL/0skips/errors in246.76s;
+Ollija36passed. Both populated0084-first/0085-first migration histories and
+empty-merge reverse/reapply preserve account/profile/publisher/product/company
+identity and authored/batch call evidence. Account geography tests now declare
+inputs explicitly after transaction tests flush migration seed rows.
+All configured backfill Ruff targets pass; system checks and migration drift
+checks pass. Whole-repository Ruff remains non-green with1841broader issues;
+no broad automatic cleanup was performed and that check is not reported passed.
+The project has no configured type checker. Browser-route testing is omitted
+for this backend/CLI-only change; staging/production HTTP and media smoke checks
+remain delivery requirements. Reuse/quality/efficiency passes ran inline per
+AGENTS, with0behavior-preserving edits needed.
+
+Fresh staging baseline at4a3328b2 confirms1660source members,0pending/invalid,
+0active groups and completed canonical status. Saved hashes cover source
+instructions, membership, every model call and policy. Production preflight
+confirms pushinweight_shadow,0083/0084applied,327963Posts/97524Accounts,
+12796authored calls/126926observations (normal writes may grow these).
+
+Production backfills will be separate one-off processes from pushinweight-harvest,
+using its existing managed on-demand/DeepInfra credentials and model profiles.
+A zero-provider runtime probe confirms both keys available, Gemma4translation,
+DeepSeek0731classification and literal-v2 enabled. Temporary project credential
+copies on pushinweight-jobs were removed; original provider-free jobs role restored.
+No production schedules, other role settings or provider routes changed.
+Runbook docs/deploy/render.md now gives exact pause/drain/cancel/resume steps.
+Private delivery evidence stays on fuchitalee under this task's
+.context/production-readiness-20261015 until archived outside the worktree before
+any cleanup. U12/U13 runtime rollout remains pending at this source checkpoint.

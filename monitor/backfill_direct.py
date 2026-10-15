@@ -9,7 +9,9 @@ from django.utils import timezone
 from core.models import ProviderBatch
 from core.provider_batches import (
     BatchAdmissionError,
+    StaleBatchClaim,
     claim_batch,
+    enrichment_paused,
     fenced_batch,
     import_response,
     release_batch,
@@ -34,8 +36,8 @@ def advance_direct(batch_id, *, api_key, concurrency=32, client_factory=None):
             batch_id, api_key=api_key, concurrency=concurrency,
             client_factory=client_factory,
         )
-        group = ProviderBatch.objects.only("state", "next_poll_at").get(pk=batch_id)
-        if group.state != "registered" or (
+        group = ProviderBatch.objects.only("state", "next_poll_at", "source_collection_job_id").get(pk=batch_id)
+        if enrichment_paused(group.source_collection_job_id) or group.state != "registered" or (
             group.next_poll_at and group.next_poll_at > timezone.now()
         ):
             return
@@ -59,7 +61,7 @@ def _advance_direct_wave(batch_id, *, api_key, concurrency, client_factory):
         client = factory(
             api_key=api_key, model=batch.model, request_profile=batch.request_profile
         )
-        with fenced_batch(claim) as row:
+        with fenced_batch(claim, for_start=True) as row:
             # No other controller can own this group's unexpired fence.
             row.calls.filter(state="sent").update(
                 state="ambiguous",
@@ -165,4 +167,9 @@ def _advance_direct_wave(batch_id, *, api_key, concurrency, client_factory):
                 ]
             )
     finally:
-        release_batch(claim)
+        try:
+            release_batch(claim)
+        except StaleBatchClaim:
+            # A completed drain may already have invalidated this ownership.
+            # Preserve an exception from the actual operation, if there is one.
+            pass
