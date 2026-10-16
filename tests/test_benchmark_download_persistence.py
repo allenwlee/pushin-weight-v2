@@ -83,6 +83,7 @@ def test_stale_direct_metric_cannot_publish_observations(replacement):
     assert CollectionRun.objects.get().report == {"successor": "preserve"}
 
 
+@pytest.mark.usefixtures("collection_instruction_bridge")
 def test_direct_replay_rejects_mismatched_legacy_instruction_copies():
     from core.benchmark_metric_store import persist_source
 

@@ -75,16 +75,7 @@ def test_reference_inventory_and_columns_match_all_concrete_application_tables()
                     cursor, model._meta.db_table
                 )
             }
-        # 0089 deliberately removes only ORM ownership during rolling overlap.
-        # The reference describes actual physical columns, including these four.
-        compatibility_columns = (
-            {"source_id", "purpose", "contract_id", "scope"}
-            if model._meta.db_table == "collection_runs"
-            else set()
-        )
-        assert physical_columns == orm_columns | compatibility_columns, (
-            model._meta.db_table
-        )
+        assert physical_columns == orm_columns, model._meta.db_table
         assert set(columns) == physical_columns and len(columns) == len(
             physical_columns
         ), model._meta.db_table

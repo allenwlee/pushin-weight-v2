@@ -207,7 +207,7 @@ def test_frozen_legacy_bootstrap_launcher_runs_only_with_its_historical_orm(
 
 
 @pytest.mark.usefixtures("historical_schema")
-def test_phase2_reader_includes_finished_old_writer_evidence_after_catchup():
+def test_current_reader_includes_finished_old_writer_evidence_after_catchup():
     from django.db.migrations.recorder import MigrationRecorder
 
     from core.collection_reports import resource_statistics
@@ -227,7 +227,7 @@ def test_phase2_reader_includes_finished_old_writer_evidence_after_catchup():
         payload(123),
     )
     assert run.job_id is None and run.status == "success"
-    MigrationExecutor(connection).migrate([("core", "0089_job_owned_run_instructions")])
+    MigrationExecutor(connection).migrate([("core", "0090_remove_run_instruction_columns")])
     report = resource_statistics(
         contract_id=contract.pk, source="hf", identifier="lab/Model"
     )
@@ -235,6 +235,7 @@ def test_phase2_reader_includes_finished_old_writer_evidence_after_catchup():
     assert "123" in {v["value"] for v in report["values"]}
 
 
+@pytest.mark.usefixtures("collection_instruction_bridge")
 def test_scope_copy_mismatch_is_rejected_before_it_can_weaken_a_claim():
     from django.db import IntegrityError, transaction
 
