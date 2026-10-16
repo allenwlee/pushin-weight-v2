@@ -586,6 +586,124 @@ def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benc
     assert product.type is None
 
 
+def test_history_statistics_reuses_existing_product_and_publisher_subjects():
+    from core.benchmark_metric_identity import configure_collection
+    from core.model_kind_qualification import qualify_model_kind
+    from core.models import MetricCollectionContract, Product, SourceSubjectMapping
+
+    original_product, original_spec = setup_spec()
+    original_contract = configure_collection(original_spec)
+    account = original_product.publisher_account
+    product = Product.objects.create(
+        repo_id="lab/Legacy",
+        brand=original_product.brand,
+        publisher_account=account,
+        type=None,
+        private=False,
+        disabled=False,
+    )
+    subject = MeasurementSubject.objects.create(subject_kind="product", product=product)
+    publisher_subject = MeasurementSubject.objects.create(
+        subject_kind="account", account=account
+    )
+    assert subject.pk != subject_id("product", product.product_key)
+    assert publisher_subject.pk != subject_id("account", account.pk)
+    source = DataSource.objects.get(pk="hf")
+    mappings = []
+    for provider, scope in (
+        (source, "model"),
+        (DataSource.objects.get(pk="openrouter"), "rankings_permaslug"),
+    ):
+        mappings.append(
+            review_catalog_mapping(
+                source=provider,
+                subject=subject,
+                external_identifier=product.repo_id,
+                source_subject_kind="repository" if provider == source else "model",
+                identifier_scope=scope,
+                publisher_account=account,
+                role="dedicated_model",
+                version_selector=None,
+                evidence_url="https://huggingface.co/lab/Legacy",
+                reviewed_by="fixture",
+                identity_snapshot={},
+            )
+        )
+    evidence_run = CollectionRun.objects.create(
+        source=source,
+        purpose="catalog",
+        status="success",
+        completed_at=timezone.now(),
+        ingestion_key="1" * 64,
+    )
+    CollectionObservation.objects.create(
+        run=evidence_run,
+        product=product,
+        source_identifier=product.repo_id,
+        source_subject_kind="repository",
+        observation_key="2" * 64,
+        listing={"id": product.repo_id, "private": False},
+        dimensions={"kind": "creation_inventory"},
+    )
+    qualification = qualify_model_kind(product)
+    assert qualification
+    draft = {
+        "cohort_hash": "f" * 64,
+        "models": [
+            {
+                "product_key": str(product.product_key),
+                "qualification": qualification,
+                "provider_pins": [
+                    {
+                        "mapping_id": str(mappings[0].pk),
+                        "mapping_hash": mappings[0].mapping_hash,
+                        "source": "hf",
+                    }
+                ],
+            }
+        ],
+    }
+    original_draft = copy.deepcopy(draft)
+    old_subjects = list(MeasurementSubject.objects.order_by("pk").values())
+    old_mapping_ids = list(SourceSubjectMapping.objects.values_list("pk", flat=True))
+    old_mappings = list(SourceSubjectMapping.objects.order_by("pk").values())
+    old_contract = (
+        MetricCollectionContract.objects.filter(pk=original_contract.pk).values().get()
+    )
+
+    prepared = prepare_history_statistics_scope(
+        source=source, scope=draft, reviewed_by="fixture"
+    )
+    assert draft == original_draft
+    assert (
+        prepare_history_statistics_scope(
+            source=source, scope=draft, reviewed_by="fixture"
+        )
+        == prepared
+    )
+    contract = MetricCollectionContract.objects.get(pk=prepared["numeric_contract_id"])
+    expected = {subject.pk, publisher_subject.pk}
+    assert set(contract.mappings.values_list("subject_id", flat=True)) == expected
+    assert set(contract.taxonomy_version.snapshot["subjects"]) == {
+        str(pk) for pk in expected
+    }
+    assert list(MeasurementSubject.objects.order_by("pk").values()) == old_subjects
+    assert (
+        list(
+            SourceSubjectMapping.objects.filter(pk__in=old_mapping_ids)
+            .order_by("pk")
+            .values()
+        )
+        == old_mappings
+    )
+    assert (
+        MetricCollectionContract.objects.filter(pk=original_contract.pk).values().get()
+        == old_contract
+    )
+    product.refresh_from_db()
+    assert product.type is None
+
+
 @pytest.mark.parametrize("items", [1000, 2])
 def test_sparse_hf_archive_acquisition_automatically_projects_without_interpolation(
     items,

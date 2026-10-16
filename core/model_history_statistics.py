@@ -5,7 +5,7 @@ import copy
 from django.db import transaction
 
 from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
-from core.measurement_taxonomy import configure_taxonomy, require, subject_id
+from core.measurement_taxonomy import configure_taxonomy, require, resolve_subject_id
 from core.models import DataSource, Product, SourceSubjectMapping
 from core.source_metric_projection import configure_source_statistics
 
@@ -43,6 +43,7 @@ def prepare_history_statistics_scope(*, source, scope, reviewed_by, use_policy=N
             ).get(pk=pin["mapping_id"], purpose="catalog", source=source)
             require(
                 reviewed.mapping_hash == pin["mapping_hash"]
+                and reviewed.subject.subject_kind == "product"
                 and reviewed.subject.product_id == product.product_key,
                 "frozen catalog crosswalk changed",
             )
@@ -64,7 +65,7 @@ def prepare_history_statistics_scope(*, source, scope, reviewed_by, use_policy=N
                     "source_subject_kind": reviewed.source_subject_kind,
                     "identifier_scope": reviewed.identifier_scope,
                     "external_identifier": reviewed.external_identifier,
-                    "subject_id": str(subject_id("product", product.product_key)),
+                    "subject_id": str(reviewed.subject_id),
                     "publisher_account_key": str(account.pk),
                     "evidence_url": reviewed.evidence_url,
                     "identifier_metadata": {
@@ -87,7 +88,7 @@ def prepare_history_statistics_scope(*, source, scope, reviewed_by, use_policy=N
                 "source_subject_kind": "account",
                 "identifier_scope": account.account_kind,
                 "external_identifier": account.normalized_identifier,
-                "subject_id": str(subject_id("account", account.pk)),
+                "subject_id": str(resolve_subject_id("account", account.pk)),
                 "publisher_account_key": str(account.pk),
                 "evidence_url": account.provider_metadata.get("ownership_evidence")
                 or (

@@ -105,6 +105,91 @@ def test_subject_constraint_rejects_mismatched_target():
         MeasurementSubject.objects.create(subject_kind="product", brand=brand)
 
 
+@pytest.mark.requires_postgres
+@pytest.mark.parametrize("kind", ["product", "account", "brand", "company"])
+@pytest.mark.parametrize("preexisting", [True, False])
+def test_taxonomy_reuses_target_subject_or_creates_deterministic_identity(
+    kind, preexisting
+):
+    from core.account_identity import upsert_account
+    from core.measurement_taxonomy import (
+        configure_taxonomy,
+        prepare_taxonomy,
+        subject_id,
+    )
+    from core.models import Company, DataSource, MeasurementSubject, TaxonomyVersion
+
+    brand = Brand.objects.create(nickname="lab", display_name="Lab")
+    if kind == "product":
+        target = product("model", brand)
+        key = target.product_key
+    elif kind == "account":
+        DataSource.objects.get_or_create(
+            id="hf", defaults={"name": "HF", "source_type": "model_adoption"}
+        )
+        target = upsert_account(
+            source="hf", external_identifier="lab", account_kind="organization"
+        )
+        key = target.pk
+    else:
+        target = (
+            brand if kind == "brand" else Company.objects.create(nickname="company")
+        )
+        key = target.pk
+    previous = None
+    expected = subject_id(kind, key)
+    if preexisting:
+        previous = MeasurementSubject.objects.create(
+            subject_kind=kind, **{kind: target}
+        )
+        assert previous.pk != expected
+        expected = previous.pk
+    before = list(MeasurementSubject.objects.values())
+    spec = {"reviewed_by": "fixture", "subjects": [{"kind": kind, "key": str(key)}]}
+
+    snapshot = prepare_taxonomy(spec)
+    assert set(snapshot["subjects"]) == {str(expected)}
+    assert (
+        list(MeasurementSubject.objects.values()) == before
+    )  # Preparation is read-only.
+    version = configure_taxonomy(spec)
+    assert version.snapshot == snapshot
+    assert configure_taxonomy(spec).pk == version.pk
+    assert TaxonomyVersion.objects.count() == 1
+    subject = MeasurementSubject.objects.get(**{f"{kind}_id": key})
+    assert subject.pk == expected
+    assert subject.subject_kind == kind
+    assert MeasurementSubject.objects.count() == 1
+    if previous:
+        assert list(MeasurementSubject.objects.values()) == before
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.parametrize("other_kind", ["product", "brand"])
+def test_taxonomy_rejects_generated_id_already_assigned_to_another_target(other_kind):
+    from core.measurement_taxonomy import configure_taxonomy, subject_id
+    from core.models import MeasurementSubject, TaxonomyVersion
+
+    brand = Brand.objects.create(nickname="lab")
+    selected = product("selected", brand)
+    other = product("other", brand) if other_kind == "product" else brand
+    MeasurementSubject.objects.create(
+        id=subject_id("product", selected.product_key),
+        subject_kind=other_kind,
+        **{other_kind: other},
+    )
+    before = list(MeasurementSubject.objects.values())
+    with pytest.raises(ValueError, match="subject identity.*another target"):
+        configure_taxonomy(
+            {
+                "reviewed_by": "fixture",
+                "subjects": [{"kind": "product", "key": str(selected.product_key)}],
+            }
+        )
+    assert list(MeasurementSubject.objects.values()) == before
+    assert not TaxonomyVersion.objects.exists()
+
+
 def test_merge_parents_and_successor_diamond_keep_one_membership_and_both_paths():
     from core.measurement_taxonomy import configure_taxonomy, resolve_products
     from core.models import ProductGroupMembership
@@ -122,7 +207,8 @@ def test_merge_parents_and_successor_diamond_keep_one_membership_and_both_paths(
     spec = {
         "reviewed_by": "fixture",
         "subjects": [
-            {"kind": "product", "key": str(p.product_key)} for p in (a, b, c, d, derivative)
+            {"kind": "product", "key": str(p.product_key)}
+            for p in (a, b, c, d, derivative)
         ],
         "relationships": [
             {
@@ -161,7 +247,9 @@ def test_relationship_evidence_cannot_name_a_different_repository():
         configure_taxonomy(
             {
                 "reviewed_by": "fixture",
-                "subjects": [{"kind": "product", "key": str(p.product_key)} for p in (a, b)],
+                "subjects": [
+                    {"kind": "product", "key": str(p.product_key)} for p in (a, b)
+                ],
                 "relationships": [
                     {
                         "parent": str(a.product_key),
