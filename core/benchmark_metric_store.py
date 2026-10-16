@@ -270,6 +270,44 @@ def native_rows(source, payload):
                         )
             if row.get("observed_at"):
                 out["observed_at"] = row["observed_at"]
+        elif source == "github":
+            raw = row.get("raw", row)
+            out = {
+                "source_identifier": str(row.get("repository_id", raw["id"])),
+                "source_subject_kind": "repository",
+                "identifier_scope": "repository_id",
+                "dimensions": row.get("dimensions", {}),
+                "source_metadata": metadata,
+                "metrics": {
+                    key: {"value": raw[wire]}
+                    for wire, key in (
+                        ("stargazers_count", "stars"),
+                        ("forks_count", "forks"),
+                        ("open_issues_count", "open_issues"),
+                        ("subscribers_count", "subscribers"),
+                        ("download_count", "asset_downloads"),
+                    )
+                    if wire in raw
+                },
+            }
+            if "account_identifier" in row:
+                out.update(
+                    source_identifier=row["account_identifier"],
+                    source_subject_kind="account",
+                    identifier_scope=row.get("account_kind", "unknown"),
+                    metrics={"followers": {"value": raw["followers"]}}
+                    if "followers" in raw
+                    else {},
+                )
+            if "size" in raw and "account_identifier" not in row:
+                size_key = (
+                    "asset_size_bytes"
+                    if "asset_id" in out["dimensions"]
+                    else "repository_size_kb"
+                )
+                out["metrics"][size_key] = {"value": raw["size"]}
+            if row.get("observed_at"):
+                out["observed_at"] = row["observed_at"]
         elif source == "openrouter":
             day = row["date"]
             start, end = calendar_window(day, "UTC")
@@ -398,6 +436,7 @@ def collection_lock(contract, source):
 
 def prepare_rows(contract, source, payload, *, adapter=None):
     settings = contract.source_configuration[source]
+    statistics = settings.get("eligibility_policy") == "source-statistics-v1"
     if source == "arena":
         require(
             payload.get("config") == settings.get("config", "text_style_control"),
@@ -437,7 +476,14 @@ def prepare_rows(contract, source, payload, *, adapter=None):
         mapping = mappings.get(
             (kind, scope, identity.casefold() if source == "hf" else identity)
         )
-        metadata = row.get("source_metadata", {})
+        if (
+            statistics
+            and mapping
+            and mapping.subject.subject_kind == "product"
+            and mapping.identifier_metadata.get("role") != "dedicated_model"
+        ):
+            mapping = None
+        metadata = dict(row.get("source_metadata", {}))
         dimensions = row.get("dimensions", {})
         key = digest(
             [
@@ -453,6 +499,9 @@ def prepare_rows(contract, source, payload, *, adapter=None):
                 metadata.get("immutable_revision"),
             ]
         )
+        if statistics and row.get("projection_key"):
+            key = row["projection_key"]
+            require(re.fullmatch(r"[0-9a-f]{64}", key), "invalid projection key")
         # A repeated exact row is one observation; conflicting same-context rows fail.
         fingerprint = digest(
             {k: v for k, v in row.items() if k not in {"observed_at", "metrics"}}
@@ -491,7 +540,7 @@ def prepare_rows(contract, source, payload, *, adapter=None):
         values = []
         try:
             if observation["status"] == "ok":
-                applicable_required = required
+                applicable_required = set() if statistics else required
                 if source == "hf" and (
                     kind == "account"
                     or metadata.get("history_basis")
@@ -506,13 +555,20 @@ def prepare_rows(contract, source, payload, *, adapter=None):
                     if metric not in definitions:
                         continue
                     definition = definitions[metric]
-                    values.append(
-                        dict(
+                    try:
+                        value = dict(
                             source_metric=definition,
                             **numeric_value(definition, point["value"]),
                             **value_times(definition, point),
                         )
-                    )
+                    except (ValueError, TypeError, KeyError, OverflowError) as exc:
+                        if not statistics:
+                            raise
+                        metadata.setdefault("metric_rejections", []).append(
+                            {"metric": metric, "reason": str(exc)}
+                        )
+                        continue
+                    values.append(value)
             else:
                 require(
                     observation["status"] == "error" and observation["error_code"],
@@ -523,8 +579,117 @@ def prepare_rows(contract, source, payload, *, adapter=None):
                 raise
             observation.update(status="error", error_code="invalid_subject_data")
             values = []
+        if statistics:
+            observation.update(
+                resource_key=row.get("resource_key"),
+                product_id=(
+                    mapping.subject.product.pk
+                    if mapping and mapping.subject.subject_kind == "product"
+                    else None
+                ),
+            )
+            metadata["native_only"] = (
+                mapping is None or mapping.subject.subject_kind != "product"
+            )
         result.append((observation, values))
     return result
+
+
+@transaction.atomic
+def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
+    """Commit validated rows inside the caller's source lock and live claim fence.
+
+    Legacy imports keep per-run observations. Statistics use a DB-enforced key
+    across jobs and never change the original observation's owning run.
+    """
+    require(
+        run.purpose == "metric"
+        and run.contract_id is not None
+        and run.status == "running",
+        "active metric-purpose run required",
+    )
+    observations, reused, pending_values = [], [], []
+    if not reuse_snapshots:
+        observations = CollectionObservation.objects.bulk_create(
+            [CollectionObservation(run=run, **data) for data, _ in prepared],
+            batch_size=1000,
+        )
+    else:
+        for data, values in prepared:
+            require(
+                data["source_metadata"].get("projection_kind")
+                == "source-statistics-v1",
+                "snapshot reuse requires source statistics",
+            )
+            observation, created = CollectionObservation.objects.get_or_create(
+                observation_key=data["observation_key"],
+                source_metadata__projection_kind="source-statistics-v1",
+                defaults={"run": run, **data},
+            )
+            if not created:
+                require(
+                    observation.run.contract_id == run.contract_id
+                    and observation.run.source_id == run.source_id,
+                    "projection lineage conflict",
+                )
+                for field in (
+                    "mapping_id",
+                    "product_id",
+                    "source_identifier",
+                    "source_subject_kind",
+                    "dimensions",
+                    "published_at",
+                    "published_date",
+                    "publication_precision",
+                ):
+                    expected = (
+                        data.get("mapping").pk
+                        if field == "mapping_id" and data.get("mapping")
+                        else data.get(field)
+                    )
+                    require(
+                        getattr(observation, field) == expected,
+                        "immutable snapshot conflict: " + field,
+                    )
+                if data["source_metadata"].get("snapshot_kind") == "capture":
+                    require(
+                        observation.observed_at == data["observed_at"],
+                        "immutable snapshot clock conflict",
+                    )
+                require(
+                    observation.source_metadata.get("clocks")
+                    == data["source_metadata"].get("clocks"),
+                    "immutable snapshot clock conflict",
+                )
+                reused.append(observation.pk)
+            observations.append(observation)
+    for observation, (_, values) in zip(observations, prepared, strict=True):
+        existing = (
+            {v.source_metric_id: v for v in observation.values.all()}
+            if reuse_snapshots
+            else {}
+        )
+        for value in values:
+            previous = existing.get(value["source_metric"].pk)
+            if previous:
+                for field, expected in value.items():
+                    actual = (
+                        previous.source_metric
+                        if field == "source_metric"
+                        else getattr(previous, field)
+                    )
+                    require(
+                        actual == expected,
+                        "immutable numeric snapshot conflict: " + field,
+                    )
+            else:
+                pending_values.append(MetricValue(observation=observation, **value))
+    MetricValue.objects.bulk_create(pending_values, batch_size=1000)
+    return observations, {
+        "reused_observation_ids": reused,
+        "written_values": len(pending_values),
+        "written_observations": len(observations) - len(reused),
+    }
 
 
 def persist_source(
@@ -543,6 +708,11 @@ def persist_source(
 ):
     """Manual/import entry point; deterministic keys make replay a no-op."""
     require(source in contract.source_configuration, "source is outside contract")
+    require(
+        contract.source_configuration[source].get("eligibility_policy")
+        != "source-statistics-v1",
+        "source statistics require the shared evidence projector",
+    )
     from core.benchmark_attribution import enforce_source_collection
 
     enforce_source_collection(
@@ -710,20 +880,7 @@ def persist_source(
         ):
             successful = retained_successful
             errors = False
-            observations = CollectionObservation.objects.bulk_create(
-                [CollectionObservation(run=run, **data) for data, _ in prepared],
-                batch_size=1000,
-            )
-            MetricValue.objects.bulk_create(
-                [
-                    MetricValue(observation=observation, **value)
-                    for observation, (_, values) in zip(
-                        observations, prepared, strict=True
-                    )
-                    for value in values
-                ],
-                batch_size=1000,
-            )
+            observations, _ = commit_prepared_rows(run, prepared)
             for observation, (_, values) in zip(observations, prepared, strict=True):
                 errors |= observation.status == "error"
                 if observation.mapping_id and values:

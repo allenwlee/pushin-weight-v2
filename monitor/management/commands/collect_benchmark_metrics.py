@@ -22,7 +22,9 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--contract", required=True)
         parser.add_argument(
-            "--source", required=True, choices=["hf", "openrouter", "arena", "opencode"]
+            "--source",
+            required=True,
+            choices=["hf", "github", "openrouter", "arena", "opencode"],
         )
         parser.add_argument("--start-date", required=True)
         parser.add_argument("--end-date", required=True)
@@ -67,6 +69,37 @@ class Command(BaseCommand):
                             "selected_subjects": contract.mappings.filter(
                                 purpose="metric", source_id=source
                             ).count(),
+                        }
+                    )
+                )
+                return
+            if (
+                contract.source_configuration[source].get("eligibility_policy")
+                == "source-statistics-v1"
+            ):
+                from core.models import CollectionJob
+                from core.source_metric_projection import replay_saved_evidence
+
+                if not options["job"]:
+                    raise ValueError("source statistics require a reviewed source job")
+                selected = CollectionJob.objects.get(pk=options["job"])
+                if (
+                    selected.contract_id != contract.pk
+                    or selected.source_id != source
+                    or selected.definition.get("campaign", {}).get("phase") != "replay"
+                ):
+                    raise ValueError(
+                        "source-statistics acquisition hook is unavailable; select a saved-evidence replay job"
+                    )
+                run = replay_saved_evidence(selected.pk)
+                self.stdout.write(
+                    json.dumps(
+                        {
+                            "run_id": str(run.pk),
+                            "status": run.status,
+                            "selected_count": run.selected_count,
+                            "success_count": run.success_count,
+                            "request_count": run.request_count,
                         }
                     )
                 )

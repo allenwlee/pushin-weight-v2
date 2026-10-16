@@ -107,10 +107,10 @@ def test_crashed_reservation_survives_reclaim_and_pause_fences_response():
         claim_job(job.pk)
 
 
-def test_replay_requires_explicit_hook_and_never_falls_back_to_acquisition():
+def test_replay_rejects_acquisition_phase_and_never_falls_back_to_acquisition():
     from core.data_source_backfill import execute_phase
     job = registered()
-    with pytest.raises(ValueError, match='replay.*unavailable'):
+    with pytest.raises(ValueError, match='replay.*phase mismatch'):
         execute_phase(job.pk, replay=True)
     job.refresh_from_db()
     assert job.state == 'paused'

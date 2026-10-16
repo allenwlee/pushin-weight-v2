@@ -1,8 +1,7 @@
 """Database-backed campaign facade over the shared collection services.
 
 Definitions are reviewed inputs, never local checkpoints. Adapters retain ownership
-of their actual run, lease, evidence and checkpoints. Replay must be connected to a
-saved-evidence projector explicitly; it can never fall through to acquisition.
+of their actual run, lease, evidence and checkpoints. Replay uses the shared saved-evidence projector and can never fall through to acquisition.
 """
 from __future__ import annotations
 
@@ -140,8 +139,11 @@ def execute_phase(job_id, *, budget=None, executor=None, replay=False, projector
     job = campaign_jobs(job_id=job_id).get()
     validate_job(job)
     campaign = validate_campaign(job.definition, contract_id=job.contract_id)
-    require(not replay or projector is not None, 'saved-evidence replay is unavailable')
-    require(replay == (campaign['phase'] == 'replay'), 'campaign phase mismatch')
+    require(replay == (campaign['phase'] == 'replay'), 'campaign replay phase mismatch')
+    if replay and projector is None:
+        from core.source_metric_projection import replay_saved_evidence
+
+        projector = replay_saved_evidence
     require(executor is not None or replay or job.operation != 'collect_metrics',
             'direct metric acquisition hook is unavailable')
     usage = campaign_usage(job)

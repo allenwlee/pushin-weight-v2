@@ -120,13 +120,10 @@ def test_dispatch_invocation_budget_stops_before_second_job(settings):
     job = scheduled(settings)
     take_metric_authority(job.pk)
     job.refresh_from_db()
-    source = DataSource.objects.create(
-        pk="github",
-        name="GitHub",
-        source_type="model_adoption",
-        enabled=True,
-        adapter_key="github-catalog-v1",
-    )
+    # Definition registration now includes the existing GitHub provider identity.
+    source = DataSource.objects.get(pk="github")
+    source.enabled = True
+    source.save(update_fields=["enabled"])
     other = register_job(
         job_key="catalog",
         source=source,

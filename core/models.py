@@ -8090,6 +8090,11 @@ class CollectionObservation(models.Model):
             models.UniqueConstraint(
                 fields=["run", "observation_key"], name="uq_metric_observation"
             ),
+            models.UniqueConstraint(
+                fields=["observation_key"],
+                condition=models.Q(source_metadata__projection_kind="source-statistics-v1"),
+                name="uq_source_statistics_snapshot",
+            ),
             models.CheckConstraint(
                 condition=models.Q(observation_key__regex=r"^[0-9a-f]{64}$"),
                 name="ck_observation_key",
