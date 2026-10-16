@@ -18,7 +18,9 @@ from core.models import CollectionObservation, CollectionRun
 
 def retained_checks(contract, *, cutoff=None):
     runs = CollectionRun.objects.filter(
-        contract=contract, source_id="opencode", status__in=["success", "partial"]
+        job__contract=contract,
+        job__source_id="opencode",
+        status__in=["success", "partial"],
     )
     if cutoff is not None:
         runs = runs.filter(completed_at__lte=cutoff)
@@ -53,9 +55,10 @@ def selected_rows(contract, mapping_ids, start, end, *, cutoff=None):
             reference.value::bigint, r.id,
             check_row.value - 'row_references' - 'dates'
         FROM collection_runs r
+        JOIN collection_jobs j ON j.id = r.job_id
         CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.source_metadata->'endpoint_checks', '[]'::jsonb)) check_row
         CROSS JOIN LATERAL jsonb_each_text(COALESCE(check_row.value->'row_references', '{}'::jsonb)) reference
-        WHERE r.contract_id = %s AND r.source_id = 'opencode'
+        WHERE j.contract_id = %s AND j.source_id = 'opencode'
             AND r.status IN ('success', 'partial')
             AND check_row.value->>'status' = 'ok'
             AND check_row.value->>'source_identifier' = ANY(%s)
@@ -84,8 +87,8 @@ def selected_rows(contract, mapping_ids, start, end, *, cutoff=None):
         for obj in CollectionObservation.objects.filter(
             pk__in={row["observation_id"] for row in chosen.values()},
             mapping_id__in=mapping_ids,
-            run__contract=contract,
-            run__source_id="opencode",
+            run__job__contract=contract,
+            run__job__source_id="opencode",
             status="ok",
         )
         .select_related("run")
@@ -111,8 +114,9 @@ def publication_times(contract):
             """SELECT DISTINCT ON (c.value->>'source_identifier')
             c.value->>'source_identifier', (c.value->>'updated_at')::timestamptz
             FROM collection_runs r
+        JOIN collection_jobs j ON j.id = r.job_id
             CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.source_metadata->'endpoint_checks', '[]'::jsonb)) c
-            WHERE r.contract_id=%s AND r.source_id='opencode' AND r.status IN ('success','partial')
+            WHERE j.contract_id=%s AND j.source_id='opencode' AND r.status IN ('success','partial')
             AND c.value->>'status'='ok'
             ORDER BY c.value->>'source_identifier', (c.value->>'updated_at')::timestamptz DESC
             LIMIT 101""",
@@ -182,8 +186,9 @@ def prepare_revisions(contract, prepared, payload):
                 cursor.execute(
                     """SELECT EXISTS (
                     SELECT 1 FROM collection_runs r
+        JOIN collection_jobs j ON j.id = r.job_id
                     CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.source_metadata->'endpoint_checks', '[]'::jsonb)) c
-                    WHERE r.contract_id=%s AND r.source_id='opencode' AND r.status IN ('success','partial')
+                    WHERE j.contract_id=%s AND j.source_id='opencode' AND r.status IN ('success','partial')
                     AND c.value->>'status'='ok' AND c.value->>'source_identifier'=%s
                     AND (c.value->>'updated_at')::timestamptz=%s AND c.value->>'body_sha256'<>%s
                 )""",

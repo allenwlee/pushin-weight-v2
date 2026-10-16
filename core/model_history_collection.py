@@ -72,7 +72,7 @@ def _existing_evidence(job, model, pins):
     selected = []
     rows = (
         CollectionObservation.objects.filter(
-            run__source_id=job.source_id,
+            run__job__source_id=job.source_id,
             source_identifier__in={p["native_identifier"] for p in pins},
             status="ok",
         )

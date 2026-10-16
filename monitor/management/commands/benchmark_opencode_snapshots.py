@@ -52,8 +52,8 @@ class Command(BaseCommand):
                 o.pk: o
                 for o in CollectionObservation.objects.filter(
                     pk__in={r[3] for r in references},
-                    run__contract=contract,
-                    run__source_id="opencode",
+                    run__job__contract=contract,
+                    run__job__source_id="opencode",
                 ).prefetch_related("values__source_metric")
             }
             rows = []

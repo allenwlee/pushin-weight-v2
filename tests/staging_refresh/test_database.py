@@ -38,6 +38,7 @@ from scripts.staging_refresh.receipt import (
     decode_database_comment,
     encode_database_comment,
 )
+from tests.collection_fixtures import evidence_job
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 POLICY_PATH = REPO_ROOT / "config" / "staging_refresh.yaml"
@@ -126,6 +127,10 @@ class FakeAdapter:
 
     def drop_shadow(self, _url: str, name: str) -> None:
         self.events.append(f"shadow:drop:{name}")
+
+    def purge_collection_runtime(self, _url: str, name: str):
+        self.events.append(f"candidate:purge-collection:{name}")
+        return {}
 
     def scrub_candidate(self, _url: str, name: str) -> ScrubReport:
         self.events.append(f"candidate:scrub:{name}")
@@ -656,7 +661,9 @@ def test_shared_collection_scrub_preserves_numeric_evidence():
     numeric = persist_source(configured(), "hf", "9" * 64, payload())
     value_ids = list(MetricValue.objects.values_list("pk", flat=True))
     catalog = CollectionRun.objects.create(
-        source_id="hf", purpose="catalog", ingestion_key="8" * 64, status="pending"
+        job=evidence_job(source_id="hf", purpose="catalog"),
+        ingestion_key="8" * 64,
+        status="pending",
     )
     scope = CollectionScopeRun.objects.create(
         run=catalog, scope_key="publisher", ownership={}
@@ -681,7 +688,7 @@ def test_shared_collection_scrub_preserves_numeric_evidence():
     with transaction.atomic(), connection.cursor() as cursor:
         scrub_candidate_data(cursor, policy)
     assert CollectionRun.objects.filter(pk=numeric.pk).exists()
-    assert not CollectionRun.objects.filter(purpose="catalog").exists()
+    assert not CollectionRun.objects.filter(job__purpose="catalog").exists()
     assert not CollectionScopeRun.objects.exists()
     assert list(MetricValue.objects.values_list("pk", flat=True)) == value_ids
 

@@ -108,7 +108,7 @@ def test_reclaimed_acquisition_cannot_acknowledge_committed_projection(
     assert queue.outcome == "pending" and queue.cursor is None
     committed_values = list(MetricValue.objects.order_by("pk").values())
     assert len(committed_values) == (2 if operation == "hf_catalog" else 3)
-    numeric = CollectionRun.objects.get(purpose="metric")
+    numeric = CollectionRun.objects.get(job__purpose="metric")
     assert numeric.status == "success"
 
     recovered = drain_pending_projections(job.pk, origin_claim=successor[0])
@@ -206,7 +206,7 @@ def test_replaced_origin_stops_between_metric_registration_and_execution(monkeyp
     )
     with pytest.raises(StaleClaim):
         drain_pending_projections(job.pk, origin_claim=stale)
-    assert not CollectionRun.objects.filter(purpose="metric").exists()
+    assert not CollectionRun.objects.filter(job__purpose="metric").exists()
     assert not MetricValue.objects.exists()
 
 
@@ -229,7 +229,7 @@ def test_standalone_recovery_cannot_acknowledge_after_acquisition_starts(monkeyp
         ValueError, match="active catalog projection requires origin claim"
     ):
         drain_pending_projections(job.pk)
-    queue = CollectionRun.objects.get(purpose="catalog").scopes.get(
+    queue = CollectionRun.objects.get(job__purpose="catalog").scopes.get(
         scope_kind="numeric_projection"
     )
     assert queue.envelopes == [{"observation_id": snapshot.pk}]

@@ -7935,17 +7935,11 @@ class CollectionJob(models.Model):
 class CollectionRun(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     batch_id = models.UUIDField(default=uuid.uuid4)
-    job = models.ForeignKey(CollectionJob, null=True, on_delete=models.PROTECT, related_name="runs")
+    job = models.ForeignKey(CollectionJob, on_delete=models.PROTECT, related_name="runs")
     lease_token = models.UUIDField(null=True)
-    purpose = models.CharField(max_length=16, default="metric", db_default="metric")
-    scope = models.JSONField(default=dict, db_default={})
     invocations = models.JSONField(default=list, db_default=[])
     report = models.JSONField(default=dict, db_default={})
     updated_at = models.DateTimeField(auto_now=True, null=True)
-    contract = models.ForeignKey(
-        MetricCollectionContract, on_delete=models.PROTECT, null=True
-    )
-    source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
     ingestion_key = models.CharField(max_length=64, unique=True)
     status = models.CharField(max_length=16, default="running")
     started_at = models.DateTimeField(default=timezone.now)
@@ -7963,11 +7957,35 @@ class CollectionRun(models.Model):
     raw_payload = models.JSONField(null=True)
     error_code = models.CharField(max_length=64, null=True)
 
+    @property
+    def source(self):
+        return self.job.source
+
+    @property
+    def source_id(self):
+        return self.job.source_id
+
+    @property
+    def purpose(self):
+        return self.job.purpose
+
+    @property
+    def contract(self):
+        return self.job.contract
+
+    @property
+    def contract_id(self):
+        return self.job.contract_id
+
+    @property
+    def scope(self):
+        return self.job.definition["scope"]
+
     class Meta:
         db_table = "collection_runs"
         indexes = [
             models.Index(
-                fields=["contract", "source", "status", "completed_at"],
+                fields=["job", "status", "completed_at"],
                 name="idx_metric_run_outcome",
             ),
             models.Index(fields=["batch_id"], name="idx_metric_run_batch"),
@@ -7981,43 +7999,6 @@ class CollectionRun(models.Model):
                 condition=models.Q(payload_sha256__isnull=True)
                 | models.Q(payload_sha256__regex=r"^[0-9a-f]{64}$"),
                 name="ck_run_payload_hash",
-            ),
-            models.CheckConstraint(
-                condition=(
-                    models.Q(
-                        purpose="metric",
-                        contract__isnull=False,
-                        lease_expires_at__isnull=False,
-                    )
-                    & (
-                        models.Q(status="running", completed_at__isnull=True)
-                        | models.Q(
-                            status__in=["success", "partial", "failed", "aborted"],
-                            completed_at__isnull=False,
-                        )
-                    )
-                )
-                | (
-                    models.Q(purpose="catalog", contract__isnull=True)
-                    & (
-                        models.Q(
-                            status__in=["pending", "running", "partial", "interrupted"],
-                            completed_at__isnull=True,
-                        )
-                        | models.Q(
-                            status__in=["success", "failed", "aborted"],
-                            completed_at__isnull=False,
-                        )
-                    )
-                )
-                | (
-                    models.Q(purpose="content", contract__isnull=True)
-                    & (
-                        models.Q(status="running", completed_at__isnull=True)
-                        | models.Q(status__in=["success", "partial", "failed", "aborted"], completed_at__isnull=False)
-                    )
-                ),
-                name="ck_collection_run_lifecycle",
             ),
             models.CheckConstraint(
                 condition=models.Q(job__isnull=True) | ~models.Q(status="running") | models.Q(lease_token__isnull=False, lease_expires_at__isnull=False),

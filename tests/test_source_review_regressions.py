@@ -136,7 +136,7 @@ def test_inventory_terminal_missing_counters_ack_and_next_acquisition(
 
             queued_ids = [
                 pk
-                for numeric in CollectionRun.objects.filter(purpose="metric")
+                for numeric in CollectionRun.objects.filter(job__purpose="metric")
                 for pk in numeric.report.get("projection", {}).get(
                     "source_observation_ids", []
                 )
@@ -163,7 +163,7 @@ def test_inventory_terminal_missing_counters_ack_and_next_acquisition(
 
         coverage = [
             c
-            for r in CollectionRun.objects.filter(purpose="metric")
+            for r in CollectionRun.objects.filter(job__purpose="metric")
             for c in r.report.get("coverage", [])
         ]
         assert any(c["outcome"] == "invalid" for c in coverage)

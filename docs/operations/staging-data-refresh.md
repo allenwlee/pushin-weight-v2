@@ -455,9 +455,9 @@ UNION ALL SELECT 'original_content_texts', count(*) FROM original_content_texts
 UNION ALL SELECT 'original_content_sources', count(*) FROM original_content_sources
 UNION ALL SELECT 'brand_discovery_candidate_token_evidence', count(*) FROM brand_discovery_candidate_token_evidence
 UNION ALL SELECT 'brand_discovery_candidate_tokens', count(*) FROM brand_discovery_candidate_tokens
-UNION ALL SELECT 'collection_runs:catalog', count(*) FROM collection_runs WHERE purpose = 'catalog'
-UNION ALL SELECT 'collection_scope_runs:catalog', count(*) FROM collection_scope_runs s JOIN collection_runs r ON r.id = s.run_id WHERE r.purpose = 'catalog'
-UNION ALL SELECT 'collection_observations:catalog', count(*) FROM collection_observations o JOIN collection_runs r ON r.id = o.run_id WHERE r.purpose = 'catalog'
+UNION ALL SELECT 'collection_runs:catalog', count(*) FROM collection_runs r JOIN collection_jobs j ON j.id = r.job_id WHERE j.purpose = 'catalog'
+UNION ALL SELECT 'collection_scope_runs:catalog', count(*) FROM collection_scope_runs s JOIN collection_runs r ON r.id = s.run_id JOIN collection_jobs j ON j.id = r.job_id WHERE j.purpose = 'catalog'
+UNION ALL SELECT 'collection_observations:catalog', count(*) FROM collection_observations o JOIN collection_runs r ON r.id = o.run_id JOIN collection_jobs j ON j.id = r.job_id WHERE j.purpose = 'catalog'
 UNION ALL SELECT 'call_state', count(*) FROM call_state
 UNION ALL SELECT 'django_session', count(*) FROM django_session
 UNION ALL SELECT 'harvest_backlog_windows', count(*) FROM harvest_backlog_windows
@@ -612,16 +612,15 @@ ALTER ROLE staging_refresh_reader NOLOGIN;
 Do not revoke or rotate the production application credential as part of this
 procedure.
 
-Collection refresh policy through migration 0080: Products and numeric evidence
-are copied. Shared `collection_runs` and `collection_observations` counts include
-only `purpose=metric`. Job definitions are copied with `state=paused`, no due/retry
-date and no active claim. Attempt/success pointers to retained numeric runs survive;
+Collection refresh policy: Products and numeric evidence are copied. Shared `collection_runs` and `collection_observations` counts include only runs whose job has `purpose=metric`; schema-aware source inspection also accepts the retained legacy run-purpose column in older snapshots. Executable job definitions are copied with `state=paused`, no due/retry date and no active claim. Inactive archival/direct receipt jobs remain completed and non-dispatchable. Attempt/success pointers to retained numeric runs survive;
 pointers to excluded catalog/content runs are cleared before deletion. Catalog and
 content observations, scope progress and runs are deleted
 in foreign-key order inside the non-serving candidate transaction, preserving
 numeric rows and shared sequence positions. Candidate validation requires zero
 catalog/content rows and no job runtime intent before activation. Product metadata pointers remain source evidence;
 they do not imply the original catalog observations exist in staging.
+
+Before migration `0089_job_owned_run_instructions` makes jobs mandatory, the restored non-serving candidate removes excluded catalog/content runtime rows. Retained jobless numeric runs receive inactive archival jobs; their exact count is calculated from that snapshot, including older-process writes after its migration marker. A retained running numeric attempt fails refresh explicitly. The refresh never invents its completion time or changes production rows. Matching PostgreSQL dump/restore client versions are required.
 
 For a pre-0080 source, only the two known numeric table aliases map to canonical
 count names. The three old HF ledgers remain excluded from dump data; their

@@ -161,7 +161,7 @@ def record_post_membership(run, scope, post_ids, *, observed_at=None):
     """Call inside the fenced page transaction, after Post writes succeeded."""
     if not transaction.get_connection().in_atomic_block:
         raise BatchAdmissionError("membership_requires_fenced_page_transaction")
-    if run.purpose != "content" or run.source_id != "x" or not run.job_id:
+    if not run.job_id or run.job.purpose != "content" or run.job.source_id != "x":
         raise BatchAdmissionError("membership_requires_real_x_collection")
     if scope is not None and scope.run_id != run.pk:
         raise BatchAdmissionError("membership_scope_run_mismatch")

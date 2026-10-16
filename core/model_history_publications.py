@@ -118,7 +118,7 @@ def _publication_window(parent, budget, start, end, *, key, config):
     )
     cached = (
         CollectionObservation.objects.filter(
-            run__source_id=parent.source_id,
+            run__job__source_id=parent.source_id,
             status="ok",
             dimensions__kind="publication_window",
             dimensions__cache_key=cache_key,
@@ -584,14 +584,15 @@ def _reuse_openrouter_days(job, model, identifiers, start, end):
     values = (
         MetricValue.objects.filter(
             source_metric_id=definition["id"],
-            observation__run__source_id="openrouter",
+            observation__run__job__source_id="openrouter",
             observation__run__status__in=["success", "partial"],
             observation__status="ok",
             observation__source_identifier__in=identifiers,
             temporal_status="exact",
             period_label_date__range=(start_date, end_date),
         )
-        .select_related("observation__run", "observation__mapping__subject")
+        .select_related("observation__run__job", "observation__mapping__subject")
+        .defer("observation__run__job__definition")
         .order_by("-observation__observed_at", "-pk")
     )
     selected = {}
@@ -629,7 +630,7 @@ def _reuse_openrouter_days(job, model, identifiers, start, end):
                     {
                         "observation_id": observation.pk,
                         "run_id": str(observation.run_id),
-                        "contract_id": str(observation.run.contract_id),
+                        "contract_id": str(observation.run.job.contract_id),
                         "value_id": value.pk,
                         "source_metric_id": value.source_metric_id,
                         "original_observed_at": observation.observed_at.isoformat(),

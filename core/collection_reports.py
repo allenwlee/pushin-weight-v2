@@ -14,8 +14,8 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000):
     require(source in contract.source_configuration, "source outside contract")
     query = (
         MetricValue.objects.filter(
-            observation__run__contract=contract,
-            observation__run__source_id=source,
+            observation__run__job__contract=contract,
+            observation__run__job__source_id=source,
             observation__source_identifier=identifier,
             observation__status="ok",
             observation__run__status__in=["success", "partial"],

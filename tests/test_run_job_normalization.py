@@ -19,7 +19,33 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 MIGRATION = "core.migrations.0088_archive_run_instructions"
 
 
-def previous_module(name):
+@pytest.fixture
+def historical_schema(isolated_migration_database, monkeypatch):
+    """Old rows belong to historical models on the actual old schema."""
+    executor = MigrationExecutor(connection)
+    target = [("core", "0088_archive_run_instructions")]
+    executor.migrate(target)
+    historical = executor.loader.project_state(target).apps
+    monkeypatch.setitem(globals(), "apps", historical)
+    monkeypatch.setitem(
+        globals(), "CollectionRun", historical.get_model("core", "CollectionRun")
+    )
+    monkeypatch.setitem(
+        globals(), "CollectionJob", historical.get_model("core", "CollectionJob")
+    )
+    return historical
+
+
+def legacy_persist(contract, *args, **kwargs):
+    historic_contract = apps.get_model("core", "MetricCollectionContract").objects.get(
+        pk=contract.pk
+    )
+    return previous_module("benchmark_metric_store").persist_source(
+        historic_contract, *args, **kwargs
+    )
+
+
+def previous_module(name, historical=None):
     """Exact core source at 2023a3ad, runnable without local Git history.
 
     Fixtures are byte-for-byte exports of the pre-U17 caller, rather than a
@@ -39,11 +65,34 @@ def previous_module(name):
     assert hashlib.sha256(source).hexdigest() == hashes[name]
     module = types.ModuleType(f"previous_{name}")
     exec(compile(source, str(path), "exec"), module.__dict__)  # noqa: S102 - trusted historical caller fixture
+    # The frozen caller imports the model state it actually deployed against.
+    # Never emulate removed ORM fields through a current compatibility manager.
+    model_apps = historical or apps
+    for symbol, value in list(vars(module).items()):
+        if hasattr(value, "_meta") and value._meta.app_label == "core":
+            setattr(
+                module, symbol, model_apps.get_model("core", value._meta.model_name)
+            )
+    if name == "hf_catalog":
+        from core.models import Product
+
+        # Historical models deliberately omit Python methods; restore the
+        # deployed read-through property without changing persisted state.
+        module.Product.hf_namespace = Product.hf_namespace
+        original = module.get_publisher
+
+        def historical_publisher(*args, **kwargs):
+            result = original(*args, **kwargs)
+            return model_apps.get_model("core", "CompanyAccount").objects.get(
+                pk=result.pk
+            )
+
+        module.get_publisher = historical_publisher
     return module
 
 
-def previous_catalog_module():
-    return previous_module("hf_catalog")
+def previous_catalog_module(historical=None):
+    return previous_module("hf_catalog", historical)
 
 
 @pytest.mark.parametrize(
@@ -51,6 +100,7 @@ def previous_catalog_module():
 )
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.usefixtures("isolated_migration_database")
+@pytest.mark.usefixtures("historical_schema")
 def test_build_leaves_catalog_resumable_by_loaded_previous_caller(status, budget):
     from tests.test_hf_catalog_runner import api, scope
 
@@ -75,11 +125,11 @@ def test_build_leaves_catalog_resumable_by_loaded_previous_caller(status, budget
     assert CollectionJob.objects.count() == 0
 
 
+@pytest.mark.usefixtures("historical_schema")
 def test_build_skips_all_jobless_running_rows_but_strict_catchup_refuses_them():
-    from core.benchmark_metric_store import persist_source
     from tests.test_benchmark_download_persistence import configured, payload
 
-    numeric = persist_source(configured(), "hf", "d" * 64, payload())
+    numeric = legacy_persist(configured(), "hf", "d" * 64, payload())
     CollectionRun.objects.filter(pk=numeric.pk).update(
         job=None, status="running", completed_at=None, lease_token=None
     )
@@ -100,8 +150,9 @@ def test_build_skips_all_jobless_running_rows_but_strict_catchup_refuses_them():
     assert catalog.job_id is None and catalog.lease_token is None
 
 
+@pytest.mark.usefixtures("historical_schema")
 def test_catalog_run_lookup_preserves_jobless_history_without_writes():
-    from core.hf_catalog import resolve_catalog_run
+    resolve_catalog_run = previous_catalog_module().resolve_catalog_run
 
     run = CollectionRun.objects.create(
         source_id="hf", purpose="catalog", status="pending", ingestion_key="f" * 64
@@ -115,7 +166,48 @@ def test_catalog_run_lookup_preserves_jobless_history_without_writes():
     assert CollectionJob.objects.count() == jobs_before
 
 
-def test_phase1_reader_includes_finished_jobless_write_after_migration():
+@pytest.mark.usefixtures("historical_schema")
+def test_frozen_legacy_bootstrap_launcher_runs_only_with_its_historical_orm(
+    settings, monkeypatch
+):
+    import httpx
+
+    from core import models
+    from tests.test_benchmark_download_persistence import configured, payload
+
+    contract = configured()
+    batch = uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        "pw-benchmark-production-bootstrap:" + str(contract.pk) + ":hf",
+    )
+    run = legacy_persist(contract, "hf", "9" * 64, payload(), batch_id=batch)
+    settings.BENCHMARK_COLLECTION_ENABLED = True
+    # Keep the current command's own imports bound to current model classes;
+    # only the frozen inline caller receives its historical ORM imports.
+    importlib.import_module("monitor.management.commands.collect_benchmark_due")
+    monkeypatch.setattr(models, "MetricCollectionRun", CollectionRun)
+    monkeypatch.setattr(
+        models,
+        "MetricCollectionContract",
+        apps.get_model("core", "MetricCollectionContract"),
+    )
+
+    def no_provider_request(*args, **kwargs):
+        raise AssertionError("Retained bootstrap and disabled schedule need no request")
+
+    monkeypatch.setattr(httpx.Client, "send", no_provider_request)
+    script = (
+        Path(__file__).parent
+        / "fixtures/collection_schema/legacy_benchmark_launcher.txt"
+    ).read_text()
+    script = script.replace("75c4a856-385b-429a-9b03-c7e023ea6f73", str(contract.pk))
+    exec(compile(script, "historical_legacy_benchmark_launcher.py", "exec"), {})  # noqa: S102 - frozen historical deployed payload
+    assert CollectionRun.objects.count() == 1
+    assert CollectionRun.objects.get(pk=run.pk).observations.count() == 1
+
+
+@pytest.mark.usefixtures("historical_schema")
+def test_phase2_reader_includes_finished_old_writer_evidence_after_catchup():
     from django.db.migrations.recorder import MigrationRecorder
 
     from core.collection_reports import resource_statistics
@@ -128,8 +220,14 @@ def test_phase1_reader_includes_finished_jobless_write_after_migration():
     )
     previous = previous_module("benchmark_metric_store")
     contract = configured()
-    run = previous.persist_source(contract, "hf", "f" * 64, payload(123))
+    run = previous.persist_source(
+        apps.get_model("core", "MetricCollectionContract").objects.get(pk=contract.pk),
+        "hf",
+        "f" * 64,
+        payload(123),
+    )
     assert run.job_id is None and run.status == "success"
+    MigrationExecutor(connection).migrate([("core", "0089_job_owned_run_instructions")])
     report = resource_statistics(
         contract_id=contract.pk, source="hf", identifier="lab/Model"
     )
@@ -137,17 +235,28 @@ def test_phase1_reader_includes_finished_jobless_write_after_migration():
     assert "123" in {v["value"] for v in report["values"]}
 
 
-def test_scope_copy_mismatch_fences_a_claim():
-    from core.collection_state import StaleClaim, claim_job, fenced_run
+def test_scope_copy_mismatch_is_rejected_before_it_can_weaken_a_claim():
+    from django.db import IntegrityError, transaction
+
+    from core.collection_state import claim_job, fenced_run
 
     claim = claim_job(ready().pk)
-    CollectionRun.objects.filter(pk=claim.run_id).update(scope={"wrong": True})
-    with pytest.raises(StaleClaim), fenced_run(claim):
-        pytest.fail("mismatched legacy instructions were admitted")
+    with (
+        pytest.raises(IntegrityError, match="instruction copy mismatch"),
+        transaction.atomic(),
+        connection.cursor() as cursor,
+    ):
+        cursor.execute(
+            "UPDATE collection_runs SET scope = %s WHERE id = %s",
+            ['{"wrong": true}', claim.run_id],
+        )
+    with fenced_run(claim) as (_, run):
+        assert run.pk == claim.run_id
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.usefixtures("isolated_migration_database")
+@pytest.mark.usefixtures("historical_schema")
 def test_0087_to_0088_preserves_every_existing_field_and_is_retryable():
     executor = MigrationExecutor(connection)
     before = [("core", "0087_source_statistics_snapshot")]
@@ -159,10 +268,9 @@ def test_0087_to_0088_preserves_every_existing_field_and_is_retryable():
     Observation = old.get_model("core", "CollectionObservation")
     source = Source.objects.get(pk="hf")
     timestamp = timezone.now()
-    from core.benchmark_metric_store import persist_source
     from tests.test_benchmark_download_persistence import configured, payload
 
-    numeric = persist_source(configured(), "hf", "e" * 64, payload(9007199254740993))
+    numeric = legacy_persist(configured(), "hf", "e" * 64, payload(9007199254740993))
     # Simulate an old deployed writer without manufacturing a second collector.
     numeric_job = numeric.job_id
     Run.objects.filter(pk=numeric.pk).update(job=None)
@@ -238,13 +346,20 @@ def test_0087_to_0088_preserves_every_existing_field_and_is_retryable():
 @pytest.mark.parametrize(
     "helper", ["archive_run_instructions", "archive_inactive_run_instructions"]
 )
+@pytest.mark.usefixtures("historical_schema")
 def test_archive_rejects_existing_job_copy_mismatch(helper):
-    from core.collection_state import claim_job, finish_run
 
     module = importlib.import_module(MIGRATION)
-    claim = claim_job(ready().pk)
-    finish_run(claim, status="success")
-    CollectionRun.objects.filter(pk=claim.run_id).update(scope={"wrong": True})
+    owner = ready()
+    CollectionRun.objects.create(
+        job_id=owner.pk,
+        source_id=owner.source_id,
+        purpose=owner.purpose,
+        scope={"wrong": True},
+        status="success",
+        completed_at=timezone.now(),
+        ingestion_key="7" * 64,
+    )
     with (
         connection.schema_editor() as editor,
         pytest.raises(ValueError, match="instruction mismatch"),
@@ -252,6 +367,7 @@ def test_archive_rejects_existing_job_copy_mismatch(helper):
         getattr(module, helper)(apps, editor)
 
 
+@pytest.mark.usefixtures("historical_schema")
 def test_archives_cannot_become_ready_or_due():
     from core.collection_jobs import set_job_state
     from core.collection_scheduling import due_job
@@ -261,7 +377,7 @@ def test_archives_cannot_become_ready_or_due():
     from core.models import DataSource
 
     run = CollectionRun.objects.create(
-        source=DataSource.objects.get(pk="hf"),
+        source_id=DataSource.objects.get(pk="hf").pk,
         purpose="catalog",
         status="pending",
         scope={"actual": True},
@@ -279,13 +395,14 @@ def test_archives_cannot_become_ready_or_due():
 
 
 @pytest.mark.parametrize("collision", ["id", "key"])
+@pytest.mark.usefixtures("historical_schema")
 def test_archive_known_identity_collision_never_reassigns_or_overwrites(collision):
     from tests.test_collection_jobs import job
 
     module = importlib.import_module(MIGRATION)
     owner = job()
     run = CollectionRun.objects.create(
-        source=owner.source,
+        source_id=owner.source_id,
         purpose="catalog",
         status="pending",
         ingestion_key="b" * 64,
@@ -313,6 +430,7 @@ def test_archive_known_identity_collision_never_reassigns_or_overwrites(collisio
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("historical_schema")
 def test_archive_retry_after_committed_batch_preserves_ids(monkeypatch):
     from core.models import DataSource
 
@@ -320,7 +438,7 @@ def test_archive_retry_after_committed_batch_preserves_ids(monkeypatch):
     monkeypatch.setattr(module, "BATCH_SIZE", 1)
     first = CollectionRun.objects.create(
         id=uuid.UUID(int=1),
-        source=DataSource.objects.get(pk="hf"),
+        source_id=DataSource.objects.get(pk="hf").pk,
         purpose="catalog",
         status="pending",
         ingestion_key="a" * 64,
@@ -349,30 +467,6 @@ def test_archive_retry_after_committed_batch_preserves_ids(monkeypatch):
     first.refresh_from_db()
     assert first.job_id == preserved
     assert CollectionJob.objects.count() == 2
-
-
-def test_direct_claim_cannot_replace_a_job_assigned_after_object_was_loaded():
-    from core.collection_state import claim_direct_run
-    from core.models import DataSource
-
-    module = importlib.import_module(MIGRATION)
-    stale = CollectionRun.objects.create(
-        source=DataSource.objects.get(pk="hf"),
-        purpose="catalog",
-        status="pending",
-        ingestion_key="c" * 64,
-    )
-    with connection.schema_editor(atomic=False) as editor:
-        module.archive_run_instructions(apps, editor)
-    actual = CollectionRun.objects.get(pk=stale.pk)
-    with pytest.raises(ValueError, match="changed while acquiring"):
-        claim_direct_run(
-            stale, driver="execute_catalog", seconds=60, limits={"seconds": 60}
-        )
-    actual.refresh_from_db()
-    assert actual.job.operation == "archived_run"
-    assert actual.status == "pending"
-    assert CollectionJob.objects.count() == 1
 
 
 @pytest.mark.django_db(transaction=True)

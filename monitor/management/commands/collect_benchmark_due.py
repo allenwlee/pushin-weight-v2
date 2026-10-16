@@ -69,7 +69,9 @@ class Command(BaseCommand):
                 continue
             enabled = config.get("scheduling_enabled", False) and registry.enabled
             latest = (
-                CollectionRun.objects.filter(contract=contract, source_id=source)
+                CollectionRun.objects.filter(
+                    job__contract=contract, job__source_id=source
+                )
                 .order_by("-started_at")
                 .first()
             )

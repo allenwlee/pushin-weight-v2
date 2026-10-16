@@ -1,5 +1,7 @@
 """Shared collection storage preserves numeric admission and catalog recovery."""
 
+from uuid import uuid4
+
 import pytest
 from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
@@ -10,6 +12,7 @@ from core.models import (
     CollectionScopeRun,
     DataSource,
 )
+from tests.collection_fixtures import evidence_job
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
@@ -20,11 +23,11 @@ def source():
     )[0]
 
 
-def test_live_legacy_benchmark_launcher_uses_shared_storage(settings, monkeypatch):
+def test_repository_benchmark_scheduler_reads_job_backed_history(settings, monkeypatch):
     import uuid
-    from pathlib import Path
 
     import httpx
+    from django.core.management import call_command
 
     from core.benchmark_metric_store import persist_source
     from tests.test_benchmark_download_persistence import configured, payload
@@ -43,13 +46,7 @@ def test_live_legacy_benchmark_launcher_uses_shared_storage(settings, monkeypatc
         )
 
     monkeypatch.setattr(httpx.Client, "send", no_provider_request)
-    script = (
-        Path(__file__).parent
-        / "fixtures/collection_schema/legacy_benchmark_launcher.txt"
-    ).read_text()
-    script = script.replace("75c4a856-385b-429a-9b03-c7e023ea6f73", str(contract.pk))
-    # Execute the vetted, checked-in launcher to cover its actual import/query path.
-    exec(compile(script, "legacy_benchmark_launcher.py", "exec"), {})  # noqa: S102
+    call_command("collect_benchmark_due", contract=str(contract.pk), apply=True)
     assert CollectionRun.objects.count() == 1
     assert CollectionRun.objects.get(pk=run.pk).observations.count() == 1
 
@@ -74,17 +71,19 @@ def test_existing_tables_remain_consolidated_with_the_shared_job_registry():
 def test_numeric_run_still_requires_a_reviewed_contract():
     with pytest.raises(IntegrityError), transaction.atomic():
         CollectionRun.objects.create(
-            source=source(), ingestion_key="a" * 64, lease_expires_at=timezone.now()
+            ingestion_key="a" * 64,
+            lease_expires_at=timezone.now(),
+            lease_token=uuid4(),
         )
 
 
 def test_catalog_partial_remains_resumable_without_fake_numeric_contract():
     run = CollectionRun.objects.create(
-        source=source(),
-        purpose="catalog",
+        job=evidence_job(
+            source_id=source().pk, purpose="catalog", scope={"namespaces": []}
+        ),
         ingestion_key="b" * 64,
         status="partial",
-        scope={"namespaces": []},
     )
     run.refresh_from_db()
     assert run.completed_at is None and run.contract_id is None
@@ -112,9 +111,11 @@ def test_metric_partial_requires_completed_timestamp():
     _, _, observation = measurement()
     with pytest.raises(IntegrityError), transaction.atomic():
         CollectionRun.objects.create(
-            source=source(),
-            contract=observation.run.contract,
-            purpose="metric",
+            job=evidence_job(
+                source_id=source().pk,
+                purpose="metric",
+                contract_id=observation.run.contract.pk,
+            ),
             ingestion_key="d" * 64,
             status="partial",
             lease_expires_at=timezone.now(),

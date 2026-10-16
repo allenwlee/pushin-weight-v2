@@ -298,7 +298,7 @@ def _publisher(contract, source, identifier):
 def evidence_rows(contract, source, evidence):
     """Yield supported native rows; preserve snapshot and effective clocks separately."""
     require(
-        evidence.run.purpose == "catalog" and evidence.run.source_id == source,
+        evidence.run.job.purpose == "catalog" and evidence.run.job.source_id == source,
         "catalog evidence source mismatch",
     )
     require(evidence.status == "ok", "source evidence is an error")
@@ -510,7 +510,8 @@ def enqueue_projection(claim, *, contract, evidence_ids):
     )
     with fenced_run(claim) as (_, run):
         require(
-            run.purpose == "catalog" and run.source_id in contract.source_configuration,
+            run.job.purpose == "catalog"
+            and run.job.source_id in contract.source_configuration,
             "projection queue requires catalog source evidence",
         )
         ids = sorted(set(evidence_ids))
@@ -579,6 +580,7 @@ def _project_evidence(
     enforce_source_collection(contract, source)
     selected = list(
         CollectionObservation.objects.select_related("run")
+        .prefetch_related("run__job")
         .filter(pk__in=evidence_ids)
         .order_by("pk")
     )
@@ -812,8 +814,8 @@ def replay_saved_evidence(job_id):
         cursor = int(previous.cursor) if previous and previous.cursor else 0
     selected = CollectionObservation.objects.filter(
         Q(run_id__in=runs) | Q(run__job_id__in=jobs),
-        run__source_id=job.source_id,
-        run__purpose="catalog",
+        run__job__source_id=job.source_id,
+        run__job__purpose="catalog",
         pk__gt=cursor,
         source_subject_kind__in=["repository", "account", "model", "aggregate"],
         status="ok",

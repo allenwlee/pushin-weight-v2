@@ -29,23 +29,53 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 
 @pytest.mark.usefixtures("isolated_migration_database")
 @pytest.mark.parametrize(
-    "legacy_source", [False, True, "0087", "0088", "0088-active-metric"]
+    "legacy_source", [False, True, "0080", "0087", "0088", "0088-active-metric"]
 )
 def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
     tmp_path, legacy_source
 ):
     from core.benchmark_metric_store import persist_source
     from core.models import CollectionObservation, CollectionRun, CollectionScopeRun
+    from tests.collection_fixtures import evidence_job
     from tests.test_benchmark_download_persistence import configured, payload
+    from tests.test_run_job_normalization import previous_module
 
     executor = MigrationExecutor(connection)
-    executor.migrate(executor.loader.graph.leaf_nodes())
-    numeric = persist_source(
-        configured(), "hf", "9" * 64, payload(downloads=4_000_000_000)
+    target = (
+        executor.loader.graph.leaf_nodes()
+        if legacy_source is False
+        else [
+            (
+                "core",
+                "0088_archive_run_instructions"
+                if legacy_source in {"0088", "0088-active-metric"}
+                else "0087_source_statistics_snapshot",
+            )
+        ]
     )
-    catalog = CollectionRun.objects.create(
-        source_id="hf", purpose="catalog", status="pending", ingestion_key="8" * 64
-    )
+    executor.migrate(target)
+    contract = configured()
+    if legacy_source is False:
+        numeric = persist_source(
+            contract, "hf", "9" * 64, payload(downloads=4_000_000_000)
+        )
+        catalog = CollectionRun.objects.create(
+            job=evidence_job(source_id="hf"), status="pending", ingestion_key="8" * 64
+        )
+    else:
+        historical = executor.loader.project_state(target).apps
+        CollectionRun = historical.get_model("core", "CollectionRun")
+        CollectionScopeRun = historical.get_model("core", "CollectionScopeRun")
+        CollectionObservation = historical.get_model("core", "CollectionObservation")
+        historic_contract = historical.get_model(
+            "core", "MetricCollectionContract"
+        ).objects.get(pk=contract.pk)
+        numeric = previous_module("benchmark_metric_store", historical).persist_source(
+            historic_contract, "hf", "9" * 64, payload(downloads=4_000_000_000)
+        )
+        catalog = CollectionRun.objects.create(
+            source_id="hf", purpose="catalog", status="pending", ingestion_key="8" * 64
+        )
     scope = CollectionScopeRun.objects.create(
         run=catalog, scope_key="publisher", ownership={}
     )
@@ -108,13 +138,6 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
         claim_job(content_job.pk, manual_authorized=True)
         jobs = [metric_job.pk, catalog_job.pk, content_job.pk]
     if legacy_source:
-        from core.models import CollectionJob
-
-        # Recreate a genuine old writer's jobless numeric attempt before
-        # restoring an older snapshot, rather than undoing archived evidence.
-        numeric.job = None
-        numeric.save(update_fields=["job"])
-        CollectionJob.objects.all().delete()
         if legacy_source == "0088-active-metric":
             CollectionRun.objects.filter(pk=numeric.pk).update(
                 status="running", completed_at=None, lease_token=None
@@ -141,6 +164,8 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
         MigrationExecutor(connection).migrate(
             [("core", "0079_original_content_physical_names")]
         )
+    elif legacy_source == "0080":
+        MigrationExecutor(connection).migrate([("core", "0080_collection_schema")])
     elif legacy_source == "0087":
         MigrationExecutor(connection).migrate(
             [("core", "0087_source_statistics_snapshot")]
@@ -227,9 +252,7 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
             policy=policy, target_url=url, adapter=adapter, python=sys.executable
         )
         if legacy_source == "0088-active-metric":
-            with pytest.raises(
-                RefreshError, match="candidate_run_normalization_failed"
-            ):
+            with pytest.raises(RefreshError, match="candidate_migration_failed"):
                 processor.process(candidate)
             import psycopg
 

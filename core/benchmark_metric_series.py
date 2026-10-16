@@ -327,8 +327,8 @@ def metric_points(contract, line, days):
     lower, upper = days[0], days[-1]
     if source == "arena":
         prior = CollectionObservation.objects.filter(
-            run__contract=contract,
-            run__source_id="arena",
+            run__job__contract=contract,
+            run__job__source_id="arena",
             run__status__in=["success", "partial"],
             published_date__lt=lower,
             status="ok",
@@ -361,7 +361,7 @@ def metric_points(contract, line, days):
         queryset.filter(
             source_metric=definition,
             observation__mapping_id__in=mapping_ids,
-            observation__run__contract=contract,
+            observation__run__job__contract=contract,
             observation__run__status__in=["success", "partial"],
             observation__status="ok",
         )
@@ -489,8 +489,8 @@ def metric_points(contract, line, days):
         # Keep that publication as absence evidence without inventing a row.
         publication_runs = list(
             CollectionRun.objects.filter(
-                contract=contract,
-                source_id=source,
+                job__contract=contract,
+                job__source_id=source,
                 status__in=["success", "partial"],
                 source_metadata__publication_end__gte=str(prior or lower),
                 source_metadata__publication_start__lte=upper,
@@ -511,8 +511,8 @@ def metric_points(contract, line, days):
                     complete_publications[day] = revision
         publications = (
             CollectionObservation.objects.filter(
-                run__contract=contract,
-                run__source_id=source,
+                run__job__contract=contract,
+                run__job__source_id=source,
                 run__status__in=["success", "partial"],
                 status="ok",
                 source_metadata__publication_complete=True,
@@ -543,8 +543,8 @@ def metric_points(contract, line, days):
     if source == "openrouter":
         observed_dates = set(
             CollectionObservation.objects.filter(
-                run__contract=contract,
-                run__source_id=source,
+                run__job__contract=contract,
+                run__job__source_id=source,
                 run__status__in=["success", "partial"],
                 status="ok",
                 dimensions__date__gte=lower,
@@ -701,12 +701,13 @@ def build_comparison(contract, preset_key, start_date=None, end_date=None):
         )
     latest = {}
     for run in (
-        CollectionRun.objects.filter(contract=contract)
-        .order_by("source_id", "-started_at", "-id")
-        .distinct("source_id")
-        .only("source_id", "status", "started_at", "completed_at", "error_code")
+        CollectionRun.objects.filter(job__contract=contract)
+        .order_by("job__source_id", "-started_at", "-id")
+        .distinct("job__source_id")
+        .select_related("job")
+        .only("job__source_id", "status", "started_at", "completed_at", "error_code")
     ):
-        latest[run.source_id] = {
+        latest[run.job.source_id] = {
             "status": run.status,
             "last_attempt_at": run.started_at.isoformat(),
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,

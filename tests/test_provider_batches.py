@@ -82,9 +82,7 @@ def test_post_membership_preserves_old_observation_constraints(batch):
     job = batch.source_collection_job
     post = Post.objects.create(tweet_id="1", text="Qwen", lang="en")
     run = CollectionRun.objects.create(
-        source=job.source,
         job=job,
-        purpose="content",
         ingestion_key="d" * 64,
         lease_token=uuid4(),
         lease_expires_at=timezone.now() + timedelta(minutes=5),
@@ -216,9 +214,7 @@ def admitted(batch):
     post = Post.objects.create(tweet_id="1", text="Qwen", lang="en")
     PostEnrichmentState.objects.create(post=post)
     run = CollectionRun.objects.create(
-        source=job.source,
         job=job,
-        purpose="content",
         ingestion_key="d" * 64,
         lease_token=uuid4(),
         lease_expires_at=timezone.now() + timedelta(minutes=5),

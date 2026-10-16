@@ -71,8 +71,8 @@ def _creation_record(product, aliases, mappings, company_ids, cutoff):
         if mapping.source_id == "openrouter" and product.repo_id is None:
             observation = (
                 CollectionObservation.objects.filter(
-                    run__source_id="openrouter",
-                    run__purpose="catalog",
+                    run__job__source_id="openrouter",
+                    run__job__purpose="catalog",
                     source_identifier=mapping.external_identifier,
                     dimensions__kind="model_catalog",
                     status="ok",
@@ -101,8 +101,8 @@ def _creation_record(product, aliases, mappings, company_ids, cutoff):
         ):
             observation = (
                 CollectionObservation.objects.filter(
-                    run__source_id="github",
-                    run__purpose="catalog",
+                    run__job__source_id="github",
+                    run__job__purpose="catalog",
                     source_identifier=mapping.external_identifier,
                     dimensions__kind="repository",
                     status="ok",

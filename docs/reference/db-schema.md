@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-16 JST (source `8e62818e`; exact table/column inventory checked against models and isolated PostgreSQL, including the valid/ready statistics snapshot index)
+Last verified: 2026-10-16 JST (repository candidate based on `fdfa3dcc`; collection instruction ownership checked against models, migration SQL and isolated PostgreSQL)
 
-Scope: **151 application tables**, **1971 physical columns**, plus nine compatibility views. Migration boundary: `0087_source_statistics_snapshot`, following the account/provider-batch merge `0086_merge_account_provider_batch`. This increment adds no tables or columns; it adds a conditional unique index to existing collection observations.
+Scope: **151 application tables**, **1971 physical columns**, plus nine compatibility views. Migration boundary: `0089_job_owned_run_instructions`. Four physical compatibility columns on `collection_runs` are deliberately absent from the Django model; all other physical columns have model fields. This boundary adds or retires no tables.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -5833,16 +5833,16 @@ adds six temporary writable views after atomically renaming their base tables:
 | `trend_narrative_visible_runs` | `original_content_selections` |
 | `editorial_pictures` | `content_pictures` |
 
-Migration 0080 also supplies writable `metric_collection_runs` and `metric_observations` views restricted to numeric-purpose records.
+`metric_collection_runs` and `metric_observations` are writable views restricted to numeric-purpose records. The run view exposes its existing 25-column interface: source, purpose, contract and scope are read-only expressions derived from its job; execution columns remain writable. It does not expose `job_id` or `lease_token`, so a new run must be created through the canonical table with its required job. The observation view remains a writable single-table view filtered by its run's job purpose. Both views enforce their metric-purpose selection on writes.
 
-These views select the unchanged columns; they contain no copied rows. Runtime
+These views contain no copied rows. The six original-content aliases select unchanged columns. Runtime
 models target canonical base tables. Table, FK, index, constraint and sequence
 identities are preserved, including existing sequence names. Lock waits are
 bounded to five seconds in both migration directions. Alias removal is separately
 scoped after verification of all consumers; there is no calendar waiting period.
 
 The column/type/index inventory was reconciled with all 151 concrete
-`core` models and the combined final migration state through migration 0086. Raw SQL
+`core` models and the combined final migration state through migration 0089, including its four retained physical compatibility columns. Raw SQL
 migrations additionally supply the account-handle expression index, the X detail source guards, the named
 account-country FK, the two explicit SQL delete actions on posts, the ICU
 collation, the person-name selection/immutability triggers, and these compatibility views. Application-level validators and
@@ -5900,9 +5900,7 @@ next_due_at)`. Field-level uniqueness on `job_key` uses
 `ck_collection_job_mode` and `ck_collection_job_state` enforce the listed choices;
 `ck_collection_job_idle_dates` requires null due/retry dates outside ready state;
 `ck_collection_job_hash` requires 64 lowercase hexadecimal characters;
-`ck_collection_job_key` forbids an empty key. Application services validate
-definition hashes, allowed operations and matching source/purpose/contract on
-all pointed-to runs. Reverse migration refuses while job/content evidence exists.
+`ck_collection_job_key` forbids an empty key. The `collection_job_immutable_instructions` trigger rejects updates to identity, source, purpose, contract, operation, mode, job key, definition or definition hash; state, dates and run pointers remain mutable. Application services validate definition hashes, allowed operations and matching instructions on all pointed-to runs. Archival and legacy-direct receipt jobs are completed, with no active run or future dispatch dates; shared scheduling never executes them. The job-backed instruction migration is forward-only; rolling application code back requires a compatible revision.
 
 [Back to table inventory](#table-inventory)
 
@@ -6021,9 +6019,7 @@ None declared beyond field/FK/constraint indexes.
 
 ### `collection_runs` — CollectionRun
 
-One source collection run for numeric measurements, catalog discovery or content
-invocation accounting. Catalog partial runs resume; content attempts remain
-separate terminal receipts. Legacy numeric runs may have no job.
+One execution record for numeric measurements, catalog discovery or content invocation accounting. Every run references the job owning its source, purpose, contract and frozen scope. Catalog partial runs resume; content attempts remain separate terminal receipts. Instance properties expose job-owned instructions for existing Python callers; ORM queries use `job__source`, `job__purpose` and other job relations.
 
 Model: [CollectionRun](../../core/models.py#L7935).
 
@@ -6033,15 +6029,15 @@ Model: [CollectionRun](../../core/models.py#L7935).
 | --- | --- | --- | --- |
 | `id` | `uuid` | No | PK. Django default: `uuid4`. |
 | `batch_id` | `uuid` | No | Django default: `uuid4`. |
-| `job_id` | `uuid` | Yes | FK → [`collection_jobs`](#table-collection_jobs); Django `PROTECT`, PostgreSQL deferred NO ACTION. |
+| `job_id` | `uuid` | No | Required instruction owner → [`collection_jobs`](#table-collection_jobs); Django `PROTECT`, PostgreSQL deferred NO ACTION. |
 | `lease_token` | `uuid` | Yes | Rotating execution token; late responses cannot use a replaced claim. |
-| `purpose` | `varchar(16)` | No | `metric` requires a reviewed contract and lease; `catalog`/`content` require no numeric contract. Django default: `'metric'`. SQL default: `'metric'`. |
-| `scope` | `jsonb` | No | Frozen source selection for catalog continuation. Django default: `dict`. SQL default: `{}`. |
+| `purpose` | `varchar(16)` | No | Physical compatibility copy populated from the job by a trigger; no Django field. SQL default: `'metric'`. The job owns its meaning. |
+| `scope` | `jsonb` | No | Physical compatibility copy of `job.definition.scope`, populated by a trigger; no Django field. SQL default: `{}`. |
 | `invocations` | `jsonb` | No | Append-preserved invocation budgets, counters and results. Django default: `list`. SQL default: `[]`. |
 | `report` | `jsonb` | No | Latest collection summary. Django default: `dict`. SQL default: `{}`. |
 | `updated_at` | `timestamp with time zone` | Yes | Set by Django on save; original migrated timestamp preserved, unknown prior numeric timestamps stay NULL. |
-| `contract_id` | `uuid` | Yes | FK → [`metric_collection_contracts`](#table-metric_collection_contracts) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `contract`. |
-| `source_id` | `varchar(32)` | No | FK → [`data_sources`](#table-data_sources) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source`. |
+| `contract_id` | `uuid` | Yes | Physical compatibility copy of the job's contract; no Django field. Retained FK → [`metric_collection_contracts`](#table-metric_collection_contracts) (`id`), PostgreSQL deferred NO ACTION. |
+| `source_id` | `varchar(32)` | No | Physical compatibility copy of the job's source; no Django field. Retained FK → [`data_sources`](#table-data_sources) (`id`), PostgreSQL deferred NO ACTION. |
 | `ingestion_key` | `varchar(64)` | No | Field-level unique. |
 | `status` | `varchar(16)` | No | Django default: `'running'`. |
 | `started_at` | `timestamp with time zone` | No | Django default: `now`. |
@@ -6061,18 +6057,17 @@ Model: [CollectionRun](../../core/models.py#L7935).
 
 **Named indexes:**
 
-- `idx_metric_run_outcome`: `CREATE INDEX "idx_metric_run_outcome" ON "collection_runs" ("contract_id", "source_id", "status", "completed_at")`.
+- `idx_metric_run_outcome`: `CREATE INDEX "idx_metric_run_outcome" ON "collection_runs" ("job_id", "status", "completed_at")`.
 - `idx_metric_run_batch`: `CREATE INDEX "idx_metric_run_batch" ON "collection_runs" ("batch_id")`.
 
 **Named constraints:**
 
 - `ck_metric_ingestion_key`: `ALTER TABLE "collection_runs" ADD CONSTRAINT "ck_metric_ingestion_key" CHECK ("ingestion_key"::text ~ '^[0-9a-f]{64}$')`.
 - `ck_run_payload_hash`: `ALTER TABLE "collection_runs" ADD CONSTRAINT "ck_run_payload_hash" CHECK (("payload_sha256" IS NULL OR "payload_sha256"::text ~ '^[0-9a-f]{64}$'))`.
-- `ck_collection_run_lifecycle`: `CHECK ((((contract_id IS NOT NULL) AND (lease_expires_at IS NOT NULL) AND ((purpose)::text = 'metric'::text) AND (((completed_at IS NULL) AND ((status)::text = 'running'::text)) OR ((completed_at IS NOT NULL) AND ((status)::text = ANY ((ARRAY['success'::character varying, 'partial'::character varying, 'failed'::character varying, 'aborted'::character varying])::text[]))))) OR ((contract_id IS NULL) AND ((purpose)::text = 'catalog'::text) AND (((completed_at IS NULL) AND ((status)::text = ANY ((ARRAY['pending'::character varying, 'running'::character varying, 'partial'::character varying, 'interrupted'::character varying])::text[]))) OR ((completed_at IS NOT NULL) AND ((status)::text = ANY ((ARRAY['success'::character varying, 'failed'::character varying, 'aborted'::character varying])::text[]))))) OR ((contract_id IS NULL) AND ((purpose)::text = 'content'::text) AND (((completed_at IS NULL) AND ((status)::text = 'running'::text)) OR ((completed_at IS NOT NULL) AND ((status)::text = ANY ((ARRAY['success'::character varying, 'partial'::character varying, 'failed'::character varying, 'aborted'::character varying])::text[])))))))`.
 - `ck_collection_run_job_lease`: `CHECK (((job_id IS NULL) OR (NOT ((status)::text = 'running'::text)) OR ((lease_expires_at IS NOT NULL) AND (lease_token IS NOT NULL))))`.
 - `ck_run_success_count`: `ALTER TABLE "collection_runs" ADD CONSTRAINT "ck_run_success_count" CHECK ("success_count" <= ("selected_count"))`.
 
-Numeric partial is terminal and has a completion timestamp. Catalog partial/interrupted remains resumable with no completion timestamp. Catalog success/failed/aborted is terminal. Imported legacy identities remain in `source_metadata.legacy_catalog`.
+The `collection_run_job_instructions` trigger validates lifecycle against the linked job on every insert/update. Numeric runs require a contract and lease expiry; running means no completion timestamp, while success/partial/failed/aborted requires one. Catalog jobs have no numeric contract: pending/running/partial/interrupted has no completion timestamp; success/failed/aborted requires one. Content jobs have no numeric contract: running has no completion timestamp, while success/partial/failed/aborted requires one. The trigger also populates the four physical compatibility copies from the job and rejects conflicting updates. These copies provide the preceding application revision with readable columns; they are not independent instructions. Imported legacy identities remain in `source_metadata.legacy_catalog`.
 
 [Back to table inventory](#table-inventory)
 

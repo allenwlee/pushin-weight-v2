@@ -793,48 +793,11 @@ def persist_source(
             else None
         )
         if existing:
-            if existing.job_id is None:
-                # A serving pre-compatible revision may have written this row
-                # after migration 0088. Guard its stored identity, then archive
-                # only after its original lease has naturally expired/finished.
-                from importlib import import_module
-                from types import SimpleNamespace
-
-                from django.apps import apps
-
-                require(
-                    existing.contract_id == contract.pk
-                    and existing.source_id == source
-                    and existing.purpose == "metric",
-                    "ingestion key collision",
-                )
-                if existing.status == "running":
-                    if existing.lease_expires_at > now:
-                        raise ValueError("run lease is active")
-                    existing.status, existing.completed_at = "aborted", now
-                    existing.error_code = "expired_lease"
-                    existing.save(
-                        update_fields=["status", "completed_at", "error_code"]
-                    )
-                import_module(
-                    "core.migrations.0088_archive_run_instructions"
-                ).archive_run_instructions(
-                    apps,
-                    SimpleNamespace(connection=connection),
-                    run_id=existing.pk,
-                )
-                existing.refresh_from_db()
             require(
                 existing.job.contract_id == contract.pk
-                and existing.job.source_id == source,
+                and existing.job.source_id == source
+                and existing.job.purpose == "metric",
                 "ingestion key collision",
-            )
-            require(
-                existing.source_id == existing.job.source_id
-                and existing.purpose == existing.job.purpose
-                and existing.contract_id == existing.job.contract_id
-                and existing.scope == existing.job.definition["scope"],
-                "run instruction copy mismatch",
             )
             if existing.status != "running":
                 require(
@@ -851,11 +814,28 @@ def persist_source(
             existing.save(update_fields=["status", "completed_at", "error_code"])
             return existing
         if claim is None:
-            from core.collection_state import claim_direct_run, fenced_run
+            from core.collection_state import (
+                claim_direct_run,
+                fenced_run,
+                register_direct_job,
+            )
 
-            run = CollectionRun(
-                contract=contract,
+            limits = {
+                "seconds": 600,
+                "payload_bytes": 32 * 1024 * 1024,
+                "requests": None,
+                "request_budget_owner": "caller",
+            }
+            job = register_direct_job(
+                contract_id=contract.pk,
                 source_id=source,
+                purpose="metric",
+                scope={},
+                driver="persist_source",
+                limits=limits,
+            )
+            run = CollectionRun(
+                job=job,
                 ingestion_key=ingestion_key,
                 lease_expires_at=now + timedelta(minutes=10),
                 source_url=DataSource.objects.get(pk=source).website_url,
@@ -868,12 +848,7 @@ def persist_source(
                 run,
                 driver="persist_source",
                 seconds=600,
-                limits={
-                    "seconds": 600,
-                    "payload_bytes": 32 * 1024 * 1024,
-                    "requests": None,
-                    "request_budget_owner": "caller",
-                },
+                limits=limits,
             )
         else:
             run.selected_count = contract.mappings.filter(

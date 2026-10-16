@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import httpx
 import pytest
+from django.core.management import call_command
 from django.utils import timezone
 
 from core.collection_identity import review_catalog_mapping
@@ -21,6 +22,7 @@ from core.models import (
     MetricValue,
 )
 from scripts.benchmark_download_collector.sources import Budget
+from tests.collection_fixtures import evidence_job
 from tests.test_benchmark_download_db_identity import setup_spec
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
@@ -340,8 +342,7 @@ def test_opt_in_model_kind_pins_native_evidence_without_changing_taxonomy_type(d
         Brand.objects.create(nickname=f"other-{i}").pk for i in range(20)
     ]
     run = CollectionRun.objects.create(
-        source_id="hf",
-        purpose="catalog",
+        job=evidence_job(source_id="hf", purpose="catalog"),
         status="success",
         completed_at=timezone.now(),
         ingestion_key="b" * 64,
@@ -359,6 +360,7 @@ def test_opt_in_model_kind_pins_native_evidence_without_changing_taxonomy_type(d
         },
         dimensions={"kind": "creation_inventory"},
     )
+    call_command("normalize_collection_run_jobs", verbosity=0)
     arguments = {"brand_ids": brands, "cutoff": "2026-09-12T00:00:00Z"}
     original = build_cohort(**arguments)
     assert not original["brands"][product.brand_id]["models"]
@@ -502,8 +504,7 @@ def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benc
     product.type = None
     product.save()
     evidence_run = CollectionRun.objects.create(
-        source_id="hf",
-        purpose="catalog",
+        job=evidence_job(source_id="hf", purpose="catalog"),
         status="success",
         completed_at=timezone.now(),
         ingestion_key="d" * 64,
@@ -517,6 +518,7 @@ def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benc
         listing={"id": product.repo_id, "private": False, "downloads": 7, "likes": 2},
         dimensions={"kind": "creation_inventory"},
     )
+    call_command("normalize_collection_run_jobs", verbosity=0)
     qualification = qualify_model_kind(product)
     assert qualification
     subject = MeasurementSubject.objects.get(
@@ -630,8 +632,7 @@ def test_history_statistics_reuses_existing_product_and_publisher_subjects():
             )
         )
     evidence_run = CollectionRun.objects.create(
-        source=source,
-        purpose="catalog",
+        job=evidence_job(source_id=source.pk, purpose="catalog"),
         status="success",
         completed_at=timezone.now(),
         ingestion_key="1" * 64,
@@ -645,6 +646,7 @@ def test_history_statistics_reuses_existing_product_and_publisher_subjects():
         listing={"id": product.repo_id, "private": False},
         dimensions={"kind": "creation_inventory"},
     )
+    call_command("normalize_collection_run_jobs", verbosity=0)
     qualification = qualify_model_kind(product)
     assert qualification
     draft = {

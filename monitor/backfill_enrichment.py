@@ -900,10 +900,10 @@ def adopt_completed_membership(job):
     """Adopt genuine pre-0085 stored-page evidence without rewriting history."""
     if job.state != "completed" or not job.last_success_id:
         return
-    run = CollectionRun.objects.only("id", "job_id", "status", "purpose").get(
+    run = CollectionRun.objects.select_related("job").only("id", "job_id", "status", "job__purpose").get(
         pk=job.last_success_id
     )
-    if run.job_id != job.pk or run.status != "success" or run.purpose != "content":
+    if run.job_id != job.pk or run.status != "success" or run.job.purpose != "content":
         raise BatchAdmissionError("historical_membership_success_run_mismatch")
     marker = CollectionRun.objects.filter(pk=run.pk).values_list(
         "report__post_membership", flat=True

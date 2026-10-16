@@ -123,7 +123,7 @@ def test_fresh_inventory_writes_repo_account_numbers_and_preserves_access_payloa
     assert run.status == "success"
     access = run.observations.get(dimensions__kind="repository_access")
     assert access.listing["subscribers_count"] == 7
-    values = MetricValue.objects.filter(observation__run__source_id="github")
+    values = MetricValue.objects.filter(observation__run__job__source_id="github")
     assert set(values.values_list("source_metric__metric_key", flat=True)) >= {
         "stars",
         "forks",

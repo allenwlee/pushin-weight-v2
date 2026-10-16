@@ -193,7 +193,7 @@ def test_committed_projection_recovers_after_crash_before_ack_without_refetch(
         )
     assert MetricValue.objects.count() == 2
     assert CollectionRun.objects.filter(
-        purpose="catalog",
+        job__purpose="catalog",
         scopes__scope_kind="numeric_projection",
         scopes__outcome="pending",
     ).exists()

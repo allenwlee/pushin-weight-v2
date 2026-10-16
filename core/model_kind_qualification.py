@@ -25,8 +25,8 @@ def _qualification(product, observation):
     )
     raw = observation.listing
     require(
-        observation.run.source_id == "hf"
-        and observation.run.purpose == "catalog"
+        observation.run.job.source_id == "hf"
+        and observation.run.job.purpose == "catalog"
         and observation.status == "ok"
         and observation.product_id == product.pk
         and observation.source_subject_kind == "repository"
@@ -79,12 +79,12 @@ def qualify_model_kind(product):
     observations = (
         CollectionObservation.objects.filter(
             product=product,
-            run__source_id="hf",
-            run__purpose="catalog",
+            run__job__source_id="hf",
+            run__job__purpose="catalog",
             status="ok",
             source_subject_kind="repository",
         )
-        .select_related("run", "scope_run")
+        .select_related("run__job", "scope_run")
         .order_by("pk")
     )
     for observation in observations.iterator():
@@ -97,9 +97,9 @@ def qualify_model_kind(product):
 
 def validate_model_kind(product, pin):
     require(pin.get("policy") == MODEL_KIND_POLICY, "unsupported model-kind policy")
-    observation = CollectionObservation.objects.select_related("run", "scope_run").get(
-        pk=pin["observation_id"]
-    )
+    observation = CollectionObservation.objects.select_related(
+        "run__job", "scope_run"
+    ).get(pk=pin["observation_id"])
     require(
         _qualification(product, observation) == pin,
         "frozen model-kind evidence changed",

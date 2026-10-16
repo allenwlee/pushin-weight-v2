@@ -141,10 +141,6 @@ def validate_job(job):
                 CollectionRun.objects.filter(
                     pk=pointer,
                     job=job,
-                    source_id=job.source_id,
-                    purpose=job.purpose,
-                    contract_id=job.contract_id,
-                    scope=job.definition["scope"],
                 ).exists(),
                 "job/run pointer mismatch",
             )

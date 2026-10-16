@@ -93,6 +93,32 @@ def test_request_cap_commits_discovery_before_pending_enrichment_and_resumes():
     assert resumed["imported"] == 2
 
 
+def test_resumed_projection_reuses_loaded_job_instead_of_fetching_per_model(monkeypatch):
+    from django.test.utils import CaptureQueriesContext
+
+    from core import hf_catalog
+
+    first = execute_catalog(scope=scope(), hf=api(budget=2))
+    persist = hf_catalog.persist_product
+    job_reads = []
+
+    def measured_projection(*args, **kwargs):
+        with CaptureQueriesContext(connection) as queries:
+            result = persist(*args, **kwargs)
+        job_reads.extend(
+            query["sql"]
+            for query in queries
+            if 'FROM "collection_jobs"' in query["sql"]
+        )
+        return result
+
+    monkeypatch.setattr(hf_catalog, "persist_product", measured_projection)
+    resumed = execute_catalog(run_id=first["run_id"], hf=api())
+    assert resumed["complete"] and resumed["unique_models"] == 2
+    assert resumed["requests"] == 4
+    assert not job_reads
+
+
 def test_slow_http_response_records_partial_time_cap_with_finalization_lease(
     monkeypatch,
 ):
@@ -128,23 +154,25 @@ def test_slow_http_response_records_partial_time_cap_with_finalization_lease(
     assert run.invocations[-1]["max_seconds"] == 60
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
 def test_archived_partial_catalog_reuses_pages_without_rewriting_unknown_budgets():
     import copy
-    import importlib
 
-    from django.apps import apps
+    from django.db.migrations.executor import MigrationExecutor
 
     from tests.test_run_job_normalization import previous_catalog_module
 
-    previous = previous_catalog_module()
+    target = [("core", "0088_archive_run_instructions")]
+    executor = MigrationExecutor(connection)
+    executor.migrate(target)
+    historical = executor.loader.project_state(target).apps
+    previous = previous_catalog_module(historical)
     first = previous.execute_catalog(scope=scope(), hf=api(budget=2))
-    run = CollectionRun.objects.get(pk=first["run_id"])
+    run = historical.get_model("core", "CollectionRun").objects.get(pk=first["run_id"])
     scopes = list(run.scopes.values_list("pk", flat=True))
     observations = list(run.observations.values_list("pk", flat=True))
-    migration = importlib.import_module("core.migrations.0088_archive_run_instructions")
-    with connection.schema_editor(atomic=False) as editor:
-        migration.archive_run_instructions(apps, editor)
-    run.refresh_from_db()
+    MigrationExecutor(connection).migrate([("core", "0089_job_owned_run_instructions")])
+    run = CollectionRun.objects.get(pk=run.pk)
     archive_id = run.job_id
     definition = copy.deepcopy(run.job.definition)
     assert definition["budgets"] is None

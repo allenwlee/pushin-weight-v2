@@ -17,7 +17,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from core.account_identity import publisher_discovery_label, publisher_identifier
-from core.collection_state import claim_direct_run, fenced_run
+from core.collection_state import claim_direct_run, fenced_run, register_direct_job
 from core.hf_metadata_client import INVENTORY_VERSION, NAMESPACE, REPO_ID
 from core.measurement_taxonomy import digest
 from core.models import (
@@ -341,9 +341,12 @@ def _save_scope(ns, claim, **kwargs):
 
 
 def _enrich(ns, hf, rules, visited, max_models, attempted, claim):
-    for observation in ns.observations.exclude(
-        processing_outcome__in=["owner_conflict", "complete"]
-    ).order_by("id"):
+    for observation in (
+        ns.observations.exclude(processing_outcome__in=["owner_conflict", "complete"])
+        .select_related("run__job")
+        .defer("run__raw_payload", "run__job__definition")
+        .order_by("id")
+    ):
         if groups_complete(observation.groups):
             continue
         if (
@@ -517,14 +520,14 @@ def resolve_catalog_run(run_id):
     """Accept saved pre-merge UUIDs while isolating the HF catalog purpose."""
     return CollectionRun.objects.get(
         Q(pk=run_id) | Q(source_metadata__legacy_catalog__run_id=str(run_id)),
-        Q(job__source_id="hf", job__purpose="catalog")
-        | Q(job__isnull=True, source_id="hf", purpose="catalog"),
+        job__source_id="hf",
+        job__purpose="catalog",
     )
 
 
 def catalog_scope(run):
-    """Read old-revision rows during rollout without creating instructions."""
-    return run.job.definition["scope"] if run.job_id else run.scope
+    """Read the frozen instructions owned by this run's job."""
+    return run.job.definition["scope"]
 
 
 def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
@@ -532,6 +535,13 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
         raise ValueError("supply scope or resume run, exclusively")
     if max_models is not None and max_models < 1:
         raise ValueError("model budget must be positive")
+    limits = {
+        "requests": hf.max_requests,
+        "seconds": hf.max_seconds,
+        "response_bytes": hf.max_bytes,
+        "total_bytes": hf.max_total_bytes,
+        "models": max_models,
+    }
     with catalog_lock():
         if run_id is not None:
             run = resolve_catalog_run(run_id)
@@ -546,23 +556,21 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                 run_id = uuid.uuid4()
                 run = CollectionRun(
                     id=run_id,
-                    source=source,
-                    purpose="catalog",
+                    job=register_direct_job(
+                        source_id=source.pk,
+                        purpose="catalog",
+                        scope=scope,
+                        driver="execute_catalog",
+                        limits=limits,
+                    ),
                     status="pending",
-                    scope=scope,
                     ingestion_key=digest(["catalog", "hf", str(run_id)]),
                 )
         claim = claim_direct_run(
             run,
             driver="execute_catalog",
             seconds=hf.max_seconds + 60,
-            limits={
-                "requests": hf.max_requests,
-                "seconds": hf.max_seconds,
-                "response_bytes": hf.max_bytes,
-                "total_bytes": hf.max_total_bytes,
-                "models": max_models,
-            },
+            limits=limits,
         )
         if run_id is not None and not run.scopes.exists():
             with fenced_run(claim):

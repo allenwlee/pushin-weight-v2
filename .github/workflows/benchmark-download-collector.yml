@@ -55,6 +55,8 @@ on:
       - 'tests/test_hf_metadata_client.py'
       - 'tests/test_collection*.py'
       - 'tests/test_run_job_normalization.py'
+      - 'tests/test_job_owned_run_instructions.py'
+      - 'tests/collection_fixtures.py'
       - 'tests/test_github*.py'
       - 'tests/test_model_history*.py'
       - 'tests/test_model_inventory.py'
@@ -79,7 +81,7 @@ concurrency:
 jobs:
   regression-net:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:18
@@ -155,3 +157,57 @@ jobs:
           tests/test_hf_catalog_scope.py tests/test_hf_catalog_regression_net.py
           tests/test_onboard_brand.py tests/test_reconcile_account_geography.py
           tests/test_backfill_account_based_in.py
+
+  run-instruction-migrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: benchmark_test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: benchmark_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://benchmark_test:test@127.0.0.1:5432/benchmark_test
+      PW_TEST_PG_BIN: /usr/lib/postgresql/18/bin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e '.[dev,benchmark]'
+      - name: Install PostgreSQL 18 dump and restore tools
+        run: |
+          if [ ! -x /usr/lib/postgresql/18/bin/pg_dump ]; then
+            sudo install -d /usr/share/postgresql-common/pgdg
+            sudo curl --fail --silent --show-error \
+              -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+              https://www.postgresql.org/media/keys/ACCC4CF8.asc
+            . /etc/os-release
+            sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null <<EOF
+          Types: deb
+          URIs: https://apt.postgresql.org/pub/repos/apt
+          Suites: ${VERSION_CODENAME}-pgdg
+          Components: main
+          Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          EOF
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends postgresql-client-18
+          fi
+          /usr/lib/postgresql/18/bin/pg_dump --version
+          /usr/lib/postgresql/18/bin/pg_restore --version
+      - name: Lint run instruction and restore regressions
+        run: >-
+          python -m ruff check tests/test_job_owned_run_instructions.py
+          tests/test_collection_schema_refresh.py tests/collection_fixtures.py
+      - name: PostgreSQL run instructions and real snapshot restoration
+        run: >-
+          python -m pytest -q tests/test_job_owned_run_instructions.py
+          tests/test_collection_schema_refresh.py

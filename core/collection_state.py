@@ -39,11 +39,61 @@ class RunClaim:
 
 
 @transaction.atomic
-def claim_direct_run(run, *, driver, seconds, limits, now=None):
-    """Lease an explicit legacy invocation under its existing advisory lock.
+def register_direct_job(*, source_id, purpose, contract_id=None, scope, driver, limits):
+    """Save an immutable receipt before constructing a direct caller's run."""
+    require(
+        driver in {"persist_source", "execute_catalog"}, "unsupported direct driver"
+    )
+    definition = {
+        "version": 1,
+        "scope": copy.deepcopy(scope),
+        "schedule": {"kind": "manual", "driver": driver},
+        "budgets": copy.deepcopy(limits),
+        "budget_authority": "direct_invocation",
+        "execution": {"driver": driver, "executable": False},
+    }
+    safe_payload(definition)
+    require(isinstance(scope, dict), "frozen scope required")
+    identity = {
+        "source": source_id,
+        "purpose": purpose,
+        "contract": str(contract_id) if contract_id else None,
+        "operation": "legacy_direct",
+        "mode": "manual",
+        "definition": definition,
+    }
+    key = f"direct:{driver}:{digest(identity)}"
+    identifier = uuid.uuid5(uuid.NAMESPACE_URL, f"pushinweight:{key}")
+    require(
+        not CollectionJob.objects.filter(job_key=key).exclude(pk=identifier).exists(),
+        "direct job key collision",
+    )
+    values = {
+        "job_key": key,
+        "source_id": source_id,
+        "purpose": purpose,
+        "contract_id": contract_id,
+        "operation": "legacy_direct",
+        "mode": "manual",
+        "definition": definition,
+        "definition_sha256": digest(identity),
+        "state": "completed",
+    }
+    job, _ = CollectionJob.objects.get_or_create(pk=identifier, defaults=values)
+    require(
+        all(getattr(job, name) == value for name, value in values.items()),
+        "direct job identity collision",
+    )
+    validate_job(job)
+    return job
 
-    Receipt jobs cannot be dispatched or activated. Known limits describe this
-    actual driver; historical archives retain their original unknown limits.
+
+@transaction.atomic
+def claim_direct_run(run, *, driver, seconds, limits, now=None):
+    """Lease an explicit invocation under its existing caller advisory lock.
+
+    Registration precedes run construction; archived instructions stay unchanged
+    when the original catalog driver resumes with new invocation limits.
     """
     require(
         driver in {"persist_source", "execute_catalog"}, "unsupported direct driver"
@@ -52,51 +102,6 @@ def claim_direct_run(run, *, driver, seconds, limits, now=None):
         isinstance(seconds, (int, float)) and 0 < seconds < float("inf"),
         "finite direct invocation duration required",
     )
-    original_job_id = run.job_id
-    if run.job_id is None:
-        definition = {
-            "version": 1,
-            "scope": copy.deepcopy(run.scope),
-            "schedule": {"kind": "manual", "driver": driver},
-            "budgets": copy.deepcopy(limits),
-            "budget_authority": "direct_invocation",
-            "execution": {"driver": driver, "executable": False},
-        }
-        identity = {
-            "source": run.source_id,
-            "purpose": run.purpose,
-            "contract": str(run.contract_id) if run.contract_id else None,
-            "operation": "legacy_direct",
-            "mode": "manual",
-            "definition": definition,
-        }
-        key = f"direct:{driver}:{digest(identity)}"
-        identifier = uuid.uuid5(uuid.NAMESPACE_URL, f"pushinweight:{key}")
-        require(
-            not CollectionJob.objects.filter(job_key=key)
-            .exclude(pk=identifier)
-            .exists(),
-            "direct job key collision",
-        )
-        job, _ = CollectionJob.objects.get_or_create(
-            pk=identifier,
-            defaults={
-                "job_key": key,
-                "source_id": run.source_id,
-                "purpose": run.purpose,
-                "contract_id": run.contract_id,
-                "operation": "legacy_direct",
-                "mode": "manual",
-                "definition": definition,
-                "definition_sha256": digest(identity),
-                "state": "completed",
-            },
-        )
-        require(
-            job.job_key == key and job.definition_sha256 == digest(identity),
-            "direct job identity collision",
-        )
-        run.job = job
     job = CollectionJob.objects.select_for_update().get(pk=run.job_id)
     validate_job(job)
     require(
@@ -104,20 +109,24 @@ def claim_direct_run(run, *, driver, seconds, limits, now=None):
         "shared jobs require the shared collector claim",
     )
     require(
-        run.source_id == job.source_id
-        and run.purpose == job.purpose
-        and run.contract_id == job.contract_id
-        and run.scope == job.definition["scope"],
-        "direct run instruction mismatch",
+        (driver == "persist_source" and job.purpose == "metric")
+        or (
+            driver == "execute_catalog"
+            and job.purpose == "catalog"
+            and job.source_id == "hf"
+        ),
+        "direct driver instruction mismatch",
+    )
+    require(
+        job.operation == "archived_run"
+        or job.definition["execution"]["driver"] == driver,
+        "direct driver instruction mismatch",
     )
     if not run._state.adding:
         stored = CollectionRun.objects.select_for_update().get(pk=run.pk)
         require(
-            stored.job_id == original_job_id
-            and stored.source_id == run.source_id
-            and stored.purpose == run.purpose
-            and stored.contract_id == run.contract_id
-            and stored.scope == run.scope
+            stored.job_id == run.job_id
+            and stored.lease_token == run.lease_token
             and stored.status == run.status,
             "direct run changed while acquiring ownership",
         )
@@ -129,6 +138,7 @@ def claim_direct_run(run, *, driver, seconds, limits, now=None):
         ):
             raise BusyJob("direct run lease is active")
     now = now or timezone.now()
+    run.job = job
     run.status, run.completed_at = "running", None
     run.lease_token = uuid.uuid4()
     run.lease_expires_at = now + timedelta(seconds=seconds)
@@ -224,12 +234,8 @@ def claim_job(
     if run is None:
         run = CollectionRun(
             job=job,
-            source=job.source,
-            purpose=job.purpose,
-            contract=job.contract,
             ingestion_key=ingestion_key,
             started_at=now,
-            scope=copy.deepcopy(job.definition["scope"]),
             report={"definition_sha256": job.definition_sha256},
         )
     if bounded_campaign:
@@ -317,10 +323,6 @@ def fenced_run(claim: RunClaim, *, now=None):
                 )
             )
             and run.job_id == job.pk
-            and run.source_id == job.source_id
-            and run.purpose == job.purpose
-            and run.contract_id == job.contract_id
-            and run.scope == job.definition["scope"]
             and run.status == "running"
             and run.lease_token == claim.lease_token
             and run.lease_expires_at
@@ -498,14 +500,11 @@ def record_rejection(job_id, *, invocation_id, reason, report=None, now=None):
         return existing
     return CollectionRun.objects.create(
         job=job,
-        source=job.source,
-        purpose="content",
         ingestion_key=ingestion_key,
         status="aborted",
         started_at=now,
         completed_at=now,
         error_code=reason,
-        scope=job.definition["scope"],
         report={
             **(report or {}),
             "definition_sha256": job.definition_sha256,

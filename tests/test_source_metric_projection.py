@@ -3,6 +3,7 @@
 import copy
 from datetime import UTC, datetime, timedelta
 from io import StringIO
+from uuid import uuid4
 
 import pytest
 from django.core.management import call_command
@@ -13,6 +14,7 @@ from core.collection_jobs import register_job, set_job_state
 from core.collection_state import StaleClaim, claim_job
 from core.measurement_taxonomy import configure_taxonomy, digest, subject_id
 from core.models import CollectionObservation, CollectionRun, MetricValue
+from tests.collection_fixtures import evidence_job
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 CAPTURED = datetime(2026, 10, 12, 4, 5, tzinfo=UTC)
@@ -96,12 +98,15 @@ def configured(source="hf", *, product_type=None, mapped=False):
 
 def evidence(source, raw, *, observed_at=CAPTURED):
     run = CollectionRun.objects.create(
-        source_id=source,
-        purpose="catalog",
+        job=evidence_job(source_id=source, purpose="catalog"),
         ingestion_key=digest([source, raw, observed_at.isoformat()]),
         status="success",
         completed_at=timezone.now(),
     )
+    # Saved catalog fixtures model historical evidence after the compatible
+    # release has linked its actually stored instructions to an archival job.
+    call_command("normalize_collection_run_jobs", verbosity=0)
+    run.refresh_from_db()
     return CollectionObservation.objects.create(
         run=run,
         source_subject_kind="repository",
@@ -238,10 +243,10 @@ def test_projection_constraint_is_cross_run_and_only_for_selected_marker():
         "observation_key": numeric.observation_key,
     }
     other = CollectionRun.objects.create(
-        contract=contract,
-        source_id="hf",
+        job=evidence_job(source_id="hf", purpose="metric", contract_id=contract.pk),
         ingestion_key="f" * 64,
         lease_expires_at=timezone.now() + timedelta(seconds=60),
+        lease_token=uuid4(),
     )
     with pytest.raises(IntegrityError), transaction.atomic():
         CollectionObservation.objects.create(
@@ -262,7 +267,7 @@ def test_numeric_failure_rolls_back_observations_and_checkpoint(monkeypatch):
         project(contract, "hf", [snapshot])
     assert CollectionObservation.objects.count() == 1
     assert not MetricValue.objects.exists()
-    assert not CollectionRun.objects.get(purpose="metric").scopes.exists()
+    assert not CollectionRun.objects.get(job__purpose="metric").scopes.exists()
 
 
 def test_replay_command_default_hook_is_bounded_resumable_and_has_no_http(monkeypatch):
@@ -539,11 +544,11 @@ def test_concurrent_different_jobs_replay_one_snapshot_without_reparenting():
             project_evidence(claim, [snapshot.pk])
     assert MetricValue.objects.count() == 2
     assert CollectionObservation.objects.count() == 2
-    assert CollectionRun.objects.filter(purpose="metric", status="success").count() == 2
+    assert CollectionRun.objects.filter(job__purpose="metric", status="success").count() == 2
     assert (
         sum(
             r.report["projection"]["written_values"]
-            for r in CollectionRun.objects.filter(purpose="metric")
+            for r in CollectionRun.objects.filter(job__purpose="metric")
         )
         == 2
     )

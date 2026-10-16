@@ -215,8 +215,8 @@ def due_job(job, *, now=None):
         elif (
             job.purpose == "metric"
             and CollectionRun.objects.filter(
-                source_id=job.source_id,
-                contract_id=job.contract_id,
+                job__source_id=job.source_id,
+                job__contract_id=job.contract_id,
                 status="success",
                 started_at__gte=slot,
             ).exists()

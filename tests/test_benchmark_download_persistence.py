@@ -1,9 +1,11 @@
 from datetime import UTC, datetime
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 
 from core.models import CollectionObservation, CollectionRun, MetricValue
+from tests.collection_fixtures import evidence_job
 from tests.test_benchmark_download_db_identity import setup_spec
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
@@ -86,9 +88,18 @@ def test_direct_replay_rejects_mismatched_legacy_instruction_copies():
 
     contract = configured()
     run = persist_source(contract, "hf", "a" * 64, payload())
-    CollectionRun.objects.filter(pk=run.pk).update(scope={"changed": True})
-    with pytest.raises(ValueError, match="instruction copy mismatch"):
-        persist_source(contract, "hf", "a" * 64, payload())
+    from django.db import IntegrityError, connection, transaction
+
+    with (
+        pytest.raises(IntegrityError, match="instruction copy mismatch"),
+        transaction.atomic(),
+        connection.cursor() as cursor,
+    ):
+        cursor.execute(
+            "UPDATE collection_runs SET scope = %s WHERE id = %s",
+            ['{"changed": true}', run.pk],
+        )
+    assert persist_source(contract, "hf", "a" * 64, payload()).pk == run.pk
 
 
 def test_independent_direct_metric_attempts_reuse_the_same_immutable_job():
@@ -294,10 +305,10 @@ def test_source_lock_contention_and_expired_run_recovery():
     finally:
         other.close()
     run = CollectionRun.objects.create(
-        contract=contract,
-        source_id="hf",
+        job=evidence_job(source_id="hf", purpose="metric", contract_id=contract.pk),
         ingestion_key="2" * 64,
         lease_expires_at=timezone.now() - timedelta(seconds=1),
+        lease_token=uuid4(),
     )
     aborted = persist_source(contract, "hf", "2" * 64, payload())
     assert aborted.pk == run.pk and aborted.status == "aborted"

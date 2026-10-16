@@ -1,8 +1,8 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-16 JST, source `8e62818e`, through migration `0087_source_statistics_snapshot`.
+Last verified: 2026-10-16 JST, repository candidate based on `fdfa3dcc`, through migration `0089_job_owned_run_instructions`.
 This describes the implementation verified on isolated PostgreSQL, not a claim
-that its source roles or historical campaign have been activated in production.
+that this migration boundary or the full historical campaign has been activated in production.
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
@@ -39,8 +39,9 @@ operation, mode, versioned definition and optional numeric contract. Definitions
 contain frozen `scope`, `schedule` and positive `budgets` for requests, seconds,
 bytes and items. The SHA-256 covers the full instruction identity. Changed
 instructions need a new job key; a later ownership/mapping edit cannot silently
-change an old campaign. Registration creates a paused job and changes no source
-or contract activation flags.
+change an old campaign. A database trigger prevents instruction changes, including before the first run; coordination state and run pointers remain mutable. Registration creates a paused job and changes no source or contract activation flags.
+
+Every run requires a job. Source, purpose, contract and frozen scope belong to that job; run records retain attempt status, lease, clocks, counters, evidence and results. Python instance properties read instructions through the job, and database queries follow `job__` relations. Four physical run columns remain as trigger-maintained compatibility copies for the preceding application revision; they are absent from the Django model. Old jobless runs receive inactive archival jobs preserving their recorded instructions without inventing budgets or finish times. Explicit direct drivers register completed, non-dispatchable receipt jobs and use a genuine bounded lease for each invocation.
 
 `claim_job` locks the job, validates its immutable definition and issues a run
 and rotating lease token. Provider requests happen outside database transactions.

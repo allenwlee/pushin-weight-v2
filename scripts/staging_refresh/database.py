@@ -231,6 +231,10 @@ class SnapshotAdapter(Protocol):
 
     def scrub_candidate(self, database_url: str, name: str) -> ScrubReport: ...
 
+    def purge_collection_runtime(
+        self, database_url: str, name: str
+    ) -> Mapping[str, int]: ...
+
     def inspect_candidate(self, database_url: str, name: str) -> CandidateCensus: ...
 
     def mark_validated(
@@ -388,10 +392,14 @@ def _catalog_counts(cursor: Any) -> dict[str, int]:
                 query = f"SELECT count(*) FROM {table} t JOIN collection_runs r ON r.id = t.run_id WHERE {instruction_purpose} = %s"
             cursor.execute(query, [purpose])
             counts[f"{table}:{purpose}"] = int(cursor.fetchone()[0])
-    cursor.execute(
-        "SELECT count(*) FROM collection_jobs WHERE (state <> 'paused' AND operation NOT IN ('archived_run', 'legacy_direct')) OR active_run_id IS NOT NULL OR next_due_at IS NOT NULL OR next_retry_at IS NOT NULL"
-    )
-    counts["collection_jobs:runtime_intent"] = int(cursor.fetchone()[0])
+    cursor.execute("SELECT to_regclass('public.collection_jobs')")
+    if cursor.fetchone()[0] is None:
+        counts["collection_jobs:runtime_intent"] = 0
+    else:
+        cursor.execute(
+            "SELECT count(*) FROM collection_jobs WHERE (state <> 'paused' AND operation NOT IN ('archived_run', 'legacy_direct')) OR active_run_id IS NOT NULL OR next_due_at IS NOT NULL OR next_retry_at IS NOT NULL"
+        )
+        counts["collection_jobs:runtime_intent"] = int(cursor.fetchone()[0])
     return counts
 
 
@@ -519,18 +527,22 @@ def _source_dependent_seed_migration_deltas(
     return count_deltas, translation_deltas
 
 
-def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
-    """Scrub one already-restored non-serving database inside its transaction."""
+def purge_collection_runtime(cursor: Any) -> dict[str, int]:
+    """Remove only disposable collection work in a non-serving shadow.
 
-    cleared = {
-        table: _table_count(cursor, table)
-        for table in sorted(policy.scrub.truncate_tables)
-    }
-    cleared.update(_catalog_counts(cursor))
+    Run before mandatory-job migration: old running catalog rows must be
+    discarded, never completed or archived. Pre-0080 dumps have no shared runs.
+    """
+    cursor.execute("SELECT to_regclass('public.collection_runs')")
+    if cursor.fetchone()[0] is None:
+        return {}
+    cleared = _catalog_counts(cursor)
     instruction_purpose = _run_purpose_expression(cursor)
-    cursor.execute(
-        f"UPDATE collection_jobs SET state = CASE WHEN operation IN ('archived_run', 'legacy_direct') THEN 'completed' ELSE 'paused' END, active_run_id = NULL, next_due_at = NULL, next_retry_at = NULL, last_attempt_id = CASE WHEN last_attempt_id IN (SELECT r.id FROM collection_runs r WHERE {instruction_purpose} = 'metric') THEN last_attempt_id ELSE NULL END, last_success_id = CASE WHEN last_success_id IN (SELECT r.id FROM collection_runs r WHERE {instruction_purpose} = 'metric') THEN last_success_id ELSE NULL END"
-    )
+    cursor.execute("SELECT to_regclass('public.collection_jobs')")
+    if cursor.fetchone()[0] is not None:
+        cursor.execute(
+            f"UPDATE collection_jobs SET state = CASE WHEN operation IN ('archived_run', 'legacy_direct') THEN 'completed' ELSE 'paused' END, active_run_id = NULL, next_due_at = NULL, next_retry_at = NULL, last_attempt_id = CASE WHEN last_attempt_id IN (SELECT r.id FROM collection_runs r WHERE {instruction_purpose} = 'metric') THEN last_attempt_id ELSE NULL END, last_success_id = CASE WHEN last_success_id IN (SELECT r.id FROM collection_runs r WHERE {instruction_purpose} = 'metric') THEN last_success_id ELSE NULL END"
+        )
     # Delete in foreign-key order without resetting shared numeric sequences.
     for table in ("collection_observations", "collection_scope_runs"):
         cursor.execute(
@@ -543,6 +555,17 @@ def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
     cursor.execute(
         f"DELETE FROM collection_runs r WHERE {instruction_purpose} IN ('catalog', 'content')"
     )
+    return cleared
+
+
+def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
+    """Scrub one already-restored non-serving database inside its transaction."""
+
+    cleared = {
+        table: _table_count(cursor, table)
+        for table in sorted(policy.scrub.truncate_tables)
+    }
+    cleared.update(purge_collection_runtime(cursor))
     targets = [sql.Identifier(table) for table in sorted(policy.scrub.truncate_tables)]
     cursor.execute(
         sql.SQL("TRUNCATE TABLE {} RESTART IDENTITY CASCADE").format(
@@ -751,6 +774,15 @@ class PsycopgSnapshotAdapter:
         parameters = self._candidate_parameters(database_url, name)
         with self.connect(**parameters) as connection, connection.cursor() as cursor:
             return scrub_candidate_data(cursor, self.policy)
+
+    def purge_collection_runtime(
+        self, database_url: str, name: str
+    ) -> Mapping[str, int]:
+        with (
+            self.connect(**self._candidate_parameters(database_url, name)) as conn,
+            conn.cursor() as cursor,
+        ):
+            return purge_collection_runtime(cursor)
 
     def inspect_candidate(self, database_url: str, name: str) -> CandidateCensus:
         parameters = self._candidate_parameters(database_url, name)
@@ -1494,10 +1526,12 @@ class CandidateProcessor:
             raise RefreshError("candidate_site_invalid")
 
     def process(self, candidate: ShadowCandidate) -> CandidateResult:
+        purged = self.adapter.purge_collection_runtime(self.target_url, candidate.name)
         self._run_django(candidate.name, "migrate", "--noinput")
         self._run_django(candidate.name, "check", "--deploy")
         self._run_django(candidate.name, "migrate", "--check")
         scrub = self.adapter.scrub_candidate(self.target_url, candidate.name)
+        scrub = replace(scrub, cleared_rows={**scrub.cleared_rows, **purged})
         # Old processes can write jobless metrics after 0088's one-time scan.
         # Scrub first so catalog/content work gets no unnecessary archive jobs.
         # Strict normalization refuses unsupported active numeric snapshots.

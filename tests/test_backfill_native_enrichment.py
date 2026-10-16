@@ -137,9 +137,7 @@ def native(monkeypatch, seeded_policy_keywords):
         [],
     )
     run = CollectionRun.objects.create(
-        source=job.source,
         job=job,
-        purpose="content",
         ingestion_key="a" * 64,
         lease_token=uuid4(),
         lease_expires_at=timezone.now() + timedelta(minutes=5),
@@ -437,7 +435,9 @@ def test_typed_membership_resume_does_not_load_oversized_legacy_receipt(native):
 
     with connection.execute_wrapper(forbid_full_report):
         adopt_completed_membership(job)
-    assert CollectionObservation.objects.filter(run=run, post__isnull=False).count() == 2
+    assert (
+        CollectionObservation.objects.filter(run=run, post__isnull=False).count() == 2
+    )
     assert not OriginalContentCall.objects.exists()
 
 
@@ -458,13 +458,28 @@ def test_typed_membership_count_drift_is_refused_before_provider_work(native):
 
 
 def test_database_pin_prevents_writes_and_provider_calls(native):
+    from copy import deepcopy
+
+    from core.collection_jobs import register_job, set_job_state
     from core.provider_batches import BatchAdmissionError
 
     job, _, _, _ = native
-    job.definition["scope"]["database"] = {"name": "wrong", "user": "wrong"}
-    job.save(update_fields=["definition"])
+    definition = deepcopy(job.definition)
+    definition["scope"]["database"] = {"name": "wrong", "user": "wrong"}
+    # A copied job may be pinned to another database. Register its instructions
+    # honestly instead of mutating an existing immutable job to make a fixture.
+    wrong_database_job = register_job(
+        job_key=job.job_key + ":wrong-database",
+        source=job.source,
+        purpose=job.purpose,
+        operation=job.operation,
+        mode=job.mode,
+        contract=job.contract,
+        definition=definition,
+    )
+    wrong_database_job = set_job_state(wrong_database_job.pk, "ready")
     with pytest.raises(BatchAdmissionError, match="database_identity_mismatch"):
-        advance(native, initial=True)
+        advance((wrong_database_job, *native[1:]), initial=True)
     assert not ProviderBatch.objects.exists() and NativeProvider.submissions == []
 
 

@@ -176,12 +176,15 @@ def test_populated_merge_restore_and_replay_preserve_history_and_references(
     Run = new.get_model("core", "CollectionRun")
     Observation = new.get_model("core", "CollectionObservation")
     imported_run = Run.objects.get(purpose="catalog")
-    # Runtime consumers target the current schema; historical models above
-    # still characterize 0080 and the legacy writable aliases below.
-    migrate([("core", "0082_collection_catalog_mappings")])
-    from core.hf_catalog import resolve_catalog_run
+    # This proof reverses 0080: use the reader deployed with that historical
+    # schema. Current job-only readers are verified after 0089 separately.
+    reader_apps = migrate([("core", "0082_collection_catalog_mappings")])
+    from tests.test_run_job_normalization import previous_catalog_module
 
-    assert resolve_catalog_run(run_id).pk == imported_run.pk
+    assert (
+        previous_catalog_module(reader_apps).resolve_catalog_run(run_id).pk
+        == imported_run.pk
+    )
     assert imported_run.pk != run_id
     assert imported_run.started_at == imported_run.updated_at == timestamp
     assert imported_run.scope == catalog.scope

@@ -67,16 +67,35 @@ def test_reference_inventory_and_columns_match_all_concrete_application_tables()
             "[Back to table inventory]", 1
         )[0]
         columns = re.findall(r"^\| `([^`]+)` \|", section, re.MULTILINE)
-        expected_columns = {f.column for f in model._meta.local_fields if f.concrete}
-        assert set(columns) == expected_columns and len(columns) == len(
-            expected_columns
+        orm_columns = {f.column for f in model._meta.local_fields if f.concrete}
+        with connection.cursor() as cursor:
+            physical_columns = {
+                column.name
+                for column in connection.introspection.get_table_description(
+                    cursor, model._meta.db_table
+                )
+            }
+        # 0089 deliberately removes only ORM ownership during rolling overlap.
+        # The reference describes actual physical columns, including these four.
+        compatibility_columns = (
+            {"source_id", "purpose", "contract_id", "scope"}
+            if model._meta.db_table == "collection_runs"
+            else set()
+        )
+        assert physical_columns == orm_columns | compatibility_columns, (
+            model._meta.db_table
+        )
+        assert set(columns) == physical_columns and len(columns) == len(
+            physical_columns
         ), model._meta.db_table
 
 
 @pytest.mark.usefixtures("isolated_migration_database")
 def test_catalog_mapping_reverse_refuses_without_erasing_identity_evidence():
     executor = MigrationExecutor(connection)
-    executor.migrate(executor.loader.graph.leaf_nodes("core"))
+    # The old 0082 rollback guard predates forward-only 0089; exercise that
+    # historical boundary without first crossing the new cutover migration.
+    executor.migrate([("core", "0088_archive_run_instructions")])
     from tests.test_collection_identity import admit, identities
 
     _, _, subject, repo = identities()

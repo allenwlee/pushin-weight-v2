@@ -90,7 +90,7 @@ def predecessor_points(contract, line, days):
         MetricValue.objects.filter(
             source_metric=definition,
             observation__mapping_id__in=mapping_ids,
-            observation__run__contract=contract,
+            observation__run__job__contract=contract,
             observation__run__status__in=["success", "partial"],
             observation__status="ok",
         )

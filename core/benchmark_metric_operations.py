@@ -44,7 +44,9 @@ def collection_health(contract, *, now=None):
     now = now or timezone.now()
     result = {}
     for source, config in contract.source_configuration.items():
-        runs = CollectionRun.objects.filter(contract=contract, source_id=source).only(
+        runs = CollectionRun.objects.filter(
+            job__contract=contract, job__source_id=source
+        ).only(
             "status",
             "started_at",
             "completed_at",
@@ -55,8 +57,8 @@ def collection_health(contract, *, now=None):
         attempt = runs.order_by("-started_at", "-id").first()
         success = runs.filter(status="success").order_by("-completed_at", "-id").first()
         values = MetricValue.objects.filter(
-            observation__run__contract=contract,
-            observation__run__source_id=source,
+            observation__run__job__contract=contract,
+            observation__run__job__source_id=source,
             observation__run__status__in=["success", "partial"],
             observation__status="ok",
             observation__mapping__isnull=False,
