@@ -213,6 +213,7 @@ def _runtime_publication_window(claim, job):
         window = {
             "cutoff": cutoff.isoformat(),
             "publication_start_at": (cutoff - timedelta(days=days)).isoformat(),
+            "acquisition_generation": str(claim.run_id),
         }
         checkpoint_scope(
             claim,

@@ -12,6 +12,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 
+from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
 from core.benchmark_metric_store import calendar_window, native_date
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import (
@@ -26,6 +27,7 @@ from core.model_history_statistics import history_statistics_contract
 from core.models import (
     CollectionJob,
     CollectionObservation,
+    CollectionScopeRun,
     DataSource,
     MetricValue,
     SourceSubjectMapping,
@@ -37,7 +39,16 @@ from scripts.benchmark_download_collector.sources import (
 )
 
 
-def _window_key(source, cohort_hash, start, end, config, *, window_policy=None):
+def _window_key(
+    source,
+    cohort_hash,
+    start,
+    end,
+    config,
+    *,
+    window_policy=None,
+    acquisition_generation=None,
+):
     identity = {
         "source": source,
         "cohort_hash": cohort_hash,
@@ -47,6 +58,8 @@ def _window_key(source, cohort_hash, start, end, config, *, window_policy=None):
     }
     if window_policy:
         identity["window_policy"] = window_policy
+    if acquisition_generation:
+        identity["acquisition_generation"] = acquisition_generation
     return digest(identity)
 
 
@@ -57,7 +70,7 @@ def _publication_window(parent, budget, start, end, *, key, config):
     statistics = bool(
         contract
         and contract.source_configuration[parent.source_id].get("eligibility_policy")
-        == "source-statistics-v1"
+        == SOURCE_STATISTICS_POLICY
     )
     if statistics:
         from core.benchmark_attribution import enforce_source_collection
@@ -76,6 +89,9 @@ def _publication_window(parent, budget, start, end, *, key, config):
         end,
         config,
         window_policy="source-statistics-exact-window-v1" if statistics else None,
+        acquisition_generation=scope.get("acquisition_generation")
+        if scope.get("publication_window_policy") == "rolling-completed-days-v1"
+        else None,
     )
     cached = (
         CollectionObservation.objects.filter(
@@ -105,6 +121,8 @@ def _publication_window(parent, budget, start, end, *, key, config):
     if statistics:
         definition["scope"]["window_policy"] = "source-statistics-exact-window-v1"
         definition["scope"]["carry_in_days"] = 0
+    if scope.get("publication_window_policy") == "rolling-completed-days-v1":
+        definition["scope"]["acquisition_generation"] = scope["acquisition_generation"]
     if parent.definition.get("campaign"):
         definition["campaign"] = {
             **parent.definition["campaign"],
@@ -222,7 +240,7 @@ def _admit_publication(claim, job, publication, start, end):
     if (
         contract
         and contract.source_configuration[job.source_id].get("eligibility_policy")
-        == "source-statistics-v1"
+        == SOURCE_STATISTICS_POLICY
     ):
         return _queue_publication(claim, job, publication, contract)
     contract_id = job.definition["scope"].get("numeric_contract_id")
@@ -274,6 +292,14 @@ def _queue_publication(claim, job, publication, contract):
     """Commit selected native rows and their pending projection together."""
     from core.source_metric_projection import enqueue_projection
 
+    selection_key = digest([publication.pk, contract.contract_hash])
+    if CollectionScopeRun.objects.filter(
+        run_id=claim.run_id,
+        scope_kind="publication_selection",
+        scope_key=selection_key,
+        enumeration_complete=True,
+    ).exists():
+        return []
     source = job.source_id
     settings = contract.source_configuration[source]
     births = {
@@ -378,7 +404,7 @@ def _queue_publication(claim, job, publication, contract):
     checkpoint_scope(
         claim,
         scope_kind="publication_selection",
-        scope_key=digest([publication.pk, contract.contract_hash]),
+        scope_key=selection_key,
         ownership={
             "publication_observation_id": publication.pk,
             "contract_hash": contract.contract_hash,
@@ -412,7 +438,7 @@ def _publication_evidence(claim, job, model, pins, budget, *, key):
         if job.source_id == "openrouter"
         else 330
     )
-    if scope.get("numeric_projection_policy") == "source-statistics-v1":
+    if scope.get("numeric_projection_policy") == SOURCE_STATISTICS_POLICY:
         window_days = scope.get("publication_window_days", 7)
         require(
             type(window_days) is int and 1 <= window_days <= 90,
@@ -436,7 +462,7 @@ def _publication_evidence(claim, job, model, pins, budget, *, key):
     for start, end in windows:
         if (
             job.source_id == "openrouter"
-            and scope.get("numeric_projection_policy") == "source-statistics-v1"
+            and scope.get("numeric_projection_policy") == SOURCE_STATISTICS_POLICY
         ):
             reused, missing_windows = _reuse_openrouter_days(
                 job, model, identifiers, start, end

@@ -208,6 +208,12 @@ def _hf(claim, job, budget):
                 def write(
                     run, scope, result=result, entry=entry, observed_at=observed_at
                 ):
+                    numeric_ids = []
+                    baseline = (
+                        not CollectionRun.objects.filter(job=job, status="success")
+                        .exclude(pk=run.pk)
+                        .exists()
+                    )
                     for row in result.payload:
                         key = digest({"resource_key": row["id"].casefold()})
                         observation, _ = CollectionObservation.objects.get_or_create(
@@ -223,7 +229,7 @@ def _hf(claim, job, budget):
                                 "dimensions": {"kind": "creation_inventory"},
                             },
                         )
-                        previous = (
+                        previous = not baseline and (
                             CollectionObservation.objects.filter(
                                 run__job=job,
                                 run__status="success",
@@ -231,11 +237,6 @@ def _hf(claim, job, budget):
                                 dimensions__kind="creation_inventory",
                             )
                             .exclude(run=run)
-                            .exists()
-                        )
-                        baseline = (
-                            not CollectionRun.objects.filter(job=job, status="success")
-                            .exclude(pk=run.pk)
                             .exists()
                         )
                         observation.source_metadata = {
@@ -252,19 +253,22 @@ def _hf(claim, job, budget):
                         )
                         persist_product(observation, entry, rules, row, "listing")
                         if contract and any(
-                            key in row
-                            for key in (
-                                "downloads",
-                                "downloadsAllTime",
-                                "likes",
-                                "trendingScore",
+                            wire in row
+                            and metric in contract.source_configuration["hf"]["metrics"]
+                            for wire, metric in (
+                                ("downloads", "downloads"),
+                                ("downloadsAllTime", "downloads_all_time"),
+                                ("likes", "likes"),
+                                ("trendingScore", "trending_score"),
                             )
                         ):
-                            from core.source_metric_projection import enqueue_projection
+                            numeric_ids.append(observation.pk)
+                    if numeric_ids:
+                        from core.source_metric_projection import enqueue_projection
 
-                            enqueue_projection(
-                                claim, contract=contract, evidence_ids=[observation.pk]
-                            )
+                        enqueue_projection(
+                            claim, contract=contract, evidence_ids=numeric_ids
+                        )
 
                 scoped = checkpoint_scope(
                     claim,

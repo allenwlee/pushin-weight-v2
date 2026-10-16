@@ -588,7 +588,7 @@ def _project_evidence(
         <= job.definition["budgets"]["bytes"],
         "projection byte budget exceeded",
     )
-    prepared, rejections = [], []
+    prepared, rejections, terminal_ids = [], [], []
     for evidence in selected:
         require(
             monotonic() - started <= job.definition["budgets"]["seconds"]
@@ -625,10 +625,27 @@ def _project_evidence(
                 ):
                     raise ValueError("native resource belongs to destination partition")
                 for rejection in data["source_metadata"].get("metric_rejections", []):
-                    rejections.append({"observation_id": evidence.pk, **rejection})
+                    rejections.append(
+                        {
+                            "observation_id": evidence.pk,
+                            "outcome": "invalid",
+                            **rejection,
+                        }
+                    )
                 if not values:
-                    raise ValueError("no supported numeric counters returned")
-            prepared.extend(entries)
+                    terminal_ids.append(evidence.pk)
+                    rejections.append(
+                        {
+                            "observation_id": evidence.pk,
+                            "terminal": True,
+                            "outcome": "invalid"
+                            if data["source_metadata"].get("metric_rejections")
+                            else "not_returned",
+                            "reason": "no supported numeric counters returned",
+                        }
+                    )
+                else:
+                    prepared.append((data, values))
         except (ValueError, KeyError, TypeError) as exc:
             rejections.append({"observation_id": evidence.pk, "reason": str(exc)})
     with collection_lock(contract, source), fenced_run(claim) as (_, run):
@@ -644,6 +661,7 @@ def _project_evidence(
             **accounting,
             "selected_resources": len(selected),
             "admitted_resources": len(observations),
+            "terminal_resources": len(set(terminal_ids)),
             "mapped_resources": mapped,
             "native_only_resources": len(observations) - mapped,
             "rejections": rejections,
@@ -653,6 +671,7 @@ def _project_evidence(
         for counter in (
             "selected_resources",
             "admitted_resources",
+            "terminal_resources",
             "mapped_resources",
             "native_only_resources",
             "written_values",
@@ -684,7 +703,9 @@ def _project_evidence(
             {
                 "source": source,
                 "origin_observation_id": rejection["observation_id"],
-                "outcome": "not_returned" if "metric" in rejection else "unmapped",
+                "outcome": rejection.get(
+                    "outcome", "not_returned" if "metric" in rejection else "unmapped"
+                ),
                 "reason": rejection["reason"],
                 **({"metric": rejection["metric"]} if "metric" in rejection else {}),
             }
@@ -706,7 +727,10 @@ def _project_evidence(
             envelopes=[projection],
         )
         # Rejections of malformed optional fields do not invalidate admitted resources.
-        missing = projection["admitted_resources"] != projection["selected_resources"]
+        missing = (
+            projection["admitted_resources"] + projection["terminal_resources"]
+            != projection["selected_resources"]
+        )
         return finish_run(
             claim,
             status="success" if complete and not missing else "partial",
@@ -760,7 +784,9 @@ def project_evidence(claim, evidence_ids, *, cursor=None, complete=True, deadlin
 
 def replay_saved_evidence(job_id):
     """Default CLI hook: bounded database cursor; no provider client is constructed."""
+    started = monotonic()
     job = CollectionJob.objects.select_related("contract").get(pk=job_id)
+    deadline = started + job.definition["budgets"]["seconds"]
     scope = job.definition["scope"]
     runs, jobs = scope.get("origin_run_ids", []), scope.get("origin_job_ids", [])
     require(
@@ -811,9 +837,13 @@ def replay_saved_evidence(job_id):
     if job.source_id in {"openrouter", "arena"}:
         selected = selected.filter(dimensions__kind="publication_row")
     ids, consumed, complete = [], 0, True
-    for evidence in selected.only("id", "listing", "source_metadata", "dimensions")[
+    evidence_rows = selected.only("id", "listing", "source_metadata", "dimensions")[
         : job.definition["budgets"]["items"] + 1
-    ]:
+    ].iterator(chunk_size=1)
+    for evidence in evidence_rows:
+        if monotonic() >= deadline:
+            complete = False
+            break
         size = _evidence_bytes(evidence)
         require(
             size <= job.definition["budgets"]["bytes"],
@@ -822,13 +852,18 @@ def replay_saved_evidence(job_id):
         if (
             len(ids) == job.definition["budgets"]["items"]
             or consumed + size > job.definition["budgets"]["bytes"]
+            or monotonic() >= deadline
         ):
             complete = False
             break
         ids.append(evidence.pk)
         consumed += size
     return project_evidence(
-        claim, ids, cursor=str(ids[-1] if ids else cursor), complete=complete
+        claim,
+        ids,
+        cursor=str(ids[-1] if ids else cursor),
+        complete=complete,
+        deadline=deadline,
     )
 
 
@@ -939,9 +974,10 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
         if job.state == "paused":
             job = set_job_state(job.pk, "ready")
         ids = []
-        for evidence in CollectionObservation.objects.filter(
+        evidence_batch = CollectionObservation.objects.filter(
             pk__in=[row["observation_id"] for row in scope.envelopes]
-        ).order_by("pk"):
+        ).order_by("pk")[: limits["items"] - selected_count]
+        for evidence in evidence_batch.iterator(chunk_size=100):
             size = _evidence_bytes(evidence)
             if (
                 selected_count + len(ids) >= limits["items"]
@@ -961,7 +997,7 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
         rejected = {
             row["observation_id"]
             for row in projection["rejections"]
-            if "metric" not in row
+            if "metric" not in row and not row.get("terminal")
         }
         committed = set(ids) - rejected
         # Fence the acquisition before locking its queue row, matching enqueue's

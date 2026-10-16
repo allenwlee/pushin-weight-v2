@@ -586,29 +586,73 @@ def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benc
     assert product.type is None
 
 
-def test_sparse_hf_archive_acquisition_automatically_projects_without_interpolation():
+@pytest.mark.parametrize("items", [1000, 2])
+def test_sparse_hf_archive_acquisition_automatically_projects_without_interpolation(
+    items,
+):
     from core.collection_identity import review_catalog_mapping
 
     product, _ = setup_spec()
     source = DataSource.objects.get(pk="hf")
     source.enabled = True
     source.save()
-    subject = MeasurementSubject.objects.get(
-        pk=subject_id("product", product.product_key)
-    )
-    mapping = review_catalog_mapping(
-        source=source,
-        subject=subject,
-        external_identifier=product.repo_id,
-        source_subject_kind="repository",
-        identifier_scope="model",
+    from core.measurement_taxonomy import configure_taxonomy
+    from core.models import Product
+
+    second = Product.objects.create(
+        repo_id="lab/Second",
         publisher_account=product.publisher_account,
-        role="dedicated_model",
-        version_selector=None,
-        evidence_url="https://huggingface.co/lab/Model",
-        reviewed_by="fixture",
-        identity_snapshot={},
+        brand=product.brand,
+        type="llm-model",
+        private=False,
+        disabled=False,
     )
+    configure_taxonomy(
+        {
+            "reviewed_by": "fixture",
+            "subjects": [
+                {"kind": "product", "key": str(p.product_key)}
+                for p in (product, second)
+            ],
+        }
+    )
+    models = []
+    for selected in (product, second):
+        subject = MeasurementSubject.objects.get(
+            pk=subject_id("product", selected.product_key)
+        )
+        mapping = review_catalog_mapping(
+            source=source,
+            subject=subject,
+            external_identifier=selected.repo_id,
+            source_subject_kind="repository",
+            identifier_scope="model",
+            publisher_account=selected.publisher_account,
+            role="dedicated_model",
+            version_selector=None,
+            evidence_url="https://huggingface.co/" + selected.repo_id,
+            reviewed_by="fixture",
+            identity_snapshot={},
+        )
+        models.append(
+            {
+                "product_key": str(selected.product_key),
+                "creation": {
+                    "at": "2026-09-01T00:00:00Z",
+                    "source": "hf",
+                    "native_identifier": selected.repo_id,
+                },
+                "provider_pins": [
+                    {
+                        "mapping_id": str(mapping.pk),
+                        "mapping_hash": mapping.mapping_hash,
+                        "source": "hf",
+                        "native_identifier": selected.repo_id,
+                        "identifier_scope": "model",
+                    }
+                ],
+            }
+        )
     scope = prepare_history_statistics_scope(
         source=source,
         reviewed_by="fixture",
@@ -617,21 +661,7 @@ def test_sparse_hf_archive_acquisition_automatically_projects_without_interpolat
             "brand_id": product.brand_id,
             "cutoff": "2026-09-12T00:00:00Z",
             "global_start_at": "2026-09-01T00:00:00Z",
-            "models": [
-                {
-                    "product_key": str(product.product_key),
-                    "creation": {"at": "2026-09-01T00:00:00Z"},
-                    "provider_pins": [
-                        {
-                            "mapping_id": str(mapping.pk),
-                            "mapping_hash": mapping.mapping_hash,
-                            "source": "hf",
-                            "native_identifier": product.repo_id,
-                            "identifier_scope": "model",
-                        }
-                    ],
-                }
-            ],
+            "models": models,
             "hf_archive": {
                 "dataset_id": "cfahlgren1/hub-stats",
                 "archive_publisher": "cfahlgren1",
@@ -652,13 +682,34 @@ def test_sparse_hf_archive_acquisition_automatically_projects_without_interpolat
     with patch(
         "scripts.benchmark_download_collector.hf_archive.select_snapshot",
         return_value={
-            "rows": [{"id": product.repo_id, "downloads": 5, "likes": 2}],
+            "rows": [
+                {"id": repo, "downloads": 5, "likes": 2}
+                for repo in (product.repo_id, "lab/Second")
+            ],
             "file_path": "saved.parquet",
         },
     ):
-        run = execute_model_history(register(source, scope).pk, budget=budget)
+        job = register(source, scope, items=items)
+        for _ in range(6):
+            run = execute_model_history(job.pk, budget=budget)
+            if run.status != "partial":
+                break
+            budget = Budget(
+                httpx.Client(
+                    transport=httpx.MockTransport(
+                        lambda request: pytest.fail("resume must not refetch archives")
+                    )
+                )
+            )
     assert run.status == "success", run.report
-    assert MetricValue.objects.count() == 4
+    assert MetricValue.objects.count() == 8
+    assert (
+        CollectionObservation.objects.filter(values__isnull=False).distinct().count()
+        == 4
+    )
+    assert not run.scopes.filter(
+        scope_kind="numeric_projection", outcome="pending"
+    ).exists()
     assert set(
         MetricValue.objects.filter(source_metric__metric_key="likes").values_list(
             "as_of_date", flat=True

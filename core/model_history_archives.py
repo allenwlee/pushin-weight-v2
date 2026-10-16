@@ -10,6 +10,7 @@ import copy
 from datetime import UTC, datetime
 
 from core.benchmark_metric_history import import_history, prepare_history
+from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
 from core.benchmark_metric_store import aware_instant
 from core.collection_state import (
     checkpoint_scope,
@@ -20,6 +21,7 @@ from core.model_history_cohort import validate_model_pins
 from core.model_history_statistics import history_statistics_contract
 from core.models import (
     CollectionObservation,
+    CollectionScopeRun,
 )
 
 
@@ -167,7 +169,7 @@ def acquire_hf_archives(claim, job, budget):
     if (
         contract
         and contract.source_configuration["hf"].get("eligibility_policy")
-        == "source-statistics-v1"
+        == SOURCE_STATISTICS_POLICY
     ):
         from core.benchmark_attribution import enforce_source_collection
 
@@ -280,7 +282,7 @@ def acquire_hf_archives(claim, job, budget):
         if (
             contract
             and contract.source_configuration["hf"].get("eligibility_policy")
-            == "source-statistics-v1"
+            == SOURCE_STATISTICS_POLICY
         ):
             _queue_hf_archive(claim, job, contract, archive, snap)
         elif scope.get("numeric_contract_id") and snap["payload"]["rows"]:
@@ -318,6 +320,15 @@ def _queue_hf_archive(claim, job, contract, archive, snapshot):
             contract.contract_hash,
         ]
     )
+    # Capture and enqueue share the checkpoint transaction. Its durable queue
+    # survives interruption; a completed capture must never recreate that work.
+    if CollectionScopeRun.objects.filter(
+        run_id=claim.run_id,
+        scope_kind="archive_projection",
+        scope_key=key,
+        enumeration_complete=True,
+    ).exists():
+        return
 
     def write(run, scoped):
         ids = []
