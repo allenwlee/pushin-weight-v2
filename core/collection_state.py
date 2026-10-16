@@ -35,6 +35,105 @@ class RunClaim:
     job_id: uuid.UUID
     run_id: uuid.UUID
     lease_token: uuid.UUID
+    direct_driver: str | None = None
+
+
+@transaction.atomic
+def claim_direct_run(run, *, driver, seconds, limits, now=None):
+    """Lease an explicit legacy invocation under its existing advisory lock.
+
+    Receipt jobs cannot be dispatched or activated. Known limits describe this
+    actual driver; historical archives retain their original unknown limits.
+    """
+    require(
+        driver in {"persist_source", "execute_catalog"}, "unsupported direct driver"
+    )
+    require(
+        isinstance(seconds, (int, float)) and 0 < seconds < float("inf"),
+        "finite direct invocation duration required",
+    )
+    original_job_id = run.job_id
+    if run.job_id is None:
+        definition = {
+            "version": 1,
+            "scope": copy.deepcopy(run.scope),
+            "schedule": {"kind": "manual", "driver": driver},
+            "budgets": copy.deepcopy(limits),
+            "budget_authority": "direct_invocation",
+            "execution": {"driver": driver, "executable": False},
+        }
+        identity = {
+            "source": run.source_id,
+            "purpose": run.purpose,
+            "contract": str(run.contract_id) if run.contract_id else None,
+            "operation": "legacy_direct",
+            "mode": "manual",
+            "definition": definition,
+        }
+        key = f"direct:{driver}:{digest(identity)}"
+        identifier = uuid.uuid5(uuid.NAMESPACE_URL, f"pushinweight:{key}")
+        require(
+            not CollectionJob.objects.filter(job_key=key)
+            .exclude(pk=identifier)
+            .exists(),
+            "direct job key collision",
+        )
+        job, _ = CollectionJob.objects.get_or_create(
+            pk=identifier,
+            defaults={
+                "job_key": key,
+                "source_id": run.source_id,
+                "purpose": run.purpose,
+                "contract_id": run.contract_id,
+                "operation": "legacy_direct",
+                "mode": "manual",
+                "definition": definition,
+                "definition_sha256": digest(identity),
+                "state": "completed",
+            },
+        )
+        require(
+            job.job_key == key and job.definition_sha256 == digest(identity),
+            "direct job identity collision",
+        )
+        run.job = job
+    job = CollectionJob.objects.select_for_update().get(pk=run.job_id)
+    validate_job(job)
+    require(
+        job.operation in {"legacy_direct", "archived_run"},
+        "shared jobs require the shared collector claim",
+    )
+    require(
+        run.source_id == job.source_id
+        and run.purpose == job.purpose
+        and run.contract_id == job.contract_id
+        and run.scope == job.definition["scope"],
+        "direct run instruction mismatch",
+    )
+    if not run._state.adding:
+        stored = CollectionRun.objects.select_for_update().get(pk=run.pk)
+        require(
+            stored.job_id == original_job_id
+            and stored.source_id == run.source_id
+            and stored.purpose == run.purpose
+            and stored.contract_id == run.contract_id
+            and stored.scope == run.scope
+            and stored.status == run.status,
+            "direct run changed while acquiring ownership",
+        )
+        now = now or timezone.now()
+        if (
+            stored.status == "running"
+            and stored.lease_expires_at
+            and stored.lease_expires_at > now
+        ):
+            raise BusyJob("direct run lease is active")
+    now = now or timezone.now()
+    run.status, run.completed_at = "running", None
+    run.lease_token = uuid.uuid4()
+    run.lease_expires_at = now + timedelta(seconds=seconds)
+    run.save()
+    return RunClaim(job.pk, run.pk, run.lease_token, driver)
 
 
 def _key(job, invocation_id):
@@ -54,13 +153,19 @@ def claim_job(
     # the selected job, including on reclaim, without affecting legacy/X claims.
     candidate = CollectionJob.objects.get(pk=job_id)
     campaign = candidate.definition.get("campaign", {})
-    bounded_campaign = (isinstance(campaign, dict)
-                        and campaign.get("kind") == "backfiller-data-source-v1")
+    bounded_campaign = (
+        isinstance(campaign, dict)
+        and campaign.get("kind") == "backfiller-data-source-v1"
+    )
     if bounded_campaign:
-        list(CollectionJob.objects.select_for_update().filter(
-            definition__campaign__kind="backfiller-data-source-v1",
-            definition__campaign__key=campaign["key"],
-        ).order_by("pk"))
+        list(
+            CollectionJob.objects.select_for_update()
+            .filter(
+                definition__campaign__kind="backfiller-data-source-v1",
+                definition__campaign__key=campaign["key"],
+            )
+            .order_by("pk")
+        )
     job = (
         CollectionJob.objects.select_for_update(of=("self",))
         .select_related("source", "contract")
@@ -129,15 +234,18 @@ def claim_job(
         )
     if bounded_campaign:
         prior_usage = run.report.get("campaign_usage", {})
-        run.report = {**run.report, "campaign_usage": {
-            "invocations": prior_usage.get("invocations", 0) + 1,
-            "reserved_requests": prior_usage.get("reserved_requests", 0)
-            + job.definition["budgets"]["requests"],
-            "reserved_before_current": prior_usage.get("reserved_requests", 0),
-            "recorded_before_current": run.request_count,
-            "current_invocation_reservation": job.definition["budgets"]["requests"],
-            "accounting": "conservative_reservation",
-        }}
+        run.report = {
+            **run.report,
+            "campaign_usage": {
+                "invocations": prior_usage.get("invocations", 0) + 1,
+                "reserved_requests": prior_usage.get("reserved_requests", 0)
+                + job.definition["budgets"]["requests"],
+                "reserved_before_current": prior_usage.get("reserved_requests", 0),
+                "recorded_before_current": run.request_count,
+                "current_invocation_reservation": job.definition["budgets"]["requests"],
+                "accounting": "conservative_reservation",
+            },
+        }
     run.status, run.completed_at = "running", None
     run.lease_token, run.lease_expires_at = token, lease
     run.error_code = None
@@ -149,8 +257,10 @@ def claim_job(
     if bounded_campaign and job.purpose == "metric" and job.last_attempt_id:
         previous = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
         if previous.status == "partial" and previous.completed_at is not None:
-            require(previous.report.get("definition_sha256") == job.definition_sha256,
-                    "continuation identity mismatch")
+            require(
+                previous.report.get("definition_sha256") == job.definition_sha256,
+                "continuation identity mismatch",
+            )
             for scope in previous.scopes.all():
                 scope.pk = None
                 scope.run = run
@@ -188,17 +298,29 @@ def claim_job(
 @contextmanager
 def fenced_run(claim: RunClaim, *, now=None):
     """Lock job then run; perform database writes only while the claim is live."""
-    now = now or timezone.now()
     with transaction.atomic():
         job = CollectionJob.objects.select_for_update().get(pk=claim.job_id)
         run = CollectionRun.objects.select_for_update().get(pk=claim.run_id)
+        now = now or timezone.now()
         if not (
-            job.state == "ready"
-            and job.active_run_id == run.pk
+            (
+                (
+                    claim.direct_driver in {"persist_source", "execute_catalog"}
+                    and job.operation in {"legacy_direct", "archived_run"}
+                    and job.state == "completed"
+                    and job.active_run_id is None
+                )
+                or (
+                    claim.direct_driver is None
+                    and job.state == "ready"
+                    and job.active_run_id == run.pk
+                )
+            )
             and run.job_id == job.pk
             and run.source_id == job.source_id
             and run.purpose == job.purpose
             and run.contract_id == job.contract_id
+            and run.scope == job.definition["scope"]
             and run.status == "running"
             and run.lease_token == claim.lease_token
             and run.lease_expires_at
@@ -206,6 +328,7 @@ def fenced_run(claim: RunClaim, *, now=None):
         ):
             raise StaleClaim("execution claim has expired or been replaced")
         validate_job(job)
+        run.job = job
         yield job, run
 
 
@@ -277,8 +400,8 @@ def finish_run(
         "terminal/yield outcome required",
     )
     safe_payload(report or {})
-    now = now or timezone.now()
     with fenced_run(claim, now=now) as (job, run):
+        now = now or timezone.now()
         run.status = status
         run.completed_at = (
             None if job.purpose == "catalog" and status == "partial" else now
@@ -292,24 +415,34 @@ def finish_run(
         # reservation. Interrupted/ambiguous attempts retain their conservative cap.
         reservation = run.report.get("campaign_usage")
         campaign = job.definition.get("campaign")
-        if (isinstance(campaign, dict)
-                and campaign.get("kind") == "backfiller-data-source-v1"
-                and reservation and status == "success"
-                and (report or {}).get("physical_accounting_complete") is True
-                and request_count is not None
-                and all(key in reservation for key in (
-                    "reserved_before_current", "recorded_before_current",
+        if (
+            isinstance(campaign, dict)
+            and campaign.get("kind") == "backfiller-data-source-v1"
+            and reservation
+            and status == "success"
+            and (report or {}).get("physical_accounting_complete") is True
+            and request_count is not None
+            and all(
+                key in reservation
+                for key in (
+                    "reserved_before_current",
+                    "recorded_before_current",
                     "current_invocation_reservation",
-                ))):
+                )
+            )
+        ):
             # The successor proves only its own physical usage. Earlier partial
             # or expired invocations retain their reservation, even when a
             # catalog attempt reuses the same run row after a hard interruption.
             current_requests = request_count - reservation["recorded_before_current"]
-            require(0 <= current_requests <= reservation["current_invocation_reservation"],
-                    "accounted requests exceed current invocation reservation")
+            require(
+                0 <= current_requests <= reservation["current_invocation_reservation"],
+                "accounted requests exceed current invocation reservation",
+            )
             run.report["campaign_usage"] = {
                 **reservation,
-                "reserved_requests": reservation["reserved_before_current"] + current_requests,
+                "reserved_requests": reservation["reserved_before_current"]
+                + current_requests,
                 "accounting": "complete_current_invocation_accounting",
             }
         run.error_code = error_code

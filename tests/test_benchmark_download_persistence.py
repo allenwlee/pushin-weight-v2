@@ -34,6 +34,10 @@ def test_hf_atomic_idempotent_values_do_not_invent_window_bounds():
 
     contract = configured()
     run = persist_source(contract, "hf", "a" * 64, payload())
+    assert run.job_id is not None
+    assert run.job.source_id == run.source_id == "hf"
+    assert run.job.contract_id == run.contract_id == contract.pk
+    assert run.job.definition["scope"] == run.scope == {}
     assert run.status == "success"
     assert persist_source(contract, "hf", "a" * 64, payload()).pk == run.pk
     assert CollectionObservation.objects.count() == 1
@@ -46,6 +50,56 @@ def test_hf_atomic_idempotent_values_do_not_invent_window_bounds():
         for v in values
     )
     assert all(v.observation.observed_at is not None for v in values)
+
+
+@pytest.mark.parametrize("replacement", ["expired", "replaced"])
+def test_stale_direct_metric_cannot_publish_observations(replacement):
+    import uuid
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from core.benchmark_metric_store import persist_source
+    from core.collection_state import StaleClaim
+
+    contract = configured()
+
+    def lose_ownership():
+        run = CollectionRun.objects.get()
+        changes = {"report": {"successor": "preserve"}}
+        if replacement == "expired":
+            changes["lease_expires_at"] = timezone.now() - timedelta(seconds=1)
+        else:
+            changes["lease_token"] = uuid.uuid4()
+        CollectionRun.objects.filter(pk=run.pk).update(**changes)
+        return payload()
+
+    with pytest.raises(StaleClaim):
+        persist_source(contract, "hf", "a" * 64, fetch=lose_ownership)
+    assert not CollectionObservation.objects.exists()
+    assert not MetricValue.objects.exists()
+    assert CollectionRun.objects.get().report == {"successor": "preserve"}
+
+
+def test_direct_replay_rejects_mismatched_legacy_instruction_copies():
+    from core.benchmark_metric_store import persist_source
+
+    contract = configured()
+    run = persist_source(contract, "hf", "a" * 64, payload())
+    CollectionRun.objects.filter(pk=run.pk).update(scope={"changed": True})
+    with pytest.raises(ValueError, match="instruction copy mismatch"):
+        persist_source(contract, "hf", "a" * 64, payload())
+
+
+def test_independent_direct_metric_attempts_reuse_the_same_immutable_job():
+    from core.benchmark_metric_store import persist_source
+
+    contract = configured()
+    first = persist_source(contract, "hf", "a" * 64, payload())
+    second = persist_source(contract, "hf", "b" * 64, payload(20))
+    assert first.pk != second.pk
+    assert first.job_id == second.job_id
+    assert first.job.runs.count() == 2
 
 
 @pytest.mark.parametrize("bad", [1.5, True, -1, "10", 2**63])

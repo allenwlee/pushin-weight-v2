@@ -8,6 +8,7 @@ on:
       - 'monitor/management/commands/backfill_hf_*.py'
       - 'monitor/management/commands/backfill_*history.py'
       - 'monitor/management/commands/import_hf_backfill.py'
+      - 'monitor/management/commands/normalize_collection_run_jobs.py'
       - 'core/hf_metadata_client.py'
       - 'core/account_identity.py'
       - 'core/publisher_accounts.py'
@@ -43,6 +44,7 @@ on:
       - 'monitor/management/commands/*benchmark*.py'
       - 'monitor/management/commands/configure_measurement_taxonomy.py'
       - 'tests/fixtures/benchmark_download_collector/**'
+      - 'tests/fixtures/collection_compat/**'
       - 'tests/test_measurement*.py'
       - 'tests/test_account_source_identity.py'
       - 'tests/test_benchmark_pulse*.py'
@@ -52,6 +54,7 @@ on:
       - 'tests/test_benchmark*.py'
       - 'tests/test_hf_metadata_client.py'
       - 'tests/test_collection*.py'
+      - 'tests/test_run_job_normalization.py'
       - 'tests/test_github*.py'
       - 'tests/test_model_history*.py'
       - 'tests/test_model_inventory.py'
@@ -107,6 +110,7 @@ jobs:
           monitor/management/commands/*benchmark*.py
           monitor/management/commands/backfill_hf_*.py monitor/management/commands/backfill_*history.py
           monitor/management/commands/import_hf_backfill.py monitor/management/commands/configure_measurement_taxonomy.py
+          monitor/management/commands/normalize_collection_run_jobs.py
           tests/test_benchmark_pulse_views.py tests/test_measurement*.py
           core/collection*.py core/github*.py core/model_history*.py
           core/model_native_history.py core/model_inventory.py
@@ -116,6 +120,7 @@ jobs:
           core/management/commands/backfiller_data_source.py
           core/management/commands/plan_model_history.py core/management/commands/review_collection_mapping.py
           tests/test_collection*.py tests/test_github*.py tests/test_model_history*.py
+          tests/test_run_job_normalization.py
           tests/test_model_inventory.py tests/test_hf_catalog_runner.py
           tests/test_data_source*.py tests/test_source*.py tests/test_hf_source_ingestion.py
       - name: Offline collector and PostgreSQL regression net
@@ -133,6 +138,7 @@ jobs:
           tests/test_collection_identity.py tests/test_collection_schema_consolidation.py
           tests/test_collection_schema_migration.py tests/test_collection_schema_regression_net.py
           tests/test_collection_scheduling.py tests/test_collection_budgets.py tests/test_collection_reports.py
+          tests/test_run_job_normalization.py
           tests/test_github_metadata_client.py tests/test_github_catalog.py
           tests/test_model_history_cohort.py tests/test_model_inventory.py
           tests/test_model_history_collection.py tests/test_hf_catalog_runner.py

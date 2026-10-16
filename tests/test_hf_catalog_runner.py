@@ -58,6 +58,9 @@ def test_full_walk_enrichment_refresh_identity_and_ambiguous_brand():
     assert result["unique_models"] == result["imported"] == 2
     assert result["requests"] == 6
     saved = CollectionRun.objects.get(pk=result["run_id"])
+    assert saved.job_id is not None
+    assert saved.job.source_id == saved.source_id == "hf"
+    assert saved.job.definition["scope"] == saved.scope == manifest
     assert saved.request_count == 6
     assert saved.selected_count == saved.success_count == 2
     assert Product.objects.filter(brand__isnull=True).count() == 2
@@ -66,6 +69,16 @@ def test_full_walk_enrichment_refresh_identity_and_ambiguous_brand():
     assert again["imported"] == 0 and again["updated"] == 2
     assert list(Product.objects.values_list("id", "repo_id")) == identities
     assert CollectionRun.objects.count() == 2
+    assert CollectionRun.objects.get(pk=again["run_id"]).job_id == saved.job_id
+
+
+def test_different_direct_catalog_bounds_have_different_immutable_jobs():
+    manifest = scope()
+    first = execute_catalog(scope=manifest, hf=api(budget=2))
+    second = execute_catalog(scope=manifest, hf=api(budget=3))
+    assert CollectionRun.objects.get(pk=first["run_id"]).job_id != (
+        CollectionRun.objects.get(pk=second["run_id"]).job_id
+    )
 
 
 def test_request_cap_commits_discovery_before_pending_enrichment_and_resumes():
@@ -78,6 +91,77 @@ def test_request_cap_commits_discovery_before_pending_enrichment_and_resumes():
     assert resumed["requests"] == 4
     assert resumed["cumulative_requests"] == 6
     assert resumed["imported"] == 2
+
+
+def test_slow_http_response_records_partial_time_cap_with_finalization_lease(
+    monkeypatch,
+):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    elapsed = [0.0]
+    started = timezone.now()
+    monkeypatch.setattr(
+        timezone, "now", lambda: started + timedelta(seconds=elapsed[0])
+    )
+
+    def slow_response(request):
+        elapsed[0] = 61.0
+        return httpx.Response(200, json={"name": "lab"})
+
+    hf = HFMetadataClient(
+        httpx.Client(transport=httpx.MockTransport(slow_response)),
+        max_requests=5,
+        max_seconds=60,
+        clock=lambda: elapsed[0],
+    )
+    report = execute_catalog(scope=scope(), hf=hf)
+    assert report["stop_reason"] == "time_cap"
+    run = CollectionRun.objects.get(pk=report["run_id"])
+    assert run.status == run.invocations[-1]["outcome"] == "partial"
+    assert run.report == report
+    assert run.scopes.get().outcome == "time_cap"
+    assert run.request_count == 1
+    assert run.lease_expires_at == started + timedelta(seconds=120)
+    assert run.job.definition["budgets"]["seconds"] == 60
+    assert run.invocations[-1]["max_seconds"] == 60
+
+
+def test_archived_partial_catalog_reuses_pages_without_rewriting_unknown_budgets():
+    import copy
+    import importlib
+
+    from django.apps import apps
+
+    from tests.test_run_job_normalization import previous_catalog_module
+
+    previous = previous_catalog_module()
+    first = previous.execute_catalog(scope=scope(), hf=api(budget=2))
+    run = CollectionRun.objects.get(pk=first["run_id"])
+    scopes = list(run.scopes.values_list("pk", flat=True))
+    observations = list(run.observations.values_list("pk", flat=True))
+    migration = importlib.import_module("core.migrations.0088_archive_run_instructions")
+    with connection.schema_editor(atomic=False) as editor:
+        migration.archive_run_instructions(apps, editor)
+    run.refresh_from_db()
+    archive_id = run.job_id
+    definition = copy.deepcopy(run.job.definition)
+    assert definition["budgets"] is None
+    assert definition["schedule"] is None
+
+    def no_saved_pages(request):
+        assert request.url.path.startswith("/api/models/lab/")
+
+    resumed = execute_catalog(run_id=run.pk, hf=api(no_saved_pages, budget=7))
+    run.refresh_from_db()
+    assert resumed["complete"] and resumed["requests"] == 4
+    assert run.job_id == archive_id
+    assert run.job.definition == definition
+    assert list(run.scopes.values_list("pk", flat=True)) == scopes
+    assert list(run.observations.values_list("pk", flat=True)) == observations
+    assert run.invocations[-1]["max_requests"] == 7
+    assert run.invocations[-1]["max_seconds"] == 60
 
 
 def test_short_page_next_link_is_followed_and_repeated_cursor_is_partial():
@@ -258,3 +342,35 @@ def test_one_inaccessible_namespace_does_not_suppress_another():
     assert result["namespaces"][0]["outcome"] == "forbidden"
     assert result["namespaces"][1]["enumeration_complete"]
     assert Product.objects.count() == 2
+
+
+@pytest.mark.parametrize("replacement", ["expired", "replaced"])
+def test_stale_direct_catalog_cannot_checkpoint_or_overwrite_final_report(replacement):
+    import uuid
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from core.collection_state import StaleClaim
+
+    manifest = scope()
+
+    def lose_ownership(request):
+        run = CollectionRun.objects.get()
+        changes = {"report": {"successor": "preserve"}}
+        if replacement == "expired":
+            changes["lease_expires_at"] = timezone.now() - timedelta(seconds=1)
+        else:
+            changes["lease_token"] = uuid.uuid4()
+        CollectionRun.objects.filter(pk=run.pk).update(**changes)
+        return httpx.Response(200, json={"name": "lab"})
+
+    client = api(lose_ownership)
+    with pytest.raises(StaleClaim):
+        execute_catalog(scope=manifest, hf=client)
+    run = CollectionRun.objects.get()
+    assert run.report == {"successor": "preserve"}
+    assert run.scopes.get().envelopes == []
+    assert not run.observations.exists()
+    assert not Product.objects.exists()
+    assert client.on_attempt is None

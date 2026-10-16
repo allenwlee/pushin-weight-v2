@@ -102,6 +102,30 @@ def validate_definition(
 
 
 def validate_job(job):
+    if job.operation in {"archived_run", "legacy_direct"}:
+        require(
+            job.state == "completed"
+            and job.active_run_id is None
+            and job.next_due_at is None
+            and job.next_retry_at is None
+            and job.definition.get("execution", {}).get("executable") is False,
+            "non-dispatchable instruction record required",
+        )
+        require(
+            job.definition_sha256
+            == digest(
+                {
+                    "source": job.source_id,
+                    "purpose": job.purpose,
+                    "operation": job.operation,
+                    "mode": job.mode,
+                    "contract": str(job.contract_id) if job.contract_id else None,
+                    "definition": job.definition,
+                }
+            ),
+            "immutable instruction hash mismatch",
+        )
+        return
     actual = validate_definition(
         source_id=job.source_id,
         purpose=job.purpose,
@@ -120,6 +144,7 @@ def validate_job(job):
                     source_id=job.source_id,
                     purpose=job.purpose,
                     contract_id=job.contract_id,
+                    scope=job.definition["scope"],
                 ).exists(),
                 "job/run pointer mismatch",
             )
@@ -185,8 +210,8 @@ def set_job_state(job_id, state, *, now=None):
         job.next_due_at = job.next_retry_at = None
         if job.active_run_id:
             run = CollectionRun.objects.select_for_update().get(pk=job.active_run_id)
-            run.status = "interrupted" if run.purpose == "catalog" else "aborted"
-            run.completed_at = None if run.purpose == "catalog" else now
+            run.status = "interrupted" if job.purpose == "catalog" else "aborted"
+            run.completed_at = None if job.purpose == "catalog" else now
             run.lease_expires_at = now
             run.error_code = "job_" + state
             run.save()

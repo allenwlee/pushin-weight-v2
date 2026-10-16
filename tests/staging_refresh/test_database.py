@@ -580,6 +580,7 @@ def test_candidate_runs_migrations_scrub_and_full_validation_before_marking(
         ["manage.py", "migrate", "--noinput"],
         ["manage.py", "check", "--deploy"],
         ["manage.py", "migrate", "--check"],
+        ["manage.py", "normalize_collection_run_jobs", "--purpose=metric"],
     ]
     assert events.index(f"candidate:scrub:{candidate.name}") < events.index(
         f"candidate:inspect:{candidate.name}"

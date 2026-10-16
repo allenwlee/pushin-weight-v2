@@ -30,6 +30,8 @@ Collect full relevant inventories for verified tracked publishers, then recover 
 
 Completion requires actual `MetricValue` writes, safe replay of saved evidence, restart using database state alone, and proof that the next normal collection uses the same path. The existing saved three-brand counters provide a concrete minimum of **1,610 metric values** to recover before new network acquisition. A broader campaign must account for all 21 brands and all four sources, with explicit coverage gaps. Preserve the 15-minute X harvester and its separately owned recovery campaign; bulk source backfills do not run inside that cycle.
 
+The owner additionally selects removing four duplicated instruction columns from runs. Jobs become the single owner of source, purpose, pinned contract and scope. Preserve older jobless runs through explicitly inactive archival jobs and release the transition in compatible stages; see U17. This adds no tables.
+
 The October 16 planning turn performed no implementation or runtime actions. The subsequent owner instruction “lfg this subplan” selects execution through the recorded production endpoint, full four-source backfill and verified ongoing collection; see Current LFG Authorization under Delivery Exceptions.
 
 ---
@@ -108,6 +110,8 @@ Other missing wiring includes complete metadata acquisition, source-specific num
 - R21. Separate prompt, fresh publisher inventory/current-metadata collection from deep repository activity/history continuation. Historical work cannot keep normal discovery stuck on an old partial catalog run. Use one scheduling authority per role and finite, fair provider budgets.
 - R22. Report coverage by source, selected model/native resource, data family/metric and requested period/configuration. Distinguish stored, reused, native-only, unavailable, missing, truncated, retryable failure and cooldown. Neither unsupported history nor a successful HTTP response counts as a fully ingested series.
 - R23. Complete all selected four-source campaign scopes for the frozen 21-brand cohort to honest terminal outcomes, verify normalized data through product readers, and demonstrate routine continuity. A three-brand inventory pilot is an intermediate checkpoint, not completion of this plan.
+
+- R24. Collection jobs own source, purpose, pinned contract and frozen scope. Remove their four duplicated physical run columns, preserve existing execution/evidence/value facts and explicitly recover old jobless instructions. Governs U17 and charterG3-R33.
 
 ### Scope
 
@@ -1038,6 +1042,12 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
+### Run instruction normalization — owner instruction October 16
+
+The owner explicitly directs: **“ok if they are repeated, then remove them from run.”** Remove the duplicated `collection_runs.source_id`, `purpose`, `contract_id`, and `scope`; their authoritative owners are `collection_jobs.source_id`, `purpose`, `contract_id`, and `definition.scope`. Preserve run identity, source/retrieval/publication clocks, raw payloads, request parameters, counters, status, leases, invocations and reports. This amendment adds **zero tables**, retires **zero tables**, and removes **four columns** when the final migration is applied. It supersedes earlier conversational suggestions to retain the copies. No X scheduling/provider authority changes.
+
+Use a three-release transition under the existing staged production route. A build-time migration must never drop a column still selected or written by a serving previous revision. First ship compatible job-backed writers while retaining and populating the four existing columns and keeping current readers. Recover stored instructions for inactive metric runs into archival jobs that the shared scheduler cannot dispatch; defer catalog/content archival and every running legacy run until all old callers finish. Explicitly mark historical instructions beyond the stored fields unknown. Do not reassign existing jobs or change old run/value/observation identities. After all production processes use the writer bridge, run strict catch-up and verify every run has a matching job. Second switch all readers to jobs and remove the four fields from ORM state, temporarily retaining physical compatibility columns populated from the job for any overlapping compatible writer. Finally drop physical columns once every serving process no longer references them. Preserve compatibility views where still required by updating their joins/projections, and preserve status/lease integrity without SQL CHECKs that depend on removed columns.
+
 ### Current LFG Authorization — October 16
 
 After confirming completion includes a working reusable backfiller, ongoing scheduled ingestion and the full 21-brand/four-source campaign, the owner explicitly requests **“lfg this subplan.”** Execute implementation, review/checks and the already selected staged production endpoint, then bounded source-statistics replay, collection and routine activation/proof. This grant excludes X paid collection, a pause/restart of the X harvester or active August recovery, and changes to unrelated source/model settings. Preserve current normal cadences, including HF 10:00 UTC; inspect and record the actual per-source configuration before activation. Use finite per-attempt and campaign budgets from the scope/adapter ceilings; no weights/binary assets or model inference calls.
@@ -1323,6 +1333,237 @@ The owner subsequently selected LFG and faster native implementation workers. Th
 
 ### Runtime preservation baseline and release sequence
 
+**Saved replay completed, 2026-10-16T03:26Z:** campaign
+`g3-source-replay-20261016` completed six first jobs and six independent repeats
+with HTTP prohibited. First executions wrote **1,759 values**: HF1,190 and
+GitHub569, including captured repository-size and publisher-profile counters.
+All second executions wrote zero additional values. Read-back verified native-only
+attribution and original capture clocks. The post-replay production audit matched
+the original18 metric-definition rows, legacy contract, unrelated source controls,
+and all1,959 pilot observation IDs/full-row hashes;38 definitions now exist.
+
+**Fresh acquisition selected, 2026-10-16T03:26Z:** register paused database-backed
+inventory jobs for the same21 brand IDs, deriving verified company/publisher
+scopes from existing relations. Campaign `g3-source-fresh-20261016` permits at
+most200 invocations/20,000 physical requests. Each HF invocation is bounded at
+100requests/600seconds/32MiB/10,000items; GitHub inventory at
+40requests/180seconds/8MiB/1,000items. Reuse replay contracts only for exact
+publisher sets and definition/policy pins. Ambiguous ownership remains an
+explicit gap. Registration changes neither source controls nor recurring
+authorities; execution uses the shared facade. Preserve HF10:00UTC, existing
+Google/NVIDIA watch exceptions and the distinction between watch modification
+order and later creation-ordered historical selection. No paid X/LLM calls,
+weights, binaries, new scheduler, or authoritative local progress files.
+
+**Routine activation envelope, 2026-10-16T03:31Z:** the24 reviewed publisher
+inventory scopes (21HF company scopes and3GH owners) retain daily10:00UTC
+schedules through the existing hourly collector. Use one explicit source-role
+authority per company, separate from all historical campaigns. HF's aggregate
+wake-up envelope is1,000requests/300seconds/32MiB, with each individual job
+still capped at100requests/180seconds; GitHub's aggregate is40requests/
+180seconds/8MiB, preserving capacity under its unauthenticated public quota.
+Incomplete work continues from the database with provider cooldowns respected.
+No secret is copied from shared GitHub CLI credentials. These limits do not
+alter legacy benchmark contract settings or X/careers schedules.
+
+The fresh OpenRouter/Arena proof uses only exact identifiers from retained
+numeric provider observations, explicitly native-only, over the three completed
+UTC days ending2026-10-16T00:00Z. Its selected publication campaign is capped at
+20invocations/500requests, each40requests/180seconds/8MiB/2,000items.
+Separate recurring publication roles preserve the verified legacy contract's
+`poll_seconds=86300`, using rolling completed-day windows and the same writer.
+Registration leaves these paused; parent activation and natural scheduler
+evidence are recorded separately. Legacy canonical mappings remain unchanged.
+
+**Runtime Arena diagnosis, 2026-10-16T03:38Z:** fresh OpenRouter acquisition
+wrote9 values through3 physical publication requests (six selected model/day
+values plus three unassigned `other` aggregates). Arena's historical
+`datasets-server.huggingface.co/filter` request failed with a directly observed
+`httpx.ReadTimeout` after20.061seconds; its three original physical attempts and
+one bounded diagnostic retry remain persisted under run
+`83745005-5f2c-4a60-977a-988666934da3` and its publication child. DNS/TLS reachability
+is verified. The official latest artifact returned200 in0.197seconds through
+the permitted HF redirect, with613,695bytes advertised. `sources.arena_latest`
+already avoids this cold search-index dependency; `model_history` currently
+forces the historical filter reader in `core/model_history_publications.py`.
+Add an explicit immutable `arena_publication_mode=latest-artifact-v1` for
+current/routine publication jobs, reusing the existing bounded artifact reader.
+Keep default historical filtering unchanged, pin acquisition mode in shared
+cache identity, capture once per requested interval, exclude out-of-window
+numeric rows and retain `latest_publication_only` coverage. Verify actual
+executor-to-Parquet-to-values and clock/gap/replay cases in the existing history
+test file, review, then stage/deploy the fix under the existing production grant.
+No new schema/provider/scheduler authority is added.
+
+OpenRouter's recurring role uses the original contract's verified seven-day
+recheck window and86,300-second interval. Its activation performs no manual
+collection; the next natural hourly wake-up supplies routine evidence.
+
+**Natural routine proof, 2026-10-16T04:01Z:** the unchanged hourly Render service
+`crn-db3lm2ui0phs73amjs30` started naturally at04:00:17Z and finished successfully
+at04:01:19Z. Its actual command dispatched source-role job
+`61359152-a2bb-4d14-9085-aaa6501a2afb`, acquisition run
+`cbb16ae2-9357-430f-b3d4-3e2bb917416b`, under contract
+`e0a0d32d-04d3-4697-996c-3c30043682ca`. Seven completed-day HTTP acquisitions
+wrote **13 new values**, reused8 snapshots and acknowledged21 resources with
+no pending projection. Read-only joins verify original acquisition lineage and
+exact UTC daily windows; `other` remains an unassigned aggregate. This proof
+ran on deployed0bf5158d before the Arena repair; its caller, writer, source
+authority and valid OpenRouter window semantics are preserved by that repair.
+Cron logs and database evidence agree; no manual invocation substitutes for it.
+
+**Arena repair candidate, df4e08b8235e43cddf7770e3e5f71f36f58c3d98:** six new
+cases failed before the fix; the final history file passes27cases, parent
+regression61requiredPostgreSQL cases/0skips/errors, and36Ollija checks pass.
+Three simplification reviews applied no changes; one low-value extra lookup
+suggestion was skipped. Focused correctness, governing-instruction and separate
+native adversarial review found no actionable defects. The GrokCLI review
+attempt reached its600-second attempt limit without an artifact, so it supplies
+no independent-model evidence; its terminal job is cleaned up. Existing code,
+tests and this plan carry the reasoning; separate compounding is skipped.
+Browser testing is skipped with no affected rendered routes. Hosted run
+[38847223773](https://github.com/allenwlee/pushin-weight-v2/actions/runs/38847223773)
+passes **610tests/455requiredPostgreSQL/0requiredskips/errors** and scoped lint.
+Exact candidate is live in staging at deploy`dep-db8q0d3ncjis73f02840`;
+internal/public login200, valid/ready existing snapshot index,18old definitions,
+two unchanged historical X jobs and0newcampaign jobs, with collection disabled.
+The staging preflight used existing authenticated SSH/internal PostgreSQL after
+the external psql route rejected the host's changed public IP; no allowlist
+change. An initial operator assertion confused0campaign jobs with0total jobs;
+actual two old X jobs are preserved and the corrected check passes. Production
+promotion follows these verified checks; actual Arena positive write remains
+pending deployment/activation.
+
+**Production/runtime and owner walkthrough, 2026-10-16T04:19Z:** all six production
+consumers report exact candidate `df4e08b8235e43cddf7770e3e5f71f36f58c3d98` live.
+The production web runtime independently confirms that revision, PostgreSQL18.4,
+0087, valid/ready snapshot index and login200. HF inventory has20/21company jobs
+complete; Alibaba/Qwen remains resumable at the request cap. Saved replay1759,
+freshHF7180/GitHub843/OpenRouter9, and the natural OpenRouter run13additional
+values are verified at this checkpoint; these are not full-history coverage.
+
+The owner's plain HTML request is delivered to local Chrome as
+`docs/analysis/2026-10-16-131832-g3-actual-collection-records.html` (authoritative
+worktree copy), SHA256
+`7b23d24c0ae4d477aa8ce42d1f67f5b984197d94f34353964079587e4a446a58`.
+Read-only repeatable PostgreSQL snapshot04:16:50Z verifies every depicted physical
+column and actual links: HFvalue379393, GitHub377563, scheduledOpenRouter384549;
+olderArenavalue372370 explicitly separated from today's failed attempt.
+56actualrecords/10existingtabletypes,0added/retired,4values,0brokenanchors,
+expand/collapse and390/1440px no page overflow,0browsererrors. Copy/hash and
+actualnewChrome tab verified onallenwlee; no database dump or credential copied.
+
+Today's current Arena job `1c9c59eb-2488-4097-9e04-ee9567b2837a`, run
+`6b742a0b-6d68-4997-a00b-c5a1ed172772`, and shared publication child both stop
+before any request with `install_benchmark_extra_for_arena`. Cause: the manual
+operator ran on the web build, whose `build.sh` installs `.[dev]`; `pyarrow` is
+the existing `benchmark` extra. The actual hourly benchmark service already
+builds with `pip install -e '.[benchmark]'`. This is an operator/runtime mismatch,
+not a reason to add a dependency to every web/worker or change collection code.
+Continue the same bounded database job in a short-lived Render one-off based on
+`pushinweight-benchmark`, verify exact revision and `pyarrow` before execution,
+and retain all existing job budgets/checkpoints/failed attempts. No new scheduler,
+service setting, database schema or X controller change. Render's current
+[one-off documentation](https://render.com/docs/one-off-jobs) confirms that cron
+services can supply the latest successful build and environment to an isolated
+one-off. Completion still requires actual Arena writes and the full frozen
+21-brand/four-source campaign; do not label the old Arena value as new evidence.
+
+**Arena continuation and refreshed walkthrough, 2026-10-16T04:25Z:** one-off
+`job-db8qccbl550s73eqv0dg`, based on the existing benchmark cron build with its
+existing `benchmark` extra, succeeds04:21:45Z. The same catalog run
+`6b742a0b-6d68-4997-a00b-c5a1ed172772` resumes in place and now succeeds;
+shared publication run `ae050fc5-2041-48eb-8ac6-768db22ea62a` accounts for
+2physical requests. The numeric projection run
+`0033c220-bf84-4b0c-b614-5495b8258844` commits18newvalues for3native models,
+6metrics each, publicationOctober15. Actual rating example385051 is
+1470.5296626495826 forglm-5.3-flash. No canonical attribution or complete
+October13–15history claimed: coverage remains explicitly latest-publication-only.
+The current success report retains the earlier invocation's missing-extra
+`stop_reason`; interpret that retained diagnostic with actual current status,
+invocations and numeric projection, not as a new failure. This is a report
+clarity limitation, not an absent numeric write. No code/dependency/service
+configuration mutation was needed for the operator-runtime correction.
+
+Refreshed the same owner HTML from read-only PostgreSQL snapshot04:24:46Z to
+show today's full four-source chains, with Arena385051 replacing the older
+example.60actualrecords/10existingtabletypes/4values, every physical column
+reconciled,0brokenanchors/duplicateIDs/browsererrors,84expandableblocks verified
+and390px no page overflow. LocalChrome newtab/hash verified; newSHA256
+`6714afb2c4fceff127cdf1551adca585621853511d8347684b68b3e69dd1eb8a`.
+Owner's job/run duplication question is answered in chat and that same HTML:
+source/purpose/contract copies and identical immutable-scope copies are actual
+cleanup candidates; jobstate/runstatus and registration/start timestamps mean
+different things. No additional schema refactor is authorized or performed.
+
+**Full-cohort execution selection, 2026-10-16T04:27Z:** all21freshHFcompany
+inventory jobs now complete. Alibaba/Qwen run5685238b finishes after944total
+physical requests across bounded resumptions; the final controller uses3of its
+8allowed invocations and stops immediately on completion. Freeze the existing
+21-brand selection at cutoff2026-10-16T00:00:00Z, up100creation-qualified canonical
+models perbrand under `hf-public-model-registry-v1`, identical products across
+all4sources. Register campaign`g3-source-history-20261016` with84paused primary
+jobs; auxiliary publication/projection jobs retain that campaign but do not
+become additional brand/source cells. The reviewed existing operator uses
+database-native manifest/cohort/contract pins, no provider call during freeze,
+and verifies existing SourceMetric/Source/contract/Product.type preservation.
+Select at most400globalinvocations/40000reservedrequests; each primary scope
+100requests/180seconds/8MiB/1000items, respecting existing shared adapter
+budgets and provider cooldown. This is the already authorized full-cohort
+campaign, not an additional pilot or schema change. Register paused, inspect
+actual selected counts and mapping/qualification gaps, then execute/resume
+through the same shared database facade. No guessed crosswalks, synthetic
+historical counters, weight downloads, new X/LLM calls or external business
+checkpoint files; report unsupported/missing source history explicitly.
+
+**History-preparation diagnosis, 2026-10-16T04:33Z:** the first web-shell
+preparation lost its connection; no history jobs committed, and login200 and
+the unchanged deployed revision were independently rechecked. The service
+worker subsequently booted; a resource-exhaustion cause was not established.
+Moved the same bounded preparation to isolated benchmark one-off
+`job-db8qgb0n74is73cf4e8g` on temporary2GiB compute, with no permanent service
+change. That run fails04:30:55Z with a concrete identity-reuse defect, again
+rolling back the entire transaction: `configure_taxonomy` tries to insert a
+derived MeasurementSubject ID for a product that already has another subject
+ID protected by the unique product_key relationship. Production read-only
+evidence: productb3240199-cf5b-4831-b045-3759b51efb1e already has subject
+23276a7e-22a5-4ff5-8398-52a48250c204 and2mappings; derived helper ID is
+8d4d7d45-dee1-5ae4-a1ab-4af67779ac2a.0history jobs exist after rollback.
+Do not delete, rekey, merge or modify the existing subject/mappings/contracts.
+The next convergent fix reuses existing entity-subject identities in draft
+taxonomy/statistics preparation, retaining deterministic IDs only for new
+targets. No schema migration or job/run duplication cleanup is selected.
+User-authorized faster native implementation worker owns only the two relevant
+application modules and existing regression-test homes; parent owns review,
+Git, staged production delivery and runtime. Actual source capture and native
+scheduled proof remain valid ondf4; the84-scope historical campaign is still
+pending this fix, not falsely called complete. Separate bounded GitHub
+continuation uses the shared existing campaign after its prior public request
+window, preserving provider cooldown and15requests perselected job.
+
+**Release observed, 2026-10-16:** unchanged candidate
+`0bf5158dba8a4e5321f3e4b39bfb324d4b2f78f6` passed the configured hosted
+collector workflow [38842863420](https://github.com/allenwlee/pushin-weight-v2/actions/runs/38842863420):602tests, including447requiredPostgreSQL checks,
+zero required skips/errors, plus focused lint. Staging's3active consumers report
+that candidate; staged PostgreSQL18.4 has0087and a valid/ready index, successful
+login/default-read-only command checks, and a rolled-back38-definition/native
+contract construction proof preserving18legacy definitions and7existing source
+settings. Production web deploy `dep-db8pc73bc2fs738of2vg` is live at that same
+candidate (03:14:19Z); the hourly benchmark and15-minute harvest consumers also
+report it. Production runtime confirms0087and valid/ready index plus login200.
+
+Next execute the saved-data checkpoint through the shared database campaign API:
+six source/brand replay jobs plus six independent second-job repeats, at most36
+invocations for this campaign, each300seconds/32MiB/1,000evidence items. HTTP is
+prohibited during replay; the positive request allowance of1satisfies the shared
+instruction schema only. Pin native publisher contracts with the supported
+source-statistics definitions; retain native-only attribution explicitly. Enable
+only the selected GitHub source and its bounded public-metadata collection and
+retention policy; other use grants and unrelated source settings remain preserved.
+Existing pilot jobs remain paused and their original rows/hash must remain exact.
+Actual replay, fresh ingestion, routine continuity and full campaign acceptance
+are still pending this execution checkpoint.
+
 **Fresh backup verified, 2026-10-16T02:29:42Z:** production export
 `dpg-d9koekqjobas73fvjqng-a/2026-10-16T01:52Z` completed and was downloaded
 to the authoritative host at
@@ -1383,3 +1624,57 @@ verified against [Render's export endpoint](https://api-docs.render.com/referenc
 and [backup guidance](https://render.com/docs/postgresql-backups).
 
 Read-only production audit found existing dated Arena/OpenRouter/HF measurements suitable for inspection/reuse before further acquisition. Unknown-time HF counters retain unknown effective time. The original1959catalog observations and live sources remain unmodified by this local implementation checkpoint; no source-provider batch, production migration, push or deployment has run yet.
+
+
+## U17. Normalize run instructions onto jobs
+
+**Goal (R2,R9,R11,R13,R24):** Every run links to the job holding its source, purpose, pinned contract and frozen scope. Those four fields are physically absent from `collection_runs` at completion; evidence and numeric data remain unchanged.
+
+**Dependencies:** Existing U10–U16 collection foundation; active X/backfill owner compatibility; finish the already-reviewed subject-identity fix as part of the first compatible candidate. Treat each deployment phase as a separate verified revision.
+
+**Files:** `core/models.py`, new migrations following0087, shared collection state/jobs, legacy metric/HF writers, all ORM readers and raw SQL using run instructions, staging-refresh policy/verification, focused PostgreSQL migration and collector tests, current schema references and the existing HTML walkthrough. No other task's files or provider/scheduler configuration.
+
+**Implementation:**
+1. Inspect actual production jobless runs, instruction equality, dependent views and active jobs. Record a fixed-ID preservation baseline. Design inactive archival jobs from actual stored fields without inventing old schedules or budgets. Future direct metric and legacy catalog writers must register/reuse appropriate jobs.
+2. Compatibility release: new direct writers register/reuse jobs and populate the four legacy copies; current readers keep using those copies during overlap with older writers. Archive only inactive metric histories at build time; leave jobless catalog/content rows and every running row untouched. This preserves old catalog resume and avoids archive jobs for runtime work later scrubbed from staging. Strict post-rollout catch-up includes all purposes and refuses running rows. Keep native source attribution and original event clocks unchanged. Include old-caller resume, mixed-writer reader visibility, finite timeout finalization, transition preservation and identity-collision regressions.
+3. ORM-removal release: make `job_id` required after jobless writes have ceased and catch-up finds no missing links. Switch readers to `job__source`, `job__purpose`, `job__contract`, and `job.definition.scope`; remove fields from model/migration state while temporarily retaining physical legacy columns. A database trigger must populate these copies from the job while the previous compatible application can still read them. Python read-through properties are permissible for stable access but cannot pretend removed columns remain filterable. Replace affected indexes and lifecycle enforcement with equivalent job-backed enforcement. Protect job instructions from mutation and update compatibility views and staging-refresh operations.
+4. Column-removal release: verify all six production resources run the prior compatible candidate and no separately owned old process writes the old schema. Drop only the four duplicate physical columns and their obsolete dependencies with finite lock timeout. Retain forward-only safety where reverse migration would invent historical data.
+
+**Verification:** Prove old/jobless migration, job-linked equality checks, replay/idempotence, actual HF/GH/OR/Arena reader/writer chains, claim/reclaim/stale fences/rejection receipts, X adapter compatibility, SQL OpenCode readers and staging refresh. Preserve pre-existing run/observation/value IDs and all non-instruction columns; compare old instruction values against linked job values. Test fresh migration and migration from0087, compatibility between successive deployed revisions, required PostgreSQL checks, model/migration alignment, final information-schema absence of exactly four columns, and continuing natural collection. The shared scheduler must never dispatch archive jobs or mark them ready. An explicit original catalog driver may resume its archived run under a fresh finite invocation lease; it must preserve the archive definition and record actual new limits on the invocation. Refresh the existing walkthrough with schema-state labels and deliver the review copy locally.
+
+**Delivery:** Existing production authority and staged/branch route persist. No new tables, new scheduler, paid source calls, identity merges, collector pauses or unrelated configuration changes. Begin broad84-scope collection after the job-backed application transition is verified; physical removal may wait for the separately owned older process while collection uses the normalized path. Do not make that source campaign depend on an unnecessary halt or restart of the other owner’s work. A staged candidate, ORM-only removal, or prepared migration is not physical production completion.
+
+
+**U17 pre-migration evidence, 2026-10-16T05:01Z:** current productiondf4has600runs:66catalog(20jobless),179content(0jobless),355metric(282jobless), no running runs or active job pointers at the inspection. All298job-linked instruction copies match their jobs. Two dependent metric compatibility views exist. A separate old-code paidX-enrichment one-off remains running under its owner's authority; compatible phase1 can proceed, physicaldrop cannot precede its natural completion. The fixed-ID verification receipt covers600runIDs,156708observations throughID157520 and385641values throughID385641. Original18metricdefinitions retain MD5`422104487ff85dcac599c221f835a247`. The initial read-only baseline query used an incorrect physical name for the definitions table and rolled back; the corrected`metrics` query produced the retained successful baseline. No database mutation occurred.
+
+**Prior candidate verification,2023a3ad:** all3active staging consumers are live at the exact subject-identity fix. The corrected staging probe passed existing and rollback-only non-derived subject identity checks, migration0087/index validity, no persistent fixture writes, Django checks and login200. Hosted workflow38852123592 passes621tests (311offline/205sharedcollection/105accountpreservation); all three steps explicitly execute466requiredPostgreSQL tests with0skips/errors. Production remainsdf4 while the newly authorized U17 compatible candidate is prepared. This evidence does not cover the pending schema-normalization changes.
+
+
+### U17 migration details and executable invariants
+
+Ship only one phase’s migration files in each candidate. Render runs migrations during build; putting the later drop migration in an earlier candidate would break the still-serving old revision.
+
+- 0088 compatibility: per-run deterministic archival identity, exact instruction equality/collision checks,100-row batches selecting only instruction/status columns; never load large raw payloads to recover job links. The build wrapper skips all jobless non-metric and running rows. Strict post-rollout catch-up includes catalog rows and refuses any jobless running row, even with a token. New direct metric/HF drivers retain their explicit existing authority and advisory locks; genuine invocation tokens use the existing shared fence. Resolve expiry time after acquiring row locks and fence every write, including HF callbacks/final saves. Give the catalog lease the same finite60-second finalization allowance used by shared claims without changing the actual request deadline or recorded budget. A stale in-memory run cannot replace a job link assigned by concurrent archival.
+- Application transition: remove the obsolete outcome index and purpose-dependent run CHECK references from migration state before the fields. Use job-backed database lifecycle enforcement and protect immutable job instructions from UPDATE; mutable coordination fields remain writable. Keep the local status/lease checks. While physical compatibility copies remain, populate them from the job in the run trigger so overlapping previous-revision readers and fences see correct values. Mandatory job linkage waits for all writers to be compatible and the catch-up to find no jobless rows.
+- Views: preserve`metric_collection_runs` and`metric_observations`. The current run compatibility view has25columns from0080and excludes0081’sjob/token additions. Preserve its explicit old column order, deriving the four old read aliases from jobs; no unnecessary INSERT triggers. Keep ordinary base-field updates writable and derived instruction aliases read-only. The observation view stays single-base-table/writable with a job-purpose filter. Do not use cascading drops.
+- Staging refresh: dynamically calculate new archival-job counts for retained metric runs from the exported source snapshot, independently of the0088ledger marker; never hardcode302. Normalize retained jobless metric runs after scrubbing, including snapshots written by older processes after0088. Validate zero retained metric runs without jobs. Read both jobless legacy source schemas and normalized schemas. Scrubbing must preserve archival/direct receipts as non-dispatchable while pausing executable jobs. Test real0087, mixed0088 and normalized-zero-delta dump/restore/migrate/scrub, including a running legacy catalog row removed only in the non-serving candidate.
+
+**Review correction,2026-10-16T05:54Z:** Full review`20261016-052600-u17-a5b9ac39` collected all11selected reviewers and independent validation of5merged findings:4confirmed,1rejected against an existing replay test. Confirmed defects are old-caller catalog resume after premature archival, job-only readers hiding overlapping old-writer rows, normal time-cap finalization losing its lease, and mixed0088snapshots skipping catch-up. Resolve reader overlap by moving the already-written reader changes into phase2, rather than adding temporary fallback queries throughout the application. Preserve those changes in a local source patch, with no business state stored there. Existing99-test PostgreSQL pass precedes these corrections and is not their validation. The earlier external reviewer routes remain unavailable; native fresh-context adversarial coverage is recorded without claiming cross-provider corroboration.
+
+Read-only pre/post checks, using the exact deployment revision and database identity:
+
+```sql
+SELECT count(*) FROM collection_runs WHERE job_id IS NULL; -- final expected0
+SELECT count(*) FROM collection_runs r LEFT JOIN collection_jobs j ON j.id=r.job_id WHERE j.id IS NULL; -- expected0
+SELECT column_name FROM information_schema.columns
+ WHERE table_schema='public' AND table_name='collection_runs'
+ AND column_name IN ('source_id','purpose','contract_id','scope'); --4beforephysicaldrop,0after
+SELECT count(*) FROM collection_jobs
+ WHERE operation IN ('archived_run','legacy_direct')
+ AND (state<>'completed' OR active_run_id IS NOT NULL
+      OR next_due_at IS NOT NULL OR next_retry_at IS NOT NULL); --expected0
+```
+
+The fixed-ID preservation probe compares all600baseline run IDs and every non-instruction physical field, excluding only the newly populatedjob_id. It separately compares original instruction hashes to their linked job fields, checks original non-null job links were not reassigned, and checks all baseline observation/value rows and original18metricdefinitions. New rows do not count as preservation proof. Execute against staging first; production comparisons use the saved read-only baseline receipt. A code rollback after physicaldrop must target the ORM-free previous release; rolling back to an old ORM revision requires reconstructing compatibility columns first, never blindly deployoldcode. The full existing logical backup remains an emergency artifact; no automatic full-database restore is selected.
+
+**Phase1 corrected local verification,2026-10-16T06:13Z:** Four confirmed review findings resolved by metric-only inactive build archival, deferring18reader/fixture diffs to phase2, finite60-second catalog finalization allowance, and post-scrub retained-metric catch-up independent of the0088marker. Frozen actual2023caller fixtures remove Git-history/HEAD dependence. Worker189tests/121requiredPG pass; final affected migration/real-restore21test subset rerun passes. Parent independently verified source hashes and ran remaining47files:376tests/257requiredPG pass. These565distinct tests/378requiredPG have0skips/errors; subset counts are not added. Parent Ruff14changedPython paths, model/migration alignment and whitespace checks pass. Seven known staticfiles-directory warnings came from Django page tests. Browser-scope check has0affected page routes; no browser pass is claimed. No extra learning document: existing U17plan and regression fixtures retain rationale. No new tables or physical column removal in this first revision.

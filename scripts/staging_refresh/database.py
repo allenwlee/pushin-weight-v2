@@ -325,16 +325,34 @@ def _libpq_environment(
     return environment
 
 
-def _table_count(cursor: Any, table: str) -> int:
-    # Catalog rows are environment-local work. Parity counts describe only the
-    # numeric evidence that survives scrubbing, including on an older source.
-    if table == "collection_runs":
-        cursor.execute("SELECT count(*) FROM collection_runs WHERE purpose = 'metric'")
-        return int(cursor.fetchone()[0])
-    if table == "collection_observations":
-        cursor.execute(
-            "SELECT count(*) FROM collection_observations o JOIN collection_runs r ON r.id = o.run_id WHERE r.purpose = 'metric'"
+def _run_purpose_expression(cursor: Any) -> str:
+    # Source snapshots can precede 0081/0088. Discover the physical columns
+    # before referencing either schema; job-backed instructions win when linked.
+    cursor.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND table_name = 'collection_runs'"
+    )
+    columns = {row[0] for row in cursor.fetchall()}
+    job_purpose = "(SELECT j.purpose FROM collection_jobs j WHERE j.id = r.job_id)"
+    if "purpose" in columns:
+        return (
+            f"COALESCE({job_purpose}, r.purpose)"
+            if "job_id" in columns
+            else "r.purpose"
         )
+    return job_purpose
+
+
+def _table_count(cursor: Any, table: str) -> int:
+    # Catalog work is scrubbed; exact parity covers retained numeric evidence.
+    if table in {"collection_runs", "collection_observations"}:
+        purpose = _run_purpose_expression(cursor)
+        relation = (
+            "collection_runs r"
+            if table == "collection_runs"
+            else "collection_observations o JOIN collection_runs r ON r.id = o.run_id"
+        )
+        cursor.execute(f"SELECT count(*) FROM {relation} WHERE {purpose} = 'metric'")
         return int(cursor.fetchone()[0])
     cursor.execute(sql.SQL("SELECT count(*) FROM {}").format(sql.Identifier(table)))
     return int(cursor.fetchone()[0])
@@ -357,6 +375,7 @@ def _source_exact_row_counts(
 
 def _catalog_counts(cursor: Any) -> dict[str, int]:
     counts = {}
+    instruction_purpose = _run_purpose_expression(cursor)
     for table in (
         "collection_observations",
         "collection_scope_runs",
@@ -364,13 +383,13 @@ def _catalog_counts(cursor: Any) -> dict[str, int]:
     ):
         for purpose in ("catalog", "content"):
             if table == "collection_runs":
-                query = "SELECT count(*) FROM collection_runs WHERE purpose = %s"
+                query = f"SELECT count(*) FROM collection_runs r WHERE {instruction_purpose} = %s"
             else:
-                query = f"SELECT count(*) FROM {table} t JOIN collection_runs r ON r.id = t.run_id WHERE r.purpose = %s"
+                query = f"SELECT count(*) FROM {table} t JOIN collection_runs r ON r.id = t.run_id WHERE {instruction_purpose} = %s"
             cursor.execute(query, [purpose])
             counts[f"{table}:{purpose}"] = int(cursor.fetchone()[0])
     cursor.execute(
-        "SELECT count(*) FROM collection_jobs WHERE state <> 'paused' OR active_run_id IS NOT NULL OR next_due_at IS NOT NULL OR next_retry_at IS NOT NULL"
+        "SELECT count(*) FROM collection_jobs WHERE (state <> 'paused' AND operation NOT IN ('archived_run', 'legacy_direct')) OR active_run_id IS NOT NULL OR next_due_at IS NOT NULL OR next_retry_at IS NOT NULL"
     )
     counts["collection_jobs:runtime_intent"] = int(cursor.fetchone()[0])
     return counts
@@ -395,6 +414,29 @@ def _pending_migration_count_deltas(
     return _pending_migration_deltas(
         policy.validation.forward_migration_count_deltas, migration_rows
     )
+
+
+def _pending_archive_job_delta(cursor, source_tables):
+    """Count retained metric archives, including writes after 0088 was applied."""
+    if "collection_runs" in source_tables:
+        purpose = _run_purpose_expression(cursor)
+        if "collection_jobs" in source_tables:
+            cursor.execute(
+                "SELECT count(*) FROM collection_runs r WHERE r.job_id IS NULL "
+                f"AND {purpose} = 'metric' "
+                "AND NOT EXISTS (SELECT 1 FROM collection_jobs j "
+                "WHERE j.job_key = 'archive:run:' || r.id::text)"
+            )
+        else:
+            cursor.execute(
+                f"SELECT count(*) FROM collection_runs r WHERE {purpose} = 'metric'"
+            )
+    elif "metric_collection_runs" in source_tables:
+        # The dump excludes old source-specific HF catalog runtime tables.
+        cursor.execute("SELECT count(*) FROM metric_collection_runs")
+    else:
+        return 0
+    return int(cursor.fetchone()[0])
 
 
 def _pending_migration_translation_count_deltas(
@@ -485,18 +527,21 @@ def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
         for table in sorted(policy.scrub.truncate_tables)
     }
     cleared.update(_catalog_counts(cursor))
+    instruction_purpose = _run_purpose_expression(cursor)
     cursor.execute(
-        "UPDATE collection_jobs SET state = 'paused', active_run_id = NULL, next_due_at = NULL, next_retry_at = NULL, last_attempt_id = CASE WHEN last_attempt_id IN (SELECT id FROM collection_runs WHERE purpose = 'metric') THEN last_attempt_id ELSE NULL END, last_success_id = CASE WHEN last_success_id IN (SELECT id FROM collection_runs WHERE purpose = 'metric') THEN last_success_id ELSE NULL END"
+        f"UPDATE collection_jobs SET state = CASE WHEN operation IN ('archived_run', 'legacy_direct') THEN 'completed' ELSE 'paused' END, active_run_id = NULL, next_due_at = NULL, next_retry_at = NULL, last_attempt_id = CASE WHEN last_attempt_id IN (SELECT r.id FROM collection_runs r WHERE {instruction_purpose} = 'metric') THEN last_attempt_id ELSE NULL END, last_success_id = CASE WHEN last_success_id IN (SELECT r.id FROM collection_runs r WHERE {instruction_purpose} = 'metric') THEN last_success_id ELSE NULL END"
     )
     # Delete in foreign-key order without resetting shared numeric sequences.
     for table in ("collection_observations", "collection_scope_runs"):
         cursor.execute(
             sql.SQL(
-                "DELETE FROM {} WHERE run_id IN (SELECT id FROM collection_runs WHERE purpose IN ('catalog', 'content'))"
+                "DELETE FROM {} WHERE run_id IN (SELECT r.id FROM collection_runs r WHERE "
+                + instruction_purpose
+                + " IN ('catalog', 'content'))"
             ).format(sql.Identifier(table))
         )
     cursor.execute(
-        "DELETE FROM collection_runs WHERE purpose IN ('catalog', 'content')"
+        f"DELETE FROM collection_runs r WHERE {instruction_purpose} IN ('catalog', 'content')"
     )
     targets = [sql.Identifier(table) for table in sorted(policy.scrub.truncate_tables)]
     cursor.execute(
@@ -585,7 +630,15 @@ class PsycopgSnapshotAdapter:
                 pending_migration_translation_count_deltas[metric] = (
                     pending_migration_translation_count_deltas.get(metric, 0) + delta
                 )
+            archive_jobs = _pending_archive_job_delta(cursor, source_tables)
+            if archive_jobs:
+                pending_migration_count_deltas["collection_jobs"] = (
+                    pending_migration_count_deltas.get("collection_jobs", 0)
+                    + archive_jobs
+                )
             row_counts = _source_exact_row_counts(cursor, self.policy, source_tables)
+            if archive_jobs and "collection_jobs" not in source_tables:
+                row_counts["collection_jobs"] = 0
             latest: dict[str, str | None] = {}
             table = self.policy.validation.latest_timestamp_table
             column = self.policy.validation.latest_timestamp_column
@@ -747,6 +800,11 @@ class PsycopgSnapshotAdapter:
                 for table in sorted(self.policy.scrub.truncate_tables)
             }
             scrubbed.update(_catalog_counts(cursor))
+            cursor.execute(
+                "SELECT count(*) FROM collection_runs r WHERE r.job_id IS NULL "
+                f"AND {_run_purpose_expression(cursor)} = 'metric'"
+            )
+            scrubbed["collection_runs:jobless_metric"] = int(cursor.fetchone()[0])
             cursor.execute(
                 "SELECT count(*) FROM trend_narratives WHERE status = ANY(%s)",
                 [list(self.policy.scrub.retained_narrative_statuses)],
@@ -1369,6 +1427,8 @@ class CandidateProcessor:
                 raise RefreshError("candidate_migrations_pending")
             if arguments and arguments[0] == "migrate":
                 raise RefreshError("candidate_migration_failed")
+            if arguments and arguments[0] == "normalize_collection_run_jobs":
+                raise RefreshError("candidate_run_normalization_failed")
             raise RefreshError("candidate_django_check_failed")
 
     def validate(self, candidate: ShadowCandidate, census: CandidateCensus) -> None:
@@ -1438,6 +1498,12 @@ class CandidateProcessor:
         self._run_django(candidate.name, "check", "--deploy")
         self._run_django(candidate.name, "migrate", "--check")
         scrub = self.adapter.scrub_candidate(self.target_url, candidate.name)
+        # Old processes can write jobless metrics after 0088's one-time scan.
+        # Scrub first so catalog/content work gets no unnecessary archive jobs.
+        # Strict normalization refuses unsupported active numeric snapshots.
+        self._run_django(
+            candidate.name, "normalize_collection_run_jobs", "--purpose=metric"
+        )
         census = self.adapter.inspect_candidate(self.target_url, candidate.name)
         self.validate(candidate, census)
         evidence: dict[str, object] = {

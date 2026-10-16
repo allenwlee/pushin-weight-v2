@@ -96,6 +96,7 @@ class HFMetadataClient:
             raise ValueError("HF request, time, and size budgets must be positive")
         self.client = client
         self.max_requests = max_requests
+        self.max_seconds = max_seconds
         self.max_bytes = max_bytes
         self.max_total_bytes = max_total_bytes
         self.bytes_received = 0

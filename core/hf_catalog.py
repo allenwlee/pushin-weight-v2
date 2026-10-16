@@ -17,6 +17,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from core.account_identity import publisher_discovery_label, publisher_identifier
+from core.collection_state import claim_direct_run, fenced_run
 from core.hf_metadata_client import INVENTORY_VERSION, NAMESPACE, REPO_ID
 from core.measurement_taxonomy import digest
 from core.models import (
@@ -334,7 +335,12 @@ def _persist_page(ns, result, rules):
     ns.save()
 
 
-def _enrich(ns, hf, rules, visited, max_models, attempted):
+def _save_scope(ns, claim, **kwargs):
+    with fenced_run(claim):
+        ns.save(**kwargs)
+
+
+def _enrich(ns, hf, rules, visited, max_models, attempted, claim):
     for observation in ns.observations.exclude(
         processing_outcome__in=["owner_conflict", "complete"]
     ).order_by("id"):
@@ -357,7 +363,7 @@ def _enrich(ns, hf, rules, visited, max_models, attempted):
                 return hf.stop_reason
             attempted.add(key)
             result = hf.model_group(observation.source_identifier, group)
-            with transaction.atomic():
+            with fenced_run(claim):
                 observation.envelopes += _envelopes(result, group)
                 observation.groups[group] = result.outcome
                 if result.outcome in {"ok", "partial_expansion"}:
@@ -375,7 +381,7 @@ def _enrich(ns, hf, rules, visited, max_models, attempted):
     return None
 
 
-def _walk_namespace(ns, hf, rules, visited, max_models):
+def _walk_namespace(ns, hf, rules, visited, max_models, claim):
     # Completed namespace identity and pages are durable; resuming enrichment
     # does not spend requests checking them again.
     if not any(
@@ -385,24 +391,24 @@ def _walk_namespace(ns, hf, rules, visited, max_models):
         result = hf.namespace_info(ns.scope_key)
         ns.envelopes += _envelopes(result, "identity")
         ns.outcome = result.outcome
-        ns.save()
+        _save_scope(ns, claim)
         if result.outcome != "ok":
             return
     attempted = set()
-    if reason := _enrich(ns, hf, rules, visited, max_models, attempted):
+    if reason := _enrich(ns, hf, rules, visited, max_models, attempted, claim):
         ns.outcome = reason
-        ns.save(update_fields=["outcome"])
+        _save_scope(ns, claim, update_fields=["outcome"])
         return
     restarted = False
     while not ns.enumeration_complete:
         if hf.stop_reason:
             ns.outcome = hf.stop_reason
-            ns.save(update_fields=["outcome"])
+            _save_scope(ns, claim, update_fields=["outcome"])
             return
         remaining = None if max_models is None else max_models - len(visited)
         if remaining is not None and remaining <= 0:
             ns.outcome = "model_cap"
-            ns.save(update_fields=["outcome"])
+            _save_scope(ns, claim, update_fields=["outcome"])
             return
         result = hf.list_page(ns.scope_key, ns.cursor, limit=min(100, remaining or 100))
         if result.outcome != "ok":
@@ -419,27 +425,28 @@ def _walk_namespace(ns, hf, rules, visited, max_models):
                 ns.cursor_history = []
                 ns.outcome = "cursor_restart"
                 restarted = True
-                ns.save()
+                _save_scope(ns, claim)
                 continue
-            ns.save()
+            _save_scope(ns, claim)
             return
         if len(result.payload) > min(100, remaining or 100):
             ns.envelopes += _envelopes(result, "listing")
             ns.outcome = "provider_exceeded_limit"
-            ns.save()
+            _save_scope(ns, claim)
             return
-        _persist_page(ns, result, rules)
+        with fenced_run(claim):
+            _persist_page(ns, result, rules)
         visited.update(
             (item.get("id") or item["modelId"]).casefold() for item in result.payload
         )
         if ns.outcome in {"repeated_cursor", "empty_page_with_cursor"}:
             return
-        if reason := _enrich(ns, hf, rules, visited, max_models, attempted):
+        if reason := _enrich(ns, hf, rules, visited, max_models, attempted, claim):
             ns.outcome = reason
-            ns.save(update_fields=["outcome"])
+            _save_scope(ns, claim, update_fields=["outcome"])
             return
     ns.outcome = "exhausted"
-    ns.save(update_fields=["outcome"])
+    _save_scope(ns, claim, update_fields=["outcome"])
 
 
 def catalog_report(run, *, requests=0, stop_reason=None):
@@ -477,12 +484,12 @@ def catalog_report(run, *, requests=0, stop_reason=None):
         "run_id": str(run.pk),
         "complete": enumeration_complete
         and enrichment_complete
-        and not run.scope["gaps"]
+        and not run.job.definition["scope"]["gaps"]
         and not gaps
         and not conflicts,
         "enumeration_complete": enumeration_complete,
         "enrichment_complete": enrichment_complete,
-        "scope_gaps": run.scope["gaps"],
+        "scope_gaps": run.job.definition["scope"]["gaps"],
         "attribution_gaps": gaps,
         "conflicts": conflicts,
         "group_outcomes": group_outcomes,
@@ -510,9 +517,14 @@ def resolve_catalog_run(run_id):
     """Accept saved pre-merge UUIDs while isolating the HF catalog purpose."""
     return CollectionRun.objects.get(
         Q(pk=run_id) | Q(source_metadata__legacy_catalog__run_id=str(run_id)),
-        source_id="hf",
-        purpose="catalog",
+        Q(job__source_id="hf", job__purpose="catalog")
+        | Q(job__isnull=True, source_id="hf", purpose="catalog"),
     )
+
+
+def catalog_scope(run):
+    """Read old-revision rows during rollout without creating instructions."""
+    return run.job.definition["scope"] if run.job_id else run.scope
 
 
 def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
@@ -523,7 +535,7 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
     with catalog_lock():
         if run_id is not None:
             run = resolve_catalog_run(run_id)
-            check_scope(run.scope)
+            check_scope(catalog_scope(run))
         else:
             check_scope(scope)
             with transaction.atomic():
@@ -532,7 +544,7 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                     defaults={"name": "Hugging Face", "source_type": "model_adoption"},
                 )
                 run_id = uuid.uuid4()
-                run = CollectionRun.objects.create(
+                run = CollectionRun(
                     id=run_id,
                     source=source,
                     purpose="catalog",
@@ -540,7 +552,21 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                     scope=scope,
                     ingestion_key=digest(["catalog", "hf", str(run_id)]),
                 )
-                for entry in scope["namespaces"]:
+        claim = claim_direct_run(
+            run,
+            driver="execute_catalog",
+            seconds=hf.max_seconds + 60,
+            limits={
+                "requests": hf.max_requests,
+                "seconds": hf.max_seconds,
+                "response_bytes": hf.max_bytes,
+                "total_bytes": hf.max_total_bytes,
+                "models": max_models,
+            },
+        )
+        if run_id is not None and not run.scopes.exists():
+            with fenced_run(claim):
+                for entry in run.job.definition["scope"]["namespaces"]:
                     CollectionScopeRun.objects.create(
                         run=run,
                         scope_key=entry["namespace"],
@@ -552,12 +578,16 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
             "retries": 0,
             "max_requests": hf.max_requests,
             "max_models": max_models,
+            "max_seconds": hf.max_seconds,
+            "max_response_bytes": hf.max_bytes,
+            "max_total_bytes": hf.max_total_bytes,
             "outcome": "running",
         }
         run.invocations.append(invocation)
         run.status = "running"
         run.completed_at = None
-        run.save()
+        with fenced_run(claim):
+            run.save()
 
         def record_request(envelope):
             invocation["requests"] = hf.requests
@@ -566,7 +596,8 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                 key: envelope[key] for key in ("endpoint", "attempted_at")
             }
             run.request_count = sum(i["requests"] for i in run.invocations)
-            run.save(update_fields=["invocations", "request_count", "updated_at"])
+            with fenced_run(claim):
+                run.save(update_fields=["invocations", "request_count", "updated_at"])
 
         hf.on_attempt = record_request
         try:
@@ -574,7 +605,14 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
             for ns in run.scopes.order_by("scope_key"):
                 if hf.stop_reason:
                     break
-                _walk_namespace(ns, hf, run.scope["rules"], visited, max_models)
+                _walk_namespace(
+                    ns,
+                    hf,
+                    run.job.definition["scope"]["rules"],
+                    visited,
+                    max_models,
+                    claim,
+                )
             report = catalog_report(
                 run, requests=hf.requests, stop_reason=hf.stop_reason
             )
@@ -608,5 +646,8 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                 ended_at=timezone.now().isoformat(),
             )
             run.request_count = sum(i["requests"] for i in run.invocations)
-            run.save()
-            hf.on_attempt = None
+            try:
+                with fenced_run(claim):
+                    run.save()
+            finally:
+                hf.on_attempt = None

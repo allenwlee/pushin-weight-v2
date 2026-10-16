@@ -10,6 +10,7 @@ import httpx
 from django.core.management.base import BaseCommand, CommandError
 
 from core.hf_catalog import (
+    catalog_scope,
     check_scope,
     execute_catalog,
     resolve_catalog_run,
@@ -74,7 +75,7 @@ class Command(BaseCommand):
             if options["resume"]:
                 run_id = uuid.UUID(options["resume"])
                 run = resolve_catalog_run(run_id)
-                manifest = run.scope
+                manifest = catalog_scope(run)
                 check_scope(manifest)
             elif options["all_tracked"]:
                 manifest = resolve_scope()
@@ -84,7 +85,11 @@ class Command(BaseCommand):
                         "both --brand and --confirmed-namespace are required"
                     )
                 brand = Brand.objects.get(pk=options["brand"], is_sentinel=False)
-                org = get_publisher(source="hf", identifier=options["confirmed_namespace"], confirmed=True)
+                org = get_publisher(
+                    source="hf",
+                    identifier=options["confirmed_namespace"],
+                    confirmed=True,
+                )
                 if not BrandCompany.objects.filter(
                     brand=brand, company_id=org.company_id
                 ).exists():
@@ -92,7 +97,9 @@ class Command(BaseCommand):
                         "Brand does not own the confirmed HF namespace; no request was sent"
                     )
                 manifest = resolve_scope(
-                    brands=[brand.pk], companies=[], namespace=org.account.external_identifier
+                    brands=[brand.pk],
+                    companies=[],
+                    namespace=org.account.external_identifier,
                 )
         except (
             ValueError,

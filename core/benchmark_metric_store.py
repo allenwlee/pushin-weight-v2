@@ -648,8 +648,8 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
     across jobs and never change the original observation's owning run.
     """
     require(
-        run.purpose == "metric"
-        and run.contract_id is not None
+        run.job.purpose == "metric"
+        and run.job.contract_id is not None
         and run.status == "running",
         "active metric-purpose run required",
     )
@@ -666,15 +666,19 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
                 == SOURCE_STATISTICS_POLICY,
                 "snapshot reuse requires source statistics",
             )
-            observation, created = CollectionObservation.objects.get_or_create(
-                observation_key=data["observation_key"],
-                source_metadata__projection_kind=SOURCE_STATISTICS_POLICY,
-                defaults={"run": run, **data},
+            observation, created = (
+                CollectionObservation.objects.select_related("run__job")
+                .defer("run__raw_payload", "run__job__definition")
+                .get_or_create(
+                    observation_key=data["observation_key"],
+                    source_metadata__projection_kind=SOURCE_STATISTICS_POLICY,
+                    defaults={"run": run, **data},
+                )
             )
             if not created:
                 require(
-                    observation.run.contract_id == run.contract_id
-                    and observation.run.source_id == run.source_id,
+                    observation.run.job.contract_id == run.job.contract_id
+                    and observation.run.job.source_id == run.job.source_id,
                     "projection lineage conflict",
                 )
                 for field in (
@@ -789,9 +793,48 @@ def persist_source(
             else None
         )
         if existing:
+            if existing.job_id is None:
+                # A serving pre-compatible revision may have written this row
+                # after migration 0088. Guard its stored identity, then archive
+                # only after its original lease has naturally expired/finished.
+                from importlib import import_module
+                from types import SimpleNamespace
+
+                from django.apps import apps
+
+                require(
+                    existing.contract_id == contract.pk
+                    and existing.source_id == source
+                    and existing.purpose == "metric",
+                    "ingestion key collision",
+                )
+                if existing.status == "running":
+                    if existing.lease_expires_at > now:
+                        raise ValueError("run lease is active")
+                    existing.status, existing.completed_at = "aborted", now
+                    existing.error_code = "expired_lease"
+                    existing.save(
+                        update_fields=["status", "completed_at", "error_code"]
+                    )
+                import_module(
+                    "core.migrations.0088_archive_run_instructions"
+                ).archive_run_instructions(
+                    apps,
+                    SimpleNamespace(connection=connection),
+                    run_id=existing.pk,
+                )
+                existing.refresh_from_db()
             require(
-                existing.contract_id == contract.pk and existing.source_id == source,
+                existing.job.contract_id == contract.pk
+                and existing.job.source_id == source,
                 "ingestion key collision",
+            )
+            require(
+                existing.source_id == existing.job.source_id
+                and existing.purpose == existing.job.purpose
+                and existing.contract_id == existing.job.contract_id
+                and existing.scope == existing.job.definition["scope"],
+                "run instruction copy mismatch",
             )
             if existing.status != "running":
                 require(
@@ -808,7 +851,9 @@ def persist_source(
             existing.save(update_fields=["status", "completed_at", "error_code"])
             return existing
         if claim is None:
-            run = CollectionRun.objects.create(
+            from core.collection_state import claim_direct_run, fenced_run
+
+            run = CollectionRun(
                 contract=contract,
                 source_id=source,
                 ingestion_key=ingestion_key,
@@ -819,6 +864,17 @@ def persist_source(
                     purpose="metric", source_id=source
                 ).count(),
             )
+            claim = claim_direct_run(
+                run,
+                driver="persist_source",
+                seconds=600,
+                limits={
+                    "seconds": 600,
+                    "payload_bytes": 32 * 1024 * 1024,
+                    "requests": None,
+                    "request_budget_owner": "caller",
+                },
+            )
         else:
             run.selected_count = contract.mappings.filter(
                 purpose="metric", source_id=source
@@ -828,7 +884,7 @@ def persist_source(
                 run.batch_id = batch_id
 
         def save_result():
-            if claim is None:
+            if claim.direct_driver == "persist_source":
                 run.save()
                 return run
             from core.collection_state import finish_run
@@ -912,15 +968,12 @@ def persist_source(
             run.status = "failed"
             run.error_code = "invalid_source_data"
             run.completed_at = timezone.now()
-            if claim is None:
-                return save_result()
             with fenced_run(claim):
                 return save_result()
-        from contextlib import nullcontext
 
         with (
             transaction.atomic(),
-            fenced_run(claim) if claim is not None else nullcontext(),
+            fenced_run(claim),
         ):
             successful = retained_successful
             errors = False
