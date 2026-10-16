@@ -1,5 +1,13 @@
 # Database-enforced measurement windows: verification and deployment handoff
 
+The verification results below describe the October9 candidate. During the
+October16 integration, its two unapplied migrations were renumbered to
+`0091_measurement_window` and `0092_measurement_window_index`, after the deployed
+`0090_remove_run_instruction_columns`. The deployment/recovery instructions
+below use those current names; historical test results retain their original
+migration numbers. Collection migrations0080/0081 and irreversible0090 must not
+be reversed for a measurement-window rollback.
+
 The three-column implementation preserves nullable start/end evidence and adds
 a stored generated `window_range`. PostgreSQL creates finite `[start,end)`
 ranges only when both endpoints are known. Either unknown means the entire
@@ -10,8 +18,8 @@ their existing instant/date fields and a NULL flow range.
 Scope: plan R46–R49, U29–U31; based on `671e968290780813bdbbfb9cd0d37bb74f601c6a`.
 Migration leaf: `0081_measurement_window_index`, after
 `0080_measurement_window` and the existing 0079 leaf. No new tables or changed
-provider clocks. Current endpoint is a verified PR; staging and production
-have not received these migrations.
+provider clocks. The October9 endpoint was a verified PR; staging and production
+had not received these migrations at that checkpoint.
 
 ## What was verified
 
@@ -102,7 +110,7 @@ semantics under persisted generated values.
 
 The measured local times are rehearsal evidence, not production guarantees.
 The stored column rewrites `metric_values` under an exclusive table lock.
-Migration 0080 admits that lock for at most five seconds and bounds statements
+Migration 0091 admits that lock for at most five seconds and bounds statements
 at 120 seconds within its transaction. A busy table causes an atomic failure;
 diagnose the conflicting activity and retry after it clears. Other tables,
 source schedules and collectors are not paused by this implementation.
@@ -113,16 +121,16 @@ was fully restored but predates subsequently imported/collected metric data;
 take and restore a new snapshot if recovery must include that later data.
 It may be taken hours before the planned deployment. Use the existing shared
 build migration runner to serialize service builds. New application processes
-must start after 0080 is applied; old application code can continue using the
+must start after 0091 is applied; old application code can continue using the
 retained endpoints on the expanded schema.
 
-Migration 0081 creates the partial GiST index concurrently outside the
+Migration 0092 creates the partial GiST index concurrently outside the
 transaction. A failed concurrent build can leave its index invalid. Inspect
 `pg_index` and the migration ledger before retry; remove only the owned invalid
 `idx_value_window_range` with a concurrent drop under the migration guard, then
-retry 0081. Do not drop a valid/shared index or use CASCADE.
+retry 0092. Do not drop a valid/shared index or use CASCADE.
 
-After cutover, verify leaf 0081, generated-column expression/comments, zero
+After cutover, verify leaf 0092, generated-column expression/comments, zero
 range/boundary mismatches, valid/ready index, preserved unknown boundaries and
 the four source/chart paths. Example diagnostic:
 
@@ -141,8 +149,12 @@ WHERE indexrelid = 'idx_value_window_range'::regclass;
 ```
 
 Application rollback can retain this additive schema. If schema reversal is
-required, first move application processes to code that does not select the
-generated column, then reverse 0081 and 0080 to 0079 under the shared guard.
+required, first move every application consumer to compatible code that does
+not select the generated column while retaining the expanded schema. Verify
+that transition before reversing only0092 and0091 to the exact target
+`0090_remove_run_instruction_columns` under the shared migration guard. Stop at
+0090; it is irreversible, and collection migrations0080/0081 are unrelated to
+this rollback and must remain applied.
 Reversal removes only the derived column/index/function, preserving original
 timestamps and measurement rows. A future table depending on the function
 must be handled explicitly; the function drop intentionally refuses CASCADE.

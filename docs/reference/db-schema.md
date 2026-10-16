@@ -6214,7 +6214,7 @@ Model: [MetricValue](../../core/models.py#L8148).
 - `ck_value_finite_window_end_at`: `CONSTRAINT "ck_value_finite_window_end_at" CHECK (("window_end_at" IS NULL OR isfinite("window_end_at")))`.
 - `ck_value_finite_period_label_date`: `CONSTRAINT "ck_value_finite_period_label_date" CHECK (("period_label_date" IS NULL OR isfinite("period_label_date")))`.
 
-**Generated interval contract (repository schema through 0081; deployment must be verified separately):**
+**Generated interval contract (repository candidate through 0092; deployment must be verified separately):**
 
 Migration [0091](../../core/migrations/0091_measurement_window.py) installs immutable PostgreSQL function `measurement_window_v1(timestamptz,timestamptz)` and the stored expression `measurement_window_v1(window_start_at,window_end_at)`. It rejects any infinite supplied endpoint, including when the other is NULL, and rejects nonpositive complete intervals. It returns SQL NULL for incomplete intervals and constructs complete ranges with inclusive start/exclusive end. SQL cannot independently override the generated column. Column/function comments expose this rule to database clients. Function versions preserve their meaning; changed semantics require a new version and migration. Future metric tables use the [shared generated-field factory](../../core/measurement_time.py) rather than constructing ranges from nullable endpoints themselves.
 
