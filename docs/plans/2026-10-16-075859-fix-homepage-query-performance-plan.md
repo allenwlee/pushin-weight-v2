@@ -247,3 +247,40 @@ First clean candidateaa60ae15 passed343tests/75subtests/177requiredPostgreSQL wi
 External Claude route returned402before review; the sole replacement Grok route reached its600-second hard limit without usable output. Independent in-process adversarial review found a realP2: database ICU-equivalent FK spellings were lost by a case-sensitive Python dict merge. A real anonymous/chart caller regression was red forUP→up and decomposedcafé→canonicalcafé: both counts became0. The corrected aggregate starts from the already-scoped Brand queryset, selects canonical brands.nickname, and keeps shared date bounds inWHERE plus two periodFILTER counts. No normalization/data rewrite is needed.22pulse tests/16subtests/22requiredPG now pass0skips/errors. Independent re-review returns0remainingfindings; original/corrected receipts are under machine-local /tmp/compound-engineering-501/ce-code-review/20261016-homepage-release.
 
 New serial read-only production process measurement of the corrected source on4e60/PG18.4:1d1.100s (Pulse0.110s),30d4.496s (Pulse2.122s),365d8.456s (Pulse2.478s). These single samples preserve the improvement and remain diagnostics, not deployed proof. Fresh full candidate assurance/performance follows the correction commit. No product schema, collectors or summary policy changed.
+
+### Required historical migration-test repair
+
+The delivery continuation expands test scope only to
+`tests/test_original_content_migrations.py` and
+`tests/test_original_content_table_names.py`. Hosted Editorial on candidate
+ce425 returned578passed/5failed: historical migration proofs attempted to reverse
+current0090 (and the earlier forward-only0089) before reaching their assertions.
+The same seven-test module selection reproduced5failed/2passed on task-ownedPG18.
+Those source files, shared fixture and production migrations matched live main.
+
+The five historical tests now use the existing `isolated_migration_database`
+fixture. The table-name restoration fixture is explicitly requested by only its
+four historical rehearsal tests and directly depends on database isolation, so
+latest-schema restoration precedes database disposal. The two runtime-only tests
+retain the ordinary latest0090 database. Assertions, real migration executors,
+lock-timeout/error cases, threaded migration-runner serialization, shared fixture
+and production migration definitions are unchanged. An initial all-module0088
+preview was discarded because it weakened current-schema runtime coverage.
+
+Final narrow repair:7tests/7requiredPG passed,0skips/errors,112.50s. OrdinaryDB
+complete core-migration-list and public table/view/sequenceOID fingerprints match
+before/after exactly; current schema remains0090. Full exact Editorial workflow
+selection passes583tests/366requiredPG,0skips/errors in211.20s; this includes the
+seven focused tests rather than adding distinct coverage. Ruff and whitespace
+checks pass. Parent and independent final-diff reviews report0findings; receipt
+is retained with the original source review and release evidence.
+
+Main subsequently promoted G3's independent4f1f20dd HF-access fix; incorporate
+that already-promoted base only. Homepage product bytes/assets/dependencies and
+all schema remain unchanged by this test-only repair. Prior ce425 application,
+browser and production timing proof stays attributed to ce425. Candidate-bound
+assurance/performance must be regenerated for the final repair revision; new
+hosted checks must pass. No direct-route selection has been received; use the
+existing staged route only after fresh service/database availability verification.
+No materialized-view implementation, normalization, collection or provider-policy
+change belongs to this release. Zero production tables added or retired.

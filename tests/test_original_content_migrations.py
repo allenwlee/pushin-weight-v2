@@ -10,7 +10,9 @@ BASE = ("core", "0074_official_company_generic_accounts")
 EXPAND = ("core", "0076_original_content_expand")
 
 
-def test_populated_expand_and_pre_cutover_reverse_preserve_text_and_keys():
+def test_populated_expand_and_pre_cutover_reverse_preserve_text_and_keys(
+    isolated_migration_database,
+):
     executor = MigrationExecutor(connection)
     final = executor.loader.graph.leaf_nodes()
     executor.migrate([BASE])
