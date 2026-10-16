@@ -194,6 +194,7 @@ def safety_failure(exc):
             "deadline_exhausted",
             "enrichment_paused",
             "enrichment_not_drained",
+            "enrichment_provider_admission_http_",
         )
     )
 

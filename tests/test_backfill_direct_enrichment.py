@@ -91,6 +91,28 @@ def test_direct_real_callers_publish_and_reuse_without_file_requests(native):
     assert provider.sent == sent
 
 
+@pytest.mark.parametrize("status", [401, 402, 403])
+def test_provider_admission_failure_drains_sent_wave_then_stops(native, status):
+    from core.provider_batches import BatchAdmissionError
+    from x_monitor.deepinfra import DeepInfraPermanentError
+
+    class RejectedProvider(DirectProvider):
+        def transport(self, body, timeout):
+            with self.lock:
+                self.sent += 1
+            raise DeepInfraPermanentError(f"deepinfra_http_status_{status}")
+
+    provider = RejectedProvider()
+    with pytest.raises(BatchAdmissionError, match=f"enrichment_provider_admission_http_{status}"):
+        run_direct(native, provider, initial=True, concurrency=2)
+    calls = OriginalContentCall.objects.filter(provider_batch__source_collection_job=native[0])
+    sent = calls.filter(sent_at__isnull=False)
+    assert provider.sent == sent.count() == 2
+    assert sent.filter(state="failed").count() == 2
+    assert not sent.filter(state__in=["sent", "ambiguous"]).exists()
+    assert all(c.error_code for c in sent)
+
+
 def test_completed_classifier_packets_survive_changed_pending_page(native, monkeypatch):
     """A changed page must consume saved packets before regrouping their cases."""
     from django.db import transaction

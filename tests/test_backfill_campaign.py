@@ -68,6 +68,9 @@ def test_aggregate_mode_attempts_later_windows_after_quality_and_provider_failur
         "campaign_deadline_exhausted",
         "immutable_campaign_manifest_changed",
         "enrichment_configuration_changed",
+        "enrichment_provider_admission_http_401",
+        "enrichment_provider_admission_http_402",
+        "enrichment_provider_admission_http_403",
     ],
 )
 def test_aggregate_evaluation_preserves_global_safety_guards(code):
