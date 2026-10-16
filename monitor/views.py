@@ -3853,14 +3853,13 @@ def _build_home_pulse_payload(
             )
         )
         counts = {
-            row["brand_id"]: row
-            for row in PostBrand.objects.filter(
-                brand_id__in=[row["nickname"] for row in rows],
-                post__created_at__gte=start,
-                post__created_at__lt=now,
-            ).order_by().values("brand_id").annotate(
-                current_count=Count("post_id", filter=Q(post__created_at__gte=midpoint)),
-                prior_count=Count("post_id", filter=Q(post__created_at__lt=midpoint)),
+            row["nickname"]: row
+            for row in brands.filter(
+                posts__post__created_at__gte=start,
+                posts__post__created_at__lt=now,
+            ).order_by().values("nickname").annotate(
+                current_count=Count("posts__post_id", filter=Q(posts__post__created_at__gte=midpoint)),
+                prior_count=Count("posts__post_id", filter=Q(posts__post__created_at__lt=midpoint)),
             )
         }
         rows = _home_visible_brand_rows(rows)

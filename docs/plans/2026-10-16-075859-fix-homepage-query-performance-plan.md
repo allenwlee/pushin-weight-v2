@@ -239,3 +239,11 @@ investigation stage; this current production request supersedes that endpoint.
 ## Production delivery progress
 
 2026-10-16: delegated release owns the existing fix through observed production. Staging is ahead at7178ea32/0090; production/base4e60 is ORM-free and compatible, but independent G3 ownership must finish before sharing that lane. Full candidate checks and focused independent review pending.
+
+### Independent review correction and candidate verification
+
+First clean candidateaa60ae15 passed343tests/75subtests/177requiredPostgreSQL with0skips/errors, node108+114, and5028/5028normalizedUI obligations. Local performance was sealed clean at96ffc5269956478496930f93 (two desktop/two mobile runs); mobile LighthouseLCP7.10s remained advisory. These are superseded product-source evidence after the following necessary correction.
+
+External Claude route returned402before review; the sole replacement Grok route reached its600-second hard limit without usable output. Independent in-process adversarial review found a realP2: database ICU-equivalent FK spellings were lost by a case-sensitive Python dict merge. A real anonymous/chart caller regression was red forUP→up and decomposedcafé→canonicalcafé: both counts became0. The corrected aggregate starts from the already-scoped Brand queryset, selects canonical brands.nickname, and keeps shared date bounds inWHERE plus two periodFILTER counts. No normalization/data rewrite is needed.22pulse tests/16subtests/22requiredPG now pass0skips/errors. Independent re-review returns0remainingfindings; original/corrected receipts are under machine-local /tmp/compound-engineering-501/ce-code-review/20261016-homepage-release.
+
+New serial read-only production process measurement of the corrected source on4e60/PG18.4:1d1.100s (Pulse0.110s),30d4.496s (Pulse2.122s),365d8.456s (Pulse2.478s). These single samples preserve the improvement and remain diagnostics, not deployed proof. Fresh full candidate assurance/performance follows the correction commit. No product schema, collectors or summary policy changed.

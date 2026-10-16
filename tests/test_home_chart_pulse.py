@@ -172,6 +172,25 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         self.assertEqual(sql.count("FILTER (WHERE"), 2)
 
     @patch("monitor.views._dashboard_now", return_value=ANCHOR)
+    def test_chart_counts_use_canonical_brand_identity_for_collation_equivalent_links(self, _now):
+        PostBrand.objects.filter(brand_id="up").update(brand_id="UP")
+        canonical = Brand.objects.create(nickname="caf\u00e9")
+        post = Post.objects.create(tweet_id="pulse-collation", created_at=ANCHOR - timedelta(hours=1))
+        PostBrand.objects.create(post=post, brand_id="cafe\u0301")
+        self.client.logout()
+        with patch("monitor.views._tracked_home_brand_nicknames", return_value=("up", canonical.nickname)):
+            response = self.client.get("/chart.html", {"window": 1, "locale": "en"}, secure=True)
+        self.assertEqual(response.status_code, 200)
+        parser = _ChartFragmentParser()
+        parser.feed(response.content.decode())
+        payload = json.loads(parser.canvas_attrs[0]["data-home"])
+        counts = {
+            row["nickname"]: (row["current_count"], row["prior_count"])
+            for row in payload["pulse"]["entries"]
+        }
+        self.assertEqual(counts, {"up": (6, 4), canonical.nickname: (1, 0)})
+
+    @patch("monitor.views._dashboard_now", return_value=ANCHOR)
     def test_thirty_day_chart_counts_share_one_scan_and_preserve_empty_brands(self, _now):
         """The real chart route must not repeat a historical scan per brand."""
         tracked = ("up", "down", "flat", "new", "absent")
