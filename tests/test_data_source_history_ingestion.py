@@ -793,3 +793,177 @@ def test_statistics_arena_windows_are_pinned_and_have_no_synthetic_carry_in():
     assert run.status == "success", run.report
     assert "2026-09-11" in requests[0].url.params["where"]
     assert "2026-08-" not in requests[0].url.params["where"]
+
+
+def latest_arena_transport(*, published="2026-09-11", rating=1400.0):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    sink = pa.BufferOutputStream()
+    pq.write_table(
+        pa.Table.from_pylist(
+            [
+                {
+                    "model_name": "lab/model",
+                    "category": "overall",
+                    "leaderboard_publish_date": published,
+                    "rating": rating,
+                    "rating_lower": rating - 10,
+                    "rating_upper": rating + 10,
+                    "vote_count": 12,
+                    "rank": 1,
+                }
+            ]
+        ),
+        sink,
+    )
+    content = sink.getvalue().to_pybytes()
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        assert request.url.host == "huggingface.co"
+        assert request.url.path.endswith("/text/latest-00000-of-00001.parquet")
+        return httpx.Response(200, content=content)
+
+    return Budget(
+        httpx.Client(transport=httpx.MockTransport(respond)),
+        max_requests=30,
+        max_bytes=1000000,
+    ), requests
+
+
+@pytest.mark.parametrize(
+    "published,has_values",
+    [
+        ("2026-09-11", True),
+        ("2026-09-09", False),
+        ("2026-09-12", False),
+    ],
+)
+def test_latest_arena_artifact_dispatch_preserves_publication_window(
+    published, has_values
+):
+    from core.collection_scheduling import execute_due_job
+
+    source, _product, scope = publication_scope("arena")
+    scope.update(arena_publication_mode="latest-artifact-v1", publication_window_days=1)
+    budget, requests = latest_arena_transport(published=published)
+    run = execute_due_job(register(source, scope), {"slot": None}, budget)
+    assert run.status == "success", run.report
+    assert len(requests) == 1  # One bounded artifact for the whole multi-day window.
+    assert MetricValue.objects.exists() is has_values
+    cell = run.report["coverage"][0]
+    assert cell["outcome"] == "not_published"
+    assert cell["coverage_complete"] is False
+    evidence = cell["evidence"]
+    assert len(evidence) == 1
+    assert evidence[0]["provider_coverage"] == "latest_publication_only"
+    assert bool(evidence[0]["matched_rows"]) is has_values
+    raw = CollectionObservation.objects.get(dimensions__kind="publication_window")
+    assert raw.listing["rows"][0]["leaderboard_publish_date"] == published
+    assert raw.listing["artifact_sha256"]
+    child_scope = raw.run.job.definition["scope"]
+    assert child_scope["arena_publication_mode"] == "latest-artifact-v1"
+    if has_values:
+        assert set(MetricValue.objects.values_list("as_of_date", flat=True)) == {
+            datetime.fromisoformat(published).date()
+        }
+
+
+def test_latest_arena_artifact_cache_separates_history_and_retains_revisions():
+    source, _product, scope = publication_scope("arena")
+    execute_model_history(register(source, scope).pk, budget=transport("arena")[0])
+    historical_count = MetricValue.objects.count()
+    scope["arena_publication_mode"] = "latest-artifact-v1"
+    budget, requests = latest_arena_transport()
+    first = execute_model_history(
+        register(source, scope, key="artifact").pk, budget=budget
+    )
+    assert first.status == "success", first.report
+    assert len(requests) == 1
+    count = MetricValue.objects.count()
+    assert count == historical_count * 2
+    budget, requests = latest_arena_transport()
+    again = execute_model_history(
+        register(source, scope, key="artifact-repeat").pk, budget=budget
+    )
+    assert again.status == "success", again.report
+    assert not requests and MetricValue.objects.count() == count
+    later = copy.deepcopy(scope)
+    later["cutoff"] = "2026-09-13T00:00:00Z"
+    budget, requests = latest_arena_transport(rating=1401.0)
+    revised = execute_model_history(
+        register(source, later, key="artifact-revised").pk, budget=budget
+    )
+    assert revised.status == "success", revised.report
+    assert len(requests) == 1
+    assert MetricValue.objects.count() == count + historical_count
+
+
+@pytest.mark.parametrize(
+    "source,mode",
+    [
+        ("arena", "unknown"),
+        ("openrouter", "latest-artifact-v1"),
+    ],
+)
+def test_arena_publication_mode_rejects_unsupported_instructions_without_http(
+    source, mode
+):
+    provider, _product, scope = publication_scope(source)
+    scope["arena_publication_mode"] = mode
+    budget, requests = transport(source)
+    run = execute_model_history(
+        register(provider, scope).pk, budget=budget, key="fixture"
+    )
+    assert run.status == "partial", run.report
+    assert not requests and not MetricValue.objects.exists()
+
+
+def test_latest_arena_mode_requires_source_statistics_contract():
+    provider, _product, scope = publication_scope("arena")
+    scope["arena_publication_mode"] = "latest-artifact-v1"
+    scope.pop("numeric_contract_id")
+    scope.pop("numeric_projection_policy")
+    budget, requests = latest_arena_transport()
+    run = execute_model_history(register(provider, scope).pk, budget=budget)
+    assert run.status == "partial", run.report
+    assert not requests and not MetricValue.objects.exists()
+
+
+def test_rolling_latest_arena_reacquires_each_generation_without_duplicate_values():
+    provider, _product, scope = publication_scope("arena")
+    scope.update(
+        arena_publication_mode="latest-artifact-v1",
+        publication_window_policy="rolling-completed-days-v1",
+        publication_recheck_days=2,
+    )
+    now = datetime(2026, 9, 12, 3, tzinfo=UTC)
+    count = None
+    for key in ("rolling-first", "rolling-second"):
+        budget, requests = latest_arena_transport()
+        with patch("core.model_history_collection.timezone.now", return_value=now):
+            run = execute_model_history(
+                register(provider, scope, key=key).pk, budget=budget
+            )
+        assert run.status == "success", run.report
+        assert len(requests) == 1
+        if count is None:
+            count = MetricValue.objects.count()
+            assert count > 0
+        else:
+            assert MetricValue.objects.count() == count
+    publications = CollectionObservation.objects.filter(
+        dimensions__kind="publication_window"
+    )
+    assert publications.count() == 2
+    assert (
+        len(
+            {
+                row.run.job.definition["scope"]["acquisition_generation"]
+                for row in publications
+            }
+        )
+        == 2
+    )

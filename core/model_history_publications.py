@@ -48,6 +48,7 @@ def _window_key(
     *,
     window_policy=None,
     acquisition_generation=None,
+    arena_publication_mode=None,
 ):
     identity = {
         "source": source,
@@ -60,12 +61,33 @@ def _window_key(
         identity["window_policy"] = window_policy
     if acquisition_generation:
         identity["acquisition_generation"] = acquisition_generation
+    if arena_publication_mode:
+        identity["arena_publication_mode"] = arena_publication_mode
     return digest(identity)
+
+
+def _arena_publication_mode(job):
+    scope = job.definition["scope"]
+    if "arena_publication_mode" not in scope:
+        return None
+    mode = scope["arena_publication_mode"]
+    contract = history_statistics_contract(job)
+    require(
+        mode == "latest-artifact-v1"
+        and job.source_id == "arena"
+        and scope.get("numeric_projection_policy") == SOURCE_STATISTICS_POLICY
+        and contract is not None
+        and contract.source_configuration["arena"].get("eligibility_policy")
+        == SOURCE_STATISTICS_POLICY,
+        "unsupported Arena publication mode",
+    )
+    return mode
 
 
 def _publication_window(parent, budget, start, end, *, key, config):
     """A shared instruction serializes acquisition; DB evidence survives temp-file loss."""
     scope = parent.definition["scope"]
+    acquisition_mode = _arena_publication_mode(parent)
     contract = history_statistics_contract(parent)
     statistics = bool(
         contract
@@ -92,6 +114,7 @@ def _publication_window(parent, budget, start, end, *, key, config):
         acquisition_generation=scope.get("acquisition_generation")
         if scope.get("publication_window_policy") == "rolling-completed-days-v1"
         else None,
+        arena_publication_mode=acquisition_mode,
     )
     cached = (
         CollectionObservation.objects.filter(
@@ -121,6 +144,8 @@ def _publication_window(parent, budget, start, end, *, key, config):
     if statistics:
         definition["scope"]["window_policy"] = "source-statistics-exact-window-v1"
         definition["scope"]["carry_in_days"] = 0
+    if acquisition_mode:
+        definition["scope"]["arena_publication_mode"] = acquisition_mode
     if scope.get("publication_window_policy") == "rolling-completed-days-v1":
         definition["scope"]["acquisition_generation"] = scope["acquisition_generation"]
     if parent.definition.get("campaign"):
@@ -161,7 +186,7 @@ def _publication_window(parent, budget, start, end, *, key, config):
                 budget,
                 start,
                 end,
-                history=True,
+                history=acquisition_mode != "latest-artifact-v1",
                 config=config,
                 carry_in_days=0 if statistics else 30,
             )
@@ -195,6 +220,11 @@ def _publication_window(parent, budget, start, end, *, key, config):
                         "retrieved_at": timezone.now().isoformat(),
                         "provider_limits": payload.get("coverage"),
                         "dataset_revision": payload.get("revision"),
+                        **(
+                            {"arena_publication_mode": acquisition_mode}
+                            if acquisition_mode
+                            else {}
+                        ),
                     },
                 },
             )
@@ -242,7 +272,7 @@ def _admit_publication(claim, job, publication, start, end):
         and contract.source_configuration[job.source_id].get("eligibility_policy")
         == SOURCE_STATISTICS_POLICY
     ):
-        return _queue_publication(claim, job, publication, contract)
+        return _queue_publication(claim, job, publication, contract, start, end)
     contract_id = job.definition["scope"].get("numeric_contract_id")
     if not contract_id:
         return
@@ -288,7 +318,7 @@ def _admit_publication(claim, job, publication, start, end):
     )
 
 
-def _queue_publication(claim, job, publication, contract):
+def _queue_publication(claim, job, publication, contract, start, end):
     """Commit selected native rows and their pending projection together."""
     from core.source_metric_projection import enqueue_projection
 
@@ -331,6 +361,13 @@ def _queue_publication(claim, job, publication, contract):
         if row[field] in native_ids
         and row[field] not in identifiers
         and row[field] != "other"
+    ]
+    rows = [
+        row
+        for row in rows
+        if start
+        <= (row["date"] if source == "openrouter" else row["leaderboard_publish_date"])
+        <= end
     ]
     selected_ids = []
 
@@ -418,6 +455,7 @@ def _queue_publication(claim, job, publication, contract):
 
 def _publication_evidence(claim, job, model, pins, budget, *, key):
     scope = job.definition["scope"]
+    acquisition_mode = _arena_publication_mode(job)
     config = scope.get("arena_config")
     if job.source_id == "arena" and config not in {
         "text",
@@ -446,6 +484,9 @@ def _publication_evidence(claim, job, model, pins, budget, *, key):
         )
         size = min(size, window_days)
     windows, _ = history_windows(start_at, scope["cutoff"], job.source_id, size=size)
+    if acquisition_mode and windows:
+        # Latest is one publication artifact, never daily historical acquisition.
+        windows = [(windows[0][0], windows[-1][1])]
     evidence = []
     identifiers = {
         p["native_identifier"]
@@ -481,7 +522,15 @@ def _publication_evidence(claim, job, model, pins, budget, *, key):
         rows = [
             r
             for r in payload["rows"]
-            if r[field] in identifiers and r[field] != "other"
+            if r[field] in identifiers
+            and r[field] != "other"
+            and start
+            <= (
+                r["date"]
+                if job.source_id == "openrouter"
+                else r["leaderboard_publish_date"]
+            )
+            <= end
         ]
         evidence.append(
             {
