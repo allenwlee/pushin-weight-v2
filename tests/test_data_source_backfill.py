@@ -107,6 +107,23 @@ def test_crashed_reservation_survives_reclaim_and_pause_fences_response():
         claim_job(job.pk)
 
 
+def test_successful_reclaim_keeps_previous_ambiguous_request_reservation():
+    from core.data_source_backfill import campaign_usage
+
+    job = registered()
+    set_job_state(job.pk, 'ready')
+    first = claim_job(job.pk)
+    CollectionRun.objects.filter(pk=first.run_id).update(
+        lease_expires_at=timezone.now() - timedelta(seconds=1))
+    successor = claim_job(job.pk)
+    # The recovered invocation can account for its own three physical requests.
+    # It cannot establish how many requests the crashed invocation dispatched.
+    finish_run(successor, status='success', request_count=3,
+               report={'physical_accounting_complete': True})
+    assert campaign_usage(job) == {
+        'invocations': 2, 'reserved_requests': 23, 'recorded_requests': 3}
+
+
 def test_replay_rejects_acquisition_phase_and_never_falls_back_to_acquisition():
     from core.data_source_backfill import execute_phase
     job = registered()

@@ -133,6 +133,9 @@ def claim_job(
             "invocations": prior_usage.get("invocations", 0) + 1,
             "reserved_requests": prior_usage.get("reserved_requests", 0)
             + job.definition["budgets"]["requests"],
+            "reserved_before_current": prior_usage.get("reserved_requests", 0),
+            "recorded_before_current": run.request_count,
+            "current_invocation_reservation": job.definition["budgets"]["requests"],
             "accounting": "conservative_reservation",
         }}
     run.status, run.completed_at = "running", None
@@ -292,13 +295,22 @@ def finish_run(
         if (isinstance(campaign, dict)
                 and campaign.get("kind") == "backfiller-data-source-v1"
                 and reservation and status == "success"
-                and run.report.get("physical_accounting_complete") is True
-                and request_count is not None):
-            require(request_count <= reservation["reserved_requests"],
-                    "accounted requests exceed campaign reservation")
+                and (report or {}).get("physical_accounting_complete") is True
+                and request_count is not None
+                and all(key in reservation for key in (
+                    "reserved_before_current", "recorded_before_current",
+                    "current_invocation_reservation",
+                ))):
+            # The successor proves only its own physical usage. Earlier partial
+            # or expired invocations retain their reservation, even when a
+            # catalog attempt reuses the same run row after a hard interruption.
+            current_requests = request_count - reservation["recorded_before_current"]
+            require(0 <= current_requests <= reservation["current_invocation_reservation"],
+                    "accounted requests exceed current invocation reservation")
             run.report["campaign_usage"] = {
-                **reservation, "reserved_requests": request_count,
-                "accounting": "complete_physical_accounting",
+                **reservation,
+                "reserved_requests": reservation["reserved_before_current"] + current_requests,
+                "accounting": "complete_current_invocation_accounting",
             }
         run.error_code = error_code
         for field, value in (
