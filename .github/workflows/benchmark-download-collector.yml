@@ -25,8 +25,14 @@ on:
       - 'core/model_history*.py'
       - 'core/model_native_history.py'
       - 'core/model_inventory.py'
+      - 'core/data_source_backfill.py'
+      - 'core/source_metric_projection.py'
+      - 'core/model_kind_qualification.py'
+      - 'core/hf_catalog.py'
+      - 'scripts/render_migrate.py'
       - 'core/management/commands/collect_*.py'
       - 'core/management/commands/collection_*.py'
+      - 'core/management/commands/backfiller_data_source.py'
       - 'core/management/commands/plan_model_history.py'
       - 'core/management/commands/review_collection_mapping.py'
       - 'monitor/benchmark_views.py'
@@ -49,6 +55,9 @@ on:
       - 'tests/test_github*.py'
       - 'tests/test_model_history*.py'
       - 'tests/test_model_inventory.py'
+      - 'tests/test_data_source*.py'
+      - 'tests/test_source*.py'
+      - 'tests/test_hf_source_ingestion.py'
       - 'tests/test_hf_catalog_runner.py'
       - 'tests/fixtures/github_catalog/**'
       - 'scripts/staging_refresh/**'
@@ -101,10 +110,14 @@ jobs:
           tests/test_benchmark_pulse_views.py tests/test_measurement*.py
           core/collection*.py core/github*.py core/model_history*.py
           core/model_native_history.py core/model_inventory.py
+          core/data_source_backfill.py core/source_metric_projection.py
+          core/model_kind_qualification.py core/hf_catalog.py scripts/render_migrate.py
           core/management/commands/collect_*.py core/management/commands/collection_*.py
+          core/management/commands/backfiller_data_source.py
           core/management/commands/plan_model_history.py core/management/commands/review_collection_mapping.py
           tests/test_collection*.py tests/test_github*.py tests/test_model_history*.py
           tests/test_model_inventory.py tests/test_hf_catalog_runner.py
+          tests/test_data_source*.py tests/test_source*.py tests/test_hf_source_ingestion.py
       - name: Offline collector and PostgreSQL regression net
         run: >-
           python -m pytest -q tests/test_benchmark*.py
@@ -123,6 +136,10 @@ jobs:
           tests/test_github_metadata_client.py tests/test_github_catalog.py
           tests/test_model_history_cohort.py tests/test_model_inventory.py
           tests/test_model_history_collection.py tests/test_hf_catalog_runner.py
+          tests/test_data_source_backfill.py tests/test_source_metric_projection.py
+          tests/test_hf_source_ingestion.py tests/test_github_source_ingestion.py
+          tests/test_data_source_history_ingestion.py tests/test_source_collection_routine.py
+          tests/test_source_statistics_migration.py tests/test_source_projection_fencing.py
       - name: Shared account extension and migration preservation
         run: >-
           python -m pytest -q tests/test_account_extensions.py
