@@ -932,3 +932,77 @@ those exact IDs once no earlier than 16:56:12.274418 UTC. Initial helper result
 is unhealthy; do not present it as green or replace the cohort. Canonical
 current-day checks remain separate from the helper's legacy commentary facts.
 The stored July30 union remains 1,899, below the 3,800–4,200 count requirement.
+
+
+At 16:43:06 UTC `14a0b27b91227414fae884d7230fb64858417758` is LIVE
+on production web and harvest, with login HTTP200. Staging read-only job
+`job-db956o6i0phs73cc0od0` proved all six actual saved replies valid, wrong
+magnitude rejected, paid prompt unchanged and three matching source hashes,
+with zero provider calls/database writes. No cron was paused.
+
+The first private cache launcher `job-db9588dg1s2s73f2ltg0` failed before
+its lock or writes because the clients are frozen dataclasses. Corrected
+only the private launcher with dataclasses.replace, verified both real client
+factories offline and unchanged request identities. After confirmed terminal
+failure, uniquely receipted job `job-db9594qjnfac73akfmp0` succeeded
+16:45:56 UTC: four saved classifications published and two translations
+reopened. All 3,803 physical model rows/starts and USD5.402086 reserved are
+unchanged; cached usage remains old paid usage, never a new start.
+
+Bounded corrected-input job `job-db959pk9v7es739j7dp0` succeeded
+16:48:09 UTC. It froze the remaining four posts, exact failed-call IDs,
+source fingerprints, feedback and unchanged configuration/policy into the
+existing CollectionRun before new starts. All eight formerly incomplete
+original posts now pass both canonical translation and classification. The
+100-trillion-token post reused its saved translations. Targeted follow-on
+prepared two requests. No Twitter calls, new tables or budget/attempt reset.
+The first local targeted audit saw extraction disabled and therefore could
+not establish production role completeness. Render's later guard correctly
+refused the supplement because current targeted outputs remain unfinished.
+Inspect those failures under the actual Render configuration before recovery.
+Preserve old failures and healthy outputs. Supplemental 347-member enrichment
+and final complete-cohort audit remain.
+
+
+### Bounded supplemental extraction scope — 2026-10-16 17:10 UTC
+
+The zero-inference/current-key enrichment guards correctly stopped both
+supplement launchers before their first model request. Two old classifier
+packets remain unused pending imports although all20 members have healthy
+current outputs; preserve that truthful cache history instead of marking them
+applied. Actual Render configuration also exposed11 unfinished targeted roles;
+the first local audit had extraction disabled and its zero count was invalid.
+The production read-only diagnosis and subsequent bounded corrected-input run
+`job-db95gkft5n8s73ec5qg0` repaired10. Post2082872979424510292 still lacks
+a publishable event after its fixed corrected-input retries. Preserve that
+failure and all attempts; do not reset it under a fresh source job.
+
+Implement one optional post_ids selection on the existing shared
+scripts.backfill_targeted.advance_targeted. Validate nonempty membership
+before advancing paid groups, then restrict the ordinary observation query.
+Default callers retain the full existing cohort. Reuse the same prompts,
+_prepare, request registration, ordinary-API transport and domain publishers.
+No new table/migration, helper pipeline, prompt/model/key, live cursor or
+scheduler change. Regression net: real PostgreSQL production-caller publication
+for one selected post, excluded failed sibling unchanged, duplicate IDs
+normalized, empty/foreign members rejected before any provider call.
+
+Use the same staged production route. Supplemental base enrichment keeps
+healthy original overlaps; targeted extraction explicitly selects only the347
+new members. Freeze the one original exhausted role in instructions/report
+and assert it matches current Render facts; do not silently retry it or hide
+it from final verification. Deduct all additional original recovery rows and
+reservations before allocating the still-unstarted supplement. Its first two
+launches created no provider batches or starts. This continues independent
+work while retaining failures for the final full-cohort evaluation, consistent
+with the owner instruction. The expected3800–4200 count remains unmet at1899.
+
+The exact20 follow-up was observed once after16:56:12UTC: helper failed with
+19unhealthy/1pending, legacycommentary0/20, validlanguage17/20, Chinese15/15;
+no missingIDs. Separate canonical facts are19/20, not a helper pass. Normal
+16:45 cycle completed16:50:57 with89inserts and degraded capacity refusals;
+production read-only DB independently finds89fresh-day rows in that window,
+50translation-success and40classification-success at the later snapshot.
+No healthy-cycle claim or cron pause. Preserve these limitations.
+
+Regression evidence for this helper:3new tests red before source change;95focused green including40required PostgreSQL and existing Ollija/default/corrected-recovery/consumer checks,0skips/errors. Final strengthened6targeted tests pass including6required PostgreSQL; invalid selection cannot even advance an existing registered paid group. Django check,2-file Ruff and whitespace pass. Serial inline review,0independent reviewers under owner mapping, no confirmed findings; receipt /tmp/compound-engineering-501/ce-code-review/20261016-171148-targeted-selection/review.json. Source changes only subset selection; normal core prompts and content identities stay unchanged.

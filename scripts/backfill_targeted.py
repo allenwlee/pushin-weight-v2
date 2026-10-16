@@ -19,6 +19,7 @@ from core.models import (
     RareTypeSearchHit,
 )
 from core.provider_batches import (
+    BatchAdmissionError,
     assert_enrichment_admission,
     digest,
     own_historical_posts,
@@ -218,12 +219,21 @@ def advance_targeted(
     delegate=None,
     client_factory=None,
     defer_failures=False,
+    post_ids=None,
 ):
-    """Advance one bounded page. All starts use ordinary-API durable admission."""
+    """Advance a job or explicit member subset through shared paid admission."""
     job = CollectionJob.objects.get(pk=job_id)
     first = job.provider_batches.order_by("created_at").first()
     if first is None:
         raise ValueError("base_enrichment_policy_missing")
+    observations = CollectionObservation.objects.filter(
+        run__job=job, source_subject_kind="post"
+    )
+    if post_ids is not None:
+        selected = sorted({str(identifier) for identifier in post_ids})
+        observations = observations.filter(post_id__in=selected)
+        if not selected or observations.values("post_id").distinct().count() != len(selected):
+            raise BatchAdmissionError("targeted_selection_membership_missing")
     delegate = delegate or build_relevancy_client_from_env(
         cfg, deepinfra_key_env="DEEPINFRA_ON_DEMAND",
     )
@@ -238,9 +248,6 @@ def advance_targeted(
             client_factory=client_factory,
         )
     prepared, pending, scanned, after = [], 0, 0, ""
-    observations = CollectionObservation.objects.filter(
-        run__job=job, source_subject_kind="post"
-    )
     if defer_failures:
         deferred = deferred_enrichment_work(
             job,

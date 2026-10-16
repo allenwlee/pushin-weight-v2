@@ -108,6 +108,69 @@ def test_read_only_checker_rejects_skipped_extraction(accepted):
     assert "targeted_extraction_incomplete" in result["errors"][ids[0]]
 
 
+def test_selected_extraction_preserves_unselected_failed_post(accepted, native):
+    ids, cfg = accepted
+    cfg.targeted_extraction.enabled = True
+    for identifier in ids:
+        PostBrandSignal.objects.create(
+            post_id=identifier, brand_id="qwen", post_type_id="events",
+            sentiment_id="neutral",
+        )
+    excluded = TargetedExtractionState.objects.create(
+        post_id=ids[1], role="event_extraction", status="failed",
+        model=cfg.targeted_extraction.roles["event_extraction"].model,
+        prompt_version="previous-failed-input", content_identity="0" * 64,
+    )
+    before = TargetedExtractionState.objects.filter(pk=excluded.pk).values().get()
+    provider = ExtractionProvider()
+    for _ in range(5):
+        result = advance_targeted(
+            native[0].pk, cfg=cfg, api_key="test",
+            delegate=native[2]["classification"], client_factory=provider.factory,
+            post_ids=[ids[0], ids[0]],
+        )
+        if result["status"] == "completed":
+            break
+    assert result["status"] == "completed"
+    calls = OriginalContentCall.objects.filter(
+        provenance__context__operation="post_targeted_extraction",
+    )
+    assert calls.count() == provider.sent == 1
+    assert calls.get().member_post_ids == [ids[0]]
+    assert calls.get().import_state == "applied"
+    assert not incomplete_roles(Post.objects.get(pk=ids[0]), cfg)
+    assert incomplete_roles(Post.objects.get(pk=ids[1]), cfg) == ["event_extraction"]
+    assert TargetedExtractionState.objects.filter(pk=excluded.pk).values().get() == before
+
+
+@pytest.mark.parametrize("selection", [[], ["outside-job-membership"]])
+def test_targeted_selection_rejects_invalid_members_before_payment(
+    accepted, native, selection, monkeypatch,
+):
+    from core.provider_batches import BatchAdmissionError
+
+    _ids, cfg = accepted
+    cfg.targeted_extraction.enabled = True
+    provider = ExtractionProvider()
+    batch = native[0].provider_batches.order_by("created_at").first()
+    batch.state = "registered"
+    batch.save(update_fields=["state"])
+
+    def must_not_advance(*args, **kwargs):
+        raise AssertionError("invalid selection advanced an existing paid group")
+
+    monkeypatch.setattr("scripts.backfill_targeted.advance_direct", must_not_advance)
+    before = list(OriginalContentCall.objects.order_by("pk").values())
+    with pytest.raises(BatchAdmissionError, match="targeted_selection"):
+        advance_targeted(
+            native[0].pk, cfg=cfg, api_key="test",
+            delegate=native[2]["classification"], client_factory=provider.factory,
+            post_ids=selection,
+        )
+    assert provider.sent == 0
+    assert list(OriginalContentCall.objects.order_by("pk").values()) == before
+
+
 def test_historical_base_failures_do_not_block_required_targeted_work(accepted, native):
     import copy
     from datetime import timedelta
