@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 
+from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
 from core.benchmark_metric_store import aware_instant
 from core.collection_state import (
     checkpoint_scope,
@@ -153,7 +154,7 @@ def _github_history(claim, job, pins, budget, items):
         )
         if (
             job.definition["scope"].get("numeric_projection_policy")
-            == "source-statistics-v1"
+            == SOURCE_STATISTICS_POLICY
         ):
             _release_assets(
                 claim,
@@ -270,7 +271,7 @@ def _hf_history(claim, job, pins, budget, items):
                         )
                         if contract.source_configuration["hf"].get(
                             "eligibility_policy"
-                        ) == "source-statistics-v1" and any(
+                        ) == SOURCE_STATISTICS_POLICY and any(
                             key in data
                             for key in (
                                 "downloads",

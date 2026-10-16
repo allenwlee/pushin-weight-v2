@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 from django.db import connection, transaction
 from django.utils import timezone
 
-from core.benchmark_metric_identity import definition_snapshot
+from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY, definition_snapshot
 from core.measurement_taxonomy import digest, require
 from core.models import (
     CollectionObservation,
@@ -467,7 +467,7 @@ def collection_lock(contract, source):
 
 def prepare_rows(contract, source, payload, *, adapter=None):
     settings = contract.source_configuration[source]
-    statistics = settings.get("eligibility_policy") == "source-statistics-v1"
+    statistics = settings.get("eligibility_policy") == SOURCE_STATISTICS_POLICY
     if source == "arena":
         require(
             payload.get("config") == settings.get("config", "text_style_control"),
@@ -663,12 +663,12 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
         for data, values in prepared:
             require(
                 data["source_metadata"].get("projection_kind")
-                == "source-statistics-v1",
+                == SOURCE_STATISTICS_POLICY,
                 "snapshot reuse requires source statistics",
             )
             observation, created = CollectionObservation.objects.get_or_create(
                 observation_key=data["observation_key"],
-                source_metadata__projection_kind="source-statistics-v1",
+                source_metadata__projection_kind=SOURCE_STATISTICS_POLICY,
                 defaults={"run": run, **data},
             )
             if not created:
@@ -718,11 +718,10 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
             previous = existing.get(value["source_metric"].pk)
             if previous:
                 for field, expected in value.items():
-                    actual = (
-                        previous.source_metric
-                        if field == "source_metric"
-                        else getattr(previous, field)
-                    )
+                    if field == "source_metric":
+                        actual, expected = previous.source_metric_id, expected.pk
+                    else:
+                        actual = getattr(previous, field)
                     require(
                         actual == expected,
                         "immutable numeric snapshot conflict: " + field,
@@ -755,7 +754,7 @@ def persist_source(
     require(source in contract.source_configuration, "source is outside contract")
     require(
         contract.source_configuration[source].get("eligibility_policy")
-        != "source-statistics-v1",
+        != SOURCE_STATISTICS_POLICY,
         "source statistics require the shared evidence projector",
     )
     from core.benchmark_attribution import enforce_source_collection

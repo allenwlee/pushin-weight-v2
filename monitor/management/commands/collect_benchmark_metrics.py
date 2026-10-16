@@ -9,6 +9,7 @@ import httpx
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
 
+from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
 from core.benchmark_metric_store import collection_lock, persist_source
 from core.measurement_taxonomy import digest
 from core.models import MetricCollectionContract
@@ -75,7 +76,7 @@ class Command(BaseCommand):
                 return
             if (
                 contract.source_configuration[source].get("eligibility_policy")
-                == "source-statistics-v1"
+                == SOURCE_STATISTICS_POLICY
             ):
                 from core.models import CollectionJob
                 from core.source_metric_projection import replay_saved_evidence

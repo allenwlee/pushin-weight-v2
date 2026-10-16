@@ -1319,8 +1319,38 @@ The owner subsequently selected LFG and faster native implementation workers. Th
 
 - **R9 integration fix, 8e62818e:** the faster worker reproduced lost queue acknowledgement after pause/reclaim through all three acquisition entry points (three red failures before the fix). All six live drain calls now pass their original acquisition claim. Short fences protect continuation/acknowledgement without holding origin locks during metric registration, claiming or projection. The independent committed metric snapshot remains valid; a successor reuses it without duplicates. Worker90checks plus final12fencing checks pass, zero skips/errors; the final extra test uses a separate PostgreSQL connection to prove lock release.
 - **U16 integrated verification at8e62818e:** the broad collection/benchmark/HF/GH/history/readers/X-adapter/staging/Ollija run passed641checks, including all299requiredPostgreSQL checks, zero skips/errors in that required set. Thirteen supplemental `tests/test_hf_products.py` checks fail against retired SQLite seed expectations. A clean source archive of unchanged main2c43b4f0 reproduces the identical13failures/12passes in that file. They are pre-existing and outside the active Django collector; no retired adapter or assertion was changed. The full broad command therefore exits1; it is not described as a wholly green suite. Exact configured collector lint passes, Django system checks pass, and migration drift check reports no changes. The required workflow includes every new ingestion/fencing/concurrent-DDL test.
+- **Review fixes, dcde5ff8:** native review run `20261016-020301-0d3dd4e1` and a fresh independent validator confirmed four defects. Completed immutable archive/publication selection checkpoints now prevent re-enqueue loops. Rolling publication polls pin a per-run acquisition generation, rechecking revisions on a new poll while resuming its saved work. Snapshots with no usable selected counters finish with explicit invalid/not-returned coverage and no invented values; retryable admission failures retain their pending evidence. Saved replay streams selection before applying one byte/item/time envelope. The faster worker reproduced the archive loop, empty-counter blockage and eager replay hydration before the fixes. Final verification passed83PostgreSQL checks, followed by27affected checks after strengthening the two-product archive fixture; zero skips/errors. The new real-caller regressions run in configured CI. Parent system/migration-drift checks pass. All four actionable findings are applied; no review residual remains. Separate compounding is skipped because this reasoning is carried in code/tests/this plan. Browser testing is skipped with zero affected rendered routes; no browser pass is claimed.
 
 ### Runtime preservation baseline and release sequence
+
+**Fresh backup verified, 2026-10-16T02:29:42Z:** production export
+`dpg-d9koekqjobas73fvjqng-a/2026-10-16T01:52Z` completed and was downloaded
+to the authoritative host at
+`/Users/fuchitalee/.local/state/pushinweight-backups/g3-backfiller-data-source-20261016T0152Z/production.dir.tar.gz`.
+The verified download is1,992,793,274bytes, SHA256
+`1227a52065f422c11a0b63f5a16d5cbe8269a3142cdd388979ff37918fd7a6ae`.
+Archive traversal finds183members; PostgreSQL18 `pg_restore --list` reads its
+directory-format table of contents with1,677entries. This is download/integrity
+and archive-readability proof, not a full restore proof. The backup remains on
+fuchitalee; no production database contents or credentials were copied to the
+desktop. Release and campaign execution are still pending.
+
+**Review coverage limitation:** the optional external Claude review inherited a
+shared MiniMax endpoint and returned HTTP402 without a review artifact. That
+route was stopped because the repository requires its project-specific MiniMax
+credential. One Grok replacement timed out at the original shared deadline and
+was reaped. No external finding or cross-model corroboration is claimed; native
+review and fresh independent validation remain the evidence for this release.
+
+**Pre-release staging inspection:** the live staging web reports
+`2c43b4f0bfce8ef0bf0f744fd25db86567904cab`; its isolated
+`pushinweight_staging` database runs PostgreSQL18.4, records core migrations
+through0086, and contains292,330Posts. At inspection there were zero other
+active queries and zero active refresh queries. The authoritative launch index
+has no competing staging release claim. This increment uses the managed
+exact-candidate staged route. Dispatch the configured collector GitHub Actions
+workflow on the feature revision for PostgreSQL18 verification before production
+promotion; a new pull request is not required by the selected production endpoint.
 
 Read-only production audit before this increment's release still observes the
 six paused pilot jobs and their1,959original observations. Ordered original-row
@@ -1346,7 +1376,8 @@ the selected new roles; leave the active X controller and careers cron alone.
 At2026-10-16T01:52:21Z, the parent requested a fresh provider-managed logical
 export of production database `dpg-d9koekqjobas73fvjqng-a`; Render returned202.
 The prior newest export is October15at05:38UTC. The fresh export is not yet
-listed as downloadable and must be verified before production migration.
+listed as downloadable at that request checkpoint; its completed download and
+readability verification are recorded above.
 The operation changes no source, job, scheduler or controller state. API procedure
 verified against [Render's export endpoint](https://api-docs.render.com/reference/create-postgres-export)
 and [backup guidance](https://render.com/docs/postgresql-backups).

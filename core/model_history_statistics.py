@@ -4,6 +4,7 @@ import copy
 
 from django.db import transaction
 
+from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
 from core.measurement_taxonomy import configure_taxonomy, require, subject_id
 from core.models import DataSource, Product, SourceSubjectMapping
 from core.source_metric_projection import configure_source_statistics
@@ -158,7 +159,7 @@ def prepare_history_statistics_scope(*, source, scope, reviewed_by, use_policy=N
         }
     )
     selected["numeric_contract_id"] = str(contract.pk)
-    selected["numeric_projection_policy"] = "source-statistics-v1"
+    selected["numeric_projection_policy"] = SOURCE_STATISTICS_POLICY
     if source.pk in {"openrouter", "arena"}:
         selected.setdefault("publication_window_days", 7)
         require(
@@ -195,7 +196,7 @@ def history_statistics_contract(job):
     )
     policy = scope.get("numeric_projection_policy")
     require(
-        policy in {None, "source-statistics-v1"},
+        policy in {None, SOURCE_STATISTICS_POLICY},
         "unsupported history statistics policy",
     )
     require(

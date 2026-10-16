@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
 from core.benchmark_metric_store import aware_instant, safe_payload
 from core.collection_jobs import register_job
 from core.collection_state import checkpoint_scope, claim_job, finish_run
@@ -198,7 +199,7 @@ def _queue_numeric(claim, run, observations):
     contract = MetricCollectionContract.objects.get(pk=contract_id)
     config = contract.source_configuration["github"]
     require(
-        config.get("eligibility_policy") == "source-statistics-v1",
+        config.get("eligibility_policy") == SOURCE_STATISTICS_POLICY,
         "statistics contract required",
     )
     wires = {d["definition_metadata"].get("wire_field") for d in config["definitions"]}
