@@ -50,6 +50,17 @@ def claim_job(
     job_id, *, invocation_id=None, manual_authorized=False, continue_from=None, now=None
 ):
     now = now or timezone.now()
+    # Campaign peers share a finite reservation ceiling. Lock in one order before
+    # the selected job, including on reclaim, without affecting legacy/X claims.
+    candidate = CollectionJob.objects.get(pk=job_id)
+    campaign = candidate.definition.get("campaign", {})
+    bounded_campaign = (isinstance(campaign, dict)
+                        and campaign.get("kind") == "backfiller-data-source-v1")
+    if bounded_campaign:
+        list(CollectionJob.objects.select_for_update().filter(
+            definition__campaign__kind="backfiller-data-source-v1",
+            definition__campaign__key=campaign["key"],
+        ).order_by("pk"))
     job = (
         CollectionJob.objects.select_for_update(of=("self",))
         .select_related("source", "contract")
@@ -81,6 +92,17 @@ def claim_job(
                 },
             }
             active.save()
+    if bounded_campaign:
+        from core.data_source_backfill import campaign_usage, validate_campaign
+
+        campaign = validate_campaign(job.definition, contract_id=job.contract_id)
+        usage = campaign_usage(job)
+        require(
+            usage["invocations"] < campaign["max_invocations"]
+            and usage["reserved_requests"] + job.definition["budgets"]["requests"]
+            <= campaign["max_requests"],
+            "campaign invocation/request limit exhausted",
+        )
     invocation_id = invocation_id or str(uuid.uuid4())
     ingestion_key = _key(job, invocation_id)
     require(
@@ -105,6 +127,14 @@ def claim_job(
             scope=copy.deepcopy(job.definition["scope"]),
             report={"definition_sha256": job.definition_sha256},
         )
+    if bounded_campaign:
+        prior_usage = run.report.get("campaign_usage", {})
+        run.report = {**run.report, "campaign_usage": {
+            "invocations": prior_usage.get("invocations", 0) + 1,
+            "reserved_requests": prior_usage.get("reserved_requests", 0)
+            + job.definition["budgets"]["requests"],
+            "accounting": "conservative_reservation",
+        }}
     run.status, run.completed_at = "running", None
     run.lease_token, run.lease_expires_at = token, lease
     run.error_code = None
@@ -113,6 +143,17 @@ def claim_job(
         {"invocation_id": invocation_id, "started_at": now.isoformat()},
     ]
     run.save()
+    if bounded_campaign and job.purpose == "metric" and job.last_attempt_id:
+        previous = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
+        if previous.status == "partial" and previous.completed_at is not None:
+            require(previous.report.get("definition_sha256") == job.definition_sha256,
+                    "continuation identity mismatch")
+            for scope in previous.scopes.all():
+                scope.pk = None
+                scope.run = run
+                scope.save(force_insert=True)
+            run.report = {**run.report, "continued_from": str(previous.pk)}
+            run.save(update_fields=["report", "updated_at"])
     if continue_from is not None:
         require(
             job.purpose == "content" and job.mode == "historical",
@@ -244,6 +285,21 @@ def finish_run(
             run.report.get("definition_sha256") == job.definition_sha256,
             "instruction provenance cannot change",
         )
+        # Only an adapter proving complete physical accounting may release unused
+        # reservation. Interrupted/ambiguous attempts retain their conservative cap.
+        reservation = run.report.get("campaign_usage")
+        campaign = job.definition.get("campaign")
+        if (isinstance(campaign, dict)
+                and campaign.get("kind") == "backfiller-data-source-v1"
+                and reservation and status == "success"
+                and run.report.get("physical_accounting_complete") is True
+                and request_count is not None):
+            require(request_count <= reservation["reserved_requests"],
+                    "accounted requests exceed campaign reservation")
+            run.report["campaign_usage"] = {
+                **reservation, "reserved_requests": request_count,
+                "accounting": "complete_physical_accounting",
+            }
         run.error_code = error_code
         for field, value in (
             ("request_count", request_count),
