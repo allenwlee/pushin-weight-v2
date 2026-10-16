@@ -3826,7 +3826,7 @@ def _build_home_pulse_payload(
     now: datetime | None = None,
     brand_nicknames: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
-    """Aggregate equal windows for the requested brand scope in one query."""
+    """Count both equal windows together, retaining brands with no posts."""
     if window_days not in ALLOWED_HOME_WINDOWS:
         window_days = HOME_WINDOW_DEFAULT
     now = now or _dashboard_now()
@@ -3839,30 +3839,6 @@ def _build_home_pulse_payload(
 
         midpoint = now - timedelta(days=window_days)
         start = now - timedelta(days=window_days * 2)
-        current_counts = (
-            PostBrand.objects
-            .filter(
-                brand_id=OuterRef("nickname"),
-                post__created_at__gte=midpoint,
-                post__created_at__lt=now,
-            )
-            .order_by()
-            .values("brand_id")
-            .annotate(total=Count("post_id"))
-            .values("total")[:1]
-        )
-        prior_counts = (
-            PostBrand.objects
-            .filter(
-                brand_id=OuterRef("nickname"),
-                post__created_at__gte=start,
-                post__created_at__lt=midpoint,
-            )
-            .order_by()
-            .values("brand_id")
-            .annotate(total=Count("post_id"))
-            .values("total")[:1]
-        )
         brands = Brand.objects.filter(is_sentinel=False)
         if brand_nicknames is not None:
             brands = brands.filter(nickname__in=brand_nicknames)
@@ -3875,17 +3851,25 @@ def _build_home_pulse_payload(
                 "display_name_zh_cn",
                 "accent_color",
             )
-            .annotate(
-                current_count=Coalesce(Subquery(current_counts), 0),
-                prior_count=Coalesce(Subquery(prior_counts), 0),
-            )
         )
+        counts = {
+            row["brand_id"]: row
+            for row in PostBrand.objects.filter(
+                brand_id__in=[row["nickname"] for row in rows],
+                post__created_at__gte=start,
+                post__created_at__lt=now,
+            ).order_by().values("brand_id").annotate(
+                current_count=Count("post_id", filter=Q(post__created_at__gte=midpoint)),
+                prior_count=Count("post_id", filter=Q(post__created_at__lt=midpoint)),
+            )
+        }
         rows = _home_visible_brand_rows(rows)
         rows.sort(key=lambda row: _home_chart_brand_sort_key(row["nickname"]))
         entries: list[dict[str, Any]] = []
         for row in rows:
-            current = row.get("current_count") or 0
-            prior = row.get("prior_count") or 0
+            brand_counts = counts.get(row["nickname"], {})
+            current = brand_counts.get("current_count", 0)
+            prior = brand_counts.get("prior_count", 0)
             delta = _round_pulse_percent(current, prior)
             is_new = prior == 0 and current > 0
             if current == 0 and prior == 0:
