@@ -209,7 +209,13 @@ def evidence_rows(contract, source, evidence):
             require(str(raw.get("id")) == identity, "native account identity mismatch")
         else:
             require(
-                (raw.get("name") or raw.get("user") or raw.get("id") or "").casefold()
+                (
+                    raw.get("name")
+                    or raw.get("user")
+                    or raw.get("organization")
+                    or raw.get("id")
+                    or ""
+                ).casefold()
                 == identity.casefold(),
                 "native account identity mismatch",
             )
@@ -233,16 +239,19 @@ def evidence_rows(contract, source, evidence):
     elif source == "github":
         kind = evidence.dimensions.get("kind")
         require(
-            kind in {"repository", "release_asset"}, "unsupported numeric evidence kind"
+            kind in {"repository", "repository_access", "release_asset"},
+            "unsupported numeric evidence kind",
         )
         identity = (
-            str(raw.get("id")) if kind == "repository" else evidence.source_identifier
+            str(raw.get("id"))
+            if kind in {"repository", "repository_access"}
+            else evidence.source_identifier
         )
         require(
             identity == evidence.source_identifier,
             "native repository identity mismatch",
         )
-        if kind == "repository":
+        if kind in {"repository", "repository_access"}:
             require(
                 type(raw.get("id")) is int
                 and raw["id"] > 0
@@ -264,6 +273,13 @@ def evidence_rows(contract, source, evidence):
         native = {"repository_id": identity, "raw": raw, "dimensions": dimensions}
     else:
         raise ValueError("unsupported native statistics source")
+    if "numeric_fields" in evidence.source_metadata:
+        fields = set(evidence.source_metadata["numeric_fields"])
+        native["raw"] = {
+            key: value
+            for key, value in raw.items()
+            if key in fields or key in {"id", "modelId", "private"}
+        }
     row = next(native_rows(source, {"status": "ok", "rows": [native]}))
     row["observed_at"] = evidence.observed_at.isoformat()
     row["dimensions"] = dimensions
@@ -369,7 +385,9 @@ def enqueue_projection(claim, *, contract, evidence_ids):
         )
 
 
-def _project_evidence(claim, evidence_ids, *, cursor=None, complete=True):
+def _project_evidence(
+    claim, evidence_ids, *, cursor=None, complete=True, deadline=None
+):
     """Write a bounded batch and its checkpoint under source lock + claim fence.
 
     Returns a terminal metric attempt. Unknown ownership produces explicit gaps;
@@ -412,7 +430,8 @@ def _project_evidence(claim, evidence_ids, *, cursor=None, complete=True):
     prepared, rejections = [], []
     for evidence in selected:
         require(
-            monotonic() - started <= job.definition["budgets"]["seconds"],
+            monotonic() - started <= job.definition["budgets"]["seconds"]
+            and (deadline is None or monotonic() < deadline),
             "projection time budget exceeded",
         )
         try:
@@ -541,7 +560,7 @@ def _evidence_bytes(evidence):
     )
 
 
-def project_evidence(claim, evidence_ids, *, cursor=None, complete=True):
+def project_evidence(claim, evidence_ids, *, cursor=None, complete=True, deadline=None):
     """Project one fenced batch; invalid/conflicting evidence produces a failed receipt.
 
     Unexpected exceptions retain the active claim for ordinary crash/reclaim
@@ -550,7 +569,9 @@ def project_evidence(claim, evidence_ids, *, cursor=None, complete=True):
     from core.collection_state import StaleClaim
 
     try:
-        return _project_evidence(claim, evidence_ids, cursor=cursor, complete=complete)
+        return _project_evidence(
+            claim, evidence_ids, cursor=cursor, complete=complete, deadline=deadline
+        )
     except StaleClaim:
         raise
     except (ValueError, KeyError, TypeError) as exc:
@@ -598,11 +619,25 @@ def replay_saved_evidence(job_id):
         run__source_id=job.source_id,
         run__purpose="catalog",
         pk__gt=cursor,
-        source_subject_kind="repository",
+        source_subject_kind__in=["repository", "account"],
         status="ok",
     ).order_by("pk")
+    if job.source_id == "hf":
+        selected = selected.exclude(
+            Q(source_metadata__has_key="numeric_fields")
+            & Q(source_metadata__numeric_fields=[])
+        )
     if job.source_id == "github":
-        selected = selected.filter(dimensions__kind__in=["repository", "release_asset"])
+        selected = selected.filter(
+            Q(source_subject_kind="account")
+            | Q(
+                dimensions__kind__in=[
+                    "repository",
+                    "repository_access",
+                    "release_asset",
+                ]
+            )
+        )
     ids, consumed, complete = [], 0, True
     for evidence in selected.only("id", "listing", "source_metadata", "dimensions")[
         : job.definition["budgets"]["items"] + 1
@@ -623,3 +658,137 @@ def replay_saved_evidence(job_id):
     return project_evidence(
         claim, ids, cursor=str(ids[-1] if ids else cursor), complete=complete
     )
+
+
+def drain_pending_projections(catalog_job_id, *, budget=None):
+    """Consume durable capture references with one finite shared-writer budget.
+
+    Acknowledgement follows numeric commit. A crash between them safely reuses
+    immutable snapshots on the next call. Failed admission stays pending and
+    inspectable; routine attempts do not enumerate completed captures.
+    """
+    from core.collection_jobs import register_job, set_job_state, validate_job
+    from core.models import CollectionScopeRun, MetricCollectionContract
+
+    origin = CollectionJob.objects.select_related("source").get(pk=catalog_job_id)
+    validate_job(origin)
+    require(origin.purpose == "catalog", "catalog projection origin required")
+    limits = origin.definition["budgets"]
+    started = monotonic()
+    usage = {"items": 0, "bytes": 0}
+    if budget is not None:
+        if not hasattr(budget, "source_projection_usage"):
+            budget.source_projection_usage = {}
+        usage = budget.source_projection_usage.setdefault(str(origin.pk), usage)
+    consumed, selected_count = usage["bytes"], usage["items"]
+    remaining_seconds = lambda: min(
+        limits["seconds"] - (monotonic() - started),
+        budget.deadline - budget.clock() if budget is not None else limits["seconds"],
+    )
+    result = {
+        "written_values": 0,
+        "reused_resources": 0,
+        "acknowledged": 0,
+        "pending": False,
+        "runs": [],
+    }
+    pending = (
+        CollectionScopeRun.objects.filter(
+            run__job=origin, scope_kind="numeric_projection", outcome="pending"
+        )
+        .select_related("run")
+        .order_by("pk")
+    )
+    for scope in pending.iterator():
+        if selected_count >= limits["items"] or remaining_seconds() <= 0:
+            break
+        contract = MetricCollectionContract.objects.get(
+            pk=scope.ownership["contract_id"]
+        )
+        require(
+            contract.contract_hash == scope.ownership["contract_hash"],
+            "projection contract pin changed",
+        )
+        definition = {
+            "version": 1,
+            "scope": {
+                "origin_run_ids": [str(scope.run_id)],
+                "projection_scope_id": scope.pk,
+            },
+            "schedule": {"kind": "manual", "driver": "manual"},
+            "budgets": {**limits, "requests": 1},
+        }
+        campaign = origin.definition.get("campaign")
+        if campaign:
+            definition["campaign"] = {
+                **campaign,
+                "role": "projection",
+                "phase": "replay",
+                "contract_partition": str(contract.pk),
+            }
+        job = register_job(
+            job_key="projection:"
+            + digest([str(origin.pk), scope.pk, contract.contract_hash]),
+            source=origin.source,
+            purpose="metric",
+            operation="collect_metrics",
+            mode="manual",
+            contract=contract,
+            definition=definition,
+        )
+        if job.state == "paused":
+            job = set_job_state(job.pk, "ready")
+        ids = []
+        for evidence in CollectionObservation.objects.filter(
+            pk__in=[row["observation_id"] for row in scope.envelopes]
+        ).order_by("pk"):
+            size = _evidence_bytes(evidence)
+            if (
+                selected_count + len(ids) >= limits["items"]
+                or consumed + size > limits["bytes"]
+                or remaining_seconds() <= 0
+            ):
+                break
+            ids.append(evidence.pk)
+            consumed += size
+        if not ids:
+            break
+        claim = claim_job(job.pk)
+        run = project_evidence(claim, ids, deadline=monotonic() + remaining_seconds())
+        projection = run.report["projection"]
+        rejected = {
+            row["observation_id"]
+            for row in projection["rejections"]
+            if "metric" not in row
+        }
+        committed = set(ids) - rejected
+        # Lock the queue row so concurrent enqueue never loses a new reference.
+        with transaction.atomic():
+            current = CollectionScopeRun.objects.select_for_update().get(pk=scope.pk)
+            current.envelopes = [
+                row
+                for row in current.envelopes
+                if row["observation_id"] not in committed
+            ]
+            current.outcome = "pending" if current.envelopes else "complete"
+            current.enumeration_complete = not current.envelopes
+            current.cursor = str(max(committed)) if committed else current.cursor
+            current.save()
+        result["written_values"] += projection["written_values"]
+        result["reused_resources"] += len(projection["reused_observation_ids"])
+        result["acknowledged"] += len(committed)
+        result["runs"].append(str(run.pk))
+        selected_count += len(ids)
+        usage.update(items=selected_count, bytes=consumed)
+        if rejected:
+            break
+    result["pending"] = CollectionScopeRun.objects.filter(
+        run__job=origin, scope_kind="numeric_projection", outcome="pending"
+    ).exists()
+    result["pending_resources"] = sum(
+        len(scope.envelopes)
+        for scope in CollectionScopeRun.objects.filter(
+            run__job=origin, scope_kind="numeric_projection", outcome="pending"
+        )
+    )
+    return result

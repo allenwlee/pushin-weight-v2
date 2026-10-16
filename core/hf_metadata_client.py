@@ -113,6 +113,11 @@ class HFMetadataClient:
             return "request_cap"
         if self.clock() >= self.deadline:
             return "time_cap"
+        if (
+            self.max_total_bytes is not None
+            and self.bytes_received >= self.max_total_bytes
+        ):
+            return "response_size_cap"
         return None
 
     def _get(self, path: str, params: Any = None) -> MetadataResponse:
@@ -424,11 +429,7 @@ class HFMetadataClient:
         result = self._get(f"/{path_kind}/{identifier}/overview", [])
         if result.outcome == "ok":
             payload = result.payload
-            if (
-                not isinstance(payload, dict)
-                or type(payload.get("numFollowers")) is not int
-                or payload["numFollowers"] < 0
-            ):
+            if not isinstance(payload, dict):
                 result.outcome = "malformed"
             else:
                 name = (

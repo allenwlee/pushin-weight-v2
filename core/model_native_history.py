@@ -218,6 +218,50 @@ def _hf_history(claim, job, pins, budget, items):
                     isinstance(data, dict) and isinstance(data.get("sha"), str),
                     "native HF head revision required",
                 )
+                from django.utils import timezone
+
+                observed_at = timezone.now()
+
+                def capture_head(
+                    run,
+                    scoped,
+                    identifier=identifier,
+                    data=data,
+                    observed_at=observed_at,
+                ):
+                    observation = _native_record(
+                        run,
+                        scoped,
+                        identifier,
+                        "hf_metadata",
+                        data,
+                        metadata={
+                            "revision": data["sha"],
+                            "historical_public_visibility_proven": False,
+                        },
+                    )
+                    observation.observed_at = observed_at
+                    observation.save(update_fields=["observed_at", "updated_at"])
+                    if job.definition["scope"].get("numeric_contract_id"):
+                        from core.models import MetricCollectionContract
+                        from core.source_metric_projection import enqueue_projection
+
+                        contract = MetricCollectionContract.objects.get(
+                            pk=job.definition["scope"]["numeric_contract_id"]
+                        )
+                        if any(
+                            key in data
+                            for key in (
+                                "downloads",
+                                "downloadsAllTime",
+                                "likes",
+                                "trendingScore",
+                            )
+                        ):
+                            enqueue_projection(
+                                claim, contract=contract, evidence_ids=[observation.pk]
+                            )
+
                 checkpoint_scope(
                     claim,
                     scope_kind="hf_history_head",
@@ -231,19 +275,7 @@ def _hf_history(claim, job, pins, budget, items):
                             "attempts": json.loads(json.dumps(result.attempts)),
                         }
                     ],
-                    write=lambda run, scoped, identifier=identifier, data=data: (
-                        _native_record(
-                            run,
-                            scoped,
-                            identifier,
-                            "hf_metadata",
-                            data,
-                            metadata={
-                                "revision": data["sha"],
-                                "historical_public_visibility_proven": False,
-                            },
-                        )
-                    ),
+                    write=capture_head,
                 )
                 revision = data["sha"]
             else:

@@ -87,6 +87,8 @@ METRIC_TYPES = [
     "open_issues",
     "subscribers",
     "storage_size",
+    "following",
+    "repository_count",
 ]
 
 
@@ -96,6 +98,8 @@ def definition_rows():
         ("github", "repository_size_kb", "state", "count", "kilobytes", "integer"),
         ("github", "asset_size_bytes", "state", "count", "bytes", "integer"),
         ("github", "followers", "state", "count", "followers", "integer"),
+        ("github", "following", "state", "count", "accounts", "integer"),
+        ("github", "public_repos", "state", "count", "repositories", "integer"),
         ("github", "stars", "state", "count", "stars", "integer"),
         ("github", "forks", "state", "count", "forks", "integer"),
         ("github", "open_issues", "state", "count", "issues", "integer"),
@@ -105,6 +109,10 @@ def definition_rows():
         ("hf", "downloads_all_time", "flow", "count", "downloads", "integer"),
         ("hf", "likes", "state", "count", "likes", "integer"),
         ("hf", "followers", "state", "count", "followers", "integer"),
+        ("hf", "trending_score", "state", "score", "hf_trending_points", "float"),
+        ("hf", "models_count", "state", "count", "models", "integer"),
+        ("hf", "datasets_count", "state", "count", "datasets", "integer"),
+        ("hf", "spaces_count", "state", "count", "spaces", "integer"),
         ("openrouter", "total_tokens", "flow", "count", "tokens", "integer"),
         ("opencode", "tokens", "flow", "count", "tokens", "integer"),
         ("opencode", "unique_users", "flow", "count", "users", "integer"),
@@ -134,6 +142,11 @@ def definition_rows():
             "rank": "rank",
             "likes": "likes",
             "followers": "followers",
+            "following": "following",
+            "public_repos": "repository_count",
+            "models_count": "repository_count",
+            "datasets_count": "repository_count",
+            "spaces_count": "repository_count",
             "variance": "score_variance",
         }.get(key, "benchmark_score")
         row = {
@@ -164,6 +177,10 @@ def definition_rows():
                 "followers",
                 "unique_users",
                 "sessions",
+                "trending_score",
+                "models_count",
+                "datasets_count",
+                "spaces_count",
             },
             "definition_metadata": {
                 "wire_field": "downloadsAllTime"
@@ -177,6 +194,8 @@ def definition_rows():
             row["definition_metadata"].update(
                 wire_field={
                     "followers": "followers",
+                    "following": "following",
+                    "public_repos": "public_repos",
                     "repository_size_kb": "size",
                     "asset_size_bytes": "size",
                     "stars": "stargazers_count",
@@ -189,11 +208,27 @@ def definition_rows():
                 resource_grain="release_asset"
                 if key in {"asset_downloads", "asset_size_bytes"}
                 else "account"
-                if key == "followers"
+                if key in {"followers", "following", "public_repos"}
                 else "repository",
             )
             if key == "asset_downloads":
                 row.update(window_mode="since_origin")
+        if source == "hf" and key in {
+            "trending_score",
+            "models_count",
+            "datasets_count",
+            "spaces_count",
+        }:
+            row["definition_metadata"].update(
+                wire_field={
+                    "trending_score": "trendingScore",
+                    "models_count": "numModels",
+                    "datasets_count": "numDatasets",
+                    "spaces_count": "numSpaces",
+                }[key],
+                adapter_version="hf-statistics-v1",
+                resource_grain="repository" if key == "trending_score" else "account",
+            )
         if key == "downloads":
             row.update(
                 window_mode="rolling",

@@ -248,6 +248,10 @@ def native_rows(source, payload):
                     ("downloadsAllTime", "downloads_all_time"),
                     ("likes", "likes"),
                     ("numFollowers", "followers"),
+                    ("trendingScore", "trending_score"),
+                    ("numModels", "models_count"),
+                    ("numDatasets", "datasets_count"),
+                    ("numSpaces", "spaces_count"),
                 ]:
                     if wire in raw:
                         out["metrics"][key] = {"value": raw[wire]}
@@ -295,9 +299,11 @@ def native_rows(source, payload):
                     source_identifier=row["account_identifier"],
                     source_subject_kind="account",
                     identifier_scope=row.get("account_kind", "unknown"),
-                    metrics={"followers": {"value": raw["followers"]}}
-                    if "followers" in raw
-                    else {},
+                    metrics={
+                        key: {"value": raw[key]}
+                        for key in ("followers", "following", "public_repos")
+                        if key in raw
+                    },
                 )
             if "size" in raw and "account_identifier" not in row:
                 size_key = (

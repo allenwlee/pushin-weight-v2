@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections import Counter
 from contextlib import contextmanager
@@ -232,7 +233,11 @@ def persist_product(observation, entry, rules, payload, group):
     product = Product.objects.select_for_update().get(pk=product.pk)
     if (
         product.hf_type != "model"
-        or (product.hf_namespace and product.hf_namespace.casefold() != publisher_identifier(org.account).casefold())
+        or (
+            product.hf_namespace
+            and product.hf_namespace.casefold()
+            != publisher_identifier(org.account).casefold()
+        )
         or (product.brand_id and product.brand_id not in brands)
     ):
         observation.processing_outcome = "owner_conflict"
@@ -281,7 +286,7 @@ def persist_product(observation, entry, rules, payload, group):
 def _envelopes(result, group):
     return [
         {
-            **attempt,
+            **json.loads(json.dumps(attempt)),
             "group": group,
             "validation_outcome": result.outcome,
             "returned_fields": sorted(attempt["payload"])

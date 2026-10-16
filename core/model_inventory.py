@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from django.utils import timezone
 
-from core.collection_state import checkpoint_scope, claim_job, finish_run
+from core.collection_state import checkpoint_scope, claim_job, fenced_run, finish_run
 from core.hf_catalog import _envelopes, persist_product
 from core.hf_metadata_client import HFMetadataClient
 from core.measurement_taxonomy import digest, require
@@ -107,6 +107,29 @@ def _hf(claim, job, budget):
         clock=budget.clock,
         sleep=budget.sleep,
     )
+
+    def record_attempt(envelope):
+        with fenced_run(claim) as (_, run):
+            run.request_count += 1
+            run.report = {
+                **run.report,
+                "physical_accounting_complete": False,
+                "last_physical_attempt": {
+                    "endpoint": envelope["endpoint"],
+                    "attempted_at": envelope["attempted_at"],
+                    "outcome": "reserved_before_dispatch",
+                },
+            }
+            run.save(update_fields=["request_count", "report", "updated_at"])
+
+    client.on_attempt = record_attempt
+    contract = None
+    if job.definition["scope"].get("numeric_contract_id"):
+        from core.models import MetricCollectionContract
+
+        contract = MetricCollectionContract.objects.get(
+            pk=job.definition["scope"]["numeric_contract_id"]
+        )
     try:
         for entry in frozen["namespaces"]:
             namespace = entry["namespace"]
@@ -115,13 +138,39 @@ def _hf(claim, job, budget):
             ).first()
             while scoped is None or not scoped.enumeration_complete:
                 remaining = job.definition["budgets"]["items"] - count
+                watch_exception = job.definition["scope"].get(
+                    "watch_inventory"
+                ) and entry["company"].casefold() in {"google", "nvidia"}
+                if watch_exception:
+                    from django.db.models import Sum
+
+                    already = (
+                        CollectionScopeRun.objects.filter(
+                            run_id=claim.run_id,
+                            scope_kind="namespace",
+                            ownership__company=entry["company"],
+                        ).aggregate(total=Sum("raw_count"))["total"]
+                        or 0
+                    )
+                    remaining = min(remaining, 100 - already)
+                    if remaining <= 0:
+                        checkpoint_scope(
+                            claim,
+                            scope_kind="namespace",
+                            scope_key=namespace,
+                            ownership=entry,
+                            enumeration_complete=True,
+                            outcome="watch_limit",
+                            envelopes=scoped.envelopes if scoped else [],
+                        )
+                        break
                 if remaining <= 0:
                     raise SourceError("item_cap")
                 result = client.list_page(
                     namespace,
                     scoped.cursor if scoped else None,
                     limit=min(100, remaining),
-                    sort="createdAt",
+                    sort="lastModified" if watch_exception else "createdAt",
                 )
                 envelopes = [
                     *(scoped.envelopes if scoped else []),
@@ -138,6 +187,10 @@ def _hf(claim, job, budget):
                         outcome=result.outcome,
                     )
                     raise SourceError(result.outcome)
+                require(
+                    len(result.payload) <= min(100, remaining),
+                    "HF inventory provider exceeded item limit",
+                )
                 history = (
                     [
                         *(scoped.cursor_history if scoped else []),
@@ -170,7 +223,48 @@ def _hf(claim, job, budget):
                                 "dimensions": {"kind": "creation_inventory"},
                             },
                         )
+                        previous = (
+                            CollectionObservation.objects.filter(
+                                run__job=job,
+                                run__status="success",
+                                source_identifier=row["id"],
+                                dimensions__kind="creation_inventory",
+                            )
+                            .exclude(run=run)
+                            .exists()
+                        )
+                        baseline = (
+                            not CollectionRun.objects.filter(job=job, status="success")
+                            .exclude(pk=run.pk)
+                            .exists()
+                        )
+                        observation.source_metadata = {
+                            **observation.source_metadata,
+                            "inventory_event": "baseline"
+                            if baseline
+                            else "known"
+                            if previous
+                            else "newly_observed",
+                            "historical_public_visibility_proven": False,
+                        }
+                        observation.save(
+                            update_fields=["source_metadata", "updated_at"]
+                        )
                         persist_product(observation, entry, rules, row, "listing")
+                        if contract and any(
+                            key in row
+                            for key in (
+                                "downloads",
+                                "downloadsAllTime",
+                                "likes",
+                                "trendingScore",
+                            )
+                        ):
+                            from core.source_metric_projection import enqueue_projection
+
+                            enqueue_projection(
+                                claim, contract=contract, evidence_ids=[observation.pk]
+                            )
 
                 scoped = checkpoint_scope(
                     claim,
@@ -186,6 +280,8 @@ def _hf(claim, job, budget):
                     write=write,
                 )
                 count += len(result.payload)
+            if job.definition["scope"].get("ingest_metadata"):
+                _hf_metadata(claim, job, client, entry, rules, contract)
     finally:
         budget.remaining = before - client.requests
         budget.total_bytes_read += client.bytes_received
@@ -219,7 +315,14 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
     budget.deadline = min(budget.deadline, budget.clock() + limits["seconds"])
     before = budget.remaining
     reason, items = None, 0
+    projection = None
     try:
+        if job.definition["scope"].get("numeric_contract_id"):
+            from core.source_metric_projection import drain_pending_projections
+
+            projection = drain_pending_projections(job.pk, budget=budget)
+            if projection["pending"]:
+                raise SourceError("numeric_projection_pending")
         items = (
             _hf(claim, job, budget)
             if job.source_id == "hf"
@@ -227,13 +330,29 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
         )
     except SourceError as exc:
         reason = str(exc)
-    except (KeyError, ValueError, TypeError):
+    except (KeyError, ValueError, TypeError) as exc:
         reason = "invalid_or_unqualified_catalog"
+        with fenced_run(claim) as (_, failed_run):
+            failed_run.report = {**failed_run.report, "catalog_error": str(exc)}
+            failed_run.save(update_fields=["report", "updated_at"])
     finally:
         if owned:
             owned.close()
     run = CollectionRun.objects.get(pk=claim.run_id)
-    scopes = run.scopes.all()
+    if job.definition["scope"].get("numeric_contract_id"):
+        from core.source_metric_projection import drain_pending_projections
+
+        try:
+            projection = drain_pending_projections(job.pk, budget=budget)
+            if projection["pending"]:
+                reason = reason or "numeric_projection_pending"
+        except ValueError as exc:
+            reason = "numeric_projection_failed"
+            projection = {"pending": True, "error": str(exc)}
+    run.refresh_from_db()
+    scopes = run.scopes.exclude(
+        scope_kind__in=["numeric_projection", "hf_metadata", "hf_profile"]
+    )
     from django.db.models import Sum
 
     total_items = scopes.aggregate(items=Sum("raw_count"))["items"] or 0
@@ -243,17 +362,34 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
         job.source_id == "hf"
         and job.definition["scope"].get("hf_scope", {}).get("gaps")
         and reason is None
+        and not job.definition["scope"].get("numeric_contract_id")
     ):
         reason = "inventory_scope_incomplete"
     return finish_run(
         claim,
         status="partial" if reason else "success",
-        request_count=run.request_count + before - budget.remaining,
+        request_count=run.request_count
+        if job.source_id == "hf"
+        else run.request_count + before - budget.remaining,
         selected_count=scopes.count(),
         success_count=scopes.filter(enumeration_complete=True).count(),
         error_code=reason,
         report={
             "stop_reason": reason,
+            "numeric_projection": projection,
+            "scope_coverage": [
+                {**gap, "outcome": "unavailable"}
+                for gap in job.definition["scope"].get("hf_scope", {}).get("gaps", [])
+            ],
+            "metadata_coverage": list(
+                run.scopes.filter(scope_kind__in=["hf_metadata", "hf_profile"]).values(
+                    "scope_kind", "scope_key", "outcome", "enumeration_complete"
+                )
+            ),
+            "physical_accounting_complete": True,
+            "missing_numeric_fields": _hf_missing_fields(run, job)
+            if job.source_id == "hf"
+            else [],
             "items_this_invocation": items,
             "total_committed_items": total_items,
             "bytes_this_invocation": budget.total_bytes_read,
@@ -261,3 +397,255 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
             "usage_mapping_inferred": False,
         },
     )
+
+
+def _hf_metadata(claim, job, client, entry, rules, contract):
+    """Enrich each saved listing once per run; counters keep their fetch clocks."""
+    from core.models import Account, Product
+    from core.source_metric_projection import enqueue_projection
+
+    listings = CollectionObservation.objects.filter(
+        run_id=claim.run_id,
+        scope_run__scope_kind="namespace",
+        scope_run__scope_key=entry["namespace"],
+    ).order_by("pk")
+    partial = False
+    for listing in listings:
+        for group in ("detail", "expanded"):
+            existing = CollectionScopeRun.objects.filter(
+                run_id=claim.run_id,
+                scope_kind="hf_metadata",
+                scope_key=listing.source_identifier + ":" + group,
+            ).first()
+            if existing and existing.enumeration_complete:
+                continue
+            result = client.model_group(listing.source_identifier, group)
+            observed_at = timezone.now()
+            accepted = result.outcome in {"ok", "partial_expansion"}
+
+            def write(
+                run,
+                scope,
+                result=result,
+                group=group,
+                listing=listing,
+                observed_at=observed_at,
+                accepted=accepted,
+            ):
+                if not accepted:
+                    return
+                previous = (
+                    Product.objects.get(pk=listing.product_id).siblings
+                    if listing.product_id
+                    else None
+                )
+                observation = CollectionObservation.objects.create(
+                    run=run,
+                    scope_run=scope,
+                    resource_key=listing.resource_key,
+                    source_identifier=listing.source_identifier,
+                    source_subject_kind="repository",
+                    listing=result.payload,
+                    observed_at=observed_at,
+                    observation_key=digest([str(run.pk), listing.pk, group]),
+                    envelopes=_envelopes(result, group),
+                    groups={group: result.outcome},
+                    dimensions={"kind": "hf_metadata", "group": group},
+                    source_metadata={"historical_public_visibility_proven": False},
+                )
+                if group == "detail" and "siblings" in result.payload:
+                    paths = lambda rows: {
+                        r.get("rfilename"): r.get("blobId")
+                        or r.get("lfs", {}).get("oid")
+                        for r in (rows or [])
+                        if isinstance(r, dict)
+                    }
+                    old, new = paths(previous), paths(result.payload["siblings"])
+                    changed = sorted(
+                        path
+                        for path in set(old) | set(new)
+                        if path not in old or path not in new or old[path] != new[path]
+                    )
+                    observation.source_metadata["file_changes"] = {
+                        "changed_paths": changed,
+                        "kind": "baseline"
+                        if previous is None
+                        else "weights"
+                        if any(
+                            p.endswith((".safetensors", ".bin", ".gguf", ".pt", ".pth"))
+                            for p in changed
+                        )
+                        else "setup_or_readme"
+                        if changed
+                        else "unchanged",
+                        "comparison_basis": "file_paths_and_supplied_hashes",
+                        "weight_binaries_downloaded": False,
+                    }
+                # Listing owns rolling counters. An optional fresh field uses the
+                # first detail/expanded response actually supplying it, never an
+                # old listing clock or a duplicate complete model-number set.
+                supplied = set(listing.listing)
+                prior = CollectionObservation.objects.filter(
+                    run=run,
+                    source_identifier=listing.source_identifier,
+                    dimensions__kind="hf_metadata",
+                ).exclude(pk=observation.pk)
+                for captured in prior:
+                    supplied.update(captured.source_metadata.get("numeric_fields", []))
+                selected_metrics = (
+                    contract.source_configuration["hf"]["metrics"] if contract else []
+                )
+                optional = [
+                    wire
+                    for wire, metric in (
+                        ("downloads", "downloads"),
+                        ("likes", "likes"),
+                        ("downloadsAllTime", "downloads_all_time"),
+                        ("trendingScore", "trending_score"),
+                    )
+                    if wire in result.payload
+                    and wire not in supplied
+                    and metric in selected_metrics
+                ]
+                observation.source_metadata["numeric_fields"] = optional
+                observation.save(update_fields=["source_metadata", "updated_at"])
+                persist_product(observation, entry, rules, result.payload, group)
+                if contract and optional:
+                    enqueue_projection(
+                        claim, contract=contract, evidence_ids=[observation.pk]
+                    )
+
+            checkpoint_scope(
+                claim,
+                scope_kind="hf_metadata",
+                scope_key=listing.source_identifier + ":" + group,
+                ownership={
+                    "namespace": entry["namespace"],
+                    "repository": listing.source_identifier,
+                },
+                enumeration_complete=accepted,
+                outcome=result.outcome,
+                envelopes=_envelopes(result, group),
+                write=write,
+            )
+            if not accepted:
+                partial = True
+                if client.stop_reason:
+                    raise SourceError(client.stop_reason)
+    profile = CollectionScopeRun.objects.filter(
+        run_id=claim.run_id, scope_kind="hf_profile", scope_key=entry["namespace"]
+    ).first()
+    if profile is None or not profile.enumeration_complete:
+        account = Account.objects.get(
+            data_source_id="hf", normalized_identifier=entry["namespace"].casefold()
+        )
+        response = (
+            client.account_counts(entry["namespace"], account.account_kind)
+            if account.account_kind in {"organization", "individual"}
+            else client.namespace_info(entry["namespace"])
+        )
+        observed_at = timezone.now()
+
+        def profile_write(run, scope):
+            if response.outcome != "ok":
+                return
+            observation = CollectionObservation.objects.create(
+                run=run,
+                scope_run=scope,
+                resource_key=entry["namespace"].casefold(),
+                source_subject_kind="account",
+                source_identifier=entry["namespace"],
+                listing=response.payload,
+                observed_at=observed_at,
+                observation_key=digest([str(run.pk), "profile", entry["namespace"]]),
+                envelopes=_envelopes(response, "profile"),
+            )
+            from core.account_identity import upsert_account
+
+            current = Account.objects.select_for_update().get(pk=account.pk)
+            metadata = dict(current.provider_metadata)
+            metadata["hf_profile"] = {
+                **metadata.get("hf_profile", {}),
+                **response.payload,
+            }
+            metadata["hf_profile_observation"] = {
+                "id": observation.pk,
+                "observed_at": observed_at.isoformat(),
+            }
+            upsert_account(
+                source="hf",
+                external_identifier=current.external_identifier,
+                handle=current.handle,
+                account_kind=current.account_kind,
+                provider_metadata=metadata,
+            )
+            if contract and any(
+                wire in response.payload
+                and metric in contract.source_configuration["hf"]["metrics"]
+                for wire, metric in (
+                    ("numFollowers", "followers"),
+                    ("numModels", "models_count"),
+                    ("numDatasets", "datasets_count"),
+                    ("numSpaces", "spaces_count"),
+                )
+            ):
+                enqueue_projection(
+                    claim, contract=contract, evidence_ids=[observation.pk]
+                )
+
+        checkpoint_scope(
+            claim,
+            scope_kind="hf_profile",
+            scope_key=entry["namespace"],
+            ownership={"account_id": str(account.pk)},
+            enumeration_complete=response.outcome == "ok",
+            outcome=response.outcome,
+            envelopes=_envelopes(response, "profile"),
+            write=profile_write,
+        )
+        partial |= response.outcome != "ok"
+    if partial:
+        raise SourceError("metadata_partial")
+
+
+def _hf_missing_fields(run, job):
+    """Explicit terminal gaps for optional selected fields absent from all groups."""
+    from core.models import MetricCollectionContract
+
+    contract_id = job.definition["scope"].get("numeric_contract_id")
+    if not contract_id:
+        return []
+    contract = MetricCollectionContract.objects.get(pk=contract_id)
+    metrics = contract.source_configuration["hf"]["metrics"]
+    repository_fields = {
+        "downloads": "downloads",
+        "downloads_all_time": "downloadsAllTime",
+        "likes": "likes",
+        "trending_score": "trendingScore",
+    }
+    account_fields = {
+        "followers": "numFollowers",
+        "models_count": "numModels",
+        "datasets_count": "numDatasets",
+        "spaces_count": "numSpaces",
+    }
+    groups = {}
+    for observation in run.observations.filter(status="ok"):
+        key = (observation.source_subject_kind, observation.source_identifier)
+        groups.setdefault(key, set()).update(observation.listing)
+    result = []
+    for (kind, identity), returned in groups.items():
+        for metric, wire in (
+            account_fields if kind == "account" else repository_fields
+        ).items():
+            if metric in metrics and wire not in returned:
+                result.append(
+                    {
+                        "source": "hf",
+                        "source_identifier": identity,
+                        "metric": metric,
+                        "outcome": "not_returned",
+                        "reason": "selected_field_absent_from_captured_groups",
+                    }
+                )
+    return result
