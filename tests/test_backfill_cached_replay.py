@@ -61,6 +61,62 @@ def _paid_history():
     ))
 
 
+def test_reuses_saved_hyphenated_quantity_translations_through_real_publishers(native):
+    from monitor.backfill_enrichment import revalidate_cached_translations
+    from x_monitor.deepinfra import GEMMA_4_31B_MODEL
+
+    job, _cfg, delegates, _policy = native
+    Post.objects.filter(pk="native-1").update(
+        text="Qwen costs $3 per million tokens. Its 100-trillion-token study."
+    )
+
+    class SavedQuantityProvider(DirectProvider):
+        def transport(self, body, timeout):
+            reply = super().transport(body, timeout)
+            if (
+                body["model"] == GEMMA_4_31B_MODEL
+                and body["max_tokens"] != 16
+                and "100-trillion-token" in json.dumps(body)
+            ):
+                if "Japanese (ja)" in json.dumps(body):
+                    text = "Qwenは100万トークン当たり3ドル。研究は100兆トークンを対象にする。"
+                else:
+                    text = "Qwen每100万个Token收费3美元。研究覆盖100万亿个Token。"
+                reply["choices"][0]["message"]["content"] = text
+            return reply
+
+    provider = SavedQuantityProvider()
+    run_direct(native, provider, initial=True)
+    saved = OriginalContentCall.objects.filter(
+        stage="translation", member_post_ids=["native-1"],
+        provenance__context__operation="post_literal_translation",
+    )
+    ids = list(saved.order_by("pk").values_list("pk", flat=True))
+    assert len(ids) == 2
+    # Simulate the actual already-paid replies rejected by the old validator.
+    saved.update(import_state="error", error_code="cached_response_validation_failed",
+                 import_evidence={"validation": "failed"})
+    physical_history = _paid_history()
+    sent_before = provider.sent
+    result = revalidate_cached_translations(
+        job.pk, call_ids=ids, delegate=delegates["translation"], actor="test",
+        reason="Source hyphenated token count was missed by the previous validator",
+    )
+    assert result == {"reopened": ids, "rejected": []}
+    assert _paid_history() == physical_history and provider.sent == sent_before
+    for _ in range(8):
+        status = run_direct(native, provider)
+        if status["status"] == "completed":
+            break
+    assert status["status"] == "completed"
+    assert OriginalContentCall.objects.filter(
+        stage="translation", member_post_ids=["native-1"],
+        provenance__context__operation="post_literal_translation",
+    ).count() == 2
+    assert _paid_history()[:len(physical_history)] == physical_history
+    assert all(all(f.values()) for f in completion_facts(["native-1", "native-2"]).values())
+
+
 def _replay(native, ids):
     from monitor.backfill_enrichment import replay_rejected_classifier_packet
     return replay_rejected_classifier_packet(

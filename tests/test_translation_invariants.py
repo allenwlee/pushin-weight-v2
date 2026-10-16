@@ -14,6 +14,39 @@ from x_monitor.translation_invariants import (
 SOURCE = "The model trained on 10.9 trillion tokens."
 
 
+@pytest.mark.parametrize("source,translated", [
+    ("Costs per million tokens. Its 100-trillion-token study.", "100兆トークンの研究。"),
+    ("Costs per million tokens. Its 100-trillion-token study.", "100万亿个Token的研究。"),
+    ("1 million tokens; 21M output tokens.", "2100万トークン。"),
+    ("1 million tokens; 21M\t tokens.", "2100万トークン。"),
+    ("1 million tokens; 21M\n tokens.", "2100万トークン。"),
+    ("1 million tokens; 21 million output tokens.", "2100万トークン。"),
+    ("1 million tokens; 130M-output-token evaluation.", "1億3000万トークン。"),
+])
+def test_validation_accepts_hyphenated_and_qualified_source_token_counts(source, translated):
+    # July30 saved replies were correct; the guard only recognized the price
+    # denominator and incorrectly rejected the study's 100-trillion count.
+    assert validate_translation_quantities(source, translated, source_language="en") == []
+
+
+@pytest.mark.parametrize("source", [
+    "1 million tokens; 100-trillion-parameter study.",
+    "1 million tokens; https://example.test/100-trillion-token.",
+    "1 million tokens; @model_100_trillion_token.",
+    "1 million tokens; build_100-trillion-token.",
+    "1 million tokens; build-100-trillion-token.",
+    "1 million tokens; 10-trillion-token study.",
+])
+def test_hyphenated_counts_do_not_license_wrong_units_identifiers_or_magnitudes(source):
+    assert validate_translation_quantities(source, "100兆トークン。", source_language="en")
+
+
+def test_source_count_validation_preserves_exact_saved_paid_prompt_inputs():
+    source = "Costs per million tokens. 21M output tokens. A 100-trillion-token study."
+    assert protect_token_quantities(source, "ja") == (source, {})
+    assert quantity_instruction(source) == ""
+
+
 def test_normalizes_equivalent_english_and_cjk_token_quantities():
     assert [item.value for item in extract_token_quantities(SOURCE)] == [Decimal(10900000000000)]
     assert [item.value for item in extract_token_quantities("模型使用10.9万亿 tokens训练。")] == [Decimal(10900000000000)]

@@ -708,3 +708,227 @@ CONCEPTS discoverable. The old July pipeline-wiring learning needs a narrow
 future refresh and is explicitly identified as historical in the new learning.
 No application tests, paid calls, production writes, schema changes or deployment
 were performed during this documentation phase.
+
+### Production execution and recall reconciliation — 2026-10-16 15:23 UTC
+
+Production web and harvest are observed live at `99461050b7d283503dde9cffec1b2de920666e35`.
+The first full-day collection saved 1,552 distinct eligible Posts after all eight
+raw routes exhausted; 192 physical TwitterAPI starts and 282 collection model
+starts (7 staff, 275 Jev) are retained. Its enrichment stopped before inference
+because an authenticated database login has a different effective default role.
+The deployed fix checks `session_user`, preserving the frozen login/database
+pins. Four real PostgreSQL role-switch regressions failed before the correction;
+90 tests, including 71 required PostgreSQL tests, passed afterward.
+
+Resume Render job `job-db93nic9v7es73ee1sm0` uses the same immutable manifest,
+CollectionJob `4808e70c-7f1a-4ceb-a5e6-4090d6618513`, original budgets and
+CollectionRun `6471ab7d-66fa-4079-a9e0-891c4e7302f7`. No Twitter searches were
+repeated by this resume. At 15:16 UTC, 582 base/targeted model starts had 581
+returned responses and 77 durable translation/classification successes. This is
+progress, not the goal result. Direct concurrency remains 32 and the on-demand
+DeepInfra key is used. Peak observed memory so far is 193.39 MiB on 512 MiB.
+
+A controlled identical-query B1 search for July 30 12:00–13:00 UTC returned
+84 distinct raw IDs, while the original full-day B1 enumeration contained only
+3 for that hour. Of 57 eligible stored Posts, 35 were absent from the original
+cohort. Its shared CollectionJob `d8d24ec9-fccf-4cfb-acfc-3cb0e65f1873` completed
+with 6 physical API starts and no model calls. This proves a wide-window recall
+omission; it does not establish an undocumented provider cap or full recall.
+
+Reconcile all 24 hours for the six unchanged B/C queries through the existing
+`x-backfill/v1` adapter and normal shared Post writer: 144 input scopes in one
+additional shared CollectionJob, retaining the exact original query strings,
+exclusions, brands and UTC day. A and RARE_EXTRA have already been enumerated.
+The job has a fixed 17:30 UTC deadline, 200 requests/600 seconds per attempt,
+32 MiB/100,000-item attempt bounds, at most 20 attempts, and 1,000 additional
+physical API starts (estimated ceiling USD3.00), with zero model allowance.
+The cumulative API baseline is 198, including the six control calls; no prior
+history or budget is reset. Ordinary-writer contention waits before claiming a
+new attempt. Authentication/payment/rate-limit failures retain checkpoints and
+stop the unsafe attempt; independent recoverable scope work can continue.
+
+Storage audit confirms reuse of CollectionJob instructions, CollectionRun
+attempts, CollectionScopeRun cursors/receipts and CollectionObservation typed
+Post membership. Existing Post and PostEnrichmentState writers remain shared.
+No tables or migrations are added or retired. Additional members must be
+audited as a distinct union and enriched under the retained aggregate budget
+after checking existing paid ownership; do not send duplicate in-flight work.
+The 3,800–4,200 genuine-Post and 1,829/1,856 canonical completion criteria remain
+unchanged. Retain all valid Posts if enumeration exceeds the expected range.
+
+Normal cron was not paused or reconfigured. Its 14:30 tick skipped because the
+backfill held the shared writer lock. The 14:45 tick reported 31 inserts but
+degraded coverage; exit zero is not a healthy-cycle claim. The existing lock
+still covers a provider page and its write, so month-scale writer fairness
+remains an explicit unresolved issue. Observe a new normal cycle and durable
+inserts rather than assuming the parallel jobs leave harvesting unaffected.
+
+At 15:33 UTC the hourly job completed all 144 scopes without scope errors,
+using 415 new API starts and zero model starts. Its own distinct membership
+is 1,839; the original/control/hourly union is 1,899, not the sum of overlapping
+job memberships. The retained physical API total is 613. The expected 4,000
+has not been demonstrated, and all genuine results remain retained.
+
+Next compare the six literal B1 OR branches individually for the same control
+hour, July 30 12:00–13:00 UTC. Derive the brands and query text with the existing
+policy spec builder and query renderer; assert the full rendered B1 query
+matches its frozen original and each isolated branch is a literal substring.
+Retain the exact engagement and excluded-author suffix. This narrows queries
+to existing branches, without introducing aliases or broadening collection
+scope. Reuse the shared adapter/writer and collection records, with 100 new
+API starts (estimated ceiling USD0.30), zero model allowance, 600-second attempt
+and fixed 17:30 UTC deadline. Baseline all 613 prior calls and compare returned
+IDs to the completed combined one-hour scope. Do not repeat the completed
+hourly job. This control tests an additional recall mechanism; its completion
+is not evidence that the numerical or enrichment goal has been met.
+
+The branch control completed at 15:34:50 UTC (Render
+`job-db947nqjnfac73agem8g`, CollectionJob
+`62af53a0-60e6-48be-a576-6bfea0c7a3cd`): 14 physical API starts, zero model
+calls, all six branches complete. Their distinct union is exactly the same
+84 IDs as the combined one-hour B1 search; zero novel eligible Posts. This
+control supplies no reason for a larger branch-isolation sweep. All four jobs
+together have 627 physical API starts, counting requests once rather than
+adding each job's imported cumulative baseline.
+
+The 15:36:57 read-only raw-receipt census found 3,619 distinct received IDs
+across all four jobs, including rejected and rare-inbox results, with no
+native-ID timestamps outside July 30 and nonzero results in every UTC hour.
+The six hourly routes have raw counts B1=1,716, B2=1,029, B3=123, C1=541,
+C2=85, C3=161. Only B1 materially differs from the original full-day walk
+(1,095); the other routes differ by at most five appearances. Original A=269
+and RARE_EXTRA=275 remain retained. Raw search results are not automatically
+eligible Posts, and these observations do not prove a complete X census.
+
+The distinct stored union remains 1,899, all inside the UTC day. At 15:35 the
+canonical verifier proved 516 translations, 500 classifications and 500 both;
+the frozen 98.54525862068965% rate would require 1,872 of this cohort. Continue
+the existing original enrichment job, then process additional incomplete
+members from the completed hourly job after outstanding paid ownership has
+drained. Deduct all prior reservations and starts from the original aggregate
+USD25 base/50,000 model-start/deadline allowances before allocating a supplement;
+never reset budgets, hide unknowns, steal active calls or resend healthy overlaps.
+The 3,800–4,200 target remains unproven and unmet; keep the goal active while
+enrichment and verification can still make concrete progress.
+
+### Enrichment continuation — 2026-10-16 16:00 UTC
+
+The original resume job remains authoritatively running. At 16:00 the durable
+ledger has 948 translation/classification successes, 2,589 model starts,
+2,587 returned responses and zero ambiguous requests. The 15:44 spend audit
+counted 2,019 registered model rows, USD2.777242 reserved and USD0.600438 in
+provider-reported cost estimates; 282 collection model starts remain separately
+retained. These estimates are not a provider invoice. Mean database send-marker
+to saved-reply durations were 10.228846 seconds for translation and 25.482359
+seconds for classification, with maxima 89.717293 and 44.709833 seconds. The
+duration includes transport and controller persistence. Wave barriers wait for
+their slowest request, so measured average call time alone understates runtime.
+
+One exhausted classification was inspected from actual saved packets:
+`2082732492084428850`. Rejected replies put catalog-tracked Qwen/Wan into the
+untracked promotion list; another hallucinated MiniMax absent from source.
+Later paid pair `46897`/`46898` has the same exact user packet and a newer input
+fingerprint, but the member was not processed after earlier-input deferral.
+Both later envelopes pass the shared DeepInfra parser. A zero-inference replay
+through `replay_rejected_classifier_packet` is prepared for after the original
+controller terminates and shared drain/claim guards pass. Canonical publication
+is still unproven. If rejected, diagnose that actual failure before using the
+existing corrected-input recovery helper with an immutable feedback spec and
+the same retained policy, history, deadline and spend limits.
+
+A guarded supplemental executor and read-only allocation builder are prepared
+for the completed hourly job; neither has been launched. They reuse
+`execute_enrichment`, `advance_targeted`, shared publishers and the original
+campaign's controller lock. Remaining USD25/model50,000 allowances must deduct
+all earlier registered rows/reservations and collection starts. Freeze current
+membership/configuration/source pins only after the original controller is
+terminal. Healthy overlaps must be preserved, and unfinished original work
+must receive cause-specific repair rather than fresh implicit retry counters.
+Historical deferral evidence alone is not a current-health verdict: an obsolete
+fingerprint may remain exhausted after a later corrected result succeeds. Use
+canonical persisted facts and current targeted role health for that decision.
+No new application source, schema, deployment, API or model request was made by
+these preparations. All current paid work remains with the existing job handle.
+
+At 16:09, a direct read-only production count confirms all 1,899 July30 Posts
+are attributed and represented in CollectionObservation; there is no larger
+unrecorded cohort hidden by the membership audit. The retired local SQLite
+archive and run folders have no July30 data. A read-only staging Render job
+`job-db94neajnfac73aihurg` succeeded and found zero July30 Posts. Staging's
+external IP allowlist was preserved; no database access rules were changed.
+
+One final bounded acquisition control compares the same B1 12:00–13:00 UTC
+query with its four 15-minute subranges. The existing one-hour combined and
+six-branch controls both found the same 84 distinct raw IDs. The new control
+uses the shared v1 collection adapter, unchanged query/exclusions/brands,
+50 physical starts at most (estimated USD0.15 ceiling), zero model allowance,
+300-second attempt and unchanged 17:30 UTC control deadline. Its cumulative
+API baseline is 627. Further full-day splitting requires actual novel-result
+evidence; this control does not reinstate scheduled slot waits or inline LLMs.
+
+The quarter-hour control completed successfully at 16:11:33 UTC: Render
+`job-db94p1c9v7es739hg0b0`, CollectionJob
+`524b9bbb-0d3a-44b4-b32b-6fa8c029feb0`. All four scopes drained with 10 physical
+API starts, zero model calls, 84 raw distinct IDs and 57 eligible Posts. Both
+novel raw and novel eligible counts are zero. Total physical API starts across
+the five genuine collection jobs are 637; their distinct stored union remains
+1,899. Do not launch a larger quarter-hour sweep on this evidence.
+
+The 16:13 read-only canonical audit confirms 1,265 complete translations,
+1,249 complete classifications and 1,249 complete for both (65.77145866%) from
+all five jobs, with all 1,899 inside the UTC day. The same frozen rate requires
+1,872 completions for this denominator; count still falls below 3,800–4,200.
+The original Render enrichment handle remains running, with 3,261 model starts,
+3,258 returned responses and no ambiguous requests at that snapshot. Full-day
+collection, current database count, canonical enrichment and hypothetical X
+completeness remain separate claims; none redefines the owner goal.
+
+
+### Source quantity validation and saved-reply recovery — 2026-10-16 16:40 UTC
+
+The original enrichment controller `job-db93nic9v7es73ee1sm0` is now
+succeeded (16:31:15 UTC), with 3,803 saved model starts/replies and no ambiguous
+requests. Durable original membership is 1,552: 1,544 translations plus
+classifications succeeded, seven classification-pending and one translation-
+and classification-pending. Job success does not prove the numerical goal.
+
+One fixable failure is reproduced from six actual saved translations of Post
+`2082845127593066980`. All preserve the source's 100-trillion-token study as
+100万亿/100兆. The source-only quantity validator recognized the price's
+million-token denominator but missed hyphenated and output-qualified counts,
+therefore rejected all six valid replies. Fix only
+`x_monitor/translation_invariants.py` source recognition, with regression nets
+in `tests/test_translation_invariants.py` and `tests/test_backfill_cached_replay.py`.
+Preserve the paid prompt's protected spans/instructions, configuration pin,
+source fingerprint, URL/handle/identifier masking and magnitude/unit rejection.
+Preserve existing whitespace shorthand recognition. Add no tables or migrations;
+reuse OriginalContentCall evidence, shared revalidation and canonical publishers.
+No query/credential/model/policy/schedule or existing frozen instructions change.
+
+Red-before evidence: five quantity positives and the real PostgreSQL saved-
+translation recovery failed against the old validator; six negative controls
+passed. Green-after: 157 focused tests (51 required PostgreSQL, zero skips/errors)
+and 66 literal tests; final whitespace-compatible rerun 154 passed (16 required
+PostgreSQL, zero skips/errors). Django check, scoped Ruff and whitespace check
+pass. Offline all six actual paid replies fail old/pass new, without requests.
+Focused review is serial inline under the owner's AGENTS task mapping; zero
+independent reviewers or external model reviews. No confirmed finding remains.
+A tab/newline compatibility issue found in review was repaired and retested.
+Review receipt: /tmp/compound-engineering-501/ce-code-review/20261016-163654-hyphen/review.json.
+
+Release through the existing staged route; verify the exact candidate source
+and six actual replies on staging read-only with zero provider calls, then the
+same production web/harvest revision. Leave the now-terminal original job and
+its complete paid history intact. After original claim/request drain, replay
+selected valid saved classifier/translation replies; use existing bounded
+corrected-input recovery only for actual remaining contract errors. Original
+USD25, 50,000 model-start and deadline allowances remain aggregate ceilings.
+Then enrich the additional 347 genuine members from hourly reconciliation,
+without recollection or resending healthy overlaps. Keep all 77 rare decisions
+in their actual review state. No forced decisions to obtain the desired count.
+
+A fresh ordered latest20 cohort was frozen at 16:26:12.274418 UTC; follow up
+those exact IDs once no earlier than 16:56:12.274418 UTC. Initial helper result
+is unhealthy; do not present it as green or replace the cohort. Canonical
+current-day checks remain separate from the helper's legacy commentary facts.
+The stored July30 union remains 1,899, below the 3,800–4,200 count requirement.

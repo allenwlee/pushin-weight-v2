@@ -98,8 +98,15 @@ def _validation_source_values(source: str, *, source_language: str | None) -> se
         re.IGNORECASE,
     )
     abbreviated = re.compile(
-        boundary + rf"(?P<number>{_NUMBER})\s*(?P<scale>mil|[MBT])\s*"
+        boundary + rf"(?P<number>{_NUMBER})\s*(?P<scale>mil|[MBT])[\s-]*"
+        rf"(?:(?:input|output|cached|cache)[\s-]+)?"
         rf"{_UNIT}(?![A-Za-z0-9_])", re.IGNORECASE,
+    )
+    qualified = re.compile(
+        boundary + rf"(?P<number>{_NUMBER})[ -]+"
+        rf"(?P<scale>million|billion|trillion)[ -]+"
+        rf"(?:(?:input|output|cached|cache)[ -]+)?{_UNIT}(?![A-Za-z0-9_])",
+        re.IGNORECASE,
     )
     elliptical = re.compile(
         boundary + r"per\s+(?:million|billion|trillion)\s+tokens?\s*[?!.]?"
@@ -116,6 +123,10 @@ def _validation_source_values(source: str, *, source_language: str | None) -> se
     scales = {"m": (Decimal("1e6"),), "b": (Decimal("1e9"),), "t": (Decimal("1e12"),), "mil": mil}
     for match in per.finditer(masked):
         values.add(_ENGLISH_SCALE[match["scale"].lower()])
+    # Source-only recognition keeps already-paid prompts/placeholder maps
+    # unchanged while accepting e.g. "100-trillion-token" and "21M output tokens".
+    for match in qualified.finditer(masked):
+        values.add(Decimal(match["number"].replace(",", "")) * _ENGLISH_SCALE[match["scale"].lower()])
     for match in abbreviated.finditer(masked):
         count = Decimal(match["number"].replace(",", ""))
         values.update(count * scale for scale in scales[match["scale"].lower()])
