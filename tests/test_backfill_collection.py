@@ -301,16 +301,18 @@ def test_recoverable_scope_error_does_not_starve_independent_queries(pipeline):
     assert not attempt.scopes.get(scope_key="B1:aug09").enumeration_complete
 
 
-def policy_job(monkeypatch, tmp_path, *, calls, rare=False):
+def policy_job(monkeypatch, tmp_path, *, calls, rare=False, selected_calls=None):
     from monitor.backfill_collection import plan_job_definition
     cfg = load_config(Path("config.yaml"))
     if rare:
         from tests.test_rare_type_cycle import _enable
         _enable(cfg, tmp_path)
     monkeypatch.setattr("monitor.backfill_collection.load_config", lambda path: cfg)
+    extra = {"call_ids": selected_calls} if selected_calls is not None else {}
     definition = plan_job_definition(
         cfg=cfg, since_epoch=1786233600, until_epoch=1786234500, brands=["qwen"],
         requests=3, model_requests=60, seconds=300, maximum_requests=20, maximum_models=100,
+        **extra,
     )
     for unit in definition["scope"]["units"]:
         if unit["ownership"]["call_id"] not in calls:
@@ -338,6 +340,82 @@ def test_historical_call_a_frozen_official_role_bypasses_body_matching(pipeline,
     assert PostBrandMention.objects.filter(post_id="1", brand_id="qwen", source="author_account").exists()
     assert not TwitterListMembership.objects.get(account=account).active
     assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
+
+
+@pytest.mark.parametrize("role", ["official", "staff"])
+def test_historical_call_a_matches_normal_roles_outside_keyword_brands(
+    pipeline, monkeypatch, tmp_path, role,
+):
+    from core.models import PostBrand, TwitterListMembership
+    from monitor.cycle import (
+        CycleRunner,
+        _build_brand_index,
+        _resolve_x_monitor_list_id,
+    )
+    from tests.test_call_a_role_routing import _call, _seed_author
+    from x_monitor.apify import _normalize_tweet
+
+    account = _seed_author(edges=[("outside-keyword-brands", role)])
+    cfg = load_config(Path("config.yaml"))
+    list_id = _resolve_x_monitor_list_id(cfg)
+    TwitterListMembership.objects.filter(account=account).update(list_id=list_id)
+    job = policy_job(monkeypatch, tmp_path, calls={"A"})
+    body = page("1")
+    body["tweets"][0]["text"] = "An announcement for our community."
+    normal = _normalize_tweet(body["tweets"][0])
+    normal["id"] = "normal-role-parity"
+    runner = CycleRunner(cfg=cfg, _relevancy_llm_call=lambda system, user: "KEEP")
+    runner._prepare_call_a_roles([normal], list_id=list_id)
+    runner._attribute_items([normal], _build_brand_index(["qwen"]), {})
+    runner._route_and_persist(_call(), [normal])
+    expected = set(PostBrand.objects.filter(post_id="normal-role-parity").values_list("brand_id", flat=True))
+    assert expected == {"outside-keyword-brands"}
+
+    pipeline.responses.append(body)
+    report = run(job)
+    assert report["recovered_post_ids"] == ["1"]
+    assert set(PostBrand.objects.filter(post_id="1").values_list("brand_id", flat=True)) == expected
+    assert job.definition["scope"]["brands"] == ["qwen"]
+
+
+def test_explicit_current_policy_a_only_job_uses_real_scope_without_fake_completions(
+    pipeline, monkeypatch, tmp_path,
+):
+    job = policy_job(monkeypatch, tmp_path, calls={"A"}, selected_calls=["A"])
+    scope = job.definition["scope"]
+    assert scope["selected_call_ids"] == scope["required_call_ids"] == ["A"]
+    assert len(scope["units"]) == 1 and not scope["units"][0].get("enumeration_complete")
+    pipeline.responses.append(page("1"))
+    report = run(job)
+    assert report["collection_drained"] and report["scopes_complete"] == report["scopes_total"] == 1
+    assert len(pipeline.requests) == 1 and "list:" in pipeline.requests[0]["query"]
+
+
+@pytest.mark.parametrize("selection", [[], ["UNRECOGNIZED"], ["A", "A"], [None], "A"])
+def test_explicit_route_selection_rejects_empty_or_unknown_before_claim(
+    pipeline, monkeypatch, tmp_path, selection,
+):
+    with pytest.raises(ValueError, match="route selection"):
+        policy_job(monkeypatch, tmp_path, calls={"A"}, selected_calls=selection)
+    assert not CollectionRun.objects.exists() and not pipeline.requests
+
+
+def test_saved_explicit_route_selection_cannot_hide_a_different_missing_route(
+    pipeline, monkeypatch, tmp_path,
+):
+    import copy
+
+    job = policy_job(monkeypatch, tmp_path, calls={"A"}, selected_calls=["A"])
+    definition = copy.deepcopy(job.definition)
+    definition["scope"]["selected_call_ids"] = ["B1"]
+    source = job.source
+    job.delete()
+    job = register_job(job_key="tampered-selection", source=source, purpose="content",
+                       operation="x_backfill", mode="historical", definition=definition)
+    job = set_job_state(job.pk, "ready")
+    with pytest.raises(ValueError, match="route omitted"):
+        run(job)
+    assert not CollectionRun.objects.exists() and not pipeline.requests
 
 
 @pytest.mark.parametrize(("verdict", "interrupt"), [("KEEP", False), ("DROP", False), ("KEEP", True)])

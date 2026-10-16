@@ -152,12 +152,19 @@ def validate_scope(job, cfg):
         from monitor.cycle import plan_calls_for_cycle
         with _brand_scope(scope["brands"]):
             expected = {c.call_id for c in plan_calls_for_cycle(cfg, scheduled_exclusions=True)}
+        if "selected_call_ids" in scope:
+            selected = scope["selected_call_ids"]
+            require(isinstance(selected, list) and bool(selected)
+                    and all(isinstance(value, str) for value in selected)
+                    and len(selected) == len(set(selected)) and set(selected) <= expected,
+                    "invalid collection route selection")
+            expected = set(selected)
         require(planned == expected, "required current-policy collection route omitted")
     return scope
 
 
 def plan_job_definition(*, cfg, since_epoch, until_epoch, brands, requests, model_requests,
-                        seconds, maximum_requests, maximum_models):
+                        seconds, maximum_requests, maximum_models, call_ids=None):
     """Freeze current policy and observed role evidence for an arbitrary UTC range."""
     from core.models import TwitterListMembership
     from monitor.cycle import _resolve_x_monitor_list_id, plan_calls_for_cycle
@@ -172,6 +179,13 @@ def plan_job_definition(*, cfg, since_epoch, until_epoch, brands, requests, mode
     require(bool(calls) and any(c.call_id == "A" for c in calls), "required Call A missing")
     require(all(call.call_id in CALL_IDS | {"A", "RARE_EXTRA"} for call in calls),
             "enabled discovery route lacks historical adapter")
+    if call_ids is not None:
+        require(isinstance(call_ids, list) and bool(call_ids)
+                and all(isinstance(value, str) for value in call_ids)
+                and len(call_ids) == len(set(call_ids))
+                and set(call_ids) <= {call.call_id for call in calls},
+                "invalid collection route selection")
+        calls = [call for call in calls if call.call_id in call_ids]
     list_id = _resolve_x_monitor_list_id(cfg)
     authors = list(TwitterListMembership.objects.filter(list_id=list_id, active=True).values_list(
         "account__author_id", flat=True))
@@ -181,8 +195,9 @@ def plan_job_definition(*, cfg, since_epoch, until_epoch, brands, requests, mode
     frozen = {}
     for author, context in contexts.items():
         value = asdict(context)
-        value["official_brands"] = [b for b in value["official_brands"] if b in selected]
-        value["staff_brands"] = [b for b in value["staff_brands"] if b in selected]
+        # Call A follows all canonical author roles, independently of B/C keywords.
+        value["official_brands"] = list(value["official_brands"])
+        value["staff_brands"] = list(value["staff_brands"])
         stamp = value["last_complete_reconciliation_at"]
         value["last_complete_reconciliation_at"] = stamp.isoformat() if stamp else None
         frozen[author] = value
@@ -207,6 +222,8 @@ def plan_job_definition(*, cfg, since_epoch, until_epoch, brands, requests, mode
                              "contexts": frozen, "degraded": degraded},
         },
     }
+    if call_ids is not None:
+        definition["scope"]["selected_call_ids"] = [call.call_id for call in calls]
     from core.collection_jobs import validate_definition
     validate_definition(source_id="x", purpose="content", operation="x_backfill", mode="historical",
                         contract_id=None, definition=definition)

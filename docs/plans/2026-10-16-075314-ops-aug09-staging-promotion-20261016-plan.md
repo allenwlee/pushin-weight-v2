@@ -1006,3 +1006,94 @@ production read-only DB independently finds89fresh-day rows in that window,
 No healthy-cycle claim or cron pause. Preserve these limitations.
 
 Regression evidence for this helper:3new tests red before source change;95focused green including40required PostgreSQL and existing Ollija/default/corrected-recovery/consumer checks,0skips/errors. Final strengthened6targeted tests pass including6required PostgreSQL; invalid selection cannot even advance an existing registered paid group. Django check,2-file Ruff and whitespace pass. Serial inline review,0independent reviewers under owner mapping, no confirmed findings; receipt /tmp/compound-engineering-501/ce-code-review/20261016-171148-targeted-selection/review.json. Source changes only subset selection; normal core prompts and content identities stay unchanged.
+
+
+At17:19:36UTC exact81ca4ae155b6b191a81da5ed00e0abd272811188 is
+LIVE on production web and harvest with login200. Staging job
+job-db95nhu7bikc73dqgsmg succeeded and proved four deployed source hashes,
+selected-member API availability, six real saved replies and unchanged paid
+prompt protection; zero provider calls or database writes. The shared subset
+change is deployed; no further code release is planned for this continuation.
+
+Actual supplemental controller job-db95pck9v7es739kqqig was created once
+17:19:46UTC from immutable instructions171431. Source CollectionJob remains
+81185716-fb17-4b23-a620-4a796372ebfc, with1,839observed members and347new.
+Base uses execute_enrichment; targeted uses advance_targeted(post_ids=new_ids).
+Exact source/new-member hashes and the one original exhausted event role are
+pinned and checked before paid work. Original old cache packets remain honestly
+unused/pending imports. First two failed launchers produced no provider batches
+or model starts. All3,829 earlier base/targeted rows,282collection model starts
+and USD5.541867 reserved were deducted, leaving USD19.458133/45,889 model rows
+under the original aggregate ceilings and original deadline. No new Twitter
+requests, cursor/backlog/schedule/secret/schema changes. Observe this handle;
+never duplicate it. Final full1,899-member verification remains outstanding.
+
+For the later month run, retain these unresolved lessons rather than claiming
+implementation: runtime targeted flags must be part of preflight evidence;
+local disabled extraction cannot prove production completeness. Current shared
+targeted payloads omit Post.created_at, so relative historical dates cannot be
+anchored reliably; role prompts should explicitly state the existing required
+name/title, numeric confidence and timezone/precision constraints. The current
+configuration pin does not cover the complete targeted configuration/source;
+future pin changes need an explicit compatibility design for existing immutable
+jobs. Preserve completed physical calls and earlier failure evidence, and
+separate obsolete failed fingerprints from current canonical role health.
+Keep one exhausted extraction visible while independent new members finish.
+Writer-lock fairness and wide-window search recall controls remain required
+before a month, without pausing the scheduled cron or inventing a post quota.
+
+
+### Confirmed Call A role-scope departure — 2026-10-16 18:00 UTC
+
+Read-only evidence finds a concrete collector difference: plan_job_definition
+intersects every frozen official/staff role with the21 keyword-search brands.
+Normal CycleRunner._prepare_call_a_roles preserves all canonical roles for the
+list author, independently of the B/C keyword filter. Of203frozen authors,
+158have no remaining role after filtering, despite only28original resolver
+warnings. Current DB comparison finds140authors with omitted roles, including
+chatglm, alibaba-cloud, runway and other existing tracked identities. Current
+DB roles may differ from freeze time;140is not a historical coverage claim.
+Call A actually received269IDs;201were rejected as unmatched attribution and4
+by staff relevance. This proves an extra restriction; it does not prove that
+all201are valid or explain the entire4000-post shortfall.
+
+Change only monitor/backfill_collection.py, its tests and this plan. Preserve
+all frozen author roles as the normal harvester does, while retaining the
+21-brand B/C query selection. Keep old registered definitions/manifests and
+contexts immutable. Add an optional explicit call_ids selector to the shared
+planner, recorded as selected_call_ids in a newly frozen scope. Validate that
+it is nonempty, unique and a subset of the actual current policy, and that the
+planned units/required IDs match it. Without an explicit selector, retain the
+existing full-route omission guard. This allows an A-only corrective job using
+exactly the normal list query, shared writer and shared staff gate, without
+repeating paid B/C searches or rare decisions. It narrows only this corrective
+operation; the full24h/every-route overall goal is unchanged.
+
+Regression net: real PostgreSQL normal-versus-historical official and staff
+publication outside the keyword-brand set; explicit A-only job fetches onlyA;
+empty/unknown selectors and tampered saved masks fail before claim/provider.
+Reuse on-demand credential and durable request/accounting tests. No table,
+migration, role/membership mutation, Post writer, classifier prompt, live
+cursor/backlog or cron change. Current V4enrichment remains on its pinned81
+image; collect corrective data only after it and the unknown repair drain so
+active paid input snapshots are not invalidated. Recompute all remaining
+original budgets before registration; no fresh allowance or quota padding.
+
+V4succeeded17:53:03UTC with346/347newbase completions and one unknown
+translation call48756. Bounded repair job-db96bnnf3r2c73a9ddc0 was launched
+17:58:54UTC using the actual terminal receipt, shared unknown-import closure,
+physical charge/history preservation and the same stored enrichment policy.
+It will report actual remaining targeted roles under Render's configuration.
+
+Verification: six new call-chain/selector tests fail before the source change;
+157 combined tests pass afterward,78required PostgreSQL,0skips/errors.
+Both changed Python files Ruff-clean and Django system checks pass. Default
+planner call sites remain compatible; no role evidence is rewritten for old
+registered jobs. Serial inline correctness and adversarial reasoning complete
+under owner AGENTS mapping,0independent reviewers; receipt call-a-review-location.json
+identifies the private review artifact. Deliver through exact-SHA staging
+read-only proof then production; collect only after prior controllers terminal.
+Unknown repair ended18:01:32UTC after a second transport-unknown translation;
+1898/1899canonical complete (99.9473%), both physical attempts/reservations
+retained. All347new members have no remaining targeted roles among those
+with completed base; one original exhausted event remains visible.
