@@ -171,7 +171,7 @@ def test_archived_partial_catalog_reuses_pages_without_rewriting_unknown_budgets
     run = historical.get_model("core", "CollectionRun").objects.get(pk=first["run_id"])
     scopes = list(run.scopes.values_list("pk", flat=True))
     observations = list(run.observations.values_list("pk", flat=True))
-    MigrationExecutor(connection).migrate([("core", "0089_job_owned_run_instructions")])
+    MigrationExecutor(connection).migrate([("core", "0090_remove_run_instruction_columns")])
     run = CollectionRun.objects.get(pk=run.pk)
     archive_id = run.job_id
     definition = copy.deepcopy(run.job.definition)

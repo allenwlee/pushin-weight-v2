@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-16 JST (repository candidate based on `fdfa3dcc`; collection instruction ownership checked against models, migration SQL and isolated PostgreSQL)
+Last verified: 2026-10-16 JST (repository candidate based on `4e60a2f1`; collection instruction ownership checked against models, migration SQL and isolated PostgreSQL)
 
-Scope: **151 application tables**, **1971 physical columns**, plus nine compatibility views. Migration boundary: `0089_job_owned_run_instructions`. Four physical compatibility columns on `collection_runs` are deliberately absent from the Django model; all other physical columns have model fields. This boundary adds or retires no tables.
+Scope: **151 application tables**, **1967 physical columns**, plus nine compatibility views. Migration boundary: `0090_remove_run_instruction_columns`. Every physical application column has a Django model field. Runs reference the job owning their source, purpose, contract and frozen scope. This boundary adds or retires no tables.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -5842,7 +5842,7 @@ bounded to five seconds in both migration directions. Alias removal is separatel
 scoped after verification of all consumers; there is no calendar waiting period.
 
 The column/type/index inventory was reconciled with all 151 concrete
-`core` models and the combined final migration state through migration 0089, including its four retained physical compatibility columns. Raw SQL
+`core` models and the combined final migration state through migration 0090. Raw SQL
 migrations additionally supply the account-handle expression index, the X detail source guards, the named
 account-country FK, the two explicit SQL delete actions on posts, the ICU
 collation, the person-name selection/immutability triggers, and these compatibility views. Application-level validators and
@@ -6031,13 +6031,9 @@ Model: [CollectionRun](../../core/models.py#L7935).
 | `batch_id` | `uuid` | No | Django default: `uuid4`. |
 | `job_id` | `uuid` | No | Required instruction owner → [`collection_jobs`](#table-collection_jobs); Django `PROTECT`, PostgreSQL deferred NO ACTION. |
 | `lease_token` | `uuid` | Yes | Rotating execution token; late responses cannot use a replaced claim. |
-| `purpose` | `varchar(16)` | No | Physical compatibility copy populated from the job by a trigger; no Django field. SQL default: `'metric'`. The job owns its meaning. |
-| `scope` | `jsonb` | No | Physical compatibility copy of `job.definition.scope`, populated by a trigger; no Django field. SQL default: `{}`. |
 | `invocations` | `jsonb` | No | Append-preserved invocation budgets, counters and results. Django default: `list`. SQL default: `[]`. |
 | `report` | `jsonb` | No | Latest collection summary. Django default: `dict`. SQL default: `{}`. |
 | `updated_at` | `timestamp with time zone` | Yes | Set by Django on save; original migrated timestamp preserved, unknown prior numeric timestamps stay NULL. |
-| `contract_id` | `uuid` | Yes | Physical compatibility copy of the job's contract; no Django field. Retained FK → [`metric_collection_contracts`](#table-metric_collection_contracts) (`id`), PostgreSQL deferred NO ACTION. |
-| `source_id` | `varchar(32)` | No | Physical compatibility copy of the job's source; no Django field. Retained FK → [`data_sources`](#table-data_sources) (`id`), PostgreSQL deferred NO ACTION. |
 | `ingestion_key` | `varchar(64)` | No | Field-level unique. |
 | `status` | `varchar(16)` | No | Django default: `'running'`. |
 | `started_at` | `timestamp with time zone` | No | Django default: `now`. |
@@ -6067,7 +6063,7 @@ Model: [CollectionRun](../../core/models.py#L7935).
 - `ck_collection_run_job_lease`: `CHECK (((job_id IS NULL) OR (NOT ((status)::text = 'running'::text)) OR ((lease_expires_at IS NOT NULL) AND (lease_token IS NOT NULL))))`.
 - `ck_run_success_count`: `ALTER TABLE "collection_runs" ADD CONSTRAINT "ck_run_success_count" CHECK ("success_count" <= ("selected_count"))`.
 
-The `collection_run_job_instructions` trigger validates lifecycle against the linked job on every insert/update. Numeric runs require a contract and lease expiry; running means no completion timestamp, while success/partial/failed/aborted requires one. Catalog jobs have no numeric contract: pending/running/partial/interrupted has no completion timestamp; success/failed/aborted requires one. Content jobs have no numeric contract: running has no completion timestamp, while success/partial/failed/aborted requires one. The trigger also populates the four physical compatibility copies from the job and rejects conflicting updates. These copies provide the preceding application revision with readable columns; they are not independent instructions. Imported legacy identities remain in `source_metadata.legacy_catalog`.
+The `collection_run_job_instructions` trigger validates lifecycle against the linked job on every insert/update. Numeric runs require a contract and lease expiry; running means no completion timestamp, while success/partial/failed/aborted requires one. Catalog jobs have no numeric contract: pending/running/partial/interrupted has no completion timestamp; success/failed/aborted requires one. Content jobs have no numeric contract: running has no completion timestamp, while success/partial/failed/aborted requires one. The run has no physical source, purpose, contract or scope copies. The linked job supplies those instructions to readers and lifecycle validation. Imported legacy identities remain in `source_metadata.legacy_catalog`.
 
 [Back to table inventory](#table-inventory)
 

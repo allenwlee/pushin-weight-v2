@@ -181,3 +181,15 @@ def isolated_migration_database(transactional_db):
         connection.settings_dict["NAME"] = original_name
         with connection.cursor() as cursor:
             cursor.execute(f'DROP DATABASE "{name}"')
+
+
+@pytest.fixture
+def collection_instruction_bridge(isolated_migration_database):
+    """Preceding-reader compatibility belongs to the explicit 0089 bridge."""
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+
+    executor = MigrationExecutor(connection)
+    target = [("core", "0089_job_owned_run_instructions")]
+    executor.migrate(target)
+    return executor.loader.project_state(target).apps

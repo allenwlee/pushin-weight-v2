@@ -130,6 +130,7 @@ def test_instructions_are_immutable_even_before_first_reference(linked, field, v
     assert job.state == "paused"
 
 
+@pytest.mark.usefixtures("collection_instruction_bridge")
 def test_phase1_models_can_read_and_save_phase2_inserts_for_all_purposes():
     historical = (
         MigrationExecutor(connection)
@@ -183,6 +184,7 @@ def test_phase1_models_can_read_and_save_phase2_inserts_for_all_purposes():
         ("scope", '{"wrong": true}'),
     ],
 )
+@pytest.mark.usefixtures("collection_instruction_bridge")
 def test_legacy_updates_cannot_change_instruction_copies(column, value):
     run = CollectionRun.objects.create(
         job=instructions("catalog"), status="pending", ingestion_key="a" * 64
@@ -410,6 +412,7 @@ def test_cutover_rejects_running_jobless_source_attempt_without_inventing_facts(
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.usefixtures("collection_instruction_bridge")
 def test_legacy_run_update_does_not_acquire_a_job_row_lock():
     import psycopg
 

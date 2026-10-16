@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-16 JST, repository candidate based on `fdfa3dcc`, through migration `0089_job_owned_run_instructions`.
+Last verified: 2026-10-16 JST, repository candidate based on `4e60a2f1`, through migration `0090_remove_run_instruction_columns`.
 This describes the implementation verified on isolated PostgreSQL, not a claim
 that this migration boundary or the full historical campaign has been activated in production.
 
@@ -41,7 +41,7 @@ bytes and items. The SHA-256 covers the full instruction identity. Changed
 instructions need a new job key; a later ownership/mapping edit cannot silently
 change an old campaign. A database trigger prevents instruction changes, including before the first run; coordination state and run pointers remain mutable. Registration creates a paused job and changes no source or contract activation flags.
 
-Every run requires a job. Source, purpose, contract and frozen scope belong to that job; run records retain attempt status, lease, clocks, counters, evidence and results. Python instance properties read instructions through the job, and database queries follow `job__` relations. Four physical run columns remain as trigger-maintained compatibility copies for the preceding application revision; they are absent from the Django model. Old jobless runs receive inactive archival jobs preserving their recorded instructions without inventing budgets or finish times. Explicit direct drivers register completed, non-dispatchable receipt jobs and use a genuine bounded lease for each invocation.
+Every run requires a job. Source, purpose, contract and frozen scope belong to that job; run records retain attempt status, lease, clocks, counters, evidence and results. Python instance properties read instructions through the job, and database queries follow `job__` relations. Runs contain no physical copies of these four instructions. The database lifecycle trigger reads the immutable job, and compatibility views derive their instruction aliases through that same relationship. Old jobless runs receive inactive archival jobs preserving their recorded instructions without inventing budgets or finish times. Explicit direct drivers register completed, non-dispatchable receipt jobs and use a genuine bounded lease for each invocation.
 
 `claim_job` locks the job, validates its immutable definition and issues a run
 and rotating lease token. Provider requests happen outside database transactions.
