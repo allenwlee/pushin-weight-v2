@@ -95,6 +95,7 @@ class SearchPage:
     received_monotonic: float
     clipped: bool = False
     continuation_invalid: bool = False
+    raw_post_ids: tuple[str | None, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -202,6 +203,11 @@ class TwitterApiClient:
                     f"TwitterAPI.io rate limit: {r.text[:200]}"
                 )
                 exc.response_status_code = r.status_code
+                retry_after = str(getattr(r, "headers", {}).get("Retry-After", ""))
+                exc.retry_after_seconds = (
+                    max(1, min(300, int(retry_after)))
+                    if retry_after.isascii() and retry_after.isdigit() and len(retry_after) <= 9 else 30
+                )
                 raise exc
             if 500 <= r.status_code < 600:
                 last_exc = TwitterApiServerError(
@@ -361,6 +367,10 @@ class TwitterApiClient:
                 received_monotonic=received_monotonic,
                 clipped=clipped,
                 continuation_invalid=bool(data.get("has_next_page")) and not bool(next_cursor),
+                raw_post_ids=tuple(
+                    str(raw.get("id") or raw.get("tweet_id") or "") or None
+                    if isinstance(raw, dict) else None for raw in tweets
+                ),
             )
 
             if n_returned >= max_results or not continuation:

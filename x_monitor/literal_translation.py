@@ -335,7 +335,7 @@ def _translate_target(
                 deadline=deadline, telemetry_context=telemetry_context, role="post_literal_translation",
             )
             text, usage, latency_ms = _parse_paragraph_response(text, markers, separators, usage, latency_ms)
-            text, usage, latency_ms = _restore_and_validate(source, target_language, text, quantities, usage, latency_ms)
+            text, usage, latency_ms = _restore_and_validate(source, target_language, text, quantities, usage, latency_ms, source_language=source_language)
             return text, usage, latency_ms, ("returned_validation_failed" if text is None and outcome == "returned" else outcome)
     if chunk_index is not None:
         prompt = (
@@ -352,7 +352,7 @@ def _translate_target(
             thinking=thinking, deadline=deadline, telemetry_context=telemetry_context,
             role="post_literal_translation",
         )
-        text, usage, latency_ms = _restore_and_validate(source, target_language, text, quantities, usage, latency_ms)
+        text, usage, latency_ms = _restore_and_validate(source, target_language, text, quantities, usage, latency_ms, source_language=source_language)
         return text, usage, latency_ms, ("returned_validation_failed" if text is None and outcome == "returned" else outcome)
     prompt = (
         f"{LITERAL_TRANSLATION_PROMPT_VERSION}. Translate one {source_language} source post into {target_label} ({target_language}). "
@@ -374,7 +374,7 @@ def _translate_target(
         telemetry_context=telemetry_context,
         role="post_literal_translation",
     )
-    text, usage, latency_ms = _restore_and_validate(source, target_language, text, quantities, usage, latency_ms)
+    text, usage, latency_ms = _restore_and_validate(source, target_language, text, quantities, usage, latency_ms, source_language=source_language)
     return text, usage, latency_ms, ("returned_validation_failed" if text is None and outcome == "returned" else outcome)
 
 
@@ -385,6 +385,8 @@ def _restore_and_validate(
     quantities: dict[str, str],
     usage: dict[str, int | float | str | None],
     latency_ms: int,
+    *,
+    source_language: str | None = None,
 ) -> tuple[str | None, dict[str, int | float | str | None], int]:
     from .translation_invariants import restore_token_quantities
 
@@ -392,7 +394,7 @@ def _restore_and_validate(
         text = restore_token_quantities(text, quantities)
         if text is None:
             logger.warning("literal_translation_validation_failed target=%s reasons=protected_span_mismatch", target_language)
-    return _validate_translation(source, target_language, text, usage, latency_ms)
+    return _validate_translation(source, target_language, text, usage, latency_ms, source_language=source_language)
 
 
 def _semantic_instructions(source: str) -> str:
@@ -416,13 +418,15 @@ def _validate_translation(
     text: str | None,
     usage: dict[str, int | float | str | None],
     latency_ms: int,
+    *,
+    source_language: str | None = None,
 ) -> tuple[str | None, dict[str, int | float | str | None], int]:
     """Reject narrow, observable contradictions without a repair/reviewer call."""
     from .translation_invariants import validate_translation_quantities
 
     if text is None:
         return None, usage, latency_ms
-    errors = validate_translation_quantities(source, text)
+    errors = validate_translation_quantities(source, text, source_language=source_language)
     if _is_untranslated_copy(source, text, target_language):
         errors.append("untranslated_source_copy")
     if errors:
@@ -439,6 +443,38 @@ def _is_untranslated_copy(source: str, translated: str, target_language: str) ->
     """
     if re.sub(r"\s+", "", source) != re.sub(r"\s+", "", translated):
         return False
+    # A complete bare launch recipe is machine syntax, even without Markdown
+    # fences. Recognize only assignments and a vllm command with flag/value
+    # arguments; any separate prose or unrecognized command keeps the guard.
+    import shlex
+
+    machine_lines = 0
+    for line in source.replace("\\\n", "").splitlines():
+        try:
+            tokens = shlex.split(line, comments=True)
+        except ValueError:
+            break
+        if not tokens:
+            continue
+        if tokens[0] == "export" and len(tokens) > 1 and all(
+            re.match(r"[A-Za-z_][A-Za-z0-9_]*=", token) for token in tokens[1:]
+        ):
+            machine_lines += 1
+            continue
+        if len(tokens) >= 3 and tokens[:2] == ["vllm", "serve"] and re.fullmatch(r"[\w./:@+-]+", tokens[2]):
+            index = 3
+            while index < len(tokens):
+                if not re.fullmatch(r"--[a-z][a-z0-9-]*(?:=.*)?", tokens[index]):
+                    break
+                takes_value = "=" not in tokens[index] and index + 1 < len(tokens) and not tokens[index + 1].startswith("--")
+                index += 2 if takes_value else 1
+            if index == len(tokens):
+                machine_lines += 1
+                continue
+        break
+    else:
+        if machine_lines and source == translated:
+            return False
     from .translation_invariants import protect_translation_spans
 
     # Explicit pronunciation spellings are intentionally copied, not prose.

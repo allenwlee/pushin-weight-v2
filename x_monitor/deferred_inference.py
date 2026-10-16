@@ -33,10 +33,12 @@ class DeferredInferenceClient:
             [str, dict[str, Any], str, dict[str, Any]], dict[str, Any] | None
         ],
         reply_transport: Callable[[str], str] | None = None,
+        context_transform: Callable[[dict[str, Any], dict[str, Any]], dict[str, Any]] | None = None,
     ) -> None:
         self._delegate = delegate
         self._resolve = resolve
         self._reply_transport = reply_transport or (lambda identity: "batch")
+        self._context_transform = context_transform
         self._local = threading.local()
 
     @property
@@ -60,6 +62,8 @@ class DeferredInferenceClient:
         if not isinstance(context, dict) or not context.get("post_ids"):
             raise ValueError("batch_request_members_missing")
         body = self._delegate.build_request(**kwargs)
+        if self._context_transform is not None:
+            context = self._context_transform(body, context)
         identity = hashlib.sha256(
             json.dumps(
                 {"body": body, "response_kind": kind, "context": context},

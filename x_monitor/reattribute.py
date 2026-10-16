@@ -458,7 +458,9 @@ def build_anthropic_client_from_env(cfg: Config | None = None) -> AnthropicClaud
     return _build_client_for_base_url(base_url, caller_label="classifier")
 
 
-def build_classifier_client_from_env(cfg: Config | None = None) -> Any | None:
+def build_classifier_client_from_env(
+    cfg: Config | None = None, *, deepinfra_key_env: str = "DEEPINFRA_API_KEY",
+) -> Any | None:
     """Build only the classifier's configured transport.
 
     The generic Anthropic-compatible factory remains for legacy, relevancy, and
@@ -475,13 +477,13 @@ def build_classifier_client_from_env(cfg: Config | None = None) -> Any | None:
     if provider_name == "deepinfra":
         from x_monitor.deepinfra import DeepInfraChatCompletionsClient
 
-        # The adapter obtains only DEEPINFRA_API_KEY.  This direct-provider
-        # route deliberately has no OpenRouter, DeepSeek, or Anthropic
-        # fallback: a missing dedicated key leaves classification pending.
+        # The adapter reads only the caller-selected DeepInfra credential.
+        # A missing key never borrows from another spending track or provider.
         return DeepInfraChatCompletionsClient.from_config(
             model=cfg.llm.classifier_model,
             base_url=cfg.llm.classifier_base_url,
             request_profile=cfg.llm.classifier_deepinfra_request_profile,
+            credential_env=deepinfra_key_env,
         )
     if provider_name == "openrouter":
         from x_monitor.openrouter import OpenRouterChatCompletionsClient
@@ -516,7 +518,9 @@ def build_classifier_client_from_env(cfg: Config | None = None) -> Any | None:
     return build_anthropic_client_from_env(cfg)
 
 
-def build_relevancy_client_from_env(cfg: Config | None = None) -> Any | None:
+def build_relevancy_client_from_env(
+    cfg: Config | None = None, *, deepinfra_key_env: str = "DEEPINFRA_API_KEY",
+) -> Any | None:
     """Build the binary relevancy client without crossing provider protocols."""
     if cfg is None:
         from x_monitor.config import load_config
@@ -529,11 +533,16 @@ def build_relevancy_client_from_env(cfg: Config | None = None) -> Any | None:
                 "route; relevancy disabled"
             )
             return None
-        return build_classifier_client_from_env(cfg)
+        return build_classifier_client_from_env(
+            cfg, **({"deepinfra_key_env": deepinfra_key_env}
+                    if deepinfra_key_env != "DEEPINFRA_API_KEY" else {}),
+        )
     return build_anthropic_client_from_env(cfg)
 
 
-def build_translator_client_from_env(cfg: Config | None = None) -> Any | None:
+def build_translator_client_from_env(
+    cfg: Config | None = None, *, deepinfra_key_env: str = "DEEPINFRA_API_KEY",
+) -> Any | None:
     """Return an `AnthropicClaudeClient` for the translation stage.
 
     Reads the base URL from `cfg.llm.translator_base_url`. When config is not
@@ -561,13 +570,12 @@ def build_translator_client_from_env(cfg: Config | None = None) -> Any | None:
     if getattr(cfg.llm, "translator_provider", "anthropic") == "deepinfra":
         from x_monitor.deepinfra import DeepInfraChatCompletionsClient
 
-        # The direct Gemma route accepts only DEEPINFRA_API_KEY.  Do not let a
-        # stale DeepSeek/Anthropic/OpenRouter credential turn this into a
-        # different scheduled translation provider.
+        # Keep the selected DeepInfra spending track and provider explicit.
         return DeepInfraChatCompletionsClient.from_config(
             model=cfg.llm.translator_model,
             base_url=cfg.llm.translator_base_url,
             request_profile=cfg.llm.translator_deepinfra_request_profile,
+            credential_env=deepinfra_key_env,
         )
 
     base_url = (

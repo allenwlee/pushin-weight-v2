@@ -240,6 +240,9 @@ services:
         sync: false
       - key: TYPESAFE_API_KEY
         sync: false
+      # Historical jobs use a separate DeepInfra spending credential.
+      - key: DEEPINFRA_ON_DEMAND
+        sync: false
       # Render-managed group must supply purpose-separated TwitterAPI keys:
       # TWITTERAPI_IO_SCHEDULED_API_KEY and TWITTERAPI_IO_ON_DEMAND_API_KEY.
       - fromGroup: pushinweight-secrets

@@ -212,18 +212,23 @@ def test_real_management_command_uses_only_native_provider_and_read_only_status(
     from monitor.management.commands import backfill
 
     job, cfg, delegates, _ = native
-    monkeypatch.setenv("DEEPINFRA_API_KEY", "test-only")
+    monkeypatch.delenv("DEEPINFRA_API_KEY", raising=False)
+    monkeypatch.setenv("DEEPINFRA_ON_DEMAND", "test-only")
     monkeypatch.setattr(backfill, "load_config", lambda path: cfg)
-    monkeypatch.setattr(enrichment, "DeepInfraBatchClient", NativeProvider)
+    def on_demand_provider(**kwargs):
+        assert kwargs["api_key"] == "test-only"
+        return NativeProvider(**kwargs)
+
+    monkeypatch.setattr(enrichment, "DeepInfraBatchClient", on_demand_provider)
     monkeypatch.setattr(
         enrichment,
         "build_translator_client_from_env",
-        lambda cfg: delegates["translation"],
+        lambda cfg, *, deepinfra_key_env: delegates["translation"],
     )
     monkeypatch.setattr(
         enrichment,
         "build_classifier_client_from_env",
-        lambda cfg: delegates["classification"],
+        lambda cfg, *, deepinfra_key_env: delegates["classification"],
     )
     output = StringIO()
     call_command(
@@ -237,6 +242,7 @@ def test_real_management_command_uses_only_native_provider_and_read_only_status(
     first = json.loads(output.getvalue())
     assert first["model_requests_sent"] == 6 and first["twitterapi_requests"] == 0
     before = first["control_requests"]
+    monkeypatch.delenv("DEEPINFRA_ON_DEMAND")
     output = StringIO()
     call_command(
         "backfill",
@@ -498,6 +504,95 @@ def test_source_change_between_preparation_and_reservation_stops_before_http(nat
         not ProviderBatch.objects.exists() and not OriginalContentCall.objects.exists()
     )
     assert NativeProvider.submissions == []
+
+
+def _rejected_quantity_reply(native, *, language="en", reply="2000万トークン"):
+    from core.provider_batches import digest
+    from monitor.backfill_enrichment import _register_requests, prepare_page
+
+    job, cfg, delegates, policy = native
+    Post.objects.filter(pk="native-1").update(
+        text="20 mil tokens", lang=language, lang_detected=language,
+    )
+    requests, _, _ = prepare_page(job, ["native-1"], cfg, delegates=delegates)
+    request = next(r for r in requests if r["context"].get("target_language") == "ja")
+    _register_requests(job, [request], policy, cfg, transport="direct")
+    call = OriginalContentCall.objects.get(request_hash=request["hash"])
+    payload = {"model": call.model, "choices": [
+        {"finish_reason": "stop", "message": {"content": reply}},
+    ], "usage": {"prompt_tokens": 10, "completion_tokens": 5}}
+    now = timezone.now()
+    OriginalContentCall.objects.filter(pk=call.pk).update(
+        state="completed", sent_at=now, completed_at=now, response_hash=digest(payload),
+        response_payload=payload, import_state="error",
+        error_code="cached_response_validation_failed", actual_usd="0.00001",
+        import_evidence={"validation": "failed", "reason": "canonical_cached_reply_rejected", "cost_kind": "provider_reported"},
+    )
+    return OriginalContentCall.objects.get(pk=call.pk)
+
+
+@pytest.mark.parametrize("language,reply,accepted", [
+    ("en", "2000万トークン", True), ("en", "2万トークン", False),
+    ("es", "2万トークン", True), ("es", "2000万トークン", False),
+])
+def test_explicit_revalidation_uses_actual_cached_caller_and_retains_paid_history(native, language, reply, accepted):
+    from monitor.backfill_enrichment import revalidate_cached_translations
+
+    job, _, delegates, _ = native
+    call = _rejected_quantity_reply(native, language=language, reply=reply)
+    before = OriginalContentCall.objects.filter(pk=call.pk).values().get()
+    result = revalidate_cached_translations(
+        job.pk, call_ids=[call.pk], delegate=delegates["translation"],
+        actor="test", reason="shared validator correction",
+    )
+    call.refresh_from_db()
+    assert result["reopened"] == ([call.pk] if accepted else [])
+    assert call.import_state == ("pending" if accepted else "error")
+    after = OriginalContentCall.objects.filter(pk=call.pk).values().get()
+    for key in set(before) - {"import_state", "import_evidence", "error_code", "updated_at"}:
+        assert after[key] == before[key], key
+    assert OriginalContentCall.objects.count() == 1 and NativeProvider.submissions == []
+    if accepted:
+        audit = call.import_evidence["revalidation_history"][0]
+        assert audit["previous_import_evidence"] == before["import_evidence"]
+        assert audit["previous_error_code"] == before["error_code"]
+        assert audit["actor"] == "test"
+        assert revalidate_cached_translations(
+            job.pk, call_ids=[call.pk], delegate=delegates["translation"],
+            actor="test", reason="repeat",
+        )["reopened"] == []
+        call.refresh_from_db()
+        assert len(call.import_evidence["revalidation_history"]) == 1
+
+
+@pytest.mark.parametrize("blocker", ["sent", "batch_claim", "post_claim", "source_change", "unknown"])
+def test_saved_reply_revalidation_rejects_active_changed_and_unknown_work(native, blocker):
+    from core.provider_batches import BatchAdmissionError
+    from monitor.backfill_enrichment import revalidate_cached_translations
+
+    job, _, delegates, _ = native
+    call = _rejected_quantity_reply(native)
+    if blocker in {"sent", "unknown"}:
+        OriginalContentCall.objects.filter(pk=call.pk).update(
+            state="sent" if blocker == "sent" else "ambiguous", completed_at=None,
+        )
+    elif blocker == "batch_claim":
+        ProviderBatch.objects.filter(pk=call.provider_batch_id).update(
+            claim_expires_at=timezone.now() + timedelta(minutes=5),
+        )
+    elif blocker == "post_claim":
+        PostEnrichmentState.objects.filter(pk="native-1").update(
+            claim_owner="other", claim_expires_at=timezone.now() + timedelta(minutes=5),
+        )
+    else:
+        Post.objects.filter(pk="native-1").update(text="Changed source.")
+    with pytest.raises(BatchAdmissionError):
+        revalidate_cached_translations(
+            job.pk, call_ids=[call.pk], delegate=delegates["translation"],
+            actor="test", reason="must reject",
+        )
+    call.refresh_from_db()
+    assert call.import_state == "error" and "revalidation_history" not in call.import_evidence
 
 
 def test_failed_result_duplicates_and_interrupted_import_resume_without_duplicate_charge(

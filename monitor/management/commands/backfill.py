@@ -154,6 +154,10 @@ class Command(BaseCommand):
     help = "Run harvest cycles with date-bounded search window (batchable, resumable)."
 
     def add_arguments(self, parser) -> None:
+        parser.add_argument("--plan-collection-job", default=None,
+                            help="Freeze a reusable current-policy historical job under this key; --dry-run prints only.")
+        parser.add_argument("--maximum-api-requests", type=int, default=10000)
+        parser.add_argument("--maximum-model-requests", type=int, default=20000)
         parser.add_argument(
             "--collection-job", type=str,
             help="Execute a ready, frozen X backfill CollectionJob; progress lives in PostgreSQL.",
@@ -267,9 +271,33 @@ class Command(BaseCommand):
             for name in _RUNTIME_SETTING_NAMES
         }
         try:
+            if options.get("plan_collection_job"):
+                if not options.get("since") or not options.get("until"):
+                    raise CommandError("job planning requires --since and --until")
+                if options.get("collection_job") or options.get("call_ids") or options.get("query"):
+                    raise CommandError("current-policy planning owns every enabled collection route")
+                from monitor.backfill_collection import plan_job_definition
+                definition = plan_job_definition(
+                    cfg=load_config(Path("config.yaml")),
+                    since_epoch=_parse_iso(options["since"]), until_epoch=_parse_iso(options["until"]),
+                    brands=[b.strip() for b in (options.get("brands") or "").split(",") if b.strip()],
+                    requests=options["max_api_requests"], model_requests=options["max_llm_calls"],
+                    seconds=options["run_seconds"], maximum_requests=options["maximum_api_requests"],
+                    maximum_models=options["maximum_model_requests"],
+                )
+                self.result = {"definition": definition}
+                if not options["dry_run"]:
+                    from core.collection_jobs import register_job, set_job_state
+                    from core.models import DataSource
+                    job = register_job(job_key=options["plan_collection_job"], source=DataSource.objects.get(pk="x"),
+                                       purpose="content", operation="x_backfill", mode="historical", definition=definition)
+                    set_job_state(job.pk, "ready")
+                    self.result["job_id"] = str(job.pk)
+                self.stdout.write(json.dumps(self.result, sort_keys=True))
+                return
             if options.get("collection_job"):
                 if any(options.get(key) for key in (
-                    "since", "until", "brands", "call_ids", "query", "reset", "quarantined", "retry_blocked",
+                    "since", "until", "brands", "call_ids", "query", "reset", "quarantined",
                 )):
                     raise CommandError("--collection-job owns its frozen scope; omit scope/reset options")
                 if options.get("enrichment_control"):
@@ -321,9 +349,9 @@ class Command(BaseCommand):
                             max_model_requests=options["enrichment_max_model_requests"],
                             max_control_requests=options["enrichment_max_control_requests"],
                             selection=(options["enrichment_post_ids"] or "").split(",") if options["enrichment_post_ids"] else [])
-                    api_key = os.environ.get("DEEPINFRA_API_KEY", "")
+                    api_key = os.environ.get("DEEPINFRA_ON_DEMAND", "")
                     if not api_key and not read_only:
-                        raise CommandError("native enrichment requires DEEPINFRA_API_KEY")
+                        raise CommandError("historical enrichment requires DEEPINFRA_ON_DEMAND")
                     try:
                         if options["enrichment_finish_pilot"]:
                             if policy is not None:
@@ -344,6 +372,7 @@ class Command(BaseCommand):
                 else:
                     self.result = execute_job(
                         options["collection_job"], read_only=options["status"] or options["dry_run"],
+                        retry_blocked=options["retry_blocked"],
                     )
                 self.stdout.write(json.dumps(self.result, sort_keys=True))
                 return
@@ -616,7 +645,9 @@ class Command(BaseCommand):
                 )
                 started = datetime.now(UTC).isoformat()
                 try:
-                    relevancy_client = None if options.get("batch", False) else build_relevancy_client_from_env(cfg)
+                    relevancy_client = None if options.get("batch", False) else build_relevancy_client_from_env(
+                        cfg, deepinfra_key_env="DEEPINFRA_ON_DEMAND",
+                    )
                     if relevancy_client is not None:
                         relevancy_client = _BoundedClassifierClient(
                             relevancy_client, maximum_calls=budget.remaining_llm_calls, pause_seconds=0,

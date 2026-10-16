@@ -613,6 +613,10 @@ class JevDecisionGate:
         client: JevDecisionsClient,
         environment: str,
         now: Callable[[], datetime] | None = None,
+        lane: str = "rare_types",
+        before_call: Callable[[], None] | None = None,
+        after_call: Callable[[Any], None] | None = None,
+        retry_unknown: bool = True,
     ) -> None:
         if question_content_hash() != config.question_content_sha256:
             raise JevDecisionError("question_hash_mismatch")
@@ -637,6 +641,10 @@ class JevDecisionGate:
         self.client = client
         self.environment = environment
         self._now = now or (lambda: datetime.now(UTC))
+        self.lane = lane
+        self.before_call = before_call
+        self.after_call = after_call
+        self.retry_unknown = retry_unknown
 
     def process_hit(
         self,
@@ -652,7 +660,7 @@ class JevDecisionGate:
             return JevGateResult(
                 outcome="pending", reason="deadline_exhausted", decision_id=None
             )
-        hit = RareTypeSearchHit.objects.only("public_payload").get(pk=hit_id)
+        hit = RareTypeSearchHit.objects.only("public_payload", "provider_post_id", "content_hash").get(pk=hit_id)
         try:
             state = public_post_state(hit.public_payload)
             request_bytes = encode_request_payload(state, self.config)
@@ -660,6 +668,21 @@ class JevDecisionGate:
         except JevDecisionError as exc:
             return JevGateResult(outcome="pending", reason=exc.code, decision_id=None)
         now = self._now()
+        if not self.retry_unknown:
+            # A historical continuation must not turn an unobserved paid
+            # request into an automatic replacement request.
+            prior = RareTypeDecision.objects.filter(
+                provider_post_id=hit.provider_post_id,
+                content_hash=hit.content_hash,
+                model=self.config.model, question_version=question_identity(self.config),
+                threshold_version=threshold_identity(self.config),
+            ).exclude(status__in=["completed", "review_needed"]).first()
+            if prior and prior.attempt_events.filter(
+                state__in=["sent", "retained"], response_id="",
+                error_code__in=["", "timeout", "transport_error"],
+            ).exists():
+                return JevGateResult(outcome="pending", reason="prior_request_outcome_unknown",
+                                     decision_id=prior.pk)
         decision_limit = (
             self.config.staging_decisions_per_cycle
             if self.environment == "staging"
@@ -671,7 +694,7 @@ class JevDecisionGate:
             question_version=question_identity(self.config),
             threshold_version=threshold_identity(self.config),
             owner=owner,
-            lane="rare_types",
+            lane=self.lane,
             environment=self.environment,
             reserved_usd=reserved_usd,
             now=now,
@@ -714,6 +737,13 @@ class JevDecisionGate:
                 reason="deadline_exhausted",
                 decision_id=claim.decision.pk,
             )
+        if self.before_call:
+            try:
+                self.before_call()
+            except Exception:
+                cancel_funded_decision_claim(hit_id=hit_id, decision_id=claim.decision.pk,
+                                             owner=owner, fence=claim.decision.claim_fence)
+                raise
         if not mark_decision_request_sent(
             claim.decision.pk,
             owner=owner,
@@ -744,7 +774,11 @@ class JevDecisionGate:
             )
             if response.cost_usd > reserved_usd:
                 raise JevDecisionError("usage_exceeds_reservation", usage=response)
+            if self.after_call:
+                self.after_call(response)
         except JevDecisionError as exc:
+            if self.after_call:
+                self.after_call(exc)
             failed_at = self._now()
             known_usage = exc.usage
             fail_funded_decision(
@@ -804,6 +838,10 @@ def build_jev_decision_gate(
     environment: str,
     transport: httpx.AsyncBaseTransport | None = None,
     now: Callable[[], datetime] | None = None,
+    lane: str = "rare_types",
+    before_call: Callable[[], None] | None = None,
+    after_call: Callable[[Any], None] | None = None,
+    retry_unknown: bool = True,
 ) -> JevDecisionGate | None:
     """Construct no provider client while the combined lane is disabled."""
 
@@ -817,4 +855,6 @@ def build_jev_decision_gate(
         client=jev_client,
         environment=environment,
         now=now,
+        lane=lane, before_call=before_call, after_call=after_call,
+        retry_unknown=retry_unknown,
     )

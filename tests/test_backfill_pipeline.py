@@ -26,7 +26,7 @@ def pipeline(monkeypatch, tmp_path, seeded_policy_keywords):
     post_fetch_method = cycle.CycleRunner._run_post_fetch
     monkeypatch.setattr(backfill, "_seconds_to_next_slot", lambda: 900)
     monkeypatch.setattr(backfill, "_STATE_DIR", tmp_path)
-    monkeypatch.setattr("x_monitor.reattribute.build_relevancy_client_from_env", lambda cfg: None)
+    monkeypatch.setattr("x_monitor.reattribute.build_relevancy_client_from_env", lambda cfg, **kwargs: None)
     monkeypatch.setattr(cycle.CycleRunner, "_run_post_fetch",
                         lambda self, items, **kwargs: cohorts.append(kwargs["post_ids"]) or {})
     def forbidden(*args, **kwargs):
@@ -268,7 +268,7 @@ def test_manual_long_translation_and_cache_use_same_smaller_chunks(pipeline, mon
     Post.objects.filter(pk="1").update(text="word " * 1_200, lang="en")
     PostEnrichmentState.objects.filter(pk="1").update(classification_status="succeeded")
     monkeypatch.setattr(cycle.CycleRunner, "_run_post_fetch", pipeline.post_fetch_method)
-    monkeypatch.setattr("x_monitor.reattribute.build_translator_client_from_env", lambda cfg: object())
+    monkeypatch.setattr("x_monitor.reattribute.build_translator_client_from_env", lambda cfg, **kwargs: object())
     seen = []
     def cached(tweets, **kwargs):
         seen.append(("cache", kwargs.get("chunk_size")))

@@ -102,7 +102,8 @@ Execution model request: faster model. The native thread model override to
 `gpt-6.1-sol` was accepted by the task tool; no separate worker or new goal was
 created. Record served identity only when the runtime supplies evidence.
 
-The owner authorizes a data-only staging-to-production transfer, conditional on
+Historical authorization for the completed August 9 phase: the owner authorized
+a data-only staging-to-production transfer, conditional on
 all 1,660 Posts passing current ingestion/enrichment verification. Code delivery
 remains on-request: no commit, push, application deployment, schema/service or
 scheduler change. Production completion means independently verified imported
@@ -114,12 +115,18 @@ The separate 502 task remains explicitly held and G3-owned.
 
 ## Plain-English Summary
 
-The August 9 transfer and subsequent diagnosis are recorded below. The next
-phase prepares a July 30 backfill that includes the normal harvester's relevant
-collection routes and proves both collection and enrichment. Around 4,000
-unique posts is the owner's expectation, not a quota or a completion check.
-The latest instruction is to capture lessons before implementing that phase;
-this update starts no new run or deployment.
+The August 9 transfer and diagnosis are recorded below. The current authorized
+phase implements, deploys and runs a July 30 backfill with the normal
+harvester's relevant collection routes and shared enrichment. Success requires
+3,800–4,200 genuine distinct posts and canonical translation plus classification
+completion of at least 98.54525862068965%, the frozen current-day baseline.
+These are acceptance checks, never instructions to pad or truncate valid data.
+
+Acquire the full day before repairing classification failures. Continue
+independent work after recoverable failures, retain paid-call history and use
+the on-demand TwitterAPI and DeepInfra credentials. Verify the deployed source,
+database records and application projections. Current author membership and
+provider search results cannot prove perfect historical recall.
 
 ### Completed transfer scope
 
@@ -564,7 +571,9 @@ following provider pages; one request is not a month's dataset.
 
 Completion requires evidence that the selected routes actually ran, returned
 IDs reconcile to distinct saved posts, and applicable enrichment published
-correctly. The anticipated 4,000 posts is only a comparison point. Current
+correctly. The active goal requires 3,800–4,200 genuine distinct posts and
+canonical completion at least 1,829/1,856; preserve every valid post even if the
+result falls outside that range. Current
 policy and account membership cannot reconstruct precisely what a historical
 policy would have found; provider search may not return every eligible post.
 Report those limitations without claiming full recall from a healthy cohort.
@@ -573,13 +582,13 @@ Report those limitations without claiming full recall from a healthy cohort.
 
 - Owner requested adding Call A and rare and double-checking scope against the
   normal harvester, then explicitly requested ce-compound first.
-- Current endpoint: verified learning plus this continuation plan. Code
-  preparation remains the next authorized task; this documentation phase does
-  not start implementation, a paid run or deployment.
+- Current endpoint: deployed code plus the actual July 30 production run and
+  verified goal criteria. The completed ce-compound documentation phase preceded
+  the owner's explicit implementation-through-production authorization.
 - Intended data destination is production. Record exact database and candidate
   identities before launch. Completed Aug9 data-transfer authority is retained
-  as history; code delivery remains on-request, without inventing new release
-  authority from the intended destination.
+  as history. The current goal explicitly authorizes code delivery through the
+  staged route and the July 30 production batch.
 - Select all 21 intended brands, deriving and recording their exact names from
   the current policy. Use the half-open UTC interval `[2026-07-30, 2026-07-31)`.
 - Use `TWITTERAPI_IO_ON_DEMAND_API_KEY` and `DEEPINFRA_ON_DEMAND`, resolved by

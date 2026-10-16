@@ -114,16 +114,19 @@ def test_selected_factories_pass_exact_direct_routes_to_the_adapter(
             "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
             "base_url": "https://api.deepinfra.com/v1/openai",
             "request_profile": "deepseek_0731",
+            "credential_env": "DEEPINFRA_API_KEY",
         },
         {
             "model": "deepseek-ai/DeepSeek-V4-Flash-0731",
             "base_url": "https://api.deepinfra.com/v1/openai",
             "request_profile": "deepseek_0731",
+            "credential_env": "DEEPINFRA_API_KEY",
         },
         {
             "model": "google/gemma-4-31B-it-turbo",
             "base_url": "https://api.deepinfra.com/v1/openai",
             "request_profile": "gemma4_translation_v1",
+            "credential_env": "DEEPINFRA_API_KEY",
         },
     ]
 

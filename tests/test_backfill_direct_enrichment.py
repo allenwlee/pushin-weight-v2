@@ -118,15 +118,23 @@ def test_completed_classifier_packets_survive_changed_pending_page(native, monke
     # The final two-case packet can already publish; preserve those complete
     # Posts while the earlier twenty-case packet remains ready for replay.
     complete = list(Post.objects.order_by("pk").values_list("pk", flat=True))[20:]
-    _, _, missing = enrichment.prepare_page(job, complete, native[1], delegates=native[2])
+    _, _, missing = enrichment.prepare_page(
+        job, complete, native[1], delegates=native[2]
+    )
     assert not missing
     before = list(Post.objects.filter(pk__in=complete).order_by("pk").values())
-    saved = list(OriginalContentCall.objects.filter(
-        stage="classification", state="completed", import_state="pending",
-    ).values_list("pk", "response_hash"))
+    saved = list(
+        OriginalContentCall.objects.filter(
+            stage="classification",
+            state="completed",
+            import_state="pending",
+        ).values_list("pk", "response_hash")
+    )
     assert saved
     unused = OriginalContentCall.objects.filter(
-        stage="classification", member_post_ids=complete, import_state="applied",
+        stage="classification",
+        member_post_ids=complete,
+        import_state="applied",
     ).first()
     assert unused is not None
     # A retained reply for already-complete members must not block fresh work,
@@ -141,9 +149,15 @@ def test_completed_classifier_packets_survive_changed_pending_page(native, monke
     original_register = enrichment._register_requests
 
     def register(job, requests, *args, **kwargs):
-        assert PostEnrichmentState.objects.exclude(pk="native-0").filter(
-            translation_status="succeeded", classification_status="succeeded",
-        ).count() == 22
+        assert (
+            PostEnrichmentState.objects.exclude(pk="native-0")
+            .filter(
+                translation_status="succeeded",
+                classification_status="succeeded",
+            )
+            .count()
+            == 22
+        )
         assert all(r["context"]["post_ids"] == ["native-0"] for r in requests)
         return original_register(job, requests, *args, **kwargs)
 
@@ -191,19 +205,24 @@ def test_direct_command_admits_before_http_and_status_does_no_work(native, monke
         starts.append(len(calls))
         return ThreadPoolExecutor(**kwargs)
 
-    monkeypatch.setenv("DEEPINFRA_API_KEY", "test-only")
+    monkeypatch.setenv("DEEPINFRA_API_KEY", "scheduled-must-not-be-used")
+    monkeypatch.setenv("DEEPINFRA_ON_DEMAND", "on-demand-fixture")
     monkeypatch.setattr(backfill, "load_config", lambda path: cfg)
-    monkeypatch.setattr(direct, "DeepInfraChatCompletionsClient", provider.factory)
+    def on_demand_factory(**kwargs):
+        assert kwargs["api_key"] == "on-demand-fixture"
+        return provider.factory(**kwargs)
+
+    monkeypatch.setattr(direct, "DeepInfraChatCompletionsClient", on_demand_factory)
     monkeypatch.setattr(direct, "ThreadPoolExecutor", executor)
     monkeypatch.setattr(
         enrichment,
         "build_translator_client_from_env",
-        lambda cfg: delegates["translation"],
+        lambda cfg, *, deepinfra_key_env: delegates["translation"],
     )
     monkeypatch.setattr(
         enrichment,
         "build_classifier_client_from_env",
-        lambda cfg: delegates["classification"],
+        lambda cfg, *, deepinfra_key_env: delegates["classification"],
     )
     output = StringIO()
     call_command(
@@ -218,6 +237,8 @@ def test_direct_command_admits_before_http_and_status_does_no_work(native, monke
     assert starts and provider.sent > 0
     assert json.loads(output.getvalue())["twitterapi_requests"] == 0
     sent = provider.sent
+    monkeypatch.delenv("DEEPINFRA_ON_DEMAND")
+    monkeypatch.delenv("DEEPINFRA_API_KEY")
     call_command(
         "backfill",
         collection_job=str(job.pk),
@@ -226,6 +247,26 @@ def test_direct_command_admits_before_http_and_status_does_no_work(native, monke
         stdout=StringIO(),
     )
     assert provider.sent == sent
+
+
+def test_command_requires_on_demand_key_before_paid_admission(native, monkeypatch):
+    from django.core.management.base import CommandError
+
+    import monitor.backfill_enrichment as enrichment
+    from monitor.management.commands import backfill
+
+    monkeypatch.setenv("DEEPINFRA_API_KEY", "scheduled-must-not-be-used")
+    monkeypatch.delenv("DEEPINFRA_ON_DEMAND", raising=False)
+    monkeypatch.setattr(backfill, "load_config", lambda path: native[1])
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Missing backfill key must be rejected before admission")
+
+    monkeypatch.setattr(enrichment, "execute_enrichment", forbidden)
+    with pytest.raises(CommandError, match="DEEPINFRA_ON_DEMAND"):
+        call_command("backfill", collection_job=str(native[0].pk), enrich_direct=True)
+    assert not OriginalContentCall.objects.exists()
+    assert not ProviderBatch.objects.exists()
 
 
 def test_direct_switch_reuses_completed_native_replies(native):
@@ -329,7 +370,9 @@ def test_direct_drains_ready_waves_before_repeating_database_preparation(native)
     assert run_direct(native, provider)["status"] == "completed"
 
 
-def test_direct_advancement_still_bounds_total_waves_and_persists_unstarted_calls(native):
+def test_direct_advancement_still_bounds_total_waves_and_persists_unstarted_calls(
+    native,
+):
     from django.db import transaction
 
     from core.models import Post, PostBrand, PostEnrichmentState
@@ -338,9 +381,18 @@ def test_direct_advancement_still_bounds_total_waves_and_persists_unstarted_call
 
     job = native[0]
     ids = [f"drain-{index}" for index in range(8)]
-    Post.objects.bulk_create([Post(tweet_id=identifier, text="I tried Qwen today.", lang="en") for identifier in ids])
-    PostBrand.objects.bulk_create([PostBrand(post_id=identifier, brand_id="qwen") for identifier in ids])
-    PostEnrichmentState.objects.bulk_create([PostEnrichmentState(post_id=identifier) for identifier in ids])
+    Post.objects.bulk_create(
+        [
+            Post(tweet_id=identifier, text="I tried Qwen today.", lang="en")
+            for identifier in ids
+        ]
+    )
+    PostBrand.objects.bulk_create(
+        [PostBrand(post_id=identifier, brand_id="qwen") for identifier in ids]
+    )
+    PostEnrichmentState.objects.bulk_create(
+        [PostEnrichmentState(post_id=identifier) for identifier in ids]
+    )
     with transaction.atomic():
         record_post_membership(job.runs.get(), None, ids)
     provider = DirectProvider()
@@ -393,9 +445,416 @@ def test_invalid_cached_reply_is_retained_and_only_that_request_is_retried(nativ
         if result["status"] == "completed":
             break
     assert result["status"] == "completed"
-    rejected = OriginalContentCall.objects.get(error_code="cached_response_validation_failed")
-    assert rejected.state == "completed" and rejected.response_payload["model"] == "wrong-model"
+    rejected = OriginalContentCall.objects.get(
+        error_code="cached_response_validation_failed"
+    )
+    assert (
+        rejected.state == "completed"
+        and rejected.response_payload["model"] == "wrong-model"
+    )
     attempts = OriginalContentCall.objects.filter(request_hash=rejected.request_hash)
     assert attempts.count() == 2
     assert attempts.exclude(pk=rejected.pk).get().import_state == "applied"
     assert all(call.reserved_usd > 0 for call in attempts)
+
+
+def test_exhausted_translation_defers_its_packet_but_healthy_posts_finish(native):
+    """Real shared callers: one poison reply must not block the next paid packet."""
+    from django.db import transaction
+
+    from core.models import Post, PostBrand, PostEnrichmentState
+    from core.provider_batches import BatchAdmissionError, record_post_membership
+    from monitor.backfill_enrichment import deferred_enrichment_work
+
+    job, cfg, delegates, policy = native
+    Post.objects.filter(pk="native-1").update(
+        text="I tried Qwen today. Poison identifier."
+    )
+    ids = [f"native-{index:02}" for index in range(3, 23)]
+    for identifier in ids:
+        post = Post.objects.create(
+            tweet_id=identifier, text="I tried Qwen today.", lang="en"
+        )
+        PostBrand.objects.create(post=post, brand_id="qwen")
+        PostEnrichmentState.objects.create(post=post)
+    with transaction.atomic():
+        record_post_membership(job.runs.get(), None, ids)
+    provider = DirectProvider()
+    original = provider.transport
+
+    def poison(body, timeout):
+        reply = original(body, timeout)
+        raw = json.dumps(body)
+        if "Poison identifier" in raw and "Japanese (ja)" in raw:
+            reply["model"] = "wrong-model"
+        return reply
+
+    provider.transport = poison
+    for turn in range(20):
+        try:
+            result = execute_enrichment(
+                job.pk,
+                cfg=cfg,
+                api_key="test",
+                delegates=delegates,
+                policy=policy if turn == 0 else None,
+                transport="direct",
+                direct_concurrency=32,
+                direct_client_factory=provider.factory,
+                defer_failures=True,
+            )
+        except BatchAdmissionError as exc:
+            assert str(exc) == "model_attempt_allowance_exhausted"
+            continue
+        if result["actionable_pending_count"] == 0:
+            break
+    assert result["status"] == "partial", result
+    assert result["cohort_count"] == 22 and result["pending_count"] == 1
+    assert result["actionable_pending_count"] == 0
+    deferred = deferred_enrichment_work(job, max_attempts=3)
+    assert deferred["native-1"] == "model_attempt_allowance_exhausted"
+    assert len(deferred) == 1
+    assert PostEnrichmentState.objects.exclude(pk__in=deferred).filter(
+        translation_status="succeeded",
+        classification_status="succeeded",
+    ).count() == 22 - len(deferred)
+    rejected = OriginalContentCall.objects.filter(
+        error_code="cached_response_validation_failed",
+    )
+    assert rejected.count() == 3
+    assert rejected.values("request_hash").distinct().count() == 1
+    saved = list(
+        OriginalContentCall.objects.filter(state="completed").values_list(
+            "pk", "response_hash"
+        )
+    )
+    sent = provider.sent
+    again = execute_enrichment(
+        job.pk,
+        cfg=cfg,
+        api_key="test",
+        delegates=delegates,
+        transport="direct",
+        direct_concurrency=32,
+        direct_client_factory=provider.factory,
+        defer_failures=True,
+    )
+    assert again["pending_count"] == result["pending_count"] and provider.sent == sent
+    assert (
+        list(
+            OriginalContentCall.objects.filter(state="completed").values_list(
+                "pk", "response_hash"
+            )
+        )
+        == saved
+    )
+
+
+def test_aggregate_deferral_never_resends_an_unknown_paid_request(native):
+    from monitor.backfill_enrichment import deferred_enrichment_work
+
+    provider = DirectProvider()
+
+    def timeout(body, seconds):
+        provider.sent += 1
+        raise TimeoutError("lost reply")
+
+    provider.transport = timeout
+    run_direct(native, provider, initial=True)
+    # Drain only reservations that had never been sent; unknown calls stay intact.
+    for _ in range(4):
+        execute_enrichment(
+            native[0].pk,
+            cfg=native[1],
+            api_key="test",
+            delegates=native[2],
+            transport="direct",
+            direct_concurrency=32,
+            direct_client_factory=provider.factory,
+            defer_failures=True,
+        )
+    sent = provider.sent
+    execute_enrichment(
+        native[0].pk,
+        cfg=native[1],
+        api_key="test",
+        delegates=native[2],
+        transport="direct",
+        direct_concurrency=32,
+        direct_client_factory=provider.factory,
+        defer_failures=True,
+    )
+    assert provider.sent == sent
+    assert set(deferred_enrichment_work(native[0], max_attempts=3)) == {
+        "native-1",
+        "native-2",
+    }
+    assert OriginalContentCall.objects.filter(
+        state="ambiguous", actual_usd=None
+    ).exists()
+
+
+def test_final_assessment_records_incomplete_without_changing_source_receipt(native):
+    from scripts.backfill_campaign import assess_campaign
+
+    job, cfg, _, _ = native
+    run = job.runs.get()
+    run.report = {"preserve": "source receipt"}
+    run.save(update_fields=["report"])
+    job.last_attempt = run
+    job.save(update_fields=["last_attempt"])
+    window = {"index": 1}
+    frozen = {"campaign": job.job_key.rsplit("/", 1)[0], "windows": [window]}
+    result = assess_campaign(
+        frozen, cfg, [{"status": "deferred", "error_code": "test_failure", "source_collection_job": str(job.pk)}]
+    )
+    assert result["status"] == "incomplete"
+    assert result["windows_attempted"] == 1 and result["windows_verified"] == 0
+    run.refresh_from_db()
+    assert run.report["preserve"] == "source receipt"
+    assert run.report["backfill_campaign"]["latest"]["status"] == "failed"
+
+
+def test_saved_packet_replays_exact_submitted_catalog_after_catalog_changes(native):
+    from core.models import Brand, BrandSearchTerm
+    from monitor.cycle import _classification_tracked_brand_catalog
+
+    provider = DirectProvider()
+    run_direct(native, provider, initial=True)
+    saved = list(
+        OriginalContentCall.objects.filter(
+            stage="classification", state="completed", import_state="pending"
+        )
+    )
+    assert len(saved) == 2
+    original_revision = json.loads(
+        next(
+            m["content"]
+            for m in saved[0].request_packet["messages"]
+            if m["role"] == "user"
+        )
+    )["tracked_brands"]["revision"]
+    BrandSearchTerm.objects.create(brand_id="qwen", term="fresh-catalog-alias")
+    Brand.objects.create(nickname="catalog-added", display_name="A later brand")
+    from x_monitor.attribution import _tracked_brand_catalog
+
+    assert (
+        _tracked_brand_catalog(
+            [], [{"tracked_brand_catalog": _classification_tracked_brand_catalog()}]
+        )["revision"]
+        != original_revision
+    )
+    sent = provider.sent
+    result = run_direct(native, provider)
+    assert result["status"] == "completed", result
+    assert provider.sent == sent
+    for call in saved:
+        retained = OriginalContentCall.objects.get(pk=call.pk)
+        assert (
+            retained.import_state == "applied"
+            and retained.response_hash == call.response_hash
+        )
+
+
+def test_saved_packet_rejects_changed_source_before_publication_or_payment(native):
+    from core.models import Post
+    from core.provider_batches import BatchAdmissionError
+
+    provider = DirectProvider()
+    run_direct(native, provider, initial=True)
+    sent = provider.sent
+    Post.objects.filter(pk="native-1").update(text="A changed source must be reviewed.")
+    with pytest.raises(
+        BatchAdmissionError, match="saved_classifier_packet_source_changed"
+    ):
+        run_direct(native, provider)
+    assert provider.sent == sent
+
+
+def test_partial_saved_packet_repairs_only_incomplete_members_without_payment(native):
+    from django.db import transaction
+
+    from core.models import (
+        Post,
+        PostBrand,
+        PostBrandClassificationState,
+        PostEnrichmentState,
+    )
+    from core.provider_batches import record_post_membership
+
+    ids = [f"partial-{i:02}" for i in range(20)]
+    for identifier in ids:
+        post = Post.objects.create(
+            tweet_id=identifier, text="I tried Qwen today.", lang="en"
+        )
+        PostBrand.objects.create(post=post, brand_id="qwen")
+        PostEnrichmentState.objects.create(post=post)
+    with transaction.atomic():
+        record_post_membership(native[0].runs.get(), None, ids)
+    provider = DirectProvider()
+    for turn in range(8):
+        result = run_direct(native, provider, initial=turn == 0, concurrency=32)
+        if result["status"] == "completed":
+            break
+    assert result["status"] == "completed"
+    packet = (
+        OriginalContentCall.objects.filter(
+            stage="classification", member_post_ids__len=20
+        )
+        .first()
+        .member_post_ids
+    )
+    repaired = packet[:2]
+    # A member can need translation while its classification is already valid.
+    # Replaying the packet must preserve that classification too.
+    PostEnrichmentState.objects.filter(pk=packet[2]).update(
+        translation_status="pending"
+    )
+    PostEnrichmentState.objects.filter(pk__in=repaired).update(
+        classification_status="pending"
+    )
+    PostBrandClassificationState.objects.filter(post_id__in=repaired).update(
+        selected_final_judgment=None
+    )
+    OriginalContentCall.objects.filter(
+        stage="classification", member_post_ids=packet
+    ).update(import_state="pending")
+    unchanged_posts = list(
+        Post.objects.exclude(pk__in=repaired).order_by("pk").values()
+    )
+    unchanged_states = list(
+        PostBrandClassificationState.objects.exclude(post_id__in=repaired)
+        .order_by("pk")
+        .values()
+    )
+    saved = list(
+        OriginalContentCall.objects.filter(
+            stage="classification", member_post_ids=packet
+        ).values_list("pk", "response_hash")
+    )
+    sent = provider.sent
+    result = run_direct(native, provider, concurrency=32)
+    assert result["status"] == "completed", result
+    assert provider.sent == sent
+    assert (
+        list(Post.objects.exclude(pk__in=repaired).order_by("pk").values())
+        == unchanged_posts
+    )
+    assert (
+        list(
+            PostBrandClassificationState.objects.exclude(post_id__in=repaired)
+            .order_by("pk")
+            .values()
+        )
+        == unchanged_states
+    )
+    for pk, response_hash in saved:
+        call = OriginalContentCall.objects.get(pk=pk)
+        assert call.import_state == "applied" and call.response_hash == response_hash
+
+
+def test_older_saved_attempt_remains_replayable_after_newer_attempt_fails(native):
+    import copy
+    from datetime import timedelta
+
+    from core.provider_batches import digest
+
+    provider = DirectProvider()
+    run_direct(native, provider, initial=True)
+    saved = list(OriginalContentCall.objects.filter(stage="classification"))
+    assert len(saved) == 2
+    newer = []
+    for original in saved:
+        call = copy.deepcopy(original)
+        call.pk = None
+        call.request_identity = (
+            "newer-attempt-" + original.provenance["context"]["role"]
+        )
+        call.batch_key = original.batch_key + ":newer"
+        call.reserved_at += timedelta(microseconds=1)
+        call.provenance["attempt"] = 2
+        if call.provenance["context"]["role"] == "content":
+            body = call.response_payload
+            value = json.loads(body["choices"][0]["message"]["content"])
+            value["decisions"]["D01"]["post_types"] = ["invalid-post-type"]
+            body["choices"][0]["message"]["content"] = json.dumps(value)
+            call.response_hash = digest(body)
+        call.save(force_insert=True)
+        newer.append(call.pk)
+    sent = provider.sent
+    # A newer invalid reply must not abort before an older paid reply can repair
+    # the remaining member in the same original positional packet.
+    for _ in range(3):
+        result = run_direct(native, provider)
+        if result["status"] == "completed":
+            break
+    assert result["status"] == "completed", result
+    assert provider.sent == sent
+    assert (
+        OriginalContentCall.objects.filter(pk__in=newer, import_state="error").count()
+        == 2
+    )
+    for original in saved:
+        call = OriginalContentCall.objects.get(pk=original.pk)
+        assert (
+            call.import_state == "applied"
+            and call.response_hash == original.response_hash
+        )
+
+
+def test_unknown_group_does_not_block_new_independent_members(native):
+    from django.db import transaction
+
+    from core.models import Post, PostBrand, PostEnrichmentState
+    from core.provider_batches import record_post_membership
+
+    provider = DirectProvider()
+    normal = provider.transport
+
+    def timeout(body, seconds):
+        provider.sent += 1
+        raise TimeoutError("lost original reply")
+
+    provider.transport = timeout
+    run_direct(native, provider, initial=True, concurrency=32)
+    unknown = list(
+        OriginalContentCall.objects.filter(state="ambiguous").values_list(
+            "pk", "reserved_usd"
+        )
+    )
+    assert unknown
+    post = Post.objects.create(
+        tweet_id="independent", text="I tried Qwen today.", lang="en"
+    )
+    PostBrand.objects.create(post=post, brand_id="qwen")
+    PostEnrichmentState.objects.create(post=post)
+    with transaction.atomic():
+        record_post_membership(native[0].runs.get(), None, [post.pk])
+    provider.transport = normal
+    for _ in range(8):
+        result = execute_enrichment(
+            native[0].pk,
+            cfg=native[1],
+            api_key="test",
+            delegates=native[2],
+            transport="direct",
+            direct_concurrency=32,
+            direct_client_factory=provider.factory,
+            defer_failures=True,
+        )
+        if result["actionable_pending_count"] == 0:
+            break
+    state = PostEnrichmentState.objects.get(pk=post.pk)
+    assert state.translation_status == state.classification_status == "succeeded"
+    assert result["pending_count"] == 2 and result["status"] == "partial"
+    assert (
+        list(
+            OriginalContentCall.objects.filter(state="ambiguous").values_list(
+                "pk", "reserved_usd"
+            )
+        )
+        == unknown
+    )
+    assert OriginalContentCall.objects.filter(
+        state="ambiguous", actual_usd=None
+    ).count() == len(unknown)
