@@ -320,7 +320,9 @@ def _execute_models(claim, job, budget, *, key, before):
                     claim, job, source_pins, budget, items
                 )
             except SourceError as exc:
-                if str(exc) in {"not_found", "private", "http_404", "http_410"}:
+                if str(exc) in {"not_found", "private", "http_404", "http_410"} or (
+                    job.source_id == "hf" and str(exc) in {"unauthorized", "forbidden"}
+                ):
                     inaccessible_reason = str(exc)
                 else:
                     pending_native = True

@@ -142,6 +142,113 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download(rea
     assert MetricValue.objects.count() == 0
 
 
+@pytest.mark.parametrize(
+    ("failure", "error_reason", "terminal"),
+    [
+        (401, "unauthorized", True),
+        (403, "forbidden", True),
+        (429, "throttled", False),
+        (503, "http_503", False),
+        ("timeout", "request_error", False),
+    ],
+)
+def test_hf_history_access_failure_keeps_evidence_and_transient_resume(
+    failure, error_reason, terminal
+):
+    import httpx
+
+    from core.models import Product
+    from scripts.benchmark_download_collector.sources import Budget
+    from tests.test_hf_catalog_runner import scope
+
+    scope()
+    product = Product.objects.create(
+        brand_id="lab", repo_id="lab/model", type="llm-model"
+    )
+    source = DataSource.objects.get(pk="hf")
+    source.enabled, source.adapter_key = True, "hf-catalog-v1"
+    source.save()
+    job = history_job(
+        source,
+        product.brand,
+        product,
+        creation={
+            "at": "2026-09-01T00:00:00Z",
+            "source": "hf",
+            "native_identifier": "lab/model",
+        },
+    )
+    calls = []
+    recovering = False
+
+    def respond(request):
+        calls.append((request.url.path, request.url.params.get("cursor")))
+        assert "authorization" not in request.headers
+        path = request.url.path
+        if path == "/api/models/lab/model":
+            return httpx.Response(
+                200, json={"id": "lab/model", "private": False, "sha": "a" * 40}
+            )
+        if "/commits/" in path:
+            assert path.endswith("a" * 40)
+            if not request.url.params.get("cursor"):
+                return httpx.Response(
+                    200,
+                    json=[{"id": "b" * 40, "date": "2026-09-03T00:00:00Z"}],
+                    headers={
+                        "Link": f'<https://huggingface.co{path}?cursor=next>; rel="next"'
+                    },
+                )
+            if recovering:
+                return httpx.Response(200, json=[])
+            if failure == "timeout":
+                raise httpx.ReadTimeout("captured transport failure", request=request)
+            return httpx.Response(failure, json={"error": error_reason})
+        assert recovering and path.endswith("/tree/" + "b" * 40)
+        return httpx.Response(200, json=[])
+
+    def budget():
+        return Budget(
+            httpx.Client(transport=httpx.MockTransport(respond)),
+            max_requests=10,
+            max_bytes=1000000,
+            sleep=lambda _: None,
+        )
+
+    first = execute_model_history(job.pk, budget=budget())
+    assert first.request_count == len(calls) == (3 if terminal else 5)
+    assert first.report["physical_requests_this_invocation"] == len(calls)
+    assert first.report["physical_accounting_complete"] is True
+    evidence = list(first.observations.order_by("pk").values())
+    assert len(evidence) == 2
+    coverage = first.report["coverage"][0]
+    assert {item["observation_id"] for item in coverage["evidence"]} == {
+        row["id"] for row in evidence
+    }
+    assert coverage["coverage_complete"] is False
+    assert first.scopes.get(scope_kind="hf_repository_history").cursor == "next"
+    cell = first.scopes.get(scope_kind="model_coverage")
+    if terminal:
+        assert first.status == "success"
+        assert coverage["outcome"] == cell.outcome == "inaccessible"
+        assert coverage["reason"] == error_reason
+        assert cell.enumeration_complete is True
+    else:
+        assert first.status == "partial"
+        assert coverage["outcome"] == cell.outcome == "partial"
+        assert cell.enumeration_complete is False
+        recovering = True
+        resumed = execute_model_history(job.pk, budget=budget())
+        assert resumed.pk == first.pk and resumed.status == "success"
+        assert resumed.request_count == len(calls) == 7
+        assert resumed.report["physical_requests_this_invocation"] == 2
+        assert resumed.report["coverage"][0]["outcome"] == "observed"
+        assert list(resumed.observations.order_by("pk").values()) == evidence
+        assert sum(cursor is None and "/commits/" in path for path, cursor in calls) == 1
+        assert sum(path == "/api/models/lab/model" for path, _ in calls) == 1
+    assert MetricValue.objects.count() == 0
+
+
 def test_github_history_uses_reviewed_native_repo_and_pinned_tree():
     import httpx
 
