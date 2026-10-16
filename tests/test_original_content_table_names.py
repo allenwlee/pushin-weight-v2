@@ -39,16 +39,6 @@ BEFORE = ("core", "0078_original_content_workflow_shape")
 AFTER = ("core", "0079_original_content_physical_names")
 
 
-@pytest.fixture(autouse=True)
-def restore_current_migration_state(transactional_db):
-    # Historical rename rehearsals must restore newer tables before DB flush.
-    targets = MigrationExecutor(connection).loader.graph.leaf_nodes()
-    try:
-        yield
-    finally:
-        MigrationExecutor(connection).migrate(targets)
-
-
 def migrate(target):
     executor = MigrationExecutor(connection)
     executor.migrate([target])
@@ -175,7 +165,9 @@ def test_runtime_orm_names_match_canonical_base_tables_and_compatible_views():
             assert dict(cursor.fetchall()) == {old: "v", canonical: "r"}
 
 
-def test_populated_forward_and_reverse_preserve_rows_keys_indexes_and_sequences():
+def test_populated_forward_and_reverse_preserve_rows_keys_indexes_and_sequences(
+    isolated_migration_database,
+):
     try:
         old_apps = migrate(BEFORE)
         graph = seed(old_apps)
@@ -291,7 +283,7 @@ def test_old_and_new_orms_write_same_rows_with_defaults_conflicts_locks_and_prot
     )
 
 
-def test_lock_timeout_rolls_back_all_prior_renames():
+def test_lock_timeout_rolls_back_all_prior_renames(isolated_migration_database):
     blocker = connection.copy()
     try:
         migrate(BEFORE)
@@ -316,7 +308,9 @@ def test_lock_timeout_rolls_back_all_prior_renames():
         migrate(AFTER)
 
 
-def test_unexpected_target_is_not_replaced_and_all_renames_roll_back():
+def test_unexpected_target_is_not_replaced_and_all_renames_roll_back(
+    isolated_migration_database,
+):
     try:
         migrate(BEFORE)
         with connection.cursor() as cursor:
@@ -336,7 +330,7 @@ def test_unexpected_target_is_not_replaced_and_all_renames_roll_back():
         migrate(AFTER)
 
 
-def test_two_build_migration_runners_serialize_the_same_rename():
+def test_two_build_migration_runners_serialize_the_same_rename(isolated_migration_database):
     try:
         migrate(BEFORE)
         barrier = Barrier(2)
