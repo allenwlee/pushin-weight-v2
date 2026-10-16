@@ -160,3 +160,34 @@ def test_numeric_event_pagination_requires_native_identity_and_positive_integer(
         with pytest.raises(ValueError, match="repository ID"):
             reader.events("publisher/model", "commits", repository_id=identity)
     assert len(sent) == 1
+
+
+def test_release_asset_metadata_pagination_pins_repository_and_release():
+    sent = []
+    next_url = "https://api.github.com/repositories/123/releases/5/assets?page=2"
+
+    def response(request):
+        sent.append(request)
+        return httpx.Response(
+            200,
+            json=[{"id": 501}],
+            headers={} if len(sent) > 1 else {"Link": f'<{next_url}>; rel="next"'},
+        )
+
+    reader = client(response)
+    first = reader.release_assets("publisher/family", 5, repository_id=123)
+    assert first.next_url == next_url
+    reader.release_assets("publisher/family", 5, repository_id=123, next_url=next_url)
+    assert len(sent) == 2 and all(
+        r.headers["accept"] == "application/vnd.github+json" for r in sent
+    )
+    for invalid in (
+        next_url.replace("123", "124"),
+        next_url.replace("/5/", "/6/"),
+        "https://downloads.example.com/weights.bin",
+    ):
+        with pytest.raises(ValueError):
+            reader.release_assets(
+                "publisher/family", 5, repository_id=123, next_url=invalid
+            )
+    assert len(sent) == 2

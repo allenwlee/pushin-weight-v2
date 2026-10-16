@@ -22,7 +22,7 @@ METADATA_FILES = frozenset(
 )
 NAME = r"[A-Za-z0-9_.-]{1,100}"
 ENDPOINT = re.compile(
-    rf"/(?:users/{NAME}|(?:orgs|users)/{NAME}/repos|repos/{NAME}/{NAME}(?:/(?:releases|tags|commits|git/trees/[0-9a-f]{{40,64}}|contents/(?:README\.md|config\.json|model_index\.json|generation_config\.json)))?|repositories/[1-9][0-9]*/(?:releases|tags|commits))"
+    rf"/(?:users/{NAME}|(?:orgs|users)/{NAME}/repos|repos/{NAME}/{NAME}(?:/(?:releases(?:/[1-9][0-9]*/assets)?|tags|commits|git/trees/[0-9a-f]{{40,64}}|contents/(?:README\.md|config\.json|model_index\.json|generation_config\.json)))?|repositories/[1-9][0-9]*/(?:releases(?:/[1-9][0-9]*/assets)?|tags|commits))"
 )
 
 
@@ -232,6 +232,31 @@ class GitHubMetadataClient:
     def tree(self, full_name, revision):
         self.revision(revision)
         return self.get(self.repo_url(full_name) + "/git/trees/" + revision)
+
+    def release_assets(
+        self, full_name, release_id, *, repository_id, next_url=None, per_page=100
+    ):
+        """Metadata JSON only; never follow an asset's binary download URL."""
+        require(
+            type(release_id) is int
+            and release_id > 0
+            and type(repository_id) is int
+            and repository_id > 0,
+            "native repository and release IDs required",
+        )
+        require(type(per_page) is int and 1 <= per_page <= 100, "invalid page size")
+        suffix = f"/releases/{release_id}/assets"
+        endpoint = self.repo_url(full_name) + suffix
+        paths = {urlsplit(endpoint).path, f"/repositories/{repository_id}{suffix}"}
+        require(
+            next_url is None or urlsplit(next_url).path in paths,
+            "pagination scope mismatch",
+        )
+        return self.get(
+            next_url or endpoint,
+            params=None if next_url else {"per_page": per_page},
+            pagination_paths=paths,
+        )
 
     @staticmethod
     def revision(value):

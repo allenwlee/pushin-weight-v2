@@ -41,8 +41,18 @@ def register_github_source():
 
 
 def register_github_job(
-    *, job_key, publisher_ids, budgets, mode="recurring", schedule=None
+    *,
+    job_key,
+    publisher_ids,
+    budgets,
+    mode="recurring",
+    schedule=None,
+    github_role="inventory",
+    numeric_contract_id=None,
 ):
+    require(
+        github_role in {"inventory", "release_watch", "full"}, "unsupported GitHub role"
+    )
     source = register_github_source()
     publishers = []
     for key in publisher_ids:
@@ -73,7 +83,15 @@ def register_github_job(
         mode=mode,
         definition={
             "version": 1,
-            "scope": {"publishers": publishers},
+            "scope": {
+                "publishers": publishers,
+                "github_role": github_role,
+                **(
+                    {"numeric_contract_id": str(numeric_contract_id)}
+                    if numeric_contract_id
+                    else {}
+                ),
+            },
             "budgets": budgets,
             "schedule": schedule
             or (
@@ -108,6 +126,8 @@ def _record(
     observed_at,
     coordinate=None,
     reused_from=None,
+    dimensions=None,
+    metadata=None,
 ):
     safe_payload(payload)
     resource = (
@@ -115,7 +135,7 @@ def _record(
     )
     clocks = {}
     published_at = None
-    if kind == "repository":
+    if kind in {"repository", "repository_access"}:
         clocks = {
             "repository_created_at": payload.get("created_at"),
             "repository_updated_at": payload.get("updated_at"),
@@ -134,6 +154,11 @@ def _record(
             "author_at": commit.get("author", {}).get("date"),
             "committer_at": commit.get("committer", {}).get("date"),
         }
+    elif kind == "release_asset":
+        clocks = {
+            "asset_created_at": payload.get("created_at"),
+            "asset_updated_at": payload.get("updated_at"),
+        }
     key = digest({"resource_key": resource})
     observation, _ = CollectionObservation.objects.get_or_create(
         run=run,
@@ -145,13 +170,41 @@ def _record(
             "source_subject_kind": "account" if kind == "publisher" else "repository",
             "observed_at": observed_at,
             "listing": payload,
-            "dimensions": {"kind": kind, "coordinate": coordinate},
-            "source_metadata": {"clocks": clocks, "reused_from": reused_from},
+            "dimensions": {
+                "kind": kind,
+                "coordinate": coordinate,
+                **(dimensions or {}),
+            },
+            "source_metadata": {
+                "clocks": clocks,
+                "reused_from": reused_from,
+                **(metadata or {}),
+            },
             "published_at": published_at,
             "publication_precision": "instant" if published_at else "unknown",
         },
     )
     return observation
+
+
+def _queue_numeric(claim, run, observations):
+    """Queue the exact captured payloads inside their fenced evidence transaction."""
+    contract_id = run.job.definition["scope"].get("numeric_contract_id")
+    if not contract_id:
+        return
+    from core.models import MetricCollectionContract
+    from core.source_metric_projection import enqueue_projection
+
+    contract = MetricCollectionContract.objects.get(pk=contract_id)
+    config = contract.source_configuration["github"]
+    require(
+        config.get("eligibility_policy") == "source-statistics-v1",
+        "statistics contract required",
+    )
+    wires = {d["definition_metadata"].get("wire_field") for d in config["definitions"]}
+    ids = [o.pk for o in observations if any(w in o.listing for w in wires if w)]
+    if ids:
+        enqueue_projection(claim, contract=contract, evidence_ids=ids)
 
 
 def _scope(claim, kind, key):
@@ -204,6 +257,18 @@ def _publisher_inventory(claim, client, pin, items):
             == ("Organization" if pin["account_kind"] == "organization" else "User"),
             "publisher kind mismatch",
         )
+
+        def write_profile(run, scope):
+            observation = _record(
+                run,
+                scope,
+                key,
+                "publisher",
+                result.payload,
+                observed_at=result.observed_at,
+            )
+            _queue_numeric(claim, run, [observation])
+
         checkpoint_scope(
             claim,
             scope_kind="publisher",
@@ -212,14 +277,7 @@ def _publisher_inventory(claim, client, pin, items):
             enumeration_complete=True,
             outcome="complete",
             envelopes=[_envelope(result)],
-            write=lambda run, scope: _record(
-                run,
-                scope,
-                key,
-                "publisher",
-                result.payload,
-                observed_at=result.observed_at,
-            ),
+            write=write_profile,
         )
     scoped = _scope(claim, "publisher_repos", key)
     previous = None
@@ -292,16 +350,24 @@ def _publisher_inventory(claim, client, pin, items):
         require(not next_url or next_url not in history, "pagination loop")
 
         def write(run, scope, rows=rows, result=result, reused=reused):
+            captured = []
             for row in rows:
-                _record(
+                observation = _record(
                     run,
                     scope,
                     row["id"],
                     "repository",
                     row,
-                    observed_at=result.observed_at,
+                    observed_at=aware_instant(reused["observed_at"])
+                    if reused
+                    else result.observed_at,
                     reused_from=reused,
                 )
+                captured.append(observation)
+            # A 304 carries old counters. Fresh detail below provides today's
+            # numbers; the reused listing never becomes a new numeric snapshot.
+            if not reused:
+                _queue_numeric(claim, run, captured)
 
         scoped = checkpoint_scope(
             claim,
@@ -326,6 +392,17 @@ def _repository_access(claim, client, repository):
     key = str(repo["id"])
     ownership = {"repository_id": key, "owner_id": str(repo["owner"]["id"])}
     result = client.repository(repo["full_name"])
+    if result.status == 404:
+        checkpoint_scope(
+            claim,
+            scope_kind="repository_access",
+            scope_key=key,
+            ownership=ownership,
+            enumeration_complete=True,
+            outcome="inaccessible",
+            envelopes=[_envelope(result)],
+        )
+        return False
     _checked_response(
         claim,
         result,
@@ -343,6 +420,19 @@ def _repository_access(claim, client, repository):
         "native repository access identity mismatch",
     )
     public = data["private"] is False
+
+    def write_access(run, scope):
+        if public:
+            observation = _record(
+                run,
+                scope,
+                key,
+                "repository_access",
+                data,
+                observed_at=result.observed_at,
+            )
+            _queue_numeric(claim, run, [observation])
+
     checkpoint_scope(
         claim,
         scope_kind="repository_access",
@@ -358,8 +448,98 @@ def _repository_access(claim, client, repository):
                 "public": public,
             }
         ],
+        write=write_access,
     )
     return public
+
+
+def _release_assets(claim, client, repository, releases, items, limit):
+    repo = repository.listing
+    for release in releases.observations.filter(dimensions__kind="releases").order_by(
+        "pk"
+    ):
+        release_id = release.listing["id"]
+        key = f"{repo['id']}:{release_id}"
+        ownership = {
+            "repository_id": repo["id"],
+            "release_id": release_id,
+            "owner_id": repo["owner"]["id"],
+        }
+        scoped = _scope(claim, "release_assets", key)
+        while scoped is None or not scoped.enumeration_complete:
+            if items[0] >= limit:
+                raise CollectionStop("item_cap")
+            result = client.release_assets(
+                repo["full_name"],
+                release_id,
+                repository_id=repo["id"],
+                next_url=scoped.cursor if scoped else None,
+                per_page=min(100, limit - items[0]),
+            )
+            _checked_response(
+                claim,
+                result,
+                kind="release_assets",
+                key=key,
+                ownership=ownership,
+                scope=scoped,
+            )
+            rows = result.payload
+            require(
+                isinstance(rows, list) and len(rows) <= limit - items[0],
+                "bounded release asset list required",
+            )
+            require(
+                all(
+                    isinstance(row, dict)
+                    and type(row.get("id")) is int
+                    and row["id"] > 0
+                    for row in rows
+                ),
+                "native asset ID required",
+            )
+            history = [*(scoped.cursor_history if scoped else []), result.url]
+            require(
+                not result.next_url or result.next_url not in history,
+                "asset pagination loop",
+            )
+
+            def write_assets(
+                run, scope, rows=rows, result=result, release_id=release_id
+            ):
+                captured = [
+                    _record(
+                        run,
+                        scope,
+                        repo["id"],
+                        "release_asset",
+                        row,
+                        observed_at=result.observed_at,
+                        coordinate={"release_id": release_id, "asset_id": row["id"]},
+                        dimensions={"release_id": release_id, "asset_id": row["id"]},
+                        metadata={
+                            "owner_id": repo["owner"]["id"],
+                            "repository_id": repo["id"],
+                        },
+                    )
+                    for row in rows
+                ]
+                _queue_numeric(claim, run, captured)
+
+            scoped = checkpoint_scope(
+                claim,
+                scope_kind="release_assets",
+                scope_key=key,
+                ownership=ownership,
+                cursor=result.next_url,
+                cursor_history=history,
+                envelopes=[*(scoped.envelopes if scoped else []), _envelope(result)],
+                enumeration_complete=result.next_url is None,
+                outcome="complete" if result.next_url is None else "pending",
+                raw_count=(scoped.raw_count if scoped else 0) + len(rows),
+                write=write_assets,
+            )
+            items[0] += len(rows)
 
 
 def _events(claim, client, repository, kind, items, limit):
@@ -585,7 +765,18 @@ def execute_github_catalog(job_id, *, client=None, key=None):
     reason, retry_at = None, None
     items = [0]
     try:
-        publishers = job.definition["scope"].get("publishers")
+        from core.source_metric_projection import drain_pending_projections
+
+        scope = job.definition["scope"]
+        role = scope.get("github_role", "full")
+        require(
+            role in {"inventory", "release_watch", "full"}, "unsupported GitHub role"
+        )
+        if scope.get("numeric_contract_id"):
+            pending = drain_pending_projections(job.pk, budget=budget)
+            if pending["pending"]:
+                raise CollectionStop("numeric_projection_pending")
+        publishers = scope.get("publishers")
         require(
             isinstance(publishers, list) and publishers,
             "reviewed publisher scope required",
@@ -593,9 +784,20 @@ def execute_github_catalog(job_id, *, client=None, key=None):
         for publisher in publishers:
             repositories = _publisher_inventory(claim, client, publisher, items)
             for repository in repositories:
+                prior_access = _scope(
+                    claim, "repository_access", str(repository.listing["id"])
+                )
+                if (
+                    role == "inventory"
+                    and prior_access
+                    and prior_access.enumeration_complete
+                ):
+                    continue
                 if not _repository_access(claim, client, repository):
                     continue
-                _events(
+                if role == "inventory":
+                    continue
+                releases = _events(
                     claim,
                     client,
                     repository,
@@ -603,6 +805,19 @@ def execute_github_catalog(job_id, *, client=None, key=None):
                     items,
                     job.definition["budgets"]["items"],
                 )
+                if scope.get(
+                    "include_release_assets", bool(scope.get("numeric_contract_id"))
+                ):
+                    _release_assets(
+                        claim,
+                        client,
+                        repository,
+                        releases,
+                        items,
+                        job.definition["budgets"]["items"],
+                    )
+                if role == "release_watch":
+                    continue
                 _events(
                     claim,
                     client,
@@ -627,6 +842,16 @@ def execute_github_catalog(job_id, *, client=None, key=None):
     finally:
         if own_client:
             own_client.close()
+    projection = None
+    if job.definition["scope"].get("numeric_contract_id"):
+        from core.source_metric_projection import drain_pending_projections
+
+        try:
+            projection = drain_pending_projections(job.pk, budget=budget)
+            if projection["pending"] and reason is None:
+                reason = "numeric_projection_pending"
+        except (ValueError, KeyError, TypeError):
+            reason = reason or "numeric_projection_failed"
     scopes = run.scopes.all()
     selected, successful = (
         scopes.count(),
@@ -639,6 +864,13 @@ def execute_github_catalog(job_id, *, client=None, key=None):
         "bytes_this_invocation": budget.total_bytes_read,
         "api_version": "2026-03-10",
         "native_clocks_are_release_leads": True,
+        "numeric_projection": projection,
+        "physical_accounting_complete": True,
+        "inaccessible_repositories": list(
+            scopes.filter(
+                scope_kind="repository_access", outcome="inaccessible"
+            ).values_list("scope_key", flat=True)
+        ),
         "inventory_complete": {
             s.scope_key: s.enumeration_complete
             for s in scopes.filter(scope_kind="publisher_repos")
