@@ -7,14 +7,17 @@ ollija:
   change_id: feat-benchmark-download-collector-2026-10-05-070106
   branch: feat/benchmark-download-collector
   workflow: plan
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  delivery_target: production
+  delivery_selected_by_user: true
+  delivery_route: staged
+  delivery_route_selected_by_user: false
+  staging_transport: branch
 ---
 # Benchmark scores and model adoption in PostgreSQL
 
 ## Plain-English Summary
 
-**Current October 9 follow-up:** make measurement intervals self-describing in PostgreSQL. Keep nullable start/end timestamps and add a generated `window_range` that records inclusive start and exclusive end. If either endpoint is unknown, the range itself stays NULL and the other timestamp is preserved. These measurement windows never have intentionally infinite endpoints. This independently owned change supports the new G3 chart engine while retaining existing chart calculations, source clocks and historical evidence. Verify fresh and populated migrations, direct SQL boundaries, collector/read regressions and reversal in isolated PostgreSQL. The current LFG endpoint is a tested pull request; prior production grants below describe completed releases and do not authorize this migration's deployment.
+**Current October 16 follow-up:** complete the approved three-column measurement-window change through verified production deployment. Keep nullable start/end timestamps and add a generated `window_range` that records inclusive start and exclusive end. If either endpoint is unknown, the range itself stays NULL and the other timestamp is preserved. These measurement windows never have intentionally infinite endpoints. Reconcile existing PR56 with current main and the deployed collection schema, rehearse preservation on populated PostgreSQL, retain a recoverable production backup, verify staging, then observe the intended production revision and generated ranges. This adds one column and one index, with zero new/retired tables; collection, source clocks and historical evidence remain unchanged.
 
 Compare post volume, benchmark scores, HF downloads and OpenRouter/OpenCode usage using products we identify and a taxonomy we control. Product relationships store typed parent/child links using HF's vocabulary. Named product groups, such as M-family, have explicit membership; they are not compulsory levels between brands and products. Django queries interpret successor chains and groups while company ownership and brand membership remain separate.
 
@@ -38,7 +41,25 @@ The owner has now selected one combined release-response chart as the default G5
 
 The latest naming decision renames the definition table from `source_metrics` to `metrics`. A metric still belongs to one data source and retains its unit, numeric type, version and state/flow semantics. This is a migration of the existing table, not another table or a change in recorded measurements. U24 is implemented and verified on isolated and populated staging PostgreSQL; the October 8 verified production release also uses `metrics`.
 
-## October 9 amendment — database-enforced measurement intervals
+## October 16 production completion — existing PR56
+
+The owner's current **“lfg that”** selects production completion of the four-step proposal immediately preceding it: reconcile existing PR56 with current schema, rehearse populated migration and preservation, retain a recoverable live backup, verify staging, deploy and inspect actual generated-range coverage. This supersedes the October9 verified-PR-only boundary for this bounded follow-up. Reuse this canonical plan/worktree and PR56; no separate plan, replacement PR, source collection or schema redesign.
+
+### Delivery Exceptions
+
+- Delivery target is production, explicitly selected by the owner on October16; use the default staged route. No staging/browser/check waiver or direct-production route has been requested.
+- Preserve the October9 approved finite nullable-start/end plus generated-range design (R46–R49/KD28/KTD7). Other sessions' work and existing operational schedules/credentials are excluded. Original-content/chart-performance fixes remain separately owned.
+- Merge current main into the existing branch without forced history replacement. Renumber the unapplied range migrations after the confirmed current leaf (`0090` at intake), updating dependencies and owned test references. Never rename or edit migrations already applied in production.
+- Production backup must be private on fuchitalee, archive-validated and restore-tested with metric-data coverage. Serialize migrations through the existing shared migration guard, with bounded lock admission. Record concrete failure/rollback diagnosis in this plan; no automatic broad database restore or destructive data rollback.
+- Completion requires observed production revision, generated-column/function/index verification, retained original-value hashes and a completed routine collection writing correctly under the new schema. An open PR or branch push alone does not complete this selection.
+
+### Remaining execution units
+
+- **U32 — reconcile current schema:** inspect current model/migrations/writers/readers; integrate main, renumber only the two unapplied migrations, preserve existing nullable values, carry range regression checks onto current job/run/observation identities. Verify one migration leaf and no ungenerated model changes. No new/retired table.
+- **U33 — populated preservation and backup:** run existing range/direct-SQL/source/series regression tests on isolated PostgreSQL18. Test fresh graph, populated upgrade/reversal/reapply, bounded lock refusal, generated-column ownership, complete/partial/unknown windows and index validity. Compare original column hashes and source-series responses. Take and restore a recoverable current production backup; record exact evidence scope, revision, durations and data counts.
+- **U34 — staged production rollout:** complete simplification and code/data-integrity review; update existing PR56 and required CI. Check shared staging/service/database occupancy before promotion, verify exact staging candidate and real database shape/data/readers, then merge/promote authorized candidate and observe production consumers. Verify finite `[start,end)` shape, SQL NULL for all incomplete/state windows, original-row preservation and a natural collector write. Record failures with exact service/SHA/SQL evidence and safe forward repair; no provider batches, scheduler changes or other-owner mutations. Finish with scoped evidence/review delivery and only eligible clean verified worktree cleanup.
+
+## October 9 amendment — database-enforced measurement intervals (historical PR endpoint)
 
 ### Current scope and delivery
 
@@ -2099,11 +2120,25 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Delivery target: `production`
+- Owner selection recorded: `true`
 - Delivery route: `staged`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
+5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
+6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
+7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/benchmark-download-collector` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
