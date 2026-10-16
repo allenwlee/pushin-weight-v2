@@ -1,11 +1,18 @@
 # Render runbook — Pushin Weight v2
 
-The shared collection-job candidate is described in
-[Collection jobs](../reference/collection-jobs.md). Migrations 0081–0082 add one
-table and alter existing run/mapping fields; registering jobs does not activate
-sources, provider batches or schedules. `collect_jobs_due --execute` requires a
-separate scheduler activation. The existing fifteen-minute X cron remains the
-only harvest scheduler, and its runtime receipt adapter has separate ownership.
+The shared collection foundation is described in
+[Collection jobs](../reference/collection-jobs.md). The source-ingestion increment
+adds no tables; migration0087creates the conditional statistics snapshot index
+concurrently. The build migration runner polls its application-database advisory
+lock so another build cannot obstruct concurrent DDL. Inspect both the migration
+ledger and index valid/ready state after a failed build before retrying it.
+
+Registering jobs does not activate sources, provider batches or schedules.
+Reviewed recurring source roles use explicit collection authority and the existing
+hourly benchmark runner. Historical backfiller-data-source work and evidence replay
+use the same adapters and numeric writer, with separate finite jobs and budgets.
+The existing fifteen-minute X cron remains the only harvest scheduler, and its
+runtime receipt adapter and recovery controller have separate ownership.
 
 For compatible OriginalContent storage delivery, follow the
 [storage controls and cutover contract](../reference/original-content.md#controls-cutover-and-rollback).

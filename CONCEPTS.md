@@ -34,6 +34,24 @@ which its source count and citation links are derived.
 Search matches and retrieved background do not automatically become cited
 support; a repeated source is not an additional independent confirmation.
 
+## Data-source collection
+
+### Backfiller data source
+
+The repeatable process for ingesting available historical and current provider
+data into PushinWeight's shared collection and measurement storage. Its component
+name is **backfiller-data-source**; the command is `backfiller_data_source`.
+It shares acquisition, validation and numeric ingestion with normal source
+collection. Committed database state allows interrupted work to resume. It is
+separate from the X post backfiller and does not imply complete provider history.
+
+### Native-resource measurement
+
+A measurement belonging to a provider resource, such as a repository, account
+or release asset. It can be stored before a reviewed canonical model link exists.
+Such values remain **native-only** until qualified for canonical attribution;
+one shared repository's counter is not copied onto each model it supports.
+
 ## Ollija plan guidance
 
 ### Standalone Ollija

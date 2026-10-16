@@ -1313,6 +1313,42 @@ The owner subsequently selected LFG and faster native implementation workers. Th
 - **U13, 0df28b63:** GH fresh inventory/release-watch/deep-history roles, full access/profile evidence, native counters and paginated asset metadata. Parent17client checks and14PostgreSQL integration checks cover new/legacy paths; the later combined selected checks include this increment. Fixtures140saved repositories→420values and second-job replay0additional/noHTTP; actual binary URLs are never requested. New following/public_repos counters retain account grain.
 - **U15 recovery slice, c2426cf8:** a red PostgreSQL case proved a successful reclaimed catalog attempt incorrectly released an earlier crashed invocation's request reservation. Claims now distinguish previous reservation from current physical usage; only the current explicitly accounted invocation can release its unused allowance. Parent56PostgreSQL integration/state/scheduling checks passed before the final profile refinement; subsequent23PostgreSQL HF/GH/facade checks pass after it. No old unresolved usage is reset.
 
-U14 publication/history/cohort integration and U15 hourly scheduler/readers remain in progress. Most production Products lack a finer model subtype. The opt-in cohort refinement will require immutable public first-party model-registry evidence to qualify native model kind, retain the subtype as unreviewed, and leave default cohort/text-benchmark admission unchanged. It must not manufacture LLM labels or an almost-empty successful cohort.
+- **U14, 64004745:** automatic OpenRouter/Arena publication and sparse HF archive projection, typed Arena agent definitions, saved compatible daily reuse, bounded exact windows and a per-run rolling publication window. The opt-in `hf-public-model-registry-v1` cohort qualification pins immutable public first-party evidence while leaving unknown subtype and default cohort/text-benchmark admission unchanged. Native GPT-6.1 Sol worker reported74checks/67requiredPostgreSQL before final refinements and55checks/21requiredPostgreSQL after them, all zero skips/errors. Parent integrated facade/history/scheduling/reports/projection verification:61requiredPostgreSQL checks passed, zero skips/errors. Unsupported Arena configurations retain explicit gaps; incomplete windows remain partial.
+- **U15, b6fa3091:** the actual hourly `collect_benchmark_due` entry point dispatches explicitly claimed source roles using shared bounded adapters. Registration does not activate a role. Default recurring dispatch excludes manual projection jobs, preserves provider cooldowns and resumes partial catalog slots. Native-resource CLI reports retain definitions, units, unknown time and provenance. Parent33requiredPostgreSQL checks passed, including hourly-entry acquisition-to-values and same-slot no-HTTP reuse. Natural production execution remains unobserved.
+- **U16 local migration slice, 23c862c8:** the actual deployment runner polls `pg_try_advisory_lock` with a finite deadline. A blocking application-database lock waiter can obstruct concurrent index DDL. The new two-session PostgreSQL proof and nine focused deployment checks pass; the existing two-runner rename compatibility proof also passes. The physical schema/doc inventory remains exactly151tables/1971columns, and the new snapshot index is valid/ready on isolated PostgreSQL. No tables or columns were added.
+
+- **R9 integration fix, 8e62818e:** the faster worker reproduced lost queue acknowledgement after pause/reclaim through all three acquisition entry points (three red failures before the fix). All six live drain calls now pass their original acquisition claim. Short fences protect continuation/acknowledgement without holding origin locks during metric registration, claiming or projection. The independent committed metric snapshot remains valid; a successor reuses it without duplicates. Worker90checks plus final12fencing checks pass, zero skips/errors; the final extra test uses a separate PostgreSQL connection to prove lock release.
+- **U16 integrated verification at8e62818e:** the broad collection/benchmark/HF/GH/history/readers/X-adapter/staging/Ollija run passed641checks, including all299requiredPostgreSQL checks, zero skips/errors in that required set. Thirteen supplemental `tests/test_hf_products.py` checks fail against retired SQLite seed expectations. A clean source archive of unchanged main2c43b4f0 reproduces the identical13failures/12passes in that file. They are pre-existing and outside the active Django collector; no retired adapter or assertion was changed. The full broad command therefore exits1; it is not described as a wholly green suite. Exact configured collector lint passes, Django system checks pass, and migration drift check reports no changes. The required workflow includes every new ingestion/fencing/concurrent-DDL test.
+
+### Runtime preservation baseline and release sequence
+
+Read-only production audit before this increment's release still observes the
+six paused pilot jobs and their1,959original observations. Ordered original-row
+hashes are pinned below; later replay must preserve both IDs and full rows.
+
+| Source | Original observations | Ordered ID MD5 | Ordered full-row MD5 |
+| --- | ---: | --- | --- |
+| github |1364|`ab149eefa771c041b524c430d540d9fd`|`6ce9d91945cb468fd40c8e1a08f848bb`|
+| hf |595|`a34dc0ec9b6eb4e874a3edbcba37122e`|`e0646892a5c4d6c1900dcf74dcf276a2`|
+
+Both staging and production web remain live at2c43b4f0before delivery. Before
+promoting0087, verify staging service/database occupancy, then complete and
+verify a fresh production backup/export on fuchitalee or a provider-managed
+recovery point. Record its actual identifier, time and restore/readability
+evidence here before migration; an old backup or an uncompleted export is not
+this proof. Do not copy database contents to the desktop review directory.
+The concurrent index and nonblocking migration gate require no X pause.
+After migration, verify the migration ledger and index valid/ready flags before
+source activation. A failed concurrent index build needs inspected recovery,
+not a blind deploy retry. Preserve all source flags until explicitly activating
+the selected new roles; leave the active X controller and careers cron alone.
+
+At2026-10-16T01:52:21Z, the parent requested a fresh provider-managed logical
+export of production database `dpg-d9koekqjobas73fvjqng-a`; Render returned202.
+The prior newest export is October15at05:38UTC. The fresh export is not yet
+listed as downloadable and must be verified before production migration.
+The operation changes no source, job, scheduler or controller state. API procedure
+verified against [Render's export endpoint](https://api-docs.render.com/reference/create-postgres-export)
+and [backup guidance](https://render.com/docs/postgresql-backups).
 
 Read-only production audit found existing dated Arena/OpenRouter/HF measurements suitable for inspection/reuse before further acquisition. Unknown-time HF counters retain unknown effective time. The original1959catalog observations and live sources remain unmodified by this local implementation checkpoint; no source-provider batch, production migration, push or deployment has run yet.

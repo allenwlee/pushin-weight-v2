@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-15 (integrated account and provider-batch source; database proof recorded with the release)
+Last verified: 2026-10-16 JST (source `8e62818e`; exact table/column inventory checked against models and isolated PostgreSQL, including the valid/ready statistics snapshot index)
 
-Scope: **151 application tables**, **1971 physical columns**, plus nine compatibility views. Source: `docs/august-harvest-audit-20261012`, integrated G3 account and backfill source; migration graph joins `0084_shared_publisher_accounts` and `0085_provider_batch_enrichment` through `0086_merge_account_provider_batch`.
+Scope: **151 application tables**, **1971 physical columns**, plus nine compatibility views. Migration boundary: `0087_source_statistics_snapshot`, following the account/provider-batch merge `0086_merge_account_provider_batch`. This increment adds no tables or columns; it adds a conditional unique index to existing collection observations.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -6127,6 +6127,7 @@ Model: [CollectionObservation](../../core/models.py#L8033).
 
 - `uq_collection_scope_resource`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "uq_collection_scope_resource" UNIQUE ("scope_run_id", "resource_key")`.
 - `uq_metric_observation`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "uq_metric_observation" UNIQUE ("run_id", "observation_key")`.
+- `uq_source_statistics_snapshot`: a unique index on `observation_key` restricted to `source_metadata.projection_kind = "source-statistics-v1"`. It prevents the same contract-pinned numeric snapshot being copied across different jobs/runs; unrelated legacy/catalog/content observations retain their existing keys and constraints. Migration0087 builds the index concurrently. Reused numeric observations keep their original owning run and observation clock; the later attempt records references and reuse counts.
 - `ck_observation_key`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_key" CHECK ("observation_key"::text ~ '^[0-9a-f]{64}$')`.
 - `ck_observation_kind`: `ALTER TABLE "collection_observations" ADD CONSTRAINT "ck_observation_kind" CHECK ("source_subject_kind" IN ('model', 'repository', 'lab', 'account', 'aggregate', 'post'))`.
 - `ck_observation_post_subject`: Post kind requires a real matching `post_id`, no metric mapping/product and `created_product = false`; every other kind requires NULL `post_id`.
