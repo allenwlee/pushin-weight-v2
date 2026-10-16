@@ -180,6 +180,8 @@ def test_0089_to_0090_preserves_rows_clocks_evidence_views_and_instruction_links
             if not (
                 row[1].startswith("FOREIGN KEY (source_id)")
                 or row[1].startswith("FOREIGN KEY (contract_id)")
+                # PostgreSQL 18 catalogs the removed columns' NOT NULL rules.
+                or row[1] in {f"NOT NULL {column}" for column in COPIES}
             )
         ]
         cursor.execute(
