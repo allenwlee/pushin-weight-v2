@@ -20,6 +20,104 @@ def metric_authority(source, contract_id):
     return source.metadata.get("collection_job_authorities", {}).get(str(contract_id))
 
 
+def collection_authority(source, role):
+    return source.metadata.get("collection_role_authorities", {}).get(role)
+
+
+@transaction.atomic
+def take_collection_authority(job_id):
+    """Explicitly attach one recurring source role to the existing hourly runner."""
+    job = CollectionJob.objects.select_for_update().get(pk=job_id)
+    validate_job(job)
+    role = job.definition["scope"].get("routine_role")
+    require(
+        job.purpose == "catalog"
+        and job.mode == "recurring"
+        and job.source_id in {"hf", "github", "openrouter", "arena"}
+        and job.definition["schedule"]["driver"] == "shared"
+        and isinstance(role, str)
+        and 0 < len(role) <= 128,
+        "reviewed recurring source role required",
+    )
+    source = DataSource.objects.select_for_update().get(pk=job.source_id)
+    pointers = dict(source.metadata.get("collection_role_authorities", {}))
+    previous = pointers.get(role)
+    require(
+        previous in (None, str(job.pk))
+        or CollectionJob.objects.filter(
+            pk=previous, source=source, state="cancelled"
+        ).exists(),
+        "another job owns collection role dispatch",
+    )
+    pointers[role] = str(job.pk)
+    source.metadata = {**source.metadata, "collection_role_authorities": pointers}
+    source.save(update_fields=["metadata"])
+    return job
+
+
+def dispatch_collection_roles(*, execute=False, now=None):
+    """Extend the deployed wake-up; registration cannot activate a source role."""
+    import httpx
+
+    from core.collection_budgets import invocation_budget
+
+    require(
+        not execute or settings.BENCHMARK_COLLECTION_ENABLED,
+        "source collection is disabled in this environment",
+    )
+    output = []
+    for source in DataSource.objects.order_by("pk"):
+        pointers = source.metadata.get("collection_role_authorities", {})
+        require(
+            isinstance(pointers, dict) and len(pointers) <= 1000,
+            "invalid collection role authorities",
+        )
+        if not pointers:
+            continue
+        jobs = []
+        for role, identifier in pointers.items():
+            try:
+                job = CollectionJob.objects.get(
+                    pk=uuid.UUID(identifier),
+                    source=source,
+                    purpose="catalog",
+                    mode="recurring",
+                )
+            except (ValueError, TypeError, CollectionJob.DoesNotExist) as exc:
+                raise ValueError("invalid collection role authority identity") from exc
+            require(
+                job.definition["scope"].get("routine_role") == role,
+                "collection role authority scope mismatch",
+            )
+            jobs.append(job.pk)
+        if execute:
+            limits = source.metadata.get(
+                "collection_role_dispatch_budget",
+                {
+                    "requests": 100,
+                    "seconds": 300,
+                    "bytes": 8 * 1024 * 1024,
+                },
+            )
+            require(
+                isinstance(limits, dict)
+                and set(limits) == {"requests", "seconds", "bytes"},
+                "invalid source dispatch budget",
+            )
+            with httpx.Client(trust_env=False) as client:
+                budget = invocation_budget(
+                    client,
+                    requests=limits["requests"],
+                    seconds=limits["seconds"],
+                    max_bytes=limits["bytes"],
+                )
+                rows = dispatch_due(execute=True, budget=budget, job_ids=jobs, now=now)
+        else:
+            rows = dispatch_due(job_ids=jobs, now=now)
+        output.extend({**row, "authority": "source-role"} for row in rows)
+    return output
+
+
 @transaction.atomic
 def take_metric_authority(job_id):
     """Registration alone does not replace the current benchmark scheduler."""
@@ -64,6 +162,21 @@ def due_job(job, *, now=None):
         reason = "external_or_manual_driver"
     elif job.state != "ready" or not job.source.enabled:
         reason = "paused_or_disabled"
+    elif (
+        job.purpose == "catalog"
+        and job.definition["scope"].get("routine_role")
+        and (not settings.BENCHMARK_COLLECTION_ENABLED)
+    ):
+        reason = "source_collection_disabled"
+    elif (
+        job.purpose == "catalog"
+        and job.definition["scope"].get("routine_role")
+        and (
+            collection_authority(job.source, job.definition["scope"]["routine_role"])
+            != str(job.pk)
+        )
+    ):
+        reason = "unclaimed_collection_role"
     elif job.purpose == "metric" and (
         not settings.BENCHMARK_COLLECTION_ENABLED
         or not job.contract.source_configuration[job.source_id].get(
@@ -84,7 +197,17 @@ def due_job(job, *, now=None):
     elif job.next_retry_at and job.next_retry_at > now:
         reason = "cooldown"
     else:
-        slot, following = schedule_slot(job, now)
+        continuation = (
+            job.last_attempt
+            if job.purpose == "catalog"
+            and job.last_attempt_id
+            and job.last_attempt.status == "partial"
+            and job.last_attempt.completed_at is None
+            else None
+        )
+        slot, following = schedule_slot(
+            job, continuation.started_at if continuation else now
+        )
         if slot > now or (job.next_due_at and job.next_due_at > now):
             reason = "before_slot"
         elif job.last_success_id and job.last_success.started_at >= slot:
@@ -188,7 +311,14 @@ def execute_due_job(job, decision, budget):
 
 
 def dispatch_due(
-    *, budget=None, now=None, execute=False, job_id=None, executor=None, limit=100
+    *,
+    budget=None,
+    now=None,
+    execute=False,
+    job_id=None,
+    job_ids=None,
+    executor=None,
+    limit=100,
 ):
     from core.collection_budgets import charge, job_budget
     from scripts.benchmark_download_collector.sources import SourceError
@@ -196,16 +326,28 @@ def dispatch_due(
     require(type(limit) is int and 1 <= limit <= 100, "invalid dispatch job cap")
     now = now or timezone.now()
     jobs = CollectionJob.objects.select_related(
-        "source", "contract", "active_run", "last_success"
-    ).order_by("created_at", "job_key")
+        "source", "contract", "active_run", "last_success", "last_attempt"
+    ).order_by("updated_at", "job_key")
     if job_id:
         jobs = jobs.filter(pk=job_id)
+    elif job_ids is not None:
+        jobs = jobs.filter(pk__in=job_ids)
+    else:
+        # Imported/manual projection receipts must not consume the dispatch cap.
+        jobs = jobs.filter(mode="recurring", definition__schedule__driver="shared")
     # Numeric work precedes catalog maintenance in a bounded invocation.
-    selected = list(jobs.filter(purpose="metric")[:limit])
-    selected += list(jobs.exclude(purpose="metric")[: limit - len(selected)])
+    candidates = [(job, due_job(job, now=now)) for job in jobs]
+    candidates.sort(
+        key=lambda pair: (
+            not pair[1]["due"],
+            pair[0].purpose != "metric",
+            pair[0].updated_at,
+            pair[0].job_key,
+        )
+    )
+    selected = candidates[:limit]
     output = []
-    for job in selected:
-        decision = due_job(job, now=now)
+    for job, decision in selected:
         decision["applied"] = False
         output.append(decision)
         if not execute or not decision["due"]:
@@ -236,7 +378,7 @@ def dispatch_due(
                     and current.state == "ready"
                 ):
                     current.next_retry_at = (
-                        timezone.now() + timedelta(minutes=15)
+                        max(now + timedelta(minutes=15), current.next_retry_at or now)
                         if run.status != "success"
                         else None
                     )

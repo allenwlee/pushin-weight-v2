@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from core.collection_jobs import set_job_state, validate_job
-from core.collection_scheduling import take_metric_authority
+from core.collection_scheduling import take_collection_authority, take_metric_authority
 from core.models import CollectionJob
 
 
@@ -19,6 +19,7 @@ class Command(BaseCommand):
             "--state", required=True, choices=["ready", "paused", "cancelled"]
         )
         parser.add_argument("--take-metric-authority", action="store_true")
+        parser.add_argument("--take-collection-authority", action="store_true")
         parser.add_argument("--apply", action="store_true")
 
     def handle(self, *args, **options):
@@ -29,6 +30,8 @@ class Command(BaseCommand):
                 with transaction.atomic():
                     if options["take_metric_authority"]:
                         take_metric_authority(job.pk)
+                    if options["take_collection_authority"]:
+                        take_collection_authority(job.pk)
                     job = set_job_state(job.pk, options["state"])
             self.stdout.write(
                 json.dumps(

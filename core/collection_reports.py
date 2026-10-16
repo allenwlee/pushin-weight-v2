@@ -3,7 +3,74 @@
 from django.db.models import Q
 from django.utils import timezone
 
-from core.models import CollectionJob
+from core.measurement_taxonomy import require
+from core.models import CollectionJob, MetricCollectionContract, MetricValue
+
+
+def resource_statistics(*, contract_id, source, identifier, limit=1000):
+    """Read native snapshots without promoting them into canonical model series."""
+    require(type(limit) is int and 0 < limit <= 1000, "invalid numeric report limit")
+    contract = MetricCollectionContract.objects.get(pk=contract_id)
+    require(source in contract.source_configuration, "source outside contract")
+    query = (
+        MetricValue.objects.filter(
+            observation__run__contract=contract,
+            observation__run__source_id=source,
+            observation__source_identifier=identifier,
+            observation__status="ok",
+            observation__run__status__in=["success", "partial"],
+        )
+        .select_related("observation__run", "source_metric")
+        .order_by("-observation__observed_at", "pk")
+    )
+    values = list(query[: limit + 1])
+    rows = []
+    for value in values[:limit]:
+        observation, definition = value.observation, value.source_metric
+        rows.append(
+            {
+                "value_id": value.pk,
+                "observation_id": observation.pk,
+                "run_id": str(observation.run_id),
+                "source_identifier": observation.source_identifier,
+                "source_subject_kind": observation.source_subject_kind,
+                "canonical_product_id": observation.product_id,
+                "native_only": observation.product_id is None,
+                "metric": definition.metric_key,
+                "version": definition.version,
+                "unit": definition.unit,
+                "measurement_kind": definition.measurement_kind,
+                "value": str(value.integer_value)
+                if value.integer_value is not None
+                else value.float_value,
+                "observed_at": observation.observed_at.isoformat(),
+                "temporal_status": value.temporal_status,
+                **{
+                    field: getattr(value, field).isoformat()
+                    if getattr(value, field) is not None
+                    else None
+                    for field in (
+                        "as_of_at",
+                        "as_of_date",
+                        "window_start_at",
+                        "window_end_at",
+                        "period_label_date",
+                    )
+                },
+                "dimensions": observation.dimensions,
+                "source_evidence": observation.source_metadata,
+            }
+        )
+    return _redact(
+        {
+            "contract_id": str(contract.pk),
+            "source": source,
+            "source_identifier": identifier,
+            "values": rows,
+            "truncated": len(values) > limit,
+            "limit": limit,
+        }
+    )
 
 
 def _run(run):

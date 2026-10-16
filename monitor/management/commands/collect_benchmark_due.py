@@ -11,7 +11,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from core.benchmark_metric_operations import daily_collection_hour_utc
-from core.collection_scheduling import metric_authority
+from core.collection_scheduling import dispatch_collection_roles, metric_authority
 from core.models import (
     CollectionJob,
     CollectionRun,
@@ -125,4 +125,5 @@ class Command(BaseCommand):
                 )
                 row["applied"] = True
             output.append(row)
+        output.extend(dispatch_collection_roles(execute=options["apply"], now=now))
         self.stdout.write(json.dumps(output))
