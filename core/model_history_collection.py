@@ -233,7 +233,9 @@ def _runtime_publication_window(claim, job):
 
 
 def _execute_models(claim, job, budget, *, key, before):
-    prior_projection = drain_pending_projections(job.pk, budget=budget)
+    prior_projection = drain_pending_projections(
+        job.pk, budget=budget, origin_claim=claim
+    )
     coverage = []
     items = [0]
     archive_outcome = None
@@ -374,7 +376,7 @@ def _execute_models(claim, job, budget, *, key, before):
         )
         coverage.append(cell)
     run = CollectionRun.objects.get(pk=claim.run_id)
-    projection = drain_pending_projections(job.pk, budget=budget)
+    projection = drain_pending_projections(job.pk, budget=budget, origin_claim=claim)
     pending_projection = projection["pending"]
     return finish_run(
         claim,

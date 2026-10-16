@@ -773,7 +773,9 @@ def execute_github_catalog(job_id, *, client=None, key=None):
             role in {"inventory", "release_watch", "full"}, "unsupported GitHub role"
         )
         if scope.get("numeric_contract_id"):
-            pending = drain_pending_projections(job.pk, budget=budget)
+            pending = drain_pending_projections(
+                job.pk, budget=budget, origin_claim=claim
+            )
             if pending["pending"]:
                 raise CollectionStop("numeric_projection_pending")
         publishers = scope.get("publishers")
@@ -847,7 +849,9 @@ def execute_github_catalog(job_id, *, client=None, key=None):
         from core.source_metric_projection import drain_pending_projections
 
         try:
-            projection = drain_pending_projections(job.pk, budget=budget)
+            projection = drain_pending_projections(
+                job.pk, budget=budget, origin_claim=claim
+            )
             if projection["pending"] and reason is None:
                 reason = "numeric_projection_pending"
         except (ValueError, KeyError, TypeError):

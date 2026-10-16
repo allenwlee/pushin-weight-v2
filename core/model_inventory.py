@@ -320,7 +320,9 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
         if job.definition["scope"].get("numeric_contract_id"):
             from core.source_metric_projection import drain_pending_projections
 
-            projection = drain_pending_projections(job.pk, budget=budget)
+            projection = drain_pending_projections(
+                job.pk, budget=budget, origin_claim=claim
+            )
             if projection["pending"]:
                 raise SourceError("numeric_projection_pending")
         items = (
@@ -343,7 +345,9 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
         from core.source_metric_projection import drain_pending_projections
 
         try:
-            projection = drain_pending_projections(job.pk, budget=budget)
+            projection = drain_pending_projections(
+                job.pk, budget=budget, origin_claim=claim
+            )
             if projection["pending"]:
                 reason = reason or "numeric_projection_pending"
         except ValueError as exc:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+from contextlib import contextmanager
 from time import monotonic
 
 from django.db import transaction
@@ -831,19 +832,45 @@ def replay_saved_evidence(job_id):
     )
 
 
-def drain_pending_projections(catalog_job_id, *, budget=None):
+@contextmanager
+def _projection_origin(catalog_job_id, origin_claim):
+    """Fence live acquisition or lock an idle origin for standalone recovery."""
+    if origin_claim is not None:
+        require(
+            str(origin_claim.job_id) == str(catalog_job_id),
+            "projection origin claim mismatch",
+        )
+        with fenced_run(origin_claim) as (job, _):
+            yield job
+    else:
+        with transaction.atomic():
+            job = CollectionJob.objects.select_for_update().get(pk=catalog_job_id)
+            require(
+                job.active_run_id is None,
+                "active catalog projection requires origin claim",
+            )
+            yield job
+
+
+def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None):
     """Consume durable capture references with one finite shared-writer budget.
 
     Acknowledgement follows numeric commit. A crash between them safely reuses
     immutable snapshots on the next call. Failed admission stays pending and
     inspectable; routine attempts do not enumerate completed captures.
+
+    Acquisition callers must pass their held origin_claim. Omitting it permits
+    standalone saved-queue recovery only while the origin has no active run.
+    Origin locks never span metric job registration, claiming or projection:
+    campaign claims lock peer jobs in their own order. Recheck the origin at
+    acknowledgement so a replaced worker leaves pending references intact.
     """
     from core.collection_jobs import register_job, set_job_state, validate_job
     from core.models import CollectionScopeRun, MetricCollectionContract
 
-    origin = CollectionJob.objects.select_related("source").get(pk=catalog_job_id)
-    validate_job(origin)
-    require(origin.purpose == "catalog", "catalog projection origin required")
+    with _projection_origin(catalog_job_id, origin_claim) as origin:
+        validate_job(origin)
+        require(origin.purpose == "catalog", "catalog projection origin required")
     limits = origin.definition["budgets"]
     started = monotonic()
     usage = {"items": 0, "bytes": 0}
@@ -871,6 +898,8 @@ def drain_pending_projections(catalog_job_id, *, budget=None):
         .order_by("pk")
     )
     for scope in pending.iterator():
+        with _projection_origin(catalog_job_id, origin_claim):
+            pass
         if selected_count >= limits["items"] or remaining_seconds() <= 0:
             break
         contract = MetricCollectionContract.objects.get(
@@ -924,6 +953,8 @@ def drain_pending_projections(catalog_job_id, *, budget=None):
             consumed += size
         if not ids:
             break
+        with _projection_origin(catalog_job_id, origin_claim):
+            pass
         claim = claim_job(job.pk)
         run = project_evidence(claim, ids, deadline=monotonic() + remaining_seconds())
         projection = run.report["projection"]
@@ -933,8 +964,10 @@ def drain_pending_projections(catalog_job_id, *, budget=None):
             if "metric" not in row
         }
         committed = set(ids) - rejected
-        # Lock the queue row so concurrent enqueue never loses a new reference.
-        with transaction.atomic():
+        # Fence the acquisition before locking its queue row, matching enqueue's
+        # job/run/scope order. An independent numeric commit remains valid when
+        # this fence fails; its successor will reuse that immutable snapshot.
+        with _projection_origin(catalog_job_id, origin_claim):
             current = CollectionScopeRun.objects.select_for_update().get(pk=scope.pk)
             current.envelopes = [
                 row
