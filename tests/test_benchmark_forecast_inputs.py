@@ -27,11 +27,11 @@ def test_operational_cutoff_excludes_late_import_and_later_revision():
 
 def test_contract_review_after_cutoff_and_reconstruction_are_not_past_knowledge():
     from core.benchmark_forecast_inputs import forecast_inputs
-    from core.models import MetricObservation
+    from core.models import CollectionObservation
 
     contract = configured()
     run = persist_source(contract, "hf", "3" * 64, payload())
-    MetricObservation.objects.filter(run=run).update(
+    CollectionObservation.objects.filter(run=run).update(
         source_metadata={"history_basis": "reconstructed_current_relationships"}
     )
     assert (

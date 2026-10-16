@@ -35,7 +35,7 @@ import threading
 import time
 import uuid
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -787,6 +787,8 @@ class _BoundedClassifierClient:
         pause_seconds: float,
         monotonic: Any = time.monotonic,
         sleep: Any = time.sleep,
+        before_call: Any = None,
+        after_call: Any = None,
     ) -> None:
         self._delegate = client
         self._base_url = getattr(client, "_base_url", None)
@@ -794,6 +796,8 @@ class _BoundedClassifierClient:
         self._pause_seconds = max(0.0, float(pause_seconds))
         self._monotonic = monotonic
         self._sleep = sleep
+        self._before_call = before_call
+        self._after_call = after_call
         self._lock = threading.Lock()
         self._calls = 0
         self._reserved_calls = 0
@@ -804,7 +808,7 @@ class _BoundedClassifierClient:
     @property
     def calls(self) -> int:
         with self._lock:
-            return self._calls
+            return 0 if self.deferred_requests else self._calls
 
     @property
     def request_identity(self) -> str | None:
@@ -817,6 +821,10 @@ class _BoundedClassifierClient:
         """Keep the selected request format through the shared budget guard."""
         value = getattr(self._delegate, "request_profile", None)
         return value if isinstance(value, str) and value else None
+
+    @property
+    def deferred_requests(self) -> bool:
+        return getattr(self._delegate, "deferred_requests", False) is True
 
     @property
     def remaining_calls(self) -> int | None:
@@ -870,23 +878,36 @@ class _BoundedClassifierClient:
                 self._reserved_calls -= 1
             elif self._maximum_calls is not None and self._calls + self._reserved_calls >= self._maximum_calls:
                 raise LLMCallBudgetExhausted("classifier transport cap exhausted")
-            if self._last_started is not None and self._pause_seconds:
+            if not self.deferred_requests and self._last_started is not None and self._pause_seconds:
                 wait_seconds = (
                     self._last_started + self._pause_seconds - self._monotonic()
                 )
                 if wait_seconds > 0:
                     self._sleep(wait_seconds)
+            if self._before_call is not None and not self.deferred_requests:
+                self._before_call()
             self._calls += 1
             self._last_started = self._monotonic()
 
     def messages_create(self, **kwargs: Any) -> dict[str, Any]:
         self._start_physical_call(kwargs)
-        return self._delegate.messages_create(**kwargs)
+        return self._invoke(self._delegate.messages_create, kwargs)
 
     def messages_create_text(self, **kwargs: Any) -> Any:
         """Forward raw-text requests through the same physical-call budget."""
         self._start_physical_call(kwargs)
-        return self._delegate.messages_create_text(**kwargs)
+        return self._invoke(self._delegate.messages_create_text, kwargs)
+
+    def _invoke(self, method: Any, kwargs: dict[str, Any]) -> Any:
+        try:
+            response = method(**kwargs)
+        except Exception as exc:
+            if self._after_call is not None and not self.deferred_requests:
+                self._after_call(exc)
+            raise
+        if self._after_call is not None and not self.deferred_requests:
+            self._after_call(response)
+        return response
 
 
 class _RepairRetryLimitedClient:
@@ -958,6 +979,7 @@ def _requeue_recent_incomplete_translations(
     candidates = PostEnrichmentState.objects.filter(
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
         created_at__gt=age_cutoff,
+        source_collection_job__isnull=True,
     )
     if post_ids is not None:
         candidates = candidates.filter(post_id__in=post_ids)
@@ -1002,6 +1024,7 @@ def _claim_enrichment_states(
     prefer_created_before: datetime | None = None,
     post_ids: set[str] | None = None,
     defer_translation_attempts: bool = False,
+    source_collection_job_id: Any | None = None,
 ) -> EnrichmentClaimBatch:
     """Quarantine exhausted debt, then claim one atomic two-lane batch.
 
@@ -1025,11 +1048,13 @@ def _claim_enrichment_states(
     ) & (Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now))
     if post_ids is not None:
         due &= Q(post_id__in=post_ids)
+    due &= Q(source_collection_job_id=source_collection_job_id)
+    age_eligible = Q(created_at__gt=age_cutoff) if source_collection_job_id is None else Q()
     current_cycle: list[PostEnrichmentState] = []
     carryover: list[PostEnrichmentState] = []
 
     with transaction.atomic():
-        expired_due = due & Q(created_at__lte=age_cutoff)
+        expired_due = due & Q(created_at__lte=age_cutoff) & Q(source_collection_job__isnull=True)
         quarantined = PostEnrichmentState.objects.filter(expired_due).update(
             translation_status=Case(
                 When(
@@ -1068,7 +1093,7 @@ def _claim_enrichment_states(
         # Transition attempt-exhausted stages before either bounded lane is
         # sliced. Otherwise terminal debt can consume a claim slot and starve
         # eligible work at the edge of the cap.
-        attempt_exhausted = due & Q(created_at__gt=age_cutoff) & (
+        attempt_exhausted = due & age_eligible & Q(source_collection_job__isnull=True) & (
             Q(
                 translation_status=PostEnrichmentState.Status.PENDING,
                 translation_attempts__gte=cfg.max_attempts,
@@ -1147,7 +1172,7 @@ def _claim_enrichment_states(
         eligible_qs = (
             PostEnrichmentState.objects.select_for_update(skip_locked=True)
             .select_related("post")
-            .filter(due, created_at__gt=age_cutoff)
+            .filter(due, age_eligible)
             .annotate(
                 _retry_priority=Case(
                     When(
@@ -1166,6 +1191,8 @@ def _claim_enrichment_states(
             )
             .order_by("-created_at", "_retry_priority", "post_id")
         )
+        if source_collection_job_id is not None:
+            eligible_qs = eligible_qs.order_by("post_id")
 
         if prefer_created_before is None:
             legacy_cap = min(
@@ -1202,7 +1229,7 @@ def _claim_enrichment_states(
                     continue
                 attempts_name = f"{prefix}_attempts"
                 first_name = f"{prefix}_first_attempt_at"
-                if prefix == "translation" and defer_translation_attempts:
+                if source_collection_job_id is not None or (prefix == "translation" and defer_translation_attempts):
                     continue
                 setattr(state, attempts_name, getattr(state, attempts_name) + 1)
                 if getattr(state, first_name) is None:
@@ -1283,8 +1310,8 @@ def _finish_enrichment_stage(
                 setattr(state, next_name, None)
                 setattr(state, error_name, "")
             else:
-                exhausted = getattr(state, f"{stage}_attempts") >= cfg.max_attempts
-                aged = state.created_at <= age_cutoff
+                exhausted = state.source_collection_job_id is None and getattr(state, f"{stage}_attempts") >= cfg.max_attempts
+                aged = state.source_collection_job_id is None and state.created_at <= age_cutoff
                 if exhausted or aged:
                     setattr(state, status_name, PostEnrichmentState.Status.FAILED)
                     setattr(
@@ -2492,10 +2519,12 @@ class CycleRunner:
         cycle_kind: str = "manual",
         _backfill_call_ids: list[str] | None = None,
         _max_llm_calls: int | None = None,
+        _backfill_context: Any | None = None,
         _relevancy_llm_call=None,
         _targeted_extraction_calls: dict[str, Any] | None = None,
         _official_company_call=None,
         _official_list_client=None,
+        _post_fetch_clients: dict[str, Any] | None = None,
         _clock=None,
         _monotonic=None,
     ) -> None:
@@ -2513,6 +2542,10 @@ class CycleRunner:
         # Hard cap on LLM batches per invocation.  None = no cap.
         # Used by the backfill command to limit API spend on large windows.
         self._max_llm_calls = _max_llm_calls
+        self._backfill_context = _backfill_context
+        if _backfill_context is not None and cycle_kind != "backfill":
+            raise ValueError("historical context requires cycle_kind=backfill")
+        self._backfill_fetch_receipt: dict[str, Any] = {}
         # U6 runtime wire-in: injected llm_call(system, user) -> str
         # dependency for the binary relevancy gate (R19a +
         # x_monitor/relevancy.py). Default None → gate is a no-op (KEEP).
@@ -2521,6 +2554,7 @@ class CycleRunner:
         self._targeted_extraction_calls = dict(_targeted_extraction_calls or {})
         self._official_company_call = _official_company_call
         self._official_list_client = _official_list_client
+        self._post_fetch_clients = _post_fetch_clients
         self._optional_calls_remaining = cfg.targeted_extraction.max_calls_per_cycle
         # U14 keeps server-owned clocks injectable for deterministic latency
         # proof. Production defaults remain the wall/monotonic clocks.
@@ -2668,6 +2702,15 @@ class CycleRunner:
             self._errors.append(f"plan: {exc}")
             return []
 
+        if self._backfill_context is not None and self._backfill_context.query_override:
+            selected = self._backfill_call_ids or []
+            if len(selected) != 1:
+                raise ValueError("a historical query override requires exactly one call")
+            query = self._backfill_context.query_override
+            calls = [
+                replace(call, query_string=query, query_length=len(query))
+                if call.call_id == selected[0] else call for call in calls
+            ]
         logger.info(
             "CycleRunner._plan_calls: %d calls planned",
             len(calls),
@@ -2831,6 +2874,12 @@ class CycleRunner:
             )
             return [], "length_cap_exceeded"
 
+        if self._backfill_context is not None:
+            return self._fetch_backfill_pages(
+                call, api, window=window, max_results=max_results_cap,
+                max_pages=max_pages_cap, max_per_page=max_per_page_cap,
+            )
+
         all_items: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
         cur_until = until_time
@@ -2972,6 +3021,68 @@ class CycleRunner:
         if still_truncated:
             return all_items, "truncated"
         return all_items, "ok"
+
+    def _fetch_backfill_pages(
+        self, call: PlannedCall, api: TwitterApiClient, *, window: tuple[int, int],
+        max_results: int, max_pages: int, max_per_page: int,
+    ) -> tuple[list[dict[str, Any]], str]:
+        """Retain received pages and resume tokens without skipping tied times."""
+        context = self._backfill_context
+        receipt = {
+            "cursor": context.cursor, "seen_cursors": list(context.seen_cursors),
+            "pages_received": 0, "drained": False, "reason": "page_cap",
+            "out_of_window_results": 0, "invalid_time_results": 0,
+        }
+        self._backfill_fetch_receipt = receipt
+        items: list[dict[str, Any]] = []
+        seen_ids: set[str] = set()
+        try:
+            for page in api.run_search_pages(
+                call.query_string, max_results=max_results, max_pages=max_pages,
+                max_per_page=max_per_page, since_time=window[0], until_time=window[1],
+                cursor=context.cursor,
+            ):
+                self._api_calls += 1
+                receipt["pages_received"] += 1
+                for item in page.items:
+                    created_epoch = _item_created_epoch(item)
+                    if created_epoch is None:
+                        receipt["invalid_time_results"] += 1
+                        continue
+                    if not window[0] <= created_epoch < window[1]:
+                        receipt["out_of_window_results"] += 1
+                        continue
+                    tweet_id = str(item.get("id") or item.get("tweet_id") or "")
+                    if tweet_id and tweet_id not in seen_ids:
+                        items.append(item)
+                        seen_ids.add(tweet_id)
+                if receipt["out_of_window_results"] or receipt["invalid_time_results"]:
+                    receipt["reason"] = "invalid_primary_window"
+                    break
+                # A clipped page cannot commit its continuation: replay it at
+                # full page size instead of dropping the unpersisted tail.
+                if page.clipped:
+                    receipt["reason"] = "clipped_page"
+                    break
+                if page.continuation_invalid:
+                    receipt["reason"] = "invalid_continuation"
+                    break
+                if not page.has_more:
+                    receipt["drained"] = True
+                    receipt["reason"] = "drained"
+                    receipt["cursor"] = None
+                    return items, "ok"
+                next_cursor = page.next_cursor
+                if not page.items or not next_cursor or next_cursor == receipt["cursor"] or next_cursor in receipt["seen_cursors"]:
+                    receipt["reason"] = "nonprogressing_cursor"
+                    break
+                receipt["cursor"] = next_cursor
+                receipt["seen_cursors"].append(next_cursor)
+        except Exception as exc:
+            receipt["reason"] = type(exc).__name__
+            self._errors.append(f"fetch.{call.call_id}: {type(exc).__name__}")
+            return items, "truncated" if items else "error"
+        return items, "truncated"
 
     def _run_rare_type_search(
         self, call: PlannedCall, api: TwitterApiClient, *, now: datetime
@@ -3570,6 +3681,15 @@ class CycleRunner:
         self,
         items: list[dict[str, Any]],
     ) -> tuple[int, int, int, int]:
+        context = getattr(self, "_backfill_context", None)
+        if context is not None and context.page_writer is not None:
+            return context.page_writer(self, items, self._persist_items_orm)
+        return self._persist_items_orm(items)
+
+    def _persist_items_orm(
+        self,
+        items: list[dict[str, Any]],
+    ) -> tuple[int, int, int, int]:
         """Persist attributed items via Django ORM.
 
         For each item: upsert Account → upsert Post → persist attribution
@@ -3642,6 +3762,22 @@ class CycleRunner:
     # Step 5: Post-fetch (translate + classify)
     # ------------------------------------------------------------------
 
+    def _backfill_model_callbacks(self) -> dict[str, Any]:
+        if self._backfill_context is None:
+            return {}
+        budget = self._backfill_context.budget
+        timeout = self.cfg.harvest.enrichment.request_timeout_seconds
+        return {
+            "before_call": lambda: budget.claim_llm_request(timeout),
+            "after_call": budget.record_model_response,
+        }
+
+    def _remaining_model_calls(self) -> int | None:
+        if self._backfill_context is not None:
+            return self._backfill_context.budget.remaining_llm_calls
+        return (None if self._max_llm_calls is None
+                else max(0, self._max_llm_calls - self._llm_call_count))
+
     def _run_post_fetch(
         self,
         kept_posts: list[dict[str, Any]],
@@ -3651,6 +3787,7 @@ class CycleRunner:
         prefer_created_before: datetime | None = None,
         post_ids: set[str] | None = None,
         repair_manifest: dict[str, dict[str, Any]] | None = None,
+        source_collection_job_id: Any | None = None,
     ) -> dict[str, Any]:
         """Drain a bounded durable translation/classification claim batch.
 
@@ -3702,7 +3839,11 @@ class CycleRunner:
             else None
         )
         claim_safe_envelope = enrichment_cfg.claim_safe_envelope_seconds
-        if deadline is not None and not deadline.can_start(claim_safe_envelope):
+        model_allowance_empty = (
+            self._backfill_context is not None
+            and self._backfill_context.budget.remaining_llm_calls == 0
+        )
+        if model_allowance_empty or (deadline is not None and not deadline.can_start(claim_safe_envelope)):
             deferred = PostEnrichmentState.objects.filter(
                 Q(translation_status=PostEnrichmentState.Status.PENDING)
                 | Q(classification_status=PostEnrichmentState.Status.PENDING)
@@ -3717,7 +3858,7 @@ class CycleRunner:
                 cfg=enrichment_cfg,
                 literal_v2_enabled=self.cfg.llm.literal_translation_v2_enabled,
                 post_ids=selected_post_ids,
-            )
+            ) if source_collection_job_id is None else 0
         )
 
         claim_batch = _claim_enrichment_states(
@@ -3726,6 +3867,7 @@ class CycleRunner:
             prefer_created_before=prefer_created_before,
             post_ids=selected_post_ids,
             defer_translation_attempts=self.cfg.llm.literal_translation_v2_enabled,
+            source_collection_job_id=source_collection_job_id,
         )
         claimed_states = list(claim_batch.states)
         counters["n_enrichment_claimed"] = len(claimed_states)
@@ -3833,12 +3975,12 @@ class CycleRunner:
         )
 
         translator_client = (
-            build_translator_client_from_env(self.cfg)
+            (self._post_fetch_clients["translation"] if self._post_fetch_clients is not None else build_translator_client_from_env(self.cfg))
             if translation_tweets
             else None
         )
         classifier_client = (
-            build_classifier_client_from_env(self.cfg)
+            (self._post_fetch_clients["classification"] if self._post_fetch_clients is not None else build_classifier_client_from_env(self.cfg))
             if classification_tweets
             else None
         )
@@ -3874,9 +4016,9 @@ class CycleRunner:
         # The feature flag preserves the prior combined translator as the
         # rollback lane until the split literal contract passes staging.
         from x_monitor.literal_translation import (
-            CHUNK_TRANSLATION_PROMPT_VERSION,
             LITERAL_TRANSLATION_PROMPT_VERSION,
             LONG_POST_THRESHOLD,
+            chunk_translation_prompt_version,
             translate_batch_literal_plaintext,
         )
         from x_monitor.translator import translate_batch_pragmatics
@@ -3895,16 +4037,13 @@ class CycleRunner:
             counters["n_translator_unavailable"] = 1
             translation_rows = []
         elif translation_tweets:
-            remaining_llm_calls = (
-                None
-                if self._max_llm_calls is None
-                else max(0, self._max_llm_calls - self._llm_call_count)
-            )
+            remaining_llm_calls = self._remaining_model_calls()
             bounded_translator_client = _BoundedClassifierClient(
                 translator_client,
                 maximum_calls=remaining_llm_calls,
                 pause_seconds=0,
                 monotonic=self._monotonic,
+                **self._backfill_model_callbacks(),
             )
             try:
                 if self.cfg.llm.literal_translation_v2_enabled:
@@ -3922,6 +4061,7 @@ class CycleRunner:
                     ]
                     telemetry = {"stage": "post_fetch", "run_id": run_id}
                     translation_rows = []
+                    deferred_chunks = []
                     if short_tweets:
                         short_budget = (
                             enrichment_cfg.short_post_budget_seconds
@@ -3939,10 +4079,13 @@ class CycleRunner:
                             enrichment_cfg.long_post_budget_seconds
                             if short_tweets else enrichment_cfg.attempt_budget_seconds
                         )
-                        current_long = long_tweets[:1]
+                        long_limit = 10 if source_collection_job_id is not None else 1
+                        current_long = long_tweets[:long_limit]
+                        chunk_options = {"chunk_size": 2_000} if self._backfill_context is not None or source_collection_job_id is not None else {}
                         cached = load_literal_translation_chunks(
                             current_long, model=self.cfg.llm.translator_model,
-                            prompt_version=CHUNK_TRANSLATION_PROMPT_VERSION,
+                            prompt_version=chunk_translation_prompt_version(**chunk_options),
+                            **chunk_options,
                         )
                         translation_rows.extend(translate_batch_literal_plaintext(
                             current_long, bounded_translator_client, cfg=self.cfg,
@@ -3950,12 +4093,13 @@ class CycleRunner:
                                 monotonic=self._monotonic, budget_seconds=long_budget
                             ),
                             max_workers=1, telemetry_context=telemetry,
+                            **chunk_options,
                             cached_chunks=cached,
-                            on_chunk_success=lambda **kwargs: persist_literal_translation_chunk(
-                                **kwargs, expected_claim_run_id=run_id
-                            ),
+                            on_chunk_success=(lambda **kwargs: deferred_chunks.append(kwargs) or True)
+                            if source_collection_job_id is not None else
+                            (lambda **kwargs: persist_literal_translation_chunk(**kwargs, expected_claim_run_id=run_id)),
                         ))
-                        if len(long_tweets) > 1:
+                        if len(long_tweets) > long_limit:
                             from x_monitor.config import EnrichmentAttemptDeadline
 
                             no_call_deadline = EnrichmentAttemptDeadline(
@@ -3964,10 +4108,12 @@ class CycleRunner:
                                 monotonic=self._monotonic,
                             )
                             translation_rows.extend(translate_batch_literal_plaintext(
-                                long_tweets[1:], bounded_translator_client, cfg=self.cfg,
+                                long_tweets[long_limit:], bounded_translator_client, cfg=self.cfg,
                                 deadline=no_call_deadline, max_workers=1,
                                 telemetry_context=telemetry,
                             ))
+                    for chunk in deferred_chunks:
+                        persist_literal_translation_chunk(**chunk, expected_claim_run_id=run_id)
                 else:
                     translation_deadline = enrichment_cfg.start_attempt_deadline(
                         monotonic=self._monotonic
@@ -4196,11 +4342,7 @@ class CycleRunner:
             classification_deadline = enrichment_cfg.start_attempt_deadline(
                 monotonic=self._monotonic
             )
-            remaining_llm_calls = (
-                None
-                if self._max_llm_calls is None
-                else max(0, self._max_llm_calls - self._llm_call_count)
-            )
+            remaining_llm_calls = self._remaining_model_calls()
             bounded_classifier_client = _BoundedClassifierClient(
                 (
                     _RepairRetryLimitedClient(classifier_client)
@@ -4209,6 +4351,7 @@ class CycleRunner:
                 maximum_calls=remaining_llm_calls,
                 pause_seconds=pause_sec,
                 monotonic=self._monotonic,
+                **self._backfill_model_callbacks(),
             )
             try:
                 results = classify_batch_pragmatics_full(
@@ -4811,6 +4954,9 @@ class CycleRunner:
         kept_all: list[dict[str, Any]] = []
         replay_started_monotonic = self._monotonic()
         deadline = self.cfg.harvest.start_deadline()
+
+        if self._backfill_context is not None:
+            deadline = self._backfill_context.budget
         reports = self._replay_backlog(
             calls=calls,
             api=api,
@@ -4840,6 +4986,31 @@ class CycleRunner:
     # Main entry point
     # ------------------------------------------------------------------
 
+    def run_backfill_enrichment(self) -> dict[str, Any]:
+        """Retry the frozen recovered cohort without purchasing search again."""
+        if self._backfill_context is None or self.cycle_kind != "backfill":
+            raise ValueError("historical enrichment requires a backfill context")
+        context = self._backfill_context
+        started = self._monotonic()
+        run_id = f"backfill-enrichment-{uuid.uuid4().hex[:12]}"
+        cohort = list(context.enrichment_cohort_ids)
+        counters = self._run_post_fetch(
+            [], run_id=run_id, deadline=context.budget, post_ids=cohort,
+        )
+        return {
+            "run_id": run_id, "status": "degraded" if self._errors else "completed",
+            "phase": "enrichment", "cycle_kind": "backfill",
+            "recovered_post_ids": list(context.post_ids),
+            "enrichment_cohort_post_ids": cohort,
+            "post_fetch": counters, "errors": list(self._errors),
+            "wall_clock_sec": round(self._monotonic() - started, 3),
+            "totals": {"n_inserted": 0, "n_calls_run": 0},
+            "calls": [{
+                "call_id": self._backfill_call_ids[0],
+                "status": "enrichment_failed" if self._errors else "enrichment_pending",
+            }],
+        }
+
     def run(self) -> dict[str, Any]:
         """Execute one harvest cycle.
 
@@ -4855,6 +5026,8 @@ class CycleRunner:
         )
         started_at = cycle_started_at
         deadline = self.cfg.harvest.start_deadline()
+        if self._backfill_context is not None:
+            deadline = self._backfill_context.budget
 
         summary: dict[str, Any] = {
             "run_id": run_id,
@@ -4971,6 +5144,13 @@ class CycleRunner:
             summary["degraded"]["api_client"] = str(exc)
             return self._finish_summary(summary, started_monotonic=t0)
 
+        if self._backfill_context is not None:
+            context = self._backfill_context
+            api.timeout_s = context.api_timeout_seconds
+            api.max_retries = 0
+            api.before_request = context.budget.claim_api_request
+            api.after_response = context.budget.record_api_response
+
         search_terms = _load_brand_search_terms()
         list_id = _resolve_x_monitor_list_id(self.cfg)
 
@@ -5053,7 +5233,10 @@ class CycleRunner:
                 api,
                 window=(since_epoch, until_epoch),
                 tip_only=(self.cycle_kind == "scheduled" and cursor_owned),
+                deadline=(deadline if self._backfill_context is not None else None),
             )
+            if self._backfill_context is not None:
+                call_entry["backfill_progress"] = dict(self._backfill_fetch_receipt)
             discovery_window = (since_epoch, until_epoch)
             self._record_discovery_run_safe(
                 call=call,
@@ -5086,7 +5269,7 @@ class CycleRunner:
             first_page_max_ms = max(
                 first_page_max_ms, call_entry["cycle_start_to_first_page_ms"]
             )
-            if call.call_id == "A" and list_id is not None and items:
+            if call.call_id == "A" and list_id is not None and items and self._backfill_context is None:
                 observation = observe_call_a_authors(
                     list_id=int(list_id),
                     items=items,
@@ -5392,7 +5575,7 @@ class CycleRunner:
                 if "staging" in os.environ.get("RENDER_SERVICE_NAME", "").lower()
                 else None
             )
-            if "rare_type_ingestion" not in summary:
+            if "rare_type_ingestion" not in summary and self._backfill_context is None:
                 summary["rare_type_ingestion"] = self._drain_rare_type_hits(
                     run_id=run_id,
                     index=index,
@@ -5402,6 +5585,21 @@ class CycleRunner:
                     deadline=deadline,
                 )
             post_fetch_started = self._monotonic()
+            recovery_ids = None
+            enrichment_ids = None
+            if self._backfill_context is not None:
+                context = self._backfill_context
+                recovery_ids = list(dict.fromkeys([
+                    *context.post_ids,
+                    *(str(item["_persisted_post_id"]) for item in kept_all
+                      if item.get("_persisted_post_id")),
+                ]))
+                summary["recovered_post_ids"] = recovery_ids
+                enrichment_ids = context.enrichment_cohort_ids or [
+                    str(item["_persisted_post_id"]) for item in kept_all
+                    if item.get("_db_inserted") and item.get("_persisted_post_id")
+                ][:context.enrichment_limit]
+                summary["enrichment_cohort_post_ids"] = enrichment_ids
             pf_counters = self._run_post_fetch(
                 kept_all,
                 run_id=run_id,
@@ -5409,6 +5607,7 @@ class CycleRunner:
                 prefer_created_before=(
                     None if self.cycle_kind == "backfill" else cycle_started_wall
                 ),
+                post_ids=enrichment_ids,
             )
             post_fetch_completed_at = self._wall_now().isoformat()
             pf_counters["completed_at"] = post_fetch_completed_at
@@ -5456,9 +5655,8 @@ class CycleRunner:
                 summary["degraded"]["classifier_flag_dead_letters"] = list(
                     pf_counters["flag_dead_letters"]
                 )
-            summary["synthesis_prewarm"] = self._request_synthesis_prewarm(
-                kept_all
-            )
+            if self._backfill_context is None:
+                summary["synthesis_prewarm"] = self._request_synthesis_prewarm(kept_all)
             summary.setdefault("n_errors_by_type", {}).update(
                 dict(self._error_counts)
             )

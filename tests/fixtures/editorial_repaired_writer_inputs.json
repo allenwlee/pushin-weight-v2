@@ -1,0 +1,259 @@
+{
+  "wang": {
+    "event": {
+      "key": "wang-wardrobe-correction",
+      "summary": "Owner-selected stored source.",
+      "post_ids": [
+        "2103127068318089313"
+      ],
+      "brand_keys": [
+        "llama"
+      ],
+      "occurred_at": "2026-09-24T14:19:01Z",
+      "chatter": true,
+      "pulse": false,
+      "importance": 100.0,
+      "reason": "Owner-selected writer simulation; no automatic ranking claim.",
+      "change": "new",
+      "story_id": null,
+      "subject_kind": "person",
+      "person_ids": [],
+      "visual_essential": true,
+      "source_image_url": "https://pbs.twimg.com/media/HS_O7EuawAAmr8A.jpg",
+      "chart_fact_ids": [],
+      "chart_support": "unavailable",
+      "source_check": [
+        {
+          "post_id": "2103127068318089313",
+          "span_ids": [
+            "s:b35d806af6d29aede3e6"
+          ],
+          "brand_keys": [
+            "llama"
+          ],
+          "source_field": "original_text",
+          "actor": "alexandr_wang",
+          "action": "posts",
+          "target": "stored original source",
+          "status": "unknown",
+          "number_ownership": "none"
+        }
+      ]
+    },
+    "packet": {
+      "posts": [
+        {
+          "author_handle": "alexandr_wang",
+          "author_id": "615818451",
+          "brand_keys": [
+            "llama"
+          ],
+          "created_at": "2026-09-24T14:19:01+00:00",
+          "evidence_id": "2103127068318089313",
+          "excerpt_truncated": false,
+          "id": "2103127068318089313",
+          "images": [
+            "https://pbs.twimg.com/media/HS_O7EuawAAmr8A.jpg"
+          ],
+          "is_quote": true,
+          "is_reply": false,
+          "is_retweet": false,
+          "local_parent": "",
+          "original_text": "excuse me I must correct the record on this slander https://t.co/xNHfLwM5I7",
+          "parent_author_handle": "",
+          "parent_post_id": "",
+          "platform": "x",
+          "preparation_revision": "8908a64252efd7d108c718c075c031470bd2b68855f91bfa5c7f97bf14c30dba",
+          "quoted_author_handle": "Goltra",
+          "quoted_post_id": "",
+          "source_language": "en",
+          "stored_quote": "You guys think @alexandr_wang is underdressed but he's literally flexing on you like crazy lol\n\nThere are levels to this https://t.co/dqgJBLgM2j",
+          "url": "https://x.com/i/status/2103127068318089313"
+        }
+      ],
+      "context": [
+        {
+          "id": "supplement:wang-image-transcription",
+          "platform": "supplemental_evidence",
+          "url": "https://pbs.twimg.com/media/HS_O7EuawAAmr8A.jpg",
+          "created_at": "2026-09-24T14:19:01+00:00",
+          "author_handle": "alexandr_wang",
+          "author_id": "615818451",
+          "brand_keys": [],
+          "images": [],
+          "original_text": "Reviewed source-image transcription, not a new X post. In the photo attached to @alexandr_wang's correction, the red handwritten shirt label reads \"$30 Thrifted in Santa Cruz\"; the black \"$5,699 GUCCI Armado Camo Tee\" label is crossed out.\nThe red pants label reads \"$150 Norrona falketind pants\", replacing a crossed-out \"$1,890 PRADA Re-Nylon Cargo-Pants\" label. The footwear label reads \"$60 Realtree Crocs\", replacing crossed-out \"$730 BALENCIAGA Crocs (Limited Edition)\".\nThe \"$1,250 GUCCI GG1856 Optical Glasses\" label is crossed out and annotated \"lol no\". A further red note reads \"$5 Calvin Klein underwear\". The hair note reads \"just put my head in a washing machine\".\nThese are the labels and corrections visible in the image Wang posted. The prices and garment identifications are claims in his image, not independently verified retail facts.",
+          "evidence_role": {
+            "kind": "reviewed_image_transcription",
+            "source_url": "https://pbs.twimg.com/media/HS_O7EuawAAmr8A.jpg",
+            "original_post_id": "2103127068318089313",
+            "image_sha256": "c0ddf32f548686cf725da584b8a253f20f63b2a16f98d9a59ada588d1344538e",
+            "text_sha256": "f8f45741c201e3ee8e10d969f366a77f11f9e65f3174cb53de0fe15e4406f163",
+            "observed_at": "2026-10-13T19:44:11+09:00",
+            "review": "OCR followed by agent visual verification; handwriting missed by OCR; no derived price totals or suggested headline."
+          }
+        },
+        {
+          "id": "supplement:wang-scale-identity",
+          "platform": "supplemental_evidence",
+          "url": "https://scale.com/blog/scale-ai-announces-next-phase-of-company-evolution",
+          "created_at": "2025-06-12",
+          "author_handle": "Scale AI",
+          "author_id": "official:scale.com",
+          "brand_keys": [],
+          "images": [],
+          "original_text": "In addition, Scale’s founder, Alexandr Wang, is joining Meta to work on Meta’s AI efforts.",
+          "evidence_role": {
+            "kind": "official_identity_background",
+            "source_url": "https://scale.com/blog/scale-ai-announces-next-phase-of-company-evolution",
+            "source_title": "Scale AI Announces Next Phase of Company’s Evolution",
+            "published_date": "2025-06-12",
+            "date_precision": "date",
+            "observed_at": "2026-10-13T19:44:11+09:00",
+            "text_sha256": "289c31b38006c13f672e8ca20b1e062e4e531a280aff14da5d4d60672148834d",
+            "review": "Official dated excerpt. Historical background only; does not establish a current 2026 role or a new move."
+          }
+        }
+      ],
+      "cutoff": "2026-09-24T14:45:00+00:00",
+      "story_context": {
+        "alias_bridges": [],
+        "anchor_ids": [
+          "2103127068318089313"
+        ],
+        "byte_limit": 96000,
+        "candidate_limit_per_query": 80,
+        "eligible_context": 0,
+        "evidence_bytes": 3534,
+        "expansion_rounds": 1,
+        "history_candidates": 0,
+        "history_days": 180,
+        "history_terms": [],
+        "included_ids": [
+          "supplement:wang-image-transcription",
+          "supplement:wang-scale-identity"
+        ],
+        "linked_ids": [],
+        "max_context_posts": 24,
+        "omitted_context": 0,
+        "query_timeout": false,
+        "recent_candidates": 0,
+        "seed_scope": "Latin-script distinctive names and phrases",
+        "terms": [],
+        "supplemental_records": 2,
+        "database_collector_evidence_bytes": 921
+      },
+      "chart_context": []
+    },
+    "request_hash": "6bc51eead327cdae68f4e176abdfa0e8c1dc0a6916fe1f11ff80090d90c0200f"
+  },
+  "mistral-first": {
+    "event": {
+      "key": "mistral-large-4-le-chonk-release",
+      "summary": "Owner-selected stored source.",
+      "post_ids": [
+        "2107457414387622310"
+      ],
+      "brand_keys": [
+        "mistral"
+      ],
+      "occurred_at": "2026-10-06T13:06:16Z",
+      "chatter": true,
+      "pulse": false,
+      "importance": 100.0,
+      "reason": "Owner-selected writer simulation; no automatic ranking claim.",
+      "change": "new",
+      "story_id": null,
+      "subject_kind": "model_release",
+      "person_ids": [],
+      "visual_essential": false,
+      "source_image_url": "",
+      "chart_fact_ids": [],
+      "chart_support": "unavailable",
+      "source_check": [
+        {
+          "post_id": "2107457414387622310",
+          "span_ids": [
+            "s:1cc64084fcfa527e9f65"
+          ],
+          "brand_keys": [
+            "mistral"
+          ],
+          "source_field": "original_text",
+          "actor": "MistralAI",
+          "action": "posts",
+          "target": "stored original source",
+          "status": "unknown",
+          "number_ownership": "none"
+        }
+      ]
+    },
+    "packet": {
+      "posts": [
+        {
+          "author_handle": "MistralAI",
+          "author_id": "1667249535519805451",
+          "brand_keys": [
+            "mistral"
+          ],
+          "created_at": "2026-10-06T13:06:16+00:00",
+          "evidence_id": "2107457414387622310",
+          "excerpt_truncated": false,
+          "id": "2107457414387622310",
+          "images": [],
+          "is_quote": false,
+          "is_reply": false,
+          "is_retweet": false,
+          "local_parent": "",
+          "original_text": "Meet Mistral Large 4, aka Le Chonk. \n\n• 1T parameters, natively multimodal. 49B active.\nIt is the best open weights model from US or Europe on aggregated benchmarks.\n• State-of-the-art on critical workloads, including cyber defense, manufacturing and finance and it surpasses closed frontier models on visual grounding.\n• Forged in Europe end-to-end and is deployable from Europe via our own Mistral Cloud infrastructure.\n• Available to all via API today. Working with cybersecurity partners privately.\n\nOpen weights release end of October.",
+          "parent_author_handle": "",
+          "parent_post_id": "",
+          "platform": "x",
+          "preparation_revision": "0f0f52da5189eb2f372e26fa2ed9ecb18c21cc60ebf10fd8bf11390e9cb54b38",
+          "quoted_author_handle": "",
+          "quoted_post_id": "",
+          "source_language": "en",
+          "stored_quote": "",
+          "url": "https://x.com/i/status/2107457414387622310"
+        }
+      ],
+      "context": [],
+      "cutoff": "2026-10-06T13:30:00+00:00",
+      "story_context": {
+        "alias_bridges": [],
+        "anchor_ids": [
+          "2107457414387622310"
+        ],
+        "byte_limit": 96000,
+        "candidate_limit_per_query": 80,
+        "eligible_context": 0,
+        "evidence_bytes": 1210,
+        "expansion_rounds": 1,
+        "history_candidates": 0,
+        "history_days": 180,
+        "history_terms": [
+          "mistral large 4",
+          "le chonk",
+          "europe",
+          "chonk",
+          "large"
+        ],
+        "included_ids": [],
+        "linked_ids": [],
+        "max_context_posts": 24,
+        "omitted_context": 0,
+        "query_timeout": true,
+        "recent_candidates": 0,
+        "seed_scope": "Latin-script distinctive names and phrases",
+        "terms": [
+          "mistral large 4",
+          "le chonk",
+          "europe",
+          "chonk",
+          "large"
+        ]
+      },
+      "chart_context": []
+    },
+    "request_hash": "b4672be6354d1f6dd2a132dc6817f6836a849ecedf26c25755176c772fec5658"
+  }
+}

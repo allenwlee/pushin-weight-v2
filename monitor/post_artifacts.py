@@ -48,7 +48,8 @@ def source_text_fingerprint(text: object) -> str:
 
 
 def load_literal_translation_chunks(
-    tweets: Sequence[Mapping[str, Any]], *, model: str, prompt_version: str
+    tweets: Sequence[Mapping[str, Any]], *, model: str, prompt_version: str,
+    chunk_size: int | None = None,
 ) -> dict[str, dict[str, dict[str, dict[int, str]]]]:
     """Use only chunks matching the exact current source and deterministic split."""
     from x_monitor.literal_translation import _split_translation_chunks
@@ -58,7 +59,8 @@ def load_literal_translation_chunks(
         for tweet in tweets
     }
     chunks_by_id = {
-        post_id: _split_translation_chunks(str(tweet.get("text") or ""))
+        post_id: _split_translation_chunks(str(tweet.get("text") or ""),
+                                          **({"chunk_size": chunk_size} if chunk_size is not None else {}))
         for post_id, tweet in by_id.items()
     }
     fingerprints = {
@@ -120,18 +122,23 @@ def persist_literal_translation_chunk(
         return True
 
 
-def literal_translation_artifact_complete(post: Post) -> bool:
+def literal_translation_artifact_complete(post: Post, *, artifacts=None) -> bool:
     """Prove that the current source has a complete EN/ZH-CN/JA literal artifact."""
-    artifact = (
-        PostTranslationArtifact.objects.filter(
-            post=post,
-            is_current=True,
-            state=PostTranslationArtifact.State.SUCCEEDED,
-            source_content_fingerprint=source_content_fingerprint(post),
+    if artifacts is not None:
+        fingerprint = source_content_fingerprint(post)
+        artifact = next((row for row in artifacts if row.is_current and row.state == "succeeded"
+                         and row.source_content_fingerprint == fingerprint), None)
+    else:
+        artifact = (
+            PostTranslationArtifact.objects.filter(
+                post=post,
+                is_current=True,
+                state=PostTranslationArtifact.State.SUCCEEDED,
+                source_content_fingerprint=source_content_fingerprint(post),
+            )
+            .prefetch_related("texts")
+            .first()
         )
-        .prefetch_related("texts")
-        .first()
-    )
     if artifact is None:
         return False
     texts = {

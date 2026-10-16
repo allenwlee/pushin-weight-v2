@@ -1,0 +1,142 @@
+{
+  "schema_version": "bridgewright.assurance.declaration/v1",
+  "profile": "stateful-ui-assurance/v1",
+  "source_revision": "worktree-sha256:ae4d0a04984096d0cad8304b2215de00fc9139518a7c95f9af823b9848450eb8",
+  "fixture": {
+    "path": "tests/fixtures/general_feed_contract.json",
+    "sha256": "f6578c8ae5822870bb6e99a368d85be10e5b7d16484e89db22b1fd7134425d88"
+  },
+  "generator": {
+    "name": "pushinweight-general-browser",
+    "version": "1.2",
+    "seed": 501
+  },
+  "controls": [
+    {
+      "id": "audience",
+      "kind": "single_select",
+      "values": [
+        "human",
+        "agent"
+      ],
+      "initial_value": "human",
+      "reversible": true
+    },
+    {
+      "id": "navigation",
+      "kind": "single_select",
+      "values": [
+        "rail",
+        "expanded"
+      ],
+      "initial_value": "rail",
+      "reversible": true
+    },
+    {
+      "id": "weights",
+      "kind": "single_select",
+      "values": [
+        "open",
+        "none"
+      ],
+      "initial_value": "open",
+      "reversible": true
+    },
+    {
+      "id": "locale",
+      "kind": "single_select",
+      "values": [
+        "en",
+        "zh-cn",
+        "ja"
+      ],
+      "initial_value": "en",
+      "reversible": true
+    },
+    {
+      "id": "pulse_reports",
+      "kind": "single_select",
+      "values": [
+        "closed",
+        "open"
+      ],
+      "initial_value": "closed",
+      "reversible": true
+    }
+  ],
+  "coverage_groups": [
+    {
+      "id": "general-controls",
+      "controls": [
+        "audience",
+        "navigation",
+        "weights",
+        "locale",
+        "pulse_reports"
+      ],
+      "strength": 2
+    }
+  ],
+  "ordered_groups": [
+    {
+      "id": "weights-reversal",
+      "actions": [
+        "weights:none",
+        "weights:open"
+      ],
+      "strength": 2
+    }
+  ],
+  "constraints": [],
+  "invariants": [
+    {
+      "id": "closed-weights-unavailable",
+      "projections": [
+        "controls",
+        "accessibility",
+        "feed",
+        "persistence"
+      ]
+    },
+    {
+      "id": "general-state-agrees",
+      "projections": [
+        "controls",
+        "accessibility",
+        "feed",
+        "persistence"
+      ]
+    },
+    {
+      "id": "pulse-output-honest",
+      "projections": [
+        "controls",
+        "feed",
+        "accessibility"
+      ]
+    }
+  ],
+  "races": [
+    {
+      "id": "general-latest-weights-wins",
+      "older_action": "weights:none",
+      "newer_action": "weights:open",
+      "fault": "out_of_order"
+    }
+  ],
+  "seeded_regressions": [],
+  "environments": [
+    {
+      "id": "desktop-chromium",
+      "browser_runtime": "playwright-chromium",
+      "required": true
+    }
+  ],
+  "gates": [
+    {
+      "id": "general-local",
+      "scope": "affected",
+      "required": true
+    }
+  ]
+}

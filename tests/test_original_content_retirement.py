@@ -16,7 +16,7 @@ def test_retirement_has_no_clock_without_an_observed_cutover():
     assert status["cutover_at"] is None and not status["ready"]
 
 
-def test_seven_days_alone_never_authorizes_dropping_live_legacy_storage():
+def test_retirement_has_no_wait_but_preserves_actual_legacy_dependencies():
     now = timezone.now()
     OriginalContentRun.objects.create(
         source_cycle_id="storage-cutover:verified",
@@ -27,8 +27,9 @@ def test_seven_days_alone_never_authorizes_dropping_live_legacy_storage():
         snapshot={},
         outcome={"cutover_at": now.isoformat()},
     )
-    assert not retirement_status(now=now + timedelta(days=6))["rollback_window_elapsed"]
-    status = retirement_status(now=now + timedelta(days=7))
-    assert status["rollback_window_elapsed"]
+    status = retirement_status(now=now)
+    assert "rollback_window_elapsed" not in status
+    assert "earliest_retirement_at" not in status
+    assert status == retirement_status(now=now + timedelta(days=7))
     assert status["legacy_consumers"] and status["restore_proof_required"]
     assert not status["ready"]

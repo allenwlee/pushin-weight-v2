@@ -1,6 +1,7 @@
 """Shared numeric schema: representation and time are independent dimensions."""
 
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -8,6 +9,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from core import models
+from tests.collection_fixtures import evidence_job
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
@@ -42,13 +44,15 @@ def measurement():
         methodology={},
         reviewed_by="test",
     )
-    run = models.MetricCollectionRun.objects.create(
-        contract=contract,
-        source=source,
+    run = models.CollectionRun.objects.create(
+        job=evidence_job(
+            source_id=source.pk, purpose="metric", contract_id=contract.pk
+        ),
         ingestion_key="f" * 64,
         lease_expires_at=timezone.now(),
+        lease_token=uuid4(),
     )
-    observation = models.MetricObservation.objects.create(
+    observation = models.CollectionObservation.objects.create(
         run=run,
         source_identifier="fixture",
         source_subject_kind="model",

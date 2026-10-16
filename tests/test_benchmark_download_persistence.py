@@ -1,9 +1,11 @@
 from datetime import UTC, datetime
 from unittest.mock import patch
+from uuid import uuid4
 
 import pytest
 
-from core.models import MetricCollectionRun, MetricObservation, MetricValue
+from core.models import CollectionObservation, CollectionRun, MetricValue
+from tests.collection_fixtures import evidence_job
 from tests.test_benchmark_download_db_identity import setup_spec
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
@@ -34,9 +36,13 @@ def test_hf_atomic_idempotent_values_do_not_invent_window_bounds():
 
     contract = configured()
     run = persist_source(contract, "hf", "a" * 64, payload())
+    assert run.job_id is not None
+    assert run.job.source_id == run.source_id == "hf"
+    assert run.job.contract_id == run.contract_id == contract.pk
+    assert run.job.definition["scope"] == run.scope == {}
     assert run.status == "success"
     assert persist_source(contract, "hf", "a" * 64, payload()).pk == run.pk
-    assert MetricObservation.objects.count() == 1
+    assert CollectionObservation.objects.count() == 1
     values = list(MetricValue.objects.order_by("source_metric__metric_key"))
     assert [v.integer_value for v in values] == [10, 100]
     assert all(
@@ -47,6 +53,66 @@ def test_hf_atomic_idempotent_values_do_not_invent_window_bounds():
         for v in values
     )
     assert all(v.observation.observed_at is not None for v in values)
+
+
+@pytest.mark.parametrize("replacement", ["expired", "replaced"])
+def test_stale_direct_metric_cannot_publish_observations(replacement):
+    import uuid
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from core.benchmark_metric_store import persist_source
+    from core.collection_state import StaleClaim
+
+    contract = configured()
+
+    def lose_ownership():
+        run = CollectionRun.objects.get()
+        changes = {"report": {"successor": "preserve"}}
+        if replacement == "expired":
+            changes["lease_expires_at"] = timezone.now() - timedelta(seconds=1)
+        else:
+            changes["lease_token"] = uuid.uuid4()
+        CollectionRun.objects.filter(pk=run.pk).update(**changes)
+        return payload()
+
+    with pytest.raises(StaleClaim):
+        persist_source(contract, "hf", "a" * 64, fetch=lose_ownership)
+    assert not CollectionObservation.objects.exists()
+    assert not MetricValue.objects.exists()
+    assert CollectionRun.objects.get().report == {"successor": "preserve"}
+
+
+@pytest.mark.usefixtures("collection_instruction_bridge")
+def test_direct_replay_rejects_mismatched_legacy_instruction_copies():
+    from core.benchmark_metric_store import persist_source
+
+    contract = configured()
+    run = persist_source(contract, "hf", "a" * 64, payload())
+    from django.db import IntegrityError, connection, transaction
+
+    with (
+        pytest.raises(IntegrityError, match="instruction copy mismatch"),
+        transaction.atomic(),
+        connection.cursor() as cursor,
+    ):
+        cursor.execute(
+            "UPDATE collection_runs SET scope = %s WHERE id = %s",
+            ['{"changed": true}', run.pk],
+        )
+    assert persist_source(contract, "hf", "a" * 64, payload()).pk == run.pk
+
+
+def test_independent_direct_metric_attempts_reuse_the_same_immutable_job():
+    from core.benchmark_metric_store import persist_source
+
+    contract = configured()
+    first = persist_source(contract, "hf", "a" * 64, payload())
+    second = persist_source(contract, "hf", "b" * 64, payload(20))
+    assert first.pk != second.pk
+    assert first.job_id == second.job_id
+    assert first.job.runs.count() == 2
 
 
 @pytest.mark.parametrize("bad", [1.5, True, -1, "10", 2**63])
@@ -71,8 +137,8 @@ def test_injected_database_write_failure_cannot_publish_success():
         pytest.raises(RuntimeError),
     ):
         persist_source(contract, "hf", "c" * 64, payload())
-    assert MetricCollectionRun.objects.get().status == "running"
-    assert not MetricObservation.objects.exists()
+    assert CollectionRun.objects.get().status == "running"
+    assert not CollectionObservation.objects.exists()
 
 
 def test_calendar_days_respect_daylight_saving_and_reject_ambiguous_times():
@@ -132,7 +198,7 @@ def test_openrouter_keeps_exact_integer_and_completed_utc_period():
     assert value.window_range.lower_inc and not value.window_range.upper_inc
     assert run.source_as_of == datetime(2026, 10, 6, 0, 30, tzinfo=UTC)
     assert (
-        MetricObservation.objects.get(source_subject_kind="aggregate").mapping_id
+        CollectionObservation.objects.get(source_subject_kind="aggregate").mapping_id
         is None
     )
 
@@ -244,11 +310,11 @@ def test_source_lock_contention_and_expired_run_recovery():
             pytest.fail("contended lock was admitted")
     finally:
         other.close()
-    run = MetricCollectionRun.objects.create(
-        contract=contract,
-        source_id="hf",
+    run = CollectionRun.objects.create(
+        job=evidence_job(source_id="hf", purpose="metric", contract_id=contract.pk),
         ingestion_key="2" * 64,
         lease_expires_at=timezone.now() - timedelta(seconds=1),
+        lease_token=uuid4(),
     )
     aborted = persist_source(contract, "hf", "2" * 64, payload())
     assert aborted.pk == run.pk and aborted.status == "aborted"

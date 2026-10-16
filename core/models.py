@@ -29,14 +29,14 @@ Conventions:
 from __future__ import annotations
 
 import uuid
-
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, ClassVar, Literal
 from urllib.parse import urlparse
 
+from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.indexes import GinIndex, GistIndex, OpClass
-from django.db import IntegrityError, models, transaction
+from django.db import IntegrityError, models, router, transaction
 from django.db.models.functions import Upper
 from django.utils import timezone
 
@@ -477,35 +477,6 @@ class Company(models.Model):
 # ============================================================================
 # HF orgs
 # ============================================================================
-
-
-class HFOrg(models.Model):
-    account = models.OneToOneField("Account", to_field="account_key", db_column="account_key", null=True, on_delete=models.PROTECT, related_name="legacy_hf_org")
-    namespace = models.CharField(
-        max_length=64,
-        primary_key=True,
-        db_collation="case_insensitive",
-    )
-    company = models.ForeignKey(
-        Company,
-        on_delete=models.CASCADE,
-        related_name="hf_orgs",
-        db_column="company_id",
-        to_field="nickname",
-    )
-    confirmed = models.BooleanField(default=False)
-    discovered_via = models.TextField(default="curated")
-    added_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "hf_orgs"
-        ordering = ["namespace"]
-        indexes = [
-            models.Index(fields=["company"], name="idx_hf_orgs_company"),
-        ]
-
-    def __str__(self) -> str:
-        return self.namespace
 
 
 # ============================================================================
@@ -957,57 +928,19 @@ class XAccountManager(models.Manager):
         return super().create(**kwargs)
 
 
-class Account(models.Model):
-    account_key = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    data_source = models.ForeignKey("DataSource", on_delete=models.PROTECT)
-    external_identifier = models.TextField(default="")
-    normalized_identifier = models.TextField(default="", db_collation="C")
-    identifier_kind = models.CharField(max_length=32, default="provider_id")
-    normalized_handle = models.TextField(null=True, db_collation="C")
-    account_kind = models.CharField(max_length=24, default="unknown")
-    provider_metadata = models.JSONField(default=dict)
-    objects = models.Manager()
-    x = XAccountManager()
-    author_id = models.TextField(unique=True, null=True)
+class XAccountDetail(models.Model):
+    """Optional current X profile fields; historical profiles stay in snapshots."""
 
-    def save(self, *args, **kwargs):
-        from core.account_identity import normalize_account
-        normalize_account(self)
-        if kwargs.get("update_fields") is not None:
-            kwargs["update_fields"] = set(kwargs["update_fields"]) | {"data_source", "external_identifier", "normalized_identifier", "identifier_kind", "normalized_handle", "account_kind", "author_id"}
-        return super().save(*args, **kwargs)
-
-    handle = models.TextField(
-        db_collation="C",
-        blank=True,
-        null=True,
+    account = models.OneToOneField(
+        "Account", primary_key=True, db_column="account_key",
+        on_delete=models.CASCADE, related_name="x_details",
     )
-    display_name = models.TextField(blank=True, null=True)
-    bio = models.TextField(blank=True, null=True)
-    bio_fetched_at = models.DateTimeField(blank=True, null=True)
-    verified = models.BooleanField(default=False)
-    bio_contains_brand = models.BooleanField(blank=True, null=True)
-    first_seen_at = models.DateTimeField(auto_now_add=True)
-    last_seen_at = models.DateTimeField(auto_now=True)
-    source_query_ids = models.TextField(blank=True, null=True)
-    notes = models.TextField(blank=True, null=True)
-    bio_en = models.TextField(blank=True, null=True)
-    bio_zh_cn = models.TextField(blank=True, null=True)
-    # Migration 039 — inline author metadata from tweet payloads
-    followers_count = models.IntegerField(blank=True, null=True)
-    following_count = models.IntegerField(blank=True, null=True)
     favourites_count = models.IntegerField(blank=True, null=True)
     statuses_count = models.IntegerField(blank=True, null=True)
     media_count = models.IntegerField(blank=True, null=True)
     fast_followers_count = models.IntegerField(blank=True, null=True)
     is_blue_verified = models.BooleanField(blank=True, null=True)
     verified_type = models.TextField(blank=True, null=True)
-    profile_picture = models.TextField(blank=True, null=True)
-    location = models.TextField(blank=True, null=True)
-    description = models.TextField(blank=True, null=True)
-    profile_bio_text = models.TextField(blank=True, null=True)
-    followers_fetched_at = models.DateTimeField(blank=True, null=True)
-    created_at = models.DateTimeField(blank=True, null=True)
     protected = models.BooleanField(blank=True, null=True)
     affiliate_label_badge_url = models.URLField(max_length=2048, blank=True, null=True)
     affiliate_label_description = models.TextField(blank=True, null=True)
@@ -1041,8 +974,6 @@ class Account(models.Model):
     verification_info_reason_override_verified_year = models.PositiveSmallIntegerField(
         blank=True, null=True
     )
-    unavailable = models.BooleanField(blank=True, null=True)
-    unavailable_reason = models.TextField(blank=True, null=True)
     identity_profile_label_badge_url = models.URLField(
         max_length=2048, blank=True, null=True
     )
@@ -1060,6 +991,111 @@ class Account(models.Model):
     identity_profile_label_user_label_type = models.CharField(
         max_length=128, blank=True, null=True
     )
+    account_based_in_fetched_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        db_table = "x_account_details"
+
+
+X_DETAIL_FIELDS = frozenset(
+    field.name for field in XAccountDetail._meta.concrete_fields
+    if field.name != "account"
+)
+
+
+def _x_detail_property(name):
+    def read(account):
+        pending = account.__dict__.get("_x_detail_values", {})
+        if name in pending:
+            return pending[name]
+        if account._state.adding:
+            return None
+        try:
+            return getattr(account.x_details, name)
+        except XAccountDetail.DoesNotExist:
+            return None
+
+    def write(account, value):
+        account.__dict__.setdefault("_x_detail_values", {})[name] = value
+
+    return property(read, write)
+
+
+class Account(models.Model):
+    account_key = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    data_source = models.ForeignKey("DataSource", on_delete=models.PROTECT)
+    external_identifier = models.TextField(default="")
+    normalized_identifier = models.TextField(default="", db_collation="C")
+    identifier_kind = models.CharField(max_length=32, default="provider_id")
+    normalized_handle = models.TextField(null=True, db_collation="C")
+    account_kind = models.CharField(max_length=24, default="unknown")
+    provider_metadata = models.JSONField(default=dict)
+    objects = models.Manager()
+    x = XAccountManager()
+    author_id = models.TextField(unique=True, null=True)
+
+    def save(self, *args, **kwargs):
+        alias = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        kwargs["using"] = alias
+        with transaction.atomic(using=alias):
+            from core.account_identity import normalize_account
+            normalize_account(self)
+            pending = self.__dict__.get("_x_detail_values", {})
+            requested = kwargs.get("update_fields")
+            detail_fields = set(pending) if requested is None else set(pending) & set(requested)
+            if detail_fields and self.data_source_id != "x":
+                raise ValueError("X details belong only to X accounts")
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = (set(kwargs["update_fields"]) - X_DETAIL_FIELDS) | {"data_source", "external_identifier", "normalized_identifier", "identifier_kind", "normalized_handle", "account_kind", "author_id"}
+            result = super().save(*args, **kwargs)
+            if detail_fields:
+                detail, created = XAccountDetail.objects.using(self._state.db).get_or_create(
+                    account=self, defaults={name: pending[name] for name in detail_fields}
+                )
+                if not created:
+                    for name in detail_fields:
+                        setattr(detail, name, pending[name])
+                    detail.save(using=self._state.db, update_fields=detail_fields)
+                for name in detail_fields:
+                    pending.pop(name)
+                self._state.fields_cache.pop("x_details", None)
+            return result
+
+    def refresh_from_db(self, *args, **kwargs):
+        result = super().refresh_from_db(*args, **kwargs)
+        # Loading a deferred shared field must not discard pending X evidence.
+        if kwargs.get("fields") is None:
+            self.__dict__.pop("_x_detail_values", None)
+        self._state.fields_cache.pop("x_details", None)
+        return result
+
+    handle = models.TextField(
+        db_collation="C",
+        blank=True,
+        null=True,
+    )
+    display_name = models.TextField(blank=True, null=True)
+    bio = models.TextField(blank=True, null=True)
+    bio_fetched_at = models.DateTimeField(blank=True, null=True)
+    verified = models.BooleanField(default=False)
+    bio_contains_brand = models.BooleanField(blank=True, null=True)
+    first_seen_at = models.DateTimeField(auto_now_add=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    source_query_ids = models.TextField(blank=True, null=True)
+    notes = models.TextField(blank=True, null=True)
+    bio_en = models.TextField(blank=True, null=True)
+    bio_zh_cn = models.TextField(blank=True, null=True)
+    # Migration 039 — inline author metadata from tweet payloads
+    followers_count = models.IntegerField(blank=True, null=True)
+    following_count = models.IntegerField(blank=True, null=True)
+    profile_picture = models.TextField(blank=True, null=True)
+    location = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    profile_bio_text = models.TextField(blank=True, null=True)
+    followers_fetched_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+    unavailable = models.BooleanField(blank=True, null=True)
+    unavailable_reason = models.TextField(blank=True, null=True)
     country = models.ForeignKey(
         Country,
         on_delete=models.PROTECT,
@@ -1078,7 +1114,6 @@ class Account(models.Model):
         blank=True,
         null=True,
     )
-    account_based_in_fetched_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = "accounts"
@@ -1367,6 +1402,12 @@ class Account(models.Model):
         )
 
 
+# Payload/profile callers retain their established field names; ORM queries use
+# x_details explicitly. These properties create no columns or history records.
+for _detail_name in X_DETAIL_FIELDS:
+    setattr(Account, _detail_name, _x_detail_property(_detail_name))
+
+
 class TwitterListMembership(models.Model):
     """Durable membership snapshot keyed by Twitter list and account."""
 
@@ -1585,6 +1626,10 @@ class PostEnrichmentState(models.Model):
         db_column="post_id",
         to_field="tweet_id",
         primary_key=True,
+    )
+    source_collection_job = models.ForeignKey(
+        "CollectionJob", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="enrichment_states",
     )
     translation_status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.PENDING
@@ -2132,6 +2177,7 @@ class CompanyAccount(models.Model):
         db_column="role_id",
         to_field="key",
     )
+    ownership_confirmed = models.BooleanField(null=True, default=None)
     added_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -2844,14 +2890,14 @@ class Product(models.Model):
         db_column="brand_id",
         to_field="nickname",
     )
-    hf_org = models.ForeignKey(
-        HFOrg,
-        on_delete=models.SET_NULL,
+    publisher_account = models.ForeignKey(
+        Account,
+        on_delete=models.PROTECT,
         blank=True,
         null=True,
         related_name="products",
-        db_column="hf_org_id",
-        to_field="namespace",
+        db_column="publisher_account_key",
+        to_field="account_key",
     )
     hf_type = models.TextField(default="model")
     display_name = models.TextField(blank=True, null=True)
@@ -2880,11 +2926,27 @@ class Product(models.Model):
     collected_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    @property
+    def hf_namespace(self):
+        from core.account_identity import publisher_identifier
+
+        publisher = self.publisher_account if self.publisher_account_id else None
+        return publisher_identifier(publisher) if publisher and publisher.data_source_id == "hf" else None
+
+    @property
+    def publisher_ownership(self):
+        if not self.publisher_account_id:
+            return None
+        links = list(self.publisher_account.companies.all())
+        if len(links) > 1:
+            raise ValueError("conflicting publisher company ownership")
+        return links[0] if links else None
+
     class Meta:
         db_table = "products"
         indexes = [
             models.Index(fields=["brand"], name="idx_products_brand"),
-            models.Index(fields=["hf_org"], name="idx_products_hf_org_id"),
+            models.Index(fields=["publisher_account"], name="idx_products_publisher_account"),
             models.Index(
                 fields=["collected_at"], name="idx_products_collected_at"
             ),
@@ -3025,25 +3087,12 @@ class ProductVerificationProposal(models.Model):
         ]
 
 
-class HFModelCatalogRun(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    scope = models.JSONField()
-    outcome = models.CharField(max_length=40, default="pending")
-    invocations = models.JSONField(default=list)
-    report = models.JSONField(default=dict)
-    started_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    finished_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = "hf_model_catalog_runs"
-
-
-class HFModelCatalogNamespaceRun(models.Model):
+class CollectionScopeRun(models.Model):
     run = models.ForeignKey(
-        HFModelCatalogRun, on_delete=models.CASCADE, related_name="namespaces"
+        "CollectionRun", on_delete=models.CASCADE, related_name="scopes"
     )
-    namespace = models.CharField(max_length=64)
+    scope_kind = models.CharField(max_length=32, default="namespace")
+    scope_key = models.CharField(max_length=256)
     ownership = models.JSONField()
     cursor = models.TextField(null=True, blank=True)
     cursor_history = models.JSONField(default=list)
@@ -3053,39 +3102,11 @@ class HFModelCatalogNamespaceRun(models.Model):
     raw_count = models.BigIntegerField(default=0)
 
     class Meta:
-        db_table = "hf_model_catalog_namespace_runs"
+        db_table = "collection_scope_runs"
         constraints = (
             models.UniqueConstraint(
-                fields=["run", "namespace"], name="uq_hf_catalog_run_namespace"
-            ),
-        )
-
-
-class HFModelCatalogObservation(models.Model):
-    namespace_run = models.ForeignKey(
-        HFModelCatalogNamespaceRun,
-        on_delete=models.CASCADE,
-        related_name="observations",
-    )
-    repo_key = models.CharField(max_length=256)
-    repo_id = models.CharField(max_length=256)
-    product = models.ForeignKey(
-        Product, on_delete=models.SET_NULL, null=True, blank=True
-    )
-    created_product = models.BooleanField(default=False)
-    listing = models.JSONField(default=dict)
-    envelopes = models.JSONField(default=list)
-    groups = models.JSONField(default=dict)
-    outcome = models.CharField(max_length=64, default="pending")
-    observed_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "hf_model_catalog_observations"
-        constraints = (
-            models.UniqueConstraint(
-                fields=["namespace_run", "repo_key"],
-                name="uq_hf_catalog_repo_observation",
+                fields=["run", "scope_kind", "scope_key"],
+                name="uq_collection_run_scope",
             ),
         )
 
@@ -4150,8 +4171,66 @@ class TrendNarrativeDemand(models.Model):
         ]
 
 
+class ProviderBatch(models.Model):
+    """One resumable provider group; model-call charges live on its children."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    source_collection_job = models.ForeignKey(
+        "CollectionJob", on_delete=models.PROTECT, related_name="provider_batches",
+    )
+    group_key = models.CharField(max_length=128)
+    transport = models.CharField(max_length=16)
+    stage = models.CharField(max_length=64, default="enrichment")
+    source_definition_hash = models.CharField(max_length=64)
+    cohort_hash = models.CharField(max_length=64)
+    manifest_hash = models.CharField(max_length=64)
+    provider = models.CharField(max_length=80)
+    model = models.CharField(max_length=160)
+    endpoint = models.CharField(max_length=128)
+    request_profile = models.CharField(max_length=80)
+    policy = models.JSONField(default=dict)
+    state = models.CharField(max_length=24, default="registered")
+    input_file_id = models.CharField(max_length=256, blank=True, default="")
+    output_file_id = models.CharField(max_length=256, blank=True, default="")
+    error_file_id = models.CharField(max_length=256, blank=True, default="")
+    provider_batch_id = models.CharField(max_length=256, blank=True, default="")
+    provider_status = models.CharField(max_length=32, blank=True, default="")
+    control_requests = models.PositiveIntegerField(default=0)
+    control_evidence = models.JSONField(default=list)
+    request_count = models.PositiveIntegerField(default=0)
+    imported_count = models.PositiveIntegerField(default=0)
+    import_cursor = models.CharField(max_length=256, blank=True, default="")
+    error_code = models.CharField(max_length=64, blank=True, default="")
+    deadline_at = models.DateTimeField()
+    next_poll_at = models.DateTimeField(null=True, blank=True)
+    claim_owner = models.CharField(max_length=128, blank=True, default="")
+    claim_fence = models.PositiveIntegerField(default=0)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    claim_expires_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "provider_batches"
+        indexes = [
+            models.Index(fields=["source_collection_job", "state"], name="idx_batch_job_state"),
+            models.Index(fields=["state", "next_poll_at"], name="idx_batch_poll_due"),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=["source_collection_job", "group_key"], name="uq_batch_job_group"),
+            models.UniqueConstraint(fields=["source_collection_job", "model"], condition=models.Q(transport="batch", state__in=["registered", "uploading", "uploaded", "submitting", "waiting", "ambiguous", "importing"]), name="uq_batch_active_job_model"),
+            models.UniqueConstraint(fields=["provider", "provider_batch_id"], condition=models.Q(provider_batch_id__gt=""), name="uq_batch_remote_identity"),
+            models.CheckConstraint(condition=models.Q(transport__in=["batch", "direct"]), name="ck_batch_transport"),
+            models.CheckConstraint(condition=models.Q(transport="batch") | models.Q(input_file_id="", output_file_id="", error_file_id="", provider_batch_id=""), name="ck_batch_direct_ids"),
+            models.CheckConstraint(condition=models.Q(state__in=["registered", "uploading", "uploaded", "submitting", "waiting", "ambiguous", "importing", "completed", "failed", "cancelled"]), name="ck_batch_state"),
+            models.CheckConstraint(condition=models.Q(source_definition_hash__regex=r"^[0-9a-f]{64}$", cohort_hash__regex=r"^[0-9a-f]{64}$", manifest_hash__regex=r"^[0-9a-f]{64}$"), name="ck_batch_hashes"),
+            models.CheckConstraint(condition=models.Q(claimed_at__isnull=True, claim_expires_at__isnull=True, claim_owner="", claim_fence=0) | models.Q(claimed_at__isnull=False, claim_expires_at__gt=models.F("claimed_at"), claim_owner__gt="", claim_fence__gt=0), name="ck_batch_claim_shape"),
+        ]
+
+
 class OriginalContentCall(models.Model):
-    """Append-only bounded transport ledger for rank/editor/critic work."""
+    """One paid model request owned by an authored run or collection batch."""
 
     class Stage(models.TextChoices):
         RANK = "rank", "Rank"
@@ -4169,7 +4248,15 @@ class OriginalContentCall(models.Model):
         TrendNarrativeRun,
         on_delete=models.PROTECT,
         related_name="provider_calls",
+        null=True, blank=True,
     )
+    provider_batch = models.ForeignKey(
+        ProviderBatch, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="calls",
+    )
+    member_post_ids = ArrayField(models.CharField(max_length=128), size=20, default=list, db_default=[])
+    import_state = models.CharField(max_length=24, default="not_applicable", db_default="not_applicable")
+    import_evidence = models.JSONField(default=dict, db_default={})
     stage = models.CharField(max_length=200)
     batch_key = models.CharField(max_length=200, blank=True, default="")
     request_identity = models.CharField(max_length=128)
@@ -4206,6 +4293,9 @@ class OriginalContentCall(models.Model):
     class Meta:
         db_table = "original_content_calls"
         constraints = [
+            models.CheckConstraint(condition=models.Q(run__isnull=False, provider_batch__isnull=True) | models.Q(run__isnull=True, provider_batch__isnull=False), name="ck_oc_call_owner"),
+            models.CheckConstraint(condition=models.Q(provider_batch__isnull=True, member_post_ids__len=0, import_state="not_applicable") | models.Q(provider_batch__isnull=False, kind="text", member_post_ids__len__gte=1, member_post_ids__len__lte=20, import_state__in=["pending", "applied", "stale", "error"]), name="ck_oc_call_members"),
+            models.UniqueConstraint(fields=["provider_batch", "stage", "batch_key"], condition=models.Q(provider_batch__isnull=False), name="uq_oc_batch_stage_request"),
             models.UniqueConstraint(
                 fields=["run", "stage", "batch_key"],
                 name="uq_tnpc_run_stage_batch",
@@ -4250,6 +4340,7 @@ class OriginalContentCall(models.Model):
             ),
         ]
         indexes = [
+            GinIndex(fields=["member_post_ids"], name="idx_oc_call_post_members"),
             models.Index(fields=["state", "claim_expires_at"], name="idx_tnpc_claim_due"),
             models.Index(fields=["run", "stage"], name="idx_tnpc_run_stage"),
             models.Index(fields=["budget_scope", "budget_day"], name="idx_oc_call_budget"),
@@ -7736,8 +7827,9 @@ class MetricCollectionContract(models.Model):
 
 class SourceSubjectMapping(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    purpose = models.CharField(max_length=16, default="metric", db_default="metric")
     contract = models.ForeignKey(
-        MetricCollectionContract, on_delete=models.PROTECT, related_name="mappings"
+        MetricCollectionContract, on_delete=models.PROTECT, related_name="mappings", null=True
     )
     source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
     source_subject_kind = models.CharField(max_length=32)
@@ -7776,6 +7868,19 @@ class SourceSubjectMapping(models.Model):
                     "normalized_identifier",
                 ],
                 name="uq_source_subject_mapping",
+                condition=models.Q(purpose="metric"),
+            ),
+            models.UniqueConstraint(
+                fields=["source", "source_subject_kind", "identifier_scope", "normalized_identifier", "subject"],
+                name="uq_catalog_subject_mapping", condition=models.Q(purpose="catalog"),
+            ),
+            models.CheckConstraint(
+                condition=models.Q(purpose="metric", contract__isnull=False) | models.Q(purpose="catalog", contract__isnull=True),
+                name="ck_mapping_purpose_contract",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(purpose="metric") | (~models.Q(reviewed_by="") & ~models.Q(evidence_url="")),
+                name="ck_catalog_mapping_review",
             ),
             models.CheckConstraint(
                 condition=models.Q(
@@ -7795,15 +7900,52 @@ class SourceSubjectMapping(models.Model):
         ]
 
 
-class MetricCollectionRun(models.Model):
+class CollectionJob(models.Model):
+    """Immutable collection instructions and mutable coordination pointers."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    job_key = models.CharField(max_length=128, unique=True)
+    source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
+    purpose = models.CharField(max_length=16)
+    operation = models.CharField(max_length=64)
+    mode = models.CharField(max_length=16)
+    contract = models.ForeignKey(MetricCollectionContract, null=True, on_delete=models.PROTECT)
+    definition = models.JSONField()
+    definition_sha256 = models.CharField(max_length=64)
+    state = models.CharField(max_length=16, default="paused")
+    next_due_at = models.DateTimeField(null=True)
+    next_retry_at = models.DateTimeField(null=True)
+    active_run = models.ForeignKey("CollectionRun", null=True, on_delete=models.SET_NULL, related_name="active_jobs")
+    last_attempt = models.ForeignKey("CollectionRun", null=True, on_delete=models.SET_NULL, related_name="attempt_jobs")
+    last_success = models.ForeignKey("CollectionRun", null=True, on_delete=models.SET_NULL, related_name="successful_jobs")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "collection_jobs"
+        indexes: ClassVar[list] = [models.Index(fields=["state", "next_due_at"], name="idx_collection_job_due")]
+        constraints = [
+            models.CheckConstraint(condition=(models.Q(purpose="metric", contract__isnull=False) | models.Q(purpose__in=["catalog", "content"], contract__isnull=True)), name="ck_collection_job_contract"),
+            models.CheckConstraint(condition=models.Q(mode__in=["manual", "recurring", "historical"]), name="ck_collection_job_mode"),
+            models.CheckConstraint(condition=models.Q(state__in=["paused", "ready", "completed", "cancelled"]), name="ck_collection_job_state"),
+            models.CheckConstraint(condition=models.Q(state="ready") | models.Q(next_due_at__isnull=True, next_retry_at__isnull=True), name="ck_collection_job_idle_dates"),
+            models.CheckConstraint(condition=models.Q(definition_sha256__regex=r"^[0-9a-f]{64}$"), name="ck_collection_job_hash"),
+            models.CheckConstraint(condition=~models.Q(job_key=""), name="ck_collection_job_key"),
+        ]
+
+
+class CollectionRun(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     batch_id = models.UUIDField(default=uuid.uuid4)
-    contract = models.ForeignKey(MetricCollectionContract, on_delete=models.PROTECT)
-    source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
+    job = models.ForeignKey(CollectionJob, on_delete=models.PROTECT, related_name="runs")
+    lease_token = models.UUIDField(null=True)
+    invocations = models.JSONField(default=list, db_default=[])
+    report = models.JSONField(default=dict, db_default={})
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     ingestion_key = models.CharField(max_length=64, unique=True)
     status = models.CharField(max_length=16, default="running")
     started_at = models.DateTimeField(default=timezone.now)
-    lease_expires_at = models.DateTimeField()
+    lease_expires_at = models.DateTimeField(null=True)
     observed_at = models.DateTimeField(null=True)
     completed_at = models.DateTimeField(null=True)
     source_as_of = models.DateTimeField(null=True)
@@ -7817,11 +7959,35 @@ class MetricCollectionRun(models.Model):
     raw_payload = models.JSONField(null=True)
     error_code = models.CharField(max_length=64, null=True)
 
+    @property
+    def source(self):
+        return self.job.source
+
+    @property
+    def source_id(self):
+        return self.job.source_id
+
+    @property
+    def purpose(self):
+        return self.job.purpose
+
+    @property
+    def contract(self):
+        return self.job.contract
+
+    @property
+    def contract_id(self):
+        return self.job.contract_id
+
+    @property
+    def scope(self):
+        return self.job.definition["scope"]
+
     class Meta:
-        db_table = "metric_collection_runs"
+        db_table = "collection_runs"
         indexes = [
             models.Index(
-                fields=["contract", "source", "status", "completed_at"],
+                fields=["job", "status", "completed_at"],
                 name="idx_metric_run_outcome",
             ),
             models.Index(fields=["batch_id"], name="idx_metric_run_batch"),
@@ -7837,12 +8003,8 @@ class MetricCollectionRun(models.Model):
                 name="ck_run_payload_hash",
             ),
             models.CheckConstraint(
-                condition=models.Q(status="running", completed_at__isnull=True)
-                | models.Q(
-                    status__in=["success", "partial", "failed", "aborted"],
-                    completed_at__isnull=False,
-                ),
-                name="ck_run_terminal",
+                condition=models.Q(job__isnull=True) | ~models.Q(status="running") | models.Q(lease_token__isnull=False, lease_expires_at__isnull=False),
+                name="ck_collection_run_job_lease",
             ),
             models.CheckConstraint(
                 condition=models.Q(success_count__lte=models.F("selected_count")),
@@ -7851,10 +8013,28 @@ class MetricCollectionRun(models.Model):
         ]
 
 
-class MetricObservation(models.Model):
+class CollectionObservation(models.Model):
     run = models.ForeignKey(
-        MetricCollectionRun, on_delete=models.PROTECT, related_name="observations"
+        CollectionRun, on_delete=models.PROTECT, related_name="observations"
     )
+    scope_run = models.ForeignKey(
+        CollectionScopeRun,
+        on_delete=models.PROTECT,
+        null=True,
+        related_name="observations",
+    )
+    resource_key = models.CharField(max_length=256, null=True)
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
+    post = models.ForeignKey(
+        Post, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="collection_observations",
+    )
+    created_product = models.BooleanField(default=False, db_default=False)
+    listing = models.JSONField(default=dict, db_default={})
+    envelopes = models.JSONField(default=list, db_default=[])
+    groups = models.JSONField(default=dict, db_default={})
+    processing_outcome = models.CharField(max_length=64, null=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True)
     mapping = models.ForeignKey(
         SourceSubjectMapping, null=True, on_delete=models.PROTECT
     )
@@ -7871,8 +8051,9 @@ class MetricObservation(models.Model):
     error_code = models.CharField(max_length=64, null=True)
 
     class Meta:
-        db_table = "metric_observations"
+        db_table = "collection_observations"
         indexes = [
+            models.Index(fields=["run", "post"], name="idx_observation_run_post"),
             models.Index(
                 fields=["mapping", "observed_at"], name="idx_observation_mapping_time"
             ),
@@ -7881,8 +8062,21 @@ class MetricObservation(models.Model):
             ),
         ]
         constraints = [
+            models.CheckConstraint(
+                condition=(models.Q(source_subject_kind="post", post__isnull=False, source_identifier=models.F("post_id"), product__isnull=True, mapping__isnull=True, created_product=False) | (models.Q(post__isnull=True) & ~models.Q(source_subject_kind="post"))),
+                name="ck_observation_post_subject",
+            ),
+            models.UniqueConstraint(
+                fields=["scope_run", "resource_key"],
+                name="uq_collection_scope_resource",
+            ),
             models.UniqueConstraint(
                 fields=["run", "observation_key"], name="uq_metric_observation"
+            ),
+            models.UniqueConstraint(
+                fields=["observation_key"],
+                condition=models.Q(source_metadata__projection_kind="source-statistics-v1"),
+                name="uq_source_statistics_snapshot",
             ),
             models.CheckConstraint(
                 condition=models.Q(observation_key__regex=r"^[0-9a-f]{64}$"),
@@ -7890,7 +8084,14 @@ class MetricObservation(models.Model):
             ),
             models.CheckConstraint(
                 condition=models.Q(
-                    source_subject_kind__in=["model", "repository", "lab", "account", "aggregate"]
+                    source_subject_kind__in=[
+                        "model",
+                        "repository",
+                        "lab",
+                        "account",
+                        "aggregate",
+                        "post",
+                    ]
                 ),
                 name="ck_observation_kind",
             ),
@@ -7934,7 +8135,7 @@ class MetricObservation(models.Model):
 
 class MetricValue(models.Model):
     observation = models.ForeignKey(
-        MetricObservation, on_delete=models.PROTECT, related_name="values"
+        CollectionObservation, on_delete=models.PROTECT, related_name="values"
     )
     source_metric = models.ForeignKey(SourceMetric, on_delete=models.PROTECT)
     integer_value = models.DecimalField(max_digits=30, decimal_places=0, null=True)
@@ -8444,3 +8645,9 @@ class OfficialCompanyProviderState(models.Model):
 
     class Meta:
         db_table = "official_company_provider_states"
+
+
+# Render's deployed benchmark launcher imports these names. They point to the
+# canonical models and add no tables or duplicate model registration.
+MetricCollectionRun = CollectionRun
+MetricObservation = CollectionObservation

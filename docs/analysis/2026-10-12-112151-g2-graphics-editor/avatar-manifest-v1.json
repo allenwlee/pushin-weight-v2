@@ -1,0 +1,26 @@
+{
+  "created_at": "2026-10-12T12:14:27+09:00",
+  "tool": "built-in image_gen",
+  "generation_calls": 1,
+  "corrections": 0,
+  "image": "yan-junjie-minimax-avatar-v1.png",
+  "export_dimensions": [
+    400,
+    400
+  ],
+  "master": "yan-junjie-minimax-avatar-master-v1.png",
+  "master_sha256": "bf05197e0e48dafcd0236275eec493df050ea145cf795407f3b7f454f612a128",
+  "image_sha256": "808c36ac310424cc76a19c83f594725b8d423a1960fdcb999d5a1261ec7be3af",
+  "prompt": "avatar-prompt-v1.txt",
+  "original_landscape_preserved": true,
+  "thumbnail_review_sizes": [
+    48,
+    64,
+    80
+  ],
+  "browser_cases": 12,
+  "square_and_circle_reviewed": true,
+  "owner_browser": "window=919891824 tab=919892104 title=Face + MiniMax \u00b7 compact preview url=http://100.102.74.50:58423/graphics-editor/compact.html other_tabs_preserved=true other_count=8",
+  "kind": "generated_editorial_thumbnail",
+  "application_changes": false
+}

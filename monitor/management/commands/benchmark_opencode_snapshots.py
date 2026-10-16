@@ -8,7 +8,7 @@ from core.benchmark_attribution import enforce_use
 from core.benchmark_metric_store import aware_instant
 from core.benchmark_opencode import retained_checks
 from core.measurement_taxonomy import require
-from core.models import MetricCollectionContract, MetricObservation
+from core.models import CollectionObservation, MetricCollectionContract
 from scripts.benchmark_download_collector.identity import days
 
 
@@ -50,10 +50,10 @@ class Command(BaseCommand):
             )
             observations = {
                 o.pk: o
-                for o in MetricObservation.objects.filter(
+                for o in CollectionObservation.objects.filter(
                     pk__in={r[3] for r in references},
-                    run__contract=contract,
-                    run__source_id="opencode",
+                    run__job__contract=contract,
+                    run__job__source_id="opencode",
                 ).prefetch_related("values__source_metric")
             }
             rows = []

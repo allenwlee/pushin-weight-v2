@@ -9,9 +9,16 @@ import uuid
 import httpx
 from django.core.management.base import BaseCommand, CommandError
 
-from core.hf_catalog import check_scope, execute_catalog, resolve_scope
+from core.hf_catalog import (
+    catalog_scope,
+    check_scope,
+    execute_catalog,
+    resolve_catalog_run,
+    resolve_scope,
+)
 from core.hf_metadata_client import HFMetadataClient
-from core.models import Brand, BrandCompany, HFModelCatalogRun, HFOrg
+from core.models import Brand, BrandCompany, CollectionRun, CompanyAccount
+from core.publisher_accounts import get_publisher
 
 
 class Command(BaseCommand):
@@ -67,8 +74,8 @@ class Command(BaseCommand):
         try:
             if options["resume"]:
                 run_id = uuid.UUID(options["resume"])
-                run = HFModelCatalogRun.objects.get(pk=run_id)
-                manifest = run.scope
+                run = resolve_catalog_run(run_id)
+                manifest = catalog_scope(run)
                 check_scope(manifest)
             elif options["all_tracked"]:
                 manifest = resolve_scope()
@@ -78,8 +85,10 @@ class Command(BaseCommand):
                         "both --brand and --confirmed-namespace are required"
                     )
                 brand = Brand.objects.get(pk=options["brand"], is_sentinel=False)
-                org = HFOrg.objects.get(
-                    pk=options["confirmed_namespace"], confirmed=True
+                org = get_publisher(
+                    source="hf",
+                    identifier=options["confirmed_namespace"],
+                    confirmed=True,
                 )
                 if not BrandCompany.objects.filter(
                     brand=brand, company_id=org.company_id
@@ -88,13 +97,15 @@ class Command(BaseCommand):
                         "Brand does not own the confirmed HF namespace; no request was sent"
                     )
                 manifest = resolve_scope(
-                    brands=[brand.pk], companies=[], namespace=org.pk
+                    brands=[brand.pk],
+                    companies=[],
+                    namespace=org.account.external_identifier,
                 )
         except (
             ValueError,
             Brand.DoesNotExist,
-            HFOrg.DoesNotExist,
-            HFModelCatalogRun.DoesNotExist,
+            CompanyAccount.DoesNotExist,
+            CollectionRun.DoesNotExist,
         ) as exc:
             raise CommandError(str(exc)) from exc
         preview = {

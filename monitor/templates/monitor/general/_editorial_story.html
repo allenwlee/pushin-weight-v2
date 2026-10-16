@@ -1,0 +1,13 @@
+{% load i18n %}
+<article class="editorial-story" data-edition-id="{{ item.id }}" lang="{{ item.locale }}">
+  <h3 class="editorial-headline"><a href="{{ item.url }}">{{ item.headline }}</a></h3>
+  <p class="editorial-byline">{{ item.byline }}</p>
+  <div class="editorial-meta">
+    <time datetime="{{ item.published_at }}">{{ item.published_at|slice:':10' }}</time>
+    <details class="editorial-sources" data-source-count="{{ item.source_count }}">
+      <summary>{% translate "Sources" %} · {% blocktranslate count count=item.source_count %}{{ count }} post{% plural %}{{ count }} posts{% endblocktranslate %}</summary>
+      <ol>{% for source in item.sources %}<li><a href="{{ source.url }}" target="_blank" rel="noopener noreferrer"><span>{{ source.label }}</span><span class="source-url">{{ source.url }}</span></a></li>{% endfor %}</ol>
+    </details>
+  </div>
+  <div class="editorial-body">{{ item.article|linebreaks }}</div>
+</article>

@@ -1,0 +1,18 @@
+{
+  "image": "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-editorial/docs/analysis/2026-10-12-112151-g2-graphics-editor/yan-junjie-minimax-meme-split-v1.png",
+  "source_generated_path": "/Users/fuchitalee/.codex/generated_images/01a11f5b-f117-7693-b1ec-43f9bd8ab568/exec-6b6c261b-153e-4d61-a496-db5218a2ee1d.png",
+  "sha256": "3535d08bc93364cd26245ec8b5441016ebc6d2110ec33910e8bdaeedd90ad109",
+  "tool": "built-in image_gen",
+  "generation_calls": 1,
+  "targeted_repairs": 0,
+  "expected_inscription": "Dr. Yan Junjie (闫俊杰)\nfounder of MiniMax",
+  "kind": "generated_editorial_image",
+  "design": "portrait left / logo right, softly airbrushed, meme-adapted clothing, generous tone, PushinWeight corner watermark",
+  "created_at": "2026-10-12T11:21:51+09:00",
+  "owner_browser": "window=919891824 tab=919892100 title=yan-junjie-minimax-meme-split-v1.png (1536×1024) url=http://100.102.74.50:58423/graphics-editor/yan-junjie-minimax-meme-split-v1.png other_tabs_preserved=true other_count=7",
+  "caption_check": {
+    "english_ocr": true,
+    "chinese_visual": true,
+    "chinese_ocr_reliable": false
+  }
+}

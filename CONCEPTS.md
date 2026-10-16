@@ -2,6 +2,56 @@
 
 Shared domain vocabulary for this project — entities, named processes, and status concepts with project-specific meaning. Seeded with core domain vocabulary, then accretes as ce-compound and ce-compound-refresh process learnings; direct edits are fine. Glossary only, not a spec or catch-all.
 
+## General-page vocabulary
+
+### Content
+
+The atomic, independently addressable unit of the General experience and the
+umbrella term for third-party **posts** and PushinWeight **original content**.
+The two kinds remain distinguishable. Commentary on a source post belongs to
+that post; several jobs, events or claims inside it do not create additional
+atomic posts. This term does not prescribe a new database table.
+
+### Graphics editor / graphicsed
+
+Alternative names for **picture editor** or **pics editor**: the editorial role
+that selects or creates an appropriate image/video for content. These names
+refer to one role, not separate services.
+
+### Story evidence
+
+The source material supplied for a selected story, comprising **anchors** that
+identify the story and **retrieved background** that explains its context.
+
+Background availability does not establish that a claim is true. The material
+supplied to the writer and the sources ultimately cited remain distinguishable.
+
+### Cited support
+
+The sources actually used to support a saved piece of original content, from
+which its source count and citation links are derived.
+
+Search matches and retrieved background do not automatically become cited
+support; a repeated source is not an additional independent confirmation.
+
+## Data-source collection
+
+### Backfiller data source
+
+The repeatable process for ingesting available historical and current provider
+data into PushinWeight's shared collection and measurement storage. Its component
+name is **backfiller-data-source**; the command is `backfiller_data_source`.
+It shares acquisition, validation and numeric ingestion with normal source
+collection. Committed database state allows interrupted work to resume. It is
+separate from the X post backfiller and does not imply complete provider history.
+
+### Native-resource measurement
+
+A measurement belonging to a provider resource, such as a repository, account
+or release asset. It can be stored before a reviewed canonical model link exists.
+Such values remain **native-only** until qualified for canonical attribution;
+one shared repository's counter is not copied onto each model it supports.
+
 ## Ollija plan guidance
 
 ### Standalone Ollija
@@ -335,6 +385,24 @@ top two supported brands; explicit brand filters show those brands from the
 same already-generated run.
 
 ## Provider measurements
+
+### Model history cohort
+
+A dated, fixed selection of canonical models whose history is being collected or compared.
+Membership records the selection rule, model identities, date basis and cutoff so a resumed collection uses the same models.
+Provider coverage gaps do not remove a model from the selection.
+
+### Provider crosswalk
+
+A reviewed link between a provider's identifier and our canonical product, account or other measurement subject.
+The link records ownership and evidence; matching display names alone does not establish identity.
+A family repository can support several model versions without making those versions one product.
+
+### Collection job
+
+Reviewed instructions for a collection, including its source, scope, schedule and limits.
+Execution records describe what happened when those instructions were attempted, while scoped checkpoints record committed progress for recovery.
+This separates the intended collection from its individual attempts.
 
 ### Reference week
 

@@ -1,4 +1,5 @@
-# Explicit G2 English launch profile. Select via EDITORIAL_CONFIG_PATH only after
+# Explicit G2 multilingual launch profile. The deployment path stays stable.
+# Select via EDITORIAL_CONFIG_PATH only after
 # credentials and shared storage are configured. The default profile remains off.
 # Combined text/media reservations never exceed $5 per UTC day.
 enabled: true
@@ -6,7 +7,8 @@ public_enabled: true
 daily_usd: 5
 assessment_usd: 2
 daily_calls: 384
-assessment_calls: 6
+# Editor + four writers + four senior reviews + up to four optional media calls.
+assessment_calls: 13
 media_daily_calls: 4
 # Six seconds at $0.08/s is $0.48; reserve extra for encoded-duration variance.
 media_cost_ceiling_usd: 0.60
@@ -19,7 +21,9 @@ pictures:
   pulse: derive
 permitted_reuse: [permitted, unknown]
 voices:
-  chatter:en: chatter-en-v1
+  chatter:en: chatter-en-v3
+  chatter:ja: chatter-ja-tospo-v2
+  chatter:zh-cn: chatter-zh-cn-wemedia-v2
   pulse:en: pulse-en-v1
 routes:
   editor: &factual
@@ -38,7 +42,7 @@ routes:
   pulse:
     <<: *factual
     request_profile: editorial_writer_v1
-  chatter:
+  chatter: &chatter
     model: gpt-6-sol
     endpoint: https://api.openai.com/v1/chat/completions
     # Provision this exact variable from fuchitalee's ~/.env.secrets at launch.
@@ -49,3 +53,14 @@ routes:
     input_usd_per_million: 2.50
     output_usd_per_million: 10.00
     max_output_tokens: 4096
+locale_routes:
+  chatter:ja: &native_chatter
+    <<: *chatter
+    model: gpt-6.1-sol
+    reasoning: high
+    timeout_seconds: 300
+    max_output_tokens: 16384
+  chatter:zh-cn:
+    <<: *native_chatter
+reviewer:
+  <<: *native_chatter

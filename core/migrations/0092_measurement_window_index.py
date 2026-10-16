@@ -7,7 +7,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     atomic = False
-    dependencies: ClassVar[list] = [("core", "0080_measurement_window")]
+    dependencies: ClassVar[list] = [("core", "0091_measurement_window")]
     operations: ClassVar[list] = [
         AddIndexConcurrently(
             model_name="metricvalue",

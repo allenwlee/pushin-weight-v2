@@ -181,3 +181,31 @@ def isolated_migration_database(transactional_db):
         connection.settings_dict["NAME"] = original_name
         with connection.cursor() as cursor:
             cursor.execute(f'DROP DATABASE "{name}"')
+
+
+@pytest.fixture
+def collection_instruction_bridge(isolated_migration_database, monkeypatch):
+    """Preceding-reader compatibility belongs to the explicit 0089 bridge."""
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+
+    executor = MigrationExecutor(connection)
+    target = [("core", "0089_job_owned_run_instructions")]
+    executor.migrate(target)
+    historical = executor.loader.project_state(target).apps
+    value_model = historical.get_model("core", "MetricValue")
+
+    class HistoricalValues:
+        """The preceding writer inserts with its pre-range model definition."""
+
+        objects = value_model.objects
+
+        def __new__(cls, *, observation, source_metric, **values):
+            return value_model(
+                observation_id=observation.pk,
+                source_metric_id=source_metric.pk,
+                **values,
+            )
+
+    monkeypatch.setattr("core.benchmark_metric_store.MetricValue", HistoricalValues)
+    return historical

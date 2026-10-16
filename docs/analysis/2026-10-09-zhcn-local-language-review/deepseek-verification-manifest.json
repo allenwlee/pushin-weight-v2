@@ -1,0 +1,909 @@
+{
+  "created_utc": "2026-10-09T08:18:09.373587+00:00",
+  "model": "deepseek-v4-pro",
+  "reasoning_effort": "high",
+  "new_chinese_calls": 2,
+  "retries": 0,
+  "refinements": 0,
+  "chinese_request_cap": 12000,
+  "input_image_attached": false,
+  "final_content_only": true,
+  "provider_reasoning_private": true,
+  "usage": {
+    "prompt_tokens": 3620,
+    "completion_tokens": 3128,
+    "reasoning_tokens_included": 863,
+    "total_tokens": 6748
+  },
+  "checks": [
+    {
+      "style": "metro",
+      "model": "gpt-6.1-sol",
+      "viewport": [
+        1400,
+        1000
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 1415,
+      "displayedCharacters": 1415,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组同时发送真实原图。"
+    },
+    {
+      "style": "metro",
+      "model": "gpt-6-sol",
+      "viewport": [
+        1400,
+        1000
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 671,
+      "displayedCharacters": 671,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组同时发送真实原图。"
+    },
+    {
+      "style": "wemedia",
+      "model": "gpt-6.1-sol",
+      "viewport": [
+        1400,
+        1000
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 2111,
+      "displayedCharacters": 2111,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组同时发送真实原图。"
+    },
+    {
+      "style": "wemedia",
+      "model": "gpt-6-sol",
+      "viewport": [
+        1400,
+        1000
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 992,
+      "displayedCharacters": 992,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组同时发送真实原图。"
+    },
+    {
+      "style": "metro",
+      "model": "deepseek-v4-pro",
+      "viewport": [
+        1400,
+        1000
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 1625,
+      "displayedCharacters": 1625,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组仅发送完整中文图中文字，未发送图片。"
+    },
+    {
+      "style": "wemedia",
+      "model": "deepseek-v4-pro",
+      "viewport": [
+        1400,
+        1000
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 2087,
+      "displayedCharacters": 2087,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组仅发送完整中文图中文字，未发送图片。"
+    },
+    {
+      "style": "metro",
+      "model": "gpt-6.1-sol",
+      "viewport": [
+        1280,
+        800
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 1415,
+      "displayedCharacters": 1415,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组同时发送真实原图。"
+    },
+    {
+      "style": "metro",
+      "model": "gpt-6-sol",
+      "viewport": [
+        1280,
+        800
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 671,
+      "displayedCharacters": 671,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组同时发送真实原图。"
+    },
+    {
+      "style": "wemedia",
+      "model": "gpt-6.1-sol",
+      "viewport": [
+        1280,
+        800
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 2111,
+      "displayedCharacters": 2111,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组同时发送真实原图。"
+    },
+    {
+      "style": "wemedia",
+      "model": "gpt-6-sol",
+      "viewport": [
+        1280,
+        800
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 992,
+      "displayedCharacters": 992,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组同时发送真实原图。"
+    },
+    {
+      "style": "metro",
+      "model": "deepseek-v4-pro",
+      "viewport": [
+        1280,
+        800
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 1625,
+      "displayedCharacters": 1625,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组仅发送完整中文图中文字，未发送图片。"
+    },
+    {
+      "style": "wemedia",
+      "model": "deepseek-v4-pro",
+      "viewport": [
+        1280,
+        800
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 2087,
+      "displayedCharacters": 2087,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 596.5,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组仅发送完整中文图中文字，未发送图片。"
+    },
+    {
+      "style": "metro",
+      "model": "gpt-6.1-sol",
+      "viewport": [
+        390,
+        844
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 1415,
+      "displayedCharacters": 1415,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 695.453125,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组同时发送真实原图。"
+    },
+    {
+      "style": "metro",
+      "model": "gpt-6-sol",
+      "viewport": [
+        390,
+        844
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 671,
+      "displayedCharacters": 671,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 695.453125,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组同时发送真实原图。"
+    },
+    {
+      "style": "wemedia",
+      "model": "gpt-6.1-sol",
+      "viewport": [
+        390,
+        844
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 2111,
+      "displayedCharacters": 2111,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 695.453125,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组同时发送真实原图。"
+    },
+    {
+      "style": "wemedia",
+      "model": "gpt-6-sol",
+      "viewport": [
+        390,
+        844
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 992,
+      "displayedCharacters": 992,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 695.453125,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组同时发送真实原图。"
+    },
+    {
+      "style": "metro",
+      "model": "deepseek-v4-pro",
+      "viewport": [
+        390,
+        844
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 1625,
+      "displayedCharacters": 1625,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 695.453125,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组仅发送完整中文图中文字，未发送图片。"
+    },
+    {
+      "style": "wemedia",
+      "model": "deepseek-v4-pro",
+      "viewport": [
+        390,
+        844
+      ],
+      "headlinesExact": true,
+      "rawResponseVerbatim": true,
+      "allModelWordsVisible": true,
+      "sourceCharacters": 2087,
+      "displayedCharacters": 2087,
+      "exactRole": true,
+      "factNoteExact": true,
+      "imageSrc": "chonk-official-cat-4s.jpg",
+      "imageLoaded": true,
+      "imageGeometry": true,
+      "noCatOverlay": true,
+      "purposeBottom": 695.453125,
+      "purposeFits": true,
+      "detailsCollapsed": true,
+      "overflow": false,
+      "inputNote": " 本组仅发送完整中文图中文字，未发送图片。"
+    }
+  ],
+  "photo_check": {
+    "open": true,
+    "imageLoaded": true,
+    "imageSrc": "wang-original.jpg"
+  },
+  "video_check": {
+    "open": true,
+    "videoWidth": 640,
+    "duration": 17.136327,
+    "playing": true,
+    "poster": "chonk-source-poster.jpg",
+    "source": "chonk-source-video.mp4"
+  },
+  "clipping_check": {
+    "cardScrollLeft": 0,
+    "cardOverflow": "clip",
+    "titleX": 48,
+    "cardX": 28
+  },
+  "protected_files": [
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/build_review.py",
+      "bytes": 23534,
+      "sha256": "ecfc8a40fc4aa45dec49bc136069fa03b5d87e9ef77dc69ff6cdaa0efe996b8d",
+      "current_sha256": "ecfc8a40fc4aa45dec49bc136069fa03b5d87e9ef77dc69ff6cdaa0efe996b8d",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/ledger.json",
+      "bytes": 5545,
+      "sha256": "52eeedab1c89c76e055d81f3285efe65d6fe16ee4ff88160303460ecf2d2f6c6",
+      "current_sha256": "52eeedab1c89c76e055d81f3285efe65d6fe16ee4ff88160303460ecf2d2f6c6",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6-sol-medium/answer.raw.txt",
+      "bytes": 1683,
+      "sha256": "54a3e75c1e9fe55125219db4894bc2325d28145aa4e732c69d240ff08a4008b0",
+      "current_sha256": "54a3e75c1e9fe55125219db4894bc2325d28145aa4e732c69d240ff08a4008b0",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6-sol-medium/prompt.zh-CN.txt",
+      "bytes": 7062,
+      "sha256": "db8bb080267b034136d76005790ad3dcbd718fb09937b961b562d3c7fa1ad7d4",
+      "current_sha256": "db8bb080267b034136d76005790ad3dcbd718fb09937b961b562d3c7fa1ad7d4",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6-sol-medium/receipt.json",
+      "bytes": 1306,
+      "sha256": "edc9db28fc59b0b2529a3ce0f2ede298151a0d5f1e58092a7b679e1a5fe3112e",
+      "current_sha256": "edc9db28fc59b0b2529a3ce0f2ede298151a0d5f1e58092a7b679e1a5fe3112e",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6-sol-medium/request.sanitized.json",
+      "bytes": 7771,
+      "sha256": "e188fa0962fa0b1b011b33cc76deca9e545062cc35c7052ab22b6920fad00390",
+      "current_sha256": "e188fa0962fa0b1b011b33cc76deca9e545062cc35c7052ab22b6920fad00390",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6-sol-medium/response.original.json",
+      "bytes": 7733,
+      "sha256": "4356dc8ea906ca4fa8ae05c9e64f197da0742dda68ef3175ceb0b14bfe8523d5",
+      "current_sha256": "4356dc8ea906ca4fa8ae05c9e64f197da0742dda68ef3175ceb0b14bfe8523d5",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6.1-sol-high/answer.raw.txt",
+      "bytes": 3958,
+      "sha256": "382ae770e9d890372db9ec90f06cce203761c4192f26bb445e51a47eff057fe6",
+      "current_sha256": "382ae770e9d890372db9ec90f06cce203761c4192f26bb445e51a47eff057fe6",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6.1-sol-high/prompt.zh-CN.txt",
+      "bytes": 7062,
+      "sha256": "db8bb080267b034136d76005790ad3dcbd718fb09937b961b562d3c7fa1ad7d4",
+      "current_sha256": "db8bb080267b034136d76005790ad3dcbd718fb09937b961b562d3c7fa1ad7d4",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6.1-sol-high/receipt.json",
+      "bytes": 1310,
+      "sha256": "c2da1d847d347b5f42ac46630773917735d4b63fe63b393f0cacfe4e5ea665a3",
+      "current_sha256": "c2da1d847d347b5f42ac46630773917735d4b63fe63b393f0cacfe4e5ea665a3",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6.1-sol-high/request.sanitized.json",
+      "bytes": 7771,
+      "sha256": "c433d6f5e40d0abe986f4201922d283674ead68c59f2b781dbe913a1ccb28c41",
+      "current_sha256": "c433d6f5e40d0abe986f4201922d283674ead68c59f2b781dbe913a1ccb28c41",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/metro-gpt-6.1-sol-high/response.original.json",
+      "bytes": 17022,
+      "sha256": "ad8a67633e93482063699e0c800f7d13fe0acc7c66c85a609c594370184a1d06",
+      "current_sha256": "ad8a67633e93482063699e0c800f7d13fe0acc7c66c85a609c594370184a1d06",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/packet.zh-CN.md",
+      "bytes": 7015,
+      "sha256": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df",
+      "current_sha256": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/raw-results.json",
+      "bytes": 21082,
+      "sha256": "8a1e93839d355a80309848f9029c51786f2a60730c4275695c08722796f7180e",
+      "current_sha256": "8a1e93839d355a80309848f9029c51786f2a60730c4275695c08722796f7180e",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6-sol-medium/answer.raw.txt",
+      "bytes": 2856,
+      "sha256": "0831eecfaea1c92ab2f596348562b5d55e72377f733107e1f680fc065f7c2fad",
+      "current_sha256": "0831eecfaea1c92ab2f596348562b5d55e72377f733107e1f680fc065f7c2fad",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6-sol-medium/prompt.zh-CN.txt",
+      "bytes": 7071,
+      "sha256": "ad1b1a9cedff67a9044e3966a786a343d281c3eedc0130caa6e9d755a2bce9fb",
+      "current_sha256": "ad1b1a9cedff67a9044e3966a786a343d281c3eedc0130caa6e9d755a2bce9fb",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6-sol-medium/receipt.json",
+      "bytes": 1320,
+      "sha256": "e7deab9c328f19de9b1020b579f41a146369422bf84617aa64b3df4ac0549541",
+      "current_sha256": "e7deab9c328f19de9b1020b579f41a146369422bf84617aa64b3df4ac0549541",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6-sol-medium/request.sanitized.json",
+      "bytes": 7780,
+      "sha256": "86cf45f98ed7427ed94e0df018179cffd258fed8c31cd420df84dba7375b9c97",
+      "current_sha256": "86cf45f98ed7427ed94e0df018179cffd258fed8c31cd420df84dba7375b9c97",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6-sol-medium/response.original.json",
+      "bytes": 10086,
+      "sha256": "e0d154a7a96f5f6f90d5e9af446a26f460b41aa6e35679b424bb87ac6aa41eb7",
+      "current_sha256": "e0d154a7a96f5f6f90d5e9af446a26f460b41aa6e35679b424bb87ac6aa41eb7",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6.1-sol-high/answer.raw.txt",
+      "bytes": 6093,
+      "sha256": "fb7174c5007b3dc8a3e65f4f02d8ab3644a42093f5a5d56b63bf313259254788",
+      "current_sha256": "fb7174c5007b3dc8a3e65f4f02d8ab3644a42093f5a5d56b63bf313259254788",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6.1-sol-high/prompt.zh-CN.txt",
+      "bytes": 7071,
+      "sha256": "ad1b1a9cedff67a9044e3966a786a343d281c3eedc0130caa6e9d755a2bce9fb",
+      "current_sha256": "ad1b1a9cedff67a9044e3966a786a343d281c3eedc0130caa6e9d755a2bce9fb",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6.1-sol-high/receipt.json",
+      "bytes": 1322,
+      "sha256": "ae90abc38d431128c2e627336bdebc16d455bda64caaff0248a916fdf87c2d01",
+      "current_sha256": "ae90abc38d431128c2e627336bdebc16d455bda64caaff0248a916fdf87c2d01",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6.1-sol-high/request.sanitized.json",
+      "bytes": 7780,
+      "sha256": "24000ee7fc1ec305636efb3d064d3bb997228799409daf8d03043340c1e81d1d",
+      "current_sha256": "24000ee7fc1ec305636efb3d064d3bb997228799409daf8d03043340c1e81d1d",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-local-language-20261009/wemedia-gpt-6.1-sol-high/response.original.json",
+      "bytes": 21267,
+      "sha256": "a31190f3c52c87c673a8882417c1a1783362715a72b8e78f06a85278658ff262",
+      "current_sha256": "a31190f3c52c87c673a8882417c1a1783362715a72b8e78f06a85278658ff262",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-metro-gpt-6-sol-medium/answer.md",
+      "bytes": 1900,
+      "sha256": "14203879a437423ec26590041e49b2cb1b6fd21965be5b93a660d01b172fec28",
+      "current_sha256": "14203879a437423ec26590041e49b2cb1b6fd21965be5b93a660d01b172fec28",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-metro-gpt-6-sol-medium/command.json",
+      "bytes": 1086,
+      "sha256": "707c3c244db5616ba0b77057c0b150e5fbca5f8a07ead7d5deb0ee857cd756b7",
+      "current_sha256": "707c3c244db5616ba0b77057c0b150e5fbca5f8a07ead7d5deb0ee857cd756b7",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-metro-gpt-6-sol-medium/events.jsonl",
+      "bytes": 2534,
+      "sha256": "c3d9abb973b75214bdf537cabcd397bd524448a221e0a4592b5120610453522e",
+      "current_sha256": "c3d9abb973b75214bdf537cabcd397bd524448a221e0a4592b5120610453522e",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-metro-gpt-6-sol-medium/prompt.txt",
+      "bytes": 6345,
+      "sha256": "f9a27dbc7cbb7e370c65f81861ef9e0cee3636b71a8938945d8b5b7826aaee94",
+      "current_sha256": "f9a27dbc7cbb7e370c65f81861ef9e0cee3636b71a8938945d8b5b7826aaee94",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-metro-gpt-6-sol-medium/receipt.json",
+      "bytes": 789,
+      "sha256": "e81a24a1bbc2f81c3d65fd1f259358eaf4098a98ba2b2077d0ca7678a65103ae",
+      "current_sha256": "e81a24a1bbc2f81c3d65fd1f259358eaf4098a98ba2b2077d0ca7678a65103ae",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-metro-gpt-6.1-sol-high/answer.md",
+      "bytes": 2263,
+      "sha256": "d19112b4e2988be54abcea3fe8aa6c89d5da5695e0694eda2b0c1e42f2101734",
+      "current_sha256": "d19112b4e2988be54abcea3fe8aa6c89d5da5695e0694eda2b0c1e42f2101734",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-metro-gpt-6.1-sol-high/command.json",
+      "bytes": 1086,
+      "sha256": "7311437bd1d7509e73339077774a1db8502f2378eed6fab03b71163b51c42cdd",
+      "current_sha256": "7311437bd1d7509e73339077774a1db8502f2378eed6fab03b71163b51c42cdd",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-metro-gpt-6.1-sol-high/events.jsonl",
+      "bytes": 2831,
+      "sha256": "ee1d662b07a4d5f1fdf7f06c49efd178ca33c4bced04e0eea7578cc6eb753b60",
+      "current_sha256": "ee1d662b07a4d5f1fdf7f06c49efd178ca33c4bced04e0eea7578cc6eb753b60",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-metro-gpt-6.1-sol-high/prompt.txt",
+      "bytes": 6345,
+      "sha256": "f9a27dbc7cbb7e370c65f81861ef9e0cee3636b71a8938945d8b5b7826aaee94",
+      "current_sha256": "f9a27dbc7cbb7e370c65f81861ef9e0cee3636b71a8938945d8b5b7826aaee94",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-metro-gpt-6.1-sol-high/receipt.json",
+      "bytes": 788,
+      "sha256": "2c5cb674939afffc57efec6adc79abfec95241833151201c69c280c4f8ad31ef",
+      "current_sha256": "2c5cb674939afffc57efec6adc79abfec95241833151201c69c280c4f8ad31ef",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-wemedia-gpt-6-sol-medium/answer.md",
+      "bytes": 3085,
+      "sha256": "044ea11c7f2418be96c81f9241c1fd3a1eb06a178adfed443f7cba230065eeb6",
+      "current_sha256": "044ea11c7f2418be96c81f9241c1fd3a1eb06a178adfed443f7cba230065eeb6",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-wemedia-gpt-6-sol-medium/command.json",
+      "bytes": 1088,
+      "sha256": "66be76c595d638d57c2063e9c262ac0bfb46c555bf97f586e697a557fbd074c9",
+      "current_sha256": "66be76c595d638d57c2063e9c262ac0bfb46c555bf97f586e697a557fbd074c9",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-wemedia-gpt-6-sol-medium/events.jsonl",
+      "bytes": 3707,
+      "sha256": "4997a7ecb4e5f21639857664f4b6bb4a4fb0506b227c1b105af3ae58b5c590da",
+      "current_sha256": "4997a7ecb4e5f21639857664f4b6bb4a4fb0506b227c1b105af3ae58b5c590da",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-wemedia-gpt-6-sol-medium/prompt.txt",
+      "bytes": 6354,
+      "sha256": "dbdb2fd15c2f9a21f45140f10502f5845a31862c07f13bfb5cfb35caf370b8b3",
+      "current_sha256": "dbdb2fd15c2f9a21f45140f10502f5845a31862c07f13bfb5cfb35caf370b8b3",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-wemedia-gpt-6-sol-medium/receipt.json",
+      "bytes": 802,
+      "sha256": "4689eebfbe153eb040606745bc9be8577b205db683ea1c5890bdc0cf18ce4e7f",
+      "current_sha256": "4689eebfbe153eb040606745bc9be8577b205db683ea1c5890bdc0cf18ce4e7f",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-wemedia-gpt-6.1-sol-high/answer.md",
+      "bytes": 4129,
+      "sha256": "68005713ba5b80bcde78724ea3de0344282d3a32a774af2b9b699fa9ecbdfbc5",
+      "current_sha256": "68005713ba5b80bcde78724ea3de0344282d3a32a774af2b9b699fa9ecbdfbc5",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-wemedia-gpt-6.1-sol-high/command.json",
+      "bytes": 1088,
+      "sha256": "82448d432d93af3c75504b414343acfc4585a81b9b4ba232e945d59b0f356025",
+      "current_sha256": "82448d432d93af3c75504b414343acfc4585a81b9b4ba232e945d59b0f356025",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-wemedia-gpt-6.1-sol-high/events.jsonl",
+      "bytes": 4764,
+      "sha256": "06f83e7cc46dedbda7f9798fbe8b90228f5d47fa2e1e6c6b056f89098579cbe0",
+      "current_sha256": "06f83e7cc46dedbda7f9798fbe8b90228f5d47fa2e1e6c6b056f89098579cbe0",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-wemedia-gpt-6.1-sol-high/prompt.txt",
+      "bytes": 6354,
+      "sha256": "dbdb2fd15c2f9a21f45140f10502f5845a31862c07f13bfb5cfb35caf370b8b3",
+      "current_sha256": "dbdb2fd15c2f9a21f45140f10502f5845a31862c07f13bfb5cfb35caf370b8b3",
+      "unchanged": true
+    },
+    {
+      "path": ".local/g2-zhcn-voices-20261009/bare-wemedia-gpt-6.1-sol-high/receipt.json",
+      "bytes": 802,
+      "sha256": "f9a2b85e2dd9ea3e898e5b977799536e75965bc85a6c16b80a827c9af21ac604",
+      "current_sha256": "f9a2b85e2dd9ea3e898e5b977799536e75965bc85a6c16b80a827c9af21ac604",
+      "unchanged": true
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/2026-10-09-162800-chatter-zhcn-local-language-review.html",
+      "bytes": 80607,
+      "sha256": "ac6ae5fd5e95a37fa813e58c4a59a35fbfa35f252955bac5a76b4df0530c066c",
+      "current_sha256": "59f46c5062c90f93a6e54ce3cc5d5070bdbcdf0e9754b6d58c5d678c1f60a891",
+      "unchanged": false
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/chonk-official-cat-4s.jpg",
+      "bytes": 21738,
+      "sha256": "c57c5e6cb1937b9a930769088b0f4f929cf56c2192cfd25ea12ecbab8201f1dc",
+      "current_sha256": "c57c5e6cb1937b9a930769088b0f4f929cf56c2192cfd25ea12ecbab8201f1dc",
+      "unchanged": true
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/chonk-source-poster.jpg",
+      "bytes": 112137,
+      "sha256": "52677b47e8e5fc012f86c20bea53ea6ebb1b165ced6f5fc20606fe2f251c89a3",
+      "current_sha256": "52677b47e8e5fc012f86c20bea53ea6ebb1b165ced6f5fc20606fe2f251c89a3",
+      "unchanged": true
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/chonk-source-video.mp4",
+      "bytes": 553791,
+      "sha256": "b031bce8370f0694f2f71728a70ba4ddd48c7f05ccab7d41c8a020209d1e716e",
+      "current_sha256": "b031bce8370f0694f2f71728a70ba4ddd48c7f05ccab7d41c8a020209d1e716e",
+      "unchanged": true
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/index.html",
+      "bytes": 80607,
+      "sha256": "ac6ae5fd5e95a37fa813e58c4a59a35fbfa35f252955bac5a76b4df0530c066c",
+      "current_sha256": "59f46c5062c90f93a6e54ce3cc5d5070bdbcdf0e9754b6d58c5d678c1f60a891",
+      "unchanged": false
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/packet.zh-CN.md",
+      "bytes": 7015,
+      "sha256": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df",
+      "current_sha256": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df",
+      "unchanged": true
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/raw-results.json",
+      "bytes": 21082,
+      "sha256": "8a1e93839d355a80309848f9029c51786f2a60730c4275695c08722796f7180e",
+      "current_sha256": "8a1e93839d355a80309848f9029c51786f2a60730c4275695c08722796f7180e",
+      "unchanged": true
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/receipts.json",
+      "bytes": 5545,
+      "sha256": "52eeedab1c89c76e055d81f3285efe65d6fe16ee4ff88160303460ecf2d2f6c6",
+      "current_sha256": "52eeedab1c89c76e055d81f3285efe65d6fe16ee4ff88160303460ecf2d2f6c6",
+      "unchanged": true
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/samples.json",
+      "bytes": 53515,
+      "sha256": "ea7680eb7551c3d7dd46f7fc8cae5f975e327653e44b8f0770fc363b7ccc5188",
+      "current_sha256": "ea7680eb7551c3d7dd46f7fc8cae5f975e327653e44b8f0770fc363b7ccc5188",
+      "unchanged": true
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/translation-provenance.json",
+      "bytes": 1487,
+      "sha256": "74d7cd9e62e140f64b4248f6226c89e02570ed6e56bcdd03c44a3e083bbafeec",
+      "current_sha256": "74d7cd9e62e140f64b4248f6226c89e02570ed6e56bcdd03c44a3e083bbafeec",
+      "unchanged": true
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/wang-editorial-poster.png",
+      "bytes": 570627,
+      "sha256": "cdf58d390135a335fc040c2f61e15cd56b4c67bf6d3bba8310e52549d67078ba",
+      "current_sha256": "cdf58d390135a335fc040c2f61e15cd56b4c67bf6d3bba8310e52549d67078ba",
+      "unchanged": true
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/wang-original.jpg",
+      "bytes": 156245,
+      "sha256": "c0ddf32f548686cf725da584b8a253f20f63b2a16f98d9a59ada588d1344538e",
+      "current_sha256": "c0ddf32f548686cf725da584b8a253f20f63b2a16f98d9a59ada588d1344538e",
+      "unchanged": true
+    }
+  ],
+  "files": [
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/index.html",
+      "bytes": 114745,
+      "sha256": "59f46c5062c90f93a6e54ce3cc5d5070bdbcdf0e9754b6d58c5d678c1f60a891"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/2026-10-09-162800-chatter-zhcn-local-language-review.html",
+      "bytes": 114745,
+      "sha256": "59f46c5062c90f93a6e54ce3cc5d5070bdbcdf0e9754b6d58c5d678c1f60a891"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/samples-with-deepseek.json",
+      "bytes": 88677,
+      "sha256": "2cd5771684496091db59dd73ad24e28beec47d1306fa9da3c181b26effd81e4c"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/raw-results-with-deepseek.json",
+      "bytes": 34759,
+      "sha256": "f10fdb678975b2c0aa9bb505546f4cc762bbf62216c3014e389753263b55804a"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/receipts-with-deepseek.json",
+      "bytes": 8819,
+      "sha256": "bf5b74d71eb376ab620cefc1dca668a9730ae4ac951fa58ecd0516cc2bfc8bb9"
+    },
+    {
+      "path": "docs/analysis/2026-10-09-zhcn-local-language-review/2026-10-09-172000-deepseek-v4-pro-addendum.md",
+      "bytes": 5350,
+      "sha256": "1b734d21ec13e0eb34a42dc6d50051a873a0893fd293d6b74b991f16e33ae29a"
+    }
+  ],
+  "reload_links_check": {
+    "url": "http://100.102.74.50:58423/zh-cn/index.html#metro/deepseek-v4-pro",
+    "selectedModel": "deepseek-v4-pro",
+    "selectedStyle": "metro",
+    "recordStatus": 200,
+    "receiptRows": 6,
+    "rawExact": true,
+    "clipping": {
+      "scrollLeft": 0,
+      "titleX": 48
+    }
+  }
+}

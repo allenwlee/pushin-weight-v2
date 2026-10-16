@@ -1,0 +1,96 @@
+{
+  "gap_counts": [
+    {
+      "id": 1,
+      "since": "2026-08-01T07:45:46.366015+00:00",
+      "until": "2026-08-02T03:45:56.979881+00:00",
+      "gap_hours": 20.00294829611111,
+      "brands_present": 9,
+      "inserted_after_gap": 375,
+      "inserted_first_48h_after_gap": 375,
+      "stored_posts_created_inside_gap": 375
+    },
+    {
+      "id": 2,
+      "since": "2026-08-03T04:54:19.260817+00:00",
+      "until": "2026-08-04T04:30:27.259565+00:00",
+      "gap_hours": 23.602221874444446,
+      "brands_present": 15,
+      "inserted_after_gap": 546,
+      "inserted_first_48h_after_gap": 546,
+      "stored_posts_created_inside_gap": 546
+    },
+    {
+      "id": 3,
+      "since": "2026-08-05T16:24:04.665832+00:00",
+      "until": "2026-08-06T07:01:19.711208+00:00",
+      "gap_hours": 14.620845937777778,
+      "brands_present": 7,
+      "inserted_after_gap": 279,
+      "inserted_first_48h_after_gap": 279,
+      "stored_posts_created_inside_gap": 279
+    },
+    {
+      "id": 4,
+      "since": "2026-08-06T07:02:58.405921+00:00",
+      "until": "2026-08-06T08:45:40.479781+00:00",
+      "gap_hours": 1.7116871833333334,
+      "brands_present": 7,
+      "inserted_after_gap": 86,
+      "inserted_first_48h_after_gap": 86,
+      "stored_posts_created_inside_gap": 86
+    },
+    {
+      "id": 5,
+      "since": "2026-08-06T08:45:46.642507+00:00",
+      "until": "2026-08-06T12:01:19.648366+00:00",
+      "gap_hours": 3.259168294166667,
+      "brands_present": 7,
+      "inserted_after_gap": 101,
+      "inserted_first_48h_after_gap": 101,
+      "stored_posts_created_inside_gap": 101
+    },
+    {
+      "id": 6,
+      "since": "2026-08-08T04:30:53.913717+00:00",
+      "until": "2026-08-10T05:15:19.499647+00:00",
+      "gap_hours": 48.74044053611111,
+      "brands_present": 6,
+      "inserted_after_gap": 104,
+      "inserted_first_48h_after_gap": 104,
+      "stored_posts_created_inside_gap": 104
+    },
+    {
+      "id": 7,
+      "since": "2026-08-13T05:45:55.328254+00:00",
+      "until": "2026-08-13T07:00:52.166804+00:00",
+      "gap_hours": 1.2491218194444444,
+      "brands_present": 6,
+      "inserted_after_gap": 62,
+      "inserted_first_48h_after_gap": 62,
+      "stored_posts_created_inside_gap": 62
+    },
+    {
+      "id": 8,
+      "since": "2026-08-16T02:30:50.559251+00:00",
+      "until": "2026-08-17T06:01:32.073302+00:00",
+      "gap_hours": 27.511531680833333,
+      "brands_present": 7,
+      "inserted_after_gap": 120,
+      "inserted_first_48h_after_gap": 48,
+      "stored_posts_created_inside_gap": 120
+    },
+    {
+      "id": 9,
+      "since": "2026-08-27T03:31:06.744532+00:00",
+      "until": "2026-08-27T06:00:57.379203+00:00",
+      "gap_hours": 2.497398519722222,
+      "brands_present": 9,
+      "inserted_after_gap": 40,
+      "inserted_first_48h_after_gap": 38,
+      "stored_posts_created_inside_gap": 40
+    }
+  ],
+  "snapshot_at": "2026-10-12T11:01:46.149993+00:00",
+  "transaction_read_only": "on"
+}

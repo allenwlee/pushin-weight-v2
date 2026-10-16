@@ -65,6 +65,16 @@ def utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _commit_page_parameters(token: str) -> dict[str, str] | None:
+    """Decode a bounded checkpoint token, never a provider-supplied URL."""
+    match = re.fullmatch(
+        r"hf-commits-page:v1:([1-9][0-9]{0,5}):([1-9][0-9]{0,2})", token
+    )
+    if match and int(match[1]) <= 100000 and int(match[2]) <= 100:
+        return {"p": match[1], "limit": match[2]}
+    return None
+
+
 @dataclass
 class MetadataResponse:
     outcome: str
@@ -81,6 +91,7 @@ class HFMetadataClient:
         max_requests: int,
         max_seconds: float,
         max_bytes: int = 16 * 1024 * 1024,
+        max_total_bytes: int | None = None,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
     ):
@@ -89,11 +100,16 @@ class HFMetadataClient:
             or not math.isfinite(max_seconds)
             or max_seconds <= 0
             or max_bytes < 1
+            or max_total_bytes is not None
+            and max_total_bytes < 1
         ):
             raise ValueError("HF request, time, and size budgets must be positive")
         self.client = client
         self.max_requests = max_requests
+        self.max_seconds = max_seconds
         self.max_bytes = max_bytes
+        self.max_total_bytes = max_total_bytes
+        self.bytes_received = 0
         self.sleep = sleep
         self.clock = clock
         self.started = clock()
@@ -108,6 +124,11 @@ class HFMetadataClient:
             return "request_cap"
         if self.clock() >= self.deadline:
             return "time_cap"
+        if (
+            self.max_total_bytes is not None
+            and self.bytes_received >= self.max_total_bytes
+        ):
+            return "response_size_cap"
         return None
 
     def _get(self, path: str, params: Any = None) -> MetadataResponse:
@@ -133,15 +154,20 @@ class HFMetadataClient:
             try:
                 # Explicit auth=None defeats client-level auth. Never inherit
                 # authorization headers even from an injected caller's client.
-                request = self.client.build_request(
+                request = httpx.Request(
                     "GET",
                     f"{API}{path}",
                     params=params,
-                    headers={"Accept": "application/json"},
-                    timeout=min(30.0, max(0.001, self.deadline - self.clock())),
+                    headers={
+                        "Accept": "application/json",
+                        "User-Agent": "PushinWeight-public-metadata",
+                    },
+                    extensions={
+                        "timeout": httpx.Timeout(
+                            min(30.0, max(0.001, self.deadline - self.clock()))
+                        ).as_dict()
+                    },
                 )
-                request.headers.pop("authorization", None)
-                request.headers.pop("cookie", None)
                 with closing(
                     self.client.send(
                         request, stream=True, auth=None, follow_redirects=False
@@ -151,10 +177,15 @@ class HFMetadataClient:
                     if response.status_code == 200:
                         chunks = bytearray()
                         for chunk in response.iter_bytes():
+                            self.bytes_received += len(chunk)
                             if self.clock() >= self.deadline:
                                 envelope["outcome"] = "time_cap"
                                 break
-                            if len(chunks) + len(chunk) > self.max_bytes:
+                            if (
+                                len(chunks) + len(chunk) > self.max_bytes
+                                or self.max_total_bytes is not None
+                                and self.bytes_received > self.max_total_bytes
+                            ):
                                 envelope["outcome"] = "response_size_cap"
                                 break
                             chunks.extend(chunk)
@@ -199,8 +230,11 @@ class HFMetadataClient:
                         # is an HTTP failure, not a JSON-success parsing failure.
                         body = bytearray()
                         for chunk in response.iter_bytes():
+                            self.bytes_received += len(chunk)
                             if (
                                 len(body) + len(chunk) > self.max_bytes
+                                or self.max_total_bytes is not None
+                                and self.bytes_received > self.max_total_bytes
                                 or self.clock() >= self.deadline
                             ):
                                 envelope["error_body_truncated"] = True
@@ -266,15 +300,24 @@ class HFMetadataClient:
         return result
 
     def list_page(
-        self, namespace: str, cursor: str | None = None, *, limit: int = 100
+        self,
+        namespace: str,
+        cursor: str | None = None,
+        *,
+        limit: int = 100,
+        sort: str = "lastModified",
     ) -> MetadataResponse:
-        if not NAMESPACE.fullmatch(namespace) or not 1 <= limit <= 100:
+        if (
+            not NAMESPACE.fullmatch(namespace)
+            or not 1 <= limit <= 100
+            or sort not in {"lastModified", "createdAt"}
+        ):
             return MetadataResponse("malformed")
         params = {
             "author": namespace,
             "full": "true",
             "limit": limit,
-            "sort": "lastModified",
+            "sort": sort,
             "direction": -1,
         }
         if cursor:
@@ -312,6 +355,115 @@ class HFMetadataClient:
             result.outcome = "invalid_continuation"
         return result
 
+    def history_page(
+        self, repo_id: str, revision: str, kind: str, cursor: str | None = None
+    ) -> MetadataResponse:
+        """Public commit/tree metadata at one immutable revision; no blobs."""
+        if (
+            not REPO_ID.fullmatch(repo_id)
+            or not re.fullmatch(r"[0-9a-f]{40}", revision)
+            or kind not in {"commits", "tree"}
+        ):
+            return MetadataResponse("malformed")
+        path = f"/models/{repo_id}/{kind}/{revision}"
+        params = {"recursive": "true", "expand": "true"} if kind == "tree" else {}
+        page = None
+        if cursor:
+            if not isinstance(cursor, str) or len(cursor) > 8192:
+                return MetadataResponse("invalid_continuation")
+            if cursor.startswith("hf-commits-page:"):
+                page = _commit_page_parameters(cursor)
+                if kind != "commits" or page is None:
+                    return MetadataResponse("invalid_continuation")
+                params.update(page)
+            else:
+                params["cursor"] = cursor
+        result = self._get(path, params)
+        if result.outcome != "ok":
+            return result
+        if not isinstance(result.payload, list):
+            result.outcome = "malformed"
+            return result
+        for row in result.payload:
+            if (
+                not isinstance(row, dict)
+                or kind == "commits"
+                and not re.fullmatch(r"[0-9a-f]{40}", str(row.get("id", "")))
+            ):
+                result.outcome = "malformed"
+                return result
+            if kind == "tree" and (
+                not isinstance(row.get("path"), str)
+                or row.get("type") not in {"file", "directory"}
+            ):
+                result.outcome = "malformed"
+                return result
+        link = result.attempts[-1].get("link", "")
+        response = httpx.Response(200, headers={"link": link})
+        next_link = response.links.get("next")
+        if next_link:
+            try:
+                parsed = urlparse(next_link.get("url", ""))
+                query = parse_qs(
+                    parsed.query,
+                    keep_blank_values=True,
+                    strict_parsing=True,
+                    max_num_fields=10,
+                )
+            except ValueError:
+                result.outcome = "invalid_continuation"
+                return result
+            relations = re.findall(
+                r';\s*rel\s*=\s*(?:"([^"]*)"|([^;,\s]+))', link
+            )
+            if (
+                parsed.scheme != "https"
+                or parsed.netloc != "huggingface.co"
+                or parsed.path != "/api" + path
+                or parsed.params
+                or parsed.fragment
+                or sum("next" in (quoted or bare).split() for quoted, bare in relations)
+                != 1
+            ):
+                result.outcome = "invalid_continuation"
+                return result
+            if kind == "commits" and set(query) == {"p", "limit"}:
+                if any(len(values) != 1 for values in query.values()):
+                    result.outcome = "invalid_continuation"
+                    return result
+                token = f'hf-commits-page:v1:{query["p"][0]}:{query["limit"][0]}'
+                next_page = _commit_page_parameters(token)
+                if (
+                    next_page is None
+                    or cursor is not None
+                    and page is None
+                    or int(next_page["p"]) != (int(page["p"]) + 1 if page else 1)
+                    or page is not None
+                    and next_page["limit"] != page["limit"]
+                ):
+                    result.outcome = "invalid_continuation"
+                else:
+                    result.next_cursor = token
+            else:
+                values = query.get("cursor", [])
+                if (
+                    len(values) != 1
+                    or not values[0]
+                    or len(values[0]) > 8192
+                    or values[0].startswith("hf-commits-page:")
+                    or values[0] == cursor
+                    or page is not None
+                    or "p" in query
+                    or kind == "commits"
+                    and "limit" in query
+                ):
+                    result.outcome = "invalid_continuation"
+                else:
+                    result.next_cursor = values[0]
+        elif "next" in link:
+            result.outcome = "invalid_continuation"
+        return result
+
     def download_counts(self, repo_id: str) -> MetadataResponse:
         """Read public rolling-30-day/all-time counters without model files."""
         if not REPO_ID.fullmatch(repo_id):
@@ -340,11 +492,7 @@ class HFMetadataClient:
         result = self._get(f"/{path_kind}/{identifier}/overview", [])
         if result.outcome == "ok":
             payload = result.payload
-            if (
-                not isinstance(payload, dict)
-                or type(payload.get("numFollowers")) is not int
-                or payload["numFollowers"] < 0
-            ):
+            if not isinstance(payload, dict):
                 result.outcome = "malformed"
             else:
                 name = (

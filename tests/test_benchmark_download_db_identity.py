@@ -3,7 +3,8 @@ import copy
 import pytest
 
 from core.measurement_taxonomy import configure_taxonomy, subject_id
-from core.models import Brand, BrandCompany, Company, HFOrg, Product
+from core.models import Brand, BrandCompany, Company, Product
+from tests.publisher_fixtures import hf_publisher
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
@@ -34,10 +35,10 @@ def setup_spec():
     brand = Brand.objects.create(nickname="lab", display_name="Lab")
     company = Company.objects.create(nickname="lab", display_name="Lab")
     BrandCompany.objects.create(brand=brand, company=company)
-    org = HFOrg.objects.create(namespace="lab", company=company, confirmed=True)
+    org = hf_publisher(namespace="lab", company=company, confirmed=True)
     product = Product.objects.create(
         repo_id="lab/Model",
-        hf_org=org,
+        publisher_account=org.account,
         brand=brand,
         type="llm-model",
         private=False,
@@ -98,8 +99,9 @@ def test_unreviewed_or_incompatible_hf_mapping_rejected(change):
         product.private = True
         product.save()
     if change == "unconfirmed":
-        product.hf_org.confirmed = False
-        product.hf_org.save()
+        link = product.publisher_ownership
+        link.ownership_confirmed = False
+        link.save()
     if change == "repo":
         spec["mappings"][0]["external_identifier"] = "other/Model"
     if change == "review":
@@ -122,7 +124,7 @@ def test_hf_namespace_bridge_preserves_identity_and_provenance():
         ).pk
         == account.pk
     )
-    product.hf_org.refresh_from_db()
-    assert product.hf_org.account_id == account.pk
-    assert product.hf_org.confirmed is True
+    product.refresh_from_db()
+    assert product.publisher_account_id == account.pk
+    assert product.publisher_ownership.ownership_confirmed is True
     assert CompanyAccount.objects.get(account=account).company_id == "lab"

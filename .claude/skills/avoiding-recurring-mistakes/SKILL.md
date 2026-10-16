@@ -1,6 +1,6 @@
 ---
 name: avoiding-recurring-mistakes
-description: Use when working in the pushin-weight-v2 (x-monitor) Django/Render repo on fuchitalee. Activates whenever you are about to make a code change, run a migration, modify harvest/cycle code, touch the prod DB, design URLs/endpoints, commit to main, or write/regenerate reference docs. Triggers on phrases like "harvest", "cycle", "backfiller", "prod db", "render", "i18n", "psql", "classifier", "posts_raw", "worktree", "merge", "deploy", "migration", "concurrent index", "advisory lock", "deadlock", "seed", "halt", "pause", "stop the cron", "fetched vs inserted", "credits too high", "discrepancy". Built from a longitudinal analysis of real project corrections, with amendments through 2026-08-19.
+description: Use when working in the pushin-weight-v2 (x-monitor) Django/Render repo on fuchitalee. Activates whenever you are about to make a code change, run a migration, modify harvest/cycle code, touch the prod DB, design URLs/endpoints, commit to main, or write/regenerate reference docs. Triggers on phrases like "harvest", "cycle", "backfiller", "prod db", "render", "i18n", "psql", "classifier", "posts_raw", "worktree", "merge", "deploy", "migration", "concurrent index", "advisory lock", "deadlock", "seed", "halt", "pause", "stop the cron", "fetched vs inserted", "credits too high", "discrepancy". Built from a longitudinal analysis of real project corrections, with amendments through 2026-10-14.
 ---
 
 # Avoiding Recurring Mistakes — pushin-weight-v2 (x-monitor)
@@ -8,6 +8,10 @@ description: Use when working in the pushin-weight-v2 (x-monitor) Django/Render 
 A correction log distilled from real friction. Each section is named after the mistake pattern, shows a representative correction prompt, and gives a concrete "do this" rule. Apply these rules whenever the trigger condition is met, **before** you start editing code.
 
 If a rule conflicts with `AGENTS.md` / `CLAUDE.md` / `CONCEPTS.md`, follow those repo docs first — this skill is the *recurring-friction* layer on top. Future sessions: Integrate durable corrections into the applicable M-rule and Quick reference, retaining only concise current guidance.
+
+**Before database design:** apply M19. Inspect existing entities, relationships
+and storage before deciding where a new field belongs; do not copy legacy
+duplication as a new-source convention.
 
 ## When this skill triggers
 
@@ -401,6 +405,34 @@ The translator batch-limits probe (`scripts/probes/translator_batch_limits/probe
 
 ---
 
+## M19 — Inspect existing storage before adding tables
+
+**Pattern.** A new feature or source gets another table while existing entities
+already represent its identity, evidence or collection lifecycle. Older redundant
+tables become templates for further duplication. The OriginalContent, collection
+and account cleanup discussions exposed this recurring problem.
+
+**Rule.** Inspect existing entities, relationships and storage before deciding
+where a new field belongs:
+
+1. Read `core/models.py` and relevant migrations. Use `CONCEPTS.md` and
+   `docs/reference/db-schema.md` as maps, then verify against actual code.
+2. Trace the relevant writers and readers. Compare record meaning, ownership,
+   counting unit, source/observation time, lifecycle and constraints, rather than
+   matching only names or columns.
+3. Prefer reuse or a justified extension. A new provider does not by itself need
+   a new account, observation, metric or run table. Distinct typed profile
+   extensions or other genuinely different records can justify new tables.
+4. In the existing plan or change description, identify the chosen storage and
+   explain any remaining gap, new-table purpose and table additions/retirements.
+   Do not create another planning artifact or permission gate for this check.
+
+Existing repetition is not design authority. This rule does not mandate putting
+every provider field into one wide table or unstructured JSON, and does not
+authorize retiring tables or migrating business data without task scope.
+
+---
+
 ## Quick reference table
 
 | # | Mistake | One-line rule |
@@ -423,6 +455,7 @@ The translator batch-limits probe (`scripts/probes/translator_batch_limits/probe
 | M16 | Inventing API surface | `context7` / WebSearch before guessing external APIs |
 | M17 | Inferring pause authority from an anomaly | Diagnose read-only; pause/resume only with current explicit owner authorization |
 | M18 | Function-only regression net | Pin the production call chain end-to-end (fake client + captured kwargs); function-level tests stay green while production breaks |
+| M19 | New tables copied from redundant schema patterns | Read schema and writers/readers; justify reuse, extension or a distinct new table |
 
 ---
 

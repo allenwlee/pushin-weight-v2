@@ -1,0 +1,474 @@
+{
+  "review": {
+    "status": "complete",
+    "verdict": "Ready with fixes",
+    "scope": {
+      "base": "db5510ccc94ea326dd5f81e833a9c791e5e84d99",
+      "branch": "feat/g3-collection-jobs-history",
+      "head_sha": "0f7c33198bf3271b6ea266278202551a63913033",
+      "pr_url": null,
+      "files_changed": 74
+    },
+    "intent": "Implement G3-owned U1\u2013U8 shared collection instructions and bounded provider history using one new collection_jobs table. Keep physical names, existing metric semantics and external X runtime ownership. Deliver an open PR with CI decided; no collection activation or deployment.",
+    "intent_confidence": "explicit",
+    "reviewers": [
+      "inline correctness",
+      "inline testing",
+      "inline maintainability",
+      "inline security",
+      "inline reliability",
+      "inline data migration",
+      "inline API contract",
+      "inline performance",
+      "inline project standards",
+      "inline agent parity",
+      "inline requirements"
+    ],
+    "findings": [
+      {
+        "#": 1,
+        "title": "Resumed GitHub history trusts a stale public flag",
+        "severity": "P1",
+        "file": "core/model_history_collection.py",
+        "line": 110,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Always recheck the current reviewed repository identity and public visibility before unfinished history requests. Treat a now-private repo as inaccessible.",
+        "first_evidence": "A one-request interrupted run caches repository metadata. On resume the transport counterexample changes private to true; the collector reaches the content endpoint without another repository visibility request.",
+        "why_it_matters": "Resumed GitHub history trusts a stale public flag",
+        "evidence": "A one-request interrupted run caches repository metadata. On resume the transport counterexample changes private to true; the collector reaches the content endpoint without another repository visibility request.",
+        "reviewers": [
+          "inline correctness/security/maintainability"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "Source inspection plus failing regression; module size directly measured."
+      },
+      {
+        "#": 2,
+        "title": "Sorted aliases choose the wrong current GitHub name",
+        "severity": "P2",
+        "file": "core/model_history_collection.py",
+        "line": 115,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Record current_full_name separately from the alias set during review and use that label, with the original reviewed snapshot as the legacy fallback.",
+        "first_evidence": "Reviewing publisher/family then publisher/aaa leaves sorted aliases with family last. The transport returns 404 for the old name and the expected release evidence is absent.",
+        "why_it_matters": "Sorted aliases choose the wrong current GitHub name",
+        "evidence": "Reviewing publisher/family then publisher/aaa leaves sorted aliases with family last. The transport returns 404 for the old name and the expected release evidence is absent.",
+        "reviewers": [
+          "inline correctness/security/maintainability"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "Source inspection plus failing regression; module size directly measured."
+      },
+      {
+        "#": 3,
+        "title": "Google exclusion misses linked company aliases",
+        "severity": "P2",
+        "file": "core/model_history_cohort.py",
+        "line": 133,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Reject requested brands whose existing BrandCompany relation names Google, as well as a literal google brand.",
+        "first_evidence": "The Google company-alias regression links one of the twenty-one requested brands to Google; cohort construction currently succeeds instead of raising.",
+        "why_it_matters": "Google exclusion misses linked company aliases",
+        "evidence": "The Google company-alias regression links one of the twenty-one requested brands to Google; cohort construction currently succeeds instead of raising.",
+        "reviewers": [
+          "inline correctness/security/maintainability"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "Source inspection plus failing regression; module size directly measured."
+      },
+      {
+        "#": 4,
+        "title": "Malformed HF history continuation is reported as complete",
+        "severity": "P2",
+        "file": "core/hf_metadata_client.py",
+        "line": 378,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Mirror list_page: a Link header mentioning next that cannot be parsed into a valid cursor returns invalid_continuation.",
+        "first_evidence": "A malformed Link rel=next counterexample currently returns ok with no continuation.",
+        "why_it_matters": "Malformed HF history continuation is reported as complete",
+        "evidence": "A malformed Link rel=next counterexample currently returns ok with no continuation.",
+        "reviewers": [
+          "inline correctness/security/maintainability"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "Source inspection plus failing regression; module size directly measured."
+      },
+      {
+        "#": 5,
+        "title": "New historical orchestration module crosses 1,000 lines",
+        "severity": "P1",
+        "file": "core/model_history_collection.py",
+        "line": 1,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Move native evidence, sparse archive admission, publication acquisition and cohort interval validation into focused modules while retaining existing public imports.",
+        "first_evidence": "The newly introduced module contains 1,206 lines combining four independently testable responsibilities; the maintainability rubric flags new files above 1,000 lines.",
+        "why_it_matters": "New historical orchestration module crosses 1,000 lines",
+        "evidence": "The newly introduced module contains 1,206 lines combining four independently testable responsibilities; the maintainability rubric flags new files above 1,000 lines.",
+        "reviewers": [
+          "inline correctness/security/maintainability"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "Source size directly measured."
+      },
+      {
+        "#": 6,
+        "title": "CI does not run the new shared collection regression tests",
+        "severity": "P2",
+        "file": ".github/workflows/benchmark-download-collector.yml",
+        "line": 102,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Add new collection/provider/cohort paths and test files to the existing PostgreSQL regression workflow; preserve its legacy coverage.",
+        "first_evidence": "The workflow test command selects existing benchmark/HF tests but none of the new test_collection*, GitHub client/catalog, cohort/inventory/history tests.",
+        "why_it_matters": "A future broken shared claim, mapping or history adapter could pass the intended collector CI gate.",
+        "evidence": "Direct inspection of workflow path and pytest selectors.",
+        "reviewers": [
+          "inline testing/reliability"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "Literal workflow selectors omit all new collection tests."
+      },
+      {
+        "#": 7,
+        "title": "Catalog resume also trusts cached public repository inventory",
+        "severity": "P1",
+        "file": "core/github_catalog.py",
+        "line": 539,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Recheck repository native identity and current public status before catalog content endpoints; record inaccessible without saving private payloads.",
+        "first_evidence": "The three-request interrupted catalog regression resumes after visibility changes and fetches a private content endpoint.",
+        "why_it_matters": "Violates the selected public-evidence boundary.",
+        "evidence": "The three-request interrupted catalog regression resumes after visibility changes and fetches a private content endpoint.",
+        "reviewers": [
+          "inline security/correctness"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "A targeted PostgreSQL transport-to-writer regression fails before the correction."
+      },
+      {
+        "#": 8,
+        "title": "Authenticated drafts enter public release evidence",
+        "severity": "P1",
+        "file": "core/github_catalog.py",
+        "line": 351,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Remove draft/unpublished releases from both observation payloads and persisted page envelopes, retaining raw response/item budget counts.",
+        "first_evidence": "A response containing two published releases and one draft saves all three observations plus the unpublished sentinel in page evidence.",
+        "why_it_matters": "Violates the selected public-evidence boundary.",
+        "evidence": "A response containing two published releases and one draft saves all three observations plus the unpublished sentinel in page evidence.",
+        "reviewers": [
+          "inline security/correctness"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "A targeted PostgreSQL transport-to-writer regression fails before the correction."
+      }
+    ],
+    "actionable_findings": [
+      {
+        "#": 1,
+        "title": "Resumed GitHub history trusts a stale public flag",
+        "severity": "P1",
+        "file": "core/model_history_collection.py",
+        "line": 110,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Always recheck the current reviewed repository identity and public visibility before unfinished history requests. Treat a now-private repo as inaccessible.",
+        "first_evidence": "A one-request interrupted run caches repository metadata. On resume the transport counterexample changes private to true; the collector reaches the content endpoint without another repository visibility request.",
+        "why_it_matters": "Resumed GitHub history trusts a stale public flag",
+        "evidence": "A one-request interrupted run caches repository metadata. On resume the transport counterexample changes private to true; the collector reaches the content endpoint without another repository visibility request.",
+        "reviewers": [
+          "inline correctness/security/maintainability"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "Source inspection plus failing regression; module size directly measured."
+      },
+      {
+        "#": 2,
+        "title": "Sorted aliases choose the wrong current GitHub name",
+        "severity": "P2",
+        "file": "core/model_history_collection.py",
+        "line": 115,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Record current_full_name separately from the alias set during review and use that label, with the original reviewed snapshot as the legacy fallback.",
+        "first_evidence": "Reviewing publisher/family then publisher/aaa leaves sorted aliases with family last. The transport returns 404 for the old name and the expected release evidence is absent.",
+        "why_it_matters": "Sorted aliases choose the wrong current GitHub name",
+        "evidence": "Reviewing publisher/family then publisher/aaa leaves sorted aliases with family last. The transport returns 404 for the old name and the expected release evidence is absent.",
+        "reviewers": [
+          "inline correctness/security/maintainability"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "Source inspection plus failing regression; module size directly measured."
+      },
+      {
+        "#": 3,
+        "title": "Google exclusion misses linked company aliases",
+        "severity": "P2",
+        "file": "core/model_history_cohort.py",
+        "line": 133,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Reject requested brands whose existing BrandCompany relation names Google, as well as a literal google brand.",
+        "first_evidence": "The Google company-alias regression links one of the twenty-one requested brands to Google; cohort construction currently succeeds instead of raising.",
+        "why_it_matters": "Google exclusion misses linked company aliases",
+        "evidence": "The Google company-alias regression links one of the twenty-one requested brands to Google; cohort construction currently succeeds instead of raising.",
+        "reviewers": [
+          "inline correctness/security/maintainability"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "Source inspection plus failing regression; module size directly measured."
+      },
+      {
+        "#": 4,
+        "title": "Malformed HF history continuation is reported as complete",
+        "severity": "P2",
+        "file": "core/hf_metadata_client.py",
+        "line": 378,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Mirror list_page: a Link header mentioning next that cannot be parsed into a valid cursor returns invalid_continuation.",
+        "first_evidence": "A malformed Link rel=next counterexample currently returns ok with no continuation.",
+        "why_it_matters": "Malformed HF history continuation is reported as complete",
+        "evidence": "A malformed Link rel=next counterexample currently returns ok with no continuation.",
+        "reviewers": [
+          "inline correctness/security/maintainability"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "Source inspection plus failing regression; module size directly measured."
+      },
+      {
+        "#": 5,
+        "title": "New historical orchestration module crosses 1,000 lines",
+        "severity": "P1",
+        "file": "core/model_history_collection.py",
+        "line": 1,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Move native evidence, sparse archive admission, publication acquisition and cohort interval validation into focused modules while retaining existing public imports.",
+        "first_evidence": "The newly introduced module contains 1,206 lines combining four independently testable responsibilities; the maintainability rubric flags new files above 1,000 lines.",
+        "why_it_matters": "New historical orchestration module crosses 1,000 lines",
+        "evidence": "The newly introduced module contains 1,206 lines combining four independently testable responsibilities; the maintainability rubric flags new files above 1,000 lines.",
+        "reviewers": [
+          "inline correctness/security/maintainability"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "Source size directly measured."
+      },
+      {
+        "#": 6,
+        "title": "CI does not run the new shared collection regression tests",
+        "severity": "P2",
+        "file": ".github/workflows/benchmark-download-collector.yml",
+        "line": 102,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Add new collection/provider/cohort paths and test files to the existing PostgreSQL regression workflow; preserve its legacy coverage.",
+        "first_evidence": "The workflow test command selects existing benchmark/HF tests but none of the new test_collection*, GitHub client/catalog, cohort/inventory/history tests.",
+        "why_it_matters": "A future broken shared claim, mapping or history adapter could pass the intended collector CI gate.",
+        "evidence": "Direct inspection of workflow path and pytest selectors.",
+        "reviewers": [
+          "inline testing/reliability"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "Literal workflow selectors omit all new collection tests."
+      },
+      {
+        "#": 7,
+        "title": "Catalog resume also trusts cached public repository inventory",
+        "severity": "P1",
+        "file": "core/github_catalog.py",
+        "line": 539,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Recheck repository native identity and current public status before catalog content endpoints; record inaccessible without saving private payloads.",
+        "first_evidence": "The three-request interrupted catalog regression resumes after visibility changes and fetches a private content endpoint.",
+        "why_it_matters": "Violates the selected public-evidence boundary.",
+        "evidence": "The three-request interrupted catalog regression resumes after visibility changes and fetches a private content endpoint.",
+        "reviewers": [
+          "inline security/correctness"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "A targeted PostgreSQL transport-to-writer regression fails before the correction."
+      },
+      {
+        "#": 8,
+        "title": "Authenticated drafts enter public release evidence",
+        "severity": "P1",
+        "file": "core/github_catalog.py",
+        "line": 351,
+        "confidence": 100,
+        "autofix_class": "manual",
+        "owner": "downstream-resolver",
+        "requires_verification": true,
+        "pre_existing": false,
+        "suggested_fix": "Remove draft/unpublished releases from both observation payloads and persisted page envelopes, retaining raw response/item budget counts.",
+        "first_evidence": "A response containing two published releases and one draft saves all three observations plus the unpublished sentinel in page evidence.",
+        "why_it_matters": "Violates the selected public-evidence boundary.",
+        "evidence": "A response containing two published releases and one draft saves all three observations plus the unpublished sentinel in page evidence.",
+        "reviewers": [
+          "inline security/correctness"
+        ],
+        "independent_reviewers": [],
+        "validation_status": "confirmed",
+        "validation_reason": "A targeted PostgreSQL transport-to-writer regression fails before the correction."
+      }
+    ],
+    "triage_groups": [],
+    "pre_existing_findings": [],
+    "requirements_completeness": {
+      "g3_owned_units": "U1\u2013U8 locally implemented and verified",
+      "external_unit": "U9 X scheduled/manual/backfill adapters remain separately owned; whole-plan completion not claimed",
+      "settled_conflicts": []
+    },
+    "learnings": [],
+    "agent_native_gaps": [],
+    "deployment_notes": [
+      "Schema adds exactly collection_jobs; nullable run/job links and purpose-qualified mappings alter existing tables. Reverse migrations refuse to discard job/content/catalog evidence. No deployment selected."
+    ],
+    "residual_risks": [
+      "No independent or cross-model review: AGENTS maps review work to sequential main-thread execution; configured Claude route targets a different provider credential and was not invoked.",
+      "Fixtures are deterministic documentation-derived responses, not live provider captures.",
+      "U9 runtime integration remains separately owned."
+    ],
+    "testing_gaps": [
+      "No live historical batch, production migration or schedule activation was run."
+    ],
+    "coverage": {
+      "depth": "full",
+      "execution": "sequential-inline adaptation required by user AGENTS; no independent reviewers",
+      "pre_fix_validation": "394 passing tests, 165 required PostgreSQL cases; four added counterexamples fail as expected",
+      "cross_model": "not run; incompatible configured credential route, no request made",
+      "compound_packs": {
+        "roots": [],
+        "warnings": [],
+        "errors": []
+      }
+    },
+    "artifact_path": "/tmp/compound-engineering-501/ce-code-review/20261013-g3-3814088d",
+    "run_id": "20261013-g3-3814088d"
+  },
+  "followup": {
+    "applied_findings": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "eligible_findings_remaining": [],
+    "whole_plan_complete": false,
+    "remaining_external_integration": [
+      "U9: X runtime adapters belong to the backfill owner."
+    ],
+    "post_fix_checks": [
+      {
+        "scope": "collection/schema/history/staging refresh regression net before final catalog refinements",
+        "passed": 398,
+        "required_postgres_executed": 168,
+        "required_postgres_skipped": 0,
+        "seconds": 141.27
+      },
+      {
+        "scope": "final GitHub catalog/client, native history, cohorts, identities, HF client",
+        "passed": 72,
+        "required_postgres_executed": 34,
+        "required_postgres_skipped": 0,
+        "seconds": 5.45
+      },
+      {
+        "scope": "exact configured CI offline collector PostgreSQL test selection",
+        "passed": 301,
+        "required_postgres_executed": 179,
+        "required_postgres_skipped": 0,
+        "seconds": 84.57
+      },
+      {
+        "scope": "exact new shared collection PostgreSQL CI test selection",
+        "passed": 94,
+        "required_postgres_executed": 84,
+        "required_postgres_skipped": 0,
+        "seconds": 82.47
+      }
+    ],
+    "project_lint": "Legacy repository-wide Ruff failures remain; expanded collector workflow lint passes. New modules and migration ClassVar annotations introduce no schema drift.",
+    "typecheck": "No configured repository type-check command.",
+    "browser_tests": {
+      "status": "not_applicable",
+      "routes": [],
+      "reason": "No URL, view, template, browser interaction, script or style changed; CLI and database behavior are exercised by regression tests."
+    },
+    "compound": "Documentation skipped: the code, regression tests, plan and focused runtime reference carry the durable reasoning.",
+    "completed_at": "2026-10-13T13:54:12.749659+00:00"
+  },
+  "original_review_diff_sha256": "ed3a9b372f612b25868f4bedbfeffe763b05acb87e7fe4fb7d5509033444416d"
+}

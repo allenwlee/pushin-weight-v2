@@ -6,6 +6,7 @@ configuration:
   authorities:
     approved_mockup: docs/ideation/mockups/v24.html
     approved_product_intent:
+      - docs/plans/2026-10-02-060108-feat-g5-general-page-plan.md
       - docs/iterations/2026-09-21-155037-ui-glyphs-footer-filters-locale-chart-bridgewright-target.md
       - docs/iterations/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md
       - docs/ideation/2026-09-01-112352-country-flag-svg-reference.html

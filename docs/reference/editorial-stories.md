@@ -1,17 +1,18 @@
 # Chatter, Pulse and the picture editor
 
 G2 turns collected posts into saved stories that readers can share and revisit.
-Chatter covers AI human interest, memes and insider news with an English
-New York Post style headline and supporting line. Pulse reports factual news.
+Chatter covers AI human interest, memes and insider news with an independent
+headline and supporting line in English, Japanese and Simplified Chinese.
+The launch voices are New York Post, 東スポ and WeMedia respectively. Pulse reports factual news.
 An important event can qualify for both. A single source post remains the
 atomic unit; its own commentary preserves its meaning and tone.
 
-This reference describes the candidate implementation through migration 0068.
+This reference describes the editorial implementation and selected launch profile.
 Generation, public access and picture bindings ship **off** in
 [`config/editorial.yaml`](../../config/editorial.yaml). Deployment and a fresh
 human quality evaluation are separate from the local implementation tests.
 
-The explicit English launch profile is
+The explicit multilingual launch profile retains the filename
 [`config/editorial-english-launch.yaml`](../../config/editorial-english-launch.yaml).
 It configures generation/public story reading and headline derivatives with a
 combined $5/day reservation ceiling. `EDITORIAL_CONFIG_PATH` selects the file
@@ -48,7 +49,11 @@ every safe HTTP(S) source URL. Counts measure distinct posts, not confirmations.
    same original evidence. Accepted editions contain a headline, supporting
    line (called `byline`), full article and source links. A byline is not an
    invented journalist's name.
-5. The optional **picture editor** selects an eligible source image. `derive`
+5. A separate **senior editor** reviews each mechanically valid draft against
+   the same closed source packet. It grades nine areas and gives a publication
+   verdict. Only an approved, unchanged draft can publish; see
+   [Senior editor review](#senior-editor-review).
+6. After required text for every track and locale, the optional **picture editor** selects an eligible source image. `derive`
    adds an asynchronous MiniMax H3 video; the verified source image can display
    while that task is pending. Missing imagery does not discard valid text.
 
@@ -201,24 +206,91 @@ use first-observed posting time for priority aging. It must not be presented as
 a verified launch date. Missing context or unseen source images still limit
 what the editor can infer; supplying URLs alone does not inspect their pixels.
 
+## Senior editor review
+
+[`monitor/editorial/reviewing.py`](../../monitor/editorial/reviewing.py) uses the
+literal [`senior-ed-read` skill](../../.claude/skills/senior-ed-read/SKILL.md) as
+its rubric. Every new Chatter and Pulse locale receives a separate review after
+the existing source-support and copy-consistency checks, before publication.
+The reviewer receives the untouched draft, original frozen story packet, source
+relationships, requested voice and the image inputs supplied to the writer.
+It has no research tools and cannot fill missing story facts from memory or
+linked pages. This is an automated editorial judgment, not native-reader
+certification or a jurisdiction-specific legal determination.
+
+The review grades source quality/provenance, factual fidelity/numbers,
+attribution/uncertainty/time, fairness, context/news judgment, headline,
+supporting line, body and local-language voice separately. Each section and
+substantive finding receives A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D- or F.
+Unavailable sections use a null grade and a reason. Every section, finding and
+overall grade has a one- or two-sentence English explanation. Headline and body
+are independent grades. Findings quote exact draft wording, identify an
+available source field or a gap, and distinguish optional, required and material
+changes.
+
+The result also contains an overall grade, `publish`, `revise` or `hold` verdict,
+required changes, uncertainties and strengths. A publish verdict cannot carry
+required changes, required/material findings, unavailable sections, or a C-band
+or lower grade in sources, facts, attribution or fairness. A material finding
+requires hold. Grades are not averaged. A revise/hold verdict prevents
+publication; this step does not rewrite or retry the draft. Malformed replies,
+invalid grades/explanations, invented excerpts, sources outside the packet,
+provider failures and budget exhaustion also prevent publication.
+
+Code binds the review to hashes of the full draft, packet and skill, plus cutoff,
+locale, voice and actual writer model. The saved record includes reviewer model
+and full configured route, stage keys, time and available request hash. The
+publication transaction rechecks this identity and the exact saved assessment
+record; an approval cannot be reused after changing the draft, evidence or
+reviewer route. Existing editions remain readable without retroactive review.
+
+All paid review attempts use the existing `EditorialCall` and canonical
+`OriginalContentCall` ledgers, reservations and idempotency fences. Requests and
+model JSON remain in their existing private payload fields, including rejected
+reviews. Validated reviews, including revise/hold outcomes, are saved under
+`EditorialAssessment.outcome.senior_reviews`. Accepted editions also retain
+`evidence.senior_review`, carried into `OriginalContent.provenance.evidence`
+by the existing importer. Public story payloads exclude these private records.
+No new table, field, migration, endpoint or scheduler is introduced.
+
+Enabled generation requires an explicit `reviewer` route. The launch profile
+uses direct OpenAI `gpt-6.1-sol`, high reasoning, 16,384 total completion tokens,
+vision input, a 300-second socket timeout and default service tier for every
+language and both tracks. Writer routes and literal prompts are unchanged.
+The profile permits thirteen calls per assessment: one selection, four writers,
+four reviews and up to four optional media calls. The existing combined USD5/day
+and USD2/assessment ceilings remain; the larger call allowance is not additional
+money. Extra review latency still shares the fifteen-minute assessment lease.
+
 ## Voices and routing
 
 [`config/editorial_voices/`](../../config/editorial_voices/) holds immutable JSON
-profiles. Each has `id`, `version`, `track`, `locale`, `available` and instructions.
+profiles. Each has `id`, `version`, `track`, `locale` and `available`. Instructions
+are either inline or resolved from a locked shared prompt and publication voice.
 Changing a voice means adding a version and changing the binding in
 `editorial.yaml`; no copied generation script is needed. Saved editions retain
 the profile ID, version and content hash. Existing shared editions remain intact.
 
-`chatter-en-v1` follows the successful bare-prompt direction without the five
-prior example headlines. Chinese and Japanese Chatter profiles are explicitly
-unavailable until crafted and evaluated. Pulse has factual profiles for all
-three locales; only English is bound by default. All active bindings are
+The launch binds `chatter-en-v3`, `chatter-ja-tospo-v2` and
+`chatter-zh-cn-wemedia-v2`. The English profile uses the locked
+[`editorial-judgment-headline-v2.json`](../../config/editorial_prompts/editorial-judgment-headline-v2.json)
+contract, including its catchy/punny sentence and scoped headline attribution.
+The native profiles' shared source is
+[`editorial-judgment-headline-v1.json`](../../config/editorial_prompts/editorial-judgment-headline-v1.json):
+the owner's locked judgment paragraph plus an explicit print-headline assignment
+in the locale's language. `chatter-ja-rocket-v2` and `chatter-zh-cn-metro-v2` are
+available alternatives, requiring an explicit binding change. Profile loading
+rejects invalid paths, unlocked contracts, missing tasks and locale mismatches
+before paid work. The saved digest includes resolved instructions and references.
+Version1 profiles and hashes remain intact for historical editions.
+Pulse has factual profiles for all three locales; only English is bound in the
+launch profile. All active bindings are
 validated before paid work, including track/locale agreement. Each locale uses
 original evidence independently; it does not translate an English draft.
 
 The `editor`, `chatter` and `pulse` routes require explicit model identifiers,
 endpoint, matching credential variable, output cap and token prices. Supported
-endpoints are OpenRouter and direct DeepInfra. `vision` is an explicit capability;
+endpoints are OpenRouter, direct DeepInfra and direct OpenAI. `vision` is an explicit capability;
 OpenRouter provider fallback is disabled. A mismatched returned model or
 truncated/invalid response is held. Rejected replies persist a fixed failure code,
 HTTP status, model-match Boolean, standard finish reason and integer token counts
@@ -233,7 +305,7 @@ supplied.
 OpenRouter requests also cap the permitted provider input/output prices at the
 configured reservation rates.
 
-The English launch profile routes editor and Pulse directly to DeepInfra as
+The launch profile routes editor and Pulse directly to DeepInfra as
 `deepseek-ai/DeepSeek-V4-Flash-0731`, using `DEEPINFRA_API_KEY` and
 `reasoning_effort: none`. The `editorial_editor_v1` and `editorial_writer_v1`
 profiles in [`x_monitor/deepinfra.py`](../../x_monitor/deepinfra.py) share the
@@ -246,10 +318,19 @@ nonnegative input/output token counts, a finite nonnegative estimated cost and
 zero or absent reported reasoning tokens. It rejects truncated/empty completions
 and duplicate JSON keys. It sends no OpenRouter provider or price-cap fields on
 those routes.
-Chatter uses direct OpenAI Chat Completions at
+English Chatter uses direct OpenAI Chat Completions at
 `https://api.openai.com/v1/chat/completions`, model `gpt-6-sol`, with
 `reasoning_effort: medium`, `max_completion_tokens: 4096`, image input and
-`service_tier: default`. It sends no OpenRouter routing fields. See the
+`service_tier: default`. Japanese and Simplified Chinese use locale route
+overrides with exact model `gpt-6.1-sol` and `reasoning_effort: high`, retaining
+the same transport, vision and service tier, with a16,384-token native
+completion allowance that includes reasoning. English retains4,096 tokens. Their socket timeout
+is300seconds; English retains the90second route default. These are request
+timeouts, not a whole-assessment deadline; worker/lease fencing still applies.
+`writer_route` resolves
+an explicit `locale_routes` binding or falls back to the track route; both
+request construction and the worker call use this resolver. An override requires
+a bound voice. These routes send no OpenRouter routing fields. See the
 [OpenAI request contract](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)
 and [model pricing](https://developers.openai.com/api/docs/models/gpt-6-sol).
 The configured $2.50/M input reservation includes the published cache-write
@@ -263,7 +344,7 @@ before reserving/sending if the selected key is absent; it never falls back to
 OpenRouter. Neither selecting the profile nor passing offline checks provisions
 a Render credential or activates scheduled generation.
 
-The English launch profile allows **65,536 total output tokens** per DeepSeek
+The launch profile allows **65,536 total output tokens** per DeepSeek
 editor/Pulse call, including reasoning; the Chatter writer has its independent
 4,096-token allowance. The route validator permits configured allowances up to
 65,536. These are application request limits, not claims about the provider's

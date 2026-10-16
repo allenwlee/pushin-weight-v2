@@ -26,6 +26,7 @@ from .media import start_derivative
 from .persistence import BudgetHeld, claim_assessment, finish_assessment, require_fence
 from .pictures import select_picture
 from .providers import json_call
+from .reviewing import require_approval, review_record, review_request
 from .selection import aged_priority, should_replace, validate_decisions
 from .voices import load_voice
 from .writing import editor_request, validate_copy, writer_request
@@ -78,9 +79,9 @@ def unchanged(event, story, track):
     )
 
 
-def publish_edition(row, event, packet, track, voice, copy, model, cfg):
+def publish_edition(row, event, packet, track, voice, copy, model, cfg, *, review=None):
     with transaction.atomic():
-        require_fence(row)
+        current = require_fence(row)
         EditorialHero.objects.get_or_create(key=f"{track}:{voice.locale}")
         hero = (
             EditorialHero.objects.select_for_update(of=("self",))
@@ -131,6 +132,7 @@ def publish_edition(row, event, packet, track, voice, copy, model, cfg):
             )["n"]
             or 0
         ) + 1
+        require_approval(current, copy, packet, voice, model, cfg, review)
         edition = EditorialEdition.objects.create(
             story=story,
             assessment=row,
@@ -146,6 +148,7 @@ def publish_edition(row, event, packet, track, voice, copy, model, cfg):
             voice={"id": voice.id, "version": voice.version, "hash": voice.digest},
             model=model,
             evidence={
+                "senior_review": review,
                 "post_ids": event.post_ids,
                 "cited_post_ids": [p["id"] for p in sources],
                 "attribution": attribution,
@@ -194,7 +197,7 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
     )
     if row is None:
         return {"status": "already_claimed", "published": 0}
-    outcome = {"status": "complete", "published": 0, "holds": []}
+    outcome = {"status": "complete", "published": 0, "holds": [], "senior_reviews": {}}
     try:
         packet = row.packet or build_packet(row.cutoff, cfg)
         with transaction.atomic():
@@ -234,6 +237,7 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                 e.key,
             ),
         )
+        picture_work = []
         for track, limit in (("chatter", 1), ("pulse", cfg.pulse_limit)):
             selected = 0
             for event in ordered:
@@ -275,11 +279,42 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                     stage = (
                         f"writer:{track}:{locale}:{digest([event.key, voice.digest])}"
                     )
+                    failure_stage = "writer"
                     try:
-                        response = call(row, stage, fresh.routes[track], request, fresh)
+                        route = fresh.writer_route(track, locale)
+                        if route is None:
+                            raise ValueError("writer route unavailable")
+                        response = call(row, stage, route, request, fresh)
                         copy = validate_copy(
                             response["data"], event, locale, packet=contextual_packet
                         )
+                        writer_model = response["model"]
+                        fresh = policy_reader()
+                        if not fresh.enabled:
+                            raise BudgetHeld("disabled before senior review")
+                        failure_stage = "senior_review"
+                        review_input, identity = review_request(
+                            copy, contextual_packet, voice, writer_model, request, fresh
+                        )
+                        review_stage = f"senior-review:{track}:{locale}:{digest(identity)}"
+                        reviewed = call(row, review_stage, fresh.reviewer, review_input, fresh)
+                        if reviewed["model"] != fresh.reviewer.model:
+                            raise ValueError("senior review model mismatch")
+                        review = review_record(
+                            reviewed, copy, contextual_packet, identity, review_stage, stage
+                        )
+                        outcome["senior_reviews"][review_stage] = review
+                        with transaction.atomic():
+                            current = require_fence(row)
+                            current.outcome = outcome
+                            current.save(update_fields=["outcome"])
+                        if review["result"]["verdict"] != "publish":
+                            outcome["holds"].append({
+                                "track": track, "locale": locale, "key": event.key,
+                                "stage": "senior_review", "reason": review["result"]["verdict"],
+                                "review_stage": review_stage,
+                            })
+                            continue
                         fresh = policy_reader()
                         if not fresh.enabled:
                             raise BudgetHeld("disabled before publication")
@@ -290,14 +325,17 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                             track,
                             voice,
                             copy,
-                            response["model"],
+                            writer_model,
                             fresh,
+                            review=review,
                         )
                     except (ValueError, TypeError) as exc:
                         outcome["holds"].append(
                             {
                                 "track": track,
+                                "locale": locale,
                                 "key": event.key,
+                                "stage": failure_stage,
                                 "reason": type(exc).__name__,
                             }
                         )
@@ -306,32 +344,32 @@ def run_editorial(envelope, *, cfg=None, call=json_call, policy_reader=None):
                         continue
                     accepted = True
                     outcome["published"] += 1
-                    try:
-                        picture = select_picture(
-                            event,
-                            packet,
-                            fresh,
-                            content_kind=track,
-                            content_id=edition.pk,
-                            revision=edition.fingerprint,
-                            assessment=row,
-                            visual_brief=copy.visual_brief,
-                        )
-                        if picture:
-                            picture = start_derivative(picture, row, policy_reader())
-                            if picture.state == "pending":
-                                from .dispatch import dispatch_poll
-
-                                dispatch_poll(picture.pk)
-                    except Exception as exc:  # noqa: BLE001 - persist bounded worker failure, never report success
-                        outcome["holds"].append(
-                            {
-                                "track": track,
-                                "stage": "picture",
-                                "reason": type(exc).__name__,
-                            }
-                        )
+                    picture_work.append((track, event, edition, copy.visual_brief))
                 selected += int(accepted)
+        # Reserve required locale/track text before any optional media call.
+        for track, event, edition, visual_brief in picture_work:
+            try:
+                fresh = policy_reader()
+                picture = select_picture(
+                    event,
+                    packet,
+                    fresh,
+                    content_kind=track,
+                    content_id=edition.pk,
+                    revision=edition.fingerprint,
+                    assessment=row,
+                    visual_brief=visual_brief,
+                )
+                if picture:
+                    picture = start_derivative(picture, row, policy_reader())
+                    if picture.state == "pending":
+                        from .dispatch import dispatch_poll
+
+                        dispatch_poll(picture.pk)
+            except Exception as exc:  # noqa: BLE001 - persist bounded worker failure, never report success
+                outcome["holds"].append(
+                    {"track": track, "stage": "picture", "reason": type(exc).__name__}
+                )
         finish_assessment(row, outcome)
     except Exception as exc:  # noqa: BLE001 - persist bounded worker failure, never report success
         outcome.update(status="held", error=type(exc).__name__)

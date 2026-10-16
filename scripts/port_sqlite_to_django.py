@@ -26,7 +26,7 @@ import json
 import os
 import sqlite3
 import sys
-from datetime import UTC, date, datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -56,7 +56,6 @@ from core.models import (  # noqa: E402
     CompanyAccount,
     DiscourseKey,
     DiscourseLabel,
-    HFOrg,
     NationalismKey,
     NationalismLabel,
     Post,
@@ -75,6 +74,7 @@ from core.models import (  # noqa: E402
     SentimentLabel,
     UnsanctionedFlagKey,
 )
+from core.publisher_accounts import get_publisher, register_publisher
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -691,14 +691,11 @@ def port_hf_orgs(
             _inc(report, "hf_orgs", "skipped")
             continue
         if not dry_run:
-            HFOrg.objects.get_or_create(
-                namespace=namespace,
-                defaults={
-                    "company_id": company_nickname,
-                    "confirmed": _parse_sqlite_bool(confirmed) or False,
-                    "discovered_via": discovered_via or "curated",
-                    "added_at": _parse_sqlite_dt(added_at),
-                },
+            register_publisher(
+                source="hf", identifier=namespace, company_id=company_nickname,
+                confirmed=_parse_sqlite_bool(confirmed) or False,
+                discovered_via=discovered_via or "curated",
+                added_at=_parse_sqlite_dt(added_at),
             )
         _inc(report, "hf_orgs", "inserted")
 
@@ -1065,7 +1062,7 @@ def port_products(
         if brand_nickname is not None:
             defaults["brand_id"] = brand_nickname
         if hf_org_ns is not None:
-            defaults["hf_org_id"] = hf_org_ns
+            defaults["publisher_account_id"] = get_publisher(source="hf", identifier=hf_org_ns).account_id
 
         if not dry_run:
             Product.objects.update_or_create(

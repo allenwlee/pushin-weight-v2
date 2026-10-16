@@ -13,7 +13,6 @@ from core.models import (
     BrandCompany,
     BrandDiscoveryCandidate,
     Company,
-    HFOrg,
     ModelRelease,
     Post,
     PostBrandProduct,
@@ -32,6 +31,7 @@ from core.product_verification import (
     hf_org_socials,
     source_repo_evidence,
 )
+from tests.publisher_fixtures import hf_publisher
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
@@ -40,8 +40,8 @@ def _publisher():
     brand = Brand.objects.create(nickname="minimax", display_name="MiniMax")
     company = Company.objects.create(nickname="minimax-company", display_name="MiniMax")
     BrandCompany.objects.create(brand=brand, company=company)
-    org = HFOrg.objects.create(namespace="MiniMaxAI", company=company, confirmed=True)
-    role = Role.objects.create(key="official")
+    org = hf_publisher(namespace="MiniMaxAI", company=company, confirmed=True)
+    role, _ = Role.objects.get_or_create(key="official")
     account = Account.objects.create(
         author_id="12345",
         handle="MiniMax__AI",
@@ -392,7 +392,7 @@ def test_new_publisher_exact_model_is_cached_then_socials_resume_without_refetch
     assert proposal.proposed_brand_id == "newpublisher_ai"
     product = Product.objects.get()
     assert product.brand_id == "newpublisher_ai"
-    assert product.hf_org_id is None
+    assert product.hf_namespace is None
     assert BrandCompany.objects.count() == 0
     candidate = BrandDiscoveryCandidate.objects.get(
         candidate_identity="new-publisher-ai"

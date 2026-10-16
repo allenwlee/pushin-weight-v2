@@ -26,7 +26,7 @@ from core.models import (
     BrandCompany,
     BrandDiscoveryCandidate,
     Company,
-    HFOrg,
+    CompanyAccount,
     ModelRelease,
     Post,
     PostBrandProduct,
@@ -34,6 +34,7 @@ from core.models import (
     ProductVerificationProposal,
     RareTypeCategoryAssignment,
 )
+from core.publisher_accounts import get_publisher, publisher_links
 from x_monitor.hf_client import HF_API_BASE
 
 POLICY_VERSION = "product-x-hf-v2"
@@ -321,9 +322,7 @@ def evaluate_known_publisher(
     company_ids = BrandCompany.objects.filter(brand_id=brand.pk).values_list(
         "company_id", flat=True
     )
-    owned_namespace = HFOrg.objects.filter(
-        namespace=namespace, company_id__in=company_ids, confirmed=True
-    ).exists()
+    owned_namespace = publisher_links(source="hf", identifier=namespace, confirmed=True).filter(company_id__in=company_ids).exists()
     trace = (
         f"stable_account_id:{account.pk}",
         f"tracked_official:{str(official).lower()}",
@@ -491,11 +490,11 @@ def hf_org_socials(
 
 
 def _product_defaults(
-    payload: dict[str, Any], *, brand: Brand, hf_org: HFOrg | None
+    payload: dict[str, Any], *, brand: Brand, hf_org: CompanyAccount | None
 ) -> dict[str, Any]:
     values: dict[str, Any] = {
         "brand": brand,
-        "hf_org": hf_org,
+        "publisher_account": hf_org.account if hf_org else None,
         "hf_type": "model",
         "display_name": str(payload.get("id") or "").split("/", 1)[-1],
         "raw": payload,
@@ -533,7 +532,7 @@ def _upsert_hf_product(
     *,
     repo_id: str,
     brand: Brand,
-    hf_org: HFOrg | None,
+    hf_org: CompanyAccount | None,
     metadata: dict[str, Any],
     product_type: str,
     source_release: ModelRelease | None = None,
@@ -575,7 +574,7 @@ def _upsert_hf_product(
         product = Product.objects.select_for_update().get(pk=product.pk)
     if product.brand_id not in (None, brand.pk):
         raise ValueError("product_owner_conflict")
-    if product.hf_org_id not in (None, hf_org.pk if hf_org else None):
+    if product.publisher_account_id not in (None, hf_org.account_id if hf_org else None):
         raise ValueError("product_owner_conflict")
     if product.repo_id not in (None, repo_id):
         raise ValueError("product_repository_conflict")
@@ -619,7 +618,7 @@ def attach_verified_product(
     )
     if not decision.qualifies:
         raise ValueError(decision.reason)
-    hf_org = HFOrg.objects.select_for_update().get(namespace=namespace, confirmed=True)
+    hf_org = get_publisher(source="hf", identifier=namespace, confirmed=True, lock=True)
     product = _upsert_hf_product(
         repo_id=repo_id,
         brand=brand,
@@ -845,8 +844,7 @@ def _finalize_new_publisher(
         candidate.save()
 
     hf_org = (
-        HFOrg.objects.select_for_update()
-        .filter(namespace=namespace, confirmed=True)
+        publisher_links(source="hf", identifier=namespace, confirmed=True, lock=True)
         .first()
     )
     if hf_org:

@@ -1,29 +1,35 @@
 """Backfill: run harvest cycles with date-bounded search window.
 
-Designed for gradual, resumable execution that coexists with the regular
-15-min harvest cron. Each invocation processes a small batch of calls,
-writes progress to a state file, and exits. Run it repeatedly (e.g. via a
-Render cron or manual invocations) until all calls complete.
+Each explicit invocation processes finite call/time-slice units through the
+shared runner and saves committed provider cursors on the executing host.
+The default unit is 15 minutes and the default batch is one unit. Fixed bounds,
+policy and limits must match the checkpoint to resume. No scheduler is started.
 
 Usage:
+    # One-time historical collection: whole-window searches, page checkpoints,
+    # no scheduled-slot waits or inline model processing.
+    python manage.py backfill --batch --since 2026-08-01 --until 2026-08-31 \
+        --call-ids B1,B2,B3,C1,C2,C3 --max-api-requests 500 --run-seconds 3600
+
     # Dry-run to see what would happen
     python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --dry-run
 
-    # Run one batch (default: 3 calls per batch)
-    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00
+    # Run one scoped unit
+    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --brands qwen --call-ids B1
 
-    # Run with larger batch size
-    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --batch-size 6
+    # Bound the entire invocation, including all model roles and HTTP retries
+    python manage.py backfill --since 2026-08-09T00:00Z --until 2026-08-09T00:15Z \
+        --brands qwen --call-ids B1 --max-api-requests 10 --max-llm-calls 60
 
     # Plan a single-brand, single-call historical recovery
     python manage.py backfill --since 2026-08-13 --until 2026-08-15 \
         --brands dots --call-ids B1 --dry-run
 
     # Resume from previous state automatically (state file keyed on since/until)
-    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00
+    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --brands qwen --call-ids B1
 
     # Reset and start over
-    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --reset
+    python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --brands qwen --call-ids B1 --reset
 
 State file: data/backfill/<since_epoch>-<until_epoch>[-<scope_hash>].json
 """
@@ -32,8 +38,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import os
+import tempfile
 import time as _time
-from datetime import datetime, timezone
+from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 from django.conf import settings
@@ -41,16 +51,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from x_monitor.config import load_config
 
-# Estimated daily post volume across all brands — from Jul 21 baseline.
-_EST_DAILY_POSTS = 2_350
-# Typical number of calls per cycle.
-_EST_CALLS_PER_CYCLE = 6
-# TwitterAPI.io page cap.
-_TWEETS_PER_PAGE = 20
-# Safety ceilings.
-_MAX_PAGES_CEILING = 100
-_MAX_RESULTS_CEILING = 1_000
-# Multiplier on computed params for headroom.
+# Retained only as a validated compatibility option; never estimates volume.
 _SAFETY_MARGIN = 2.0
 # Where state files live.
 _STATE_DIR = Path("data/backfill")
@@ -63,19 +64,20 @@ _RUNTIME_SETTING_NAMES = (
 )
 _MISSING_SETTING = object()
 _COMPLETE_CALL_STATUSES = frozenset({"completed", "no_results"})
+_BLOCKED_PROGRESS_REASONS = frozenset({
+    "invalid_primary_window", "invalid_continuation", "clipped_page", "nonprogressing_cursor",
+})
 
 
 def _parse_iso(ts: str) -> int:
-    """Parse YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS to epoch seconds (UTC)."""
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
-        try:
-            dt = datetime.strptime(ts, fmt).replace(tzinfo=timezone.utc)
-            return int(dt.timestamp())
-        except ValueError:
-            continue
-    raise CommandError(
-        f"Invalid timestamp '{ts}'. Use YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS."
-    )
+    """Parse ISO dates/timestamps; unqualified timestamps mean UTC."""
+    try:
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=UTC)
+        return int(dt.timestamp())
+    except (ValueError, OverflowError) as exc:
+        raise CommandError(f"Invalid ISO timestamp '{ts}'.") from exc
 
 
 def _state_path(
@@ -109,8 +111,23 @@ def _load_state(state_file: Path) -> dict | None:
 
 
 def _save_state(state_file: Path, state: dict) -> None:
+    """Replace a fully flushed checkpoint without destroying the prior one."""
     state_file.parent.mkdir(parents=True, exist_ok=True)
-    state_file.write_text(json.dumps(state, indent=2, default=str))
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=state_file.parent,
+            prefix=f".{state_file.name}.", suffix=".tmp", delete=False,
+        ) as target:
+            temporary = Path(target.name)
+            json.dump(state, target, indent=2, default=str)
+            target.write("\n")
+            target.flush()
+            os.fsync(target.fileno())
+        temporary.replace(state_file)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def _selected_call_status(stats: dict, call_id: str) -> str:
@@ -127,27 +144,50 @@ def _selected_call_status(stats: dict, call_id: str) -> str:
     return str(matching_calls[0].get("status") or "missing_call_status")
 
 
-def _compute_params(
-    since_epoch: int, until_epoch: int, safety_margin: float
-) -> tuple[int, int, int]:
-    """Return (max_results, max_pages, est_total) with safety margin applied."""
-    gap_hours = max((until_epoch - since_epoch) / 3600.0, 1.0)
-    est_total = int(_EST_DAILY_POSTS * (gap_hours / 24))
-    est_per_call = max(est_total // _EST_CALLS_PER_CYCLE, 50)
-
-    max_results = int(min(est_per_call * safety_margin, _MAX_RESULTS_CEILING))
-    max_results = max(max_results, 100)
-    max_pages = min(
-        max(int((max_results / _TWEETS_PER_PAGE) * safety_margin) + 1, 5),
-        _MAX_PAGES_CEILING,
-    )
-    return max_results, max_pages, est_total
+def _seconds_to_next_slot() -> float:
+    elapsed = _time.time() % 900
+    # Give a newly due cron time to start before a manual unit can compete.
+    return 0 if elapsed < 120 else 900 - elapsed
 
 
 class Command(BaseCommand):
     help = "Run harvest cycles with date-bounded search window (batchable, resumable)."
 
     def add_arguments(self, parser) -> None:
+        parser.add_argument(
+            "--collection-job", type=str,
+            help="Execute a ready, frozen X backfill CollectionJob; progress lives in PostgreSQL.",
+        )
+        parser.add_argument("--storage-probe", action="store_true",
+                            help="Measure a job's frozen captured page using existing Post updates; no provider calls.")
+        parser.add_argument("--enrich-native", action="store_true",
+                            help="Advance stored-post enrichment through native model batches; zero X requests.")
+        parser.add_argument("--enrich-direct", action="store_true",
+                            help="Advance stored-post enrichment through ordinary DeepInfra calls; zero X requests.")
+        parser.add_argument("--enrichment-concurrency", type=int, default=32,
+                            help="Ordinary API calls in flight,1–128 (default32).")
+        parser.add_argument("--enrichment-control", choices=["status", "pause", "resume"],
+                            help="Inspect or control enrichment admission; pause must report safe_to_cancel before stopping its runner.")
+        parser.add_argument("--enrichment-actor", default="",
+                            help="Operator identity required for pause/resume audit.")
+        parser.add_argument("--enrichment-reason", default="",
+                            help="Operator reason required for pause/resume audit.")
+        parser.add_argument("--enrichment-finish-pilot", action="store_true",
+                            help="After complete persisted pilot proof, continue the existing source cohort.")
+        parser.add_argument("--enrichment-post-ids", default=None,
+                            help="Freeze at most110 pilot/control Post IDs, comma separated.")
+        parser.add_argument("--enrichment-max-usd", default=None,
+                            help="Initial finite durable campaign reservation ceiling in USD.")
+        parser.add_argument("--enrichment-max-model-requests", type=int, default=20000,
+                            help="Initial campaign model-request allowance, retained across restarts.")
+        parser.add_argument("--enrichment-max-control-requests", type=int, default=5000,
+                            help="Initial campaign upload/poll allowance, separate from model starts.")
+        parser.add_argument("--enrichment-deadline", default=None,
+                            help="Initial aware ISO deadline for the whole enrichment campaign.")
+        parser.add_argument(
+            "--batch", action="store_true",
+            help="Collect whole historical windows with per-page checkpoints, no cron waits or inline enrichment.",
+        )
         parser.add_argument(
             "--since", type=str, required=False,
             help="Lower bound (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS, UTC).",
@@ -159,7 +199,7 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--until", type=str, default=None,
-            help="Upper bound (same format). Default: now.",
+            help="Fixed upper bound (ISO format); required for historical runs.",
         )
         parser.add_argument(
             "--dry-run", action="store_true",
@@ -174,12 +214,12 @@ class Command(BaseCommand):
             help="Comma-separated logical call IDs to run (for example B1).",
         )
         parser.add_argument(
-            "--batch-size", type=int, default=3,
-            help="Max calls to execute per invocation (default: 3).",
+            "--batch-size", type=int, default=None,
+            help="Max work steps per invocation (default: HTTP allowance in batch mode, otherwise 1).",
         )
         parser.add_argument(
             "--safety-margin", type=float, default=_SAFETY_MARGIN,
-            help=f"Multiplier on computed max_results/pages (default: {_SAFETY_MARGIN}).",
+            help="Deprecated compatibility option; explicit caps replace volume estimates.",
         )
         parser.add_argument(
             "--pause", type=int, default=5,
@@ -194,17 +234,32 @@ class Command(BaseCommand):
             help="Print current progress and exit (no work done).",
         )
         parser.add_argument(
-            "--max-results", type=int, default=None,
-            help="Override computed per-call result cap.",
+            "--max-results", type=int, default=100,
+            help="Per-unit primary result cap, in complete 20-result pages (default: 100).",
         )
         parser.add_argument(
-            "--max-pages", type=int, default=None,
-            help="Override computed per-call page cap.",
+            "--max-pages", type=int, default=5,
+            help="Per-unit primary page cap (default: 5).",
         )
         parser.add_argument(
-            "--max-llm-calls", type=int, default=None,
-            help="Hard cap on classifier transport requests per invocation (default: no cap).",
+            "--max-llm-calls", type=int, default=60,
+            help="Invocation-wide model transport cap, including retries (default: 60).",
         )
+        parser.add_argument("--max-api-requests", type=int, default=10,
+                            help="Invocation-wide HTTP request cap (default: 10).")
+        parser.add_argument("--run-seconds", type=int, default=300,
+                            help="Invocation deadline in seconds (default: 300).")
+        parser.add_argument("--slice-minutes", type=int, default=15,
+                            help="Fixed historical unit duration (default: 15 minutes).")
+        parser.add_argument("--enrichment-limit", type=int, default=5,
+                            help="Frozen recovered-post cohort for inline enrichment (default: 5).")
+        parser.add_argument("--state-dir", type=Path, default=None,
+                            help="Durable checkpoint directory on the executing host.")
+        parser.add_argument("--json", action="store_true", help="Print the final structured state.")
+        parser.add_argument("--retry-blocked", action="store_true",
+                            help="Explicitly retry an anomalous unit after inspecting/fixing its cause.")
+        parser.add_argument("--query", default=None,
+                            help="Frozen historical query for exactly one brand and B/C call; omit time operators.")
 
     def handle(self, *args, **options) -> None:
         previous_settings = {
@@ -212,6 +267,92 @@ class Command(BaseCommand):
             for name in _RUNTIME_SETTING_NAMES
         }
         try:
+            if options.get("collection_job"):
+                if any(options.get(key) for key in (
+                    "since", "until", "brands", "call_ids", "query", "reset", "quarantined", "retry_blocked",
+                )):
+                    raise CommandError("--collection-job owns its frozen scope; omit scope/reset options")
+                if options.get("enrichment_control"):
+                    from core.provider_batches import (
+                        BatchAdmissionError,
+                        enrichment_control_status,
+                        set_enrichment_control,
+                    )
+                    action = options["enrichment_control"]
+                    if options["enrich_native"] or options["enrich_direct"] or options["enrichment_finish_pilot"]:
+                        raise CommandError("enrichment control is separate from execution")
+                    if action != "status" and (options["status"] or options["dry_run"]):
+                        raise CommandError("pause/resume are writes; select enrichment-control status")
+                    if action != "status" and (not options["enrichment_actor"].strip() or not options["enrichment_reason"].strip()):
+                        raise CommandError("--enrichment-actor and --enrichment-reason are required")
+                    try:
+                        self.result = (
+                            enrichment_control_status(options["collection_job"])
+                            if action == "status" else set_enrichment_control(
+                                options["collection_job"], action=action,
+                                actor=options["enrichment_actor"], reason=options["enrichment_reason"],
+                            )
+                        )
+                    except BatchAdmissionError as exc:
+                        raise CommandError(str(exc)) from None
+                    self.stdout.write(json.dumps(self.result, sort_keys=True))
+                    return
+                if options["enrich_native"] or options["enrich_direct"]:
+                    if options["enrich_native"] and options["enrich_direct"]:
+                        raise CommandError("select one enrichment transport")
+                    from core.provider_batches import BatchAdmissionError
+                    from monitor.backfill_enrichment import (
+                        execute_enrichment,
+                        finish_pilot,
+                        policy_snapshot,
+                    )
+                    read_only = options["status"] or options["dry_run"]
+                    cfg = load_config(Path("config.yaml"))
+                    if options["enrichment_finish_pilot"] and read_only:
+                        raise CommandError("finishing the pilot is a write; omit status/dry-run")
+                    policy = None
+                    if options["enrichment_max_usd"] or options["enrichment_deadline"] or options["enrichment_post_ids"]:
+                        if not options["enrichment_max_usd"] or not options["enrichment_deadline"]:
+                            raise CommandError("initial native enrichment requires spend ceiling and deadline")
+                        deadline = datetime.fromisoformat(options["enrichment_deadline"])
+                        if deadline.tzinfo is None:
+                            raise CommandError("enrichment deadline must include its time zone")
+                        policy = policy_snapshot(max_usd=options["enrichment_max_usd"], deadline=deadline,
+                            max_model_requests=options["enrichment_max_model_requests"],
+                            max_control_requests=options["enrichment_max_control_requests"],
+                            selection=(options["enrichment_post_ids"] or "").split(",") if options["enrichment_post_ids"] else [])
+                    api_key = os.environ.get("DEEPINFRA_API_KEY", "")
+                    if not api_key and not read_only:
+                        raise CommandError("native enrichment requires DEEPINFRA_API_KEY")
+                    try:
+                        if options["enrichment_finish_pilot"]:
+                            if policy is not None:
+                                raise CommandError("pilot continuation retains its existing identities and deadline")
+                            finish_pilot(options["collection_job"], cfg=cfg)
+                        self.result = execute_enrichment(options["collection_job"], cfg=cfg,
+                                                        api_key=api_key, policy=policy, read_only=read_only,
+                                                        transport="direct" if options["enrich_direct"] else "batch",
+                                                        direct_concurrency=options["enrichment_concurrency"])
+                    except BatchAdmissionError as exc:
+                        raise CommandError(str(exc)) from None
+                    self.stdout.write(json.dumps(self.result, sort_keys=True))
+                    return
+                from monitor.backfill_collection import benchmark_page, execute_job
+
+                if options["storage_probe"] and not (options["status"] or options["dry_run"]):
+                    self.result = benchmark_page(options["collection_job"])
+                else:
+                    self.result = execute_job(
+                        options["collection_job"], read_only=options["status"] or options["dry_run"],
+                    )
+                self.stdout.write(json.dumps(self.result, sort_keys=True))
+                return
+            if options["storage_probe"]:
+                raise CommandError("--storage-probe requires --collection-job")
+            if options.get("enrichment_control"):
+                raise CommandError("enrichment control requires --collection-job")
+            if options["enrich_native"] or options["enrich_direct"]:
+                raise CommandError("enrichment requires --collection-job")
             return self._handle_guarded(*args, **options)
         finally:
             for name, value in previous_settings.items():
@@ -247,289 +388,332 @@ class Command(BaseCommand):
                     )
                 )
                 return None
-            return self._handle(*args, **options)
+            prepared = self._handle(*args, **options)
+        if prepared is not None:
+            self._execute(prepared, prepared["options"])
 
-    def _handle(self, *args, **options) -> None:
+    def _handle(self, *args, **options):
+        """Prepare under a brief writer lease; execution leases each unit."""
         if options["quarantined"]:
-            return self._handle_quarantined(options)
+            self._handle_quarantined(options)
+            return None
         if not options.get("since"):
             raise CommandError("--since is required unless --quarantined is used")
+        if not options.get("until"):
+            raise CommandError("--until is required to freeze resumable historical bounds")
         since_epoch = _parse_iso(options["since"])
-        until_epoch = (
-            _parse_iso(options["until"])
-            if options["until"]
-            else int(datetime.now(timezone.utc).timestamp())
-        )
-        brand_filter = [
-            value.strip()
-            for value in str(options.get("brands") or "").split(",")
-            if value.strip()
-        ]
-        requested_call_ids = [
-            value.strip().upper()
-            for value in str(options.get("call_ids") or "").split(",")
-            if value.strip()
-        ]
-        if len(requested_call_ids) != len(set(requested_call_ids)):
+        until_epoch = _parse_iso(options["until"])
+        if until_epoch <= since_epoch:
+            raise CommandError("--until must be later than --since")
+        batch = options.get("batch", False)
+        if options["batch_size"] is None:
+            options["batch_size"] = options["max_api_requests"] if batch else 1
+        if batch:
+            # A page is a durable work step, not the extent of a query. Repeat
+            # the pending unit with its committed cursor until it drains.
+            options.update(
+                slice_minutes=math.ceil((until_epoch - since_epoch) / 60),
+                max_results=20, max_pages=1, pause=0,
+                enrichment_limit=0, max_llm_calls=0,
+            )
+        for name in ("batch_size", "max_results", "max_pages", "max_api_requests",
+                     "run_seconds", "slice_minutes"):
+            if options[name] <= 0:
+                raise CommandError(f"--{name.replace('_', '-')} must be positive")
+        if options["enrichment_limit"] < 0 or (not batch and options["enrichment_limit"] == 0):
+            raise CommandError("--enrichment-limit must be positive outside batch mode")
+        for name in ("pause", "max_llm_calls"):
+            if options[name] < 0:
+                raise CommandError(f"--{name.replace('_', '-')} must be nonnegative")
+        if options["max_results"] % 20:
+            raise CommandError("--max-results must be a multiple of 20 to retain complete pages")
+        if not batch and options["run_seconds"] > 780:
+            raise CommandError("--run-seconds must fit the 15-minute schedule with a 120-second reserve")
+        margin = options["safety_margin"]
+        if not math.isfinite(margin) or margin <= 0:
+            raise CommandError("--safety-margin must be finite and positive")
+        brands = [v.strip() for v in str(options.get("brands") or "").split(",") if v.strip()]
+        requested = [v.strip().upper() for v in str(options.get("call_ids") or "").split(",") if v.strip()]
+        if len(requested) != len(set(requested)):
             raise CommandError("--call-ids contains duplicates")
         from x_monitor.config import VALID_CALL_IDS
-
-        unknown_call_ids = sorted(set(requested_call_ids) - set(VALID_CALL_IDS))
-        if unknown_call_ids:
-            raise CommandError(
-                "unknown --call-ids: " + ", ".join(unknown_call_ids)
-            )
-        state_file = _state_path(
-            since_epoch,
-            until_epoch,
-            _scope_key(brands=brand_filter, call_ids=requested_call_ids),
-        )
-
-        # --- status-only ---
+        unknown = sorted(set(requested) - set(VALID_CALL_IDS))
+        if unknown:
+            raise CommandError("unknown --call-ids: " + ", ".join(unknown))
+        query_override = options.get("query")
+        if query_override is not None:
+            query_override = query_override.strip()
+            if not query_override or len(brands) != 1 or len(requested) != 1 or requested[0] == "A":
+                raise CommandError("--query requires exactly one brand and one B/C call")
+            if any(token in query_override.lower() for token in (
+                "since:", "until:", "since_time:", "until_time:", "since_id:", "max_id:",
+            )):
+                raise CommandError("--query must omit time operators; fixed command bounds own the interval")
+            if len(f"{query_override} since_time:{since_epoch} until_time:{until_epoch}") > 512:
+                raise CommandError("--query exceeds the provider length cap after fixed time bounds")
+        state_file = _state_path(since_epoch, until_epoch, _scope_key(brands=brands, call_ids=requested))
+        if options["state_dir"] is not None:
+            state_file = options["state_dir"] / state_file.name
         if options["status"]:
             state = _load_state(state_file)
             if state is None:
                 self.stdout.write("No state file — backfill not started yet.")
             else:
-                done = state.get("calls_completed", 0)
-                total = state.get("calls_total", "?")
-                inserted = sum(
-                    r.get("n_inserted", 0) for r in state.get("runs", [])
-                )
-                self.stdout.write(
-                    f"Backfill {options['since']} → {options['until'] or 'now'}:  "
-                    f"{done}/{total} calls done, {inserted} posts inserted so far."
-                )
-                if state.get("finished"):
-                    self.stdout.write("State: finished ✓")
-                elif state.get("calls_remaining"):
-                    self.stdout.write(
-                        f"Next: {state['calls_remaining'][0] if state['calls_remaining'] else 'none'}"
-                    )
-            return
+                self.stdout.write(json.dumps(state, indent=2))
+            return None
 
-        # --- state management ---
-        if options["reset"]:
-            if options["dry_run"]:
-                self.stdout.write("Would reset state (dry run; no file changed).")
-            else:
-                state_file.unlink(missing_ok=True)
-                self.stdout.write("State reset.")
-
-        max_results, max_pages, est_total = _compute_params(
-            since_epoch, until_epoch, options["safety_margin"]
-        )
-        if options["max_results"] is not None:
-            max_results = options["max_results"]
-        if options["max_pages"] is not None:
-            max_pages = options["max_pages"]
-
-        gap_hours = (until_epoch - since_epoch) / 3600.0
-
-        # --- plan calls ---
         settings.X_MONITOR_CYCLE_SINCE_TIME = since_epoch
         settings.X_MONITOR_CYCLE_UNTIL_TIME = until_epoch
-        settings.X_MONITOR_CYCLE_LIMIT_PER_CALL = max_results
-        settings.X_MONITOR_CYCLE_MAX_PAGES_PER_CALL = max_pages
-        if brand_filter:
-            settings.X_MONITOR_CYCLE_BRAND_FILTER = ",".join(brand_filter)
-        else:
-            try:
-                delattr(settings, "X_MONITOR_CYCLE_BRAND_FILTER")
-            except AttributeError:
-                pass
-
-        since_label = options["since"]
-        until_label = options["until"] or "now"
-
-        from monitor.cycle import CycleRunner, plan_calls_for_cycle
-
-        # Plan calls using the shared function — same as regular harvest.
-        # Pass cfg explicitly to avoid a second config.yaml disk read.
+        settings.X_MONITOR_CYCLE_LIMIT_PER_CALL = options["max_results"]
+        settings.X_MONITOR_CYCLE_MAX_PAGES_PER_CALL = options["max_pages"]
+        settings.X_MONITOR_CYCLE_BRAND_FILTER = ",".join(brands) or None
+        from monitor.cycle import plan_calls_for_cycle
         cfg = load_config(Path("config.yaml"))
-        disabled_brands = (
-            sorted(set(brand_filter) - set(cfg.enabled_models))
-            if brand_filter
-            else []
-        )
-        if disabled_brands:
-            raise CommandError(
-                "--brands must be enabled models: " + ", ".join(disabled_brands)
-            )
+        disabled = sorted(set(brands) - set(cfg.enabled_models)) if brands else []
+        if disabled:
+            raise CommandError("--brands must be enabled models: " + ", ".join(disabled))
         calls = plan_calls_for_cycle(cfg)
-        if brand_filter:
-            # Brand-scoped planning has already narrowed the B/C query
-            # contents. Call A is list-wide, so it is never part of a
-            # single-brand historical recovery.
+        # Historical work selects the core plan; optional modern discovery has
+        # separate evidence and budgets, and must not silently join a campaign.
+        calls = [call for call in calls if call.call_id in VALID_CALL_IDS]
+        if brands:
             calls = [call for call in calls if call.call_id != "A"]
-            if requested_call_ids:
-                inapplicable = sorted(
-                    set(requested_call_ids) - {call.call_id for call in calls}
-                )
-                if inapplicable:
-                    raise CommandError(
-                        f"call IDs {', '.join(inapplicable)} are not applicable "
-                        f"to brands {', '.join(brand_filter)}"
-                    )
-        if requested_call_ids:
-            calls = [
-                call for call in calls if call.call_id in requested_call_ids
-            ]
-        if not calls and (brand_filter or requested_call_ids):
-            raise CommandError("backfill scope selects no logical calls")
-        call_ids = [c.call_id for c in calls]
-
-        # --- load or init state ---
-        state = _load_state(state_file) or {}
-        completed = set(state.get("calls_completed_ids", []))
-        pending = [cid for cid in call_ids if cid not in completed]
-
-        if not state:
-            state = {
-                "since_epoch": since_epoch,
-                "until_epoch": until_epoch,
-                "since_label": since_label,
-                "until_label": until_label,
-                "gap_hours": round(gap_hours, 1),
-                "est_total_posts": est_total,
-                "max_results": max_results,
-                "max_pages": max_pages,
-                "calls_total": len(call_ids),
-                "brands": brand_filter,
-                "call_ids_requested": requested_call_ids,
-                "calls_completed_ids": [],
-                "calls_completed": 0,
-                "total_inserted": 0,
-                "runs": [],
-                "finished": False,
-            }
-            if not options["dry_run"]:
-                _save_state(state_file, state)
-
-        if not pending:
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"All {len(call_ids)} calls already completed — backfill finished."
-                )
+            inapplicable = sorted(set(requested) - {call.call_id for call in calls})
+            if inapplicable:
+                raise CommandError(f"call IDs {', '.join(inapplicable)} are not applicable to brands {', '.join(brands)}")
+        if requested:
+            calls = [call for call in calls if call.call_id in requested]
+        if any(call.call_id == "A" for call in calls) and not options["dry_run"]:
+            raise CommandError(
+                "Historical Call A requires a frozen account-population manifest; "
+                "select B/C call IDs for this bounded recovery"
             )
-            state["finished"] = True
-            if not options["dry_run"]:
-                _save_state(state_file, state)
-            return
+        if not calls and (brands or requested):
+            raise CommandError("backfill scope selects no logical calls")
+        call_ids = [call.call_id for call in calls]
+        if query_override is not None:
+            calls = [replace(call, query_string=query_override, query_length=len(query_override)) for call in calls]
+        if hasattr(cfg, "model_copy"):
+            from monitor.backfill_resources import bounded_backfill_config
 
-        batch = pending[: options["batch_size"]]
+            cfg = bounded_backfill_config(cfg, enrichment_limit=max(1, options["enrichment_limit"]))
+        config_value = cfg.model_dump(mode="json") if hasattr(cfg, "model_dump") else {}
+        limits = {name: options[name] for name in (
+            "max_results", "max_pages", "max_api_requests", "max_llm_calls",
+            "run_seconds", "slice_minutes", "enrichment_limit",
+        )}
+        identity = {
+            "since_epoch": since_epoch, "until_epoch": until_epoch,
+            "brands": sorted(set(brands)), "limits": limits,
+            "queries": {call.call_id: getattr(call, "query_string", "") for call in calls},
+            "config_digest": hashlib.sha256(json.dumps(config_value, sort_keys=True).encode()).hexdigest(),
+            "database": {key: settings.DATABASES["default"].get(key) for key in ("NAME", "HOST", "USER")},
+        }
+        if batch:
+            identity["execution_mode"] = "batch"
+        if query_override is not None:
+            identity["query_override"] = query_override
+        campaign_id = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+        state = None if options["reset"] else _load_state(state_file)
+        if state and (state.get("schema_version") != 2 or state.get("campaign_id") != campaign_id):
+            raise CommandError("Checkpoint identity changed or is legacy; inspect it and use an explicit --reset for a new campaign")
+        if not state:
+            slices = range(since_epoch, until_epoch, options["slice_minutes"] * 60)
+            units = [{
+                "key": f"{call_id}:{lower}:{min(lower + options['slice_minutes'] * 60, until_epoch)}",
+                "call_id": call_id, "since_epoch": lower,
+                "until_epoch": min(lower + options["slice_minutes"] * 60, until_epoch),
+                "status": "pending", "cursor": None, "seen_cursors": [], "post_ids": [],
+            } for lower in slices for call_id in call_ids]
+            state = {
+                "schema_version": 2, "campaign_id": campaign_id, "identity": identity,
+                "since_epoch": since_epoch, "until_epoch": until_epoch,
+                "calls_total": len(call_ids), "calls_completed_ids": [],
+                "calls_completed": 0, "calls_remaining": call_ids,
+                "total_inserted": 0, "units": units, "runs": [], "finished": False,
+                "enrichment_complete": False,
+            }
+        if options["retry_blocked"]:
+            for unit in state["units"]:
+                if unit["status"] == "blocked":
+                    unit["status"] = "pending"
+                    unit.pop("blocked_reason", None)
+        pending = [unit for unit in state["units"] if unit["status"] == "pending"]
         self.stdout.write(
-            f"Backfill {since_label} → {until_label}  "
-            f"({gap_hours:.1f}h, ~{est_total} posts expected, "
-            f"max_results={max_results}, max_pages={max_pages}, "
-            f"safety_margin={options['safety_margin']}x)  "
-            f"Batch: {len(batch)}/{len(pending)} remaining"
-            + ("  [DRY RUN]" if options["dry_run"] else "")
+            f"Backfill {options['since']} → {options['until']}: "
+            f"{len(pending)} pending call/time-slice units; "
+            f"caps={limits}" + (" [DRY RUN]" if options["dry_run"] else "")
         )
-
         if options["dry_run"]:
-            self.stdout.write(f"  Would execute calls: {batch}")
-            return
+            self.stdout.write(f"  Would execute calls: {call_ids}")
+            if options["reset"]:
+                self.stdout.write("Would reset state (dry run; no file changed).")
+            if options["json"]:
+                self.stdout.write(json.dumps({"campaign_id": campaign_id, "identity": identity}, indent=2))
+            return None
+        _save_state(state_file, state)
+        return {"cfg": cfg, "state_file": state_file, "campaign_id": campaign_id,
+                "call_ids": call_ids, "options": options}
 
-        # --- execute batch ---
+    def _execute(self, prepared, options):
+        from monitor.backfill_resources import (
+            BackfillBudget,
+            BackfillContext,
+        )
+        from monitor.cycle import CycleRunner, _BoundedClassifierClient
+        from monitor.run_lock import harvest_writer_lock
+        from x_monitor.reattribute import build_relevancy_client_from_env
         from x_monitor.relevancy import build_binary_relevancy_llm_call
 
-        # U6 runtime wire-in: same as run_cycle — build the provider-specific
-        # client for the binary relevancy gate. None when unavailable; the
-        # gate then runs as no-op (KEEP).
-        relevancy_client = None
-        try:
-            from x_monitor.reattribute import (
-                build_relevancy_client_from_env,
-            )
-            relevancy_client = build_relevancy_client_from_env(cfg)
-        except Exception:
-            pass
-        relevancy_llm_call = build_binary_relevancy_llm_call(
-            client=relevancy_client,
-            model=cfg.llm.relevancy_model,
-            timeout_seconds=cfg.harvest.relevancy_timeout_seconds,
+        budget = BackfillBudget(
+            max_api_requests=options["max_api_requests"],
+            max_llm_calls=options["max_llm_calls"], run_seconds=options["run_seconds"],
         )
-
-        for i, call_id in enumerate(batch):
-            if i > 0 and options["pause"] > 0:
-                self.stdout.write(f"  Pausing {options['pause']}s…")
-                _time.sleep(options["pause"])
-
-            self.stdout.write(f"  Executing call {call_id} ({i+1}/{len(batch)})…")
-            try:
-                runner = CycleRunner(
-                    cfg=cfg,
-                    dry_run=False,
-                    cycle_kind="backfill",
-                    _backfill_call_ids=[call_id],
-                    _max_llm_calls=options.get("max_llm_calls"),
-                    _relevancy_llm_call=relevancy_llm_call,
+        state_file = prepared["state_file"]
+        cfg = prepared["cfg"]
+        failed = False
+        attempted_enrichment_units: set[str] = set()
+        for attempt in range(options["batch_size"]):
+            if options.get("batch", False) and (
+                not budget.remaining_api_requests or not budget.can_start(38)
+            ):
+                break
+            if attempt and options["pause"]:
+                if budget.remaining_seconds <= options["pause"]:
+                    break
+                _time.sleep(options["pause"])  # No writer lease while idle.
+            if not options.get("batch", False) and _seconds_to_next_slot() <= budget.remaining_seconds + 120:
+                self.stderr.write("Backfill deferred: unit deadline plus reserve does not fit before the next scheduled slot.")
+                break
+            with harvest_writer_lock(execution_mode="backfill", entrypoint="management.backfill.unit") as lease:
+                if not lease.acquired:
+                    self.stderr.write("Backfill skipped: shared harvest writer lock is held.")
+                    break
+                state = _load_state(state_file)
+                if not state or state["campaign_id"] != prepared["campaign_id"]:
+                    raise CommandError("Checkpoint changed before unit execution")
+                pending = [u for u in state["units"] if u["status"] == "pending"]
+                if options.get("batch", False) and not pending:
+                    break
+                enrichment_pending = set(state.get("enrichment_pending_post_ids", []))
+                enrichment_units = [u for u in state["units"] if enrichment_pending.intersection(
+                    u.get("enrichment_cohort_post_ids", [])
+                ) and u["key"] not in attempted_enrichment_units]
+                if not pending and not enrichment_units:
+                    failed = any(u["status"] == "blocked" for u in state["units"])
+                    break
+                unit = pending[0] if pending else enrichment_units[0]
+                enrichment_only = not pending
+                if enrichment_only:
+                    attempted_enrichment_units.add(unit["key"])
+                settings.X_MONITOR_CYCLE_SINCE_TIME = unit["since_epoch"]
+                settings.X_MONITOR_CYCLE_UNTIL_TIME = unit["until_epoch"]
+                context = BackfillContext(
+                    budget=budget, cursor=unit["cursor"], seen_cursors=unit["seen_cursors"],
+                    post_ids=unit["post_ids"], enrichment_limit=options["enrichment_limit"],
+                    enrichment_cohort_ids=unit.get("enrichment_cohort_post_ids", []),
+                    query_override=state["identity"].get("query_override"),
                 )
-                stats = runner.run()
-
-                inserted = stats["totals"].get("n_inserted", 0)
-                call_status = _selected_call_status(stats, call_id)
-                call_completed = call_status in _COMPLETE_CALL_STATUSES
-                if call_completed:
-                    state["calls_completed_ids"].append(call_id)
-                    state["calls_completed"] = len(
-                        state["calls_completed_ids"]
-                    )
-                state["total_inserted"] = state.get("total_inserted", 0) + inserted
-                state["runs"].append({
-                    "call_id": call_id,
-                    "run_id": stats["run_id"],
-                    "status": stats["status"],
-                    "call_status": call_status,
-                    "n_inserted": inserted,
-                    "n_calls_run": stats["totals"].get("n_calls_run", 0),
-                    "errors": stats.get("errors", []),
-                })
-                _save_state(state_file, state)
-
-                if call_completed:
-                    self.stdout.write(
-                        f"    {call_id}: {inserted} inserted  "
-                        f"(total so far: {state['total_inserted']})"
-                    )
-                else:
-                    self.stderr.write(
-                        self.style.WARNING(
-                            f"    {call_id}: {call_status}; remains pending "
-                            f"({inserted} inserted this attempt)"
+                started = datetime.now(UTC).isoformat()
+                try:
+                    relevancy_client = None if options.get("batch", False) else build_relevancy_client_from_env(cfg)
+                    if relevancy_client is not None:
+                        relevancy_client = _BoundedClassifierClient(
+                            relevancy_client, maximum_calls=budget.remaining_llm_calls, pause_seconds=0,
+                            before_call=lambda: budget.claim_llm_request(cfg.harvest.relevancy_timeout_seconds),
+                            after_call=budget.record_model_response,
                         )
+                    relevancy = build_binary_relevancy_llm_call(
+                        client=relevancy_client, model=cfg.llm.relevancy_model,
+                        timeout_seconds=cfg.harvest.relevancy_timeout_seconds,
                     )
-            except Exception as exc:
-                self.stderr.write(f"    {call_id}: FAILED — {exc}")
-                state["runs"].append({
-                    "call_id": call_id,
-                    "status": "failed",
-                    "error": str(exc),
-                })
+                    runner = CycleRunner(
+                        cfg=cfg, cycle_kind="backfill", dry_run=False,
+                        _backfill_call_ids=[unit["call_id"]], _backfill_context=context,
+                        _max_llm_calls=options["max_llm_calls"], _relevancy_llm_call=relevancy,
+                    )
+                    stats = runner.run_backfill_enrichment() if enrichment_only else runner.run()
+                    call_status = _selected_call_status(stats, unit["call_id"])
+                    receipts = [c for c in stats.get("calls", []) if c.get("call_id") == unit["call_id"]]
+                    call = receipts[0] if len(receipts) == 1 else {}
+                    progress = call.get("backfill_progress", {})
+                    # Never commit a token past failed persistence. Previously
+                    # committed posts can be replayed safely through Post dedup.
+                    persistence_verified = call.get("n_persist_failed") == 0
+                    if persistence_verified and call_status in ("completed", "no_results", "truncated"):
+                        unit["cursor"] = progress.get("cursor", unit["cursor"])
+                        unit["seen_cursors"] = progress.get("seen_cursors", unit["seen_cursors"])
+                        unit["post_ids"] = stats.get("recovered_post_ids", unit["post_ids"])
+                    if not enrichment_only:
+                        unit["status"] = (
+                            "completed" if persistence_verified and progress.get("drained") is True
+                            and call_status in _COMPLETE_CALL_STATUSES else "pending"
+                        )
+                        if progress.get("reason") in _BLOCKED_PROGRESS_REASONS:
+                            unit["status"] = "blocked"
+                            unit["blocked_reason"] = progress["reason"]
+                    unit["enrichment_cohort_post_ids"] = stats.get("enrichment_cohort_post_ids", unit.get("enrichment_cohort_post_ids", []))
+                    inserted = stats.get("totals", {}).get("n_inserted", 0)
+                    state["total_inserted"] += inserted
+                    state["runs"].append({
+                        "unit_key": unit["key"], "call_id": unit["call_id"],
+                        "started_at": started, "finished_at": datetime.now(UTC).isoformat(),
+                        "run_id": stats.get("run_id"), "status": stats.get("status"),
+                        "call_status": call_status, "n_inserted": inserted,
+                        "n_calls_run": stats.get("totals", {}).get("n_calls_run", 0),
+                        "errors": stats.get("errors", []), "summary": stats,
+                    })
+                    if unit["status"] != "completed":
+                        self.stderr.write(f"    {unit['call_id']}: {call_status}; remains pending ({inserted} inserted)")
+                    failed = (
+                        stats.get("status") in ("aborted", "degraded")
+                        or unit["status"] == "blocked"
+                        or call_status in ("error", "persist_incomplete", "length_cap_exceeded", "enrichment_failed")
+                    )
+                except Exception as exc:  # noqa: BLE001 - persist failure receipt before command exit
+                    state["runs"].append({
+                        "unit_key": unit["key"], "call_id": unit["call_id"], "started_at": started,
+                        "finished_at": datetime.now(UTC).isoformat(),
+                        "status": "failed", "error": type(exc).__name__,
+                    })
+                    failed = True
+                state["last_invocation_usage"] = budget.snapshot()
+                state["calls_completed_ids"] = [
+                    cid for cid in prepared["call_ids"]
+                    if all(u["status"] == "completed" for u in state["units"] if u["call_id"] == cid)
+                ]
+                state["calls_completed"] = len(state["calls_completed_ids"])
+                state["calls_remaining"] = [c for c in prepared["call_ids"] if c not in state["calls_completed_ids"]]
+                state["finished"] = not state["calls_remaining"]
+                self._enrichment_status(state)
                 _save_state(state_file, state)
-                # Don't mark as completed — will retry next invocation
-                continue
+            if failed or not budget.can_start(30):
+                break
+        state = _load_state(state_file)
+        self.result = state
+        self.stdout.write(
+            f"Collection {'drained' if state['finished'] else 'pending'}; "
+            f"{state['total_inserted']} inserted; frozen cohort pending={len(state.get('enrichment_cohort_pending_post_ids', []))}; "
+            f"all recovered enrichment pending={len(state.get('enrichment_pending_post_ids', []))}. State: {state_file}"
+        )
+        if options["json"]:
+            self.stdout.write(json.dumps(state, indent=2, default=str))
+        if failed:
+            raise CommandError("Backfill attempt failed; committed checkpoint retained")
 
-        # --- final state ---
-        remaining_after = [cid for cid in call_ids if cid not in set(state["calls_completed_ids"])]
-        if not remaining_after:
-            state["finished"] = True
-        state["calls_remaining"] = remaining_after
-        _save_state(state_file, state)
-
-        if state["finished"]:
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"Backfill complete: {state['total_inserted']} posts inserted "
-                    f"across {state['calls_completed']} calls."
-                )
-            )
-        else:
-            self.stdout.write(
-                f"Batch done. {len(remaining_after)} calls remaining. "
-                f"Run again to continue. State: {state_file}"
-            )
+    @staticmethod
+    def _enrichment_status(state):
+        from core.models import PostEnrichmentState
+        post_ids = list(dict.fromkeys(pid for unit in state["units"] for pid in unit["post_ids"]))
+        complete = set(PostEnrichmentState.objects.filter(
+            post_id__in=post_ids, translation_status=PostEnrichmentState.Status.SUCCEEDED,
+            classification_status=PostEnrichmentState.Status.SUCCEEDED,
+        ).values_list("post_id", flat=True))
+        state["enrichment_pending_post_ids"] = [pid for pid in post_ids if pid not in complete]
+        state["enrichment_complete"] = bool(post_ids) and not state["enrichment_pending_post_ids"]
+        cohort_ids = {pid for unit in state["units"] for pid in unit.get("enrichment_cohort_post_ids", [])}
+        state["enrichment_cohort_pending_post_ids"] = sorted(cohort_ids - complete)
+        state["enrichment_cohort_complete"] = bool(cohort_ids) and not state["enrichment_cohort_pending_post_ids"]
 
     def _handle_quarantined(self, options) -> None:
         """Replay only quarantined ledger rows; never touch live cursors."""

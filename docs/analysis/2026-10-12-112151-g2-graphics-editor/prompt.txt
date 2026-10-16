@@ -1,0 +1,19 @@
+Use case: identity-preserve / compositing.
+Create one finished landscape 3:2 editorial identity image for PushinWeight, approximately 1536x1024. The tone is playful and ultimately generous toward the subject.
+
+Reference images, in order:
+1. MiniMax's own photograph of Dr. Yan Junjie speaking at WAIC: primary facial identity reference.
+2. A source-captioned interview photograph of the same Dr. Yan Junjie: additional close facial reference.
+3. Alexandr Wang's thrift-store camouflage T-shirt photo: clothing/meme reference ONLY. Do not use Wang's face, hair, body, price annotations, arrows or other labels.
+4. Official MiniMax brand asset: use ONLY the multicolor MiniMax symbol and MINIMAX wordmark on its left side. Omit the entire 'Intelligence with Everyone' slogan and divider.
+5. PushinWeight's existing weight-shaped mark and two-line English wordmark: watermark reference.
+
+Composition: left 50% is a large, recognizable waist-up portrait of Dr. Yan Junjie, wearing the relaxed green woodland/deer-print thrift-store T-shirt from reference 3. Right 50% is the large, clean MiniMax logo from reference 4. Give the two halves equal visual territory. Blend their backgrounds together across the middle with a soft feathered AIRBRUSH transition, with no hard vertical split, no frames and no boxed panels. Keep his face entirely in the left half and keep the complete MiniMax logo readable entirely in the right half.
+Medium: polished editorial airbrush illustration with faithful photographic facial detail and soft fabric texture; warmly lit, friendly, lighthearted. A warm off-white backdrop with a restrained coral/pink haze around the MiniMax logo is appropriate. Make the clothing contrast the small affectionate joke. His expression is relaxed and confident, with a slight natural smile. Preserve his actual bald head, facial structure, glasses and age appearance from references 1 and 2. Ordinary human proportions. He should look like the real Dr. Yan participating in the joke, without exaggerated caricature or ridicule.
+Brand fidelity: reproduce the exact MiniMax multicolor line-symbol geometry and MINIMAX wordmark proportions from reference 4; allow a charcoal wordmark for readability on a light backdrop. No invented logo or extra slogans.
+Small inscription beneath the portrait, legible and restrained, exactly two lines:
+"Dr. Yan Junjie (闫俊杰)"
+"founder of MiniMax"
+Chinese characters must be exactly 闫俊杰. Do not add any other biography, headline, speech or claim.
+Watermark: place the small complete PushinWeight mark plus its two-line "Pushin'" / "Weight" wordmark from reference 5 in the bottom-right corner. It should be discreet but readable, with enough padding, approximately 8% of the image width; do not cover the MiniMax logo or identity caption.
+Only this one person, the two requested brand marks and the identity inscription. No pasted source-photo publisher marks, no WAIC lectern or source backdrop, no luxury-brand labels, price tags, dollar amounts or extra decorative objects. This is an affectionate meme-adapted editorial portrait, not a record of an actual event.

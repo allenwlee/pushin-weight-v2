@@ -9,22 +9,28 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.db import transaction
 
-from core.account_identity import upsert_account
 from core.measurement_taxonomy import digest, require
 from core.models import (
-    CompanyAccount,
     DataSource,
-    HFOrg,
     MeasurementSubject,
     MetricCollectionContract,
     MetricType,
-    Role,
     SourceMetric,
     SourceSubjectMapping,
     TaxonomyVersion,
 )
+from core.publisher_accounts import get_publisher
+
+SOURCE_STATISTICS_POLICY = "source-statistics-v1"
 
 SOURCES = {
+    "github": (
+        "GitHub",
+        "model_adoption",
+        "https://github.com",
+        "github-catalog-v1",
+        "exact-v1",
+    ),
     "hf": (
         "Hugging Face",
         "model_adoption",
@@ -76,16 +82,38 @@ METRIC_TYPES = [
     "followers",
     "active_users",
     "session_count",
+    "stars",
+    "forks",
+    "open_issues",
+    "subscribers",
+    "storage_size",
+    "following",
+    "repository_count",
+    "observation_count",
 ]
 
 
 def definition_rows():
     rows = []
     for source, key, kind, quantity, unit, representation in [
+        ("github", "repository_size_kb", "state", "count", "kilobytes", "integer"),
+        ("github", "asset_size_bytes", "state", "count", "bytes", "integer"),
+        ("github", "followers", "state", "count", "followers", "integer"),
+        ("github", "following", "state", "count", "accounts", "integer"),
+        ("github", "public_repos", "state", "count", "repositories", "integer"),
+        ("github", "stars", "state", "count", "stars", "integer"),
+        ("github", "forks", "state", "count", "forks", "integer"),
+        ("github", "open_issues", "state", "count", "issues", "integer"),
+        ("github", "subscribers", "state", "count", "subscribers", "integer"),
+        ("github", "asset_downloads", "flow", "count", "downloads", "integer"),
         ("hf", "downloads", "flow", "count", "downloads", "integer"),
         ("hf", "downloads_all_time", "flow", "count", "downloads", "integer"),
         ("hf", "likes", "state", "count", "likes", "integer"),
         ("hf", "followers", "state", "count", "followers", "integer"),
+        ("hf", "trending_score", "state", "score", "hf_trending_points", "float"),
+        ("hf", "models_count", "state", "count", "models", "integer"),
+        ("hf", "datasets_count", "state", "count", "datasets", "integer"),
+        ("hf", "spaces_count", "state", "count", "spaces", "integer"),
         ("openrouter", "total_tokens", "flow", "count", "tokens", "integer"),
         ("opencode", "tokens", "flow", "count", "tokens", "integer"),
         ("opencode", "unique_users", "flow", "count", "users", "integer"),
@@ -98,6 +126,13 @@ def definition_rows():
         ("arena", "variance", "state", "variance", "arena_points_squared", "float"),
     ]:
         metric_type = {
+            "repository_size_kb": "storage_size",
+            "asset_size_bytes": "storage_size",
+            "asset_downloads": "downloads",
+            "stars": "stars",
+            "forks": "forks",
+            "open_issues": "open_issues",
+            "subscribers": "subscribers",
             "downloads": "downloads",
             "downloads_all_time": "downloads",
             "total_tokens": "token_usage",
@@ -108,6 +143,11 @@ def definition_rows():
             "rank": "rank",
             "likes": "likes",
             "followers": "followers",
+            "following": "following",
+            "public_repos": "repository_count",
+            "models_count": "repository_count",
+            "datasets_count": "repository_count",
+            "spaces_count": "repository_count",
             "variance": "score_variance",
         }.get(key, "benchmark_score")
         row = {
@@ -138,6 +178,10 @@ def definition_rows():
                 "followers",
                 "unique_users",
                 "sessions",
+                "trending_score",
+                "models_count",
+                "datasets_count",
+                "spaces_count",
             },
             "definition_metadata": {
                 "wire_field": "downloadsAllTime"
@@ -146,6 +190,46 @@ def definition_rows():
                 "adapter_version": SOURCES[source][3],
             },
         }
+        if source == "github":
+            row["required"] = False
+            row["definition_metadata"].update(
+                wire_field={
+                    "followers": "followers",
+                    "following": "following",
+                    "public_repos": "public_repos",
+                    "repository_size_kb": "size",
+                    "asset_size_bytes": "size",
+                    "stars": "stargazers_count",
+                    "forks": "forks_count",
+                    "open_issues": "open_issues_count",
+                    "subscribers": "subscribers_count",
+                    "asset_downloads": "download_count",
+                }[key],
+                adapter_version="github-statistics-v1",
+                resource_grain="release_asset"
+                if key in {"asset_downloads", "asset_size_bytes"}
+                else "account"
+                if key in {"followers", "following", "public_repos"}
+                else "repository",
+            )
+            if key == "asset_downloads":
+                row.update(window_mode="since_origin")
+        if source == "hf" and key in {
+            "trending_score",
+            "models_count",
+            "datasets_count",
+            "spaces_count",
+        }:
+            row["definition_metadata"].update(
+                wire_field={
+                    "trending_score": "trendingScore",
+                    "models_count": "numModels",
+                    "datasets_count": "numDatasets",
+                    "spaces_count": "numSpaces",
+                }[key],
+                adapter_version="hf-statistics-v1",
+                resource_grain="repository" if key == "trending_score" else "account",
+            )
         if key == "downloads":
             row.update(
                 window_mode="rolling",
@@ -183,8 +267,64 @@ def definition_rows():
             "vote_count",
         }:
             rows.append({**copy.deepcopy(row), "version": 2, "required": False})
-        if row["source_id"] == "hf" and row["metric_key"] == "downloads_all_time":
+        if row["source_id"] == "hf" and row["metric_key"] in {
+            "downloads",
+            "downloads_all_time",
+        }:
             rows.append({**copy.deepcopy(row), "version": 2, "required": False})
+    # Agent Arena publishes IPS scores and signal/session counts, not text votes.
+    for key, metric_type, unit, value_kind, role in [
+        ("agent_score", "benchmark_score", "arena_ips_score", "float", "value"),
+        (
+            "agent_score_ci_lower",
+            "benchmark_score",
+            "arena_ips_score",
+            "float",
+            "lower_bound",
+        ),
+        (
+            "agent_score_ci_upper",
+            "benchmark_score",
+            "arena_ips_score",
+            "float",
+            "upper_bound",
+        ),
+        (
+            "observation_count",
+            "observation_count",
+            "signal_observations",
+            "integer",
+            "value",
+        ),
+        ("session_count", "session_count", "sessions", "integer", "value"),
+    ]:
+        base = copy.deepcopy(
+            next(
+                r
+                for r in rows
+                if r["source_id"] == "arena" and r["metric_key"] == "rating"
+            )
+        )
+        base.update(
+            metric_key=key,
+            metric_type_id=metric_type,
+            name=key.replace("_", " ").title(),
+            unit=unit,
+            value_kind=value_kind,
+            value_role=role,
+            required=False,
+            quantity_form="count" if value_kind == "integer" else "score",
+        )
+        base["definition_metadata"] = {
+            "wire_field": {
+                "agent_score": "score",
+                "agent_score_ci_lower": "score_ci_lower",
+                "agent_score_ci_upper": "score_ci_upper",
+            }.get(key, key),
+            "adapter_version": "arena-agent-ips-v1",
+            "score_method": "IPS",
+        }
+        rows.append(base)
     return rows
 
 
@@ -201,7 +341,7 @@ def register_definitions():
                 "identifier_normalizer": normalizer,
             },
         )
-        if created or not source.metadata:
+        if created or (not source.metadata and key != "github"):
             from core.benchmark_attribution import DEFAULTS
 
             source.metadata = {
@@ -210,7 +350,7 @@ def register_definitions():
                 )
             }
             source.save(update_fields=["metadata"])
-        if not created:
+        if not created and key != "github":
             require(source.source_type == kind, "source category changed")
             # Complete the registry-only U10/U12 records without enabling polling.
             source.website_url = url
@@ -258,10 +398,15 @@ def validate_evidence_url(value):
     return value
 
 
-def prepare_collection(spec):
+def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
     from core.benchmark_metric_store import safe_payload
 
     safe_payload(spec)
+    require(
+        eligibility_policy in {"text-benchmark-v1", SOURCE_STATISTICS_POLICY},
+        "unknown eligibility policy",
+    )
+    statistics = eligibility_policy == SOURCE_STATISTICS_POLICY
     require(bool(spec.get("reviewed_by", "").strip()), "reviewed_by required")
     taxonomy = TaxonomyVersion.objects.get(pk=spec["taxonomy_version"])
     config = copy.deepcopy(spec["source_configuration"])
@@ -282,10 +427,33 @@ def prepare_collection(spec):
             }.items():
                 settings.setdefault(key, value)
         validate_operations(settings)
+        if not statistics:
+            require(
+                settings.get("eligibility_policy") in (None, "text-benchmark-v1"),
+                "statistics policy requires reviewed statistics contract preparation",
+            )
+        if statistics:
+            require(
+                source_key in {"hf", "github", "openrouter", "arena"},
+                "unsupported native statistics source",
+            )
+            settings["eligibility_policy"] = SOURCE_STATISTICS_POLICY
+            settings["operation"] = "source_statistics"
+            settings.setdefault("native_resources", True)
+            if source_key in {"openrouter", "arena"}:
+                from core.source_metric_projection import (
+                    validate_publication_provenance,
+                )
+
+                validate_publication_provenance(source_key, settings)
         if source_key == "arena":
             require(
                 settings.get("config", "text_style_control")
-                in {"text", "text_style_control"},
+                in (
+                    {"text", "text_style_control", "agent"}
+                    if statistics
+                    else {"text", "text_style_control"}
+                ),
                 "unsupported Arena configuration",
             )
         if source_key == "openrouter":
@@ -327,7 +495,13 @@ def prepare_collection(spec):
     mappings = []
     seen = set()
     require(
-        0 < len(spec.get("mappings", [])) <= 1000, "mapping budget exceeded or empty"
+        (0 < len(spec.get("mappings", [])) <= 1000)
+        or (
+            statistics
+            and not spec.get("mappings")
+            and set(config) <= {"openrouter", "arena"}
+        ),
+        "mapping budget exceeded or empty",
     )
     for row in spec["mappings"]:
         source = row["source"]
@@ -345,7 +519,7 @@ def prepare_collection(spec):
             "subject outside pinned taxonomy",
         )
         subject = MeasurementSubject.objects.select_related(
-            "product__hf_org", "account"
+            "product__publisher_account", "account"
         ).get(pk=subject_key)
         kind = row["source_subject_kind"]
         if source == "opencode":
@@ -369,7 +543,8 @@ def prepare_collection(spec):
             account = subject.account
             frozen = taxonomy.snapshot["subjects"][subject_key]
             require(
-                source == "hf" and account.data_source_id == source,
+                (source == "hf" or statistics and source == "github")
+                and account.data_source_id == source,
                 "account source mismatch",
             )
             require(
@@ -380,10 +555,22 @@ def prepare_collection(spec):
                 and scope == account.account_kind,
                 "account identity mismatch",
             )
+        if statistics:
+            from core.source_metric_projection import validate_statistics_mapping
+
+            validate_statistics_mapping(subject, row, source, taxonomy)
         if subject.subject_kind == "product":
             product = subject.product
             require(
-                product.type == "llm-model", "product type is not reviewed as llm-model"
+                (
+                    product.type in {"llm-model", "other-ai-model", "agent-harness"}
+                    or taxonomy.snapshot["products"][str(product.product_key)].get(
+                        "model_kind_qualification"
+                    )
+                )
+                if statistics
+                else product.type == "llm-model",
+                "product type is not reviewed as llm-model",
             )
             require(
                 product.private is not True and product.disabled is not True,
@@ -394,7 +581,7 @@ def prepare_collection(spec):
                 product.type == frozen["type"] and product.brand_id == frozen["brand"],
                 "catalog identity changed since taxonomy review",
             )
-            if product.hf_org_id and product.hf_org_id.casefold() == "google":
+            if product.hf_namespace and product.hf_namespace.casefold() == "google":
                 require(
                     product.brand_id in {"gemma", "gemini"}, "excluded Google family"
                 )
@@ -408,27 +595,34 @@ def prepare_collection(spec):
                     "HF repository identity mismatch",
                 )
                 require(
-                    product.hf_org_id and product.hf_org.confirmed,
+                    product.hf_namespace
+                    and product.publisher_ownership
+                    and product.publisher_ownership.ownership_confirmed,
                     "HF publisher ownership unconfirmed",
                 )
                 from core.models import BrandCompany
 
                 require(
                     BrandCompany.objects.filter(
-                        brand_id=product.brand_id, company_id=product.hf_org.company_id
+                        brand_id=product.brand_id,
+                        company_id=product.publisher_ownership.company_id,
                     ).exists(),
                     "HF company does not own selected brand",
                 )
                 if publisher:
                     require(
-                        str(product.hf_org.account_id) == str(publisher),
+                        str(product.publisher_account_id) == str(publisher),
                         "unreviewed repository publisher link",
                     )
         if publisher:
             from core.models import Account
 
             require(
-                Account.objects.filter(pk=publisher, data_source_id=source).exists(),
+                Account.objects.filter(pk=publisher).exists()
+                if statistics and source in {"openrouter", "arena"}
+                else Account.objects.filter(
+                    pk=publisher, data_source_id=source
+                ).exists(),
                 "publisher source mismatch",
             )
         accepted = {
@@ -466,12 +660,21 @@ def prepare_collection(spec):
         "source_configuration": config,
         "methodology": methodology,
     }
+    if statistics:
+        require(
+            set(config) <= {"openrouter", "arena"}
+            or any(m["source_subject_kind"] == "account" for m in mappings),
+            "reviewed publisher mapping required",
+        )
+        frozen["eligibility_policy"] = SOURCE_STATISTICS_POLICY
     return taxonomy, mappings, frozen
 
 
 @transaction.atomic
-def configure_collection(spec):
-    taxonomy, mappings, frozen = prepare_collection(spec)
+def configure_collection(spec, *, eligibility_policy="text-benchmark-v1"):
+    taxonomy, mappings, frozen = prepare_collection(
+        spec, eligibility_policy=eligibility_policy
+    )
     key = digest(frozen)
     obj, created = MetricCollectionContract.objects.get_or_create(
         contract_hash=key,
@@ -503,33 +706,15 @@ def configure_collection(spec):
 def configure_hf_account(namespace, *, reviewed_by, evidence_url):
     require(bool(reviewed_by.strip()), "reviewed_by required")
     validate_evidence_url(evidence_url)
-    org = HFOrg.objects.select_for_update().get(pk=namespace)
-    require(org.confirmed, "namespace ownership is not confirmed")
-    account = upsert_account(
-        source="hf",
-        external_identifier=org.namespace,
-        handle=org.namespace,
-        account_kind="organization",
-        provider_metadata={
-            "ownership_evidence": evidence_url,
-            "reviewed_by": reviewed_by,
-            "discovered_via": org.discovered_via,
-            "legacy_added_at": org.added_at.isoformat(),
-        },
-    )
-    require(org.account_id in (None, account.pk), "namespace identity conflict")
-    require(
-        not CompanyAccount.objects.filter(account=account)
-        .exclude(company=org.company)
-        .exists(),
-        "conflicting HF company ownership",
-    )
-    role, _ = Role.objects.get_or_create(pk="official")
-    CompanyAccount.objects.get_or_create(
-        company=org.company, account=account, defaults={"role": role}
-    )
-    org.account = account
-    org.save(update_fields=["account"])
+    link = get_publisher(source="hf", identifier=namespace, lock=True)
+    require(link.ownership_confirmed is True, "namespace ownership is not confirmed")
+    account = link.account
+    account.provider_metadata = {
+        **account.provider_metadata,
+        "ownership_evidence": evidence_url,
+        "reviewed_by": reviewed_by,
+    }
+    account.save(update_fields=["provider_metadata"])
     return account
 
 

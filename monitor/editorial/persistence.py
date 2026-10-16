@@ -1,7 +1,7 @@
 """Short PostgreSQL claims and pessimistic spend reservations; no network in locks."""
 
 from datetime import timedelta
-from decimal import ROUND_CEILING, Decimal
+from decimal import ROUND_CEILING, Decimal, InvalidOperation
 
 from django.db import transaction
 from django.db.models import Sum
@@ -71,8 +71,40 @@ def require_fence(row):
     return current
 
 
+def _completed_text_cost(response, request_metadata):
+    """Missing or invalid billing evidence keeps the full reservation."""
+    usage = response.get("usage") if isinstance(response, dict) else None
+    if not isinstance(usage, dict):
+        return None
+    try:
+        if "estimated_cost" in usage:
+            cost = Decimal(str(usage["estimated_cost"]))
+        else:
+            rates = (request_metadata or {}).get("rates", {})
+            cost = Decimal(0)
+            for token_key, rate_key in (
+                ("prompt_tokens", "input_usd_per_million"),
+                ("completion_tokens", "output_usd_per_million"),
+            ):
+                tokens = usage[token_key]
+                rate = Decimal(str(rates[rate_key]))
+                if (
+                    type(tokens) is not int
+                    or tokens < 0
+                    or not rate.is_finite()
+                    or rate < 0
+                ):
+                    return None
+                cost += tokens * rate / Decimal(1_000_000)
+        if not cost.is_finite() or cost < 0:
+            return None
+        return cost.quantize(Decimal("0.000001"), rounding=ROUND_CEILING)
+    except (InvalidOperation, KeyError, TypeError, ValueError):
+        return None
+
+
 def call_once(row, stage, kind, ceiling, cfg, send, *, request_metadata=None):
-    """Charge the entire configured ceiling even on errors; usage is reported separately."""
+    """Reserve before sending; release unused allowance for confirmed text usage."""
     ceiling = Decimal(str(ceiling)).quantize(
         Decimal("0.000001"), rounding=ROUND_CEILING
     )
@@ -170,10 +202,17 @@ def call_once(row, stage, kind, ceiling, cfg, send, *, request_metadata=None):
                 call.refresh_from_db()
                 import_call(call, run, request_metadata=request_metadata)
         raise
+    cost = _completed_text_cost(response, request_metadata) if kind == "text" else None
+    charged = min(call.reserved_usd, cost) if cost is not None else call.reserved_usd
     with transaction.atomic():
-        EditorialCall.objects.filter(pk=call.pk, state="sent").update(
-            state="complete", response=response
+        advisory_lock(f"content-budget:editorial:{call.budget_day}")
+        completed = EditorialCall.objects.filter(pk=call.pk, state="sent").update(
+            state="complete", response=response, reserved_usd=charged
         )
+        if completed and charged < call.reserved_usd:
+            budget = EditorialBudget.objects.select_for_update().get(pk=call.budget_day)
+            budget.reserved_usd -= call.reserved_usd - charged
+            budget.save(update_fields=["reserved_usd"])
         if run is not None:
             call.refresh_from_db()
             import_call(

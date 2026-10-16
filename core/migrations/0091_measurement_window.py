@@ -8,7 +8,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies: ClassVar[list] = [
-        ("core", "0079_original_content_physical_names"),
+        ("core", "0090_remove_run_instruction_columns"),
     ]
 
     operations: ClassVar[list] = [

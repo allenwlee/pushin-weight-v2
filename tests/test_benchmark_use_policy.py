@@ -100,7 +100,7 @@ def test_collection_is_denied_before_fetch_or_persistence():
     from unittest.mock import Mock
 
     from core.benchmark_metric_store import persist_source
-    from core.models import DataSource, MetricCollectionRun
+    from core.models import CollectionRun, DataSource
     from tests.test_benchmark_download_persistence import configured
 
     c = configured()
@@ -111,4 +111,4 @@ def test_collection_is_denied_before_fetch_or_persistence():
     with pytest.raises(policy.UseNotPermitted):
         persist_source(c, "hf", "c" * 64, fetch=fetch)
     fetch.assert_not_called()
-    assert not MetricCollectionRun.objects.exists()
+    assert not CollectionRun.objects.exists()

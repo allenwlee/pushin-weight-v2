@@ -17,6 +17,11 @@ from .grounding import (
 from .selection import EDITOR_INSTRUCTIONS
 
 WRITING_PACKET_VERSION = "editorial-writing-v2"
+HEADLINE_ATTRIBUTION_RULE = (
+    "Preserve whose claim it is in the supporting line and article in every language. "
+    "The headline may use playful shorthand; preserve attribution or uncertainty "
+    "in the headline whenever omitting it would mislead."
+)
 
 
 def writing_provenance(projected):
@@ -91,7 +96,13 @@ development matters. Preserve the actual product category, such as an embedding
 model or an AI lab's handset; never invent a description when evidence is missing.
 Produce the article as plain paragraphs, no HTML. Use only provided source IDs. Return JSON
 matching the supplied schema. Do not add facts from memory or unseen image URLs."""
-    system += "\n" + GROUNDING_INSTRUCTIONS
+    grounding = GROUNDING_INSTRUCTIONS
+    if voice.headline_attribution == "supporting_copy":
+        prior = "Preserve whose claim it is in every language and the headline."
+        if grounding.count(prior) != 1:
+            raise ValueError("headline attribution rule unavailable")
+        grounding = grounding.replace(prior, HEADLINE_ATTRIBUTION_RULE, 1)
+    system += "\n" + grounding
     system += "\nRead sources independently: no editor prose is supplied as factual evidence. After source_check, write supported_copy (headline, byline, article) in the requested voice and locale. Copy those three strings exactly into the final headline, byline and article."
     if cfg.picture_mode(voice.track) != "off":
         system += "\nYou may add a concise visual_brief describing a derivative of the source image; do not invent a person or source."
@@ -122,7 +133,8 @@ matching the supplied schema. Do not add facts from memory or unseen image URLs.
             if c["brand_key"] in event.brand_keys
         ],
     }
-    if not (cfg.routes.get(voice.track) and cfg.routes[voice.track].request_profile):
+    route = cfg.writer_route(voice.track, voice.locale)
+    if not (route and route.request_profile):
         payload["output_schema"] = schema
     return {
         "system": system,

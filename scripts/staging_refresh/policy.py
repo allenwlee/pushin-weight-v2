@@ -16,6 +16,22 @@ class PolicyError(ValueError):
     """A secret-free, operator-actionable refresh policy failure."""
 
 
+# Only these known pre-0080 relations may appear on an older source. Candidate
+# validation still requires the exact current schema; this does not admit drift.
+LEGACY_COLLECTION_TABLES = {
+    "collection_runs": "metric_collection_runs",
+    "collection_observations": "metric_observations",
+}
+LEGACY_CATALOG_TABLES = frozenset(
+    {
+        "hf_model_catalog_runs",
+        "hf_model_catalog_namespace_runs",
+        "hf_model_catalog_observations",
+    }
+)
+LEGACY_CATALOG_SEQUENCES = frozenset({"hf_model_catalog_observations_id_seq"})
+
+
 @dataclass(frozen=True, slots=True)
 class ServicePolicy:
     id: str
@@ -60,6 +76,14 @@ class RelationsPolicy:
     @property
     def required_source_sequences(self) -> frozenset[str]:
         return self.sequences - self.optional_source_sequences
+
+    @property
+    def source_excluded_tables(self) -> frozenset[str]:
+        return self.excluded_tables | LEGACY_CATALOG_TABLES
+
+    @property
+    def source_copied_tables(self) -> frozenset[str]:
+        return self.copied_tables | frozenset(LEGACY_COLLECTION_TABLES.values())
 
 
 @dataclass(frozen=True, slots=True)
@@ -781,7 +805,15 @@ def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) 
     if not source.default_transaction_read_only or source.has_write_privileges:
         raise PolicyError("source_not_read_only")
 
-    unknown = source.base_tables - policy.relations.classified_tables
+    if "collection_runs" in source.base_tables and source.base_tables & (
+        LEGACY_CATALOG_TABLES | frozenset(LEGACY_COLLECTION_TABLES.values())
+    ):
+        raise PolicyError("source_collection_schema_mixed")
+    unknown = source.base_tables - (
+        policy.relations.classified_tables
+        | LEGACY_CATALOG_TABLES
+        | frozenset(LEGACY_COLLECTION_TABLES.values())
+    )
     if unknown:
         raise PolicyError(f"source_unclassified_table:{min(unknown)}")
     missing = policy.relations.required_source_tables - source.base_tables
@@ -790,30 +822,33 @@ def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) 
     unknown_views = source.views - policy.relations.views
     if unknown_views:
         raise PolicyError(f"source_unclassified_view:{min(unknown_views)}")
-    if source.views != policy.relations.views:
+    required_views = policy.relations.views
+    if "collection_runs" not in source.base_tables:
+        required_views = required_views - frozenset(LEGACY_COLLECTION_TABLES.values())
+    if not required_views <= source.views:
         raise PolicyError("source_view_policy_mismatch")
-    if not source.sequences <= policy.relations.sequences:
+    if not source.sequences <= policy.relations.sequences | LEGACY_CATALOG_SEQUENCES:
         raise PolicyError("source_sequence_policy_mismatch")
     if not policy.relations.required_source_sequences <= source.sequences:
         raise PolicyError("source_sequence_policy_mismatch")
 
-    excluded_readable = source.readable_tables & policy.relations.excluded_tables
+    excluded_readable = source.readable_tables & policy.relations.source_excluded_tables
     if excluded_readable:
         raise PolicyError(f"source_excluded_table_readable:{min(excluded_readable)}")
     unreadable = (
-        policy.relations.copied_tables & source.base_tables
+        policy.relations.source_copied_tables & source.base_tables
     ) - source.readable_tables
     if unreadable:
         raise PolicyError(f"source_required_table_unreadable:{min(unreadable)}")
     unexpected_maintenance = (
-        source.maintainable_tables - policy.relations.excluded_tables
+        source.maintainable_tables - policy.relations.source_excluded_tables
     )
     if unexpected_maintenance:
         raise PolicyError(
             f"source_maintenance_privilege_unexpected:{min(unexpected_maintenance)}"
         )
     unlockable = (
-        policy.relations.excluded_tables & source.base_tables
+        policy.relations.source_excluded_tables & source.base_tables
     ) - source.maintainable_tables
     if unlockable:
         raise PolicyError(f"source_excluded_table_unlockable:{min(unlockable)}")

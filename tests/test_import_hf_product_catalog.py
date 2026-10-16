@@ -5,7 +5,7 @@ import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
-from core.models import HFModelCatalogRun, Product
+from core.models import CollectionRun, Product
 from tests.test_hf_catalog_runner import api, scope
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
@@ -24,7 +24,7 @@ def test_preview_makes_no_requests_or_writes(monkeypatch):
     preview = json.loads(output.getvalue())
     assert preview["mode"] == "preview"
     assert preview["scope"]["namespaces"][0]["namespace"] == "lab"
-    assert HFModelCatalogRun.objects.count() == Product.objects.count() == 0
+    assert CollectionRun.objects.count() == Product.objects.count() == 0
 
 
 def test_command_http_database_and_resume_chain(monkeypatch):

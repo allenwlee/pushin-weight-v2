@@ -1,6 +1,6 @@
 # Staging data refresh
 
-Last verified: 2026-10-07 (combined benchmark/G2 candidate policy; see release receipts for live checks).
+Last verified: 2026-10-12 (collection-schema candidate policy; see release receipts for live checks).
 
 This procedure replaces only the isolated `pushinweight_staging` database with
 a current production snapshot. It never changes the production database. The
@@ -28,6 +28,14 @@ policy and fails closed with `source_classified_table_missing:<table>` when a
 required relation is absent; the later shadow migration does not bypass that
 source check. Any optional relation present on the source must have the
 declared grant.
+
+The account-extension candidate requires the source to have migration0084:
+shared publisher identities/ownership replace hf_orgs, and current X fields live
+in x_account_details. Its copied-table policy matches that schema. A pre0084
+source fails closed; deploy/migrate the source under separate authority before
+running this candidate's refresh. The X detail SELECT grant below is required
+after that table exists. Reading this runbook grants no account migration or
+permission-change authority.
 
 Application credentials remain Render-managed. The refresh reader is a
 separate least-privileged PostgreSQL login because it must see only the
@@ -68,9 +76,9 @@ REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM staging_refresh_reader;
 GRANT SELECT ON
   data_sources, taxonomy_versions, product_groups, product_relationships,
   product_group_memberships, measurement_subjects, subject_relationships,
-  post_subject_attributions, metric_types, source_metrics,
-  metric_collection_contracts, source_subject_mappings, metric_collection_runs,
-  metric_observations, metric_values,
+  post_subject_attributions, metric_types, metrics,
+  metric_collection_contracts, source_subject_mappings, collection_jobs, collection_runs,
+  collection_observations, collection_scope_runs, metric_values,
   people_names, people_name_evidence, people_texts, people_text_translations,
   account_based_in_mappings, account_post_appearances,
   account_profile_snapshots, accounts, audience_topic_concepts,
@@ -80,7 +88,7 @@ GRANT SELECT ON
   companies_accounts, countries, country_codes_region, country_labels,
   discourse_keys, discourse_labels, django_content_type, django_migrations,
   django_site, event_evidence, events, geopolitical_mode_keys,
-  geopolitical_mode_labels, hf_orgs, job_discovery_runs,
+  geopolitical_mode_labels, x_account_details, job_discovery_runs,
   job_listing_evidence,
   job_listings, model_release_evidence, model_releases, nationalism_keys,
   nationalism_labels, national_stance_keys,
@@ -115,8 +123,6 @@ GRANT MAINTAIN ON
   official_company_scans,
   people_identity_corrections, people_media, staff_collection_work,
   staff_intakes, staff_media_objects, staff_provider_requests,
-  hf_model_catalog_runs, hf_model_catalog_namespace_runs,
-  hf_model_catalog_observations,
   _applied_config_snapshot, account_emailaddress, account_emailconfirmation,
   auth_group, auth_group_permissions, auth_permission, auth_user,
   auth_user_groups, auth_user_user_permissions, original_content,
@@ -133,7 +139,7 @@ GRANT MAINTAIN ON
   rare_type_search_runs,
   socialaccount_socialaccount, socialaccount_socialapp,
   socialaccount_socialapp_sites, socialaccount_socialtoken,
-  trend_narrative_demands, original_content_calls, original_content_runs,
+  trend_narrative_demands, original_content_calls, provider_batches, original_content_runs,
   original_content_selections, trend_narrative_work_slots,
   twitter_list_memberships, twitter_list_sync_state
 TO staging_refresh_reader;
@@ -148,7 +154,7 @@ GRANT SELECT ON
   people_texts_id_seq, people_text_translations_id_seq,
   staff_collection_work_id_seq, staff_intakes_id_seq,
   staff_provider_requests_id_seq,
-  hf_model_catalog_namespace_runs_id_seq, hf_model_catalog_observations_id_seq,
+  hf_model_catalog_namespace_runs_id_seq,
   account_emailaddress_id_seq, account_emailconfirmation_id_seq,
   account_profile_snapshots_id_seq,
   auth_group_id_seq, auth_group_permissions_id_seq, auth_permission_id_seq,
@@ -257,6 +263,14 @@ production schema and then create those empty relations with Django migrations.
 The source census omits validation counts only for optional relations that are
 absent at that boundary. Candidate and active-database validation still count
 the complete post-migration relation set.
+
+`provider_batches` records provider work for one environment. It is excluded
+and truncated together with `original_content_calls` and
+`post_enrichment_states`; a refresh therefore cannot resume a production
+batch or retain a call whose owning batch was discarded. It is optional on
+sources preceding migration `0085_provider_batch_enrichment`, has no generated
+ID sequence, and receives only the maintenance grant above when present.
+
 The repeatable-read source census calculates the exact idempotent seed effects
 for pending migrations `core.0033_stage1c_frontier_organization_brands` and
 `core.0049_rare_type_domain_records` from the same exported snapshot used by
@@ -441,9 +455,9 @@ UNION ALL SELECT 'original_content_texts', count(*) FROM original_content_texts
 UNION ALL SELECT 'original_content_sources', count(*) FROM original_content_sources
 UNION ALL SELECT 'brand_discovery_candidate_token_evidence', count(*) FROM brand_discovery_candidate_token_evidence
 UNION ALL SELECT 'brand_discovery_candidate_tokens', count(*) FROM brand_discovery_candidate_tokens
-UNION ALL SELECT 'hf_model_catalog_runs', count(*) FROM hf_model_catalog_runs
-UNION ALL SELECT 'hf_model_catalog_namespace_runs', count(*) FROM hf_model_catalog_namespace_runs
-UNION ALL SELECT 'hf_model_catalog_observations', count(*) FROM hf_model_catalog_observations
+UNION ALL SELECT 'collection_runs:catalog', count(*) FROM collection_runs r JOIN collection_jobs j ON j.id = r.job_id WHERE j.purpose = 'catalog'
+UNION ALL SELECT 'collection_scope_runs:catalog', count(*) FROM collection_scope_runs s JOIN collection_runs r ON r.id = s.run_id JOIN collection_jobs j ON j.id = r.job_id WHERE j.purpose = 'catalog'
+UNION ALL SELECT 'collection_observations:catalog', count(*) FROM collection_observations o JOIN collection_runs r ON r.id = o.run_id JOIN collection_jobs j ON j.id = r.job_id WHERE j.purpose = 'catalog'
 UNION ALL SELECT 'call_state', count(*) FROM call_state
 UNION ALL SELECT 'django_session', count(*) FROM django_session
 UNION ALL SELECT 'harvest_backlog_windows', count(*) FROM harvest_backlog_windows
@@ -473,6 +487,7 @@ UNION ALL SELECT 'socialaccount_socialapp_sites', count(*) FROM socialaccount_so
 UNION ALL SELECT 'socialaccount_socialtoken', count(*) FROM socialaccount_socialtoken
 UNION ALL SELECT 'trend_narrative_demands', count(*) FROM trend_narrative_demands
 UNION ALL SELECT 'original_content_calls', count(*) FROM original_content_calls
+UNION ALL SELECT 'provider_batches', count(*) FROM provider_batches
 UNION ALL SELECT 'original_content_runs', count(*) FROM original_content_runs
 UNION ALL SELECT 'original_content_selections', count(*) FROM original_content_selections
 UNION ALL SELECT 'trend_narrative_work_slots', count(*) FROM trend_narrative_work_slots
@@ -597,10 +612,29 @@ ALTER ROLE staging_refresh_reader NOLOGIN;
 Do not revoke or rotate the production application credential as part of this
 procedure.
 
-HF catalog refresh policy: Products (including rich metadata) are copied. The
-three `hf_model_catalog_*` ledger tables are excluded, optional on older sources,
-and scrubbed on staging. Copied metadata references retain their original run
-UUID and do not imply the original observations exist in staging.
+Collection refresh policy: Products and numeric evidence are copied. Shared `collection_runs` and `collection_observations` counts include only runs whose job has `purpose=metric`; schema-aware source inspection also accepts the retained legacy run-purpose column in older snapshots. Executable job definitions are copied with `state=paused`, no due/retry date and no active claim. Inactive archival/direct receipt jobs remain completed and non-dispatchable. Attempt/success pointers to retained numeric runs survive;
+pointers to excluded catalog/content runs are cleared before deletion. Catalog and
+content observations, scope progress and runs are deleted
+in foreign-key order inside the non-serving candidate transaction, preserving
+numeric rows and shared sequence positions. Candidate validation requires zero
+catalog/content rows and no job runtime intent before activation. Product metadata pointers remain source evidence;
+they do not imply the original catalog observations exist in staging.
+
+Before migration `0089_job_owned_run_instructions` makes jobs mandatory, the restored non-serving candidate removes excluded catalog/content runtime rows. Retained jobless numeric runs receive inactive archival jobs; their exact count is calculated from that snapshot, including older-process writes after its migration marker. A retained running numeric attempt fails refresh explicitly. The refresh never invents its completion time or changes production rows. Matching PostgreSQL dump/restore client versions are required.
+
+For a pre-0080 source, only the two known numeric table aliases map to canonical
+count names. The three old HF ledgers remain excluded from dump data; their
+schema is migrated in the candidate. Unknown tables/views remain rejected.
+Current source grants above apply after 0080; reapply SELECT grants and revoke
+MAINTAIN on `collection_scope_runs` after its rename, before refresh preflight.
+A source reader now temporarily reads catalog payloads within shared tables for
+the private non-serving snapshot. Those rows must be scrubbed before activation;
+the mechanism does not run the collector or resume source work.
+
+The public-schema dump explicitly includes the `pg_trgm` extension required by
+the editorial search indexes. Selecting `--schema=public` alone omits that
+definition; restoration needs it before migrations run. See the
+[PostgreSQL pg_dump documentation](https://www.postgresql.org/docs/18/app-pgdump.html).
 
 ## Benchmark evidence and provider-neutral accounts
 

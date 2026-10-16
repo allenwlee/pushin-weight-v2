@@ -43,6 +43,27 @@ def subject_id(kind, key):
     return uuid.uuid5(uuid.NAMESPACE_URL, f"pushinweight:subject:{kind}:{key}")
 
 
+def resolve_subject_id(kind, key):
+    """Read the canonical target identity, deriving an ID only for new subjects."""
+    require(
+        kind in {"brand", "company", "product", "account"}, "unsupported subject kind"
+    )
+    existing = (
+        MeasurementSubject.objects.filter(**{f"{kind}_id": key})
+        .values_list("id", "subject_kind")
+        .first()
+    )
+    if existing is not None:
+        require(existing[1] == kind, "subject kind does not match target")
+        return existing[0]
+    sid = subject_id(kind, key)
+    require(
+        not MeasurementSubject.objects.filter(pk=sid).exists(),
+        "derived subject identity belongs to another target",
+    )
+    return sid
+
+
 def prepare_taxonomy(spec):
     require(bool(spec.get("reviewed_by")), "reviewed_by is required")
     require(len(spec.get("subjects", [])) <= 10000, "subject budget exceeded")
@@ -67,20 +88,30 @@ def prepare_taxonomy(spec):
         )
         label = obj.display_name or str(obj.pk)
         if kind == "product":
-            require(obj.type is not None, f"unreviewed product type: {key}")
+            qualification = row.get("model_kind_qualification")
+            if qualification is not None:
+                from core.model_kind_qualification import validate_model_kind
+
+                validate_model_kind(obj, qualification)
+            require(
+                obj.type is not None or qualification, f"unreviewed product type: {key}"
+            )
             snapshot["products"][key] = {
                 "label": label,
                 "type": obj.type,
                 "brand": obj.brand_id,
                 "repo_id": obj.repo_id,
             }
-        snapshot["subjects"][str(subject_id(kind, key))] = {
+            if qualification:
+                snapshot["products"][key]["model_kind_qualification"] = qualification
+        sid = str(resolve_subject_id(kind, key))
+        snapshot["subjects"][sid] = {
             "kind": kind,
             "key": key,
             "label": label,
         }
         if kind == "account":
-            snapshot["subjects"][str(subject_id(kind, key))].update(
+            snapshot["subjects"][sid].update(
                 data_source=obj.data_source_id,
                 normalized_identifier=obj.normalized_identifier,
                 account_kind=obj.account_kind,

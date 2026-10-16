@@ -1,0 +1,4 @@
+{% load i18n %}
+<div class="setting"><span class="setting-label">{% translate "Language" %}</span><div class="segmented">{% for choice in settings_links.lang %}<a href="{{ choice.url }}" data-pref="lang" data-value="{{ choice.value }}"{% if choice.active %} aria-current="true"{% endif %}>{{ choice.label }}</a>{% endfor %}</div></div>
+<div class="setting"><span class="setting-label">{% translate "Timezone" %}</span><div class="segmented">{% for choice in settings_links.timezone %}<a href="{{ choice.url }}" data-pref="timezone" data-value="{{ choice.value }}"{% if choice.active %} aria-current="true"{% endif %}>{{ choice.label }}</a>{% endfor %}</div></div>
+<div class="setting"><span class="setting-label">{% translate "Reading" %}</span><div class="segmented"><a href="/?locale={{ locale }}">Pro</a><a href="/general/?lang={{ locale }}" aria-current="true">{% translate "General" %}</a></div></div>

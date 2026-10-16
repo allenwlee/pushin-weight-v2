@@ -14,6 +14,7 @@ from playwright.sync_api import BrowserContext, Page, sync_playwright
 
 from monitor.views import _clear_home_pulse_cache
 from tests.test_home_v22_browser import (
+    _HOME_CHART_BRAND_PRIORITY,
     V22_BROWSER_TEST_STORAGES,
     _freeze_clock,
 )
@@ -218,6 +219,15 @@ def _release_a_mask(page: Page) -> bytes:
 class CyberQuanVisualRegressionTests(StaticLiveServerTestCase):
     def setUp(self) -> None:
         super().setUp()
+        tracking = patch(
+            "monitor.views._tracked_home_brand_nicknames",
+            return_value=_HOME_CHART_BRAND_PRIORITY + (
+                "dots", "anthropic", "google_deepmind", "openai", "spacexai",
+                "pulse_up", "pulse_down", "pulse_flat", "pulse_new", "pulse_absent",
+            ),
+        )
+        tracking.start()
+        self.addCleanup(tracking.stop)
         self.clock = patch("django.utils.timezone.now", return_value=FIXED_NOW)
         self.clock.start()
         self.addCleanup(self.clock.stop)

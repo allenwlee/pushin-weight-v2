@@ -120,13 +120,16 @@ def test_additive_migration_preserves_existing_products():
         assert hf_product.objects.get(pk=hf.pk).raw == {"review": "kept"}
         executor = MigrationExecutor(connection)
         executor.migrate(after_merged)
+        merged_product = executor.loader.project_state(after_merged).apps.get_model(
+            "core", "Product"
+        )
         assert [
-            (Product.objects.get(pk=pk).pk, Product.objects.get(pk=pk).repo_id)
+            (merged_product.objects.get(pk=pk).pk, merged_product.objects.get(pk=pk).repo_id)
             for pk, _ in identities
         ] == identities
-        assert Product.objects.get(pk=hf.pk).raw == {"review": "kept"}
-        Product.objects.filter(pk=hf.pk).update(downloads=4_000_000_000)
-        assert Product.objects.get(pk=hf.pk).downloads == 4_000_000_000
+        assert merged_product.objects.get(pk=hf.pk).raw == {"review": "kept"}
+        merged_product.objects.filter(pk=hf.pk).update(downloads=4_000_000_000)
+        assert merged_product.objects.get(pk=hf.pk).downloads == 4_000_000_000
     finally:
         executor = MigrationExecutor(connection)
         executor.migrate(executor.loader.graph.leaf_nodes("core"))

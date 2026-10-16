@@ -36,7 +36,9 @@ def measurement_contract(contract, line):
     current = {
         (m.external_identifier, m.source_subject_kind, m.identifier_scope, m.subject_id)
         for m in contract.mappings.filter(
-            source_id=source, external_identifier__in=line["mapping_identifiers"]
+            purpose="metric",
+            source_id=source,
+            external_identifier__in=line["mapping_identifiers"],
         )
     }
     previous = {

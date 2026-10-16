@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from core.models import EditorialAssessment, EditorialEdition
 from monitor.editorial.service import run_editorial
-from tests.editorial_support import active_config
+from tests.editorial_support import active_config, senior_approval
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
@@ -23,6 +23,8 @@ def test_editor_publishes_two_angles_and_reuses_unchanged_evidence(monkeypatch):
 
     def call(assessment, stage, route, request, cfg):
         calls.append(stage)
+        if stage.startswith("senior-review"):
+            return {"data": senior_approval(), "model": route.model}
         if stage.startswith("editor"):
             data = {
                 "events": [
@@ -63,7 +65,7 @@ def test_editor_publishes_two_angles_and_reuses_unchanged_evidence(monkeypatch):
     result = run_editorial(envelope, cfg=cfg, call=call)
     assert result["published"] == 2, result
     assert EditorialEdition.objects.count() == 2
-    assert len(calls) == 3
+    assert len(calls) == 5
     assert run_editorial(envelope, cfg=cfg, call=call)["status"] == "already_claimed"
     # Re-evaluate the same source packet in the next claimed interval without time travel.
     EditorialAssessment.objects.update(
@@ -71,7 +73,7 @@ def test_editor_publishes_two_angles_and_reuses_unchanged_evidence(monkeypatch):
     )
     result = run_editorial(envelope, cfg=cfg, call=call)
     assert result["status"] == "unchanged"
-    assert len(calls) == 3
+    assert len(calls) == 5
 
 
 def test_production_harvest_dispatch_reaches_g2_when_legacy_headlines_are_off(

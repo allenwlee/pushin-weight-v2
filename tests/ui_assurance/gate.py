@@ -15,6 +15,13 @@ ROOT = Path(__file__).resolve().parents[2]
 EVIDENCE_RELATIVE_PATH = Path(".ollija/tmp/ui-assurance-evidence.json")
 EVIDENCE_PATH = ROOT / EVIDENCE_RELATIVE_PATH
 FOCUSED_TESTS = [
+    "tests/test_general_readers.py",
+    "tests/test_general_timing.py",
+    "tests/test_general_jobs_people.py",
+    "tests/test_general_views.py",
+    "tests/test_general_editorial.py",
+    "tests/test_content_detail.py",
+    "tests/test_general_browser.py",
     "tests/test_dashboard_each.py",
     "tests/test_dashboard_each_browser.py",
     "tests/test_ui_assurance_contract.py",
@@ -175,6 +182,8 @@ def main(argv: list[str] | None = None) -> int:
 
     _run(args.bridgewright, "assurance-validate", "--project-root", str(ROOT))
     _run(args.bridgewright, "assurance-prescribe", "--project-root", str(ROOT))
+    for command in ("assurance-validate", "assurance-prescribe"):
+        _run(args.bridgewright, command, "--project-root", str(ROOT), "--declaration", "tests/fixtures/ui_assurance/general-declaration.json")
     performance_declaration = (
         args.performance_declaration
         if args.scope == "candidate"

@@ -46,8 +46,10 @@ relations:
     - metrics
     - metric_collection_contracts
     - source_subject_mappings
-    - metric_collection_runs
-    - metric_observations
+    - collection_jobs
+    - collection_runs
+    - collection_observations
+    - collection_scope_runs
     - metric_values
     - people_names
     - people_name_evidence
@@ -81,7 +83,7 @@ relations:
     - events
     - geopolitical_mode_keys
     - geopolitical_mode_labels
-    - hf_orgs
+    - x_account_details
     - job_discovery_runs
     - job_listing_evidence
     - job_listings
@@ -159,9 +161,6 @@ relations:
     - staff_intakes
     - staff_media_objects
     - staff_provider_requests
-    - hf_model_catalog_observations
-    - hf_model_catalog_namespace_runs
-    - hf_model_catalog_runs
     - _applied_config_snapshot
     - account_emailaddress
     - account_emailconfirmation
@@ -199,6 +198,7 @@ relations:
     - socialaccount_socialapp_sites
     - socialaccount_socialtoken
     - original_content_calls
+    - provider_batches
     - trend_narrative_demands
     - original_content_runs
     - original_content_selections
@@ -206,6 +206,7 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    - provider_batches
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - data_sources
     - taxonomy_versions
@@ -219,8 +220,10 @@ relations:
     - metrics
     - metric_collection_contracts
     - source_subject_mappings
-    - metric_collection_runs
-    - metric_observations
+    - collection_jobs
+    - collection_runs
+    - collection_observations
+    - collection_scope_runs
     - metric_values
     - editorial_assessments
     - editorial_budgets
@@ -246,9 +249,6 @@ relations:
     - staff_intakes
     - staff_media_objects
     - staff_provider_requests
-    - hf_model_catalog_observations
-    - hf_model_catalog_namespace_runs
-    - hf_model_catalog_runs
     - account_profile_snapshots
     - audience_topic_concepts
     - audience_topic_labels
@@ -310,6 +310,8 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   views:
+    - metric_collection_runs
+    - metric_observations
     # Temporary writable aliases, excluded from table copies and truncation.
     - brand_trend_narratives
     - brand_trend_narrative_texts
@@ -338,7 +340,6 @@ relations:
     - staff_intakes_id_seq
     - staff_provider_requests_id_seq
     - hf_model_catalog_namespace_runs_id_seq
-    - hf_model_catalog_observations_id_seq
     - account_emailaddress_id_seq
     - account_emailconfirmation_id_seq
     - account_profile_snapshots_id_seq
@@ -426,7 +427,6 @@ relations:
     - staff_intakes_id_seq
     - staff_provider_requests_id_seq
     - hf_model_catalog_namespace_runs_id_seq
-    - hf_model_catalog_observations_id_seq
     - account_profile_snapshots_id_seq
     - brand_discovery_candidates_id_seq
     - brand_discovery_candidate_token_evidence_id_seq
@@ -470,6 +470,7 @@ relations:
 
 scrub:
   truncate_tables:
+    - provider_batches
     - editorial_assessments
     - editorial_budgets
     - editorial_calls
@@ -490,9 +491,6 @@ scrub:
     - staff_intakes
     - staff_media_objects
     - staff_provider_requests
-    - hf_model_catalog_observations
-    - hf_model_catalog_namespace_runs
-    - hf_model_catalog_runs
     - _applied_config_snapshot
     - account_emailaddress
     - account_emailconfirmation
@@ -556,8 +554,9 @@ validation:
     - metrics
     - metric_collection_contracts
     - source_subject_mappings
-    - metric_collection_runs
-    - metric_observations
+    - collection_jobs
+    - collection_runs
+    - collection_observations
     - metric_values
     - people
     - people_accounts

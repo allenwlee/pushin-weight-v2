@@ -80,6 +80,8 @@ class EditorialConfig(BaseModel):
     routes: dict[Literal["editor", "chatter", "pulse"], Route] = Field(
         default_factory=dict
     )
+    locale_routes: dict[str, Route] = Field(default_factory=dict)
+    reviewer: Route | None = None
     voices: dict[str, str] = Field(
         default_factory=lambda: {
             "chatter:en": "chatter-en-v1",
@@ -117,8 +119,11 @@ class EditorialConfig(BaseModel):
             or not self.daily_usd
             or not self.assessment_usd
             or not self.daily_calls
+            or self.reviewer is None
         ):
-            raise ValueError("generation requires explicit routes and positive budgets")
+            raise ValueError("generation requires explicit routes, senior reviewer and positive budgets")
+        if any(binding not in self.voices for binding in self.locale_routes):
+            raise ValueError("locale route requires a bound voice")
         if "derive" in self.pictures.values() and (
             not self.media_daily_calls
             or not self.media_cost_ceiling_usd
@@ -137,6 +142,9 @@ class EditorialConfig(BaseModel):
         return self.pictures.get(
             f"{content_kind}:{source_platform}", self.pictures.get(content_kind, "off")
         )
+
+    def writer_route(self, track: str, locale: str) -> Route | None:
+        return self.locale_routes.get(f"{track}:{locale}") or self.routes.get(track)
 
 
 def load_editorial_config(path: Path | None = None) -> EditorialConfig:

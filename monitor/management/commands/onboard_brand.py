@@ -20,10 +20,11 @@ from core.models import (
     BrandCompany,
     BrandKeyword,
     Company,
-    HFOrg,
+    CompanyAccount,
     Product,
     Role,
 )
+from core.publisher_accounts import publisher_links, register_publisher
 from monitor.country_codes import COUNTRY_NAMES
 from x_monitor.harvest_policy import load_policy
 from x_monitor.specs_from_policy import active_policy_tokens, normalize_policy_token
@@ -506,7 +507,7 @@ def _validate(
                 raise OnboardValidationError(
                     f"HF org {namespace!r} has conflicting ownership"
                 )
-            existing_hf = HFOrg.objects.filter(namespace=namespace).first()
+            existing_hf = publisher_links(source="hf", identifier=namespace).first()
             if (
                 existing_hf
                 and existing_hf.company_id.casefold() != row.company_nickname.casefold()
@@ -527,8 +528,8 @@ def _validate(
             if existing and (
                 existing.brand_id not in (None, row.nickname)
                 or (
-                    existing.hf_org_id
-                    and existing.hf_org_id.casefold() != owner[1].casefold()
+                    existing.hf_namespace
+                    and existing.hf_namespace.casefold() != owner[1].casefold()
                 )
             ):
                 raise OnboardValidationError(
@@ -644,16 +645,14 @@ class Command(BaseCommand):
                         brand=brand, company=company
                     )
                     counts["brands_companies"] += int(link_created)
-                hf_by_namespace: dict[str, HFOrg] = {}
+                hf_by_namespace: dict[str, CompanyAccount] = {}
                 namespaces = [
                     *row.hf_orgs,
                     *(repo_id.split("/", 1)[0] for repo_id in row.products),
                 ]
                 for namespace in dict.fromkeys(namespaces):
                     assert company is not None
-                    hf_org, hf_created = HFOrg.objects.get_or_create(
-                        namespace=namespace, defaults={"company": company}
-                    )
+                    hf_org, hf_created = register_publisher(source="hf", identifier=namespace, company=company, discovered_via="curated")
                     if not hf_created and hf_org.company_id != company.nickname:
                         raise CommandError(
                             f"HF org {namespace!r} is already owned by another company"
@@ -732,12 +731,12 @@ class Command(BaseCommand):
                     next_hf_org = hf_by_namespace.get(namespace.casefold())
                     if product_created or (
                         product.brand_id != brand.nickname
-                        or (product.hf_org_id or "").casefold()
-                        != (next_hf_org.namespace if next_hf_org else "").casefold()
+                        or (product.hf_namespace or "").casefold()
+                        != (next_hf_org.account.external_identifier if next_hf_org else "").casefold()
                     ):
                         product.brand = brand
-                        product.hf_org = next_hf_org
-                        product.save(update_fields=["brand", "hf_org", "updated_at"])
+                        product.publisher_account = next_hf_org.account if next_hf_org else None
+                        product.save(update_fields=["brand", "publisher_account", "updated_at"])
                         counts["products"] += 1
                     else:
                         counts["unchanged"] += 1

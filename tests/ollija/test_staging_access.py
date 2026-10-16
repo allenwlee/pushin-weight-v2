@@ -32,6 +32,9 @@ class _Cursor:
     def execute(self, statement: str, parameters: list[object]) -> None:
         self.operations.append((statement, tuple(parameters)))
 
+    def fetchone(self) -> tuple[bool]:
+        return (True,)
+
 
 class _Connection:
     def __init__(self, operations: list[Operation]) -> None:
@@ -70,7 +73,7 @@ def test_build_migrations_always_run_under_the_advisory_lock() -> None:
     )
 
     assert operations == [
-        ("SELECT pg_advisory_lock(%s)", (8_675_309,)),
+        ("SELECT pg_try_advisory_lock(%s)", (8_675_309,)),
         "migrate",
         ("SELECT pg_advisory_unlock(%s)", (8_675_309,)),
     ]
@@ -91,7 +94,7 @@ def test_failed_build_migration_releases_the_advisory_lock() -> None:
         )
 
     assert operations == [
-        ("SELECT pg_advisory_lock(%s)", (8_675_309,)),
+        ("SELECT pg_try_advisory_lock(%s)", (8_675_309,)),
         "migrate",
         ("SELECT pg_advisory_unlock(%s)", (8_675_309,)),
     ]
@@ -121,7 +124,7 @@ def test_main_uses_the_admin_database_lock_around_the_real_migration_chain() -> 
         ("SELECT set_config('statement_timeout', %s, false)", ("900000",)),
         ("SELECT pg_advisory_lock(%s)", (8_675_309,)),
         ("SELECT set_config('statement_timeout', '0', false)", ()),
-        ("SELECT pg_advisory_lock(%s)", (8_675_309,)),
+        ("SELECT pg_try_advisory_lock(%s)", (8_675_309,)),
         "migrate",
         ("SELECT pg_advisory_unlock(%s)", (8_675_309,)),
         ("SELECT pg_advisory_unlock(%s)", (8_675_309,)),

@@ -1,0 +1,9 @@
+{
+  "id": "chatter-en-v2",
+  "version": 2,
+  "track": "chatter",
+  "locale": "en",
+  "available": true,
+  "shared_prompt": "editorial-judgment-headline-v1",
+  "publication_voice": "nypost"
+}

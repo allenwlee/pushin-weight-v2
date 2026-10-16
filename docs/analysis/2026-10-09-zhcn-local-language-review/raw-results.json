@@ -1,0 +1,166 @@
+[
+  {
+    "style": "metro",
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "raw_text": "## “5699美元Gucci”？Alexandr Wang亲自给穿搭标签改价\n\n**一件迷彩上衣，被标成5699美元的Gucci；一双洞洞鞋，被标成730美元的巴黎世家。Alexandr Wang看了，决定拿起红笔。**\n\n2026年9月24日，Scale AI创始人Alexandr Wang在X上发布一张亲自批注的穿搭照片，配文：“不好意思，这种诽谤，我必须澄清一下。”\n\n照片里的他穿着迷彩上衣、休闲裤和洞洞鞋，原有黑色标签却给这身搭配配上了Gucci、Prada、Balenciaga等奢侈品牌，还有一串不低的价格。\n\nWang逐一划掉，换上自己的版本：上衣是“30美元，在圣克鲁兹淘来的二手货”；裤子是150美元的Norrona falketind；鞋子则是60美元的Realtree Crocs。他还主动补了一项：5美元的Calvin Klein内裤。\n\n至于被标为1250美元Gucci的眼镜，他只写了句：“哈哈，不是。”没有公布品牌和价格。连发型也没放过，指向头发的红字写着：“刚把脑袋放进洗衣机里。”\n\n这位AI行业人物的身份颇受关注。Scale AI曾于2025年6月公告，Wang将加入Meta，参与其人工智能工作。不过，这次他谈的不是模型，而是别人给自己衣服开的“价目表”。\n\n37分钟后，他又发了一条帖文，把这场“澄清”的玩笑意味补足：“其实，只要你说我看起来身材好，衣服价钱被你编得多离谱，我都不介意。”\n\n需要说明的是，图中原有的奢侈品牌标签，以及Wang本人写下的衣物身份和价格，均未获独立核实。此次发帖是一场围绕穿搭的幽默互动，并非时尚代言或商业合作声明。\n\n来源：[Wang原帖](https://x.com/alexandr_wang/status/2103127068318089313)、[后续帖文](https://x.com/alexandr_wang/status/2103136396072640640)、[Scale AI公告](https://scale.com/blog/scale-ai-announces-next-phase-of-company-evolution)\n\n---\n\n## Mistral发布万亿参数模型，名字却像一只“胖猫”\n\n**参数规模到了万亿级，名字却叫“Le Chonk”。法国人工智能公司Mistral的新模型，技术指标之外，还带着一点猫梗气质。**\n\n2026年10月6日，Mistral官方宣布推出Mistral Large 4，别名“Le Chonk”。据其发布帖文，该模型总参数量为1万亿，活跃参数为490亿，原生支持多模态。\n\n“参数”是模型内部经过学习得到的数值设置，总参数量可以描述模型规模，但不能单凭这个数字判断模型是否更聪明。\n\nMistral称，按综合基准测试，Large 4是来自美国或欧洲的最佳开放权重模型，并在网络防御、制造业、金融等任务上达到领先水平，在视觉定位任务上超过闭源前沿模型。这些排名和性能判断来自公司自己的发布声明，所提供材料中没有独立复现的评测。\n\n发布安排也有两个时间点：模型当天已可通过API调用；开放权重则计划于10月底发布。换言之，能接入公司服务，不等于已经能下载模型的数值文件、自行部署。官方帖文也没有承诺免费使用。\n\n比起技术指标，“Le Chonk”这个名字更容易让人会心一笑。“Chonk”是英语互联网里形容动物圆滚滚、胖乎乎的词，常用来形容猫。\n\n发布后，网友@shaunralston将它解读为对旧梗的呼应：此前有人虚构过一个超大Mistral模型，叫“Le Chaton Fat”；如今真正的万亿参数模型来了，于是有了“Le Chonk”。另一名网友@DeepChatBot也回顾了这个玩笑，称它起于6月。\n\n不过，“胖猫”与旧梗之间的联系，以及首席执行官Arthur Mensch为何选用这个名字，目前在所提供材料中都只是网友转述，不能当作官方确认的命名故事。\n\n来源：[Mistral官方发布](https://x.com/MistralAI/status/2107457414387622310)、[网友解读](https://x.com/i/status/2107504380404715901)、[网友回顾](https://x.com/i/status/2107533834384191577)",
+    "receipt": {
+      "style": "metro",
+      "requested_model": "gpt-6.1-sol",
+      "requested_reasoning": "high",
+      "role_sentence": "像《南方都市报》的编辑那样写。",
+      "transport": "Responses API",
+      "physical_calls": 1,
+      "retries": 0,
+      "refinements": 0,
+      "request_body_sha256": "3d2d0cfea8a53b9a98c07f27f00656e40e1c9bb2272349709721216067506001",
+      "sanitized_request_sha256": "c433d6f5e40d0abe986f4201922d283674ead68c59f2b781dbe913a1ccb28c41",
+      "packet_sha256": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df",
+      "image_sha256": "c0ddf32f548686cf725da584b8a253f20f63b2a16f98d9a59ada588d1344538e",
+      "billing_receipt": false,
+      "reported_dollars": null,
+      "response_model": "gpt-6.1-sol",
+      "response_id": "resp_0b82dc807a6462d7016ac897557df887d0bd80752bc4249f77",
+      "status": "completed",
+      "usage": {
+        "input_tokens": 3214,
+        "input_tokens_details": {
+          "cache_write_tokens": 3211,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1853,
+        "output_tokens_details": {
+          "reasoning_tokens": 781
+        },
+        "total_tokens": 5067
+      },
+      "response_body_sha256": "ad8a67633e93482063699e0c800f7d13fe0acc7c66c85a609c594370184a1d06",
+      "raw_output_sha256": "382ae770e9d890372db9ec90f06cce203761c4192f26bb445e51a47eff057fe6",
+      "incomplete_details": null,
+      "elapsed_seconds": 43.35
+    }
+  },
+  {
+    "style": "metro",
+    "model": "gpt-6-sol",
+    "effort": "medium",
+    "raw_text": "## AI圈两则趣闻：一身“奢牌”被本人划掉，万亿参数模型叫“胖猫”\n\n**Alexandr Wang亲自改穿搭价签：上衣是30美元二手货**\n\n一张拿着麦克风、穿迷彩上衣和洞洞鞋的照片，被标上了GUCCI、PRADA、BALENCIAGA等品牌，单件价格从730美元到5699美元不等。9月24日，Scale AI创始人Alexandr Wang在X上转发图片，打趣说这种“诽谤”必须澄清，并用红字逐项划掉标签。\n\n按Wang自己的批注，上衣是在圣克鲁兹淘来的30美元二手货，裤子是150美元的Norrona falketind，鞋则是60美元的Realtree Crocs。他还给头发加了一句：“刚把脑袋放进洗衣机里。”约37分钟后，他又发帖开玩笑：只要夸他身材好，衣服价格编得再离谱也不介意。\n\n这些品牌和价格分别是图片标注及Wang本人的说法，尚无独立核实。此前另一位用户也曾用**另一张照片**给他的穿搭贴上奢侈品牌标签，两张图不宜混为一谈。\n\n**Mistral发布“Le Chonk”：模型很大，猫梗来历仍是网友说法**\n\n10月6日，法国人工智能公司Mistral宣布推出Mistral Large 4，别名“Le Chonk”。公司称，该模型总参数量为1万亿、活跃参数为490亿，当天已可通过应用程序接口使用；开放权重则计划于10月底发布。其性能排名和任务表现，均为Mistral发布时的自述。\n\n“Chonk”常被用来形容圆滚滚的动物。有网友随后称，这个名字呼应了此前关于虚构巨型模型“Le Chaton Fat”的猫梗。不过，首席执行官为何选用这一名称，目前只有网友转述，不能当作官方确认的命名故事。",
+    "receipt": {
+      "style": "metro",
+      "requested_model": "gpt-6-sol",
+      "requested_reasoning": "medium",
+      "role_sentence": "像《南方都市报》的编辑那样写。",
+      "transport": "Responses API",
+      "physical_calls": 1,
+      "retries": 0,
+      "refinements": 0,
+      "request_body_sha256": "b465f1756774f3d984b1413b49ac384a83b068d75ce513dd5ca3c9a806a79feb",
+      "sanitized_request_sha256": "e188fa0962fa0b1b011b33cc76deca9e545062cc35c7052ab22b6920fad00390",
+      "packet_sha256": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df",
+      "image_sha256": "c0ddf32f548686cf725da584b8a253f20f63b2a16f98d9a59ada588d1344538e",
+      "billing_receipt": false,
+      "reported_dollars": null,
+      "response_model": "gpt-6-sol",
+      "response_id": "resp_0c77f5daba7fe98c016ac89755763887d095fadf2b66a04d60",
+      "status": "completed",
+      "usage": {
+        "input_tokens": 3214,
+        "input_tokens_details": {
+          "cache_write_tokens": 3211,
+          "cached_tokens": 0
+        },
+        "output_tokens": 664,
+        "output_tokens_details": {
+          "reasoning_tokens": 180
+        },
+        "total_tokens": 3878
+      },
+      "response_body_sha256": "4356dc8ea906ca4fa8ae05c9e64f197da0742dda68ef3175ceb0b14bfe8523d5",
+      "raw_output_sha256": "54a3e75c1e9fe55125219db4894bc2325d28145aa4e732c69d240ff08a4008b0",
+      "incomplete_details": null,
+      "elapsed_seconds": 9.31
+    }
+  },
+  {
+    "style": "wemedia",
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "raw_text": "# AI圈的反差感：大佬给穿搭“降价”，万亿模型取名“胖猫”\n\nAI圈的故事，不一定都围绕跑分、融资和算力。\n\n有时候，主角是一件30美元的二手T恤。有时候，是一个拥有1万亿参数、却叫“Le Chonk”的模型。\n\n前者忙着摘掉别人贴上来的奢侈品标签，后者顶着一个胖乎乎的名字，认真介绍自己的技术能力。\n\n两则趣闻，看点都在反差里。\n\n## 01  \n## 别人说他一身奢侈品，他拿红笔逐项改价\n\n先看Alexandr Wang。\n\n这位Scale AI创始人，在2025年6月公司公告中被宣布将加入Meta，参与人工智能工作。不过，这次引人注意的不是他的职业动向，而是一张穿搭照片。\n\n照片里，他拿着麦克风，穿着迷彩上衣和休闲裤，脚踩洞洞鞋。\n\n本来是一身相当休闲的打扮，图片上的黑色标签却给它加上了另一层滤镜：\n\n- 眼镜：1250美元，GUCCI。\n- 迷彩T恤：5699美元，GUCCI。\n- 工装裤：1890美元，PRADA。\n- 洞洞鞋：730美元，BALENCIAGA限量版。\n\n**看起来随便穿穿，标签却在说：这一身可不随便。**\n\n但Wang本人不认这份“报价单”。\n\n2026年9月24日，他发布了自己用红字批注的照片，配文：\n\n> 不好意思，这种诽谤，我必须澄清一下。\n\n这里的“诽谤”，结合图片和后续发言，更像一句玩笑式抗议，而不是严肃的法律指控。\n\n他给出的更正，相当具体。\n\n5699美元的“GUCCI迷彩T恤”？他说是**30美元，在圣克鲁兹淘来的二手货**。\n\n1890美元的“PRADA工装裤”？他说是**150美元的Norrona falketind裤子**。\n\n730美元的“BALENCIAGA洞洞鞋”？他说是**60美元的Realtree Crocs**。\n\n眼镜旁边则没有补上另一个品牌和价格，只有一句：\n\n> 哈哈，不是。\n\n更绝的是，他还主动加了一个原图没有的项目：**5美元的Calvin Klein内裤。**\n\n至于那头略显凌乱的头发，他给出的解释是：\n\n> 刚把脑袋放进洗衣机里。\n\n一张奢侈品穿搭分析图，就这样被本人改成了自嘲清单。\n\n不过，他的原则也没有那么严格。\n\n37分钟后，Wang又补了一条：\n\n> 其实，只要你说我看起来身材好，衣服价钱被你编得多离谱，我都不介意。\n\n原来价格可以商量，夸人必须到位。\n\n需要说明的是，图中原有的品牌、价格标签，以及Wang自己的更正，都属于帖文中的说法，并不是经过独立核验的零售价格。网上另有一张由@Goltra发布的穿搭标价照片，那是另一张图，不能把两张图的标签混成一套。\n\n**这件事的重点，不是奢侈品鉴定，而是当事人亲自下场，把玩笑接了过去。**\n\n## 02  \n## 法国AI公司发布万亿模型，名字却像一只胖猫\n\n另一边，法国人工智能公司Mistral的反差，出现在产品命名上。\n\n2026年10月6日，Mistral官方发布：\n\n> 认识一下Mistral Large 4，也叫Le Chonk。\n\n正式名称很像一款严肃的技术产品。\n\n别名则像一只刚吃完饭、不太想动的猫。\n\n“Chonk”是英语互联网里的一个常见用词，用来形容圆滚滚、胖乎乎的动物，尤其是猫。于是，“Le Chonk”很容易让人联想到一只“大胖猫”。\n\n但名字可爱，官方介绍的规模可不小：\n\n**总参数1万亿，活跃参数490亿，原生支持多模态。**\n\n这里的“参数”，是模型内部经过学习得到的数值设置。总参数量与活跃参数量是不同指标，也不能只凭总量，就判断一个模型是不是更聪明。\n\n按照Mistral自己的发布声明，这款模型在网络防御、制造业、金融等任务上达到领先水平，在视觉定位任务上超过闭源前沿模型；公司还称，按综合基准测试，它是来自美国或欧洲的最佳开放权重模型。\n\n这些是**公司的发布口径，而不是独立评测结论**。\n\n官方同时强调，模型从头到尾在欧洲打造，也能通过Mistral自己的云基础设施在欧洲部署。\n\n至于大家最关心的“什么时候能用”，要分成两件事：\n\n- **API调用：**官方称发布当天即可使用。\n- **开放权重：**当时计划在10月底发布。\n\n能通过接口调用，不等于已经能下载权重自行部署；“开放权重”也不等于承诺免费使用。\n\n## 03  \n## “胖猫”的来历很有趣，但先别替CEO确认动机\n\n发布之后，有网友给“Le Chonk”补上了一段背景故事。\n\n@shaunralston称，此前X上的爱好者曾拿一个虚构的超大Mistral模型“Le Chaton Fat”玩梗，而“Le Chonk”是在呼应这个猫梗。\n\n另一位网友@DeepChatBot也回顾说，爱好者在6月编出了那个虚构巨型模型，如今Mistral真的发布了一款万亿参数模型。\n\n这个故事确实有趣：\n\n**网友先想象出一只巨猫，后来产品真的顶着一个“胖猫”名字登场了。**\n\n但边界也得留住——旧梗的具体历史，以及首席执行官Arthur Mensch是否特意为此命名，都来自普通网友的转述，并非官方发布帖或当事人已核实的解释。\n\n可以说，这个名字让网友联想到了旧梗；不能直接写成“CEO亲自把网友玩笑变成现实”。\n\n## 最后\n\n这两件事，笑点其实很接近。\n\nWang拿红笔，把别人赋予他的“奢侈感”一项项划掉；Mistral则让一个严肃的大模型，有了一个不那么严肃的名字。\n\n前者最后留下的重点是：\n\n**衣服多少钱可以乱猜，记得夸我身材好。**\n\n后者留下的反差是：\n\n**名字可以像胖猫，模型能力还得看评测。**\n\n玩笑值得看，信息也值得分清。两件事并不冲突。\n\n---\n\n**主要来源：**[Wang更正帖](https://x.com/alexandr_wang/status/2103127068318089313)、[后续帖](https://x.com/alexandr_wang/status/2103136396072640640)、[Mistral官方发布](https://x.com/MistralAI/status/2107457414387622310)、[网友释梗](https://x.com/i/status/2107504380404715901)、[网友回顾](https://x.com/i/status/2107533834384191577)。",
+    "receipt": {
+      "style": "wemedia",
+      "requested_model": "gpt-6.1-sol",
+      "requested_reasoning": "high",
+      "role_sentence": "像微信公众号（自媒体）的作者那样写。",
+      "transport": "Responses API",
+      "physical_calls": 1,
+      "retries": 0,
+      "refinements": 0,
+      "request_body_sha256": "db664b20cee77820ded61fd0510ee58ba4d1bfcbe21b06ab4e6f38179562c301",
+      "sanitized_request_sha256": "24000ee7fc1ec305636efb3d064d3bb997228799409daf8d03043340c1e81d1d",
+      "packet_sha256": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df",
+      "image_sha256": "c0ddf32f548686cf725da584b8a253f20f63b2a16f98d9a59ada588d1344538e",
+      "billing_receipt": false,
+      "reported_dollars": null,
+      "response_model": "gpt-6.1-sol",
+      "response_id": "resp_0c565e900d01b50b016ac8975ead8887d0942a4141d952c3fe",
+      "status": "completed",
+      "usage": {
+        "input_tokens": 3213,
+        "input_tokens_details": {
+          "cache_write_tokens": 3210,
+          "cached_tokens": 0
+        },
+        "output_tokens": 2507,
+        "output_tokens_details": {
+          "reasoning_tokens": 824
+        },
+        "total_tokens": 5720
+      },
+      "response_body_sha256": "a31190f3c52c87c673a8882417c1a1783362715a72b8e78f06a85278658ff262",
+      "raw_output_sha256": "fb7174c5007b3dc8a3e65f4f02d8ab3644a42093f5a5d56b63bf313259254788",
+      "incomplete_details": null,
+      "elapsed_seconds": 62.693
+    }
+  },
+  {
+    "style": "wemedia",
+    "model": "gpt-6-sol",
+    "effort": "medium",
+    "raw_text": "# AI圈最近的两种幽默：一件30美元的迷彩T恤，和一只“胖猫”\n\n人工智能行业给人的印象，往往是发布会、参数表和严肃的技术讨论。但最近两条来自AI圈的帖子，画风都轻松得多。\n\n**一边是Alexandr Wang亲自给自己的穿搭“打假”；另一边是Mistral给万亿参数模型起了个圆滚滚的绰号。**\n\n## “不好意思，这种诽谤，我必须澄清”\n\n9月24日，Alexandr Wang晒出一张自己拿着麦克风的照片。迷彩上衣、工装裤、洞洞鞋，原本相当休闲的一身，被图片标签包装成了“奢侈品穿搭”：上衣标价5699美元，裤子1890美元，洞洞鞋730美元，连眼镜也被认成了1250美元的GUCCI。\n\nWang拿红字逐项改了回去：上衣是**30美元在圣克鲁兹淘来的二手货**，裤子150美元，洞洞鞋60美元；至于眼镜，他只回了一句：“哈哈，不是。”头发也没逃过调侃——他写道，自己“刚把脑袋放进洗衣机里”。\n\n他发帖说：“不好意思，这种诽谤，我必须澄清一下。”37分钟后又补了一句：其实，只要夸他身材好，衣服价格编得多离谱都没关系。\n\n这是一场穿搭玩笑，不是奢侈品牌鉴定：无论图片上夸张的标签，还是Wang写下的价格，都没有独立零售价核验。此前另一位网友也用**另一张照片**给他贴过Hermes、Loro Piana等标签，不能把两张图上的衣物混为一谈。\n\n## 万亿参数模型，叫“Le Chonk”\n\n到了10月6日，法国AI公司Mistral发布新模型Mistral Large 4，并给它起了个别名：**Le Chonk**。\n\n“Chonk”常被用来形容胖乎乎、圆滚滚的动物，尤其是猫。于是，一款官方宣称拥有**1万亿总参数、490亿活跃参数**的模型，有了一个颇具互联网气质的名字。\n\nMistral还宣称它在多项任务和基准测试中表现突出；这些排名与性能说法来自公司自身的发布帖，不能当作已经独立复现的结论。使用方式上也有个容易混淆的细节：**发布当天可通过接口调用，不等于开放权重已经放出**。官方当时给出的计划是10月底发布开放权重。\n\n有网友将“Le Chonk”解读为对早前虚构巨型模型“Le Chaton Fat”猫梗的呼应。这解释很有趣，但关于旧梗的经过、以及谁决定了名字，材料中只有网友转述，不能算官方确认的命名故事。\n\n一个认真纠正“天价穿搭”，一个郑重发布“胖猫”模型。AI圈当然还在比技术，但偶尔也会提醒人：做技术的人，同样懂得开玩笑。\n\n*来源：[Wang帖文](https://x.com/alexandr_wang/status/2103127068318089313)、[后续帖文](https://x.com/alexandr_wang/status/2103136396072640640)、[Mistral官方发布](https://x.com/MistralAI/status/2107457414387622310)。*",
+    "receipt": {
+      "style": "wemedia",
+      "requested_model": "gpt-6-sol",
+      "requested_reasoning": "medium",
+      "role_sentence": "像微信公众号（自媒体）的作者那样写。",
+      "transport": "Responses API",
+      "physical_calls": 1,
+      "retries": 0,
+      "refinements": 0,
+      "request_body_sha256": "c9a1fe73276c5a6f5ecc58b220c8b9c67edbb2e55f9cb36e67f3ecdb130c43f6",
+      "sanitized_request_sha256": "86cf45f98ed7427ed94e0df018179cffd258fed8c31cd420df84dba7375b9c97",
+      "packet_sha256": "e7b57a2dfdf982aa00e314975f0f39aa114f5eb8dfbde7b2cb1c0e59292002df",
+      "image_sha256": "c0ddf32f548686cf725da584b8a253f20f63b2a16f98d9a59ada588d1344538e",
+      "billing_receipt": false,
+      "reported_dollars": null,
+      "response_model": "gpt-6-sol",
+      "response_id": "resp_04ee5f9abc7939a6016ac89780c41087d080b19240e8c2bc07",
+      "status": "completed",
+      "usage": {
+        "input_tokens": 3213,
+        "input_tokens_details": {
+          "cache_write_tokens": 3210,
+          "cached_tokens": 0
+        },
+        "output_tokens": 1041,
+        "output_tokens_details": {
+          "reasoning_tokens": 219
+        },
+        "total_tokens": 4254
+      },
+      "response_body_sha256": "e0d154a7a96f5f6f90d5e9af446a26f460b41aa6e35679b424bb87ac6aa41eb7",
+      "raw_output_sha256": "0831eecfaea1c92ab2f596348562b5d55e72377f733107e1f680fc065f7c2fad",
+      "incomplete_details": null,
+      "elapsed_seconds": 16.015
+    }
+  }
+]

@@ -4,6 +4,12 @@ artifact_contract: ce-unified-plan/v1
 product_contract_source: legacy-requirements
 origin: docs/brainstorms/2026-09-30-104924-general-launch-charter.md
 execution: code
+status: closed
+round: 1
+closed_at: "2026-10-09T11:01:45+09:00"
+closed_by: owner
+closeout: completed-scope-with-carry-forward
+successor: docs/brainstorms/2026-10-09-110145-general-round-two.md
 ollija:
   change_id: feat-g1-r2-media-2026-10-05
   branch: feat/g1-r2-media
@@ -71,6 +77,19 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
   delivery.
 - Do not run an endless retry loop or start a persistent Ollija process.
 <!-- END OLLIJA DELIVERY GUIDE --># G1 staff identities and images — initial batch and ongoing acquisition
+
+## Round-one closeout — October 9
+
+The owner closes this round and transfers unfinished, non-superseded G1 scope
+to [round-two G1](../brainstorms/2026-10-09-110145-general-round-two.md#g1--assets-and-graphicsed),
+items B2-G1-01–03. Staff/DeepSeek scaffold and shared R2 deliveries retain their
+production receipts. Remaining identity/portrait/role coverage, broader intake
+and acquisition activation remain unfinished and are carried forward.
+
+The [round-one closeout and lessons](../analysis/2026-10-09-110145-general-round-one-closeout.md)
+records the boundary. Keep the detailed history and open checkboxes below as
+evidence; use the successor for new scope and progress. Existing delivery
+metadata describes this round's original endpoint, not a new release request.
 
 ## Plain-English Summary
 

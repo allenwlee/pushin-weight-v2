@@ -323,7 +323,8 @@ def test_badge_change_between_batches_does_not_double_count_inventory():
     )
     Account.objects.create(author_id="9104")
     scan_initial_batch(limit=1)
-    Account.objects.filter(pk=account.pk).update(verified_type="")
+    account.x_details.verified_type = ""
+    account.x_details.save(update_fields=["verified_type"])
     for _ in range(4):
         report = scan_initial_batch(limit=1)
     assert report["enumerated"] == report["population"] == 2

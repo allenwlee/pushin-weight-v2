@@ -1,0 +1,107 @@
+name: Historical X backfill
+
+on:
+  pull_request:
+    paths:
+      - 'monitor/cycle.py'
+      - 'monitor/backfill_resources.py'
+      - 'monitor/backfill_collection.py'
+      - 'monitor/backfill_enrichment.py'
+      - 'monitor/backfill_direct.py'
+      - 'core/provider_batches.py'
+      - 'core/models.py'
+      - 'core/migrations/**'
+      - 'core/collection*.py'
+      - 'monitor/post_artifacts.py'
+      - 'monitor/management/commands/backfill.py'
+      - 'monitor/run_lock.py'
+      - 'x_monitor/apify.py'
+      - 'x_monitor/literal_translation.py'
+      - 'x_monitor/deepinfra*.py'
+      - 'x_monitor/deferred_inference.py'
+      - 'x_monitor/attribution.py'
+      - 'tests/test_provider_batches.py'
+      - 'tests/test_deepinfra_batch.py'
+      - 'tests/test_backfill*.py'
+      - 'tests/test_literal_translation_plaintext.py'
+      - 'tests/test_translator_literal.py'
+      - 'tests/test_bounded_classifier_client.py'
+      - 'tests/test_cycle_cursor_wiring.py'
+      - 'tests/test_cycle_run_lock.py'
+      - 'tests/test_cycle_error_counters.py'
+      - 'tests/test_harvest_cursor_lifecycle.py'
+      - 'tests/test_cycle_search_caps.py'
+      - 'tests/test_hybrid_harvest_regression_net.py'
+      - 'tests/test_harvest_surface_regression_net.py'
+      - 'tests/conftest.py'
+      - 'tests/test_account*.py'
+      - 'tests/test_publisher_accounts.py'
+      - '.github/workflows/backfill.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-backfill-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: backfill_test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: backfill_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://backfill_test:test@127.0.0.1:5432/backfill_test
+      STAFF_COLLECTION_NETWORK_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+      - name: Lint recovery command, resource guard and tests
+        run: >-
+          python -m ruff check monitor/backfill_resources.py
+          monitor/backfill_collection.py tests/test_backfill_collection.py
+          monitor/backfill_enrichment.py core/provider_batches.py
+          monitor/backfill_direct.py tests/test_backfill_direct_enrichment.py
+          tests/test_backfill_enrichment_control.py tests/test_backfill_account_merge_migration.py
+          tests/test_account_user_about_model.py
+          x_monitor/deepinfra_batch.py x_monitor/deferred_inference.py
+          tests/test_backfill_native_enrichment.py tests/test_provider_batches.py tests/test_deepinfra_batch.py
+          monitor/management/commands/backfill.py tests/test_backfill_resources.py
+          tests/test_backfill_pipeline.py tests/test_backfill_quarantined.py
+      - name: Backfill and scheduled-path regressions (required skips fail)
+        run: >-
+          python -m pytest -q tests/test_apify.py tests/test_post_enrichment_queue.py
+          tests/test_enrichment_attempt_deadline.py tests/test_backfill_quarantined.py
+          tests/test_backfill_pipeline.py tests/test_backfill_resources.py
+          tests/test_backfill_collection.py tests/test_collection_jobs.py tests/test_collection_state.py
+          tests/test_backfill_native_enrichment.py tests/test_provider_batches.py
+          tests/test_backfill_direct_enrichment.py
+          tests/test_backfill_enrichment_control.py tests/test_backfill_account_merge_migration.py
+          tests/test_deepinfra_batch.py tests/test_deepinfra.py
+          tests/test_original_content_models.py tests/test_original_content_backfill.py
+          tests/test_cycle_plaintext_translation.py
+          tests/test_bounded_classifier_client.py tests/test_cycle_cursor_wiring.py
+          tests/test_cycle_run_lock.py tests/test_twitterapi_caller_shape.py
+          tests/test_harvest_cursor_lifecycle.py tests/test_cycle_search_caps.py
+          tests/test_cycle_error_counters.py tests/test_hybrid_harvest_regression_net.py
+          tests/test_harvest_surface_regression_net.py
+          tests/test_literal_translation_plaintext.py tests/test_translator_literal.py
+          tests/test_account_extensions.py tests/test_account_extensions_migration.py
+          tests/test_publisher_accounts.py tests/test_collection_schema_regression_net.py
+          tests/test_account_user_about_model.py

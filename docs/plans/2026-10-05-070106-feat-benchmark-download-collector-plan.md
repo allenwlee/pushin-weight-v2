@@ -45,7 +45,7 @@ The latest naming decision renames the definition table from `source_metrics` to
 
 The owner's current **“lfg that”** selects production completion of the four-step proposal immediately preceding it: reconcile existing PR56 with current schema, rehearse populated migration and preservation, retain a recoverable live backup, verify staging, deploy and inspect actual generated-range coverage. This supersedes the October9 verified-PR-only boundary for this bounded follow-up. Reuse this canonical plan/worktree and PR56; no separate plan, replacement PR, source collection or schema redesign.
 
-### Delivery Exceptions
+### Current delivery scope
 
 - Delivery target is production, explicitly selected by the owner on October16; use the default staged route. No staging/browser/check waiver or direct-production route has been requested.
 - Preserve the October9 approved finite nullable-start/end plus generated-range design (R46–R49/KD28/KTD7). Other sessions' work and existing operational schedules/credentials are excluded. Original-content/chart-performance fixes remain separately owned.
@@ -961,13 +961,15 @@ for an unrelated repair.
 
 ## Goal Capsule
 
-Current objective: SQL users can identify and query complete measurement windows with correct boundary semantics while incomplete source timing stays explicitly unknown. Means: R46–R49/KD28/KTD7, implemented as U29–U31 in the existing isolated feature worktree. Current endpoint: tested PR with CI decided; no new deployment grant. Existing chart/source behavior must remain unchanged.
+Current objective: SQL users can identify and query complete measurement windows with correct boundary semantics while incomplete source timing stays explicitly unknown. Means: R46–R49/KD28/KTD7, original U29–U31 plus October16 completion units U32–U34 in the existing isolated feature worktree. Current endpoint: verified production deployment of existing PR56, with populated preservation and backup proof. Existing chart/source behavior must remain unchanged.
 
 Historical feature objective: users can compare post attention with benchmark performance and adoption, knowing which entities, units and periods each point actually represents. Means: the owner-controlled taxonomy and shared metric schema below (KD3, KD6–KD15; KTD1–KTD6). Preserve U1–U28 as historical baseline. The four-source production activation and HF clock follow-up are completed releases, not authority for this migration. Additional product coverage and G3 forecast/trading uses remain separate decisions described in Delivery Exceptions.
 
 ## Delivery Exceptions
 
-**Current owner direction — October 9, metric time ranges:** LFG the settled three-column proposal in R46–R49/U29–U31. Default endpoint is verified PR. Preserve the prior completed production release and all clocks; historical production grants do not cover this new schema migration.
+**Current owner direction — October 16, metric time ranges:** “lfg that” selects verified production completion of existing PR56 under the October16 amendment/U32–U34. Use the default staged route, preserve all source clocks/data, reconcile only unapplied range migrations after current main, and retain restore-tested production recovery coverage before migration. No chart redesign, new tables, provider batches, credential or scheduler changes.
+
+**Historical owner direction — October 9, metric time ranges:** LFG selected the settled three-column proposal in R46–R49/U29–U31 at a verified PR. That endpoint was completed by PR56 and is superseded for this bounded follow-up by the current October16 production selection.
 
 **Latest owner direction — October 9, HF schedule:** “set it for 10:00 UTC, add a note for why, and commit/push/deploy” authorizes U28 through staged production delivery and verification. Preserve all other provider schedules, source-use/taxonomy/measurement snapshots, the separate temporary poll deadline and other sessions. Configure HF's collection clock in existing operational metadata; no time-range/schema overhaul is part of this release.
 

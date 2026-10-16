@@ -132,8 +132,8 @@ After shared activation, `original_content_storage --record-cutover
 Rollback switches readers to `legacy` while retaining compatible claim/call
 ownership and dual persistence. Uncertain sends do not become retryable.
 
-Physical retirement is later: seven days after observed cutover, proven encrypted
-restore, reconciled overlaps and zero legacy consumers are all required. The
+Physical retirement requires proven encrypted restore, reconciled overlaps and
+zero legacy consumers. There is no calendar waiting period. The
 compatible adapter still uses legacy assessments, calls/budgets, stories/editions
 and heroes. Time alone does not permit deletion. Compatibility delivery contains
 no drop or physical-rename migration.

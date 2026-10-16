@@ -15,6 +15,32 @@ class TextResponse:
         self.provider_usage = usage
 
 
+@pytest.mark.parametrize("source", [
+    ("tutututututu/Tutu-MiniMax-H3-AudioVideo-20to8-NFE-LoRA\nhttps://example.test/model\n"
+     "tutu-t8-minimax-h3-av-20to8-nfe-lora-step000100-bf16-comfyui.safetensors"),
+    ("MiniMax H3\nQwen Image 3 Pro\nElevenLabs\nRTX Pro 6000 96GB\nLocal AI\n\n"
+     "„Seven Minutes Before Dawn”\n@MiniMax_AI\nhttps://example.test/art"),
+])
+def test_unchanged_model_identifiers_and_short_versioned_names_use_real_translator(source):
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    # API language hints can be wrong for identifiers; they must remain exact.
+    client = PlaintextClient([TextResponse(source)] * 3)
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "identifiers", "text": source, "lang": "it"}], client,
+    )[0]
+    assert not row["translation_failed"]
+    assert row["text_en"] == row["text_zh_cn"] == row["text_ja"] == source
+
+
+def test_model_filename_does_not_allow_unchanged_surrounding_english_prose():
+    from x_monitor.literal_translation import _is_untranslated_copy
+
+    source = "model-step0100.safetensors\nWe compared the new model against the previous release and found several changes in its output quality."
+    assert _is_untranslated_copy(source, source, "ja")
+    assert _is_untranslated_copy(source, source, "zh-Hans")
+
+
 class PlaintextClient:
     def __init__(
         self, replies: list[object], *, request_profile: str | None = None
@@ -63,6 +89,34 @@ def test_native_source_is_byte_exact_and_only_other_two_locales_are_called():
     assert all("English" not in _prompt(call) for call in client.calls)
     assert row["input_tokens"] == 24
     assert row["output_tokens"] == 12
+
+
+def test_smaller_manual_chunks_preserve_source_and_resume_without_provider_calls():
+    from x_monitor.literal_translation import (
+        _split_translation_chunks,
+        translate_batch_literal_plaintext,
+    )
+
+    source = "word " * 1_200
+    chunks = _split_translation_chunks(source, chunk_size=2_000)
+    assert "".join(chunks) == source
+    assert max(map(len, chunks)) <= 2_000
+    assert max(map(len, _split_translation_chunks(source))) > 2_000
+    cached = {}
+    def persist(**kwargs):
+        assert len(kwargs["source_chunk"]) <= 2_000
+        cached.setdefault("manual", {}).setdefault("en", {}).setdefault(kwargs["target_language"], {})[
+            kwargs["chunk_index"]] = kwargs["translated_text"]
+        return True
+    tweet = {"tweet_id": "manual", "text": source, "lang_detected": "en"}
+    client = PlaintextClient([TextResponse("中文" * 500)] * len(chunks)
+                            + [TextResponse("日本語" * 400)] * len(chunks))
+    first = translate_batch_literal_plaintext([tweet], client, chunk_size=2_000, on_chunk_success=persist)[0]
+    assert not first["translation_failed"]
+    second = PlaintextClient([])
+    resumed = translate_batch_literal_plaintext([tweet], second, chunk_size=2_000, cached_chunks=cached)[0]
+    assert not resumed["translation_failed"] and not second.calls
+    assert resumed["text_en"] == source
 
 
 @pytest.mark.parametrize("source_language", ["zh-Hant", "ko", "other"])

@@ -17,9 +17,9 @@ from core.models import (
     BrandCompany,
     BrandKeyword,
     Company,
-    HFOrg,
     Product,
 )
+from core.publisher_accounts import get_publisher, publisher_links
 from monitor.cycle import _build_brand_index
 from monitor.management.commands.onboard_brand import (
     _normalized_token,
@@ -132,7 +132,7 @@ def test_dots_row_creates_identity_tables(tmp_path: Path):
     brand = Brand.objects.get(nickname="dots")
     company = Company.objects.get(nickname="xiaohongshu")
     assert BrandCompany.objects.filter(brand=brand, company=company).exists()
-    assert HFOrg.objects.get(namespace="dots-studio").company_id == company.nickname
+    assert get_publisher(source="hf", identifier="dots-studio").company_id == company.nickname
     assert (
         Product.objects.get(repo_id="dots-studio/dots3-note-prev").brand_id
         == brand.nickname
@@ -494,8 +494,8 @@ def test_product_repo_id_supplies_hf_org_when_org_cell_is_blank(tmp_path: Path):
 
     _run(csv_path, config, policy)
 
-    assert HFOrg.objects.filter(namespace="owner-org", company_id="owner").exists()
-    assert Product.objects.get(repo_id="owner-org/model").hf_org_id == "owner-org"
+    assert publisher_links(source="hf", identifier="owner-org", company_id="owner").exists()
+    assert Product.objects.get(repo_id="owner-org/model").hf_namespace == "owner-org"
 
 
 def test_unchanged_product_rerun_preserves_updated_at(tmp_path: Path):
@@ -608,8 +608,8 @@ def test_tracked_upgrade_csv_applies_idempotently_and_keeps_aliases_non_primary(
             "keywords": BrandKeyword.objects.filter(
                 brand_id__in=tracked_brands
             ).count(),
-            "hf_orgs": HFOrg.objects.filter(
-                namespace__in=("dots-studio", "tencent", "zai-org")
+            "hf_orgs": publisher_links(source="hf").filter(
+                account__normalized_identifier__in=("dots-studio", "tencent", "zai-org")
             ).count(),
             "products": Product.objects.filter(
                 repo_id="dots-studio/dots3-note-prev"

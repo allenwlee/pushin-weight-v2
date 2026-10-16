@@ -1,0 +1,10 @@
+Edit the approved editorial image in reference 1 into ONE compact square profile-photo thumbnail. Reference 2 supplies the actual MiniMax logo. This is for a small image beside betting/prediction posts, so judge composition at 48–64 pixels, not just full size.
+
+Create a 1:1 square, 1024x1024 master, to export as a 400x400 profile image.
+Only two visual ingredients: Dr. Yan Junjie's FACE and the MiniMax logo. Preserve his recognizable face, actual bald head, glasses and friendly expression exactly from reference 1. Crop tightly to head and face, including the chin. No torso, T-shirt, hands, name/role caption, publisher watermark or background objects.
+
+Make the face very large and slightly left of center, filling most of the square vertically. Make the MiniMax logo LARGE and move it almost over the right side of his face rather than into a separate empty panel. Let the colored wave overlap the outer temple/cheek edge, with a soft airbrushed, feathered integration into the portrait. Some logo strokes may sit behind or dissolve into the face contour. Keep both eyes, glasses bridge, nose and the friendly smile visible so the person remains recognizable. The logo may be partly obscured or cropped, with roughly 75% visible; maintaining a distinctive recognizable MiniMax wave is more important than showing every stroke or letter.
+
+Use the correct magenta-to-red-to-orange MiniMax wave from reference 2, with its bold MINIMAX wordmark compactly beneath it as part of the logo. Omit the source asset's slogan and divider. Keep the logo bold enough to register at tiny size. Avoid a hard center divider, boxed badge, pasted-on sticker look or large blank gap between face and logo.
+Preserve the approved warm off-white/coral palette and soft editorial airbrush texture. Playful and generous, relaxed and confident, ordinary proportions; no caricature or ridicule.
+Make central recognition robust for both a square thumbnail and a circular profile-photo crop. No border or extra copy.

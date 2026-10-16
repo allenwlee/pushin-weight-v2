@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import uuid
 from collections import Counter
 from contextlib import contextmanager
 from copy import deepcopy
@@ -11,20 +13,25 @@ import yaml
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import DataError, connection, transaction
+from django.db.models import Q
 from django.utils import timezone
 
+from core.account_identity import publisher_discovery_label, publisher_identifier
+from core.collection_state import claim_direct_run, fenced_run, register_direct_job
 from core.hf_metadata_client import INVENTORY_VERSION, NAMESPACE, REPO_ID
+from core.measurement_taxonomy import digest
 from core.models import (
     Brand,
     BrandCompany,
+    CollectionObservation,
+    CollectionRun,
+    CollectionScopeRun,
     Company,
-    HFModelCatalogNamespaceRun,
-    HFModelCatalogObservation,
-    HFModelCatalogRun,
-    HFOrg,
+    DataSource,
     Product,
 )
 from core.product_metadata import apply_metadata
+from core.publisher_accounts import get_publisher, publisher_links
 
 FRONTIER_COMPANIES = ("openai", "anthropic", "google", "xai")
 CATALOG_LOCK = 6842060924
@@ -67,34 +74,34 @@ def resolve_scope(*, brands=None, companies=None, namespace=None, rules=None):
         if not Company.objects.filter(pk=company).exists():
             gaps.append({"company": company, "reason": "missing_company"})
             continue
-        orgs = HFOrg.objects.filter(company_id=company)
+        orgs = publisher_links(source="hf", company_id=company)
         if namespace:
-            orgs = orgs.filter(namespace=namespace)
+            orgs = orgs.filter(account__normalized_identifier=namespace.casefold())
         if not orgs.exists():
             gaps.append({"company": company, "reason": "missing_namespace"})
         for org in orgs:
-            if not org.confirmed:
+            if not org.ownership_confirmed:
                 gaps.append(
                     {
                         "company": company,
-                        "namespace": org.pk,
+                        "namespace": publisher_identifier(org.account),
                         "reason": "unconfirmed_namespace",
                     }
                 )
                 continue
-            if not NAMESPACE.fullmatch(org.pk):
+            if not NAMESPACE.fullmatch(publisher_identifier(org.account)):
                 raise ValueError("invalid stored HF namespace")
             entries.append(
                 {
-                    "namespace": org.pk,
+                    "namespace": publisher_identifier(org.account),
                     "company": company,
                     "brands": sorted(
                         BrandCompany.objects.filter(
                             company_id=company, brand__is_sentinel=False
                         ).values_list("brand_id", flat=True)
                     ),
-                    "ownership_evidence": org.discovered_via,
-                    "source_url": f"https://huggingface.co/{org.pk}",
+                    "ownership_evidence": publisher_discovery_label(org.account),
+                    "source_url": f"https://huggingface.co/{publisher_identifier(org.account)}",
                 }
             )
     entries.sort(key=lambda row: row["namespace"].casefold())
@@ -197,45 +204,56 @@ def check_scope(scope):
 
 @transaction.atomic
 def persist_product(observation, entry, rules, payload, group):
-    org = HFOrg.objects.select_for_update().get(pk=entry["namespace"])
+    if (
+        observation.run.purpose != "catalog"
+        or observation.run.source_id != "hf"
+        or observation.scope_run_id is None
+        or observation.scope_run.run_id != observation.run_id
+    ):
+        raise ValueError("HF catalog projection requires matching catalog evidence")
+    org = get_publisher(source="hf", identifier=entry["namespace"], lock=True)
     brands = sorted(
         BrandCompany.objects.select_for_update()
         .filter(company_id=org.company_id, brand__is_sentinel=False)
         .values_list("brand_id", flat=True)
     )
     if (
-        not org.confirmed
+        not org.ownership_confirmed
         or org.company_id != entry["company"]
         or brands != entry["brands"]
     ):
         raise ValueError("HF catalog scope changed during collection")
     product, created = Product.objects.get_or_create(
-        repo_id=observation.repo_id,
+        repo_id=observation.source_identifier,
         defaults={
-            "hf_org": org,
-            "brand_id": resolve_brand(observation.repo_id, entry, rules),
-            "display_name": observation.repo_id.split("/", 1)[1],
+            "publisher_account": org.account,
+            "brand_id": resolve_brand(observation.source_identifier, entry, rules),
+            "display_name": observation.source_identifier.split("/", 1)[1],
         },
     )
     product = Product.objects.select_for_update().get(pk=product.pk)
     if (
         product.hf_type != "model"
-        or (product.hf_org_id and product.hf_org_id.casefold() != org.pk.casefold())
+        or (
+            product.hf_namespace
+            and product.hf_namespace.casefold()
+            != publisher_identifier(org.account).casefold()
+        )
         or (product.brand_id and product.brand_id not in brands)
     ):
-        observation.outcome = "owner_conflict"
-        observation.save(update_fields=["outcome", "updated_at"])
+        observation.processing_outcome = "owner_conflict"
+        observation.save(update_fields=["processing_outcome", "updated_at"])
         return
     observation.product = product
     observation.created_product = observation.created_product or created
-    observation.outcome = (
+    observation.processing_outcome = (
         "complete" if groups_complete(observation.groups) else "pending"
     )
-    if not product.hf_org_id:
-        product.hf_org = org
+    if not product.publisher_account_id:
+        product.publisher_account = org.account
     if not product.brand_id:
-        product.brand_id = resolve_brand(observation.repo_id, entry, rules)
-    product.save(update_fields=["brand", "hf_org", "updated_at"])
+        product.brand_id = resolve_brand(observation.source_identifier, entry, rules)
+    product.save(update_fields=["brand", "publisher_account", "updated_at"])
     try:
         with transaction.atomic():
             apply_metadata(
@@ -244,26 +262,32 @@ def persist_product(observation, entry, rules, payload, group):
                 group=group,
                 observation={
                     "id": observation.pk,
-                    "run_id": str(observation.namespace_run.run_id),
+                    "run_id": str(observation.run_id),
                 },
             )
         if group == "listing":
             observation.groups[group] = "ok"
-        observation.outcome = (
+        observation.processing_outcome = (
             "complete" if groups_complete(observation.groups) else "pending"
         )
     except (ValidationError, DataError, ValueError, TypeError):
         observation.groups[group] = "projection_error"
-        observation.outcome = "projection_error"
+        observation.processing_outcome = "projection_error"
     observation.save(
-        update_fields=["product", "created_product", "groups", "outcome", "updated_at"]
+        update_fields=[
+            "product",
+            "created_product",
+            "groups",
+            "processing_outcome",
+            "updated_at",
+        ]
     )
 
 
 def _envelopes(result, group):
     return [
         {
-            **attempt,
+            **json.loads(json.dumps(attempt)),
             "group": group,
             "validation_outcome": result.outcome,
             "returned_fields": sorted(attempt["payload"])
@@ -284,7 +308,16 @@ def _persist_page(ns, result, rules):
     for item in result.payload:
         repo = item.get("id") or item["modelId"]
         observation, _ = ns.observations.get_or_create(
-            repo_key=repo.casefold(), defaults={"repo_id": repo}
+            resource_key=repo.casefold(),
+            defaults={
+                "run": ns.run,
+                "source_identifier": repo,
+                "source_subject_kind": "repository",
+                "observation_key": digest(
+                    ["catalog", str(ns.run_id), ns.scope_key, repo.casefold()]
+                ),
+                "processing_outcome": "pending",
+            },
         )
         observation.listing = item
         observation.save(update_fields=["listing", "updated_at"])
@@ -302,19 +335,27 @@ def _persist_page(ns, result, rules):
     ns.save()
 
 
-def _enrich(ns, hf, rules, visited, max_models, attempted):
-    for observation in ns.observations.exclude(
-        outcome__in=["owner_conflict", "complete"]
-    ).order_by("id"):
+def _save_scope(ns, claim, **kwargs):
+    with fenced_run(claim):
+        ns.save(**kwargs)
+
+
+def _enrich(ns, hf, rules, visited, max_models, attempted, claim):
+    for observation in (
+        ns.observations.exclude(processing_outcome__in=["owner_conflict", "complete"])
+        .select_related("run__job")
+        .defer("run__raw_payload", "run__job__definition")
+        .order_by("id")
+    ):
         if groups_complete(observation.groups):
             continue
         if (
-            observation.repo_key not in visited
+            observation.resource_key not in visited
             and max_models is not None
             and len(visited) >= max_models
         ):
             return "model_cap"
-        visited.add(observation.repo_key)
+        visited.add(observation.resource_key)
         for group in METADATA_GROUPS:
             if observation.groups.get(group) == "ok":
                 continue
@@ -324,52 +365,55 @@ def _enrich(ns, hf, rules, visited, max_models, attempted):
             if hf.stop_reason:
                 return hf.stop_reason
             attempted.add(key)
-            result = hf.model_group(observation.repo_id, group)
-            with transaction.atomic():
+            result = hf.model_group(observation.source_identifier, group)
+            with fenced_run(claim):
                 observation.envelopes += _envelopes(result, group)
                 observation.groups[group] = result.outcome
                 if result.outcome in {"ok", "partial_expansion"}:
                     persist_product(
                         observation, ns.ownership, rules, result.payload, group
                     )
-                if observation.outcome not in {"owner_conflict", "projection_error"}:
-                    observation.outcome = (
+                if observation.processing_outcome not in {
+                    "owner_conflict",
+                    "projection_error",
+                }:
+                    observation.processing_outcome = (
                         "complete" if groups_complete(observation.groups) else "partial"
                     )
                 observation.save()
     return None
 
 
-def _walk_namespace(ns, hf, rules, visited, max_models):
+def _walk_namespace(ns, hf, rules, visited, max_models, claim):
     # Completed namespace identity and pages are durable; resuming enrichment
     # does not spend requests checking them again.
     if not any(
         e["group"] == "identity" and e.get("validation_outcome") == "ok"
         for e in ns.envelopes
     ):
-        result = hf.namespace_info(ns.namespace)
+        result = hf.namespace_info(ns.scope_key)
         ns.envelopes += _envelopes(result, "identity")
         ns.outcome = result.outcome
-        ns.save()
+        _save_scope(ns, claim)
         if result.outcome != "ok":
             return
     attempted = set()
-    if reason := _enrich(ns, hf, rules, visited, max_models, attempted):
+    if reason := _enrich(ns, hf, rules, visited, max_models, attempted, claim):
         ns.outcome = reason
-        ns.save(update_fields=["outcome"])
+        _save_scope(ns, claim, update_fields=["outcome"])
         return
     restarted = False
     while not ns.enumeration_complete:
         if hf.stop_reason:
             ns.outcome = hf.stop_reason
-            ns.save(update_fields=["outcome"])
+            _save_scope(ns, claim, update_fields=["outcome"])
             return
         remaining = None if max_models is None else max_models - len(visited)
         if remaining is not None and remaining <= 0:
             ns.outcome = "model_cap"
-            ns.save(update_fields=["outcome"])
+            _save_scope(ns, claim, update_fields=["outcome"])
             return
-        result = hf.list_page(ns.namespace, ns.cursor, limit=min(100, remaining or 100))
+        result = hf.list_page(ns.scope_key, ns.cursor, limit=min(100, remaining or 100))
         if result.outcome != "ok":
             ns.envelopes += _envelopes(result, "listing")
             ns.outcome = result.outcome
@@ -384,51 +428,52 @@ def _walk_namespace(ns, hf, rules, visited, max_models):
                 ns.cursor_history = []
                 ns.outcome = "cursor_restart"
                 restarted = True
-                ns.save()
+                _save_scope(ns, claim)
                 continue
-            ns.save()
+            _save_scope(ns, claim)
             return
         if len(result.payload) > min(100, remaining or 100):
             ns.envelopes += _envelopes(result, "listing")
             ns.outcome = "provider_exceeded_limit"
-            ns.save()
+            _save_scope(ns, claim)
             return
-        _persist_page(ns, result, rules)
+        with fenced_run(claim):
+            _persist_page(ns, result, rules)
         visited.update(
             (item.get("id") or item["modelId"]).casefold() for item in result.payload
         )
         if ns.outcome in {"repeated_cursor", "empty_page_with_cursor"}:
             return
-        if reason := _enrich(ns, hf, rules, visited, max_models, attempted):
+        if reason := _enrich(ns, hf, rules, visited, max_models, attempted, claim):
             ns.outcome = reason
-            ns.save(update_fields=["outcome"])
+            _save_scope(ns, claim, update_fields=["outcome"])
             return
     ns.outcome = "exhausted"
-    ns.save(update_fields=["outcome"])
+    _save_scope(ns, claim, update_fields=["outcome"])
 
 
 def catalog_report(run, *, requests=0, stop_reason=None):
-    observations = HFModelCatalogObservation.objects.filter(namespace_run__run=run)
-    conflicts = observations.filter(outcome="owner_conflict").count()
+    observations = CollectionObservation.objects.filter(scope_run__run=run)
+    conflicts = observations.filter(processing_outcome="owner_conflict").count()
     gaps = observations.filter(
         product__isnull=False, product__brand__isnull=True
     ).count()
     namespaces = [
         {
-            "namespace": ns.namespace,
+            "namespace": ns.scope_key,
             "enumeration_complete": ns.enumeration_complete,
             "outcome": ns.outcome,
             "raw_count": ns.raw_count,
             "next_cursor": ns.cursor,
             "unique_models": ns.observations.count(),
         }
-        for ns in run.namespaces.order_by("namespace")
+        for ns in run.scopes.order_by("scope_key")
     ]
     enumeration_complete = bool(namespaces) and all(
         ns["enumeration_complete"] for ns in namespaces
     )
     enrichment_complete = (
-        not observations.exclude(outcome="complete").exists()
+        not observations.exclude(processing_outcome="complete").exists()
         and not observations.filter(product__isnull=True).exists()
     )
     stored_groups = list(observations.values_list("groups", flat=True))
@@ -442,19 +487,19 @@ def catalog_report(run, *, requests=0, stop_reason=None):
         "run_id": str(run.pk),
         "complete": enumeration_complete
         and enrichment_complete
-        and not run.scope["gaps"]
+        and not run.job.definition["scope"]["gaps"]
         and not gaps
         and not conflicts,
         "enumeration_complete": enumeration_complete,
         "enrichment_complete": enrichment_complete,
-        "scope_gaps": run.scope["gaps"],
+        "scope_gaps": run.job.definition["scope"]["gaps"],
         "attribution_gaps": gaps,
         "conflicts": conflicts,
         "group_outcomes": group_outcomes,
         "attribution_gap_repositories": list(
             observations.filter(
                 product__isnull=False, product__brand__isnull=True
-            ).values_list("repo_id", flat=True)
+            ).values_list("source_identifier", flat=True)
         ),
         "unique_models": observations.count(),
         "imported": imported,
@@ -471,23 +516,68 @@ def catalog_report(run, *, requests=0, stop_reason=None):
     }
 
 
+def resolve_catalog_run(run_id):
+    """Accept saved pre-merge UUIDs while isolating the HF catalog purpose."""
+    return CollectionRun.objects.get(
+        Q(pk=run_id) | Q(source_metadata__legacy_catalog__run_id=str(run_id)),
+        job__source_id="hf",
+        job__purpose="catalog",
+    )
+
+
+def catalog_scope(run):
+    """Read the frozen instructions owned by this run's job."""
+    return run.job.definition["scope"]
+
+
 def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
     if (scope is None) == (run_id is None):
         raise ValueError("supply scope or resume run, exclusively")
     if max_models is not None and max_models < 1:
         raise ValueError("model budget must be positive")
+    limits = {
+        "requests": hf.max_requests,
+        "seconds": hf.max_seconds,
+        "response_bytes": hf.max_bytes,
+        "total_bytes": hf.max_total_bytes,
+        "models": max_models,
+    }
     with catalog_lock():
         if run_id is not None:
-            run = HFModelCatalogRun.objects.get(pk=run_id)
-            check_scope(run.scope)
+            run = resolve_catalog_run(run_id)
+            check_scope(catalog_scope(run))
         else:
             check_scope(scope)
             with transaction.atomic():
-                run = HFModelCatalogRun.objects.create(scope=scope)
-                for entry in scope["namespaces"]:
-                    HFModelCatalogNamespaceRun.objects.create(
+                source, _ = DataSource.objects.get_or_create(
+                    pk="hf",
+                    defaults={"name": "Hugging Face", "source_type": "model_adoption"},
+                )
+                run_id = uuid.uuid4()
+                run = CollectionRun(
+                    id=run_id,
+                    job=register_direct_job(
+                        source_id=source.pk,
+                        purpose="catalog",
+                        scope=scope,
+                        driver="execute_catalog",
+                        limits=limits,
+                    ),
+                    status="pending",
+                    ingestion_key=digest(["catalog", "hf", str(run_id)]),
+                )
+        claim = claim_direct_run(
+            run,
+            driver="execute_catalog",
+            seconds=hf.max_seconds + 60,
+            limits=limits,
+        )
+        if run_id is not None and not run.scopes.exists():
+            with fenced_run(claim):
+                for entry in run.job.definition["scope"]["namespaces"]:
+                    CollectionScopeRun.objects.create(
                         run=run,
-                        namespace=entry["namespace"],
+                        scope_key=entry["namespace"],
                         ownership=entry,
                     )
         invocation = {
@@ -496,12 +586,16 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
             "retries": 0,
             "max_requests": hf.max_requests,
             "max_models": max_models,
+            "max_seconds": hf.max_seconds,
+            "max_response_bytes": hf.max_bytes,
+            "max_total_bytes": hf.max_total_bytes,
             "outcome": "running",
         }
         run.invocations.append(invocation)
-        run.outcome = "running"
-        run.finished_at = None
-        run.save()
+        run.status = "running"
+        run.completed_at = None
+        with fenced_run(claim):
+            run.save()
 
         def record_request(envelope):
             invocation["requests"] = hf.requests
@@ -509,29 +603,42 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
             invocation["last_request"] = {
                 key: envelope[key] for key in ("endpoint", "attempted_at")
             }
-            run.save(update_fields=["invocations", "updated_at"])
+            run.request_count = sum(i["requests"] for i in run.invocations)
+            with fenced_run(claim):
+                run.save(update_fields=["invocations", "request_count", "updated_at"])
 
         hf.on_attempt = record_request
         try:
             visited = set()
-            for ns in run.namespaces.order_by("namespace"):
+            for ns in run.scopes.order_by("scope_key"):
                 if hf.stop_reason:
                     break
-                _walk_namespace(ns, hf, run.scope["rules"], visited, max_models)
+                _walk_namespace(
+                    ns,
+                    hf,
+                    run.job.definition["scope"]["rules"],
+                    visited,
+                    max_models,
+                    claim,
+                )
             report = catalog_report(
                 run, requests=hf.requests, stop_reason=hf.stop_reason
             )
-            run.outcome = "complete" if report["complete"] else "partial"
+            run.status = "success" if report["complete"] else "partial"
             report["stop_reason"] = (
                 "complete"
                 if report["complete"]
                 else (report["stop_reason"] or "coverage_gaps")
             )
             run.report = report
-            run.finished_at = timezone.now() if report["complete"] else None
+            run.selected_count = report["unique_models"]
+            run.success_count = run.observations.filter(
+                processing_outcome="complete"
+            ).count()
+            run.completed_at = timezone.now() if report["complete"] else None
             return report
         except BaseException:
-            run.outcome = "interrupted"
+            run.status = "interrupted"
             run.report = {
                 **run.report,
                 "complete": False,
@@ -543,8 +650,12 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
             invocation.update(
                 requests=hf.requests,
                 retries=hf.retries,
-                outcome=run.outcome,
+                outcome="complete" if run.status == "success" else run.status,
                 ended_at=timezone.now().isoformat(),
             )
-            run.save()
-            hf.on_attempt = None
+            run.request_count = sum(i["requests"] for i in run.invocations)
+            try:
+                with fenced_run(claim):
+                    run.save()
+            finally:
+                hf.on_attempt = None

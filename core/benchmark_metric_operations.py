@@ -6,7 +6,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from core.measurement_taxonomy import require
-from core.models import DataSource, MetricCollectionRun, MetricValue
+from core.models import CollectionRun, DataSource, MetricValue
 
 OPERATION_LIMITS = {
     "poll_seconds": (300, 604800, 86400),
@@ -44,8 +44,8 @@ def collection_health(contract, *, now=None):
     now = now or timezone.now()
     result = {}
     for source, config in contract.source_configuration.items():
-        runs = MetricCollectionRun.objects.filter(
-            contract=contract, source_id=source
+        runs = CollectionRun.objects.filter(
+            job__contract=contract, job__source_id=source
         ).only(
             "status",
             "started_at",
@@ -57,8 +57,8 @@ def collection_health(contract, *, now=None):
         attempt = runs.order_by("-started_at", "-id").first()
         success = runs.filter(status="success").order_by("-completed_at", "-id").first()
         values = MetricValue.objects.filter(
-            observation__run__contract=contract,
-            observation__run__source_id=source,
+            observation__run__job__contract=contract,
+            observation__run__job__source_id=source,
             observation__run__status__in=["success", "partial"],
             observation__status="ok",
             observation__mapping__isnull=False,
@@ -125,9 +125,9 @@ def collection_health(contract, *, now=None):
 
             publication = publication_times(contract)
             expected = set(
-                contract.mappings.filter(source_id=source).values_list(
-                    "external_identifier", flat=True
-                )
+                contract.mappings.filter(
+                    purpose="metric", source_id=source
+                ).values_list("external_identifier", flat=True)
             )
             complete = bool(expected) and expected <= publication.keys()
             oldest = min(publication[k] for k in expected) if complete else None

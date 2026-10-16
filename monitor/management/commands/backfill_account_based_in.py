@@ -112,7 +112,7 @@ def _eligible_accounts(*, refresh: bool, eligible_before: datetime | None = None
         .exclude(handle="")
     )
     if not refresh:
-        queryset = queryset.filter(account_based_in_fetched_at__isnull=True)
+        queryset = queryset.filter(x_details__account_based_in_fetched_at__isnull=True)
     if eligible_before is not None:
         queryset = queryset.filter(first_seen_at__lte=eligible_before)
     return queryset

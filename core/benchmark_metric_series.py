@@ -13,8 +13,8 @@ from django.utils import timezone
 from core.benchmark_metric_store import native_date
 from core.measurement_taxonomy import require, resolve_products
 from core.models import (
-    MetricCollectionRun,
-    MetricObservation,
+    CollectionObservation,
+    CollectionRun,
     MetricValue,
     Post,
     SourceMetric,
@@ -144,7 +144,7 @@ def mapping_scope(contract, line):
     )
     mappings = list(
         contract.mappings.filter(
-            source_id=source, external_identifier__in=identifiers
+            purpose="metric", source_id=source, external_identifier__in=identifiers
         ).select_related("subject")
     )
     require(len(mappings) == len(identifiers), "line mapping missing or ambiguous")
@@ -326,9 +326,9 @@ def metric_points(contract, line, days):
         )
     lower, upper = days[0], days[-1]
     if source == "arena":
-        prior = MetricObservation.objects.filter(
-            run__contract=contract,
-            run__source_id="arena",
+        prior = CollectionObservation.objects.filter(
+            run__job__contract=contract,
+            run__job__source_id="arena",
             run__status__in=["success", "partial"],
             published_date__lt=lower,
             status="ok",
@@ -361,7 +361,7 @@ def metric_points(contract, line, days):
         queryset.filter(
             source_metric=definition,
             observation__mapping_id__in=mapping_ids,
-            observation__run__contract=contract,
+            observation__run__job__contract=contract,
             observation__run__status__in=["success", "partial"],
             observation__status="ok",
         )
@@ -488,9 +488,9 @@ def metric_points(contract, line, days):
         # A scoped archive may contain no tracked models at a publication.
         # Keep that publication as absence evidence without inventing a row.
         publication_runs = list(
-            MetricCollectionRun.objects.filter(
-                contract=contract,
-                source_id=source,
+            CollectionRun.objects.filter(
+                job__contract=contract,
+                job__source_id=source,
                 status__in=["success", "partial"],
                 source_metadata__publication_end__gte=str(prior or lower),
                 source_metadata__publication_start__lte=upper,
@@ -510,9 +510,9 @@ def metric_points(contract, line, days):
                 ) <= day <= upper and revision > complete_publications.get(day, (0,)):
                     complete_publications[day] = revision
         publications = (
-            MetricObservation.objects.filter(
-                run__contract=contract,
-                run__source_id=source,
+            CollectionObservation.objects.filter(
+                run__job__contract=contract,
+                run__job__source_id=source,
                 run__status__in=["success", "partial"],
                 status="ok",
                 source_metadata__publication_complete=True,
@@ -542,9 +542,9 @@ def metric_points(contract, line, days):
     observed_dates = set()
     if source == "openrouter":
         observed_dates = set(
-            MetricObservation.objects.filter(
-                run__contract=contract,
-                run__source_id=source,
+            CollectionObservation.objects.filter(
+                run__job__contract=contract,
+                run__job__source_id=source,
                 run__status__in=["success", "partial"],
                 status="ok",
                 dimensions__date__gte=lower,
@@ -701,12 +701,13 @@ def build_comparison(contract, preset_key, start_date=None, end_date=None):
         )
     latest = {}
     for run in (
-        MetricCollectionRun.objects.filter(contract=contract)
-        .order_by("source_id", "-started_at", "-id")
-        .distinct("source_id")
-        .only("source_id", "status", "started_at", "completed_at", "error_code")
+        CollectionRun.objects.filter(job__contract=contract)
+        .order_by("job__source_id", "-started_at", "-id")
+        .distinct("job__source_id")
+        .select_related("job")
+        .only("job__source_id", "status", "started_at", "completed_at", "error_code")
     ):
-        latest[run.source_id] = {
+        latest[run.job.source_id] = {
             "status": run.status,
             "last_attempt_at": run.started_at.isoformat(),
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,

@@ -8,10 +8,13 @@ paths. Brand drill-down: /brands/<brand>/.
 from django.shortcuts import redirect
 from django.urls import path
 
-from . import benchmark_views, views
+from . import benchmark_views, content_views, general_views, views
 from .editorial import views as editorial_views
 
 urlpatterns = [
+    path("general/", general_views.general, name="general"),
+    path("general/feed/", general_views.feed, name="general_feed"),
+    path("posts/<str:post_id>/", content_views.post_detail, name="post_detail"),
     path("benchmarks/<uuid:contract_id>/<slug:preset>/", benchmark_views.pulse, name="benchmark_pulse"),
     path("benchmarks/<uuid:contract_id>/<slug:preset>/series/", benchmark_views.series, name="benchmark_series"),
     path("stories/", editorial_views.archive, name="editorial_archive"),

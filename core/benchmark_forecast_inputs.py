@@ -14,7 +14,7 @@ def evidence_selection(contract, mapping_ids, cutoff):
     """Follow frozen history pins while retaining today's identity review boundary."""
     from core.benchmark_measurement_pins import measurement_contract
 
-    mappings = contract.mappings.all()
+    mappings = contract.mappings.filter(purpose="metric")
     if mapping_ids is not None:
         require(0 < len(mapping_ids) <= 1000, "bounded mapping selection required")
         mappings = mappings.filter(pk__in=mapping_ids)
@@ -32,7 +32,7 @@ def evidence_selection(contract, mapping_ids, cutoff):
     selected = list(mappings)
     require(len(selected) <= 1000, "bounded mapping selection required")
     selection = Q(
-        observation__run__contract=contract,
+        observation__run__job__contract=contract,
         observation__mapping_id__in=[m.pk for m in selected],
     )
     seen = set()
@@ -67,7 +67,8 @@ def evidence_selection(contract, mapping_ids, cutoff):
                     subject_id=mapping.subject_id,
                 )
                 selection |= Q(
-                    observation__run__contract=parent, observation__mapping=retained
+                    observation__run__job__contract=parent,
+                    observation__mapping=retained,
                 )
     return selection
 
@@ -108,9 +109,9 @@ def forecast_inputs(
                 observation__observed_at__lte=cutoff,
                 observation__run__completed_at__lte=cutoff,
                 observation__mapping__reviewed_at__lte=cutoff,
-                observation__run__contract__reviewed_at__lte=cutoff,
-                observation__run__contract__created_at__lte=cutoff,
-                observation__run__contract__taxonomy_version__created_at__lte=cutoff,
+                observation__run__job__contract__reviewed_at__lte=cutoff,
+                observation__run__job__contract__created_at__lte=cutoff,
+                observation__run__job__contract__taxonomy_version__created_at__lte=cutoff,
             )
             .filter(
                 Q(observation__run__source_as_of__isnull=True)
@@ -134,9 +135,9 @@ def forecast_inputs(
             )
     selected = list(
         values.select_related(
-            "observation__run", "observation__mapping", "source_metric"
+            "observation__run__job", "observation__mapping", "source_metric"
         )
-        .defer("observation__run__raw_payload")
+        .defer("observation__run__raw_payload", "observation__run__job__definition")
         .order_by("id")[: limit + 1]
     )
     require(
@@ -155,7 +156,7 @@ def forecast_inputs(
                 "run_id": str(run.pk),
                 "mapping_id": str(observation.mapping_id),
                 "subject_id": str(observation.mapping.subject_id),
-                "source": run.source_id,
+                "source": run.job.source_id,
                 "source_identifier": observation.source_identifier,
                 "metric": definition.metric_key,
                 "metric_definition_id": definition.pk,
@@ -191,7 +192,7 @@ def forecast_inputs(
                 },
             }
         )
-        datasets.add((run.source_id, metadata.get("dataset_id")))
+        datasets.add((run.job.source_id, metadata.get("dataset_id")))
     enforce_use(
         contract,
         {

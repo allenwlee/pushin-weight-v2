@@ -63,6 +63,19 @@ def test_japanese_geography_seed_covers_every_existing_country_and_region():
     catalog = json.loads(
         (Path(__file__).resolve().parents[1] / "monitor/data/account_geography_ja.json").read_text()
     )
+    # Django test flushes remove data-migration rows; seed this test's prerequisites.
+    taxonomy = json.loads(
+        (Path(__file__).resolve().parents[1] / "monitor/data/account_geography.json").read_text()
+    )
+    Country.objects.bulk_create(
+        [Country(code=row["code"], m49_code=row["m49_code"]) for row in taxonomy["countries"]],
+        ignore_conflicts=True,
+    )
+    Region.objects.bulk_create(
+        [Region(key=row["key"], m49_code=row["m49_code"], source=row["source"], level=row["level"])
+         for row in taxonomy["regions"]],
+        ignore_conflicts=True,
+    )
     call_command("seed_i18n_labels", verbosity=0)
     call_command("seed_i18n_labels", verbosity=0)
     assert dict(CountryLabel.objects.filter(lang="ja").values_list("country_id", "label")) == catalog["countries"]

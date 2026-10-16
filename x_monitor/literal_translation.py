@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import time
@@ -46,6 +47,13 @@ _LANGUAGE_DETECTION_ALLOWLIST = frozenset(
 )
 
 
+def chunk_translation_prompt_version(chunk_size: int = LONG_POST_THRESHOLD) -> str:
+    """Separate deterministic layouts within the existing chunk identity."""
+    if chunk_size == LONG_POST_THRESHOLD:
+        return CHUNK_TRANSLATION_PROMPT_VERSION
+    return f"{CHUNK_TRANSLATION_PROMPT_VERSION}-chars{chunk_size}"
+
+
 def translate_batch_literal_plaintext(
     tweets: list[dict[str, Any]],
     client: Any,
@@ -55,6 +63,7 @@ def translate_batch_literal_plaintext(
     max_workers: int = 1,
     telemetry_context: dict[str, Any] | None = None,
     paragraph_tracking: bool = False,
+    chunk_size: int = LONG_POST_THRESHOLD,
     cached_chunks: Mapping[str, Mapping[str, Mapping[str, Mapping[int, str]]]] | None = None,
     on_chunk_success: Callable[..., bool] | None = None,
 ) -> list[dict[str, Any]]:
@@ -79,6 +88,7 @@ def translate_batch_literal_plaintext(
                 deadline=deadline,
                 telemetry_context=telemetry_context,
                 paragraph_tracking=paragraph_tracking,
+                chunk_size=chunk_size,
                 cached_chunks=cached_chunks,
                 on_chunk_success=on_chunk_success,
             )
@@ -97,6 +107,7 @@ def translate_batch_literal_plaintext(
                     deadline=deadline,
                     telemetry_context=telemetry_context,
                     paragraph_tracking=paragraph_tracking,
+                    chunk_size=chunk_size,
                     cached_chunks=cached_chunks,
                     on_chunk_success=on_chunk_success,
                 ),
@@ -113,6 +124,7 @@ def _translate_one(
     deadline: Any | None,
     telemetry_context: dict[str, Any] | None,
     paragraph_tracking: bool,
+    chunk_size: int,
     cached_chunks: Mapping[str, Mapping[str, Mapping[str, Mapping[int, str]]]] | None,
     on_chunk_success: Callable[..., bool] | None,
 ) -> dict[str, Any]:
@@ -123,6 +135,11 @@ def _translate_one(
     model, thinking = _translation_request_defaults(cfg)
     row = _row(tweet, lang_detected=None, failed=False)
     source_language = _declared_source_language(tweet)
+    if getattr(client, "deferred_requests", False):
+        telemetry_context = {**(telemetry_context or {}), "batch_request_context": {
+            "post_ids": [row["tweet_id"]], "stage": "translation",
+            "source_fingerprint": hashlib.sha256(source.encode()).hexdigest(),
+        }}
     if source_language is None:
         detected, usage, latency_ms, outcome = _detect_source_language(
             source[:LONG_POST_THRESHOLD] if len(source) > LONG_POST_THRESHOLD else source,
@@ -147,7 +164,7 @@ def _translate_one(
         row[native_field] = source
 
     post_id = row["tweet_id"]
-    chunks = _split_translation_chunks(source) if len(source) > LONG_POST_THRESHOLD else None
+    chunks = _split_translation_chunks(source, chunk_size=chunk_size) if len(source) > LONG_POST_THRESHOLD else None
     if chunks is not None and len(chunks) > MAX_CHUNKS_PER_POST:
         row["translation_failed"] = True
         row["failure_reasons"]["post"] = "chunk_limit_exceeded"
@@ -187,6 +204,8 @@ def _translate_one(
                 row["latency_ms"] += latency_ms
                 _record_call_outcome(row, target_language, outcome, chunk_index=index)
                 if part is None:
+                    if outcome == "not_sent_async_pending":
+                        continue
                     break
                 if on_chunk_success is not None:
                     try:
@@ -194,7 +213,7 @@ def _translate_one(
                             tweet=tweet, source_language=source_language,
                             target_language=target_language, chunk_index=index,
                             source_chunk=chunk, translated_text=part, model=model,
-                            prompt_version=CHUNK_TRANSLATION_PROMPT_VERSION, usage=usage,
+                            prompt_version=chunk_translation_prompt_version(chunk_size), usage=usage,
                         )
                     except Exception as exc:  # noqa: BLE001 - one post must not abort its peers.
                         logger.warning(
@@ -297,6 +316,12 @@ def _translate_target(
     context_after: str = "",
 ) -> tuple[str | None, dict[str, int | float | str | None], int, str]:
     from .translation_invariants import protect_translation_spans
+
+    if (telemetry_context or {}).get("batch_request_context"):
+        telemetry_context = {**telemetry_context, "batch_request_context": {
+            **telemetry_context["batch_request_context"], "target_language": target_language,
+            "source_language": source_language, "chunk_index": chunk_index,
+        }}
 
     payload, quantities = protect_translation_spans(source, target_language)
     if paragraph_tracking:
@@ -419,6 +444,24 @@ def _is_untranslated_copy(source: str, translated: str, target_language: str) ->
     # Explicit pronunciation spellings are intentionally copied, not prose.
     prose, _ = protect_translation_spans(source, target_language)
     prose = re.sub(r"```[\s\S]*?```|`[^`]*`|https?://\S+|[@#][\w]+", "", prose)
+    # Bare model identifiers are often posted without Markdown code fences.
+    prose = re.sub(
+        r"(?<!\S)(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]*[-_0-9][A-Za-z0-9._-]+"
+        r"|[A-Za-z0-9._-]+\.(?:safetensors|gguf|ggml|onnx|pth|pt|bin))(?!\S)",
+        "", prose,
+    )
+    lines = []
+    for line in prose.splitlines():
+        tokens = line.split()
+        versioned_name = (
+            1 <= len(tokens) <= 6
+            and any(re.search(r"\d", token) for token in tokens)
+            and all(re.fullmatch(r"(?:[A-Z][A-Za-z0-9.+_-]*|\d[A-Za-z0-9.+_-]*)", token)
+                    for token in tokens)
+        )
+        if not versioned_name:
+            lines.append(line)
+    prose = "\n".join(lines)
     cjk = len(re.findall(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]", prose))
     if target_language == "en":
         return cjk >= 20
@@ -549,20 +592,23 @@ def _parse_detected_language(text: str | None) -> str | None:
     return code if code in _LANGUAGE_DETECTION_ALLOWLIST else None
 
 
-def _split_translation_chunks(source: str) -> list[str]:
+def _split_translation_chunks(source: str, *, chunk_size: int = LONG_POST_THRESHOLD) -> list[str]:
     """Partition source without changing a character, preferring line boundaries."""
     chunks: list[str] = []
+    if not 0 < chunk_size <= LONG_POST_THRESHOLD:
+        raise ValueError("translation chunk size must be between 1 and the normal long-post threshold")
+    word_floor = int(chunk_size * .8)
     current = ""
     for line in source.splitlines(keepends=True):
-        if current and len(current) + len(line) > LONG_POST_THRESHOLD:
+        if current and len(current) + len(line) > chunk_size:
             chunks.append(current)
             current = ""
-        while len(line) > LONG_POST_THRESHOLD:
+        while len(line) > chunk_size:
             # Very long paragraphs have no paragraph boundary. Prefer a word
-            # boundary near 5k, falling back to a hard cut for unbroken text.
-            boundary = max(line.rfind(" ", 4_000, LONG_POST_THRESHOLD),
-                           line.rfind("\t", 4_000, LONG_POST_THRESHOLD))
-            cut = boundary + 1 if boundary >= 4_000 else LONG_POST_THRESHOLD
+            # boundary near the limit, falling back to a hard cut for unbroken text.
+            boundary = max(line.rfind(" ", word_floor, chunk_size),
+                           line.rfind("\t", word_floor, chunk_size))
+            cut = boundary + 1 if boundary >= word_floor else chunk_size
             chunks.append(line[:cut])
             line = line[cut:]
         current += line
@@ -575,7 +621,7 @@ def _split_translation_chunks(source: str) -> list[str]:
 def _record_call_outcome(
     row: dict[str, Any], target: str, outcome: str, *, chunk_index: int | None = None
 ) -> None:
-    if not outcome.startswith("not_sent_"):
+    if not outcome.startswith("not_sent_") and outcome != "cached":
         row["provider_calls"] += 1
     if outcome not in {"returned", "cached"}:
         prefix = f"chunk_{chunk_index}:" if chunk_index is not None else ""
@@ -595,6 +641,7 @@ def _call_text(
 ) -> tuple[str | None, dict[str, int | float | str | None], int, str]:
     """Make one non-retrying raw-text request and retain usage on every outcome."""
     context = dict(telemetry_context or {})
+    batch_context = context.pop("batch_request_context", None)
     context["provider_host_class"] = provider_host_class(client)
     started = time.monotonic()
     kwargs: dict[str, Any] = {
@@ -602,6 +649,8 @@ def _call_text(
         "max_tokens": max_tokens,
         "messages": [{"role": "user", "content": prompt}],
     }
+    if batch_context is not None:
+        kwargs["_batch_context"] = {**batch_context, "operation": role}
     if thinking is not None:
         kwargs["thinking"] = thinking
     if getattr(client, "request_profile", None) == "deepseek_0731":
@@ -637,7 +686,7 @@ def _call_text(
             role=role,
             model=model,
             attempt=1,
-            outcome="success",
+            outcome="cached" if getattr(client, "deferred_requests", False) else "success",
             started=started,
             response=response,
             prompt=prompt,
@@ -647,8 +696,11 @@ def _call_text(
     except Exception as exc:  # noqa: BLE001 - provider transports attach usage to errors too.
         from .attribution import LLMCallBudgetExhausted
         from .deepinfra import DeepInfraPermanentError
+        from .deferred_inference import DeferredRequestPending
 
         usage = normalize_usage(getattr(exc, "provider_usage", None))
+        if isinstance(exc, DeferredRequestPending):
+            return None, usage, _elapsed_ms(started), "not_sent_async_pending"
         if isinstance(exc, LLMCallBudgetExhausted):
             return None, usage, _elapsed_ms(started), "not_sent_call_budget"
         if isinstance(exc, DeepInfraPermanentError) and str(exc) in {

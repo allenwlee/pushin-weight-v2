@@ -38,6 +38,7 @@ from scripts.staging_refresh.receipt import (
     decode_database_comment,
     encode_database_comment,
 )
+from tests.collection_fixtures import evidence_job
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 POLICY_PATH = REPO_ROOT / "config" / "staging_refresh.yaml"
@@ -126,6 +127,10 @@ class FakeAdapter:
 
     def drop_shadow(self, _url: str, name: str) -> None:
         self.events.append(f"shadow:drop:{name}")
+
+    def purge_collection_runtime(self, _url: str, name: str):
+        self.events.append(f"candidate:purge-collection:{name}")
+        return {}
 
     def scrub_candidate(self, _url: str, name: str) -> ScrubReport:
         self.events.append(f"candidate:scrub:{name}")
@@ -580,6 +585,7 @@ def test_candidate_runs_migrations_scrub_and_full_validation_before_marking(
         ["manage.py", "migrate", "--noinput"],
         ["manage.py", "check", "--deploy"],
         ["manage.py", "migrate", "--check"],
+        ["manage.py", "normalize_collection_run_jobs", "--purpose=metric"],
     ]
     assert events.index(f"candidate:scrub:{candidate.name}") < events.index(
         f"candidate:inspect:{candidate.name}"
@@ -589,13 +595,16 @@ def test_candidate_runs_migrations_scrub_and_full_validation_before_marking(
     assert result.scrub.removed_narratives == 3
 
 
-def test_static_pending_migration_deltas_remain_empty_for_source_dependent_seeds() -> None:
+def test_static_pending_migration_deltas_remain_empty_for_source_dependent_seeds() -> (
+    None
+):
     policy = load_policy(POLICY_PATH)
 
     assert _pending_migration_count_deltas(policy, [("core", "0032", None)]) == {}
-    assert _pending_migration_translation_count_deltas(
-        policy, [("core", "0032", None)]
-    ) == {}
+    assert (
+        _pending_migration_translation_count_deltas(policy, [("core", "0032", None)])
+        == {}
+    )
 
 
 def test_source_exact_counts_skip_absent_optional_tables(
@@ -619,6 +628,69 @@ def test_source_exact_counts_skip_absent_optional_tables(
 
     assert counts == expected
     assert observed == ["model_releases", "posts"]
+
+
+def test_source_exact_counts_map_pre_merge_numeric_tables(monkeypatch):
+    policy = load_policy(POLICY_PATH)
+    expected = {"metric_collection_runs": 2, "metric_observations": 7}
+    monkeypatch.setattr(
+        refresh_database, "_table_count", lambda cursor, table: expected[table]
+    )
+    assert refresh_database._source_exact_row_counts(
+        object(), policy, frozenset(expected)
+    ) == {
+        "collection_runs": 2,
+        "collection_observations": 7,
+    }
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_shared_collection_scrub_preserves_numeric_evidence():
+    from django.db import connection, transaction
+
+    from core.benchmark_metric_store import persist_source
+    from core.models import (
+        CollectionObservation,
+        CollectionRun,
+        CollectionScopeRun,
+        MetricValue,
+    )
+    from tests.test_benchmark_download_persistence import configured, payload
+
+    numeric = persist_source(configured(), "hf", "9" * 64, payload())
+    value_ids = list(MetricValue.objects.values_list("pk", flat=True))
+    catalog = CollectionRun.objects.create(
+        job=evidence_job(source_id="hf", purpose="catalog"),
+        ingestion_key="8" * 64,
+        status="pending",
+    )
+    scope = CollectionScopeRun.objects.create(
+        run=catalog, scope_key="publisher", ownership={}
+    )
+    CollectionObservation.objects.create(
+        run=catalog,
+        scope_run=scope,
+        resource_key="publisher/model",
+        source_identifier="publisher/model",
+        source_subject_kind="repository",
+        observation_key="7" * 64,
+    )
+    policy = load_policy(POLICY_PATH)
+    with connection.cursor() as cursor:
+        counts = refresh_database._source_exact_row_counts(
+            cursor, policy, frozenset({"collection_runs", "collection_observations"})
+        )
+    assert counts == {
+        "collection_runs": 1,
+        "collection_observations": numeric.observations.count(),
+    }
+    with transaction.atomic(), connection.cursor() as cursor:
+        scrub_candidate_data(cursor, policy)
+    assert CollectionRun.objects.filter(pk=numeric.pk).exists()
+    assert not CollectionRun.objects.filter(job__purpose="catalog").exists()
+    assert not CollectionScopeRun.objects.exists()
+    assert list(MetricValue.objects.values_list("pk", flat=True)) == value_ids
 
 
 class SeedSnapshotCursor:
@@ -726,8 +798,7 @@ def test_pending_0049_conflicting_company_owner_fails_closed() -> None:
     with pytest.raises(
         RefreshError,
         match=(
-            "source_forward_seed_conflict:"
-            "core.0049_rare_type_domain_records:openai"
+            "source_forward_seed_conflict:core.0049_rare_type_domain_records:openai"
         ),
     ):
         _seed_deltas(
