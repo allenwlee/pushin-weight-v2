@@ -71,6 +71,18 @@ class TwitterApiServerError(RuntimeError):
     """Raised on HTTP 5xx."""
 
 
+def _search_results(data: Any) -> list[dict[str, Any]]:
+    """Reject provider errors before an empty result can certify exhaustion."""
+    if not isinstance(data, dict):
+        raise TypeError("TwitterAPI.io search response must be an object")
+    if str(data.get("status", "")).lower() in {"error", "failed", "failure"} or data.get("error"):
+        raise ValueError("TwitterAPI.io search response reports a provider error")
+    results = data.get("tweets") if "tweets" in data else data.get("data")
+    if not isinstance(results, list):
+        raise TypeError("TwitterAPI.io search response must contain a result list")
+    return results
+
+
 @dataclass(frozen=True)
 class SearchPage:
     """One received search page with truthful continuation and receipt clocks."""
@@ -326,7 +338,7 @@ class TwitterApiClient:
             data = self._get(SEARCH_PATH, params)
             received_at = datetime.now(timezone.utc)
             received_monotonic = time.monotonic()
-            tweets = data.get("tweets") or data.get("data") or []
+            tweets = _search_results(data)
             remaining = max_results - n_returned
             page_items: list[dict[str, Any]] = []
             for raw in tweets[:remaining]:
@@ -467,11 +479,7 @@ class TwitterApiClient:
             capture_raw=True,
             raw_sink=receipt_sink,
         )
-        if not isinstance(data, dict):
-            raise TypeError("TwitterAPI.io search response must be an object")
-        raw_items = data.get("tweets") or data.get("data") or []
-        if not isinstance(raw_items, list):
-            raise TypeError("TwitterAPI.io search results must be a list")
+        raw_items = _search_results(data)
         normalized = []
         normalization_errors = 0
         for item in raw_items[:max_results]:
