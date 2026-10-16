@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -15,10 +16,27 @@ else:
 _MIGRATION_LOCK_ID = 8_675_309
 
 
-def run_migrations(*, connection, execute_migrate) -> None:
-    """Run every build migration while holding the shared PostgreSQL lock."""
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT pg_advisory_lock(%s)", [_MIGRATION_LOCK_ID])
+def run_migrations(
+    *,
+    connection,
+    execute_migrate,
+    wait_seconds=900,
+    sleep=time.sleep,
+    clock=time.monotonic,
+) -> None:
+    """Serialize builds without leaving a database query waiting during DDL."""
+    deadline = clock() + wait_seconds
+    while True:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_try_advisory_lock(%s)", [_MIGRATION_LOCK_ID])
+            acquired = cursor.fetchone()[0]
+        if acquired:
+            break
+        if clock() >= deadline:
+            raise DatabaseLockError("migration_lock_timeout")
+        # Close the statement before sleeping. A blocking lock query can hold a
+        # virtual transaction that CREATE INDEX CONCURRENTLY must wait to finish.
+        sleep(min(0.25, max(0, deadline - clock())))
     print(f"Acquired migration advisory lock {_MIGRATION_LOCK_ID}", flush=True)
     try:
         execute_migrate()
@@ -39,7 +57,10 @@ def main(
     values = os.environ if environ is None else environ
     database_url = values.get("DATABASE_URL")
     if not database_url:
-        print("Migration cluster lock unavailable; set DATABASE_URL and retry.", file=sys.stderr)
+        print(
+            "Migration cluster lock unavailable; set DATABASE_URL and retry.",
+            file=sys.stderr,
+        )
         return 75
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "project.settings")
     setup_django()
@@ -61,7 +82,9 @@ def main(
                 execute_migrate=migration_command,
             )
     except DatabaseLockError as exc:
-        print(f"Migration cluster lock failed ({exc}); retry the deploy.", file=sys.stderr)
+        print(
+            f"Migration cluster lock failed ({exc}); retry the deploy.", file=sys.stderr
+        )
         return 75
     return 0
 
