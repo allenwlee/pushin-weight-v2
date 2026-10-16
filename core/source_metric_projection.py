@@ -57,6 +57,65 @@ def validate_statistics_mapping(subject, row, source, taxonomy):
     from core.collection_identity import qualified_ownership
     from core.models import Account
 
+    if source in {"openrouter", "arena"}:
+        from core.models import SourceSubjectMapping
+
+        metadata = row.get("identifier_metadata", {})
+        reviewed = SourceSubjectMapping.objects.select_related(
+            "subject", "publisher_account"
+        ).get(
+            pk=metadata.get("catalog_mapping_id"), purpose="catalog", source_id=source
+        )
+        require(
+            reviewed.mapping_hash == metadata.get("catalog_mapping_hash")
+            and reviewed.subject_id == subject.pk
+            and reviewed.external_identifier == row["external_identifier"]
+            and reviewed.identifier_scope
+            == ("rankings_permaslug" if source == "openrouter" else "arena_model_name")
+            and reviewed.publisher_account is not None
+            and qualified_ownership(reviewed.publisher_account, subject),
+            "reviewed publication identifier/ownership changed",
+        )
+        require(
+            str(reviewed.publisher_account_id) == str(row.get("publisher_account_key")),
+            "publication publisher changed",
+        )
+        pin = metadata.get("publisher_ownership")
+        require(
+            pin == _ownership_pin(reviewed.publisher_account),
+            "publisher ownership pin changed",
+        )
+        account = reviewed.publisher_account
+        require(
+            metadata.get("publisher_native_identity")
+            == {
+                "source": account.data_source_id,
+                "identifier": account.normalized_identifier,
+                "account_kind": account.account_kind,
+            },
+            "publication publisher native identity changed",
+        )
+        if account.data_source_id == "hf":
+            require(
+                CompanyAccount.objects.filter(
+                    account=account, role_id="official", ownership_confirmed=True
+                ).exists(),
+                "HF publication publisher ownership unconfirmed",
+            )
+        frozen = taxonomy.snapshot["products"][str(subject.product_id)]
+        require(
+            subject.product.brand_id == frozen["brand"]
+            and subject.product.type == frozen["type"]
+            and subject.product.private is not True
+            and subject.product.disabled is not True,
+            "publication product identity changed",
+        )
+        if frozen.get("model_kind_qualification"):
+            from core.model_kind_qualification import validate_model_kind
+
+            validate_model_kind(subject.product, frozen["model_kind_qualification"])
+        return
+
     publisher = row.get("publisher_account_key")
     require(publisher is not None, "reviewed publisher required")
     account = Account.objects.get(pk=publisher, data_source_id=source)
@@ -88,9 +147,39 @@ def validate_statistics_mapping(subject, row, source, taxonomy):
         )
         frozen = taxonomy.snapshot["products"][str(subject.product_id)]
         require(
-            frozen["type"] in {"llm-model", "other-ai-model", "agent-harness"},
+            subject.product.brand_id == frozen["brand"]
+            and subject.product.type == frozen["type"]
+            and subject.product.private is not True
+            and subject.product.disabled is not True,
+            "statistics product identity changed",
+        )
+        require(
+            frozen["type"] in {"llm-model", "other-ai-model", "agent-harness"}
+            or frozen.get("model_kind_qualification"),
             "unreviewed statistics product type",
         )
+        if frozen.get("model_kind_qualification"):
+            from core.model_kind_qualification import validate_model_kind
+
+            validate_model_kind(subject.product, frozen["model_kind_qualification"])
+
+
+def validate_publication_provenance(source, settings):
+    provenance = settings.get("publication_provenance", {})
+    require(
+        provenance.get("dataset_id")
+        == {
+            "openrouter": "openrouter/rankings-daily",
+            "arena": "lmarena-ai/leaderboard-dataset",
+        }[source]
+        and provenance.get("reviewed_by")
+        and provenance.get("source_url")
+        == {
+            "openrouter": "https://openrouter.ai/rankings",
+            "arena": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
+        }[source],
+        "reviewed official publication provenance required",
+    )
 
 
 def configure_source_statistics(spec):
@@ -101,12 +190,25 @@ def configure_source_statistics(spec):
     for mapping in selected["mappings"]:
         publisher = mapping.get("publisher_account_key")
         require(publisher is not None, "reviewed publisher required")
-        pin = _ownership_pin(
-            Account.objects.get(pk=publisher, data_source_id=mapping["source"])
+        account = Account.objects.get(pk=publisher)
+        require(
+            mapping["source"] in {"arena", "openrouter"}
+            or account.data_source_id == mapping["source"],
+            "publisher source mismatch",
         )
+        pin = _ownership_pin(account)
         mapping.setdefault("identifier_metadata", {}).setdefault(
             "publisher_ownership", pin
         )
+        if mapping["source"] in {"openrouter", "arena"}:
+            mapping["identifier_metadata"].setdefault(
+                "publisher_native_identity",
+                {
+                    "source": account.data_source_id,
+                    "identifier": account.normalized_identifier,
+                    "account_kind": account.account_kind,
+                },
+            )
     for source, settings in selected["source_configuration"].items():
         if source == "hf":
             versions = settings.setdefault("metric_versions", {})
@@ -201,6 +303,9 @@ def evidence_rows(contract, source, evidence):
     require(evidence.status == "ok", "source evidence is an error")
     raw = evidence.listing
     require(isinstance(raw, dict), "native object evidence required")
+    if source in {"openrouter", "arena"}:
+        yield from _publication_rows(contract, source, evidence)
+        return
     dimensions = {}
     if evidence.source_subject_kind == "account":
         identity = evidence.source_identifier
@@ -298,6 +403,7 @@ def evidence_rows(contract, source, evidence):
             "payload_sha256": digest(raw),
         }
     metadata = {
+        **copy.deepcopy(evidence.source_metadata),
         "projection_kind": SOURCE_STATISTICS_POLICY,
         "snapshot_kind": snapshot_kind,
         "snapshot_identity": snapshot,
@@ -334,6 +440,60 @@ def evidence_rows(contract, source, evidence):
     for key, times in evidence.source_metadata.get("metric_times", {}).items():
         if key in row["metrics"]:
             row["metrics"][key].update(times)
+    yield row
+
+
+def _publication_rows(contract, source, evidence):
+    settings = contract.source_configuration[source]
+    validate_publication_provenance(source, settings)
+    require(
+        evidence.dimensions.get("kind") == "publication_row",
+        "selected publication evidence required",
+    )
+    require(
+        evidence.source_metadata.get("publication_provenance")
+        == settings["publication_provenance"],
+        "publication provenance pin mismatch",
+    )
+    payload = evidence.listing
+    require(len(payload.get("rows", [])) == 1, "one immutable publication row required")
+    if source == "arena":
+        require(
+            payload.get("config") == settings.get("config"),
+            "Arena contract configuration mismatch",
+        )
+    row = next(native_rows(source, payload))
+    row["identifier_scope"] = (
+        "rankings_permaslug" if source == "openrouter" else "arena_model_name"
+    )
+    row["observed_at"] = evidence.observed_at.isoformat()
+    row["resource_key"] = row["source_identifier"]
+    snapshot = evidence.source_metadata["numeric_snapshot_identity"]
+    row["dimensions"]["revision"] = snapshot["revision"]
+    row["source_metadata"] = {
+        **row["source_metadata"],
+        "projection_kind": SOURCE_STATISTICS_POLICY,
+        "snapshot_kind": "publication",
+        "snapshot_identity": snapshot,
+        "origin_observation_id": evidence.pk,
+        "origin_run_id": str(evidence.run_id),
+        "source_payload_sha256": digest(payload),
+        "publication_provenance": settings["publication_provenance"],
+        "dataset_id": settings["publication_provenance"]["dataset_id"],
+        "clocks": copy.deepcopy(evidence.source_metadata.get("clocks", {})),
+    }
+    row["projection_key"] = digest(
+        [
+            SOURCE_STATISTICS_POLICY,
+            source,
+            contract.contract_hash,
+            digest(settings["definitions"]),
+            row["source_subject_kind"],
+            row["source_identifier"],
+            row["dimensions"],
+            snapshot,
+        ]
+    )
     yield row
 
 
@@ -435,11 +595,20 @@ def _project_evidence(
             "projection time budget exceeded",
         )
         try:
+            dataset = evidence.source_metadata.get(
+                "dataset_id"
+            ) or evidence.source_metadata.get("publication_provenance", {}).get(
+                "dataset_id"
+            )
+            if dataset:
+                enforce_source_collection(contract, source, dataset=dataset)
             rows = list(evidence_rows(contract, source, evidence))
             entries = prepare_rows(
                 contract,
                 source,
-                {},
+                {"config": contract.source_configuration[source].get("config")}
+                if source == "arena"
+                else {},
                 adapter=lambda _, prepared_rows=rows: prepared_rows,
             )
             for data, values in entries:
@@ -619,7 +788,7 @@ def replay_saved_evidence(job_id):
         run__source_id=job.source_id,
         run__purpose="catalog",
         pk__gt=cursor,
-        source_subject_kind__in=["repository", "account"],
+        source_subject_kind__in=["repository", "account", "model", "aggregate"],
         status="ok",
     ).order_by("pk")
     if job.source_id == "hf":
@@ -638,6 +807,8 @@ def replay_saved_evidence(job_id):
                 ]
             )
         )
+    if job.source_id in {"openrouter", "arena"}:
+        selected = selected.filter(dimensions__kind="publication_row")
     ids, consumed, complete = [], 0, True
     for evidence in selected.only("id", "listing", "source_metadata", "dimensions")[
         : job.definition["budgets"]["items"] + 1

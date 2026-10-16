@@ -65,7 +65,13 @@ def _latest_before_cutoff(observations, date_of, cutoff):
 def _github_history(claim, job, pins, budget, items):
     import os
 
-    from core.github_catalog import _events, _pinned_metadata, _record
+    from core.github_catalog import (
+        _events,
+        _pinned_metadata,
+        _queue_numeric,
+        _record,
+        _release_assets,
+    )
     from core.github_metadata_client import GitHubMetadataClient
 
     client = GitHubMetadataClient(
@@ -127,6 +133,7 @@ def _github_history(claim, job, pins, budget, items):
                     observed_at=result.observed_at,
                 )
             )
+            _queue_numeric(claim, run, created)
 
         checkpoint_scope(
             claim,
@@ -136,7 +143,7 @@ def _github_history(claim, job, pins, budget, items):
             write=write,
         )
         repository = created[0]
-        _events(
+        releases = _events(
             claim,
             client,
             repository,
@@ -144,6 +151,18 @@ def _github_history(claim, job, pins, budget, items):
             items,
             job.definition["budgets"]["items"],
         )
+        if (
+            job.definition["scope"].get("numeric_projection_policy")
+            == "source-statistics-v1"
+        ):
+            _release_assets(
+                claim,
+                client,
+                repository,
+                releases,
+                items,
+                job.definition["budgets"]["items"],
+            )
         _events(
             claim, client, repository, "tags", items, job.definition["budgets"]["items"]
         )
@@ -249,7 +268,9 @@ def _hf_history(claim, job, pins, budget, items):
                         contract = MetricCollectionContract.objects.get(
                             pk=job.definition["scope"]["numeric_contract_id"]
                         )
-                        if any(
+                        if contract.source_configuration["hf"].get(
+                            "eligibility_policy"
+                        ) == "source-statistics-v1" and any(
                             key in data
                             for key in (
                                 "downloads",

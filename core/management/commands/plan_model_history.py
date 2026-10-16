@@ -17,6 +17,9 @@ class Command(BaseCommand):
         parser.add_argument("--brands", required=True)
         parser.add_argument("--cutoff")
         parser.add_argument("--freeze", action="store_true")
+        parser.add_argument(
+            "--qualification-policy", choices=["hf-public-model-registry-v1"]
+        )
         parser.add_argument("--job-key-prefix", default="model-history")
         parser.add_argument("--requests", type=int, default=40)
         parser.add_argument("--seconds", type=int, default=180)
@@ -28,6 +31,7 @@ class Command(BaseCommand):
             arguments = {
                 "brand_ids": options["brands"].split(","),
                 "cutoff": options["cutoff"] or timezone.now(),
+                "qualification_policy": options["qualification_policy"],
             }
             if options["freeze"]:
                 jobs = freeze_model_history(

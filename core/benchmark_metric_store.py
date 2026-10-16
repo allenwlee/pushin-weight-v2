@@ -391,8 +391,22 @@ def native_rows(source, payload):
             require(row["category"] == "overall", "Arena category mismatch")
             config = payload.get("config")
             require(
-                config in {"text", "text_style_control"}, "Arena configuration mismatch"
+                config in {"text", "text_style_control", "agent"},
+                "Arena configuration mismatch",
             )
+            if config == "agent":
+                row = {
+                    **row,
+                    **{
+                        key: row[wire]
+                        for key, wire in (
+                            ("agent_score", "score"),
+                            ("agent_score_ci_lower", "score_ci_lower"),
+                            ("agent_score_ci_upper", "score_ci_upper"),
+                        )
+                        if wire in row
+                    },
+                }
             out = {
                 "source_identifier": row["model_name"],
                 "source_subject_kind": "model",
@@ -407,12 +421,23 @@ def native_rows(source, payload):
                         "as_of_date": day,
                     }
                     for key in (
-                        "rating",
-                        "rating_lower",
-                        "rating_upper",
-                        "vote_count",
-                        "rank",
-                        "variance",
+                        (
+                            "agent_score",
+                            "agent_score_ci_lower",
+                            "agent_score_ci_upper",
+                            "observation_count",
+                            "session_count",
+                            "rank",
+                        )
+                        if config == "agent"
+                        else (
+                            "rating",
+                            "rating_lower",
+                            "rating_upper",
+                            "vote_count",
+                            "rank",
+                            "variance",
+                        )
                     )
                     if row.get(key) is not None
                 },
@@ -482,6 +507,20 @@ def prepare_rows(contract, source, payload, *, adapter=None):
         mapping = mappings.get(
             (kind, scope, identity.casefold() if source == "hf" else identity)
         )
+        if statistics and mapping:
+            from core.source_metric_projection import validate_statistics_mapping
+
+            validate_statistics_mapping(
+                mapping.subject,
+                {
+                    "external_identifier": mapping.external_identifier,
+                    "source_subject_kind": mapping.source_subject_kind,
+                    "publisher_account_key": str(mapping.publisher_account_id),
+                    "identifier_metadata": mapping.identifier_metadata,
+                },
+                source,
+                contract.taxonomy_version,
+            )
         if (
             statistics
             and mapping

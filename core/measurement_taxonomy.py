@@ -67,13 +67,22 @@ def prepare_taxonomy(spec):
         )
         label = obj.display_name or str(obj.pk)
         if kind == "product":
-            require(obj.type is not None, f"unreviewed product type: {key}")
+            qualification = row.get("model_kind_qualification")
+            if qualification is not None:
+                from core.model_kind_qualification import validate_model_kind
+
+                validate_model_kind(obj, qualification)
+            require(
+                obj.type is not None or qualification, f"unreviewed product type: {key}"
+            )
             snapshot["products"][key] = {
                 "label": label,
                 "type": obj.type,
                 "brand": obj.brand_id,
                 "repo_id": obj.repo_id,
             }
+            if qualification:
+                snapshot["products"][key]["model_kind_qualification"] = qualification
         snapshot["subjects"][str(subject_id(kind, key))] = {
             "kind": kind,
             "key": key,

@@ -189,7 +189,8 @@ class Budget:
 
     def arena_asset(self, config=ARENA_CONFIG, split="latest"):
         require(
-            config in {"text", "text_style_control"} and split in {"latest", "full"},
+            config in {"text", "text_style_control", "agent"}
+            and split in {"latest", "full"},
             "unsupported Arena configuration",
         )
         url = f"https://huggingface.co/datasets/{ARENA_DATASET}/resolve/main/{config}/{split}-00000-of-00001.parquet"
@@ -317,7 +318,8 @@ def opencode(budget, selected, *, now=None):
     }
 
 
-def validate_arena_row(row, start_date, end_date):
+def validate_arena_row(row, start_date, end_date, *, config="text"):
+    agent = config == "agent"
     require(isinstance(row, dict), "arena_invalid_row")
     model, published = row.get("model_name"), row.get("leaderboard_publish_date")
     require(isinstance(model, str) and 0 < len(model) <= 256, "arena_invalid_model")
@@ -326,23 +328,34 @@ def validate_arena_row(row, start_date, end_date):
         and day(start_date) <= day(published) <= day(end_date),
         "arena_scope_mismatch",
     )
-    for field in ("rating", "rating_lower", "rating_upper"):
+    score = "score" if agent else "rating"
+    lower = "score_ci_lower" if agent else "rating_lower"
+    upper = "score_ci_upper" if agent else "rating_upper"
+    require(score in row, "arena_missing_score")
+    for field in (score, lower, upper):
         value = row.get(field)
+        if value is None and field != score:
+            continue
         require(
             type(value) in (int, float) and math.isfinite(value), "arena_invalid_rating"
         )
     require(
-        row["rating_lower"] <= row["rating"] <= row["rating_upper"],
-        "arena_invalid_interval",
+        row.get(lower) is None or row[lower] <= row[score], "arena_invalid_interval"
     )
-    votes = row.get("vote_count")
     require(
-        type(votes) in (int, float)
-        and math.isfinite(votes)
-        and votes >= 0
-        and int(votes) == votes,
-        "arena_invalid_votes",
+        row.get(upper) is None or row[score] <= row[upper], "arena_invalid_interval"
     )
+    for field in ("observation_count", "session_count") if agent else ("vote_count",):
+        votes = row.get(field)
+        if votes is None:
+            continue
+        require(
+            type(votes) in (int, float)
+            and math.isfinite(votes)
+            and votes >= 0
+            and int(votes) == votes,
+            "arena_invalid_count",
+        )
     return published, model
 
 
@@ -374,10 +387,7 @@ def arena_latest(budget, *, config=ARENA_CONFIG):
             "model_name",
             "category",
             "leaderboard_publish_date",
-            "rating",
-            "rating_lower",
-            "rating_upper",
-            "vote_count",
+            "score" if config == "agent" else "rating",
         }
         require(fields <= set(parquet.schema.names), "arena_schema_changed")
         rows = [r for r in parquet.read().to_pylist() if r["category"] == "overall"]
@@ -387,7 +397,7 @@ def arena_latest(budget, *, config=ARENA_CONFIG):
     seen = set()
     for row in rows:
         identity = validate_arena_row(
-            row, "2024-01-01", datetime.now(UTC).date().isoformat()
+            row, "2023-01-01", datetime.now(UTC).date().isoformat(), config=config
         )
         require(identity not in seen, "arena_duplicate_model")
         seen.add(identity)
@@ -411,15 +421,29 @@ def arena_latest(budget, *, config=ARENA_CONFIG):
 
 
 def arena(
-    budget, start_date, end_date, *, max_pages=50, history=False, config=ARENA_CONFIG
+    budget,
+    start_date,
+    end_date,
+    *,
+    max_pages=50,
+    history=False,
+    config=ARENA_CONFIG,
+    carry_in_days=30,
 ):
     """Read complete publications, including at most 30 days of carry-in history."""
     require(type(max_pages) is int and max_pages > 0, "max_pages must be positive")
     days(start_date, end_date)
-    require(config in {"text", "text_style_control"}, "unsupported Arena configuration")
+    require(
+        config in {"text", "text_style_control", "agent"},
+        "unsupported Arena configuration",
+    )
     if not history:
         return arena_latest(budget, config=config)
-    start = (day(start_date) - timedelta(days=30)).isoformat()
+    require(
+        type(carry_in_days) is int and 0 <= carry_in_days <= 30,
+        "invalid Arena carry-in",
+    )
+    start = (day(start_date) - timedelta(days=carry_in_days)).isoformat()
     where = f"\"category\"='overall' AND \"leaderboard_publish_date\">='{start}' AND \"leaderboard_publish_date\"<='{end_date}'"
     rows, total, revision = [], None, None
     seen = set()
@@ -453,7 +477,7 @@ def arena(
                 "arena_truncated_row",
             )
             row = item.get("row")
-            identity = validate_arena_row(row, start, end_date)
+            identity = validate_arena_row(row, start, end_date, config=config)
             require(identity not in seen, "arena_duplicate_model")
             seen.add(identity)
             rows.append(row)

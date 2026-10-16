@@ -51,7 +51,8 @@ def _creation_record(product, aliases, mappings, company_ids, cutoff):
             and candidate.created_at
             and candidate.private is False
             and candidate.hf_namespace
-            and candidate.publisher_ownership and candidate.publisher_ownership.ownership_confirmed
+            and candidate.publisher_ownership
+            and candidate.publisher_ownership.ownership_confirmed
             and candidate.publisher_ownership.company_id in company_ids
         ):
             native = aware_instant(candidate.created_at)
@@ -123,7 +124,13 @@ def _creation_record(product, aliases, mappings, company_ids, cutoff):
     return None
 
 
-def build_cohort(*, brand_ids, cutoff, cap=100):
+def build_cohort(*, brand_ids, cutoff, cap=100, qualification_policy=None):
+    from core.model_kind_qualification import MODEL_KIND_POLICY, qualify_model_kind
+
+    require(
+        qualification_policy in {None, MODEL_KIND_POLICY},
+        "unknown cohort qualification policy",
+    )
     cutoff = aware_instant(cutoff)
     require(
         isinstance(brand_ids, list)
@@ -146,7 +153,8 @@ def build_cohort(*, brand_ids, cutoff, cap=100):
     require(type(cap) is int and 1 <= cap <= 100, "model cap must be at most 100")
     products = list(
         Product.objects.filter(brand_id__in=brand_ids)
-        .select_related("publisher_account").prefetch_related("publisher_account__companies")
+        .select_related("publisher_account")
+        .prefetch_related("publisher_account__companies")
         .order_by("product_key")
     )
     by_key = {p.product_key: p for p in products}
@@ -200,7 +208,12 @@ def build_cohort(*, brand_ids, cutoff, cap=100):
             product = by_key[key]
             if product.brand_id != brand or not candidates:
                 continue
-            if product.type not in MODEL_TYPES:
+            qualification = (
+                qualify_model_kind(product)
+                if qualification_policy and product.type is None
+                else None
+            )
+            if product.type not in MODEL_TYPES and qualification is None:
                 unqualified.append(
                     {
                         "product_key": str(key),
@@ -214,6 +227,23 @@ def build_cohort(*, brand_ids, cutoff, cap=100):
             creation = _creation_record(
                 product, candidates, links, ownership[brand], cutoff
             )
+            if qualification:
+                try:
+                    created = aware_instant(qualification["registry_created_at"])
+                    creation = (
+                        {
+                            "at": created.isoformat(),
+                            "source": "hf",
+                            "basis": "repository_createdAt",
+                            "precision": "instant",
+                            "native_identifier": qualification["repo_id"],
+                            "observation_id": qualification["observation_id"],
+                        }
+                        if created <= cutoff
+                        else None
+                    )
+                except (ValueError, TypeError):
+                    creation = None
             if creation is None:
                 unranked.append(
                     {"product_key": str(key), "reason": "creation_unqualified"}
@@ -226,7 +256,7 @@ def build_cohort(*, brand_ids, cutoff, cap=100):
                     "creation": creation,
                     "aliases": sorted(str(p.product_key) for p in candidates),
                     "provider_pins": _provider_pins(links),
-                    "qualification": "confirmed_model",
+                    "qualification": qualification or "confirmed_model",
                 }
             )
         ranked.sort(key=lambda row: row["product_key"])
@@ -247,7 +277,7 @@ def build_cohort(*, brand_ids, cutoff, cap=100):
                 "Arena appearance is not a creation date",
             ],
         }
-    return {
+    manifest = {
         "schema_version": 1,
         "cutoff": cutoff.isoformat(),
         "brand_ids": list(brand_ids),
@@ -255,11 +285,21 @@ def build_cohort(*, brand_ids, cutoff, cap=100):
         "brands": reports,
         "date_policy": "hf-first-party-earliest-or-api-only-or-dedicated-gh-v1",
     }
+    if qualification_policy:
+        manifest["qualification_policy"] = qualification_policy
+    return manifest
 
 
 @transaction.atomic
-def freeze_model_history(*, brand_ids, cutoff, job_key_prefix, budgets, cap=100):
-    manifest = build_cohort(brand_ids=brand_ids, cutoff=cutoff, cap=cap)
+def freeze_model_history(
+    *, brand_ids, cutoff, job_key_prefix, budgets, cap=100, qualification_policy=None
+):
+    manifest = build_cohort(
+        brand_ids=brand_ids,
+        cutoff=cutoff,
+        cap=cap,
+        qualification_policy=qualification_policy,
+    )
     identity = digest(manifest)
     dates = [
         row["creation"]["at"]
@@ -290,6 +330,8 @@ def freeze_model_history(*, brand_ids, cutoff, job_key_prefix, budgets, cap=100)
                 "cap_per_brand": cap,
                 **report,
             }
+            if qualification_policy:
+                scope["qualification_policy"] = qualification_policy
             job = register_job(
                 job_key=f"{job_key_prefix}:{brand}:{provider}",
                 source=source,
@@ -367,9 +409,16 @@ def validate_model_pins(job):
         product = products[row["product_key"]]
         require(
             product.brand_id == job.definition["scope"]["brand_id"]
-            and product.type in {"llm-model", "other-ai-model"},
+            and (
+                product.type in MODEL_TYPES
+                or isinstance(row.get("qualification"), dict)
+            ),
             "frozen product ownership/type changed",
         )
+        if isinstance(row.get("qualification"), dict):
+            from core.model_kind_qualification import validate_model_kind
+
+            validate_model_kind(product, row["qualification"])
         for pin in row.get("provider_pins", []):
             mapping = SourceSubjectMapping.objects.select_related(
                 "subject", "publisher_account"

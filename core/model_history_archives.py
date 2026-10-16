@@ -17,6 +17,7 @@ from core.collection_state import (
 )
 from core.measurement_taxonomy import digest, require
 from core.model_history_cohort import validate_model_pins
+from core.model_history_statistics import history_statistics_contract
 from core.models import (
     CollectionObservation,
 )
@@ -162,6 +163,15 @@ def acquire_hf_archives(claim, job, budget):
         and archive.get("archive_publisher") == "cfahlgren1",
         "unsupported reviewed archive layout",
     )
+    contract = history_statistics_contract(job)
+    if (
+        contract
+        and contract.source_configuration["hf"].get("eligibility_policy")
+        == "source-statistics-v1"
+    ):
+        from core.benchmark_attribution import enforce_source_collection
+
+        enforce_source_collection(contract, "hf", dataset=archive["dataset_id"])
     revisions = archive.get("revisions", [])
     require(
         isinstance(revisions, list)
@@ -266,7 +276,14 @@ def acquire_hf_archives(claim, job, budget):
                 write=write,
             )
         snapshots.append(snap)
-        if scope.get("numeric_contract_id") and snap["payload"]["rows"]:
+        contract = history_statistics_contract(job)
+        if (
+            contract
+            and contract.source_configuration["hf"].get("eligibility_policy")
+            == "source-statistics-v1"
+        ):
+            _queue_hf_archive(claim, job, contract, archive, snap)
+        elif scope.get("numeric_contract_id") and snap["payload"]["rows"]:
             # A single snapshot is a bounded import chunk; sparse dates stay sparse.
             import_selected_history(
                 claim,
@@ -288,3 +305,76 @@ def acquire_hf_archives(claim, job, budget):
         "secondary_source": True,
         "daily_interpolation": False,
     }
+
+
+def _queue_hf_archive(claim, job, contract, archive, snapshot):
+    from core.source_metric_projection import enqueue_projection
+
+    key = digest(
+        [
+            archive["dataset_id"],
+            snapshot["immutable_revision"],
+            snapshot["date"],
+            contract.contract_hash,
+        ]
+    )
+
+    def write(run, scoped):
+        ids = []
+        for row in snapshot["payload"]["rows"]:
+            identifier = row["repo_id"]
+            identity = {
+                "dataset_id": archive["dataset_id"],
+                "revision": snapshot["immutable_revision"],
+                "date": snapshot["date"],
+                "native_identifier": identifier,
+            }
+            observation_key = digest(["hf-archive-native", identity])
+            payload = {"id": identifier, "private": False, **row["raw"]}
+            observation, _ = CollectionObservation.objects.get_or_create(
+                run=run,
+                observation_key=observation_key,
+                defaults={
+                    "scope_run": scoped,
+                    "resource_key": observation_key,
+                    "source_identifier": identifier,
+                    "source_subject_kind": "repository",
+                    "listing": payload,
+                    "dimensions": {"kind": "hf_archive_metadata"},
+                    "source_metadata": {
+                        "secondary_source": True,
+                        "dataset_id": archive["dataset_id"],
+                        "archive_publisher": archive["archive_publisher"],
+                        "numeric_snapshot_identity": identity,
+                        "archive_snapshot_date": snapshot["date"],
+                        "clocks": {"archive_snapshot_date": snapshot["date"]},
+                        "metric_times": {
+                            metric: {
+                                "temporal_status": "date_only",
+                                "as_of_date": snapshot["date"],
+                            }
+                            for metric in ("likes", "trending_score")
+                        },
+                        "retrieval_coordinates": snapshot[
+                            "upstream_retrieval_coordinates"
+                        ],
+                    },
+                },
+            )
+            require(observation.listing == payload, "immutable HF archive conflict")
+            ids.append(observation.pk)
+        if ids:
+            enqueue_projection(claim, contract=contract, evidence_ids=ids)
+
+    checkpoint_scope(
+        claim,
+        scope_kind="archive_projection",
+        scope_key=key,
+        ownership={
+            "dataset_id": archive["dataset_id"],
+            "contract_hash": contract.contract_hash,
+        },
+        enumeration_complete=True,
+        outcome="observed",
+        write=write,
+    )

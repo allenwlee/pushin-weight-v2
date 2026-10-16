@@ -6,7 +6,10 @@ source evidence creates a coverage outcome, never a zero-valued metric row.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from copy import copy, deepcopy
+from datetime import UTC, datetime, timedelta
+
+from django.utils import timezone
 
 from core.benchmark_metric_store import aware_instant
 from core.collection_state import (
@@ -25,6 +28,7 @@ from core.model_history_cohort import (
     validate_model_pins,
 )
 from core.model_history_publications import _publication_evidence
+from core.model_history_statistics import history_statistics_contract
 from core.model_native_history import _github_history, _hf_history
 from core.models import (
     CollectionJob,
@@ -32,6 +36,7 @@ from core.models import (
     CollectionRun,
     CompanyAccount,
 )
+from core.source_metric_projection import drain_pending_projections
 from scripts.benchmark_download_collector.sources import (
     Budget,
     SourceError,
@@ -138,7 +143,9 @@ def execute_model_history(job_id, *, budget=None, key=None):
         "shared windows execute through their parent campaign",
     )
     validate_model_pins(job)
+    history_statistics_contract(job)
     claim = claim_job(job.pk)
+    job = _runtime_publication_window(claim, job)
     owned_client = None
     if budget is None:
         import httpx
@@ -177,12 +184,92 @@ def execute_model_history(job_id, *, budget=None, key=None):
             owned_client.close()
 
 
+def _runtime_publication_window(claim, job):
+    """Freeze each rolling invocation's window in DB without changing the cohort."""
+    policy = job.definition["scope"].get("publication_window_policy")
+    if not policy:
+        return job
+    require(
+        job.source_id in {"openrouter", "arena"}
+        and policy == "rolling-completed-days-v1",
+        "unsupported moving publication policy",
+    )
+    days = job.definition["scope"].get("publication_recheck_days", 7)
+    require(
+        type(days) is int and 1 <= days <= 90, "bounded publication recheck required"
+    )
+    run = CollectionRun.objects.get(pk=claim.run_id)
+    old = run.scopes.filter(
+        scope_kind="publication_runtime", scope_key="window"
+    ).first()
+    if old:
+        window = old.envelopes[0]
+    else:
+        cutoff = (
+            timezone.now()
+            .astimezone(UTC)
+            .replace(hour=0, minute=0, second=0, microsecond=0)
+        )
+        window = {
+            "cutoff": cutoff.isoformat(),
+            "publication_start_at": (cutoff - timedelta(days=days)).isoformat(),
+        }
+        checkpoint_scope(
+            claim,
+            scope_kind="publication_runtime",
+            scope_key="window",
+            ownership={
+                "policy": policy,
+                "cohort_hash": job.definition["scope"]["cohort_hash"],
+            },
+            enumeration_complete=True,
+            outcome="observed",
+            envelopes=[window],
+        )
+    runtime = copy(job)
+    runtime.definition = deepcopy(job.definition)
+    runtime.definition["scope"].update(window)
+    return runtime
+
+
 def _execute_models(claim, job, budget, *, key, before):
+    prior_projection = drain_pending_projections(job.pk, budget=budget)
     coverage = []
     items = [0]
     archive_outcome = None
     if job.source_id == "hf":
         archive_outcome = acquire_hf_archives(claim, job, budget)
+    scope = job.definition["scope"]
+    if (
+        job.source_id in {"openrouter", "arena"}
+        and not scope.get("models")
+        and scope.get("native_publication_identifiers")
+    ):
+        evidence, disposition = _publication_evidence(
+            claim,
+            job,
+            {"creation": {"at": scope["global_start_at"]}},
+            [],
+            budget,
+            key=key,
+        )
+        cell = {
+            "source": job.source_id,
+            "native_identifiers": scope["native_publication_identifiers"],
+            "evidence": evidence,
+            "coverage_complete": False,
+            **disposition,
+        }
+        checkpoint_scope(
+            claim,
+            scope_kind="native_publication_coverage",
+            scope_key="selection",
+            ownership={"cohort_hash": scope["cohort_hash"]},
+            enumeration_complete=disposition["outcome"] != "partial",
+            outcome=disposition["outcome"],
+            envelopes=[cell],
+        )
+        coverage.append(cell)
     for model in job.definition["scope"].get("models", []):
         pin = {
             "product_key": model["product_key"],
@@ -287,10 +374,12 @@ def _execute_models(claim, job, budget, *, key, before):
         )
         coverage.append(cell)
     run = CollectionRun.objects.get(pk=claim.run_id)
+    projection = drain_pending_projections(job.pk, budget=budget)
+    pending_projection = projection["pending"]
     return finish_run(
         claim,
         status="partial"
-        if any(c["outcome"] == "partial" for c in coverage)
+        if pending_projection or any(c["outcome"] == "partial" for c in coverage)
         else "success",
         selected_count=len(coverage),
         success_count=len(coverage),
@@ -304,7 +393,12 @@ def _execute_models(claim, job, budget, *, key, before):
             "all_requested_history_available": bool(coverage)
             and all(c["coverage_complete"] for c in coverage),
             "archive": archive_outcome,
+            "numeric_projection": {
+                "before_acquisition": prior_projection,
+                "after_acquisition": projection,
+            },
             "physical_requests_this_invocation": before - budget.remaining,
+            "physical_accounting_complete": True,
             "publication_requests_accounted_in_shared_window_runs": job.source_id
             in {"openrouter", "arena"},
         },

@@ -89,6 +89,7 @@ METRIC_TYPES = [
     "storage_size",
     "following",
     "repository_count",
+    "observation_count",
 ]
 
 
@@ -271,6 +272,59 @@ def definition_rows():
             "downloads_all_time",
         }:
             rows.append({**copy.deepcopy(row), "version": 2, "required": False})
+    # Agent Arena publishes IPS scores and signal/session counts, not text votes.
+    for key, metric_type, unit, value_kind, role in [
+        ("agent_score", "benchmark_score", "arena_ips_score", "float", "value"),
+        (
+            "agent_score_ci_lower",
+            "benchmark_score",
+            "arena_ips_score",
+            "float",
+            "lower_bound",
+        ),
+        (
+            "agent_score_ci_upper",
+            "benchmark_score",
+            "arena_ips_score",
+            "float",
+            "upper_bound",
+        ),
+        (
+            "observation_count",
+            "observation_count",
+            "signal_observations",
+            "integer",
+            "value",
+        ),
+        ("session_count", "session_count", "sessions", "integer", "value"),
+    ]:
+        base = copy.deepcopy(
+            next(
+                r
+                for r in rows
+                if r["source_id"] == "arena" and r["metric_key"] == "rating"
+            )
+        )
+        base.update(
+            metric_key=key,
+            metric_type_id=metric_type,
+            name=key.replace("_", " ").title(),
+            unit=unit,
+            value_kind=value_kind,
+            value_role=role,
+            required=False,
+            quantity_form="count" if value_kind == "integer" else "score",
+        )
+        base["definition_metadata"] = {
+            "wire_field": {
+                "agent_score": "score",
+                "agent_score_ci_lower": "score_ci_lower",
+                "agent_score_ci_upper": "score_ci_upper",
+            }.get(key, key),
+            "adapter_version": "arena-agent-ips-v1",
+            "score_method": "IPS",
+        }
+        rows.append(base)
     return rows
 
 
@@ -380,15 +434,26 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
             )
         if statistics:
             require(
-                source_key in {"hf", "github"}, "unsupported native statistics source"
+                source_key in {"hf", "github", "openrouter", "arena"},
+                "unsupported native statistics source",
             )
             settings["eligibility_policy"] = SOURCE_STATISTICS_POLICY
             settings["operation"] = "source_statistics"
             settings.setdefault("native_resources", True)
+            if source_key in {"openrouter", "arena"}:
+                from core.source_metric_projection import (
+                    validate_publication_provenance,
+                )
+
+                validate_publication_provenance(source_key, settings)
         if source_key == "arena":
             require(
                 settings.get("config", "text_style_control")
-                in {"text", "text_style_control"},
+                in (
+                    {"text", "text_style_control", "agent"}
+                    if statistics
+                    else {"text", "text_style_control"}
+                ),
                 "unsupported Arena configuration",
             )
         if source_key == "openrouter":
@@ -430,7 +495,13 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
     mappings = []
     seen = set()
     require(
-        0 < len(spec.get("mappings", [])) <= 1000, "mapping budget exceeded or empty"
+        (0 < len(spec.get("mappings", [])) <= 1000)
+        or (
+            statistics
+            and not spec.get("mappings")
+            and set(config) <= {"openrouter", "arena"}
+        ),
+        "mapping budget exceeded or empty",
     )
     for row in spec["mappings"]:
         source = row["source"]
@@ -491,7 +562,12 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
         if subject.subject_kind == "product":
             product = subject.product
             require(
-                product.type in {"llm-model", "other-ai-model", "agent-harness"}
+                (
+                    product.type in {"llm-model", "other-ai-model", "agent-harness"}
+                    or taxonomy.snapshot["products"][str(product.product_key)].get(
+                        "model_kind_qualification"
+                    )
+                )
                 if statistics
                 else product.type == "llm-model",
                 "product type is not reviewed as llm-model",
@@ -542,7 +618,11 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
             from core.models import Account
 
             require(
-                Account.objects.filter(pk=publisher, data_source_id=source).exists(),
+                Account.objects.filter(pk=publisher).exists()
+                if statistics and source in {"openrouter", "arena"}
+                else Account.objects.filter(
+                    pk=publisher, data_source_id=source
+                ).exists(),
                 "publisher source mismatch",
             )
         accepted = {
@@ -582,7 +662,8 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
     }
     if statistics:
         require(
-            any(m["source_subject_kind"] == "account" for m in mappings),
+            set(config) <= {"openrouter", "arena"}
+            or any(m["source_subject_kind"] == "account" for m in mappings),
             "reviewed publisher mapping required",
         )
         frozen["eligibility_policy"] = SOURCE_STATISTICS_POLICY

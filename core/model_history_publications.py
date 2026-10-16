@@ -7,10 +7,12 @@ source evidence creates a coverage outcome, never a zero-valued metric row.
 from __future__ import annotations
 
 import copy
+from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
 
+from core.benchmark_metric_store import calendar_window, native_date
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import (
     checkpoint_scope,
@@ -20,10 +22,12 @@ from core.collection_state import (
 from core.measurement_taxonomy import digest, require
 from core.model_history_archives import import_selected_history
 from core.model_history_cohort import history_windows
+from core.model_history_statistics import history_statistics_contract
 from core.models import (
     CollectionJob,
     CollectionObservation,
     DataSource,
+    MetricValue,
     SourceSubjectMapping,
 )
 from scripts.benchmark_download_collector.sources import (
@@ -33,22 +37,46 @@ from scripts.benchmark_download_collector.sources import (
 )
 
 
-def _window_key(source, cohort_hash, start, end, config):
-    return digest(
-        {
-            "source": source,
-            "cohort_hash": cohort_hash,
-            "start": start,
-            "end": end,
-            "config": config,
-        }
-    )
+def _window_key(source, cohort_hash, start, end, config, *, window_policy=None):
+    identity = {
+        "source": source,
+        "cohort_hash": cohort_hash,
+        "start": start,
+        "end": end,
+        "config": config,
+    }
+    if window_policy:
+        identity["window_policy"] = window_policy
+    return digest(identity)
 
 
 def _publication_window(parent, budget, start, end, *, key, config):
     """A shared instruction serializes acquisition; DB evidence survives temp-file loss."""
     scope = parent.definition["scope"]
-    cache_key = _window_key(parent.source_id, scope["cohort_hash"], start, end, config)
+    contract = history_statistics_contract(parent)
+    statistics = bool(
+        contract
+        and contract.source_configuration[parent.source_id].get("eligibility_policy")
+        == "source-statistics-v1"
+    )
+    if statistics:
+        from core.benchmark_attribution import enforce_source_collection
+
+        enforce_source_collection(
+            contract,
+            parent.source_id,
+            dataset=contract.source_configuration[parent.source_id][
+                "publication_provenance"
+            ]["dataset_id"],
+        )
+    cache_key = _window_key(
+        parent.source_id,
+        scope["cohort_hash"],
+        start,
+        end,
+        config,
+        window_policy="source-statistics-exact-window-v1" if statistics else None,
+    )
     cached = (
         CollectionObservation.objects.filter(
             run__source_id=parent.source_id,
@@ -74,6 +102,15 @@ def _publication_window(parent, budget, start, end, *, key, config):
         "schedule": {"kind": "manual", "driver": "manual"},
         "budgets": parent.definition["budgets"],
     }
+    if statistics:
+        definition["scope"]["window_policy"] = "source-statistics-exact-window-v1"
+        definition["scope"]["carry_in_days"] = 0
+    if parent.definition.get("campaign"):
+        definition["campaign"] = {
+            **parent.definition["campaign"],
+            "role": "history",
+            "phase": "acquire",
+        }
     with transaction.atomic():
         DataSource.objects.select_for_update().get(pk=parent.source_id)
         shared = CollectionJob.objects.filter(
@@ -102,7 +139,14 @@ def _publication_window(parent, budget, start, end, *, key, config):
         payload = (
             openrouter(budget, start, end, key=key)
             if parent.source_id == "openrouter"
-            else arena(budget, start, end, history=True, config=config)
+            else arena(
+                budget,
+                start,
+                end,
+                history=True,
+                config=config,
+                carry_in_days=0 if statistics else 30,
+            )
         )
         require(
             budget.total_bytes_read <= budget.max_bytes, "global byte budget exceeded"
@@ -152,6 +196,7 @@ def _publication_window(parent, budget, start, end, *, key, config):
             request_count=before - budget.remaining,
             selected_count=1,
             success_count=1,
+            report={"physical_accounting_complete": True},
         )
     except (ValueError, TypeError, KeyError) as exc:
         finish_run(
@@ -173,6 +218,13 @@ def _publication_window(parent, budget, start, end, *, key, config):
 
 
 def _admit_publication(claim, job, publication, start, end):
+    contract = history_statistics_contract(job)
+    if (
+        contract
+        and contract.source_configuration[job.source_id].get("eligibility_policy")
+        == "source-statistics-v1"
+    ):
+        return _queue_publication(claim, job, publication, contract)
     contract_id = job.definition["scope"].get("numeric_contract_id")
     if not contract_id:
         return
@@ -218,20 +270,155 @@ def _admit_publication(claim, job, publication, start, end):
     )
 
 
+def _queue_publication(claim, job, publication, contract):
+    """Commit selected native rows and their pending projection together."""
+    from core.source_metric_projection import enqueue_projection
+
+    source = job.source_id
+    settings = contract.source_configuration[source]
+    births = {
+        pin["native_identifier"]: model["creation"]["at"][:10]
+        for model in job.definition["scope"].get("models", [])
+        for pin in model.get("provider_pins", [])
+        if pin["source"] == source
+    }
+    field = "model_permaslug" if source == "openrouter" else "model_name"
+    identifiers = set(
+        contract.mappings.filter(source_id=source).values_list(
+            "external_identifier", flat=True
+        )
+    )
+    rows = [
+        row
+        for row in publication.listing["rows"]
+        if row[field] == "other"
+        or row[field] in identifiers
+        and (row["date"] if source == "openrouter" else row["leaderboard_publish_date"])
+        >= births.get(row[field], "0001-01-01")
+    ]
+    # Explicit native-only scopes may select identifiers separately, never infer
+    # rankings identities from catalog IDs/canonical_slug.
+    native_ids = set(job.definition["scope"].get("native_publication_identifiers", []))
+    rows += [
+        row
+        for row in publication.listing["rows"]
+        if row[field] in native_ids
+        and row[field] not in identifiers
+        and row[field] != "other"
+    ]
+    selected_ids = []
+
+    def write(run, scoped):
+        for raw in rows:
+            period = (
+                raw["date"]
+                if source == "openrouter"
+                else raw["leaderboard_publish_date"]
+            )
+            revision = publication.listing.get("revision") or publication.listing.get(
+                "artifact_sha256"
+            )
+            if not revision:
+                revision = digest(raw)
+            snapshot = {
+                "dataset_id": settings["publication_provenance"]["dataset_id"],
+                "native_identifier": raw[field],
+                "period": period,
+                "config": publication.listing.get("config"),
+                "category": raw.get("category"),
+                "revision": revision,
+            }
+            key = digest(["publication-evidence", contract.contract_hash, snapshot])
+            payload = {
+                **{
+                    k: copy.deepcopy(v)
+                    for k, v in publication.listing.items()
+                    if k != "rows"
+                },
+                "rows": [copy.deepcopy(raw)],
+            }
+            evidence, _created = CollectionObservation.objects.get_or_create(
+                run=run,
+                observation_key=key,
+                defaults={
+                    "scope_run": scoped,
+                    "resource_key": key,
+                    "source_identifier": raw[field],
+                    "source_subject_kind": "aggregate"
+                    if raw[field] == "other"
+                    else "model",
+                    "observed_at": publication.observed_at,
+                    "published_date": period if source == "arena" else None,
+                    "publication_precision": "date" if source == "arena" else "unknown",
+                    "listing": payload,
+                    "dimensions": {
+                        "kind": "publication_row",
+                        "config": payload.get("config"),
+                        "period": period,
+                    },
+                    "source_metadata": {
+                        "publication_provenance": settings["publication_provenance"],
+                        "numeric_snapshot_identity": snapshot,
+                        "origin_publication_observation_id": publication.pk,
+                        "origin_publication_run_id": str(publication.run_id),
+                        "clocks": {"publication_date": period}
+                        if source == "arena"
+                        else {"period_label_date": period},
+                    },
+                },
+            )
+            require(
+                evidence.listing["rows"] == payload["rows"],
+                "immutable selected publication conflict",
+            )
+            selected_ids.append(evidence.pk)
+        if selected_ids:
+            enqueue_projection(claim, contract=contract, evidence_ids=selected_ids)
+
+    checkpoint_scope(
+        claim,
+        scope_kind="publication_selection",
+        scope_key=digest([publication.pk, contract.contract_hash]),
+        ownership={
+            "publication_observation_id": publication.pk,
+            "contract_hash": contract.contract_hash,
+        },
+        enumeration_complete=True,
+        outcome="observed",
+        write=write,
+    )
+    return selected_ids
+
+
 def _publication_evidence(claim, job, model, pins, budget, *, key):
     scope = job.definition["scope"]
     config = scope.get("arena_config")
-    if job.source_id == "arena" and config not in {"text", "text_style_control"}:
+    if job.source_id == "arena" and config not in {
+        "text",
+        "text_style_control",
+        "agent",
+    }:
         return [], {
             "outcome": "history_unavailable",
             "reason": "unreviewed_arena_configuration",
         }
-    start_at = scope.get("global_start_at") or model["creation"]["at"]
+    start_at = (
+        scope.get("publication_start_at")
+        or scope.get("global_start_at")
+        or model["creation"]["at"]
+    )
     size = (
         min(365, max(1, job.definition["budgets"]["items"] // 51))
         if job.source_id == "openrouter"
         else 330
     )
+    if scope.get("numeric_projection_policy") == "source-statistics-v1":
+        window_days = scope.get("publication_window_days", 7)
+        require(
+            type(window_days) is int and 1 <= window_days <= 90,
+            "bounded publication window required",
+        )
+        size = min(size, window_days)
     windows, _ = history_windows(start_at, scope["cutoff"], job.source_id, size=size)
     evidence = []
     identifiers = {
@@ -239,12 +426,26 @@ def _publication_evidence(claim, job, model, pins, budget, *, key):
         for p in pins
         if p["identifier_scope"] in {"rankings_permaslug", "arena_model_name"}
     }
+    identifiers.update(scope.get("native_publication_identifiers", []))
     if not identifiers:
         return [], {
             "outcome": "unmapped",
             "reason": "reviewed_usage_or_score_identifier_missing",
         }
+    acquisition_windows = []
     for start, end in windows:
+        if (
+            job.source_id == "openrouter"
+            and scope.get("numeric_projection_policy") == "source-statistics-v1"
+        ):
+            reused, missing_windows = _reuse_openrouter_days(
+                job, model, identifiers, start, end
+            )
+            evidence.extend(reused)
+            acquisition_windows.extend(missing_windows)
+        else:
+            acquisition_windows.append((start, end))
+    for start, end in acquisition_windows:
         publication = _publication_window(
             job, budget, start, end, key=key, config=config
         )
@@ -269,6 +470,17 @@ def _publication_evidence(claim, job, model, pins, budget, *, key):
                 "scope": payload.get("config"),
             }
         )
+    missing = any(e.get("missing_dates") for e in evidence)
+    coverage = {e.get("provider_coverage") for e in evidence}
+    if missing or coverage & {
+        "latest_publication_only",
+        "partial",
+        "partial_publication_window",
+    }:
+        return evidence, {
+            "outcome": "not_published",
+            "reason": "partial_provider_publication_coverage",
+        }
     return evidence, {
         "outcome": "observed"
         if any(e["matched_rows"] for e in evidence)
@@ -277,3 +489,99 @@ def _publication_evidence(claim, job, model, pins, budget, *, key):
         if any(e["matched_rows"] for e in evidence)
         else "not_in_provider_publications",
     }
+
+
+def _reuse_openrouter_days(job, model, identifiers, start, end):
+    """Reuse proved complete native daily cells, preserving their original owners.
+
+    A saved latest observation is a selection rule, not a claim that the provider
+    cannot publish another revision. Routine rolling windows still recheck HTTP.
+    """
+    if job.definition["scope"].get("publication_window_policy"):
+        return [], [(start, end)]
+    contract = history_statistics_contract(job)
+    definition = next(
+        row
+        for row in contract.source_configuration["openrouter"]["definitions"]
+        if row["metric_key"] == "total_tokens"
+    )
+    start_date, end_date = native_date(start), native_date(end)
+    values = (
+        MetricValue.objects.filter(
+            source_metric_id=definition["id"],
+            observation__run__source_id="openrouter",
+            observation__run__status__in=["success", "partial"],
+            observation__status="ok",
+            observation__source_identifier__in=identifiers,
+            temporal_status="exact",
+            period_label_date__range=(start_date, end_date),
+        )
+        .select_related("observation__run", "observation__mapping__subject")
+        .order_by("-observation__observed_at", "-pk")
+    )
+    selected = {}
+    for value in values[: job.definition["budgets"]["items"]].iterator(chunk_size=100):
+        observation = value.observation
+        metadata = observation.source_metadata
+        revision = metadata.get("immutable_revision") or metadata.get(
+            "snapshot_identity", {}
+        ).get("revision")
+        if not revision:
+            continue
+        expected = calendar_window(value.period_label_date.isoformat(), "UTC")
+        if (
+            value.window_start_at,
+            value.window_end_at,
+        ) != expected or value.integer_value is None:
+            continue
+        if observation.mapping_id and str(
+            observation.mapping.subject.product_id
+        ) != model.get("product_key"):
+            continue
+        selected.setdefault(
+            (value.period_label_date, observation.source_identifier), value
+        )
+    reused, missing = [], []
+    day = start_date
+    while day <= end_date:
+        daily = [selected.get((day, identifier)) for identifier in sorted(identifiers)]
+        if not daily or any(value is None for value in daily):
+            missing.append(day)
+        else:
+            for value in daily:
+                observation = value.observation
+                reused.append(
+                    {
+                        "observation_id": observation.pk,
+                        "run_id": str(observation.run_id),
+                        "contract_id": str(observation.run.contract_id),
+                        "value_id": value.pk,
+                        "source_metric_id": value.source_metric_id,
+                        "original_observed_at": observation.observed_at.isoformat(),
+                        "source_metadata": observation.source_metadata,
+                        "mapping_id": str(observation.mapping_id)
+                        if observation.mapping_id
+                        else None,
+                        "native_only": observation.mapping_id is None,
+                        "selection_rule": "latest_saved_observation",
+                        "numeric_reused": True,
+                        "requested_start_date": day.isoformat(),
+                        "requested_end_date": day.isoformat(),
+                        "provider_coverage": "persisted_completed_day",
+                        "matched_rows": [
+                            {
+                                "date": day.isoformat(),
+                                "model_permaslug": observation.source_identifier,
+                                "total_tokens": str(value.integer_value),
+                            }
+                        ],
+                    }
+                )
+        day += timedelta(days=1)
+    windows = []
+    for day in missing:
+        if windows and native_date(windows[-1][1]) + timedelta(days=1) == day:
+            windows[-1] = (windows[-1][0], day.isoformat())
+        else:
+            windows.append((day.isoformat(), day.isoformat()))
+    return reused, windows
