@@ -140,3 +140,9 @@ Owner explicitly requests “deploy”. Production target selected, default stag
 ### Release preflight
 
 Additional API-client/Ollija checks:119passed,0skips/errors. `makemigrations --check --dry-run`: no changes. Staging web/DB verified on0e0fa643, core0092, zero active leased collection runs. Remote main and staging match the implementation base. No code/assets/dependency changes since the89-test local verification. Release ownership is recorded in the authoritative index.
+
+### Hosted-check fixture repair and regression wiring
+
+First candidate af128ded passed staging exact-source/config/ORM/login checks on all3active stage resources. Hosted Official-company check exposed an unchanged baseline test failure: `test_cycle_author_context_queries_are_constant` passed `object()` as the CycleRunner instance, which lacks the `_backfill_context` added by recent main/backfill work. Reproduced locally (1failed), repaired only the test to construct a real CycleRunner, preserving the exact2-query assertion. Combined membership/metrics suite36passed/23requiredPG,0skips/errors. Add this fixture file to the fix-owned commit scope; application cycle code unchanged.
+
+The existing Historical-X-backfill hosted job now runs both metrics regression files and triggers on their implementation/configuration paths. No new job, permission or credential change. This ensures hosted checks exercise the actual15-minute refresh differentiator. Restage the new exact candidate and rerun hosted checks before production; do not retry the old candidate as though the fixture were repaired there.
