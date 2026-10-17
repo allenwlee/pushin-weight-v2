@@ -13,6 +13,7 @@ from core.measurement_taxonomy import digest, require
 from core.models import CollectionJob, CollectionRun
 
 OPERATIONS = {
+    "match_crosswalk": ("catalog", {"github", "openrouter", "arena", "opencode"}),
     "github_catalog": ("catalog", {"github"}),
     "hf_catalog": ("catalog", {"hf"}),
     "model_inventory": ("catalog", {"github", "hf", "openrouter", "arena"}),
@@ -43,6 +44,8 @@ def validate_definition(
     )
     require(mode in {"manual", "historical", "recurring"}, "unsupported mode")
     require(operation in OPERATIONS, "unsupported operation")
+    if operation == "match_crosswalk":
+        require(mode == "historical", "matching jobs are finite manual operations")
     expected, sources = OPERATIONS[operation]
     require(
         expected == purpose and (sources is None or source_id in sources),
@@ -200,7 +203,12 @@ def set_job_state(job_id, state, *, now=None):
         "terminal job cannot be reactivated",
     )
     if state == "ready":
-        require(job.purpose == "content" or job.source.enabled, "source is disabled")
+        require(
+            job.purpose == "content"
+            or job.operation == "match_crosswalk"
+            or job.source.enabled,
+            "source is disabled",
+        )
         job.next_due_at = now if job.mode == "recurring" else None
     else:
         job.next_due_at = job.next_retry_at = None

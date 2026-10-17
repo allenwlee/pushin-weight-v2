@@ -100,6 +100,52 @@ GitHub IDs, OpenRouter IDs/slugs and Arena names never overwrite Product's HF
 `repo_id` or source SHA fields. OpenRouter catalog identity and rankings
 `model_permaslug` require separate reviewed relations.
 
+## Product crosswalk matching
+
+`match_collection_products --brand <nickname>` reads existing HF products and
+stored GitHub, OpenRouter, Arena and OpenCode identities. Repeat `--brand` for
+up to 21 tracked brands and `--source` to narrow the sources. The default is a
+read-only JSON preview; `--format markdown` presents the same fields as a review
+document. It makes no provider or model requests. Products sort by highest
+evidence score, then repository creation time, with stable identity ties.
+Percentages are uncalibrated evidence ranks. Existing mapping status,
+identity evidence, database presence and admission decision are separate fields.
+
+Preview returns an evidence cutoff, an `input_sha256` fingerprint and stable
+candidate IDs. A spelling match needs human review. Apply uses the exact cutoff
+and fingerprint, `--reviewed-by`, `--review-basis`, and one
+`--review-candidate <candidate-id>` per confirmed candidate. An independently
+qualified explicit HF/repository reference can be admitted without a spelling-only
+review; conflicting ownership or native identities still block admission.
+
+```sh
+python manage.py match_collection_products --brand deepseek --source arena
+python manage.py match_collection_products --brand deepseek --source arena \
+  --cutoff <preview-cutoff> --input-sha256 <preview-fingerprint> \
+  --reviewed-by <operator> --review-basis '<identity evidence or owner review>' \
+  --review-candidate <confirmed-candidate-id> --apply
+python manage.py match_collection_products --resume <job-uuid> --apply
+python manage.py collection_status --job <job-uuid>
+```
+
+Apply freezes source-specific `match_crosswalk` instructions in `collection_jobs`.
+Existing runs and `product_match` scope records retain decisions and recovery
+state. Each invocation handles at most 50 candidates, has a 120-second work limit,
+and records zero provider calls. A partial invocation resumes the same logical
+run from the database; it needs no local manifest. A stale input, changed
+publisher or expired lease cannot commit a link. A native identity conflict is
+recorded separately from an admitted or unmatched result. The mapping and its
+scope receipt commit together. Shared catalog admission takes a nonblocking
+native-identity lock, then the subject lock, so manual reviews use the same guard.
+
+The matcher adds no table, column or migration. It does not enable source polling,
+change product type/brand, merge products, modify an earlier frozen contract, or
+reattribute existing native metric histories. Verified publisher ownership can
+qualify a catalog link for a product with no brand; numeric eligibility remains
+subject to the existing stricter rules. A fresh collection selection can use an
+admitted catalog mapping. Family and recipe relations retain their native metric
+grain instead of duplicating repository counters across models.
+
 ## Cohorts and history
 
 `plan_model_history --brands <21-comma-separated-brand-ids>` inspects database

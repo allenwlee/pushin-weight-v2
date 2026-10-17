@@ -122,6 +122,7 @@ jobs:
           core/management/commands/collect_*.py core/management/commands/collection_*.py
           core/management/commands/backfiller_data_source.py
           core/management/commands/plan_model_history.py core/management/commands/review_collection_mapping.py
+          core/management/commands/match_collection_products.py
           tests/test_collection*.py tests/test_github*.py tests/test_model_history*.py
           tests/test_run_job_normalization.py
           tests/test_model_inventory.py tests/test_hf_catalog_runner.py
@@ -139,6 +140,7 @@ jobs:
         run: >-
           python -m pytest -q tests/test_collection_jobs.py tests/test_collection_state.py
           tests/test_collection_identity.py tests/test_collection_schema_consolidation.py
+          tests/test_collection_matching.py
           tests/test_collection_schema_migration.py tests/test_collection_schema_regression_net.py
           tests/test_collection_scheduling.py tests/test_collection_budgets.py tests/test_collection_reports.py
           tests/test_run_job_normalization.py

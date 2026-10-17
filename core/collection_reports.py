@@ -185,6 +185,19 @@ def _job_status(job_id, *, now=None):
         if job.state in {"completed", "cancelled"}
         else "execute_bounded_continuation",
         "release_date_inferred": False,
+        "matching": {
+            "ruleset": scope["ruleset"],
+            "preview_sha256": scope["preview_sha256"],
+            "candidate_count": len(scope["matches"]),
+            "reviewed_by": scope["review"]["reviewed_by"],
+            "reviewed_candidate_count": len(scope["review"]["candidate_ids"]),
+            "decisions": attempt.report.get("decisions", {}) if attempt else {},
+            "remaining": attempt.report.get("remaining", len(scope["matches"]))
+            if attempt
+            else len(scope["matches"]),
+        }
+        if job.operation == "match_crosswalk"
+        else None,
     }
 
 
