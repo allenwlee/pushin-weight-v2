@@ -3,6 +3,10 @@
 // Run: node tests/test_pw_feed_formatter.js
 // Exits 0 on success, 1 on failure.
 
+// The formatter uses the visitor's local zone. Pin this test process so the
+// same instant has the same weekday on developer machines and UTC CI runners.
+process.env.TZ = 'UTC';
+
 const path = require('path');
 const fs = require('fs');
 const pwIcon = require('../monitor/static/pw-icons.js');
@@ -148,7 +152,7 @@ assertEq(formatRelative(new Date(now.getTime() - 60 * 1000), now), '1m ago', '1m
 assertEq(formatRelative(new Date(now.getTime() - 5 * 60 * 1000), now), '5m ago', '5m ago');
 assertEq(formatRelative(new Date(now.getTime() - 60 * 60 * 1000), now), '1h ago', '1h ago');
 assertEq(formatRelative(new Date(now.getTime() - 3 * 60 * 60 * 1000), now), '3h ago', '3h ago');
-assertEq(formatRelative(new Date(now.getTime() - 24 * 60 * 60 * 1000), now), 'Wed', '24h ago = weekday (under 7d)');
+assertEq(formatRelative(new Date(now.getTime() - 24 * 60 * 60 * 1000), now), 'Tue', '24h ago = weekday in UTC (under 7d)');
 assertEq(formatRelative(new Date('2026-07-15T14:00:00+00:00'), now), '7h ago', '7h ago (under 24h)');
 assertEq(formatRelative(new Date(now.getTime() + 30 * 1000), now), 'just now', 'future timestamp clamps to just now');
 assertEq(formatRelative(new Date('2026-01-15T12:00:00+00:00'), now).length > 0, true, '6 months ago: non-empty string');
