@@ -407,7 +407,7 @@ No strategy document was found; CONCEPTS.md and the General Launch Charter suppl
 **Goal:** Deliver the measured, correct feature through the authorized production endpoint.
 **Requirements:** R12–R14; SC1–SC5.
 **Dependencies:** U2–U5.
-**Files:** Existing plan; applicable delivery/reference docs; existing assurance source identity; .github/workflows/homepage-counts.yml; same PR62; task-owned private receipts.
+**Files:** Existing plan; applicable delivery/reference docs including docs/reference/db-schema.md and its README link; existing assurance source identity; .github/workflows/homepage-counts.yml; existing collection-schema inventory regression; same PR62; task-owned private receipts.
 **Approach:** Reconcile only already-promoted main changes before final candidate checks. Review migration/data integrity, invalidation races, query correctness and Top Voices removal. Use the selected staged route, fresh service/DB ownership checks and an existing authorized authenticated browser path. Provision only the new bounded count-maintenance resource as part of this release.
 **Test scenarios:**
 

@@ -62,6 +62,7 @@ jobs:
           tests/test_home_v22_feed_row_shape.py tests/test_home_v22_filter_pills.py
           tests/test_home_v22_topbar_layout.py tests/test_render_headline_topology.py
           tests/staging_refresh/test_policy.py tests/ollija
+          tests/test_collection_schema_regression_net.py::test_reference_inventory_and_columns_match_all_concrete_application_tables
           tests/test_home_v22_browser.py::HomeV22BrowserTests::test_anonymous_filters_window_and_pulse_share_one_request_state
           tests/test_home_v22_browser.py::HomeV22BrowserTests::test_per_brand_narratives_render_bilingually_as_semantic_cards
       - name: Browser projection and timezone regressions

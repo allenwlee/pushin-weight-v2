@@ -369,7 +369,7 @@ Graphviz schema and legacy SQLite file are read-only historical artifacts.
 - [Domain registration — pushinweight.si / Namecheap](docs/reference/domains.md)
 - [TwitterAPI call inventory](docs/reference/twitterapi-io-calls.md)
 - [Live query composition](docs/reference/twitterapi-live-queries-by-model.md)
-- [Database schema](docs/reference/db-schema.md)
+- [Database schema](docs/reference/db-schema.md), including source tables and derived homepage counts
 - [HF catalog collection, shared storage and recovery](docs/reference/hf-model-catalog.md)
 - [Collection jobs, reviewed provider identities and history](docs/reference/collection-jobs.md)
 - [Staff intake, evidence and reviewed corrections](docs/operations/staff-collection.md)
