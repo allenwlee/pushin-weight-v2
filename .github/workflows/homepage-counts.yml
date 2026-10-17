@@ -1,0 +1,71 @@
+name: Homepage counts regression net
+
+on:
+  pull_request:
+    paths:
+      - 'core/**'
+      - 'monitor/**'
+      - 'tests/**'
+      - 'project/**'
+      - 'config/staging_refresh.yaml'
+      - 'render*.yaml'
+      - 'pyproject.toml'
+      - '.github/workflows/homepage-counts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homepage-counts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  postgres-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: homepage_test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: homepage_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://homepage_test:test@127.0.0.1:5432/homepage_test
+      DEBUG: '1'
+      STAFF_COLLECTION_NETWORK_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e '.[dev]' 'playwright>=1.62.0'
+      - name: Install browser runtime
+        run: python -m playwright install --with-deps chromium
+      - name: Check migration state
+        run: python manage.py makemigrations --check --dry-run
+      - name: Native counts, caller parity and compatibility (required skips fail)
+        run: >-
+          python -m pytest -q
+          tests/test_home_chart.py tests/test_home_chart_pulse.py
+          tests/test_home_chart_materialization.py
+          tests/test_home_count_summary_migrations.py tests/test_refresh_home_counts.py
+          tests/test_home_count_render_config.py tests/test_public_home_window_cookie.py
+          tests/test_trend_narrative_projection.py tests/test_taxonomy_compatibility_surfaces.py
+          tests/test_home_v22_feed_row_shape.py tests/test_home_v22_filter_pills.py
+          tests/test_home_v22_topbar_layout.py tests/test_render_headline_topology.py
+          tests/staging_refresh/test_policy.py tests/ollija
+          tests/test_home_v22_browser.py::HomeV22BrowserTests::test_anonymous_filters_window_and_pulse_share_one_request_state
+          tests/test_home_v22_browser.py::HomeV22BrowserTests::test_per_brand_narratives_render_bilingually_as_semantic_cards
+      - name: Browser projection and timezone regressions
+        run: |
+          node tests/test_pw_chart_filter.js
+          node tests/test_pw_feed_formatter.js
+          node tests/test_pw_tz.js

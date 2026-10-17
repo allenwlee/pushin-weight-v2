@@ -37,7 +37,6 @@ from core.models import (
 from monitor.views import (
     _HOME_CHART_CACHE,
     _HOME_PULSE_CACHE,
-    _HOME_TOP_VOICES_CACHE,
     _build_home_chart_payload,
     _build_home_pulse_payload,
     _clear_home_pulse_cache,
@@ -197,14 +196,15 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         sentinel = Brand.objects.create(nickname="pulse-sentinel", is_sentinel=True)
         excluded = Brand.objects.create(nickname="pulse-excluded")
         PostBrand.objects.filter(brand_id__in=tracked).delete()
+        comparison_day = ANCHOR.replace(hour=0, minute=0, second=0, microsecond=0)
         dates = (
-            ("before-start", ANCHOR - timedelta(days=60, microseconds=1)),
-            ("at-start", ANCHOR - timedelta(days=60)),
-            ("before-midpoint", ANCHOR - timedelta(days=30, microseconds=1)),
-            ("at-midpoint", ANCHOR - timedelta(days=30)),
-            ("before-now", ANCHOR - timedelta(microseconds=1)),
-            ("at-now", ANCHOR),
-            ("after-now", ANCHOR + timedelta(microseconds=1)),
+            ("before-start", comparison_day - timedelta(days=60, microseconds=1)),
+            ("at-start", comparison_day - timedelta(days=60)),
+            ("before-midpoint", comparison_day - timedelta(days=30, microseconds=1)),
+            ("at-midpoint", comparison_day - timedelta(days=30)),
+            ("before-now", comparison_day - timedelta(microseconds=1)),
+            ("at-now", comparison_day),
+            ("after-now", comparison_day + timedelta(microseconds=1)),
         )
         for suffix, created_at in dates:
             post = Post.objects.create(tweet_id=f"pulse-30d-{suffix}", created_at=created_at)
@@ -270,7 +270,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
                         for row in payload["pulse"]["entries"]
                     }
                     self.assertEqual(set(counts), set(tracked))
-                    self.assertEqual(counts["up"], (6, 4) if window_days == 1 else (10, 0))
+                    self.assertEqual(counts["up"], (6, 4) if window_days == 1 else (10, 0) if window_days == 7 else (5, 0))
                     self.assertEqual(counts["absent"], (0, 0))
                     count_queries = [
                         query["sql"].upper() for query in queries.captured_queries
@@ -345,9 +345,8 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             "us_nationalism": ["mild_pro"],
             "unsanctioned": "off",
         }
-        # Pulse, brand inventory, chart aggregate, and the co-timestamped
-        # Top Voices projection. A disabled narrative performs no DB read.
-        with self.assertNumQueries(5):
+        # Pulse (two queries), brand inventory, and chart aggregate. No ranking.
+        with self.assertNumQueries(4):
             payload = _build_home_chart_payload(1, active, now=ANCHOR)
         self.assertEqual(payload["totals"], {"up": 1})
         self.assertEqual(payload["computed_at"], payload["pulse"]["computed_at"])
@@ -359,7 +358,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             now=ANCHOR + timedelta(seconds=1),
         )
         self.assertEqual(empty["totals"], {"up": 0})
-        self.assertEqual(empty["pulse"], payload["pulse"], "ordinary filters must not change market-wide pulse")
+        self.assertEqual(empty["pulse"]["entries"], payload["pulse"]["entries"], "ordinary filters must not change market-wide pulse counts")
         self.assertEqual(empty["computed_at"], empty["pulse"]["computed_at"])
 
     def test_default_chart_uses_one_bounded_post_join(self):
@@ -429,7 +428,9 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             warm = _build_home_chart_payload(30, equivalent_filters)
 
         self.assertGreater(len(cold_queries), 0)
-        self.assertEqual(len(warm_queries), 0)
+        health_reads = [row["sql"] for row in warm_queries if row["sql"].lstrip().upper().startswith("SELECT")]
+        self.assertEqual(len(health_reads), 1)
+        self.assertIn("FROM home_count_snapshot", health_reads[0])
         self.assertEqual(warm, cold)
         self.assertIsNot(warm, cold)
 
@@ -464,20 +465,18 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         self.assertEqual(len(_HOME_CHART_CACHE), 2)
 
     @patch("monitor.views.django_timezone.now", return_value=ANCHOR)
-    def test_complete_chart_cache_does_not_extend_component_cache_age(self, _now):
+    def test_complete_chart_cache_has_its_own_short_lifetime(self, _now):
         _build_home_chart_payload(30, {"brands": ["up"]})
         pulse_cached_at = _HOME_PULSE_CACHE[30][0]
-        voices_cached_at = _HOME_TOP_VOICES_CACHE[(30, 3)][0]
+        cached_at, cached_counts = _HOME_PULSE_CACHE[30]
+        _HOME_PULSE_CACHE[30] = (cached_at - 50, cached_counts)
         _HOME_CHART_CACHE.clear()
 
         _build_home_chart_payload(30, {"brands": ["down"]})
         chart_cached_at = next(iter(_HOME_CHART_CACHE.values()))[0]
 
-        self.assertEqual(
-            chart_cached_at,
-            min(pulse_cached_at, voices_cached_at),
-            "the complete cache must not give older components a fresh TTL",
-        )
+        self.assertGreaterEqual(chart_cached_at, pulse_cached_at)
+        self.assertGreater(chart_cached_at, _HOME_PULSE_CACHE[30][0])
 
     def test_posts_date_index_covers_chart_and_top_voice_keys(self):
         index = next(
