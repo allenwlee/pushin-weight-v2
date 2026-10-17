@@ -84,14 +84,48 @@ def test_P_U5_cursor_config_defaults():
 
 
 def test_P_A5_A6_metrics_refresh_config_defaults():
-    """P-A5/P-A6: delay 2.0, cap 200."""
+    """Early engagement refresh: 15-minute delay, 24-hour expiry, cap 200."""
     from x_monitor.config import MetricsRefreshConfig, load_config
 
-    assert MetricsRefreshConfig().delay_hours == 2.0
+    assert MetricsRefreshConfig().delay_hours == 0.25
+    assert MetricsRefreshConfig().max_age_hours == 24.0
     assert MetricsRefreshConfig().per_cycle_cap == 200
     cfg = load_config(CONFIG_PATH)
-    assert cfg.metrics_refresh.delay_hours == 2.0
+    assert cfg.metrics_refresh.delay_hours == 0.25
+    assert cfg.metrics_refresh.max_age_hours == 24.0
     assert cfg.metrics_refresh.per_cycle_cap == 200
+
+
+@pytest.mark.parametrize("payload,exception", [
+    ({"status": "error", "msg": "provider failed", "tweets": []}, ValueError),
+    ({"status": "success", "code": 42, "tweets": []}, ValueError),
+    ({"status": "success", "tweets": None}, TypeError),
+    ({"status": "success", "tweets": [None]}, TypeError),
+])
+def test_by_id_provider_errors_are_not_silent_missing_posts(payload, exception):
+    from x_monitor.apify import TwitterApiClient
+
+    client = TwitterApiClient(api_key="test")
+    with patch.object(client, "_get", return_value=payload), pytest.raises(exception):
+        client.get_tweets_by_ids(["99"])
+
+
+def test_by_id_missing_counts_remain_unknown():
+    from x_monitor.apify import TwitterApiClient
+
+    client = TwitterApiClient(api_key="test")
+    with patch.object(client, "_get", return_value={"tweets": [{"id": "99", "likeCount": 0}]}):
+        result = client.get_tweets_by_ids(["99"])
+    assert result == {"99": {"like_count": 0}}
+
+
+def test_refresh_expiry_must_be_later_than_delay():
+    from pydantic import ValidationError
+
+    from x_monitor.config import MetricsRefreshConfig
+
+    with pytest.raises(ValidationError):
+        MetricsRefreshConfig(delay_hours=24, max_age_hours=24)
 
 
 def test_P_A4_quote_tweets_channel_is_noop():
@@ -129,6 +163,7 @@ def test_P_A2_A3_cycle_source_uses_metrics_not_qt_capture():
 def test_P_A7_A8_A9_due_selection():
     """P-A7/A8/A9: due / young / once-only."""
     from django.utils import timezone
+
     from core.models import Post
     from monitor.metrics_refresh import select_due_posts
 
@@ -153,6 +188,7 @@ def test_P_A7_A8_A9_due_selection():
 def test_P_C1_C2_cycle_metrics_refresh_not_quotes():
     """P-C1/P-C2: metrics refresh uses by-ids for due only; never get_quote_tweets."""
     from django.utils import timezone
+
     from core.models import Post
     from monitor.metrics_refresh import run_metrics_refresh
     from x_monitor.config import load_config
@@ -185,6 +221,7 @@ def test_P_C1_C2_cycle_metrics_refresh_not_quotes():
 def test_P_C3_second_run_skips_stamped():
     """P-C3: second refresh does not re-fetch stamped ids."""
     from django.utils import timezone
+
     from core.models import Post
     from monitor.metrics_refresh import run_metrics_refresh
     from x_monitor.config import load_config

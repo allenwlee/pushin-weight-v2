@@ -769,15 +769,34 @@ class TwitterApiClient:
             data = self._get(
                 TWEETS_BY_IDS_PATH, {"tweet_ids": ",".join(chunk)}
             )
-            for t in data.get("tweets") or []:
+            if not isinstance(data, dict):
+                raise TypeError("TwitterAPI.io by-ID response must be an object")
+            if (
+                str(data.get("status", "")).lower() in {"error", "failed", "failure"}
+                or data.get("error")
+                or data.get("code") not in (None, 0)
+            ):
+                raise ValueError("TwitterAPI.io by-ID response reports a provider error")
+            tweets = data.get("tweets")
+            if not isinstance(tweets, list):
+                raise TypeError("TwitterAPI.io by-ID response must contain a tweets list")
+            for t in tweets:
+                if not isinstance(t, dict):
+                    raise TypeError("TwitterAPI.io by-ID tweet must be an object")
                 tid = str(t.get("id") or "")
-                if not tid:
+                if not tid or tid not in chunk:
                     continue
                 out[tid] = {
-                    "quote_count": int(t.get("quoteCount") or 0),
-                    "retweet_count": int(t.get("retweetCount") or 0),
-                    "reply_count": int(t.get("replyCount") or 0),
-                    "like_count": int(t.get("likeCount") or 0),
+                    key: int(t[provider_key])
+                    for key, provider_key in (
+                        ("quote_count", "quoteCount"),
+                        ("retweet_count", "retweetCount"),
+                        ("reply_count", "replyCount"),
+                        ("like_count", "likeCount"),
+                        ("view_count", "viewCount"),
+                        ("bookmark_count", "bookmarkCount"),
+                    )
+                    if t.get(provider_key) is not None
                 }
         return out
 

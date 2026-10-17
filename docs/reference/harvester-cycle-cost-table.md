@@ -66,11 +66,11 @@ Per-call result counts are not currently logged at message-create level (`x_moni
 - `x_monitor/run.py:958-978` — budget guard with the wrong `300 credits/page` constant
 - `config.yaml:65` — `daily_ceiling: 333` (read but not enforced)
 
-## Update 2026-08-10 (plan 2026-08-10-002)
+## Engagement refresh
 
-Continuous official/staff quote-count recheck (every 15 min × ~14 days via `/twitter/tweets`) is **removed**.
+The cycle refreshes engagement through `/twitter/tweets`, with up to 50 IDs per request.
 
-**New steady-state cost:** each stored post gets **at most one** by-ID metrics re-fetch after `metrics_refresh.delay_hours` (default 2.0), capped per cycle by `metrics_refresh.per_cycle_cap` (default 200). Quote-body endpoint is not used on the cycle path.
+Each eligible post gets **at most one successful** by-ID metrics refresh after `metrics_refresh.delay_hours` (default 0.25 hours / 15 minutes), capped per cycle by `metrics_refresh.per_cycle_cap` (default 200). The newest due posts are selected first. Eligibility expires after `metrics_refresh.max_age_hours` (default 24 hours) from first fetch; a known publication time must also be within that horizon. Missing posts retain their existing counts and NULL refresh stamp, and can be retried while eligible. Each attempt can incur provider charges even when no post is returned. Provider errors are reported separately from missing results. Quote-body endpoint is not used on the cycle path.
 
 See `monitor/metrics_refresh.py` and `config.yaml` → `metrics_refresh:`.
 

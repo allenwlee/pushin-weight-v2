@@ -14,6 +14,7 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 def test_select_due_excludes_young_and_already_refreshed():
     from django.utils import timezone
+
     from core.models import Post
     from monitor.metrics_refresh import select_due_posts
 
@@ -36,6 +37,7 @@ def test_select_due_excludes_young_and_already_refreshed():
 
 def test_select_due_respects_cap():
     from django.utils import timezone
+
     from core.models import Post
     from monitor.metrics_refresh import select_due_posts
 
@@ -48,11 +50,117 @@ def test_select_due_respects_cap():
     # at least cap size from our seeds (may include other suite rows; filter)
     ours = [t for t in due if t.startswith("cap_m_")]
     assert len(ours) <= 2
-    assert ours[0] == "cap_m_0"
+    assert ours[0] == "cap_m_4"
+
+
+def test_recent_due_post_is_not_starved_by_unavailable_historical_backlog():
+    from django.utils import timezone
+
+    from core.models import Post
+    from monitor.metrics_refresh import select_due_posts
+
+    now = timezone.now()
+    for tweet_id, age in [("historical_missing", timedelta(days=90)),
+                          ("recent_due", timedelta(minutes=20))]:
+        Post.objects.create(tweet_id=tweet_id)
+        Post.objects.filter(tweet_id=tweet_id).update(fetched_at=now - age)
+
+    assert select_due_posts(delay_hours=0.25, per_cycle_cap=1, now=now) == ["recent_due"]
+
+
+def test_early_refresh_excludes_expired_and_historical_backfill_posts():
+    from django.utils import timezone
+
+    from core.models import Post
+    from monitor.metrics_refresh import select_due_posts
+
+    now = timezone.now()
+    for tweet_id in ["expired", "backfill", "early", "too_young"]:
+        Post.objects.create(tweet_id=tweet_id, created_at=now - timedelta(minutes=25))
+        Post.objects.filter(tweet_id=tweet_id).update(fetched_at=now - timedelta(minutes=20))
+    Post.objects.filter(tweet_id="expired").update(fetched_at=now - timedelta(hours=25))
+    Post.objects.filter(tweet_id="backfill").update(created_at=now - timedelta(days=30))
+    Post.objects.filter(tweet_id="too_young").update(fetched_at=now - timedelta(minutes=14))
+
+    assert select_due_posts(delay_hours=0.25, per_cycle_cap=200, now=now) == ["early"]
+
+
+def test_refresh_persists_actual_http_lookup_counts_and_skips_unavailable(monkeypatch):
+    import json
+
+    import requests
+    from django.utils import timezone
+
+    from core.models import Post
+    from monitor.metrics_refresh import run_metrics_refresh
+    from x_monitor.apify import TwitterApiClient
+    from x_monitor.config import load_config
+
+    now = timezone.now()
+    for tweet_id in ["2111255857925349616", "2111255830230368630"]:
+        Post.objects.create(tweet_id=tweet_id, like_count=1)
+        Post.objects.filter(tweet_id=tweet_id).update(fetched_at=now - timedelta(minutes=20))
+    calls = []
+
+    def get(url, **kwargs):
+        calls.append((url, kwargs["params"]))
+        response = requests.Response()
+        response.status_code = 200
+        response._content = json.dumps({"status": "success", "code": 0, "tweets": [
+            {"id": "", "unavailable": True},
+            {"id": "2111255857925349616", "likeCount": 10, "retweetCount": 2,
+             "replyCount": 3, "quoteCount": 4, "viewCount": 500, "bookmarkCount": 6},
+        ]}).encode()
+        return response
+
+    monkeypatch.setattr("x_monitor.apify.requests.get", get)
+    out = run_metrics_refresh(TwitterApiClient(api_key="test", max_retries=0),
+                              load_config(REPO / "config.yaml"), now=now)
+    assert len(calls) == 1
+    assert set(calls[0][1]["tweet_ids"].split(",")) == {"2111255857925349616", "2111255830230368630"}
+    assert (out["n_refreshed"], out["n_missing"], out["n_errors"]) == (1, 1, 0)
+    post = Post.objects.get(tweet_id="2111255857925349616")
+    assert (post.like_count, post.retweet_count, post.reply_count, post.quote_count,
+            post.view_count, post.bookmark_count) == (10, 2, 3, 4, 500, 6)
+    assert post.metrics_refreshed_at == now
+    missing = Post.objects.get(tweet_id="2111255830230368630")
+    assert missing.metrics_refreshed_at is None
+    assert missing.like_count == 1
+
+
+def test_http_200_provider_error_is_reported_without_stamping_post(monkeypatch):
+    import requests
+    from django.utils import timezone
+
+    from core.models import Post
+    from monitor.metrics_refresh import run_metrics_refresh
+    from x_monitor.apify import TwitterApiClient
+    from x_monitor.config import load_config
+
+    now = timezone.now()
+    Post.objects.create(tweet_id="2111255857925349616", like_count=7)
+    Post.objects.filter(tweet_id="2111255857925349616").update(
+        fetched_at=now - timedelta(minutes=20)
+    )
+    response = requests.Response()
+    response.status_code = 200
+    response._content = b'{"status":"error","tweets":[],"msg":"provider failed"}'
+    monkeypatch.setattr("x_monitor.apify.requests.get", lambda *_args, **_kwargs: response)
+
+    out = run_metrics_refresh(
+        TwitterApiClient(api_key="test", max_retries=0),
+        load_config(REPO / "config.yaml"), now=now,
+    )
+
+    assert (out["n_refreshed"], out["n_missing"], out["n_errors"], out["n_deferred"]) == (0, 0, 1, 1)
+    post = Post.objects.get(tweet_id="2111255857925349616")
+    assert post.metrics_refreshed_at is None
+    assert post.like_count == 7
 
 
 def test_run_metrics_refresh_updates_counts_and_stamps():
     from django.utils import timezone
+
     from core.models import Post
     from monitor.metrics_refresh import run_metrics_refresh
     from x_monitor.config import load_config
@@ -83,6 +191,7 @@ def test_run_metrics_refresh_updates_counts_and_stamps():
 
 def test_run_metrics_refresh_api_error_does_not_stamp():
     from django.utils import timezone
+
     from core.models import Post
     from monitor.metrics_refresh import run_metrics_refresh
     from x_monitor.config import load_config
@@ -99,6 +208,7 @@ def test_run_metrics_refresh_api_error_does_not_stamp():
 
 def test_run_metrics_refresh_defers_before_a_request_that_cannot_fit():
     from django.utils import timezone
+
     from core.models import Post
     from monitor.metrics_refresh import run_metrics_refresh
     from x_monitor.config import load_config
@@ -132,6 +242,7 @@ def test_run_metrics_refresh_defers_before_a_request_that_cannot_fit():
 
 def test_run_metrics_refresh_rechecks_deadline_before_each_chunk():
     from django.utils import timezone
+
     from core.models import Post
     from monitor.metrics_refresh import run_metrics_refresh
     from x_monitor.config import load_config

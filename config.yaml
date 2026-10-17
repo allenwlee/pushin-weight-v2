@@ -293,11 +293,12 @@ harvest:
     terminalization_reserve_seconds: 30
 
 # One-shot metrics re-fetch (plan 2026-08-10-002). Each post is by-ID
-# refreshed exactly once after delay_hours from first fetched_at.
-# Replaces continuous official/staff QT recheck loop.
+# refreshed once after delay_hours from first fetched_at, within max_age_hours.
+# Recent due posts take priority over older unavailable results.
 metrics_refresh:
   enabled: true
-  delay_hours: 2.0
+  delay_hours: 0.25
+  max_age_hours: 24.0
   per_cycle_cap: 200
 
 
