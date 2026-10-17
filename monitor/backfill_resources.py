@@ -105,9 +105,12 @@ class BackfillContext:
     api_timeout_seconds: int = 30
     query_override: str | None = None
     page_writer: Callable[..., tuple[int, int, int, int]] | None = None
+    author_contexts: dict[str, Any] | None = None
+    match_scheduled_policy: bool = False
+    rare_page_writer: Callable[..., Any] | None = None
 
 
-def bounded_backfill_config(cfg: Any, *, enrichment_limit: int) -> Any:
+def bounded_backfill_config(cfg: Any, *, enrichment_limit: int, collection_policy: bool = False) -> Any:
     """Copy resource controls; retain canonical models, queries and policy."""
     from x_monitor.config import EnrichmentConfig
 
@@ -125,7 +128,8 @@ def bounded_backfill_config(cfg: Any, *, enrichment_limit: int) -> Any:
     )
     bounded.targeted_extraction.enabled = False
     bounded.synthesis.prewarm_enabled = False
-    bounded.discovery.rare_types.enabled = False
+    if not collection_policy:
+        bounded.discovery.rare_types.enabled = False
     bounded.discovery.rare_types.product_verification_enabled = False
     bounded.discovery.rare_types.targeted_extraction_enabled = False
     return bounded

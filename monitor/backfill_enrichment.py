@@ -13,7 +13,7 @@ from decimal import Decimal
 
 from django.contrib.postgres.expressions import ArraySubquery
 from django.db import connection, transaction
-from django.db.models import Q, Sum
+from django.db.models import Exists, OuterRef, Q, Sum
 from django.utils import timezone
 
 from core.models import (
@@ -307,25 +307,285 @@ def _cached_reply_valid(call, client, source):
         if hashlib.sha256(source.encode()).hexdigest() != context["source_fingerprint"]:
             raise BatchAdmissionError("cached_translation_source_mismatch")
         if context.get("chunk_index") is not None:
-            source = _split_translation_chunks(source, chunk_size=2000)[context["chunk_index"]]
+            source = _split_translation_chunks(source, chunk_size=2000)[
+                context["chunk_index"]
+            ]
         target = context["target_language"]
         _, quantities = protect_translation_spans(source, target)
-        text, _, _ = _restore_and_validate(source, target, text, quantities, {}, 0)
+        text, _, _ = _restore_and_validate(
+            source, target, text, quantities, {}, 0,
+            source_language=context.get("source_language"),
+        )
         return text is not None
     except DeepInfraPermanentError:
         return False
 
 
-def prepare_page(job, ids, cfg, *, delegates=None):
+def _locked_drained_revalidation_job(job_id):
+    """Call inside atomic; share the admission barrier for saved-reply repairs."""
+    job = CollectionJob.objects.select_for_update().get(pk=job_id)
+    status = enrichment_control_status(job.pk)
+    if any(status[k] for k in (
+        "sent_outstanding", "active_processing_claims", "native_groups_outstanding",
+    )) or OriginalContentCall.objects.filter(
+        provider_batch__source_collection_job=job, state="reserved",
+    ).exists():
+        raise BatchAdmissionError("cached_revalidation_requires_drained_work")
+    return job
+
+
+def _revalidation_evidence(call, *, actor, reason, validator, **details):
+    previous = dict(call.import_evidence)
+    history = previous.pop("revalidation_history", [])
+    event = {
+        "actor": actor.strip(), "reason": reason.strip(),
+        "at": timezone.now().isoformat(), "validator": validator,
+        "previous_import_state": call.import_state,
+        "previous_error_code": call.error_code,
+        "previous_import_evidence": previous, **details,
+    }
+    return {
+        **call.import_evidence, "validation": "revalidated",
+        "revalidation_history": [*history, event],
+    }
+
+
+def revalidate_cached_translations(job_id, *, call_ids, delegate, actor, reason):
+    """Explicitly reopen valid saved replies after a shared validator correction.
+
+    This performs no inference or publication and never changes physical-call
+    state, costs or attempts. The caller must first stop its owned controller.
+    """
+    ids = sorted(set(call_ids))
+    if not 0 < len(ids) <= 100 or not actor.strip() or not reason.strip():
+        raise BatchAdmissionError("cached_revalidation_requires_bounded_ids_and_audit")
+    if len(actor) > 160 or len(reason) > 1000:
+        raise BatchAdmissionError("cached_revalidation_audit_too_large")
+    reopened, rejected = [], []
+    with transaction.atomic():
+        job = _locked_drained_revalidation_job(job_id)
+        calls = list(OriginalContentCall.objects.filter(
+            pk__in=ids, provider_batch__source_collection_job=job,
+        ))
+        if len(calls) != len(ids) or any(
+            c.stage != "translation" or c.state != "completed"
+            or c.provenance.get("context", {}).get("operation") != "post_literal_translation"
+            or len(c.member_post_ids) != 1
+            or c.response_payload is None
+            or c.model != delegate.model
+            for c in calls
+        ):
+            raise BatchAdmissionError("cached_revalidation_ineligible_call")
+        members = sorted({p for c in calls for p in c.member_post_ids})
+        states = list(PostEnrichmentState.objects.select_for_update().filter(pk__in=members))
+        if len(states) != len(members) or any(
+            s.claim_expires_at and s.claim_expires_at > timezone.now() for s in states
+        ):
+            raise BatchAdmissionError("cached_revalidation_post_missing_or_claimed")
+        posts = {str(p.pk): p for p in Post.objects.select_for_update().filter(
+            pk__in=members,
+        ).prefetch_related("brands")}
+        for call in OriginalContentCall.objects.select_for_update().filter(pk__in=ids).order_by("pk"):
+            if call.import_state != "error":
+                continue
+            if call.error_code != "cached_response_validation_failed":
+                raise BatchAdmissionError("cached_revalidation_unrelated_error")
+            if {p: post_snapshot(posts[p]) for p in call.member_post_ids} != call.provenance.get("post_snapshots"):
+                raise BatchAdmissionError("cached_revalidation_source_changed")
+            if not _cached_reply_valid(call, delegate, posts[call.member_post_ids[0]].text):
+                rejected.append(call.pk)
+                continue
+            call.import_evidence = _revalidation_evidence(
+                call, actor=actor, reason=reason, validator="literal_quantity_source_forms_v1",
+            )
+            call.import_state = "pending"
+            call.error_code = ""
+            call.save(update_fields=["import_state", "error_code", "import_evidence", "updated_at"])
+            reopened.append(call.pk)
+    return {"reopened": reopened, "rejected": rejected}
+
+
+def replay_rejected_classifier_packet(
+    job_id, *, call_ids, post_ids, cfg, delegates, actor, reason,
+):
+    """Publish selected members of an exact saved pair, with no new inference.
+
+    Any missing reply or invalid selected output rolls back the entire repair.
+    Unresolved siblings retain their failure evidence and retry accounting.
+    """
+    ids, selected = sorted(set(call_ids)), sorted({str(p) for p in post_ids})
+    if len(ids) != 2 or not 0 < len(selected) <= 20 or not actor.strip() or not reason.strip():
+        raise BatchAdmissionError("classifier_revalidation_requires_pair_members_and_audit")
+    if len(actor) > 160 or len(reason) > 1000:
+        raise BatchAdmissionError("cached_revalidation_audit_too_large")
+    with transaction.atomic():
+        job = _locked_drained_revalidation_job(job_id)
+        assert_enrichment_admission(job.pk)
+        calls = list(OriginalContentCall.objects.filter(
+            pk__in=ids, provider_batch__source_collection_job=job,
+        ).select_related("provider_batch").order_by("pk"))
+        if len(calls) != 2 or any(
+            c.state != "completed" or c.stage != "classification"
+            or c.provenance.get("response_kind") != "json"
+            or c.model != delegates["classification"].model
+            or c.provider_batch.request_profile != delegates["classification"].request_profile
+            for c in calls
+        ) or {c.provenance.get("context", {}).get("role") for c in calls} != {"content", "brand_interpretation"}:
+            raise BatchAdmissionError("classifier_revalidation_ineligible_pair")
+        def user_packet(call):
+            return next(m["content"] for m in call.request_packet["messages"] if m["role"] == "user")
+        members = sorted(set(calls[0].member_post_ids))
+        if (
+            not set(selected) <= set(members)
+            or calls[0].member_post_ids != calls[1].member_post_ids
+            or calls[0].provenance["context"]["post_ids"] != calls[1].provenance["context"]["post_ids"]
+            or user_packet(calls[0]) != user_packet(calls[1])
+            or calls[0].provenance["post_snapshots"] != calls[1].provenance["post_snapshots"]
+        ):
+            raise BatchAdmissionError("classifier_revalidation_packet_mismatch")
+        states = list(PostEnrichmentState.objects.select_for_update().filter(pk__in=members))
+        if len(states) != len(members) or any(
+            s.claim_expires_at and s.claim_expires_at > timezone.now() for s in states
+        ):
+            raise BatchAdmissionError("cached_revalidation_post_missing_or_claimed")
+        list(Post.objects.select_for_update().filter(pk__in=members).order_by("pk"))
+        snapshot = saved_classifier_input(calls[0])
+        facts = completion_facts(selected)
+        if all(facts[p]["translation"] and facts[p]["classification"] for p in selected):
+            return {"replayed": [], "already_complete": selected}
+        locked = list(OriginalContentCall.objects.select_for_update().filter(pk__in=ids).order_by("pk"))
+        for call in locked:
+            if not _cached_reply_valid(call, delegates["classification"], ""):
+                raise BatchAdmissionError("classifier_revalidation_response_invalid")
+            call.import_evidence = _revalidation_evidence(
+                call, actor=actor, reason=reason, validator="classifier_packet_canonical_replay_v1",
+                selected_member_ids=selected,
+            )
+            call.import_state, call.error_code = "pending", ""
+            call.save(update_fields=["import_state", "error_code", "import_evidence", "updated_at"])
+        prepared, _, missing = prepare_page(
+            job, selected, cfg, delegates=delegates, classification_input_snapshot=snapshot,
+        )
+        if prepared or missing:
+            raise BatchAdmissionError("classifier_revalidation_requires_unsaved_reply")
+        facts = completion_facts(members)
+        succeeded = set(PostEnrichmentState.objects.filter(
+            pk__in=selected, translation_status="succeeded", classification_status="succeeded",
+        ).values_list("post_id", flat=True))
+        if succeeded != set(selected) or any(
+            not facts[p]["translation"] or not facts[p]["classification"] for p in selected
+        ):
+            raise BatchAdmissionError("classifier_revalidation_publication_incomplete")
+        complete = sorted(p for p in members if facts[p]["classification"])
+        remaining = sorted(set(members) - set(complete))
+        for call in locked:
+            call.refresh_from_db()
+            call.import_state = "error" if remaining else "applied"
+            call.import_evidence = {
+                **call.import_evidence,
+                "validation": "canonical_validation_failed" if remaining else "passed",
+                "complete_member_ids": complete, "remaining_member_ids": remaining,
+                "invalid_member_ids": remaining, "revalidated_member_ids": selected,
+            }
+            call.save(update_fields=["import_state", "import_evidence", "updated_at"])
+        return {"replayed": selected, "remaining_packet_members": remaining}
+
+
+def close_unrecoverable_direct_imports(
+    job_id, *, call_ids, terminal_controller, actor, reason,
+):
+    """Explicitly abandon missing imports; provider outcomes and charges stay unknown.
+
+    The operator must independently verify the supplied owned-controller receipt.
+    This never sends a replacement, changes physical attempts or refunds a call.
+    """
+    ids = sorted(set(call_ids))
+    if not 0 < len(ids) <= 20 or not actor.strip() or not reason.strip():
+        raise BatchAdmissionError("unknown_import_closure_requires_ids_and_audit")
+    if len(actor) > 160 or len(reason) > 1000:
+        raise BatchAdmissionError("cached_revalidation_audit_too_large")
+    try:
+        started = timezone.datetime.fromisoformat(terminal_controller["startedAt"].replace("Z", "+00:00"))
+        finished = timezone.datetime.fromisoformat(terminal_controller["finishedAt"].replace("Z", "+00:00"))
+        valid_receipt = (
+            isinstance(terminal_controller["id"], str)
+            and terminal_controller["id"].startswith("job-")
+            and terminal_controller["status"] in {"succeeded", "failed", "canceled", "cancelled"}
+            and timezone.is_aware(started) and timezone.is_aware(finished)
+            and started <= finished <= timezone.now() + timedelta(seconds=5)
+        )
+    except (KeyError, TypeError, ValueError, AttributeError):
+        valid_receipt = False
+    if not valid_receipt:
+        raise BatchAdmissionError("unknown_import_terminal_controller_required")
+    closed, already_closed = [], []
+    with transaction.atomic():
+        job = _locked_drained_revalidation_job(job_id)
+        calls = list(OriginalContentCall.objects.filter(
+            pk__in=ids, provider_batch__source_collection_job=job,
+        ).select_related("provider_batch"))
+        if len(calls) != len(ids) or any(
+            c.state != "ambiguous" or c.provider_batch.transport != "direct"
+            or c.response_payload is not None or c.response_hash
+            or c.completed_at is not None or c.actual_usd is not None
+            or c.sent_at is None or not started <= c.sent_at <= finished
+            for c in calls
+        ):
+            raise BatchAdmissionError("unknown_import_closure_ineligible_call")
+        members = sorted({p for c in calls for p in c.member_post_ids})
+        states = list(PostEnrichmentState.objects.select_for_update().filter(pk__in=members))
+        if len(states) != len(members) or any(
+            s.claim_expires_at and s.claim_expires_at > timezone.now() for s in states
+        ):
+            raise BatchAdmissionError("cached_revalidation_post_missing_or_claimed")
+        snapshots = {
+            str(p.pk): post_snapshot(p)
+            for p in Post.objects.select_for_update().filter(pk__in=members).prefetch_related("brands")
+        }
+        for call in OriginalContentCall.objects.select_for_update().filter(pk__in=ids).order_by("pk"):
+            if call.provenance.get("post_snapshots") != {p: snapshots[p] for p in call.member_post_ids}:
+                raise BatchAdmissionError("cached_revalidation_source_changed")
+            if call.import_state == "error" and call.import_evidence.get("validation") == "operator_closed_missing_import":
+                already_closed.append(call.pk)
+                continue
+            if call.import_state != "pending":
+                raise BatchAdmissionError("unknown_import_closure_unrelated_import_state")
+            call.import_evidence = {
+                **_revalidation_evidence(
+                    call, actor=actor, reason=reason, validator="operator_unknown_import_closure_v1",
+                    terminal_controller=terminal_controller,
+                ),
+                "validation": "operator_closed_missing_import",
+                "provider_outcome": "unknown", "cost_unknown": True,
+                "replacement_policy": "original_attempt_request_usd_and_deadline_limits",
+            }
+            call.import_state = "error"
+            call.save(update_fields=["import_state", "import_evidence", "updated_at"])
+            closed.append(call.pk)
+    return {"closed_imports": closed, "already_closed": already_closed}
+
+
+def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot=None):
     """Replay exact shared callers; missing replies roll back every Post write."""
     own_historical_posts(job, ids)
+    stage_targets = {
+        stage: set(
+            PostEnrichmentState.objects.filter(
+                pk__in=ids,
+                **{stage + "_status": "pending"},
+            ).values_list("post_id", flat=True)
+        )
+        for stage in ("translation", "classification")
+    }
     calls = list(
         OriginalContentCall.objects.filter(
             provider_batch__source_collection_job=job,
             member_post_ids__overlap=ids,
             state="completed",
             import_state__in=["pending", "applied"],
-        ).select_related("provider_batch").order_by("reserved_at")
+        )
+        .select_related("provider_batch")
+        .order_by("reserved_at")
     )
     cached = {call.request_hash: call for call in calls}
     outstanding = set(
@@ -345,7 +605,11 @@ def prepare_page(job, ids, cfg, *, delegates=None):
         with lock:
             if identity in cached:
                 call = cached[identity]
-                if _cached_reply_valid(call, delegates[context["stage"]], sources[call.member_post_ids[0]]):
+                if _cached_reply_valid(
+                    call,
+                    delegates[context["stage"]],
+                    sources[next(p for p in call.member_post_ids if p in sources)],
+                ):
                     consumed.add(call.pk)
                     return call.response_payload
                 rejected.add(call.pk)
@@ -362,8 +626,12 @@ def prepare_page(job, ids, cfg, *, delegates=None):
         return None
 
     delegates = delegates or {
-        "translation": build_translator_client_from_env(cfg),
-        "classification": build_classifier_client_from_env(cfg),
+        "translation": build_translator_client_from_env(
+            cfg, deepinfra_key_env="DEEPINFRA_ON_DEMAND",
+        ),
+        "classification": build_classifier_client_from_env(
+            cfg, deepinfra_key_env="DEEPINFRA_ON_DEMAND",
+        ),
     }
     if any(client is None for client in delegates.values()):
         raise BatchAdmissionError("enrichment_role_credentials_missing")
@@ -372,6 +640,7 @@ def prepare_page(job, ids, cfg, *, delegates=None):
             client,
             resolve=resolve,
             reply_transport=lambda identity: cached[identity].provider_batch.transport,
+            context_transform=getattr(client, "context_for_request", None),
         )
         for stage, client in delegates.items()
     }
@@ -390,10 +659,14 @@ def prepare_page(job, ids, cfg, *, delegates=None):
             run_id=f"batch-replay-{uuid.uuid4().hex}",
             post_ids=set(ids),
             source_collection_job_id=job.pk,
+            classification_input_snapshot=classification_input_snapshot,
         )
+        snapshot_ids = set(ids) | {
+            p for request in prepared.values() for p in request["context"]["post_ids"]
+        }
         snapshots = {
             str(p.pk): post_snapshot(p)
-            for p in Post.objects.filter(pk__in=ids).prefetch_related("brands")
+            for p in Post.objects.filter(pk__in=snapshot_ids).prefetch_related("brands")
         }
         for request in prepared.values():
             request["snapshots"] = {
@@ -402,24 +675,44 @@ def prepare_page(job, ids, cfg, *, delegates=None):
         if missing:
             transaction.set_rollback(True)
         else:
+            member_ids = set(ids) | {p for call in calls for p in call.member_post_ids}
             states = {
-                str(s.pk): s for s in PostEnrichmentState.objects.filter(pk__in=ids)
+                str(s.pk): s
+                for s in PostEnrichmentState.objects.filter(pk__in=member_ids)
             }
             for call in calls:
                 if call.pk not in consumed:
                     continue
                 prefix = call.stage
-                success = all(
-                    getattr(states[p], f"{prefix}_status") == "succeeded"
-                    for p in call.member_post_ids
+                claimed_ids = set(
+                    result.get("enrichment_current_cycle_post_ids", [])
+                ) | set(result.get("enrichment_carryover_post_ids", []))
+                processed = (
+                    set(call.member_post_ids) & stage_targets[prefix] & claimed_ids
                 )
-                call.import_state = "applied" if success else "error"
+                applied = {
+                    p
+                    for p in call.member_post_ids
+                    if getattr(states[p], f"{prefix}_status") == "succeeded"
+                }
+                success = applied == set(call.member_post_ids)
+                partial = not success and processed <= applied
+                call.import_state = (
+                    "applied" if success else "pending" if partial else "error"
+                )
                 call.import_evidence = {
                     **call.import_evidence,
                     "published_at": timezone.now().isoformat(),
                     "validation": "passed"
                     if success
+                    else "partial"
+                    if partial
                     else "canonical_validation_failed",
+                    "complete_member_ids": sorted(applied),
+                    "processed_member_ids": sorted(processed),
+                    "already_complete_member_ids": sorted(applied - processed),
+                    "remaining_member_ids": sorted(set(call.member_post_ids) - applied),
+                    "invalid_member_ids": sorted(processed - applied),
                 }
                 call.save(
                     update_fields=["import_state", "import_evidence", "updated_at"]
@@ -430,46 +723,196 @@ def prepare_page(job, ids, cfg, *, delegates=None):
         with transaction.atomic():
             CollectionJob.objects.select_for_update().get(pk=job.pk)
             for call in OriginalContentCall.objects.select_for_update().filter(
-                pk__in=rejected, state="completed", import_state__in=["pending", "applied"],
+                pk__in=rejected,
+                state="completed",
+                import_state__in=["pending", "applied"],
             ):
                 call.import_state = "error"
                 call.error_code = "cached_response_validation_failed"
                 call.import_evidence = {
-                    **call.import_evidence, "validation": "failed",
+                    **call.import_evidence,
+                    "validation": "failed",
                     "reason": "canonical_cached_reply_rejected",
                     "validated_at": timezone.now().isoformat(),
                 }
-                call.save(update_fields=["import_state", "error_code", "import_evidence", "updated_at"])
+                call.save(
+                    update_fields=[
+                        "import_state",
+                        "error_code",
+                        "import_evidence",
+                        "updated_at",
+                    ]
+                )
     return list(prepared.values()), result, bool(missing)
 
 
-def _replay_pending_classifier_packets(job, cfg, *, selection, delegates, limit):
+def deferred_enrichment_work(job, *, max_attempts, operation_scope="all"):
+    """Derive unresolved work from retained attempts, without changing their state.
+
+    Packet regrouping must not reset a Post's retry allowance. Saved replies
+    retain their complete positional packet, while publication can proceed for
+    independent members without reissuing the paid request.
+    """
+    failures, usable, latest_failure = defaultdict(int), {}, {}
+    deferred = {}
+    calls = (
+        OriginalContentCall.objects.filter(
+            provider_batch__source_collection_job=job,
+        )
+        .order_by("reserved_at", "pk")
+        .values(
+            "member_post_ids",
+            "model",
+            "stage",
+            "state",
+            "import_state",
+            "import_evidence",
+            "provenance",
+        )
+    )
+    for index, call in enumerate(calls.iterator(chunk_size=200)):
+        context = call["provenance"].get("context", {})
+        targeted = context.get("operation") == "post_targeted_extraction"
+        if (operation_scope == "base" and targeted) or (
+            operation_scope == "targeted" and not targeted
+        ):
+            continue
+        ids = call["member_post_ids"]
+        if call["state"] == "ambiguous" and call["import_state"] == "pending":
+            deferred.update({p: "provider_outcome_unknown" for p in ids})
+        for post_id in ids:
+            key = (
+                post_id,
+                call["model"],
+                call["stage"],
+                context.get("operation"),
+                context.get("role"),
+                context.get("target_language"),
+                context.get("chunk_index"),
+                context.get("input_fingerprints", {}).get(post_id)
+                or context.get("source_fingerprint"),
+            )
+            evidence = call["import_evidence"]
+            if (
+                call["state"] == "completed"
+                and evidence.get("validation") != "failed"
+                and post_id
+                in evidence.get(
+                    "complete_member_ids", evidence.get("applied_member_ids", [])
+                )
+            ):
+                usable[key] = index
+            elif call["state"] == "failed" or (
+                call["import_state"] == "error"
+                and (
+                    evidence.get("validation") == "failed"
+                    or post_id in evidence.get("invalid_member_ids", ids)
+                )
+            ):
+                failures[key] += 1
+                latest_failure[key] = index
+            elif call["state"] == "completed" and call["import_state"] in {
+                "pending",
+                "applied",
+            }:
+                usable[key] = index
+    for key, count in failures.items():
+        if count >= max_attempts and latest_failure[key] > usable.get(key, -1):
+            deferred.setdefault(key[0], "model_attempt_allowance_exhausted")
+    return deferred
+
+
+def saved_classifier_input(call):
+    """Recover the submitted positional packet, keeping source and slots pinned."""
+    from x_monitor.attribution import _validated_tracked_brand_catalog_snapshot
+
+    packet = json.loads(
+        next(
+            m["content"] for m in call.request_packet["messages"] if m["role"] == "user"
+        )
+    )
+    catalog = _validated_tracked_brand_catalog_snapshot(packet["tracked_brands"])
+    ids = call.provenance["context"]["post_ids"]
+    cases = packet["cases"]
+    if len(ids) != len(cases) or set(ids) != set(call.member_post_ids):
+        raise BatchAdmissionError("saved_classifier_packet_members_mismatch")
+    inputs = {}
+    for post_id, case in zip(ids, cases.values(), strict=True):
+        evidence = case["evidence"]
+        inputs[post_id] = {
+            "text": evidence["source_text"],
+            "brand_ids": list(case["brand_decision_slots"].values()),
+            "created_at": evidence["created_at"],
+            "source_language": evidence["source_language"],
+            "english_translation": evidence["english_translation"],
+            "context": evidence["context"],
+            "affiliations": evidence["author_affiliations"],
+        }
+    snapshots = call.provenance["post_snapshots"]
+    current = {
+        str(p.pk): post_snapshot(p)
+        for p in Post.objects.filter(pk__in=ids).prefetch_related("brands")
+    }
+    if current != snapshots:
+        raise BatchAdmissionError("saved_classifier_packet_source_changed")
+    return {"catalog": catalog, "inputs": inputs}
+
+
+def _replay_pending_classifier_packets(
+    job,
+    cfg,
+    *,
+    selection,
+    delegates,
+    limit,
+    excluded_post_ids=(),
+):
     """Consume paid replies in their original packets before regrouping Posts."""
-    pending = PostEnrichmentState.objects.filter(
-        source_collection_job=job, classification_status="pending",
-    ).order_by().values("post_id")
+    pending = (
+        PostEnrichmentState.objects.filter(
+            source_collection_job=job,
+            classification_status="pending",
+        )
+        .exclude(post_id__in=excluded_post_ids)
+        .order_by()
+        .values("post_id")
+    )
     replies = OriginalContentCall.objects.filter(
         provider_batch__source_collection_job=job,
-        stage="classification", state="completed", import_state="pending",
+        stage="classification",
+        state="completed",
+        import_state="pending",
         member_post_ids__overlap=ArraySubquery(pending),
+    )
+    replies = replies.filter(
+        provenance__context__role__in=["content", "brand_interpretation"]
     )
     if selection:
         replies = replies.filter(member_post_ids__overlap=selection)
-    packets = list(replies.order_by("reserved_at").values_list(
-        "member_post_ids", flat=True,
-    )[:40])
+    packets = list(replies.order_by("reserved_at")[:40])
     requests, seen = [], set()
-    for ids in packets:
+    for reply in packets:
+        ids = reply.member_post_ids
         packet = tuple(sorted(ids))
         if packet in seen:
             continue
         seen.add(packet)
-        prepared, _, missing = prepare_page(job, list(packet), cfg, delegates=delegates)
+        selected = [
+            p
+            for p in packet
+            if p not in excluded_post_ids and (not selection or p in selection)
+        ]
+        prepared, _, _ = prepare_page(
+            job,
+            selected,
+            cfg,
+            delegates=delegates,
+            classification_input_snapshot=saved_classifier_input(reply),
+        )
         requests.extend(prepared)
-        if not missing and replies.filter(member_post_ids=list(packet)).exists():
-            # The canonical caller no longer consumes this saved context. Keep
-            # its evidence and report it instead of deferring fresh work forever.
-            raise BatchAdmissionError("cached_classifier_packet_not_consumed")
+        # Publication can reject a newer attempt while an older paid reply is
+        # still available. Let the next advance try it; the campaign's progress
+        # guard bounds genuinely stuck work without discarding either reply.
         if len(seen) >= 20 or len(requests) >= limit:
             break
     # A saved packet may still need another reply. Keep its identity and let
@@ -643,14 +1086,39 @@ def advance_batch(batch_id, *, client_factory=None, api_key):
         release_batch(claim)
 
 
-def _register_requests(job, requests, policy, cfg, *, transport="batch"):
+def _blocking_model_groups(job, model, *, allow_drained_ambiguous):
+    groups = ProviderBatch.objects.filter(
+        source_collection_job=job,
+        model=model,
+        state__in=ACTIVE_STATES,
+    )
+    if allow_drained_ambiguous:
+        groups = groups.annotate(
+            unfinished=Exists(
+                OriginalContentCall.objects.filter(
+                    provider_batch_id=OuterRef("pk"),
+                    state__in=["reserved", "sent"],
+                )
+            )
+        ).exclude(
+            state="ambiguous",
+            transport="direct",
+            unfinished=False,
+            claim_expires_at__lte=timezone.now(),
+        )
+    return groups
+
+
+def _register_requests(
+    job, requests, policy, cfg, *, transport="batch", allow_drained_ambiguous=False
+):
     models = defaultdict(list)
     for request in requests:
         models[request["body"]["model"]].append(request)
     created = []
     for model, members in models.items():
-        if ProviderBatch.objects.filter(
-            source_collection_job=job, model=model, state__in=ACTIVE_STATES
+        if _blocking_model_groups(
+            job, model, allow_drained_ambiguous=allow_drained_ambiguous
         ).exists():
             continue
         # Stable order bounds both the uploaded manifest and request membership.
@@ -685,10 +1153,12 @@ def _register_requests(job, requests, policy, cfg, *, transport="batch"):
             CollectionJob.objects.select_for_update().get(pk=job.pk)
             existing = job.provider_batches.order_by("created_at").first()
             assert_enrichment_admission(job.pk)
-            if existing and enrichment_policy_definition(existing.policy) != enrichment_policy_definition(policy):
+            if existing and enrichment_policy_definition(
+                existing.policy
+            ) != enrichment_policy_definition(policy):
                 raise BatchAdmissionError("enrichment_policy_changed")
-            if ProviderBatch.objects.filter(
-                source_collection_job=job, model=model, state__in=ACTIVE_STATES
+            if _blocking_model_groups(
+                job, model, allow_drained_ambiguous=allow_drained_ambiguous
             ).exists():
                 continue
             profile = (
@@ -731,6 +1201,7 @@ def execute_enrichment(
     transport="batch",
     direct_concurrency=32,
     direct_client_factory=None,
+    defer_failures=False,
 ):
     from monitor.backfill_direct import advance_direct, validate_concurrency
 
@@ -741,7 +1212,9 @@ def execute_enrichment(
     def advance(group):
         if group.transport == "direct":
             advance_direct(
-                group.pk, api_key=api_key, concurrency=direct_concurrency,
+                group.pk,
+                api_key=api_key,
+                concurrency=direct_concurrency,
                 client_factory=direct_client_factory,
             )
         else:
@@ -756,17 +1229,17 @@ def execute_enrichment(
         raise BatchAdmissionError("enrichment_requires_real_x_backfill_job")
     pinned_database = job.definition.get("scope", {}).get("database", {})
     with connection.cursor() as cursor:
-        cursor.execute("SELECT current_database(), current_user")
+        # Match the login saved by the collector, including SET ROLE sessions.
+        cursor.execute("SELECT current_database(), session_user")
         name, role = cursor.fetchone()
     if pinned_database != {"name": name, "user": role}:
         raise BatchAdmissionError("enrichment_database_identity_mismatch")
     existing = job.provider_batches.order_by("created_at").first()
     pin = configuration_pin(cfg)
     if existing:
-        if (
-            policy is not None
-            and enrichment_policy_definition(policy | {"configuration_pin": pin}) != enrichment_policy_definition(existing.policy)
-        ):
+        if policy is not None and enrichment_policy_definition(
+            policy | {"configuration_pin": pin}
+        ) != enrichment_policy_definition(existing.policy):
             raise BatchAdmissionError("enrichment_policy_changed")
         policy = existing.policy
         if not read_only and policy.get("configuration_pin") != pin:
@@ -782,6 +1255,13 @@ def execute_enrichment(
         run__job=job, source_subject_kind="post"
     )
     selection = (policy or {}).get("selection")
+    deferred = (
+        deferred_enrichment_work(
+            job, max_attempts=int(policy["max_attempts"]), operation_scope="base"
+        )
+        if defer_failures and policy
+        else {}
+    )
     if selection:
         observations = observations.filter(post_id__in=selection)
         if observations.values("post_id").distinct().count() != len(selection):
@@ -791,20 +1271,27 @@ def execute_enrichment(
             if existing is None:
                 reopen_incomplete_successes(job, observations)
             for batch in list(
-                job.provider_batches.filter(state__in=ACTIVE_STATES).order_by("created_at")[
-                    :2
-                ]
+                job.provider_batches.filter(state__in=ACTIVE_STATES).order_by(
+                    "created_at"
+                )[:2]
             ):
                 advance(batch)
             request_limit = direct_concurrency * 2 if transport == "direct" else 2000
             requests, cached_packets_remain = _replay_pending_classifier_packets(
-                job, cfg, selection=selection, delegates=delegates, limit=request_limit,
+                job,
+                cfg,
+                selection=selection,
+                delegates=delegates,
+                limit=request_limit,
+                excluded_post_ids=deferred,
             )
             after = ""
             work = observations.filter(
                 Q(post__enrichment_state__translation_status="pending")
                 | Q(post__enrichment_state__classification_status="pending")
             )
+            if deferred:
+                work = work.exclude(post_id__in=deferred)
             for _ in range(0 if cached_packets_remain else 20):
                 ids = list(
                     work.filter(post_id__gt=after)
@@ -830,8 +1317,12 @@ def execute_enrichment(
                 if len(requests) >= request_limit:
                     break
             for batch_id in _register_requests(
-                job, requests, policy, cfg,
+                job,
+                requests,
+                policy,
+                cfg,
                 transport=transport,
+                allow_drained_ambiguous=defer_failures,
             ):
                 advance(ProviderBatch.objects.get(pk=batch_id))
         except BatchAdmissionError as exc:
@@ -852,6 +1343,14 @@ def execute_enrichment(
     pending_count = states.exclude(
         translation_status="succeeded", classification_status="succeeded"
     ).count()
+    actionable_pending_count = (
+        states.exclude(post_id__in=deferred)
+        .exclude(
+            translation_status="succeeded",
+            classification_status="succeeded",
+        )
+        .count()
+    )
     cohort_count = observations.values("post_id").distinct().count()
     invalid = verify_cohort(observations)[1] if pending_count == 0 else None
     control = enrichment_control_status(job.pk)
@@ -870,12 +1369,16 @@ def execute_enrichment(
         .count(),
         "collection_status": job.state,
         "pending_count": pending_count,
+        "actionable_pending_count": actionable_pending_count,
+        "deferred_post_count": len(deferred),
         "persisted_output_invalid_count": len(invalid) if invalid is not None else None,
         "model_requests_reserved": calls.count(),
         "model_requests_sent": calls.exclude(sent_at=None).count(),
         "model_responses_received": calls.filter(state="completed").count(),
         "ambiguous_model_requests": calls.filter(state="ambiguous").count(),
-        "direct_model_requests_sent": calls.filter(provider_batch__transport="direct").exclude(sent_at=None).count(),
+        "direct_model_requests_sent": calls.filter(provider_batch__transport="direct")
+        .exclude(sent_at=None)
+        .count(),
         "cost_unknown_requests": calls.filter(actual_usd=None)
         .exclude(state="reserved")
         .count(),
@@ -905,9 +1408,11 @@ def adopt_completed_membership(job):
     )
     if run.job_id != job.pk or run.status != "success" or run.job.purpose != "content":
         raise BatchAdmissionError("historical_membership_success_run_mismatch")
-    marker = CollectionRun.objects.filter(pk=run.pk).values_list(
-        "report__post_membership", flat=True
-    ).get()
+    marker = (
+        CollectionRun.objects.filter(pk=run.pk)
+        .values_list("report__post_membership", flat=True)
+        .get()
+    )
     if marker is not None:
         if (
             not isinstance(marker, dict)
@@ -917,7 +1422,9 @@ def adopt_completed_membership(job):
         ):
             raise BatchAdmissionError("historical_membership_marker_invalid")
         count = (
-            CollectionObservation.objects.filter(run__job=job, source_subject_kind="post")
+            CollectionObservation.objects.filter(
+                run__job=job, source_subject_kind="post"
+            )
             .values("post_id")
             .distinct()
             .count()

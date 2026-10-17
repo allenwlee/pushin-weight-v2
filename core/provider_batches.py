@@ -63,7 +63,9 @@ def enrichment_control_status(job_id):
     if (job.source_id, job.purpose, job.operation) != ("x", "content", "x_backfill"):
         raise BatchAdmissionError("enrichment_requires_real_x_backfill_job")
     with connection.cursor() as cursor:
-        cursor.execute("SELECT current_database(),current_user")
+        # Collection instructions pin the authenticated login. PostgreSQL may
+        # assume its configured application role without changing that login.
+        cursor.execute("SELECT current_database(),session_user")
         name, role = cursor.fetchone()
     if job.definition.get("scope", {}).get("database") != {"name": name, "user": role}:
         raise BatchAdmissionError("enrichment_database_identity_mismatch")

@@ -2695,7 +2695,9 @@ class CycleRunner:
         """Build the per-cycle call list via plan_calls_for_cycle()."""
         try:
             calls = plan_calls_for_cycle(
-                self.cfg, scheduled_exclusions=self.cycle_kind == "scheduled",
+                self.cfg, scheduled_exclusions=(self.cycle_kind == "scheduled" or bool(
+                    self._backfill_context and self._backfill_context.match_scheduled_policy
+                )),
             )
         except (TypeError, ValueError) as exc:
             logger.warning("CycleRunner._plan_calls: plan_calls failed: %s", exc)
@@ -3032,6 +3034,7 @@ class CycleRunner:
             "cursor": context.cursor, "seen_cursors": list(context.seen_cursors),
             "pages_received": 0, "drained": False, "reason": "page_cap",
             "out_of_window_results": 0, "invalid_time_results": 0,
+            "received_post_ids": [], "exclusions": [],
         }
         self._backfill_fetch_receipt = receipt
         items: list[dict[str, Any]] = []
@@ -3044,18 +3047,34 @@ class CycleRunner:
             ):
                 self._api_calls += 1
                 receipt["pages_received"] += 1
-                for item in page.items:
+                offset = len(receipt["received_post_ids"])
+                receipt["received_post_ids"].extend(page.raw_post_ids or tuple(
+                    str(item.get("id") or item.get("tweet_id") or "") or None for item in page.items
+                ))
+                for position, item in enumerate(page.items):
+                    item["_backfill_appearance_index"] = offset + position
                     created_epoch = _item_created_epoch(item)
                     if created_epoch is None:
                         receipt["invalid_time_results"] += 1
+                        self._record_backfill_exclusions([item], "invalid_time")
                         continue
                     if not window[0] <= created_epoch < window[1]:
                         receipt["out_of_window_results"] += 1
+                        self._record_backfill_exclusions([item], "out_of_window")
                         continue
                     tweet_id = str(item.get("id") or item.get("tweet_id") or "")
                     if tweet_id and tweet_id not in seen_ids:
                         items.append(item)
                         seen_ids.add(tweet_id)
+                    else:
+                        self._record_backfill_exclusions(
+                            [item], "duplicate_native_id" if tweet_id else "missing_native_id",
+                        )
+                for position in range(len(page.items), len(page.raw_post_ids)):
+                    receipt["exclusions"].append({
+                        "post_id": page.raw_post_ids[position], "appearance": offset + position,
+                        "reason": "clipped_page_tail",
+                    })
                 if receipt["out_of_window_results"] or receipt["invalid_time_results"]:
                     receipt["reason"] = "invalid_primary_window"
                     break
@@ -3080,9 +3099,24 @@ class CycleRunner:
                 receipt["seen_cursors"].append(next_cursor)
         except Exception as exc:
             receipt["reason"] = type(exc).__name__
+            http_status = getattr(exc, "response_status_code", None)
+            if type(http_status) is int and 100 <= http_status <= 599:
+                receipt["response_status_code"] = http_status
+                if http_status == 429:
+                    retry_after = getattr(exc, "retry_after_seconds", 30)
+                    receipt["retry_after_seconds"] = max(1, min(300, retry_after)) if type(retry_after) is int else 30
             self._errors.append(f"fetch.{call.call_id}: {type(exc).__name__}")
             return items, "truncated" if items else "error"
         return items, "truncated"
+
+    def _record_backfill_exclusions(self, items, reason):
+        if self._backfill_context is None:
+            return
+        for item in items:
+            self._backfill_fetch_receipt.setdefault("exclusions", []).append({
+                "post_id": str(item.get("id") or item.get("tweet_id") or "") or None,
+                "appearance": item.get("_backfill_appearance_index"), "reason": reason,
+            })
 
     def _run_rare_type_search(
         self, call: PlannedCall, api: TwitterApiClient, *, now: datetime
@@ -3402,9 +3436,20 @@ class CycleRunner:
     def _prepare_call_a_roles(
         self, items: list[dict[str, Any]], *, list_id: int
     ) -> list[str]:
-        contexts, degraded = resolve_call_a_author_contexts(
-            list_id=list_id, items=items
-        )
+        if self._backfill_context is not None and self._backfill_context.author_contexts is not None:
+            from monitor.list_membership import AuthorRoleContext
+            contexts = {
+                author_id: AuthorRoleContext(
+                    **{**value, "official_brands": tuple(value["official_brands"]),
+                       "staff_brands": tuple(value["staff_brands"]),
+                       "last_complete_reconciliation_at": (
+                           datetime.fromisoformat(value["last_complete_reconciliation_at"])
+                           if value["last_complete_reconciliation_at"] else None)},
+                ) for author_id, value in self._backfill_context.author_contexts.items()
+            }
+            degraded = []
+        else:
+            contexts, degraded = resolve_call_a_author_contexts(list_id=list_id, items=items)
         for item in items:
             author_id = str(item.get("author_id") or "")
             context = contexts.get(author_id)
@@ -3681,10 +3726,36 @@ class CycleRunner:
         self,
         items: list[dict[str, Any]],
     ) -> tuple[int, int, int, int]:
-        context = getattr(self, "_backfill_context", None)
-        if context is not None and context.page_writer is not None:
-            return context.page_writer(self, items, self._persist_items_orm)
         return self._persist_items_orm(items)
+
+    def _persist_call_page(self, call, items):
+        """Commit one provider page, including every Call A role, together."""
+        context = self._backfill_context
+        if context is None or context.page_writer is None:
+            return self._route_and_persist(call, items)
+        if call.call_id == RARE_EXTRA_CALL_ID and context.rare_page_writer:
+            return context.rare_page_writer(self, call, items)
+        drops, degraded = 0, []
+        if call.call_id == "A":
+            staff = [item for item in items if item.get("_call_a_staff_candidate")]
+            accepted, drops, degraded = self._gate_call_a_staff_items(staff)
+            self._backfill_fetch_receipt["relevancy_degraded"] = [value.split(":", 1)[0] for value in degraded]
+            accepted_ids = {id(item) for item in accepted}
+            self._record_backfill_exclusions(
+                [item for item in staff if id(item) not in accepted_ids], "relevance_drop",
+            )
+            items = [item for item in items if not item.get("_call_a_staff_candidate")] + accepted
+            for item in accepted:
+                item["_call_a_staff_candidate"] = False
+        result = None
+
+        def writer(values):
+            nonlocal result
+            result = self._route_and_persist(call, values)
+            return result[1:5]
+
+        context.page_writer(self, items, writer)
+        return (*result[:5], result[5] + drops, [*result[6], *degraded])
 
     def _persist_items_orm(
         self,
@@ -3788,6 +3859,7 @@ class CycleRunner:
         post_ids: set[str] | None = None,
         repair_manifest: dict[str, dict[str, Any]] | None = None,
         source_collection_job_id: Any | None = None,
+        classification_input_snapshot: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Drain a bounded durable translation/classification claim batch.
 
@@ -3974,13 +4046,17 @@ class CycleRunner:
             build_translator_client_from_env,
         )
 
+        deepinfra_credentials = (
+            {"deepinfra_key_env": "DEEPINFRA_ON_DEMAND"}
+            if self.cycle_kind == "backfill" else {}
+        )
         translator_client = (
-            (self._post_fetch_clients["translation"] if self._post_fetch_clients is not None else build_translator_client_from_env(self.cfg))
+            (self._post_fetch_clients["translation"] if self._post_fetch_clients is not None else build_translator_client_from_env(self.cfg, **deepinfra_credentials))
             if translation_tweets
             else None
         )
         classifier_client = (
-            (self._post_fetch_clients["classification"] if self._post_fetch_clients is not None else build_classifier_client_from_env(self.cfg))
+            (self._post_fetch_clients["classification"] if self._post_fetch_clients is not None else build_classifier_client_from_env(self.cfg, **deepinfra_credentials))
             if classification_tweets
             else None
         )
@@ -4271,12 +4347,40 @@ class CycleRunner:
         # assembled after translation so both the prompt and the fingerprint
         # see their final source packet.  `BrandRow` is intentionally too thin
         # for this catalog; Django's curated terms/accounts are authoritative.
+        classification_publish_ids = {str(t["tweet_id"]) for t in classification_tweets}
         if getattr(classifier_client, "request_profile", None) == "deepseek_0731":
-            catalog_source = _classification_tracked_brand_catalog()
+            # Deferred replies describe the evidence submitted with their paid
+            # request. Replay that exact packet, including its catalog revision,
+            # rather than silently replacing it with today's mutable catalog.
+            from x_monitor.attribution import _validated_tracked_brand_catalog_snapshot
+
+            if classification_input_snapshot is not None:
+                # Positional replies retain their original packet even when
+                # only some members remain pending. Complete members supply
+                # context/slots and are never republished below.
+                pending_tweets = {str(t["tweet_id"]): t for t in classification_tweets}
+                classification_tweets = [
+                    pending_tweets.get(post_id, {"tweet_id": post_id, **saved})
+                    for post_id, saved in classification_input_snapshot["inputs"].items()
+                ]
+            catalog_source = (
+                _validated_tracked_brand_catalog_snapshot(
+                    classification_input_snapshot["catalog"]
+                )["brands"]
+                if classification_input_snapshot is not None
+                else _classification_tracked_brand_catalog()
+            )
             for tweet in classification_tweets:
+                if classification_input_snapshot is not None:
+                    saved = classification_input_snapshot["inputs"][str(tweet["tweet_id"])]
+                    if saved["text"] != tweet["text"] or set(saved["brand_ids"]) != set(tweet["brand_ids"]):
+                        raise ValueError("classification_snapshot_source_changed")
+                    tweet.update(saved)
                 tweet["tracked_brand_catalog"] = catalog_source
-            classification_catalog = _tracked_brand_catalog(
-                brand_registry, classification_tweets
+            classification_catalog = (
+                _validated_tracked_brand_catalog_snapshot(classification_input_snapshot["catalog"])
+                if classification_input_snapshot is not None
+                else _tracked_brand_catalog(brand_registry, classification_tweets)
             )
             for tweet in classification_tweets:
                 tweet["tracked_brand_catalog"] = classification_catalog["brands"]
@@ -4417,6 +4521,8 @@ class CycleRunner:
         counters["targeted_deferred_roles"] = []
         for i, (tweet, result) in enumerate(zip(classification_tweets, results)):
             tid = tweet["tweet_id"]
+            if tid not in classification_publish_ids:
+                continue
             try:
                 flag_result = _publish_stage1_classification(
                     post_id=tid,
@@ -5187,7 +5293,7 @@ class CycleRunner:
                     "daily_credit_ceiling": call.daily_credit_ceiling,
                 }
 
-            if call.call_id == RARE_EXTRA_CALL_ID:
+            if call.call_id == RARE_EXTRA_CALL_ID and self._backfill_context is None:
                 rare_result = self._run_rare_type_search(
                     call, api, now=self._wall_now()
                 )
@@ -5290,6 +5396,8 @@ class CycleRunner:
                 if role_degraded:
                     call_entry["author_role_degraded"] = role_degraded
                     summary["degraded"]["call_a_author_roles"] = role_degraded
+            elif call.call_id == "A" and list_id is not None and items:
+                self._prepare_call_a_roles(items, list_id=int(list_id))
             # Hard failures: no items to keep, hold cursor, move on.
             # "truncated" is NOT a hard failure -- items were retrieved and
             # must be persisted; only the cursor advance is withheld so the
@@ -5387,6 +5495,10 @@ class CycleRunner:
                 ]
             self._posts_attributed += len(kept)
             call_entry["n_kept"] = len(kept)
+            kept_identities = {id(item) for item in kept}
+            self._record_backfill_exclusions(
+                [item for item in items if id(item) not in kept_identities], "unmatched_attribution",
+            )
 
             # U5 runtime wire-in: post-fetch ban match against
             # call.not_include (R12). Stable hijacks like F1/Kimi for
@@ -5398,6 +5510,11 @@ class CycleRunner:
             ni_drop_count = 0
             if ni_terms:
                 pre_drop = len(kept)
+                self._record_backfill_exclusions([
+                    item for item in kept if _matches_any_term(
+                        item.get("text") or "", item.get("quoted_text") or "", ni_terms,
+                    )
+                ], "not_include")
                 kept = [
                     it for it in kept
                     if not _matches_any_term(
@@ -5417,7 +5534,7 @@ class CycleRunner:
                 n_persist_failed,
                 llm_drop_count,
                 relevancy_degraded,
-            ) = self._route_and_persist(call, kept)
+            ) = self._persist_call_page(call, kept)
             call_entry["llm_drops"] = llm_drop_count
             if relevancy_degraded:
                 call_entry["relevancy_degraded"] = relevancy_degraded
@@ -5635,7 +5752,7 @@ class CycleRunner:
                     "resolved": product_result.resolved,
                     "deferred": product_result.deferred,
                 }
-            if self.cfg.discovery.rare_types.enabled:
+            if self.cfg.discovery.rare_types.enabled and self._backfill_context is None:
                 summary["rare_type_ingestion"]["classified_reconciled"] = (
                     reconcile_classified_hits(
                         now=self._wall_now(),

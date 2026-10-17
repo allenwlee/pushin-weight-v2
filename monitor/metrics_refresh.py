@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from django.db.models import Q
 from django.utils import timezone as dj_timezone
 
 from core.models import Post
@@ -32,16 +33,23 @@ def select_due_posts(
     *,
     delay_hours: float,
     per_cycle_cap: int,
+    max_age_hours: float = 24.0,
     now: datetime | None = None,
 ) -> list[str]:
-    """Return tweet_ids due for one-shot metrics refresh (oldest first)."""
+    """Return recent due tweet_ids, newest first, without historical starvation."""
     now = now or dj_timezone.now()
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
     cutoff = now - timedelta(hours=float(delay_hours))
+    oldest = now - timedelta(hours=float(max_age_hours))
     qs = (
-        Post.objects.filter(metrics_refreshed_at__isnull=True, fetched_at__lte=cutoff)
-        .order_by("fetched_at")
+        Post.objects.filter(
+            metrics_refreshed_at__isnull=True,
+            fetched_at__lte=cutoff,
+            fetched_at__gte=oldest,
+        )
+        .filter(Q(created_at__isnull=True) | Q(created_at__gte=oldest))
+        .order_by("-fetched_at", "tweet_id")
         .values_list("tweet_id", flat=True)[: int(per_cycle_cap)]
     )
     return [str(t) for t in qs]
@@ -79,6 +87,7 @@ def run_metrics_refresh(
         "n_errors": 0,
         "n_deferred": 0,
         "delay_hours": float(mrc.delay_hours),
+        "max_age_hours": float(mrc.max_age_hours),
         "per_cycle_cap": int(mrc.per_cycle_cap),
     }
     if not mrc.enabled:
@@ -88,6 +97,7 @@ def run_metrics_refresh(
         due = select_due_posts(
             delay_hours=mrc.delay_hours,
             per_cycle_cap=mrc.per_cycle_cap,
+            max_age_hours=mrc.max_age_hours,
             now=now,
         )
     except Exception as exc:

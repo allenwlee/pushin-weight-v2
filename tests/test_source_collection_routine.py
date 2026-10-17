@@ -17,6 +17,12 @@ pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 NOW = datetime(2026, 10, 16, 11, tzinfo=UTC)
 
 
+@pytest.fixture(autouse=True)
+def source_clock(monkeypatch):
+    """Create jobs and evaluate their due times against the same clock."""
+    monkeypatch.setattr("django.utils.timezone.now", lambda: NOW)
+
+
 def routine_job(settings, *, key="routine-hf", role="inventory:lab"):
     settings.BENCHMARK_COLLECTION_ENABLED = True
     contract, raw, _, _ = configured()

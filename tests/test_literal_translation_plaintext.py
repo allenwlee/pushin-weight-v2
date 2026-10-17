@@ -642,6 +642,43 @@ def test_caller_restores_localized_token_quantity_without_model_arithmetic():
     assert len(client.calls) == 2
 
 
+@pytest.mark.parametrize("language,translated,valid", [
+    ("en", "2000万トークン", True),
+    ("en", "2万トークン", False),
+    ("es", "2万トークン", True),
+    ("es", "2000万トークン", False),
+])
+def test_real_caller_forwards_declared_language_to_quantity_guard(language, translated, valid):
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    client = PlaintextClient([TextResponse(translated) for _ in range(3)])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "mil", "text": "20 mil tokens", "lang": language}], client,
+    )[0]
+    assert (row["text_ja"] is not None) is valid
+    assert len(client.calls) == (2 if language == "en" else 3)
+    assert all("20 mil tokens" in _prompt(call) for call in client.calls)
+
+
+def test_real_japanese_caller_accepts_compound_150_million_without_an_extra_call():
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    source = "1億5千万トークン。1億トークン。"
+    client = PlaintextClient([
+        TextResponse("150 million tokens; [[PQ0:001]]."),
+        TextResponse("1.5亿个Token。[[PQ0:001]]。"),
+    ])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "compound", "text": source, "lang": "ja"}], client,
+    )[0]
+    assert row["text_en"] == "150 million tokens; 100 million tokens."
+    assert row["text_zh_cn"] == "1.5亿个Token。1亿个Token。"
+    assert row["text_ja"] == source
+    assert not row["translation_failed"]
+    assert len(client.calls) == 2
+    assert all("1億5千万トークン" in _prompt(call) for call in client.calls)
+
+
 @pytest.mark.parametrize("suffix", ["", "[[PW0::END]]"])
 def test_complete_paragraphs_accept_observed_terminal_variants_without_repair_call(suffix):
     from x_monitor.literal_translation import translate_batch_literal_plaintext
@@ -771,3 +808,133 @@ def test_long_pronunciation_only_source_copy_is_not_untranslated_prose():
     assert not _is_untranslated_copy(source, source, 'en')
     prose = 'これは発音を説明する長い日本語の文章です。説明文までコピーしてはいけません。\n' + source
     assert _is_untranslated_copy(prose, prose, 'en')
+
+
+def test_literal_and_cached_callers_accept_quantity_after_complete_tco_link():
+    import hashlib
+    from types import SimpleNamespace
+
+    from monitor.backfill_enrichment import _cached_reply_valid
+    from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    source = "143亿Token。https://t.co/xWdYwT1HGs在接入后达到143.5亿Tokens。"
+    english = "[[PQ0:001]]. https://t.co/xWdYwT1HGs reached 14.35 billion Tokens."
+    japanese = "[[PQ0:001]]。https://t.co/xWdYwT1HGsは143.5億Tokensに達した。"
+    client = PlaintextClient([TextResponse(english), TextResponse(japanese)])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "tco-source", "text": source, "lang": "zh"}], client,
+    )[0]
+    assert row["text_en"] and "14.35 billion" in row["text_en"]
+    assert row["text_ja"] and row["text_zh_cn"] == source
+    assert len(client.calls) == 2
+    assert "达到143.5亿Tokens" in _prompt(client.calls[0])
+    call = SimpleNamespace(
+        provenance={"response_kind": "text", "context": {
+            "operation": "post_literal_translation", "target_language": "en",
+            "source_language": "zh-Hans",
+            "source_fingerprint": hashlib.sha256(source.encode()).hexdigest(),
+        }},
+        response_payload={
+            "model": "google/gemma-4-31B-it-turbo",
+            "choices": [{"message": {"content": english}, "finish_reason": "stop"}],
+        },
+    )
+    delegate = DeepInfraChatCompletionsClient(
+        api_key="unused", model="google/gemma-4-31B-it-turbo", request_profile="gemma4_translation_v1",
+    )
+    assert _cached_reply_valid(call, delegate, source)
+
+
+SHELL_ONLY_SOURCE = (
+    "export VLLM_USE_FLASHINFER_SAMPLER=0\n"
+    "export VLLM_WORKER_MULTIPROC_METHOD=spawn\n\n"
+    "vllm serve Qwen3.8-27B-FP8 \\\n"
+    " --served-model-name qwen3.8-27b --host 0.0.0.0 --port 18000 \\\n"
+    " --kernel-config '{\"linear_backend\":\"marlin\"}' \\\n"
+    " --tensor-parallel-size 2 --enable-prefix-caching --trust-remote-code"
+)
+
+
+def test_unfenced_machine_only_source_survives_real_literal_and_cached_callers():
+    import hashlib
+    from types import SimpleNamespace
+
+    from monitor.backfill_enrichment import _cached_reply_valid
+    from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    client = PlaintextClient([TextResponse(SHELL_ONLY_SOURCE)] * 2)
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "shell-source", "text": SHELL_ONLY_SOURCE, "lang": "en"}], client,
+    )[0]
+    assert not row["translation_failed"]
+    assert row["text_en"] == row["text_zh_cn"] == row["text_ja"] == SHELL_ONLY_SOURCE
+    delegate = DeepInfraChatCompletionsClient(
+        api_key="unused", model="google/gemma-4-31B-it-turbo", request_profile="gemma4_translation_v1",
+    )
+    for target in ("ja", "zh-Hans"):
+        call = SimpleNamespace(
+            provenance={"response_kind": "text", "context": {
+                "operation": "post_literal_translation", "target_language": target,
+                "source_language": "en",
+                "source_fingerprint": hashlib.sha256(SHELL_ONLY_SOURCE.encode()).hexdigest(),
+            }},
+            response_payload={"model": delegate.model, "choices": [{
+                "message": {"content": SHELL_ONLY_SOURCE}, "finish_reason": "stop",
+            }]},
+        )
+        assert _cached_reply_valid(call, delegate, SHELL_ONLY_SOURCE)
+
+
+@pytest.mark.parametrize("source", [
+    SHELL_ONLY_SOURCE + "\nThis command starts a model server and must be explained in the requested language.",
+    "Read these instructions carefully before running the following command.\n" + SHELL_ONLY_SOURCE,
+    "export Our team is announcing a new open model and inviting everyone to try it today.",
+    "vllm serve Qwen Our team is announcing a new model and inviting everyone to try it today.",
+])
+def test_machine_only_exception_never_exempts_unchanged_prose_or_invalid_commands(source):
+    from x_monitor.literal_translation import _is_untranslated_copy
+
+    assert _is_untranslated_copy(source, source, "ja")
+    assert _is_untranslated_copy(source, source, "zh-Hans")
+
+
+def test_machine_only_exception_requires_exact_code_preservation():
+    from x_monitor.literal_translation import _is_untranslated_copy
+
+    assert _is_untranslated_copy(SHELL_ONLY_SOURCE, SHELL_ONLY_SOURCE.replace("\n", " "), "ja")
+
+
+@pytest.mark.parametrize("source,zh,ja", [
+    ("A million tokens of context; three million tokens of cache.",
+     "[[PQ0:001]]上下文，300万个Token缓存。", "[[PQ0:001]]の文脈と300万トークンのキャッシュ。"),
+    ("100 billion tokens saved, with 5-10 billion tokens on the plan.",
+     "节省了[[PQ0:001]]，计划使用100亿个Token。", "[[PQ0:001]]を節約し、計画は100億トークン。"),
+])
+def test_real_literal_and_cached_callers_accept_word_and_range_source_forms(source, zh, ja):
+    import hashlib
+    from types import SimpleNamespace
+
+    from monitor.backfill_enrichment import _cached_reply_valid
+    from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+    from x_monitor.literal_translation import translate_batch_literal_plaintext
+
+    client = PlaintextClient([TextResponse(zh), TextResponse(ja)])
+    row = translate_batch_literal_plaintext(
+        [{"tweet_id": "word-range", "text": source, "lang": "en"}], client,
+    )[0]
+    assert not row["translation_failed"] and len(client.calls) == 2
+    delegate = DeepInfraChatCompletionsClient(
+        api_key="unused", model="google/gemma-4-31B-it-turbo", request_profile="gemma4_translation_v1",
+    )
+    call = SimpleNamespace(
+        provenance={"response_kind": "text", "context": {
+            "operation": "post_literal_translation", "target_language": "ja", "source_language": "en",
+            "source_fingerprint": hashlib.sha256(source.encode()).hexdigest(),
+        }},
+        response_payload={"model": delegate.model, "choices": [{
+            "message": {"content": ja}, "finish_reason": "stop",
+        }]},
+    )
+    assert _cached_reply_valid(call, delegate, source)

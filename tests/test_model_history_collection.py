@@ -57,8 +57,12 @@ def history_job(
     return set_job_state(obj.pk, "ready")
 
 
-@pytest.mark.parametrize("reachable", [True, False])
-def test_native_hf_history_pins_revision_and_resumes_without_weight_download(reachable):
+@pytest.mark.parametrize(
+    ("reachable", "pagination"), [(True, "cursor"), (False, "cursor"), (True, "legacy")]
+)
+def test_native_hf_history_pins_revision_and_resumes_without_weight_download(
+    reachable, pagination
+):
     import httpx
 
     from core.models import DataSource, Product
@@ -95,17 +99,33 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download(rea
             )
         if "/commits/" in path:
             assert path.endswith("a" * 40)
-            if request.url.params.get("cursor"):
+            if pagination == "legacy" and request.url.params.get("p") == "1":
+                assert request.url.params["limit"] == "50"
+                return httpx.Response(
+                    200,
+                    json=[{"id": "c" * 40, "date": "2026-09-04T00:00:00Z"}],
+                    headers={
+                        "Link": f'<https://huggingface.co{path}?p=2&limit=50>; rel="next"'
+                    },
+                )
+            if pagination == "legacy" and request.url.params.get("p") == "2":
+                assert request.url.params["limit"] == "50"
                 return httpx.Response(200, json=[])
+            if request.url.params.get("cursor"):
+                assert pagination == "cursor"
+                return httpx.Response(200, json=[])
+            query = "p=1&limit=50" if pagination == "legacy" else "cursor=next"
             return httpx.Response(
                 200,
                 json=[{"id": "b" * 40, "date": "2026-09-03T00:00:00Z"}],
                 headers={
-                    "Link": f'<https://huggingface.co{path}?cursor=next>; rel="next"'
+                    "Link": f'<https://huggingface.co{path}?{query}>; rel="next"'
                 },
             )
         assert "/tree/" in path
-        assert path.endswith("b" * 40), "tree must use a dated commit before the cutoff"
+        assert path.endswith(("c" if pagination == "legacy" else "b") * 40), (
+            "tree must use a dated commit before the cutoff"
+        )
         return httpx.Response(
             200,
             json=[{"type": "file", "path": "weights.safetensors", "size": 10000000000}],
@@ -127,9 +147,20 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download(rea
         assert first.request_count == 1 and len(seen) == 1
         return
     assert first.status == "partial"
+    prior = list(first.observations.order_by("pk").values())
+    assert len(prior) == 2
+    if pagination == "legacy":
+        checkpoint = first.scopes.get(scope_kind="hf_repository_history")
+        assert checkpoint.cursor == "hf-commits-page:v1:1:50"
+        assert checkpoint.enumeration_complete is False
     second = execute_model_history(job.pk, budget=budget(8))
     assert second.pk == first.pk and second.status == "success"
-    assert second.request_count == 4
+    assert second.request_count == len(seen) == (5 if pagination == "legacy" else 4)
+    assert list(
+        second.observations.filter(pk__in=[row["id"] for row in prior])
+        .order_by("pk")
+        .values()
+    ) == prior
     assert (
         sum(
             "/api/models/lab/model?" in url or url.endswith("/api/models/lab/model")
@@ -138,7 +169,9 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download(rea
         == 1
     )
     assert not any("/resolve/" in url for url in seen)
-    assert second.observations.filter(dimensions__kind="hf_commits").count() == 1
+    assert second.observations.filter(dimensions__kind="hf_commits").count() == (
+        2 if pagination == "legacy" else 1
+    )
     assert MetricValue.objects.count() == 0
 
 

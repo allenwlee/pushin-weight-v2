@@ -18,7 +18,6 @@ from core.models import (
     CollectionJob,
     CollectionObservation,
     CollectionRun,
-    MetricValue,
     SourceMetric,
 )
 from tests.collection_fixtures import evidence_job
@@ -57,10 +56,10 @@ def test_current_runs_have_no_physical_instruction_columns():
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.usefixtures("isolated_migration_database")
-def test_0089_to_0090_preserves_rows_clocks_evidence_views_and_instruction_links():
-    executor = MigrationExecutor(connection)
-    executor.migrate(BRIDGE)
+def test_0089_to_0090_preserves_rows_clocks_evidence_views_and_instruction_links(
+    collection_instruction_bridge,
+):
+    value_model = collection_instruction_bridge.get_model("core", "MetricValue")
     metric = persist_source(configured(), "hf", "a" * 64, payload(9007199254740993))
     timestamp = timezone.now()
     catalog_job = evidence_job(
@@ -140,7 +139,7 @@ def test_0089_to_0090_preserves_rows_clocks_evidence_views_and_instruction_links
         for model in (
             CollectionJob,
             CollectionObservation,
-            MetricValue,
+            value_model,
             SourceMetric,
             type(scope),
         )
@@ -227,8 +226,9 @@ def test_0089_to_0090_preserves_rows_clocks_evidence_views_and_instruction_links
     later = persist_source(metric.job.contract, "hf", "f" * 64, payload(42))
     assert (
         later.job_id == metric.job_id
-        and later.observations.get()
-        .values.get(source_metric__metric_key="downloads")
+        and value_model.objects.get(
+            observation__run_id=later.pk, source_metric__metric_key="downloads"
+        )
         .integer_value
         == 42
     )

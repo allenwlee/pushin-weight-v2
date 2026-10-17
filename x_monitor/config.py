@@ -123,13 +123,20 @@ class MetricsRefreshConfig(BaseModel):
 
     After first ingest, each post is eligible for exactly one by-ID
     metrics refresh once it is at least `delay_hours` old (by
-    `fetched_at`). Caps work per cycle so historical backlog drains
-    without a single-tick credit spike.
+    `fetched_at`). Expire historical work after `max_age_hours` so
+    unavailable old posts cannot block early engagement measurements.
     """
 
     enabled: bool = True
-    delay_hours: float = Field(default=2.0, gt=0)
+    delay_hours: float = Field(default=0.25, gt=0)
+    max_age_hours: float = Field(default=24.0, gt=0)
     per_cycle_cap: int = Field(default=200, ge=1)
+
+    @model_validator(mode="after")
+    def _check_refresh_window(self):
+        if self.max_age_hours <= self.delay_hours:
+            raise ValueError("metrics refresh max_age_hours must exceed delay_hours")
+        return self
 
 
 class SearchConfig(BaseModel):

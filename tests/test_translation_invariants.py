@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+import pytest
+
 from x_monitor.translation_invariants import (
     extract_token_quantities,
     protect_token_quantities,
@@ -10,6 +12,39 @@ from x_monitor.translation_invariants import (
 )
 
 SOURCE = "The model trained on 10.9 trillion tokens."
+
+
+@pytest.mark.parametrize("source,translated", [
+    ("Costs per million tokens. Its 100-trillion-token study.", "100兆トークンの研究。"),
+    ("Costs per million tokens. Its 100-trillion-token study.", "100万亿个Token的研究。"),
+    ("1 million tokens; 21M output tokens.", "2100万トークン。"),
+    ("1 million tokens; 21M\t tokens.", "2100万トークン。"),
+    ("1 million tokens; 21M\n tokens.", "2100万トークン。"),
+    ("1 million tokens; 21 million output tokens.", "2100万トークン。"),
+    ("1 million tokens; 130M-output-token evaluation.", "1億3000万トークン。"),
+])
+def test_validation_accepts_hyphenated_and_qualified_source_token_counts(source, translated):
+    # July30 saved replies were correct; the guard only recognized the price
+    # denominator and incorrectly rejected the study's 100-trillion count.
+    assert validate_translation_quantities(source, translated, source_language="en") == []
+
+
+@pytest.mark.parametrize("source", [
+    "1 million tokens; 100-trillion-parameter study.",
+    "1 million tokens; https://example.test/100-trillion-token.",
+    "1 million tokens; @model_100_trillion_token.",
+    "1 million tokens; build_100-trillion-token.",
+    "1 million tokens; build-100-trillion-token.",
+    "1 million tokens; 10-trillion-token study.",
+])
+def test_hyphenated_counts_do_not_license_wrong_units_identifiers_or_magnitudes(source):
+    assert validate_translation_quantities(source, "100兆トークン。", source_language="en")
+
+
+def test_source_count_validation_preserves_exact_saved_paid_prompt_inputs():
+    source = "Costs per million tokens. 21M output tokens. A 100-trillion-token study."
+    assert protect_token_quantities(source, "ja") == (source, {})
+    assert quantity_instruction(source) == ""
 
 
 def test_normalizes_equivalent_english_and_cjk_token_quantities():
@@ -110,3 +145,128 @@ def test_protection_preserves_precision_and_literal_marker_collisions():
     assert restore_token_quantities(masked, replacements) == source.replace("one trillion", "1 trillion")
     assert restore_token_quantities("original [[PQ0:001]]", {}) == "original [[PQ0:001]]"
     assert restore_token_quantities(masked + " [[PQ1:999]]", replacements) is None
+
+
+@pytest.mark.parametrize("source,translated", [
+    ("100M tokens; 210M tokens. Costs per million input tokens.", "100万トークン当たりの料金。"),
+    ("173 million tokens, priced per-million input tokens.", "[[PQ0:001]]。100万トークン当たり。"),
+    ("$5 per billion tokens?\n\nI use 150 billion a month. Also 1 million tokens.", "1500億トークン。"),
+    ("10 million tokens of context; a 2 mil token corpus.", "200万トークンのコーパス。"),
+])
+def test_accepts_saved_reply_unit_prices_abbreviations_and_billing_ellipsis(source, translated):
+    assert validate_translation_quantities(source, translated, source_language="en") == []
+
+
+@pytest.mark.parametrize("source,translated", [
+    ("1 million tokens and 2 billion parameters", "20億トークン"),
+    ("1 million tokens. 2B parameters.", "20億トークン"),
+    ("1 million tokens @2M_tokens", "200万トークン"),
+    ("1 million tokens https://example.test/2M-tokens", "200万トークン"),
+    ("1 million tokens. 2M tokens.", "20億トークン"),
+    ("1 million tokens. Costs per million input tokens.", "1億トークン"),
+    ("1 million tokens. 2 mil tokens.", "20億トークン"),
+    ("1 million tokens. $5 per billion tokens?\n\nI use 150 billion a month.", "150兆トークン"),
+    ("1 million tokens. $5 per billion parameters?\n\nI use 150 billion a month.", "1500億トークン"),
+    ("1 million tokens. $5 per billion tokens?\n\nI use 150 billion parameters a month.", "1500億トークン"),
+])
+def test_extra_source_forms_do_not_license_wrong_values_units_urls_or_handles(source, translated):
+    assert validate_translation_quantities(source, translated, source_language="en")
+
+
+@pytest.mark.parametrize("language,good,bad", [
+    ("en", "2000万トークン", "2万トークン"),
+    ("es", "2万トークン", "2000万トークン"),
+])
+def test_mil_uses_declared_source_language(language, good, bad):
+    assert validate_translation_quantities("20 mil tokens", good, source_language=language) == []
+    assert validate_translation_quantities("20 mil tokens", bad, source_language=language)
+
+
+def test_validation_extensions_leave_paid_protection_and_instructions_unchanged():
+    source = "10 million tokens of context; a 2 mil token corpus. Costs per million tokens."
+    assert protect_token_quantities(source, "ja") == (
+        "[[PQ0:001]] of context; a 2 mil token corpus. Costs per million tokens.",
+        {"[[PQ0:001]]": "1000万トークン"},
+    )
+    assert quantity_instruction(source) == (
+        "Preserve the exact meaning of these token quantities; do not round or change magnitude: "
+        "'10 million tokens' (= 10000000 tokens)."
+    )
+
+
+@pytest.mark.parametrize("source,translated", [
+    ("1億5千万トークン。1億トークン。", "150 million tokens; 100 million tokens."),
+    ("1亿5千万个Token。1亿个Token。", "1.5亿个Token。1亿个Token。"),
+    ("1億5千萬トークン。1億トークン。", "1.5亿个Token。1亿个Token。"),
+    ("1兆2億3千万トークン。1億トークン。", "1000230 million tokens."),
+])
+def test_validation_accepts_explicit_cjk_thousand_ten_thousand_compounds(source, translated):
+    assert validate_translation_quantities(source, translated, source_language="ja") == []
+
+
+@pytest.mark.parametrize("source,translated", [
+    ("1億5千万トークン。1億トークン。", "1.5 billion tokens."),
+    ("1億5千万パラメータ。1億トークン。", "150 million tokens."),
+    ("https://example.test/1億5千万トークン 1億トークン。", "150 million tokens."),
+])
+def test_compound_validation_still_rejects_wrong_values_units_and_urls(source, translated):
+    assert validate_translation_quantities(source, translated, source_language="ja")
+
+
+def test_compound_source_validation_does_not_change_paid_quantity_protection():
+    assert protect_token_quantities("1億5千万トークン。1億トークン。", "en") == (
+        "1億5千万トークン。[[PQ0:001]]。", {"[[PQ0:001]]": "100 million tokens"},
+    )
+
+
+@pytest.mark.parametrize("source,translated", [
+    ("143亿Token。https://t.co/xWdYwT1HGs在接入后达到143.5亿Tokens。", "14.35 billion tokens"),
+    ("1.2亿Token。https://t.co/xdDkZo7AST，实名后7000万Token自动到账。", "70 million tokens"),
+])
+def test_validation_sees_cjk_prose_immediately_after_complete_tco_link(source, translated):
+    assert validate_translation_quantities(source, translated, source_language="zh") == []
+
+
+@pytest.mark.parametrize("url", [
+    "https://t.co/abcdefghij/143.5亿Tokens",
+    "https://t.co/abcdefghij?qty=143.5亿Tokens",
+    "https://t.co/abcdefghij#143.5亿Tokens",
+    "https://t.co/abcdefghijk143.5亿Tokens",
+    "https://example.com/143.5亿Tokens",
+    "@n143.5亿Tokens",
+])
+def test_tco_boundary_does_not_license_quantities_inside_links_or_handles(url):
+    assert validate_translation_quantities(f"143亿Token。{url}", "14.35 billion tokens", source_language="zh")
+
+
+def test_tco_validation_keeps_original_quantity_protection_and_instruction():
+    source = "143亿Token。https://t.co/xWdYwT1HGs在接入后达到143.5亿Tokens。"
+    assert protect_token_quantities(source, "en") == (
+        "[[PQ0:001]]。https://t.co/xWdYwT1HGs在接入后达到143.5亿Tokens。",
+        {"[[PQ0:001]]": "14.3 billion tokens"},
+    )
+    assert "143.5" not in quantity_instruction(source)
+
+
+@pytest.mark.parametrize("source,translated", [
+    ("A million tokens of context; three million tokens of cache.", "300万トークン"),
+    ("100 billion tokens saved, with 5-10 billion tokens on the plan.", "100億トークン"),
+    ("100 billion tokens saved, with 5–10 billion tokens on the plan.", "50億トークン"),
+    ("100 billion tokens saved, with 5 to 10 billion tokens on the plan.", "100億トークン"),
+])
+def test_validation_accepts_small_word_quantities_and_scaled_range_endpoints(source, translated):
+    assert validate_translation_quantities(source, translated, source_language="en") == []
+
+
+@pytest.mark.parametrize("source,translated", [
+    ("1 million tokens, three million parameters", "3 million tokens"),
+    ("1 million tokens, twenty three million tokens", "3 million tokens"),
+    ("1 million tokens, one hundred and three million tokens", "3 million tokens"),
+    ("1 million tokens, twenty-three million tokens", "3 million tokens"),
+    ("1 million tokens, 5-10 billion parameters", "10 billion tokens"),
+    ("1 million tokens, 5-10 billion tokens", "20 billion tokens"),
+    ("1 million tokens https://example.test/three-million-tokens", "3 million tokens"),
+    ("1 million tokens https://example.test/5-10-billion-tokens", "10 billion tokens"),
+])
+def test_word_and_range_forms_keep_compound_unit_url_and_magnitude_guards(source, translated):
+    assert validate_translation_quantities(source, translated, source_language="en")

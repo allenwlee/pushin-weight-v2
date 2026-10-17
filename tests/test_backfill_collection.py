@@ -17,6 +17,9 @@ from tests.test_backfill_pipeline import page
 from tests.test_backfill_pipeline import pipeline as captured_pipeline
 from x_monitor.apify import TwitterApiClient
 from x_monitor.config import load_config
+from x_monitor.reattribute import (
+    build_relevancy_client_from_env as REAL_RELEVANCY_FACTORY,
+)
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 REAL_FACTORY = TwitterApiClient.__dict__["from_env"]
@@ -254,3 +257,458 @@ def test_blocked_page_retains_valid_post_evidence_without_advancing_cursor(pipel
     assert result["recovered_post_ids"] == ["1"]
     assert scope.raw_count == 2
     assert Post.objects.filter(pk="1").exists() and not Post.objects.filter(pk="outside").exists()
+
+
+def test_current_policy_job_command_plans_all_routes_without_provider(pipeline, monkeypatch, tmp_path):
+    from tests.test_rare_type_cycle import _enable
+    cfg = load_config(Path("config.yaml"))
+    _enable(cfg, tmp_path)
+    monkeypatch.setattr("monitor.management.commands.backfill.load_config", lambda path: cfg)
+    output = StringIO()
+    call_command("backfill", plan_collection_job="history-test", since="2026-08-09",
+                 until="2026-08-10", dry_run=True, stdout=output)
+    import json
+    definition = json.loads(output.getvalue())["definition"]
+    scope = definition["scope"]
+    assert {unit["ownership"]["call_id"] for unit in scope["units"]} == {
+        "A", "B1", "B2", "B3", "C1", "C2", "C3", "RARE_EXTRA",
+    }
+    assert scope["author_scope"]["historical_membership_reconstructed"] is False
+    assert scope["maximum_model_requests"] > 0
+    assert not pipeline.requests and not CollectionRun.objects.exists()
+
+
+def test_recoverable_scope_error_does_not_starve_independent_queries(pipeline):
+    import copy
+
+    import requests
+    job = ready_job(requests=2)
+    definition = copy.deepcopy(job.definition)
+    second = copy.deepcopy(definition["scope"]["units"][0])
+    second["scope_key"] = "B1:independent"
+    definition["scope"]["units"].append(second)
+    job.delete()
+    source = DataSource.objects.get(pk="x")
+    job = register_job(job_key="two-scopes", source=source, purpose="content",
+                       operation="x_backfill", mode="historical", definition=definition)
+    job = set_job_state(job.pk, "ready")
+    pipeline.responses.extend([requests.ReadTimeout("scope unavailable"), page("survivor")])
+    with pytest.raises(CommandError):
+        run(job)
+    attempt = CollectionRun.objects.get(job=job)
+    assert Post.objects.filter(pk="survivor").exists()
+    assert attempt.scopes.get(scope_key="B1:independent").enumeration_complete
+    assert not attempt.scopes.get(scope_key="B1:aug09").enumeration_complete
+
+
+def policy_job(monkeypatch, tmp_path, *, calls, rare=False, selected_calls=None):
+    from monitor.backfill_collection import plan_job_definition
+    cfg = load_config(Path("config.yaml"))
+    if rare:
+        from tests.test_rare_type_cycle import _enable
+        _enable(cfg, tmp_path)
+    monkeypatch.setattr("monitor.backfill_collection.load_config", lambda path: cfg)
+    extra = {"call_ids": selected_calls} if selected_calls is not None else {}
+    definition = plan_job_definition(
+        cfg=cfg, since_epoch=1786233600, until_epoch=1786234500, brands=["qwen"],
+        requests=3, model_requests=60, seconds=300, maximum_requests=20, maximum_models=100,
+        **extra,
+    )
+    for unit in definition["scope"]["units"]:
+        if unit["ownership"]["call_id"] not in calls:
+            unit.update(outcome="complete", enumeration_complete=True)
+    source, _ = DataSource.objects.get_or_create(id="x", defaults={"name": "X", "source_type": "social"})
+    job = register_job(job_key="policy-test", source=source, purpose="content", operation="x_backfill",
+                       mode="historical", definition=definition)
+    return set_job_state(job.pk, "ready")
+
+
+def test_historical_call_a_frozen_official_role_bypasses_body_matching(pipeline, monkeypatch, tmp_path):
+    from core.models import PostBrandMention, TwitterListMembership
+    from monitor.cycle import _resolve_x_monitor_list_id
+    from tests.test_call_a_role_routing import _seed_author
+    account = _seed_author(edges=[("qwen", "official")])
+    list_id = _resolve_x_monitor_list_id(load_config(Path("config.yaml")))
+    TwitterListMembership.objects.filter(account=account).update(list_id=list_id)
+    job = policy_job(monkeypatch, tmp_path, calls={"A"})
+    TwitterListMembership.objects.filter(account=account).update(active=False)
+    body = page("1")
+    body["tweets"][0]["text"] = "A release announcement without any tracked keyword"
+    pipeline.responses.append(body)
+    result = run(job)
+    assert result["collection_drained"] and result["recovered_post_ids"] == ["1"]
+    assert PostBrandMention.objects.filter(post_id="1", brand_id="qwen", source="author_account").exists()
+    assert not TwitterListMembership.objects.get(account=account).active
+    assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
+
+
+@pytest.mark.parametrize("role", ["official", "staff"])
+def test_historical_call_a_matches_normal_roles_outside_keyword_brands(
+    pipeline, monkeypatch, tmp_path, role,
+):
+    from core.models import PostBrand, TwitterListMembership
+    from monitor.cycle import (
+        CycleRunner,
+        _build_brand_index,
+        _resolve_x_monitor_list_id,
+    )
+    from tests.test_call_a_role_routing import _call, _seed_author
+    from x_monitor.apify import _normalize_tweet
+
+    account = _seed_author(edges=[("outside-keyword-brands", role)])
+    cfg = load_config(Path("config.yaml"))
+    list_id = _resolve_x_monitor_list_id(cfg)
+    TwitterListMembership.objects.filter(account=account).update(list_id=list_id)
+    job = policy_job(monkeypatch, tmp_path, calls={"A"})
+    body = page("1")
+    body["tweets"][0]["text"] = "An announcement for our community."
+    normal = _normalize_tweet(body["tweets"][0])
+    normal["id"] = "normal-role-parity"
+    runner = CycleRunner(cfg=cfg, _relevancy_llm_call=lambda system, user: "KEEP")
+    runner._prepare_call_a_roles([normal], list_id=list_id)
+    runner._attribute_items([normal], _build_brand_index(["qwen"]), {})
+    runner._route_and_persist(_call(), [normal])
+    expected = set(PostBrand.objects.filter(post_id="normal-role-parity").values_list("brand_id", flat=True))
+    assert expected == {"outside-keyword-brands"}
+
+    pipeline.responses.append(body)
+    report = run(job)
+    assert report["recovered_post_ids"] == ["1"]
+    assert set(PostBrand.objects.filter(post_id="1").values_list("brand_id", flat=True)) == expected
+    assert job.definition["scope"]["brands"] == ["qwen"]
+
+
+def test_explicit_current_policy_a_only_job_uses_real_scope_without_fake_completions(
+    pipeline, monkeypatch, tmp_path,
+):
+    job = policy_job(monkeypatch, tmp_path, calls={"A"}, selected_calls=["A"])
+    scope = job.definition["scope"]
+    assert scope["selected_call_ids"] == scope["required_call_ids"] == ["A"]
+    assert len(scope["units"]) == 1 and not scope["units"][0].get("enumeration_complete")
+    pipeline.responses.append(page("1"))
+    report = run(job)
+    assert report["collection_drained"] and report["scopes_complete"] == report["scopes_total"] == 1
+    assert len(pipeline.requests) == 1 and "list:" in pipeline.requests[0]["query"]
+
+
+@pytest.mark.parametrize("selection", [[], ["UNRECOGNIZED"], ["A", "A"], [None], "A"])
+def test_explicit_route_selection_rejects_empty_or_unknown_before_claim(
+    pipeline, monkeypatch, tmp_path, selection,
+):
+    with pytest.raises(ValueError, match="route selection"):
+        policy_job(monkeypatch, tmp_path, calls={"A"}, selected_calls=selection)
+    assert not CollectionRun.objects.exists() and not pipeline.requests
+
+
+def test_saved_explicit_route_selection_cannot_hide_a_different_missing_route(
+    pipeline, monkeypatch, tmp_path,
+):
+    import copy
+
+    job = policy_job(monkeypatch, tmp_path, calls={"A"}, selected_calls=["A"])
+    definition = copy.deepcopy(job.definition)
+    definition["scope"]["selected_call_ids"] = ["B1"]
+    source = job.source
+    job.delete()
+    job = register_job(job_key="tampered-selection", source=source, purpose="content",
+                       operation="x_backfill", mode="historical", definition=definition)
+    job = set_job_state(job.pk, "ready")
+    with pytest.raises(ValueError, match="route omitted"):
+        run(job)
+    assert not CollectionRun.objects.exists() and not pipeline.requests
+
+
+@pytest.mark.parametrize(("verdict", "interrupt"), [("KEEP", False), ("DROP", False), ("KEEP", True)])
+def test_historical_call_a_staff_uses_on_demand_model_and_durable_usage(pipeline, monkeypatch, tmp_path, verdict, interrupt):
+    from types import SimpleNamespace
+
+    from core.models import TwitterListMembership
+    from monitor.cycle import _resolve_x_monitor_list_id
+    from tests.test_call_a_role_routing import _seed_author
+    from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+    account = _seed_author(edges=[("qwen", "staff")])
+    list_id = _resolve_x_monitor_list_id(load_config(Path("config.yaml")))
+    TwitterListMembership.objects.filter(account=account).update(list_id=list_id)
+    job = policy_job(monkeypatch, tmp_path, calls={"A"})
+    monkeypatch.setenv("DEEPINFRA_ON_DEMAND", "test-on-demand")
+    monkeypatch.setenv("DEEPINFRA_API_KEY", "test-scheduled")
+    monkeypatch.setattr("x_monitor.reattribute.build_relevancy_client_from_env", REAL_RELEVANCY_FACTORY)
+    calls = []
+    def model(self, **kwargs):
+        assert not connection.in_atomic_block
+        attempt = CollectionRun.objects.get(job=job)
+        assert attempt.report["model_requests"] == 1
+        assert next(iter(attempt.report["staff_relevance"].values()))["status"] == "sent"
+        assert self.api_key == "test-on-demand"
+        calls.append(kwargs)
+        return SimpleNamespace(text=verdict, provider_usage={"cost_usd": "0.0001"})
+    monkeypatch.setattr(DeepInfraChatCompletionsClient, "messages_create_text", model)
+    body = page("1")
+    body["tweets"][0]["text"] = "We released our next-generation model"
+    sibling = dict(body["tweets"][0], id="2")
+    body["tweets"].append(sibling)
+    pipeline.responses.append(body)
+    if interrupt:
+        original = Post.save
+        def fail(self, *args, **kwargs):
+            raise RuntimeError("storage interrupted after paid relevance reply")
+        monkeypatch.setattr(Post, "save", fail)
+        with pytest.raises(CommandError):
+            run(job)
+        assert not Post.objects.exists()
+        monkeypatch.setattr(Post, "save", original)
+        pipeline.responses.append(body)
+    report = run(job)
+    assert report["collection_drained"] and len(calls) == 1
+    attempt = CollectionRun.objects.filter(job=job).order_by("started_at").first()
+    assert attempt.report["model_responses"][0]["usage"]["cost_usd"] == "0.0001"
+    assert report["recovered_post_ids"] == (["1", "2"] if verdict == "KEEP" else [])
+    assert CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_key="A").raw_count == 2
+    evidence = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_key="A").envelopes[-1]
+    assert evidence["received_post_ids"] == ["1", "2"]
+    assert {entry["reason"] for entry in evidence["exclusions"]} == ({"relevance_drop"} if verdict == "DROP" else set())
+    assert len(evidence["post_ids"]) + len(evidence["exclusions"]) == 2
+
+
+def test_historical_rare_inbox_precedes_gate_and_never_uses_live_slot(pipeline, monkeypatch, tmp_path):
+    from decimal import Decimal
+
+    from core.models import (
+        RareTypeDecisionProcessingCycle,
+        RareTypeSearchHit,
+        RareTypeSearchRun,
+    )
+    from x_monitor.jev_decisions import QUESTION_SET, JevDecisionsClient, JevResponse
+    job = policy_job(monkeypatch, tmp_path, calls={"RARE_EXTRA"}, rare=True)
+    monkeypatch.setenv("TYPESAFE_API_KEY", "test-typesafe")
+    def model(self, request_bytes, **kwargs):
+        assert not connection.in_atomic_block
+        assert RareTypeSearchHit.objects.count() == 1 and not Post.objects.exists()
+        assert CollectionRun.objects.get(job=job).report["model_requests"] == 1
+        probabilities = {key: .1 for key in QUESTION_SET}
+        probabilities.update(ai_related=.95, role_opening=.95)
+        return JevResponse("test-response", probabilities, 1200, 0, Decimal("0.00005"))
+    monkeypatch.setattr(JevDecisionsClient, "submit", model)
+    from monitor import backfill_enrichment
+    reopen = backfill_enrichment.reopen_incomplete_successes
+    reopened = []
+    def inspect_reopen(job, observations):
+        reopened.extend(observations.values_list("post_id", flat=True))
+        return reopen(job, observations)
+    monkeypatch.setattr(backfill_enrichment, "reopen_incomplete_successes", inspect_reopen)
+    pipeline.responses.append(page("rare-kept"))
+    report = run(job)
+    assert report["collection_drained"] and report["rare_gate_pending"] == 0
+    assert report["recovered_post_ids"] == ["rare-kept"]
+    assert RareTypeSearchHit.objects.get().post_id == "rare-kept"
+    assert not RareTypeSearchRun.objects.filter(lane="rare_types").exists()
+    assert not RareTypeDecisionProcessingCycle.objects.filter(lane="rare_types").exists()
+    assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
+    assert reopened == ["rare-kept"]
+    evidence = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_key="RARE_EXTRA").envelopes[0]
+    assert evidence["received_post_ids"] == evidence["inbox_post_ids"] == ["rare-kept"]
+    assert evidence["raw_count"] == 1 and len(evidence["rare_hit_ids"]) == 1
+    assert not evidence["exclusions"]
+
+
+def test_historical_rare_resume_uses_saved_inbox_and_exact_cursor(pipeline, monkeypatch, tmp_path):
+    from decimal import Decimal
+
+    import requests
+
+    from core.models import RareTypeSearchHit
+    from x_monitor.jev_decisions import QUESTION_SET, JevDecisionsClient, JevResponse
+    job = policy_job(monkeypatch, tmp_path, calls={"RARE_EXTRA"}, rare=True)
+    monkeypatch.setenv("TYPESAFE_API_KEY", "test-typesafe")
+    model_calls = []
+    def model(self, request_bytes, **kwargs):
+        assert not connection.in_atomic_block
+        model_calls.append(request_bytes)
+        probabilities = {key: .1 for key in QUESTION_SET}
+        probabilities.update(ai_related=.95, role_opening=.95)
+        return JevResponse("test-response", probabilities, 1200, 0, Decimal("0.00005"))
+    monkeypatch.setattr(JevDecisionsClient, "submit", model)
+    pipeline.responses.extend([page("first", cursor="next"), requests.ReadTimeout("temporary")])
+    with pytest.raises(CommandError):
+        run(job)
+    assert RareTypeSearchHit.objects.count() == 1 and not model_calls and not Post.objects.exists()
+    pipeline.responses.append(page("second"))
+    report = run(job)
+    assert report["collection_drained"] and report["rare_gate_pending"] == 0
+    assert report["recovered_post_ids"] == ["first", "second"]
+    assert pipeline.requests[-1]["cursor"] == "next"
+    assert len(model_calls) == 2 and RareTypeSearchHit.objects.count() == 2
+
+
+def test_current_policy_omitted_route_is_rejected_before_claim(pipeline, monkeypatch, tmp_path):
+    import copy
+    job = policy_job(monkeypatch, tmp_path, calls={"A"})
+    definition = copy.deepcopy(job.definition)
+    definition["scope"]["units"] = definition["scope"]["units"][1:]
+    definition["scope"]["required_call_ids"] = [u["ownership"]["call_id"] for u in definition["scope"]["units"]]
+    source = job.source
+    job.delete()
+    job = register_job(job_key="omitted-route", source=source, purpose="content", operation="x_backfill",
+                       mode="historical", definition=definition)
+    job = set_job_state(job.pk, "ready")
+    with pytest.raises(ValueError, match="route omitted"):
+        run(job)
+    assert not CollectionRun.objects.exists() and not pipeline.requests
+
+
+def test_historical_rare_unknown_model_outcome_is_not_resent(pipeline, monkeypatch, tmp_path):
+    from core.models import RareTypeDecisionAttempt
+    from x_monitor.jev_decisions import JevDecisionError, JevDecisionsClient
+    job = policy_job(monkeypatch, tmp_path, calls={"RARE_EXTRA"}, rare=True)
+    monkeypatch.setenv("TYPESAFE_API_KEY", "test-typesafe")
+    calls = []
+    def timeout(self, request_bytes, **kwargs):
+        calls.append(request_bytes)
+        raise JevDecisionError("timeout")
+    monkeypatch.setattr(JevDecisionsClient, "submit", timeout)
+    pipeline.responses.append(page("unknown"))
+    first = run(job)
+    assert first["collection_drained"] and first["rare_gate_pending"] == 1
+    second = run(job)
+    assert second["collection_drained"] and second["rare_gate_pending"] == 1
+    assert len(calls) == len(pipeline.requests) == 1
+    attempt = RareTypeDecisionAttempt.objects.get()
+    assert attempt.state == "retained" and attempt.error_code == "timeout"
+
+
+def test_page_ledger_reconciles_duplicate_ids_and_every_deterministic_rejection(pipeline, monkeypatch):
+    from dataclasses import replace
+
+    from monitor import cycle
+    original = cycle.plan_calls_for_cycle
+    monkeypatch.setattr(cycle, "plan_calls_for_cycle", lambda *args, **kwargs: [
+        replace(call, not_include=["forbidden"]) if call.call_id == "B1" else call
+        for call in original(*args, **kwargs)
+    ])
+    body = page("kept")
+    body["tweets"].append(dict(body["tweets"][0]))
+    unmatched = page("unmatched")["tweets"][0]
+    unmatched["text"] = "ordinary lunch without tracked terms"
+    excluded = page("excluded")["tweets"][0]
+    excluded["text"] = "Qwen forbidden"
+    outside = page("outside")["tweets"][0]
+    outside["createdAt"] = "Mon Aug 10 00:10:00 +0000 2026"
+    invalid = page("invalid")["tweets"][0]
+    invalid["createdAt"] = "not a date"
+    body["tweets"].extend([unmatched, excluded, outside, invalid])
+    pipeline.responses.append(body)
+    report = run(ready_job())
+    row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get()
+    evidence = row.envelopes[-1]
+    assert row.raw_count == 6
+    assert evidence["received_post_ids"] == ["kept", "kept", "unmatched", "excluded", "outside", "invalid"]
+    assert evidence["post_ids"] == ["kept"]
+    assert {entry["appearance"]: entry["reason"] for entry in evidence["exclusions"]} == {
+        1: "duplicate_native_id", 2: "unmatched_attribution", 3: "not_include",
+        4: "out_of_window", 5: "invalid_time",
+    }
+    assert len(evidence["post_ids"]) + len(evidence["exclusions"]) == row.raw_count
+    assert evidence["distinct_received_count"] == 5 and not row.enumeration_complete
+
+
+def test_all_rejected_page_retains_receipt_and_can_truthfully_drain(pipeline):
+    body = page("rejected")
+    body["tweets"][0]["text"] = "ordinary lunch without tracked terms"
+    pipeline.responses.append(body)
+    report = run(ready_job())
+    row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get()
+    evidence = row.envelopes[-1]
+    assert report["collection_drained"] and not report["recovered_post_ids"]
+    assert row.raw_count == 1 and evidence["received_post_ids"] == ["rejected"]
+    assert evidence["exclusions"] == [{"post_id": "rejected", "appearance": 0, "reason": "unmatched_attribution"}]
+
+
+def test_staff_timeout_preserves_shared_fail_open_and_continues_pages_and_routes(pipeline, monkeypatch, tmp_path):
+    from core.models import TwitterListMembership
+    from monitor.cycle import _resolve_x_monitor_list_id
+    from tests.test_call_a_role_routing import _seed_author
+    from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+    account = _seed_author(edges=[("qwen", "staff")])
+    list_id = _resolve_x_monitor_list_id(load_config(Path("config.yaml")))
+    TwitterListMembership.objects.filter(account=account).update(list_id=list_id)
+    job = policy_job(monkeypatch, tmp_path, calls={"A", "B1"})
+    monkeypatch.setenv("DEEPINFRA_ON_DEMAND", "test-on-demand")
+    monkeypatch.setattr("x_monitor.reattribute.build_relevancy_client_from_env", REAL_RELEVANCY_FACTORY)
+    model_calls = []
+    def timeout(self, **kwargs):
+        model_calls.append(kwargs)
+        raise TimeoutError("unknown provider outcome")
+    monkeypatch.setattr(DeepInfraChatCompletionsClient, "messages_create_text", timeout)
+    first = page("1", cursor="second")
+    second = page("2")
+    for body in (first, second):
+        body["tweets"][0]["author"]["id"] = "author-1"
+        body["tweets"][0]["text"] = "We released our next-generation model"
+    pipeline.responses.extend([first, second, page("independent")])
+    report = run(job)
+    assert report["collection_drained"] and report["recovered_post_ids"] == ["1", "2", "independent"]
+    assert len(model_calls) == 1 and len(pipeline.requests) == 3
+    assert pipeline.requests[1]["cursor"] == "second"
+    attempt = CollectionRun.objects.get(job=job)
+    evidence = attempt.scopes.get(scope_key="A").envelopes
+    assert all(row["relevancy_degraded"] for row in evidence)
+    assert next(iter(attempt.report["staff_relevance"].values()))["status"] == "sent"
+
+
+def test_clipped_page_records_received_tail_ids_without_advancing(pipeline):
+    body = page("0")
+    body["tweets"] = [page(str(index))["tweets"][0] for index in range(21)]
+    pipeline.responses.append(body)
+    report = run(ready_job())
+    row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get()
+    evidence = row.envelopes[-1]
+    assert not row.enumeration_complete and row.cursor is None
+    assert row.raw_count == evidence["raw_count"] == 21
+    assert evidence["received_post_ids"] == [str(index) for index in range(21)]
+    assert len(evidence["post_ids"]) == 20
+    assert evidence["exclusions"] == [{"post_id": "20", "appearance": 20, "reason": "clipped_page_tail"}]
+
+
+@pytest.mark.parametrize("http_status", [401, 402, 403, 429])
+def test_provider_safety_response_stops_all_scopes_and_preserves_cursor(pipeline, monkeypatch, http_status, caplog):
+    import copy
+    from types import SimpleNamespace
+    job = ready_job(requests=2, cursor="committed-cursor")
+    definition = copy.deepcopy(job.definition)
+    second = copy.deepcopy(definition["scope"]["units"][0])
+    second["scope_key"] = "independent"
+    definition["scope"]["units"].append(second)
+    source = job.source
+    job.delete()
+    job = register_job(job_key="provider-safety", source=source, purpose="content", operation="x_backfill",
+                       mode="historical", definition=definition)
+    job = set_job_state(job.pk, "ready")
+    requests = []
+    secret_body = "credential-sensitive-provider-body-never-log"
+    def get(*args, **kwargs):
+        requests.append(kwargs["params"])
+        return SimpleNamespace(status_code=http_status, content=secret_body.encode(), text=secret_body,
+                               headers={"Retry-After": "999999"}, json=lambda: {"error": secret_body})
+    monkeypatch.setattr("x_monitor.apify.requests.get", get)
+    with pytest.raises(CommandError) as caught:
+        run(job)
+    assert len(requests) == 1
+    assert caught.value.response_status_code == http_status
+    assert caught.value.permanent is (http_status != 429)
+    assert secret_body not in str(caught.value) and secret_body not in caplog.text
+    attempt = CollectionRun.objects.get(job=job)
+    assert attempt.request_count == 1 and attempt.status == "failed"
+    assert not attempt.report["collection_drained"]
+    assert attempt.report["global_failure"]["response_status_code"] == http_status
+    for row in attempt.scopes.all():
+        assert row.cursor == "committed-cursor" and not row.enumeration_complete
+    receipt = attempt.scopes.get(scope_key="B1:aug09").envelopes[-1]
+    assert receipt["response_status_code"] == http_status and receipt["pages_received"] == 0
+    assert secret_body not in str(attempt.report) and secret_body not in str(receipt)
+    if http_status == 429:
+        job.refresh_from_db()
+        assert job.next_retry_at is not None
+        assert attempt.report["global_failure"]["retry_after_seconds"] == 300
+        with pytest.raises(CommandError):
+            run(job)
+        assert len(requests) == CollectionRun.objects.filter(job=job).count() == 1

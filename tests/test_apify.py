@@ -120,6 +120,34 @@ def test_run_search_raises_server_error_on_500():
             client.run_search("from:x")
 
 
+@pytest.mark.parametrize("body", [
+    {"status": "error", "message": "search temporarily unavailable", "tweets": []},
+    {"status": "success"},
+    {"tweets": {"error": "invalid results"}},
+    {"tweets": None},
+    [],
+])
+@pytest.mark.parametrize("raw_receipt", [False, True])
+def test_search_error_or_malformed_200_is_not_an_exhausted_page(body, raw_receipt):
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    response = _mock_response(200, body)
+    response.content = json.dumps(body).encode()
+    captured = []
+    with (
+        patch.object(requests, "get", return_value=response) as request,
+        pytest.raises((ValueError, TypeError), match="search response"),
+    ):
+        if raw_receipt:
+            client.run_search_page_with_raw(
+                "Qwen", since_time=1, until_time=2, receipt_sink=captured.append,
+            )
+        else:
+            list(client.run_search_pages("Qwen", since_time=1, until_time=2))
+    assert request.call_count == 1
+    if raw_receipt:
+        assert captured == [response.content]
+
+
 def test_run_search_passes_query_as_param():
     """The new client must send `query` (not searchTerms/maxItems/mode)."""
     client = TwitterApiClient(api_key="x", max_retries=0)

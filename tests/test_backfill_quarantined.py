@@ -100,7 +100,7 @@ def test_backfill_incomplete_call_remains_pending(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         "x_monitor.reattribute.build_relevancy_client_from_env",
-        lambda cfg: None,
+        lambda cfg, **kwargs: None,
     )
 
     class TruncatedRunner:

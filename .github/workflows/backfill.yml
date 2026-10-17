@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'monitor/cycle.py'
+      - 'monitor/metrics_refresh.py'
       - 'monitor/backfill_resources.py'
       - 'monitor/backfill_collection.py'
       - 'monitor/backfill_enrichment.py'
@@ -16,6 +17,10 @@ on:
       - 'monitor/management/commands/backfill.py'
       - 'monitor/run_lock.py'
       - 'x_monitor/apify.py'
+      - 'x_monitor/config.py'
+      - 'config.yaml'
+      - 'tests/test_metrics_refresh.py'
+      - 'tests/test_metrics_refresh_regression_net.py'
       - 'x_monitor/literal_translation.py'
       - 'x_monitor/deepinfra*.py'
       - 'x_monitor/deferred_inference.py'
@@ -87,6 +92,7 @@ jobs:
       - name: Backfill and scheduled-path regressions (required skips fail)
         run: >-
           python -m pytest -q tests/test_apify.py tests/test_post_enrichment_queue.py
+          tests/test_metrics_refresh.py tests/test_metrics_refresh_regression_net.py
           tests/test_enrichment_attempt_deadline.py tests/test_backfill_quarantined.py
           tests/test_backfill_pipeline.py tests/test_backfill_resources.py
           tests/test_backfill_collection.py tests/test_collection_jobs.py tests/test_collection_state.py

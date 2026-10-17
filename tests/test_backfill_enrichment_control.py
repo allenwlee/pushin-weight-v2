@@ -124,6 +124,7 @@ def test_pause_drains_reply_then_stops_remaining_waves(native, monkeypatch):
 def test_control_command_needs_no_provider_keys_and_status_is_read_only(native, monkeypatch):
     reserved_group(native, monkeypatch)
     monkeypatch.delenv("DEEPINFRA_API_KEY", raising=False)
+    monkeypatch.delenv("DEEPINFRA_ON_DEMAND", raising=False)
     for key in ["TWITTERAPI_IO_ON_DEMAND_API_KEY", "TWITTERAPI_IO_SCHEDULED_API_KEY"]:
         monkeypatch.delenv(key, raising=False)
     before = list(ProviderBatch.objects.order_by("pk").values())

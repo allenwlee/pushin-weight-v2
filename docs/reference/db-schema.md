@@ -2,7 +2,7 @@
 
 Last verified: 2026-10-16 JST (repository candidate based on `4e60a2f1`; collection instruction ownership checked against models, migration SQL and isolated PostgreSQL)
 
-Scope: **151 application tables**, **1967 physical columns**, plus nine compatibility views. Migration boundary: `0090_remove_run_instruction_columns`. Every physical application column has a Django model field. Runs reference the job owning their source, purpose, contract and frozen scope. This boundary adds or retires no tables.
+Scope: **151 application tables**, **1968 physical columns**, plus nine compatibility views. Candidate migration boundary: `0092_measurement_window_index`, extending deployed `0090_remove_run_instruction_columns` with one generated measurement-window column and its index. Every physical application column has a Django model field. Runs reference the job owning their source, purpose, contract and frozen scope. This boundary adds or retires no tables.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -6187,14 +6187,16 @@ Model: [MetricValue](../../core/models.py#L8148).
 | `source_timezone` | `varchar(64)` | No | Django default: `'unknown'` (not an assumed SQL default). |
 | `as_of_at` | `timestamp with time zone` | Yes | Stored value. |
 | `as_of_date` | `date` | Yes | Stored value. |
-| `window_start_at` | `timestamp with time zone` | Yes | Stored value. |
-| `window_end_at` | `timestamp with time zone` | Yes | Stored value. |
+| `window_start_at` | `timestamp with time zone` | Yes | Inclusive measurement-window start. NULL means unknown, never infinity. |
+| `window_end_at` | `timestamp with time zone` | Yes | Exclusive measurement-window end. NULL means unknown, never infinity. |
+| `window_range` | `tstzrange` | Yes | Database-generated stored finite `[start,end)` interval. Entire range is SQL NULL if either endpoint is unknown; the separately known endpoint remains stored. |
 | `period_label_date` | `date` | Yes | Stored value. |
 
 **Named indexes:**
 
 - `idx_value_definition_obs`: `CREATE INDEX "idx_value_definition_obs" ON "metric_values" ("source_metric_id", "observation_id")`.
 - `idx_value_window_end`: `CREATE INDEX "idx_value_window_end" ON "metric_values" ("window_end_at")`.
+- `idx_value_window_range`: partial GiST index on `window_range WHERE window_range IS NOT NULL`, created concurrently by migration 0092.
 - `idx_value_as_of_date`: `CREATE INDEX "idx_value_as_of_date" ON "metric_values" ("as_of_date")`.
 
 **Named constraints:**
@@ -6211,6 +6213,29 @@ Model: [MetricValue](../../core/models.py#L8148).
 - `ck_value_finite_window_start_at`: `CONSTRAINT "ck_value_finite_window_start_at" CHECK (("window_start_at" IS NULL OR isfinite("window_start_at")))`.
 - `ck_value_finite_window_end_at`: `CONSTRAINT "ck_value_finite_window_end_at" CHECK (("window_end_at" IS NULL OR isfinite("window_end_at")))`.
 - `ck_value_finite_period_label_date`: `CONSTRAINT "ck_value_finite_period_label_date" CHECK (("period_label_date" IS NULL OR isfinite("period_label_date")))`.
+
+**Generated interval contract (repository candidate through 0092; deployment must be verified separately):**
+
+Migration [0091](../../core/migrations/0091_measurement_window.py) installs immutable PostgreSQL function `measurement_window_v1(timestamptz,timestamptz)` and the stored expression `measurement_window_v1(window_start_at,window_end_at)`. It rejects any infinite supplied endpoint, including when the other is NULL, and rejects nonpositive complete intervals. It returns SQL NULL for incomplete intervals and constructs complete ranges with inclusive start/exclusive end. SQL cannot independently override the generated column. Column/function comments expose this rule to database clients. Function versions preserve their meaning; changed semantics require a new version and migration. Future metric tables use the [shared generated-field factory](../../core/measurement_time.py) rather than constructing ranges from nullable endpoints themselves.
+
+Native interval queries apply to complete flow windows. Unknown ranges do not match these operators. State/date-only and incomplete measurements still need their existing instant/date/nullable evidence fields; `observed_at` is never a substitute for effective bounds.
+
+```sql
+-- Contains this instant, including the lower but excluding the upper bound.
+SELECT id FROM metric_values
+WHERE window_range @> TIMESTAMPTZ '2026-10-05 00:00:00+00';
+
+-- Overlaps a complete UTC day; touching only its ending boundary does not match.
+SELECT id FROM metric_values
+WHERE window_range && tstzrange(
+  TIMESTAMPTZ '2026-10-05 00:00:00+00',
+  TIMESTAMPTZ '2026-10-06 00:00:00+00', '[)');
+
+-- Inspect unknown windows without pretending they cover infinite time.
+SELECT v.id, window_start_at, window_end_at, temporal_status, period_label_date
+FROM metric_values v JOIN metrics m ON m.id = v.source_metric_id
+WHERE m.measurement_kind = 'flow' AND window_range IS NULL;
+```
 
 [Back to table inventory](#table-inventory)
 

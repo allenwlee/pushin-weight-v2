@@ -36,6 +36,14 @@ support; a repeated source is not an additional independent confirmation.
 
 ## Data-source collection
 
+### X post backfill
+
+Explicit historical collection of X posts for a bounded publication-time window,
+with recovery progress tracked separately from recurring harvesting.
+
+Finishing the selected searches and enriching their saved posts are separate
+outcomes; neither alone proves that every eligible historical post was found.
+
 ### Backfiller data source
 
 The repeatable process for ingesting available historical and current provider

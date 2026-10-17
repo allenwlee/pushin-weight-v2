@@ -65,6 +65,16 @@ def utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _commit_page_parameters(token: str) -> dict[str, str] | None:
+    """Decode a bounded checkpoint token, never a provider-supplied URL."""
+    match = re.fullmatch(
+        r"hf-commits-page:v1:([1-9][0-9]{0,5}):([1-9][0-9]{0,2})", token
+    )
+    if match and int(match[1]) <= 100000 and int(match[2]) <= 100:
+        return {"p": match[1], "limit": match[2]}
+    return None
+
+
 @dataclass
 class MetadataResponse:
     outcome: str
@@ -357,10 +367,17 @@ class HFMetadataClient:
             return MetadataResponse("malformed")
         path = f"/models/{repo_id}/{kind}/{revision}"
         params = {"recursive": "true", "expand": "true"} if kind == "tree" else {}
+        page = None
         if cursor:
             if not isinstance(cursor, str) or len(cursor) > 8192:
                 return MetadataResponse("invalid_continuation")
-            params["cursor"] = cursor
+            if cursor.startswith("hf-commits-page:"):
+                page = _commit_page_parameters(cursor)
+                if kind != "commits" or page is None:
+                    return MetadataResponse("invalid_continuation")
+                params.update(page)
+            else:
+                params["cursor"] = cursor
         result = self._get(path, params)
         if result.outcome != "ok":
             return result
@@ -385,19 +402,64 @@ class HFMetadataClient:
         response = httpx.Response(200, headers={"link": link})
         next_link = response.links.get("next")
         if next_link:
-            parsed = urlparse(next_link.get("url", ""))
-            values = parse_qs(parsed.query).get("cursor", [])
+            try:
+                parsed = urlparse(next_link.get("url", ""))
+                query = parse_qs(
+                    parsed.query,
+                    keep_blank_values=True,
+                    strict_parsing=True,
+                    max_num_fields=10,
+                )
+            except ValueError:
+                result.outcome = "invalid_continuation"
+                return result
+            relations = re.findall(
+                r';\s*rel\s*=\s*(?:"([^"]*)"|([^;,\s]+))', link
+            )
             if (
                 parsed.scheme != "https"
                 or parsed.netloc != "huggingface.co"
                 or parsed.path != "/api" + path
+                or parsed.params
                 or parsed.fragment
-                or len(values) != 1
-                or not values[0]
+                or sum("next" in (quoted or bare).split() for quoted, bare in relations)
+                != 1
             ):
                 result.outcome = "invalid_continuation"
+                return result
+            if kind == "commits" and set(query) == {"p", "limit"}:
+                if any(len(values) != 1 for values in query.values()):
+                    result.outcome = "invalid_continuation"
+                    return result
+                token = f'hf-commits-page:v1:{query["p"][0]}:{query["limit"][0]}'
+                next_page = _commit_page_parameters(token)
+                if (
+                    next_page is None
+                    or cursor is not None
+                    and page is None
+                    or int(next_page["p"]) != (int(page["p"]) + 1 if page else 1)
+                    or page is not None
+                    and next_page["limit"] != page["limit"]
+                ):
+                    result.outcome = "invalid_continuation"
+                else:
+                    result.next_cursor = token
             else:
-                result.next_cursor = values[0]
+                values = query.get("cursor", [])
+                if (
+                    len(values) != 1
+                    or not values[0]
+                    or len(values[0]) > 8192
+                    or values[0].startswith("hf-commits-page:")
+                    or values[0] == cursor
+                    or page is not None
+                    or "p" in query
+                    or kind == "commits"
+                    and "limit" in query
+                ):
+                    result.outcome = "invalid_continuation"
+                else:
+                    result.next_cursor = values[0]
         elif "next" in link:
             result.outcome = "invalid_continuation"
         return result

@@ -12,6 +12,195 @@ def test_history_rejects_an_unparseable_next_link():
     assert result.outcome == "invalid_continuation"
 
 
+def test_legacy_commit_pages_keep_pinned_path_and_stop_without_next_link():
+    calls = []
+    path = "/api/models/01-ai/Yi-6B-Chat-4bits/commits/" + "a" * 40
+
+    def respond(request):
+        calls.append(request)
+        assert request.url.host == "huggingface.co" and request.url.path == path
+        assert "cursor" not in request.url.params
+        page = int(request.url.params.get("p", "0"))
+        if page:
+            assert dict(request.url.params) == {"p": str(page), "limit": "50"}
+        start, stop = [(1, 51), (51, 61), (61, 66)][page]
+        return httpx.Response(
+            200,
+            json=[{"id": f"{i:040x}"} for i in range(start, stop)],
+            headers={
+                "link": f'<https://huggingface.co{path}?p={page + 1}&limit=50>; rel="next"'
+            }
+            if page < 2
+            else {},
+        )
+
+    hf = client(respond)
+    first = hf.history_page("01-ai/Yi-6B-Chat-4bits", "a" * 40, "commits")
+    assert first.outcome == "ok" and len(first.payload) == 50
+    assert first.next_cursor == "hf-commits-page:v1:1:50"
+    second = hf.history_page(
+        "01-ai/Yi-6B-Chat-4bits", "a" * 40, "commits", first.next_cursor
+    )
+    assert second.outcome == "ok" and len(second.payload) == 10
+    assert second.next_cursor == "hf-commits-page:v1:2:50"
+    final = hf.history_page(
+        "01-ai/Yi-6B-Chat-4bits", "a" * 40, "commits", second.next_cursor
+    )
+    assert final.outcome == "ok" and final.next_cursor is None
+    assert len(final.payload) == 5 and hf.requests == len(calls) == 3
+
+
+@pytest.mark.parametrize("kind", ["commits", "tree"])
+def test_history_opaque_cursor_stays_opaque(kind):
+    calls = []
+    path = f"/api/models/lab/model/{kind}/" + "a" * 40
+
+    def respond(request):
+        calls.append(request)
+        assert request.url.path == path
+        if len(calls) == 1:
+            tuning = "&recursive=true&expand=true&limit=1000" if kind == "tree" else ""
+            return httpx.Response(
+                200,
+                json=[],
+                headers={
+                    "link": f'<https://huggingface.co{path}?cursor=opaque%2B%2F%3D{tuning}>; rel="next"'
+                },
+            )
+        assert request.url.params["cursor"] == "opaque+/="
+        if kind == "tree":
+            assert request.url.params["recursive"] == "true"
+            assert request.url.params["expand"] == "true"
+        return httpx.Response(200, json=[])
+
+    hf = client(respond)
+    first = hf.history_page("lab/model", "a" * 40, kind)
+    assert first.outcome == "ok" and first.next_cursor == "opaque+/="
+    final = hf.history_page("lab/model", "a" * 40, kind, first.next_cursor)
+    assert final.outcome == "ok" and final.next_cursor is None
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "?p=0&limit=50",
+        "?p=-1&limit=50",
+        "?p=01&limit=50",
+        "?p=%2B1&limit=50",
+        "?p=%D9%A1&limit=50",
+        "?p=100001&limit=50",
+        "?p=1&limit=0",
+        "?p=1&limit=101",
+        "?p=1&limit=050",
+        "?p=&limit=50",
+        "?p=1&limit=",
+        "?p=1",
+        "?limit=50",
+        "?p=1&p=2&limit=50",
+        "?p=1&limit=50&limit=50",
+        "?p=1&limit=50&cursor=opaque",
+        "?p=1&limit=50&cursor=",
+        "?cursor=opaque&p=&limit=",
+        "?cursor=one&cursor=two",
+        "?cursor=",
+        "?p=1&limit=50&unknown=1",
+        "?p=1&limit=50&broken",
+        "?p=1&limit=50#fragment",
+        ";params?p=1&limit=50",
+    ],
+)
+def test_history_rejects_invalid_or_ambiguous_page_parameters(suffix):
+    link = f'<https://huggingface.co/api/models/lab/model/commits/{"a" * 40}{suffix}>; rel="next"'
+    hf = client(lambda _: httpx.Response(200, json=[], headers={"link": link}))
+    assert hf.history_page("lab/model", "a" * 40, "commits").outcome == (
+        "invalid_continuation"
+    )
+    assert hf.requests == 1
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://huggingface.co/api/models/lab/model/commits/" + "a" * 40,
+        "https://evil.example/api/models/lab/model/commits/" + "a" * 40,
+        "https://user@huggingface.co/api/models/lab/model/commits/" + "a" * 40,
+        "https://huggingface.co:443/api/models/lab/model/commits/" + "a" * 40,
+        "https://huggingface.co/api/models/other/model/commits/" + "a" * 40,
+        "https://huggingface.co/api/models/lab/model/tree/" + "a" * 40,
+        "https://huggingface.co/api/models/lab/model/commits/" + "b" * 40,
+    ],
+)
+def test_legacy_history_links_cannot_change_origin_identity_kind_or_revision(url):
+    hf = client(
+        lambda _: httpx.Response(
+            200, json=[], headers={"link": f'<{url}?p=1&limit=50>; rel="next"'}
+        )
+    )
+    assert hf.history_page("lab/model", "a" * 40, "commits").outcome == (
+        "invalid_continuation"
+    )
+    assert hf.requests == 1
+
+
+@pytest.mark.parametrize(
+    ("cursor", "query"),
+    [
+        ("hf-commits-page:v1:1:50", "p=1&limit=50"),
+        ("hf-commits-page:v1:2:50", "p=1&limit=50"),
+        ("hf-commits-page:v1:1:50", "p=3&limit=50"),
+        ("hf-commits-page:v1:1:50", "p=2&limit=100"),
+        ("hf-commits-page:v1:1:50", "cursor=opaque"),
+        ("opaque", "p=1&limit=50"),
+        ("opaque", "cursor=opaque"),
+        (None, "cursor=hf-commits-page%3Av1%3A1%3A50"),
+    ],
+)
+def test_history_rejects_protocol_switches_and_looping_continuations(cursor, query):
+    link = f'<https://huggingface.co/api/models/lab/model/commits/{"a" * 40}?{query}>; rel="next"'
+    hf = client(lambda _: httpx.Response(200, json=[], headers={"link": link}))
+    assert hf.history_page("lab/model", "a" * 40, "commits", cursor).outcome == (
+        "invalid_continuation"
+    )
+
+
+@pytest.mark.parametrize(
+    ("kind", "token"),
+    [
+        ("commits", "hf-commits-page:v2:1:50"),
+        ("commits", "hf-commits-page:v1:0:50"),
+        ("commits", "hf-commits-page:v1:100001:50"),
+        ("commits", "hf-commits-page:v1:1:101"),
+        ("commits", "hf-commits-page:v1:01:50"),
+        ("tree", "hf-commits-page:v1:1:50"),
+    ],
+)
+def test_invalid_internal_history_page_tokens_never_reach_transport(kind, token):
+    hf = client(lambda _: pytest.fail("unexpected request"))
+    assert hf.history_page("lab/model", "a" * 40, kind, token).outcome == (
+        "invalid_continuation"
+    )
+    assert hf.requests == 0
+
+
+@pytest.mark.parametrize("kind", ["commits", "tree"])
+def test_history_rejects_duplicate_next_links_and_legacy_tree_pages(kind):
+    url = f'https://huggingface.co/api/models/lab/model/{kind}/{"a" * 40}'
+    link = f'<{url}?cursor=one>; rel="next", <{url}?cursor=two>; rel="next"'
+    hf = client(lambda _: httpx.Response(200, json=[], headers={"link": link}))
+    assert hf.history_page("lab/model", "a" * 40, kind).outcome == (
+        "invalid_continuation"
+    )
+    if kind == "tree":
+        hf = client(
+            lambda _: httpx.Response(
+                200, json=[], headers={"link": f'<{url}?p=1&limit=50>; rel="next"'}
+            )
+        )
+        assert hf.history_page("lab/model", "a" * 40, kind).outcome == (
+            "invalid_continuation"
+        )
+
+
 def client(handler, **kwargs):
     return HFMetadataClient(
         httpx.Client(transport=httpx.MockTransport(handler)),

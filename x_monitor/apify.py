@@ -71,6 +71,18 @@ class TwitterApiServerError(RuntimeError):
     """Raised on HTTP 5xx."""
 
 
+def _search_results(data: Any) -> list[dict[str, Any]]:
+    """Reject provider errors before an empty result can certify exhaustion."""
+    if not isinstance(data, dict):
+        raise TypeError("TwitterAPI.io search response must be an object")
+    if str(data.get("status", "")).lower() in {"error", "failed", "failure"} or data.get("error"):
+        raise ValueError("TwitterAPI.io search response reports a provider error")
+    results = data.get("tweets") if "tweets" in data else data.get("data")
+    if not isinstance(results, list):
+        raise TypeError("TwitterAPI.io search response must contain a result list")
+    return results
+
+
 @dataclass(frozen=True)
 class SearchPage:
     """One received search page with truthful continuation and receipt clocks."""
@@ -83,6 +95,7 @@ class SearchPage:
     received_monotonic: float
     clipped: bool = False
     continuation_invalid: bool = False
+    raw_post_ids: tuple[str | None, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -190,6 +203,11 @@ class TwitterApiClient:
                     f"TwitterAPI.io rate limit: {r.text[:200]}"
                 )
                 exc.response_status_code = r.status_code
+                retry_after = str(getattr(r, "headers", {}).get("Retry-After", ""))
+                exc.retry_after_seconds = (
+                    max(1, min(300, int(retry_after)))
+                    if retry_after.isascii() and retry_after.isdigit() and len(retry_after) <= 9 else 30
+                )
                 raise exc
             if 500 <= r.status_code < 600:
                 last_exc = TwitterApiServerError(
@@ -326,7 +344,7 @@ class TwitterApiClient:
             data = self._get(SEARCH_PATH, params)
             received_at = datetime.now(timezone.utc)
             received_monotonic = time.monotonic()
-            tweets = data.get("tweets") or data.get("data") or []
+            tweets = _search_results(data)
             remaining = max_results - n_returned
             page_items: list[dict[str, Any]] = []
             for raw in tweets[:remaining]:
@@ -349,6 +367,10 @@ class TwitterApiClient:
                 received_monotonic=received_monotonic,
                 clipped=clipped,
                 continuation_invalid=bool(data.get("has_next_page")) and not bool(next_cursor),
+                raw_post_ids=tuple(
+                    str(raw.get("id") or raw.get("tweet_id") or "") or None
+                    if isinstance(raw, dict) else None for raw in tweets
+                ),
             )
 
             if n_returned >= max_results or not continuation:
@@ -467,11 +489,7 @@ class TwitterApiClient:
             capture_raw=True,
             raw_sink=receipt_sink,
         )
-        if not isinstance(data, dict):
-            raise TypeError("TwitterAPI.io search response must be an object")
-        raw_items = data.get("tweets") or data.get("data") or []
-        if not isinstance(raw_items, list):
-            raise TypeError("TwitterAPI.io search results must be a list")
+        raw_items = _search_results(data)
         normalized = []
         normalization_errors = 0
         for item in raw_items[:max_results]:
@@ -751,15 +769,34 @@ class TwitterApiClient:
             data = self._get(
                 TWEETS_BY_IDS_PATH, {"tweet_ids": ",".join(chunk)}
             )
-            for t in data.get("tweets") or []:
+            if not isinstance(data, dict):
+                raise TypeError("TwitterAPI.io by-ID response must be an object")
+            if (
+                str(data.get("status", "")).lower() in {"error", "failed", "failure"}
+                or data.get("error")
+                or data.get("code") not in (None, 0)
+            ):
+                raise ValueError("TwitterAPI.io by-ID response reports a provider error")
+            tweets = data.get("tweets")
+            if not isinstance(tweets, list):
+                raise TypeError("TwitterAPI.io by-ID response must contain a tweets list")
+            for t in tweets:
+                if not isinstance(t, dict):
+                    raise TypeError("TwitterAPI.io by-ID tweet must be an object")
                 tid = str(t.get("id") or "")
-                if not tid:
+                if not tid or tid not in chunk:
                     continue
                 out[tid] = {
-                    "quote_count": int(t.get("quoteCount") or 0),
-                    "retweet_count": int(t.get("retweetCount") or 0),
-                    "reply_count": int(t.get("replyCount") or 0),
-                    "like_count": int(t.get("likeCount") or 0),
+                    key: int(t[provider_key])
+                    for key, provider_key in (
+                        ("quote_count", "quoteCount"),
+                        ("retweet_count", "retweetCount"),
+                        ("reply_count", "replyCount"),
+                        ("like_count", "likeCount"),
+                        ("view_count", "viewCount"),
+                        ("bookmark_count", "bookmarkCount"),
+                    )
+                    if t.get(provider_key) is not None
                 }
         return out
 

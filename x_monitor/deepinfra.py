@@ -24,6 +24,7 @@ from .provider_telemetry import ProviderResponse, ProviderTextResponse
 from .structured_output import closed_object as _closed_object
 
 DEEPINFRA_ENDPOINT = "https://api.deepinfra.com/v1/openai/chat/completions"
+DEEPINFRA_ON_DEMAND_KEY_ENV = "DEEPINFRA_ON_DEMAND"
 DEEPSEEK_0731_MODEL = "deepseek-ai/DeepSeek-V4-Flash-0731"
 GEMMA_4_31B_MODEL = "google/gemma-4-31B-it-turbo"
 SUPPORTED_MODELS = frozenset({DEEPSEEK_0731_MODEL, GEMMA_4_31B_MODEL})
@@ -34,6 +35,16 @@ HEADLINE_CRITIC_HOLD_CODES = frozenset({
     "proportionality_failure", "unsafe_instruction_following",
     "output_contract_invalid", "no_relevant_evidence",
 })
+
+
+def resolve_api_key(credential_env: str, *, required: bool = True) -> str:
+    """Read exactly one supported credential, without crossing spending tracks."""
+    if credential_env not in {"DEEPINFRA_API_KEY", DEEPINFRA_ON_DEMAND_KEY_ENV}:
+        raise ValueError("deepinfra_credential_environment_invalid")
+    key = os.environ.get(credential_env, "").strip()
+    if not key and required:
+        raise ValueError(f"{credential_env} is required")
+    return key
 
 
 class DeepInfraRetryableError(RuntimeError):
@@ -491,8 +502,8 @@ class DeepInfraChatCompletionsClient:
         return f"deepinfra:{self.request_profile or 'default'}:{hashlib.sha256(material.encode()).hexdigest()[:16]}"
 
     @classmethod
-    def from_env(cls, *, model: str, request_profile: str | None = None, **kwargs: Any) -> DeepInfraChatCompletionsClient | None:
-        api_key = os.environ.get("DEEPINFRA_API_KEY")
+    def from_env(cls, *, model: str, request_profile: str | None = None, credential_env: str = "DEEPINFRA_API_KEY", **kwargs: Any) -> DeepInfraChatCompletionsClient | None:
+        api_key = resolve_api_key(credential_env, required=False)
         if not api_key:
             return None
         return cls(api_key=api_key, model=model, request_profile=request_profile, **kwargs)

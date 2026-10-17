@@ -227,7 +227,8 @@ def test_current_reader_includes_finished_old_writer_evidence_after_catchup():
         payload(123),
     )
     assert run.job_id is None and run.status == "success"
-    MigrationExecutor(connection).migrate([("core", "0090_remove_run_instruction_columns")])
+    executor = MigrationExecutor(connection)
+    executor.migrate(executor.loader.graph.leaf_nodes("core"))
     report = resource_statistics(
         contract_id=contract.pk, source="hf", identifier="lab/Model"
     )

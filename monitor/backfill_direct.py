@@ -86,6 +86,7 @@ def _advance_direct_wave(batch_id, *, api_key, concurrency, client_factory):
         # The committed reservations/sent markers precede every network start.
         # At most one wave of response bodies is held in memory. No worker ORM.
         throttled = False
+        provider_admission_failure = None
         if calls:
             timeout = max(
                 1, min(120, (batch.deadline_at - timezone.now()).total_seconds())
@@ -128,6 +129,8 @@ def _advance_direct_wave(batch_id, *, api_key, concurrency, client_factory):
                         throttled |= status == 429 or (
                             status is not None and status >= 500
                         )
+                        if status in {401, 402, 403}:
+                            provider_admission_failure = status
                         envelope = {
                             "custom_id": call.request_identity,
                             "response": {"status_code": status},
@@ -165,6 +168,12 @@ def _advance_direct_wave(batch_id, *, api_key, concurrency, client_factory):
                     "next_poll_at",
                     "updated_at",
                 ]
+            )
+        if provider_admission_failure is not None:
+            # Every response from this already-sent wave is durable before the
+            # controller stops. No later wave may repeat a bad credential.
+            raise BatchAdmissionError(
+                f"enrichment_provider_admission_http_{provider_admission_failure}"
             )
     finally:
         try:
