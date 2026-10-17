@@ -183,7 +183,12 @@ def claim_job(
     )
     validate_job(job)
     require(
-        job.state == "ready" and (job.purpose == "content" or job.source.enabled),
+        job.state == "ready"
+        and (
+            job.purpose == "content"
+            or job.operation == "match_crosswalk"
+            or job.source.enabled
+        ),
         "job/source is not ready",
     )
     if job.purpose == "content":

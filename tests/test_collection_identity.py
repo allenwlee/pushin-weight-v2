@@ -94,6 +94,28 @@ def test_rename_is_alias_and_preserves_mapping_hash():
     }
 
 
+def test_dedicated_native_identity_cannot_be_claimed_by_another_product():
+    brand, _, subject, repo = identities()
+    review_github_mapping(
+        subject=subject,
+        repo=repo,
+        role="dedicated_model",
+        evidence_url="https://github.com/publisher/family",
+        reviewed_by="test",
+    )
+    product = Product.objects.create(brand=brand, repo_id="Other/Model")
+    another = MeasurementSubject.objects.create(subject_kind="product", product=product)
+    with pytest.raises(ValueError, match="conflict"):
+        review_github_mapping(
+            subject=another,
+            repo=repo,
+            role="dedicated_model",
+            evidence_url="https://github.com/publisher/family",
+            reviewed_by="test",
+        )
+    assert SourceSubjectMapping.objects.count() == 1
+
+
 def test_dependency_and_unknown_owner_remain_unadmitted():
     _, _, subject, repo = identities()
     with pytest.raises(ValueError, match="dependency"):

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from urllib.parse import urlsplit
 
-from django.db import transaction
+from django.db import OperationalError, connection, transaction
 from django.utils import timezone
 
 from core.benchmark_metric_identity import validate_evidence_url
@@ -31,6 +31,72 @@ RELATION_ROLES = {
     "recipe",
     "agent_harness",
 }
+
+
+class MappingBusy(ValueError):
+    """Another transaction is reviewing this exact native identity."""
+
+
+class MappingConflict(ValueError):
+    """The dedicated native identity is already linked to another product."""
+
+
+def qualified_catalog_ownership(account, subject=None, *, product=None):
+    """Catalog-only publisher fallback; numeric qualification stays unchanged."""
+    if product is None and subject is not None and subject.subject_kind == "product":
+        product = subject.product
+    if product is not None:
+        official = list(
+            CompanyAccount.objects.filter(account=account, role_id="official").values(
+                "company_id", "ownership_confirmed"
+            )
+        )
+        owners = {row["company_id"] for row in official}
+        if len(owners) > 1 or (
+            account.data_source_id == "hf"
+            and any(row["ownership_confirmed"] is not True for row in official)
+        ):
+            return False
+        companies = (
+            set(
+                BrandCompany.objects.filter(brand_id=product.brand_id).values_list(
+                    "company_id", flat=True
+                )
+            )
+            if product.brand_id
+            else set()
+        )
+        if owners and companies and not owners <= companies:
+            return False
+    if subject is not None and qualified_ownership(account, subject):
+        return True
+    if product is None:
+        return False
+    if product.brand_id:
+        if BrandAccount.objects.filter(
+            account=account, brand_id=product.brand_id, role_id="official"
+        ).exists():
+            return True
+        return len(owners) == 1 and owners <= companies
+    if not product.publisher_account_id:
+        return False
+    owner_links = list(
+        CompanyAccount.objects.filter(account=product.publisher_account).values(
+            "company_id", "role_id", "ownership_confirmed"
+        )
+    )
+    target_links = list(
+        CompanyAccount.objects.filter(account=account).values(
+            "company_id", "role_id", "ownership_confirmed"
+        )
+    )
+    return (
+        len(owner_links) == len(target_links) == 1
+        and owner_links[0]["role_id"] == target_links[0]["role_id"] == "official"
+        and owner_links[0]["ownership_confirmed"] is True
+        and target_links[0]["ownership_confirmed"] is True
+        and owner_links[0]["company_id"] == target_links[0]["company_id"]
+    )
 
 
 def qualified_ownership(account, subject):
@@ -77,8 +143,6 @@ def review_catalog_mapping(
     identifier_metadata=None,
     allow_owner_transfer=False,
 ):
-    # Serialize repeated reviews of an absent mapping through its existing subject.
-    subject = MeasurementSubject.objects.select_for_update().get(pk=subject.pk)
     require(
         role in RELATION_ROLES,
         "dependency or unqualified relation cannot establish identity",
@@ -97,7 +161,7 @@ def review_catalog_mapping(
     )
     require(
         publisher_account is not None
-        and qualified_ownership(publisher_account, subject),
+        and qualified_catalog_ownership(publisher_account, subject),
         "reviewed publisher ownership required",
     )
     if role == "family_repository":
@@ -110,6 +174,49 @@ def review_catalog_mapping(
     native = (
         external_identifier.casefold() if source.pk == "hf" else external_identifier
     )
+    # Native lock first, then subject: manual reviews and the matcher share this
+    # order. Family links remain many-to-many; dedicated identities are exclusive.
+    lock_key = int(
+        digest(
+            [
+                "catalog-native-v1",
+                source.pk,
+                source_subject_kind,
+                identifier_scope,
+                native,
+            ]
+        )[:15],
+        16,
+    )
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_try_advisory_xact_lock(%s)", [lock_key])
+        if not cursor.fetchone()[0]:
+            raise MappingBusy("native identity review is busy")
+    try:
+        subject = MeasurementSubject.objects.select_for_update(nowait=True).get(
+            pk=subject.pk
+        )
+    except OperationalError as exc:
+        if getattr(exc.__cause__, "sqlstate", None) == "55P03":
+            raise MappingBusy("subject identity review is busy") from exc
+        raise
+    require(
+        qualified_catalog_ownership(publisher_account, subject),
+        "reviewed publisher ownership changed",
+    )
+    competing = SourceSubjectMapping.objects.filter(
+        source=source,
+        source_subject_kind=source_subject_kind,
+        identifier_scope=identifier_scope,
+        normalized_identifier=native,
+        subject__subject_kind="product",
+    ).exclude(subject=subject)
+    if (
+        competing.exists()
+        if role == "dedicated_model"
+        else competing.filter(identity_snapshot__role="dedicated_model").exists()
+    ):
+        raise MappingConflict("native dedicated identity conflict")
     snapshot = {
         **identity_snapshot,
         "role": role,
@@ -196,6 +303,7 @@ def review_github_mapping(
     evidence_url,
     reviewed_by,
     allow_owner_transfer=False,
+    identifier_metadata=None,
 ):
     safe_payload(repo)
     require(
@@ -225,7 +333,7 @@ def review_github_mapping(
         data_source_id="github", normalized_identifier=str(owner["id"])
     ).first()
     require(
-        account is not None and qualified_ownership(account, subject),
+        account is not None and qualified_catalog_ownership(account, subject),
         "reviewed GitHub publisher ownership required",
     )
     return review_catalog_mapping(
@@ -246,5 +354,9 @@ def review_github_mapping(
             "owner_id": owner["id"],
             "observed_full_name": full_name,
         },
-        identifier_metadata={"aliases": [full_name], "current_full_name": full_name},
+        identifier_metadata={
+            **(identifier_metadata or {}),
+            "aliases": [full_name],
+            "current_full_name": full_name,
+        },
     )
