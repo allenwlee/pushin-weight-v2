@@ -45,6 +45,29 @@ def qualified_catalog_ownership(account, subject=None, *, product=None):
     """Catalog-only publisher fallback; numeric qualification stays unchanged."""
     if product is None and subject is not None and subject.subject_kind == "product":
         product = subject.product
+    if product is not None:
+        official = list(
+            CompanyAccount.objects.filter(account=account, role_id="official").values(
+                "company_id", "ownership_confirmed"
+            )
+        )
+        owners = {row["company_id"] for row in official}
+        if len(owners) > 1 or (
+            account.data_source_id == "hf"
+            and any(row["ownership_confirmed"] is not True for row in official)
+        ):
+            return False
+        companies = (
+            set(
+                BrandCompany.objects.filter(brand_id=product.brand_id).values_list(
+                    "company_id", flat=True
+                )
+            )
+            if product.brand_id
+            else set()
+        )
+        if owners and companies and not owners <= companies:
+            return False
     if subject is not None and qualified_ownership(account, subject):
         return True
     if product is None:
@@ -54,16 +77,6 @@ def qualified_catalog_ownership(account, subject=None, *, product=None):
             account=account, brand_id=product.brand_id, role_id="official"
         ).exists():
             return True
-        companies = set(
-            BrandCompany.objects.filter(brand_id=product.brand_id).values_list(
-                "company_id", flat=True
-            )
-        )
-        owners = set(
-            CompanyAccount.objects.filter(
-                account=account, role_id="official"
-            ).values_list("company_id", flat=True)
-        )
         return len(owners) == 1 and owners <= companies
     if not product.publisher_account_id:
         return False

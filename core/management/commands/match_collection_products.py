@@ -2,6 +2,7 @@
 
 import json
 
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.management.base import BaseCommand, CommandError
 
 from core import collection_matching as matching
@@ -65,3 +66,7 @@ class Command(BaseCommand):
             )
         except (ValueError, KeyError) as exc:
             raise CommandError(str(exc)) from exc
+        except (ObjectDoesNotExist, ValidationError) as exc:
+            raise CommandError(
+                "invalid saved matching identity or unavailable evidence"
+            ) from exc

@@ -41,11 +41,20 @@ MAX_ENVELOPE_BYTES = 32768
 def bounded_reads():
     with transaction.atomic():
         with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT current_setting('statement_timeout'), current_setting('lock_timeout'), current_setting('work_mem'), current_setting('max_parallel_workers_per_gather')"
+            )
+            previous = cursor.fetchone()
             cursor.execute("SET LOCAL statement_timeout = '12s'")
             cursor.execute("SET LOCAL lock_timeout = '1s'")
             cursor.execute("SET LOCAL work_mem = '1MB'")
             cursor.execute("SET LOCAL max_parallel_workers_per_gather = 0")
         yield
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT set_config('statement_timeout', %s, true), set_config('lock_timeout', %s, true), set_config('work_mem', %s, true), set_config('max_parallel_workers_per_gather', %s, true)",
+                previous,
+            )
 
 
 def name_key(value):
@@ -261,11 +270,18 @@ def _native_inventory(sources, cutoff):
             scope = (
                 "rankings_permaslug" if source == "openrouter" else "arena_model_name"
             )
-            for observation in _pages(
-                windows.filter(payload_length__lte=MAX_ENVELOPE_BYTES).order_by(
-                    "-observed_at", "-pk"
-                )[:501]
+            for position, observation in enumerate(
+                _pages(
+                    windows.filter(payload_length__lte=MAX_ENVELOPE_BYTES).order_by(
+                        "-observed_at", "-pk"
+                    )[:501]
+                )
             ):
+                if position == 500:
+                    partial.append(
+                        {"source": source, "reason": "embedded_publication_cap"}
+                    )
+                    break
                 rows = (
                     observation.listing.get("rows", [])
                     if isinstance(observation.listing, dict)

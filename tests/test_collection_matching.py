@@ -454,3 +454,151 @@ def test_concurrent_shared_writer_admits_one_dedicated_native_identity():
         results = list(pool.map(attempt, [subject.pk, other.pk]))
     assert sorted(results) == ["admitted", "blocked"]
     assert SourceSubjectMapping.objects.count() == 1
+
+
+def test_review_preview_restores_outer_transaction_settings():
+    from django.db import connection
+
+    brand, _, _ = catalog_fixture()
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW statement_timeout")
+        before = cursor.fetchone()[0]
+    preview(brand)
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW statement_timeout")
+        assert cursor.fetchone()[0] == before
+
+
+def test_review_unconfirmed_publisher_cannot_be_approved():
+    from core.models import CompanyAccount
+
+    brand, product, _ = catalog_fixture()
+    CompanyAccount.objects.filter(account=product.publisher_account).update(
+        ownership_confirmed=False
+    )
+    report = preview(brand)
+    assert report["products"][0]["candidates"][0]["decision"] == "unmatched"
+    with pytest.raises(ValueError, match="ownership conflict"):
+        apply_reviewed(report)
+    assert not SourceSubjectMapping.objects.exists()
+
+
+def test_review_manual_writer_rejects_conflicting_publisher_companies():
+    from core.collection_identity import review_catalog_mapping
+    from core.models import CompanyAccount
+
+    _, product, observation = catalog_fixture()
+    other = Company.objects.create(nickname="conflicting-owner")
+    CompanyAccount.objects.create(
+        company=other,
+        account=product.publisher_account,
+        role_id="official",
+        ownership_confirmed=True,
+    )
+    subject = MeasurementSubject.objects.create(subject_kind="product", product=product)
+    with pytest.raises(ValueError, match="ownership"):
+        review_catalog_mapping(
+            source=observation.run.job.source,
+            subject=subject,
+            external_identifier=observation.source_identifier,
+            source_subject_kind="model",
+            identifier_scope="arena_model_name",
+            publisher_account=product.publisher_account,
+            role="dedicated_model",
+            version_selector=None,
+            evidence_url="https://example.org/review",
+            reviewed_by="operator",
+            identity_snapshot={},
+        )
+    assert not SourceSubjectMapping.objects.exists()
+
+
+def test_review_capped_publication_search_preserves_unknown_presence():
+    from core.collection_matching import identifier_presence
+
+    _, _, observation = catalog_fixture()
+    identity = observation.source_identifier
+    observation.source_identifier = "publication:oldest"
+    observation.source_subject_kind = "aggregate"
+    observation.dimensions = {"kind": "publication_window"}
+    observation.listing = {"rows": [{"model_name": identity}]}
+    observation.save()
+    CollectionObservation.objects.bulk_create(
+        [
+            CollectionObservation(
+                run=observation.run,
+                source_identifier=f"publication:{i}",
+                source_subject_kind="aggregate",
+                observation_key=digest(["cap", i]),
+                listing={"rows": [{"model_name": f"unrelated-{i}"}]},
+                dimensions={"kind": "publication_window"},
+            )
+            for i in range(501)
+        ]
+    )
+    assert (
+        identifier_presence(
+            source="arena", kind="model", scope="arena_model_name", identifier=identity
+        )
+        == "not_checked"
+    )
+
+
+def test_review_invalid_resume_uses_command_error():
+    from django.core.management.base import CommandError
+
+    with pytest.raises(CommandError, match="invalid saved matching identity"):
+        call_command(
+            "match_collection_products",
+            resume="invalid-uuid",
+            apply=True,
+            stdout=StringIO(),
+        )
+
+
+def test_review_explicit_first_party_reference_qualifies_without_candidate_approval():
+    from core.account_identity import upsert_account
+    from core.collection_matching import apply_matches, preview_matches
+    from core.models import CompanyAccount
+
+    brand, product, observation = catalog_fixture(source="github", native="123")
+    publisher = upsert_account(
+        source="github",
+        external_identifier="42",
+        handle="publisher",
+        account_kind="organization",
+    )
+    CompanyAccount.objects.create(
+        company_id="fixture-company",
+        account=publisher,
+        role_id="official",
+        ownership_confirmed=True,
+    )
+    url = "https://github.com/publisher/Model-7B-Instruct"
+    product.card_data = {"github": url}
+    product.save()
+    observation.source_subject_kind = "repository"
+    observation.dimensions = {"kind": "repository"}
+    observation.listing = {
+        "id": 123,
+        "full_name": "publisher/Model-7B-Instruct",
+        "private": False,
+        "owner": {"id": 42, "login": "publisher"},
+    }
+    observation.save()
+    report = preview_matches(brand_ids=[brand.pk], sources=["github"])
+    candidate = report["products"][0]["candidates"][0]
+    assert candidate["decision"] == "qualified" and candidate["confidence_pct"] == 99
+    apply_matches(
+        preview=report,
+        input_sha256=report["input_sha256"],
+        reviewed_by="operator",
+        review_basis="Stored first-party cross-reference",
+        reviewed_candidate_ids=[],
+    )
+    mapping = SourceSubjectMapping.objects.get()
+    assert (
+        mapping.external_identifier == "123"
+        and mapping.publisher_account_id == publisher.pk
+    )
+    assert mapping.identifier_metadata["match_review"]["owner_confirmed"] is False
