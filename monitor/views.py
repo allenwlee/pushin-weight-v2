@@ -34,6 +34,7 @@ from django.db import DatabaseError, connection, transaction
 from django.db.models import (
     Count,
     Exists,
+    FilteredRelation,
     IntegerField,
     Max,
     OuterRef,
@@ -410,9 +411,6 @@ _HOME_CHART_CACHE_MAX_ENTRIES = 64
 _HOME_CHART_CACHE: OrderedDict[
     tuple[Any, ...], tuple[float, dict[str, Any]]
 ] = OrderedDict()
-_HOME_TOP_VOICES_CACHE: dict[
-    tuple[int, int], tuple[float, list[dict[str, Any]]]
-] = {}
 _HOME_PULSE_CACHE_LOCK = Lock()
 _STAGING_REVIEW_CLOCK_CACHE: tuple[float, datetime] | None = None
 _STAGING_REFRESH_RECEIPT_MARKER = "staging-refresh/v1"
@@ -3522,12 +3520,16 @@ def _build_home_chart_payload(
     requested_at = now or _dashboard_now()
     normalized_filters = _normalize_home_filters(filters)
     tracked_brands = _tracked_home_brand_nicknames() if tracked_only else None
+    from monitor.home_count_summary import home_count_cache_token, read_home_counts
+
+    count_token = home_count_cache_token() if window_days > 1 else None
     cache_key = None
     cached_payload = None
     if now is None:
         cache_key = _home_chart_cache_key(
             window_days, normalized_filters, locale, bucket_timezone
         )
+        cache_key += (requested_at.date(), count_token)
         if tracked_brands is not None:
             cache_key += (tracked_brands,)
         cache_now = monotonic()
@@ -3539,12 +3541,17 @@ def _build_home_chart_payload(
             elif cached:
                 del _HOME_CHART_CACHE[cache_key]
         if cached_payload is not None:
-            return deepcopy(cached_payload)
+            result = deepcopy(cached_payload)
+            stamp = requested_at.isoformat()
+            result["computed_at"] = result["fetched_at"] = stamp
+            for name in ("pulse", "trend_narrative", "top_voices"):
+                result[name]["computed_at"] = stamp
+            return result
 
     pulse = _build_home_pulse_payload(
         window_days, now=requested_at, brand_nicknames=tracked_brands,
     )
-    now = datetime.fromisoformat(pulse["computed_at"])
+    now = requested_at
     local_today = now.astimezone(bucket_tzinfo).date()
     if window_days == 1:
         window_start = now - timedelta(days=1)
@@ -3631,6 +3638,11 @@ def _build_home_chart_payload(
         elif promotion_mode == "only":
             links = links.filter(post__untracked_brand_promotion__isnull=False)
 
+    # Keep the Brand join explicit: a plain brand__nickname projection is
+    # optimized to the raw FK, whose ICU-equivalent spelling may differ.
+    links = links.annotate(_home_brand=FilteredRelation(
+        "brand", condition=Q(brand__is_sentinel=False),
+    ))
     if window_days == 1:
         # Minute granularity: 288 5-minute buckets, oldest-first labels
         granularity = "minute"
@@ -3645,7 +3657,7 @@ def _build_home_chart_payload(
         }
         aggregate_rows = (
             links.annotate(bucket=TruncMinute("post__created_at"))
-            .values("brand_id", "bucket")
+            .values("_home_brand__nickname", "bucket")
             .annotate(count=Count("pk"))
         )
         for row in aggregate_rows:
@@ -3656,7 +3668,7 @@ def _build_home_chart_payload(
             # post in the first partial minute truncates just before cutoff,
             # so map that one eligible bucket to the first chart bucket.
             index = max(0, int((bucket - cutoff).total_seconds() // 300))
-            brand = row["brand_id"]
+            brand = row["_home_brand__nickname"]
             if brand in series and 0 <= index < bucket_count:
                 series[brand][index] += row["count"]
                 totals[brand] += row["count"]
@@ -3672,12 +3684,33 @@ def _build_home_chart_payload(
             brand: [0] * window_days for brand in brand_nicknames
         }
 
-        agg_rows = (
-            links
-            .annotate(day=TruncDate("post__created_at", tzinfo=bucket_tzinfo))
-            .values("brand_id", "day")
-            .annotate(count=Count("pk"))
+        agg_rows = None
+        promotion_mode = normalized_filters.get(_HOME_PROMOTION_FILTER)
+        legacy_mode = normalized_filters.get("unsanctioned")
+        aligned_midnights = all(
+            datetime.combine(
+                local_today - timedelta(days=i), datetime.min.time(), tzinfo=bucket_tzinfo
+            ).timestamp() % 900 == 0
+            for i in range(window_days)
         )
+        if not has_post_filters and not isinstance(promotion_mode, list) and aligned_midnights:
+            legacy_flag = {"off": False, "only": True}.get(legacy_mode)
+            if promotion_mode == "off" and legacy_mode is None:
+                legacy_flag = False
+            saved = read_home_counts(
+                start=window_start, end=now, brand_ids=brand_nicknames,
+                timezone_name=bucket_timezone, legacy_flag=legacy_flag,
+                promotion_flag={"off": False, "only": True}.get(promotion_mode),
+            )
+            if saved is not None:
+                agg_rows = [{**row, "day": row["bucket"]} for row in saved]
+        if agg_rows is None:
+            # Canonical identity is important with the case-insensitive FK.
+            agg_rows = (
+                links.annotate(day=TruncDate("post__created_at", tzinfo=bucket_tzinfo))
+                .values("_home_brand__nickname", "day").annotate(count=Count("pk"))
+            )
+            agg_rows = [{**row, "brand_id": row["_home_brand__nickname"]} for row in agg_rows]
 
         for row in agg_rows:
             brand = row["brand_id"]
@@ -3757,11 +3790,8 @@ def _build_home_chart_payload(
     top_voices = {
         "window_days": window_days,
         "computed_at": computed_at,
-        "entries": _multi_top_voices(
-            window_days=window_days,
-            limit=3,
-            now=now,
-        ),
+        # Empty compatibility projection for already-open chart clients.
+        "entries": [],
     }
     payload = {
         "days": days,
@@ -3780,16 +3810,7 @@ def _build_home_chart_payload(
     }
     if cache_key is not None:
         with _HOME_PULSE_CACHE_LOCK:
-            component_entries = (
-                _HOME_PULSE_CACHE.get(
-                    window_days if tracked_brands is None else (window_days, tracked_brands)
-                ),
-                _HOME_TOP_VOICES_CACHE.get((window_days, 3)),
-            )
-            cache_timestamp = min(
-                (entry[0] for entry in component_entries if entry is not None),
-                default=monotonic(),
-            )
+            cache_timestamp = monotonic()
             _HOME_CHART_CACHE[cache_key] = (cache_timestamp, deepcopy(payload))
             _HOME_CHART_CACHE.move_to_end(cache_key)
             while len(_HOME_CHART_CACHE) > _HOME_CHART_CACHE_MAX_ENTRIES:
@@ -3816,7 +3837,6 @@ def _clear_home_pulse_cache() -> None:
     with _HOME_PULSE_CACHE_LOCK:
         _HOME_CHART_CACHE.clear()
         _HOME_PULSE_CACHE.clear()
-        _HOME_TOP_VOICES_CACHE.clear()
         _STAGING_REVIEW_CLOCK_CACHE = None
 
 
@@ -3826,144 +3846,87 @@ def _build_home_pulse_payload(
     now: datetime | None = None,
     brand_nicknames: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
-    """Aggregate equal windows for the requested brand scope in one query."""
+    """Count both equal windows together, retaining brands with no posts."""
     if window_days not in ALLOWED_HOME_WINDOWS:
         window_days = HOME_WINDOW_DEFAULT
     now = now or _dashboard_now()
+    from monitor.home_count_summary import (
+        home_count_cache_token,
+        read_home_counts,
+        utc_day,
+    )
+
+    comparison_end = utc_day(now) if window_days in (30, 365) else now
     cache_now = monotonic()
     cache_key = window_days if brand_nicknames is None else (window_days, brand_nicknames)
+    token = home_count_cache_token() if window_days in (30, 365) else None
     with _HOME_PULSE_CACHE_LOCK:
         cached = _HOME_PULSE_CACHE.get(cache_key)
-        if cached and cache_now - cached[0] < _HOME_PULSE_CACHE_TTL_SECONDS:
-            return deepcopy(cached[1])
+        if (cached and cache_now - cached[0] < _HOME_PULSE_CACHE_TTL_SECONDS
+                and cached[1].get("_count_token") == token
+                and (window_days in (1, 7) or cached[1].get("comparison_as_of") == comparison_end.isoformat())):
+            payload = deepcopy(cached[1])
+            payload.pop("_count_token", None)
+            payload["computed_at"] = now.isoformat()
+            if window_days in (1, 7):
+                payload["comparison_as_of"] = now.isoformat()
+            return payload
 
-        midpoint = now - timedelta(days=window_days)
-        start = now - timedelta(days=window_days * 2)
-        current_counts = (
-            PostBrand.objects
-            .filter(
-                brand_id=OuterRef("nickname"),
-                post__created_at__gte=midpoint,
-                post__created_at__lt=now,
-            )
-            .order_by()
-            .values("brand_id")
-            .annotate(total=Count("post_id"))
-            .values("total")[:1]
+    # All SQL runs outside the process-wide cache lock.
+    midpoint = comparison_end - timedelta(days=window_days)
+    start = comparison_end - timedelta(days=window_days * 2)
+    brands = Brand.objects.filter(is_sentinel=False)
+    if brand_nicknames is not None:
+        brands = brands.filter(nickname__in=brand_nicknames)
+    rows = list(brands.values(
+        "nickname", "display_name", "display_name_en", "display_name_zh_cn", "accent_color",
+    ))
+    saved = None
+    if window_days in (30, 365):
+        saved = read_home_counts(
+            start=start, end=comparison_end, midpoint=midpoint,
+            brand_ids=[row["nickname"] for row in rows],
         )
-        prior_counts = (
-            PostBrand.objects
-            .filter(
-                brand_id=OuterRef("nickname"),
-                post__created_at__gte=start,
-                post__created_at__lt=midpoint,
+    if saved is None:
+        counts = {
+            row["nickname"]: row for row in brands.filter(
+                posts__post__created_at__gte=start,
+                posts__post__created_at__lt=comparison_end,
+            ).order_by().values("nickname").annotate(
+                current_count=Count("posts__post_id", filter=Q(posts__post__created_at__gte=midpoint)),
+                prior_count=Count("posts__post_id", filter=Q(posts__post__created_at__lt=midpoint)),
             )
-            .order_by()
-            .values("brand_id")
-            .annotate(total=Count("post_id"))
-            .values("total")[:1]
-        )
-        brands = Brand.objects.filter(is_sentinel=False)
-        if brand_nicknames is not None:
-            brands = brands.filter(nickname__in=brand_nicknames)
-        rows = list(
-            brands
-            .values(
-                "nickname",
-                "display_name",
-                "display_name_en",
-                "display_name_zh_cn",
-                "accent_color",
-            )
-            .annotate(
-                current_count=Coalesce(Subquery(current_counts), 0),
-                prior_count=Coalesce(Subquery(prior_counts), 0),
-            )
-        )
-        rows = _home_visible_brand_rows(rows)
-        rows.sort(key=lambda row: _home_chart_brand_sort_key(row["nickname"]))
-        entries: list[dict[str, Any]] = []
-        for row in rows:
-            current = row.get("current_count") or 0
-            prior = row.get("prior_count") or 0
-            delta = _round_pulse_percent(current, prior)
-            is_new = prior == 0 and current > 0
-            if current == 0 and prior == 0:
-                delta = 0
-            direction = (
-                None if is_new
-                else "up" if delta > 0
-                else "down" if delta < 0
-                else "flat"
-            )
-            entries.append({
-                **_brand_projection_fields(row),
-                "current_count": current,
-                "prior_count": prior,
-                "delta_percent": delta,
-                "delta_magnitude": abs(delta) if delta is not None else None,
-                "status": "new" if is_new else "numeric",
-                "direction": direction,
-            })
-        payload = {
-            "window_days": window_days,
-            "computed_at": now.isoformat(),
-            "entries": entries,
         }
-        _HOME_PULSE_CACHE[cache_key] = (cache_now, payload)
-        return deepcopy(payload)
-
-
-def _multi_top_voices(
-    window_days: int,
-    limit: int = 3,
-    *,
-    now: datetime | None = None,
-) -> list[dict[str, Any]]:
-    """Return top N voice authors in the current window.
-
-    Each entry has handle, voice_star (displayed as ☆ N), mention_count,
-    followers_count. Ordered by voice_score DESC.
-
-    voice_score = mention_count * log10(followers_count + 10)
-    """
-    import math
-
-    cache_key = (window_days, limit)
-    cache_now = monotonic()
-    with _HOME_PULSE_CACHE_LOCK:
-        cached = _HOME_TOP_VOICES_CACHE.get(cache_key)
-        if cached and cache_now - cached[0] < _HOME_PULSE_CACHE_TTL_SECONDS:
-            return deepcopy(cached[1])
-
-    cutoff = (now or _dashboard_now()) - timedelta(days=window_days)
-    qs = (
-        Post.objects.filter(created_at__gte=cutoff, author__isnull=False)
-        .values("author__handle", "author__author_id", "author__followers_count")
-        .annotate(mention_count=Count("tweet_id"))
-    )
-    out: list[dict[str, Any]] = []
-    for row in qs:
-        handle = row["author__handle"]
-        if not handle:
-            continue
-        followers = row["author__followers_count"] or 0
-        mentions = row["mention_count"] or 0
-        score = mentions * math.log10(max(followers, 0) + 10)
-        star = max(1, int(round(score)))
-        out.append({
-            "handle": handle,
-            "author_id": row["author__author_id"],
-            "voice_score": score,
-            "voice_star": star,
-            "mention_count": mentions,
-            "followers_count": followers,
+    else:
+        counts = {}
+        for row in saved:
+            counts.setdefault(row["brand_id"], {})[
+                "current_count" if row["bucket"] else "prior_count"
+            ] = row["count"]
+    rows = _home_visible_brand_rows(rows)
+    rows.sort(key=lambda row: _home_chart_brand_sort_key(row["nickname"]))
+    entries = []
+    for row in rows:
+        brand_counts = counts.get(row["nickname"], {})
+        current = brand_counts.get("current_count", 0)
+        prior = brand_counts.get("prior_count", 0)
+        delta = _round_pulse_percent(current, prior)
+        is_new = prior == 0 and current > 0
+        if current == 0 and prior == 0:
+            delta = 0
+        direction = None if is_new else "up" if delta > 0 else "down" if delta < 0 else "flat"
+        entries.append({
+            **_brand_projection_fields(row), "current_count": current, "prior_count": prior,
+            "delta_percent": delta, "delta_magnitude": abs(delta) if delta is not None else None,
+            "status": "new" if is_new else "numeric", "direction": direction,
         })
-    out.sort(key=lambda v: (-v["voice_score"], -v["followers_count"]))
-    result = out[:limit]
+    payload = {
+        "window_days": window_days, "computed_at": now.isoformat(),
+        "comparison_as_of": comparison_end.isoformat(), "entries": entries,
+    }
     with _HOME_PULSE_CACHE_LOCK:
-        _HOME_TOP_VOICES_CACHE[cache_key] = (cache_now, result)
-    return deepcopy(result)
+        _HOME_PULSE_CACHE[cache_key] = (cache_now, {**deepcopy(payload), "_count_token": token})
+    return payload
 
 
 def _build_brands_context(

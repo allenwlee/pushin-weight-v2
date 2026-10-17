@@ -38,6 +38,7 @@ def test_staging_blueprint_declares_one_resource_for_each_owned_role() -> None:
         "pushinweight-staging-synthesis": "worker",
         "pushinweight-staging-harvest": "cron",
         "pushinweight-staging-jobs": "cron",
+        "pushinweight-staging-home-counts": "cron",
     }
     assert [database["name"] for database in blueprint["databases"]] == [
         STAGING_DATABASE

@@ -247,6 +247,27 @@ services:
       # TWITTERAPI_IO_SCHEDULED_API_KEY and TWITTERAPI_IO_ON_DEMAND_API_KEY.
       - fromGroup: pushinweight-secrets
 
+  # Provider-free derived counts; normal daily publication at 00:07 UTC.
+  - type: cron
+    name: pushinweight-home-counts
+    runtime: python
+    region: oregon
+    plan: starter
+    schedule: "7,22,37,52 * * * *"
+    buildCommand: ./build.sh
+    startCommand: python manage.py refresh_home_counts
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-db-shadow
+          property: connectionString
+
 databases:
   # Existing production authority. Naming it here matches the resource instead
   # of provisioning the never-created `pushinweight-db` candidate.

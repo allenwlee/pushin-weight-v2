@@ -138,6 +138,8 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   excluded_tables:
+    # Publication state is valid only for the local materialized view.
+    - home_count_snapshot
     # Editorial jobs, accepted editions and media are one environment-local graph.
     - editorial_assessments
     - editorial_budgets
@@ -206,6 +208,7 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    - home_count_snapshot
     - provider_batches
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - data_sources
@@ -470,6 +473,7 @@ relations:
 
 scrub:
   truncate_tables:
+    - home_count_snapshot
     - provider_batches
     - editorial_assessments
     - editorial_budgets

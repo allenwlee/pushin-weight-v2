@@ -37,7 +37,6 @@ from core.models import (
 from monitor.views import (
     _HOME_CHART_CACHE,
     _HOME_PULSE_CACHE,
-    _HOME_TOP_VOICES_CACHE,
     _build_home_chart_payload,
     _build_home_pulse_payload,
     _clear_home_pulse_cache,
@@ -123,8 +122,8 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         super().setUp()
         _clear_home_pulse_cache()
 
-    def test_ae11_exact_equal_window_projection_and_single_query_cache(self):
-        with self.assertNumQueries(1):
+    def test_ae11_exact_equal_window_projection_and_bounded_query_cache(self):
+        with self.assertNumQueries(2):
             pulse = _build_home_pulse_payload(1, now=ANCHOR)
 
         by_nickname = {entry["nickname"]: entry for entry in pulse["entries"]}
@@ -156,19 +155,130 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         with self.assertNumQueries(0):
             self.assertEqual(_build_home_pulse_payload(1, now=ANCHOR), pulse)
 
-    def test_canonical_twenty_model_query_is_date_bounded_and_single_query(self):
+    def test_brand_counts_scan_both_date_bounded_windows_together(self):
         with CaptureQueriesContext(connection) as queries:
             pulse = _build_home_pulse_payload(1, now=ANCHOR)
 
-        self.assertEqual(len(queries), 1)
+        self.assertEqual(len(queries), 2)
         self.assertEqual(
             [entry["nickname"] for entry in pulse["entries"]],
             ["absent", "down", "flat", "new", "up"],
         )
         self.assertEqual(len(pulse["entries"]), 5)
-        sql = queries.captured_queries[0]["sql"].upper()
-        self.assertGreaterEqual(sql.count("SELECT COUNT"), 2)
-        self.assertNotIn("FILTER (WHERE", sql)
+        sql = queries.captured_queries[1]["sql"].upper()
+        self.assertEqual(sql.count("SELECT"), 1)
+        self.assertIn("GROUP BY", sql)
+        self.assertEqual(sql.count("FILTER (WHERE"), 2)
+
+    @patch("monitor.views._dashboard_now", return_value=ANCHOR)
+    def test_chart_counts_use_canonical_brand_identity_for_collation_equivalent_links(self, _now):
+        PostBrand.objects.filter(brand_id="up").update(brand_id="UP")
+        canonical = Brand.objects.create(nickname="caf\u00e9")
+        post = Post.objects.create(tweet_id="pulse-collation", created_at=ANCHOR - timedelta(hours=1))
+        PostBrand.objects.create(post=post, brand_id="cafe\u0301")
+        self.client.logout()
+        with patch("monitor.views._tracked_home_brand_nicknames", return_value=("up", canonical.nickname)):
+            response = self.client.get("/chart.html", {"window": 1, "locale": "en"}, secure=True)
+        self.assertEqual(response.status_code, 200)
+        parser = _ChartFragmentParser()
+        parser.feed(response.content.decode())
+        payload = json.loads(parser.canvas_attrs[0]["data-home"])
+        counts = {
+            row["nickname"]: (row["current_count"], row["prior_count"])
+            for row in payload["pulse"]["entries"]
+        }
+        self.assertEqual(counts, {"up": (6, 4), canonical.nickname: (1, 0)})
+
+    @patch("monitor.views._dashboard_now", return_value=ANCHOR)
+    def test_thirty_day_chart_counts_share_one_scan_and_preserve_empty_brands(self, _now):
+        """The real chart route must not repeat a historical scan per brand."""
+        tracked = ("up", "down", "flat", "new", "absent")
+        sentinel = Brand.objects.create(nickname="pulse-sentinel", is_sentinel=True)
+        excluded = Brand.objects.create(nickname="pulse-excluded")
+        PostBrand.objects.filter(brand_id__in=tracked).delete()
+        comparison_day = ANCHOR.replace(hour=0, minute=0, second=0, microsecond=0)
+        dates = (
+            ("before-start", comparison_day - timedelta(days=60, microseconds=1)),
+            ("at-start", comparison_day - timedelta(days=60)),
+            ("before-midpoint", comparison_day - timedelta(days=30, microseconds=1)),
+            ("at-midpoint", comparison_day - timedelta(days=30)),
+            ("before-now", comparison_day - timedelta(microseconds=1)),
+            ("at-now", comparison_day),
+            ("after-now", comparison_day + timedelta(microseconds=1)),
+        )
+        for suffix, created_at in dates:
+            post = Post.objects.create(tweet_id=f"pulse-30d-{suffix}", created_at=created_at)
+            for nickname in ("up", sentinel.nickname, excluded.nickname):
+                PostBrand.objects.create(post=post, brand_id=nickname)
+        old_post = Post.objects.get(tweet_id="pulse-30d-before-start")
+        PostBrand.objects.create(post=old_post, brand_id="down")
+        _clear_home_pulse_cache()
+
+        with (
+            patch("monitor.views._tracked_home_brand_nicknames", return_value=tracked),
+            CaptureQueriesContext(connection) as queries,
+        ):
+            response = self.client.get(
+                "/chart.html", {"window": 30, "locale": "en"}, secure=True,
+            )
+        self.assertEqual(response.status_code, 200)
+        parser = _ChartFragmentParser()
+        parser.feed(response.content.decode())
+        payload = json.loads(parser.canvas_attrs[0]["data-home"])
+        self.assertEqual(payload["window_days"], 30)
+        self.assertEqual(payload["computed_at"], payload["pulse"]["computed_at"])
+        counts = {
+            row["nickname"]: (row["current_count"], row["prior_count"])
+            for row in payload["pulse"]["entries"]
+        }
+        self.assertEqual(counts, {
+            "up": (2, 2), "down": (0, 0), "flat": (0, 0),
+            "new": (0, 0), "absent": (0, 0),
+        })
+        count_queries = [
+            query["sql"].upper() for query in queries.captured_queries
+            if '"POSTS_BRANDS"' in query["sql"].upper()
+            and "PRIOR_COUNT" in query["sql"].upper()
+        ]
+        self.assertEqual(len(count_queries), 1)
+        self.assertEqual(count_queries[0].count("SELECT"), 1)
+
+    @patch("monitor.views._dashboard_now", return_value=ANCHOR)
+    def test_anonymous_home_counts_stay_bounded_for_every_window_and_locale(self, _now):
+        self.client.logout()
+        tracked = ("up", "down", "flat", "new", "absent")
+        for window_days in (1, 7, 30, 365):
+            for locale in ("en", "zh_cn"):
+                with self.subTest(window=window_days, locale=locale):
+                    _clear_home_pulse_cache()
+                    with (
+                        patch("monitor.views._tracked_home_brand_nicknames", return_value=tracked),
+                        CaptureQueriesContext(connection) as queries,
+                    ):
+                        response = self.client.get(
+                            "/", {"window": window_days, "locale": locale}, secure=True,
+                        )
+                    self.assertEqual(response.status_code, 200)
+                    self.assertFalse(response.wsgi_request.user.is_authenticated)
+                    parser = _ChartFragmentParser()
+                    parser.feed(response.content.decode())
+                    payload = json.loads(parser.canvas_attrs[0]["data-home"])
+                    self.assertEqual(payload["window_days"], window_days)
+                    self.assertEqual(payload["computed_at"], payload["pulse"]["computed_at"])
+                    counts = {
+                        row["nickname"]: (row["current_count"], row["prior_count"])
+                        for row in payload["pulse"]["entries"]
+                    }
+                    self.assertEqual(set(counts), set(tracked))
+                    self.assertEqual(counts["up"], (6, 4) if window_days == 1 else (10, 0) if window_days == 7 else (5, 0))
+                    self.assertEqual(counts["absent"], (0, 0))
+                    count_queries = [
+                        query["sql"].upper() for query in queries.captured_queries
+                        if '"POSTS_BRANDS"' in query["sql"].upper()
+                        and "PRIOR_COUNT" in query["sql"].upper()
+                    ]
+                    self.assertEqual(len(count_queries), 1)
+                    self.assertEqual(count_queries[0].count("SELECT"), 1)
 
     def test_half_away_from_zero_rounding_and_rounded_zero_direction(self):
         self.assertEqual(_round_pulse_percent(9, 8), 13)
@@ -235,8 +345,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             "us_nationalism": ["mild_pro"],
             "unsanctioned": "off",
         }
-        # Pulse, brand inventory, chart aggregate, and the co-timestamped
-        # Top Voices projection. A disabled narrative performs no DB read.
+        # Pulse (two queries), brand inventory, and chart aggregate. No ranking.
         with self.assertNumQueries(4):
             payload = _build_home_chart_payload(1, active, now=ANCHOR)
         self.assertEqual(payload["totals"], {"up": 1})
@@ -249,7 +358,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             now=ANCHOR + timedelta(seconds=1),
         )
         self.assertEqual(empty["totals"], {"up": 0})
-        self.assertEqual(empty["pulse"], payload["pulse"], "ordinary filters must not change market-wide pulse")
+        self.assertEqual(empty["pulse"]["entries"], payload["pulse"]["entries"], "ordinary filters must not change market-wide pulse counts")
         self.assertEqual(empty["computed_at"], empty["pulse"]["computed_at"])
 
     def test_default_chart_uses_one_bounded_post_join(self):
@@ -319,7 +428,9 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             warm = _build_home_chart_payload(30, equivalent_filters)
 
         self.assertGreater(len(cold_queries), 0)
-        self.assertEqual(len(warm_queries), 0)
+        health_reads = [row["sql"] for row in warm_queries if row["sql"].lstrip().upper().startswith("SELECT")]
+        self.assertEqual(len(health_reads), 1)
+        self.assertIn("FROM home_count_snapshot", health_reads[0])
         self.assertEqual(warm, cold)
         self.assertIsNot(warm, cold)
 
@@ -354,20 +465,18 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         self.assertEqual(len(_HOME_CHART_CACHE), 2)
 
     @patch("monitor.views.django_timezone.now", return_value=ANCHOR)
-    def test_complete_chart_cache_does_not_extend_component_cache_age(self, _now):
+    def test_complete_chart_cache_has_its_own_short_lifetime(self, _now):
         _build_home_chart_payload(30, {"brands": ["up"]})
         pulse_cached_at = _HOME_PULSE_CACHE[30][0]
-        voices_cached_at = _HOME_TOP_VOICES_CACHE[(30, 3)][0]
+        cached_at, cached_counts = _HOME_PULSE_CACHE[30]
+        _HOME_PULSE_CACHE[30] = (cached_at - 50, cached_counts)
         _HOME_CHART_CACHE.clear()
 
         _build_home_chart_payload(30, {"brands": ["down"]})
         chart_cached_at = next(iter(_HOME_CHART_CACHE.values()))[0]
 
-        self.assertEqual(
-            chart_cached_at,
-            min(pulse_cached_at, voices_cached_at),
-            "the complete cache must not give older components a fresh TTL",
-        )
+        self.assertGreaterEqual(chart_cached_at, pulse_cached_at)
+        self.assertGreater(chart_cached_at, _HOME_PULSE_CACHE[30][0])
 
     def test_posts_date_index_covers_chart_and_top_voice_keys(self):
         index = next(

@@ -9,7 +9,7 @@ the v22-master mockup-canon shape.
 
 Bypasses the real DB by patching the data-layer functions that the
 view depends on (_get_feed_posts, _enrich_posts_with_classifications,
-_build_brands_context, _build_home_chart_payload, _multi_top_voices,
+_build_brands_context, _build_home_chart_payload,
 _post_to_wire). The shape we test is the view→template→HTML path
 which is where the iter 13 P0 drift lived.
 """
@@ -88,7 +88,6 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
             "monitor.views._enrich_posts_with_classifications": [fake],
             "monitor.views._build_brands_context": brands,
             "monitor.views._build_home_chart_payload": _fake_chart_payload(),
-            "monitor.views._multi_top_voices": [],
             "monitor.views._post_to_wire": fake,
         }
         cm = []
@@ -221,7 +220,6 @@ class HomeV22FeedRowShapeTests(PostgreSQLV22TestCase):
             patch("monitor.views._enrich_posts_with_classifications", return_value=[]),
             patch("monitor.views._build_brands_context", return_value=[]),
             patch("monitor.views._build_home_chart_payload", return_value=_fake_chart_payload()),
-            patch("monitor.views._multi_top_voices", return_value=[]),
             patch("monitor.views._post_to_wire", return_value=fake),
         ]
         for item in patches:
