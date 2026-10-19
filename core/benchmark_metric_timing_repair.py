@@ -23,6 +23,34 @@ LOCK_KEY = 0x473354494D4531
 FIELDS = (*TIME_FIELDS, "temporal_status", "source_timezone")
 
 
+def _update_locked_batch(model, rows, names):
+    """Write already-locked rows without constructing thousands of CASE nodes."""
+    if not rows:
+        return
+    require(len(rows) <= 1000, "timing update exceeds batch bound")
+    fields = [model._meta.pk, *(model._meta.get_field(name) for name in names)]
+    quote = connection.ops.quote_name
+    columns = [quote(field.column) for field in fields]
+    placeholders = (
+        "(" + ",".join("%s::" + field.db_type(connection) for field in fields) + ")"
+    )
+    assignments = ",".join(f"{column}=patch.{column}" for column in columns[1:])
+    parameters = [
+        field.get_db_prep_save(getattr(row, field.attname), connection)
+        for row in rows
+        for field in fields
+    ]
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"UPDATE {quote(model._meta.db_table)} AS target SET {assignments} "
+            f"FROM (VALUES {','.join([placeholders] * len(rows))}) "
+            f"AS patch ({','.join(columns)}) "
+            f"WHERE target.{columns[0]}=patch.{columns[0]}",
+            parameters,
+        )
+        require(cursor.rowcount == len(rows), "timing update row count mismatch")
+
+
 def serial_fields(fields):
     return {
         key: value.isoformat() if isinstance(value, (date, datetime)) else value
@@ -233,9 +261,9 @@ def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False
                     observation.source_metadata = metadata
                     changed_observations.append(observation)
         if apply:
-            MetricValue.objects.bulk_update(changed_values, FIELDS, batch_size=250)
-            CollectionObservation.objects.bulk_update(
-                changed_observations, ["source_metadata"], batch_size=250
+            _update_locked_batch(MetricValue, changed_values, FIELDS)
+            _update_locked_batch(
+                CollectionObservation, changed_observations, ["source_metadata"]
             )
         result["reasons"] = dict(reasons)
         return result

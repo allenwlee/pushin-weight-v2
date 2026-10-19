@@ -252,11 +252,16 @@ def test_timing_correction_refuses_conflicts_and_rolls_back_failed_batches(
     }
     before = list(MetricValue.objects.order_by("pk").values())
     if failure == "transaction":
+        from core import benchmark_metric_timing_repair as repair
 
-        def fail(*args, **kwargs):
-            raise RuntimeError("simulated write failure")
+        update = repair._update_locked_batch
 
-        monkeypatch.setattr(CollectionObservation.objects, "bulk_update", fail)
+        def fail_metadata(model, rows, names):
+            if model is CollectionObservation:
+                raise RuntimeError("simulated write failure")
+            return update(model, rows, names)
+
+        monkeypatch.setattr(repair, "_update_locked_batch", fail_metadata)
         with pytest.raises(RuntimeError, match="simulated write failure"):
             call_command("repair_metric_timing", **kwargs)
         assert list(MetricValue.objects.order_by("pk").values()) == before
