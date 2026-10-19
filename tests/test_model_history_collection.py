@@ -1,6 +1,6 @@
 """Historical windows, source gaps and reviewed numbers remain attributable."""
 
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -416,7 +416,10 @@ def test_archive_acquisition_to_numeric_writer_keeps_zero_and_missing_distinct()
     assert result["snapshots"] == 1
     assert MetricValue.objects.count() == 1
     value = MetricValue.objects.get()
-    assert value.integer_value == 0 and value.temporal_status == "unknown"
+    assert value.integer_value == 0 and value.temporal_status == "date_only"
+    assert value.period_label_date.isoformat() == "2026-09-10"
+    assert value.window_end_at == datetime(2026, 9, 11, tzinfo=UTC)
+    assert value.window_start_at == value.window_end_at - timedelta(days=30)
     assert value.observation.source_metadata["archive_snapshot_date"] == "2026-09-10"
     count = len(calls)
     acquire_hf_archives(claim, job, budget)
@@ -484,7 +487,7 @@ def test_each_selected_model_has_a_durable_source_gap_without_synthetic_values()
     assert MetricValue.objects.count() == 0
 
 
-def test_reviewed_archive_import_retains_sparse_snapshots_and_unknown_flow_time():
+def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time():
     contract = configured()
     source = DataSource.objects.get(pk="hf")
     source.enabled, source.adapter_key = True, "hf-engagement-v1"
@@ -522,10 +525,15 @@ def test_reviewed_archive_import_retains_sparse_snapshots_and_unknown_flow_time(
     imported = import_selected_history(claim, manifest(contract))
     assert imported.purpose == "metric" and imported.contract_id == contract.pk
     assert imported.observations.count() == 2 and MetricValue.objects.count() == 4
-    assert all(
-        v.temporal_status == "unknown" and v.window_end_at is None
-        for v in MetricValue.objects.all()
-    )
+    for value in MetricValue.objects.select_related("observation", "source_metric"):
+        day = value.observation.source_metadata["archive_snapshot_date"]
+        assert value.temporal_status == "date_only"
+        assert value.period_label_date.isoformat() == day
+        assert value.window_end_at == datetime.fromisoformat(day).replace(
+            tzinfo=UTC
+        ) + timedelta(days=1)
+        if value.source_metric.metric_key == "downloads":
+            assert value.window_start_at == value.window_end_at - timedelta(days=30)
     assert import_selected_history(claim, manifest(contract)).pk == imported.pk
     assert MetricValue.objects.count() == 4
     assert CollectionRun.objects.get(pk=claim.run_id).report["numeric_run_ids"] == [
