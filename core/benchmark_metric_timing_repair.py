@@ -16,7 +16,7 @@ from core.benchmark_metric_timing import (
     reported_times,
 )
 from core.measurement_taxonomy import require
-from core.models import CollectionObservation, MetricValue
+from core.models import CollectionObservation, MetricValue, SourceMetric
 
 REPAIR_KEY = "timing_correction_v1"
 LOCK_KEY = 0x473354494D4531
@@ -46,11 +46,21 @@ def repair_lock():
 def candidate_values(cutoff, after=0, rollback=False):
     values = MetricValue.objects.filter(id__gt=after, id__lte=cutoff)
     if rollback:
-        return values.filter(observation__source_metadata__has_key=REPAIR_KEY)
+        # Inspect markers only after bounding the scalar primary-key page. A
+        # metadata join can scan the entire observation corpus before LIMIT.
+        return values
+    source_ids = defaultdict(list)
+    for pk, source in SourceMetric.objects.filter(
+        source_id__in=["hf", "github", "opencode"]
+    ).values_list("pk", "source_id"):
+        source_ids[source].append(pk)
     return values.filter(
-        Q(source_metric__source_id__in=["hf", "github"], temporal_status="unknown")
+        Q(
+            source_metric_id__in=source_ids["hf"] + source_ids["github"],
+            temporal_status="unknown",
+        )
         | Q(
-            source_metric__source_id="opencode",
+            source_metric_id__in=source_ids["opencode"],
             window_start_at__isnull=False,
             window_end_at__isnull=True,
         )
