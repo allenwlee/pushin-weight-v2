@@ -142,6 +142,35 @@ def test_backfill_cycle_skips_unrelated_metrics_refresh(wired, monkeypatch):
     assert "metrics_refresh" not in stats
 
 
+@pytest.mark.parametrize("cycle_kind", ["scheduled", "backfill"])
+def test_cycle_persists_normalized_initial_zero_engagement(wired, cycle_kind):
+    from core.models import Post
+    from x_monitor.apify import _normalize_tweet
+
+    # The provider adapter supplies zeros even when initial counters are absent.
+    # Previously the shared writer discarded these zeros as false values.
+    tweet = _normalize_tweet(
+        {
+            "id": "1234567890",
+            "text": "MiniMax release is great",
+            "lang": "en",
+            "createdAt": "Sat Jul 25 12:00:00 +0000 2026",
+            "author": {"id": "zero-author", "userName": "zero_author"},
+        }
+    )
+    api, stats = wired(results=[tweet], cycle_kind=cycle_kind)
+
+    assert len(api.calls) == 1
+    assert stats["totals"]["n_inserted"] == 1
+    post = Post.objects.get(tweet_id="1234567890")
+    assert (post.like_count, post.retweet_count, post.reply_count, post.quote_count) == (
+        0, 0, 0, 0
+    )
+    assert post.metrics_refreshed_at is None
+    assert post.view_count is None
+    assert post.bookmark_count is None
+
+
 def test_scheduled_call_passes_both_time_bounds(wired):
     """THE BUG. v2 passed since_time=None/until_time=None in production."""
     api, _ = wired(results=[_tweet()])

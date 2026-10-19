@@ -2198,16 +2198,24 @@ def _upsert_post(
                 pass
         if parsed:
             defaults["created_at"] = parsed
-    like_count = raw.get("like_count") or raw.get("likeCount")
+    like_count = raw.get("like_count")
+    if like_count is None:
+        like_count = raw.get("likeCount")
     if like_count is not None:
         defaults["like_count"] = int(like_count)
-    retweet_count = raw.get("retweet_count") or raw.get("retweetCount")
+    retweet_count = raw.get("retweet_count")
+    if retweet_count is None:
+        retweet_count = raw.get("retweetCount")
     if retweet_count is not None:
         defaults["retweet_count"] = int(retweet_count)
-    reply_count = raw.get("reply_count") or raw.get("replyCount")
+    reply_count = raw.get("reply_count")
+    if reply_count is None:
+        reply_count = raw.get("replyCount")
     if reply_count is not None:
         defaults["reply_count"] = int(reply_count)
-    quote_count = raw.get("quote_count") or raw.get("quoteCount")
+    quote_count = raw.get("quote_count")
+    if quote_count is None:
+        quote_count = raw.get("quoteCount")
     if quote_count is not None:
         defaults["quote_count"] = int(quote_count)
     in_reply_to = raw.get("in_reply_to_user_id") or raw.get("inReplyToUserId") or ""
