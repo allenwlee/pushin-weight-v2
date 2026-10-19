@@ -94,13 +94,14 @@ def test_raw_sql_preserves_partial_bounds_and_unknown_ranges_never_overlap(start
 )
 def test_raw_sql_rejects_empty_reversed_and_nonfinite_windows(start, end):
     value = values()[0]
+    previous_range = value.window_range
     with pytest.raises(IntegrityError), transaction.atomic(), connection.cursor() as c:
         c.execute(
             "UPDATE metric_values SET window_start_at=%s::timestamptz, window_end_at=%s::timestamptz WHERE id=%s",
             [start, end, value.pk],
         )
     value.refresh_from_db()
-    assert value.window_range is None
+    assert value.window_range == previous_range
 
 
 def test_bulk_update_recomputes_ranges_and_equivalent_offsets_preserve_instants():

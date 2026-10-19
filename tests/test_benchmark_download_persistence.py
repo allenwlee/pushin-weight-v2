@@ -45,12 +45,19 @@ def test_hf_atomic_idempotent_values_do_not_invent_window_bounds():
     assert CollectionObservation.objects.count() == 1
     values = list(MetricValue.objects.order_by("source_metric__metric_key"))
     assert [v.integer_value for v in values] == [10, 100]
-    assert all(
-        v.window_start_at is None
-        and v.window_end_at is None
-        and v.temporal_status == "unknown"
-        and v.window_range is None
-        for v in values
+    rolling, cumulative = values
+    from datetime import timedelta
+
+    assert rolling.window_end_at == rolling.observation.observed_at
+    assert rolling.window_start_at == rolling.window_end_at - timedelta(days=30)
+    assert rolling.window_range is not None
+    assert cumulative.window_end_at == cumulative.observation.observed_at
+    assert cumulative.window_start_at is None
+    assert (
+        cumulative.observation.source_metadata["reported_time"]["metrics"][
+            "downloads_all_time"
+        ]["unknowns"]["start"]
+        == "missing_repository_creation"
     )
     assert all(v.observation.observed_at is not None for v in values)
 

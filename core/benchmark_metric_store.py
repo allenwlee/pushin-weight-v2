@@ -6,14 +6,22 @@ import json
 import math
 import re
 from contextlib import contextmanager
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
-from zoneinfo import ZoneInfo
 
 from django.db import connection, transaction
 from django.utils import timezone
 
 from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY, definition_snapshot
+from core.benchmark_metric_timing import (
+    TIME_FIELDS as TIME_FIELDS,  # noqa: PLC0414 - preserve existing import path
+)
+from core.benchmark_metric_timing import (
+    aware_instant,
+    calendar_window,
+    native_date,
+    value_times,
+)
 from core.measurement_taxonomy import digest, require
 from core.models import (
     CollectionObservation,
@@ -32,13 +40,6 @@ SECRET_FIELDS = {
     "password",
     "secret",
 }
-TIME_FIELDS = (
-    "as_of_at",
-    "as_of_date",
-    "window_start_at",
-    "window_end_at",
-    "period_label_date",
-)
 
 
 def safe_payload(value, depth=0):
@@ -57,50 +58,6 @@ def safe_payload(value, depth=0):
         require(math.isfinite(value), "nonfinite_payload")
     elif value is not None:
         require(type(value) in (str, int, bool), "unsupported_payload_type")
-
-
-def aware_instant(value):
-    try:
-        result = datetime.fromisoformat(value) if isinstance(value, str) else value
-    except ValueError as exc:
-        raise ValueError("invalid instant") from exc
-    require(
-        isinstance(result, datetime)
-        and result.tzinfo is not None
-        and result.utcoffset() is not None,
-        "timezone offset required",
-    )
-    return result.astimezone(UTC)
-
-
-def native_date(value):
-    require(isinstance(value, str), "native date string required")
-    parsed = date.fromisoformat(value)
-    require(parsed.isoformat() == value, "canonical date required")
-    return parsed
-
-
-def calendar_window(label, zone, amount=1):
-    require(
-        type(amount) is int and 0 < amount <= 366,
-        "calendar whole-day duration required",
-    )
-    tz = ZoneInfo(zone)
-    first = native_date(label)
-    instants = []
-    for day in (first, first + timedelta(days=amount)):
-        local = datetime.combine(day, time.min, tzinfo=tz)
-        require(
-            local.utcoffset() == local.replace(fold=1).utcoffset(),
-            "ambiguous local midnight",
-        )
-        instant = local.astimezone(UTC)
-        require(
-            instant.astimezone(tz).replace(tzinfo=None) == local.replace(tzinfo=None),
-            "nonexistent local midnight",
-        )
-        instants.append(instant)
-    return tuple(instants)
 
 
 def numeric_value(definition, value):
@@ -141,62 +98,6 @@ def numeric_value(definition, value):
     if definition.quantity_form in {"count", "rank", "variance", "ratio"}:
         require(value >= 0, "negative quantity")
     return {"float_value": float(value)}
-
-
-def value_times(definition, point):
-    status = point.get("temporal_status", "unknown")
-    zone = point.get("source_timezone", definition.source_timezone)
-    require(
-        zone == definition.source_timezone, "timezone differs from pinned definition"
-    )
-    result = {field: point.get(field) for field in TIME_FIELDS}
-    for field, value in result.items():
-        if value is not None:
-            result[field] = (
-                aware_instant(value) if field.endswith("_at") else native_date(value)
-            )
-    a, d, start, end, label = [result[f] for f in TIME_FIELDS]
-    require(status in {"exact", "date_only", "unknown"}, "invalid temporal status")
-    if definition.measurement_kind == "state":
-        require(
-            start is None and end is None and label is None,
-            "state cannot have flow window",
-        )
-        require(
-            (status == "exact" and a is not None and d is None)
-            or (status == "date_only" and a is None and d is not None)
-            or (status == "unknown" and a is None and d is None),
-            "state precision mismatch",
-        )
-    else:
-        require(a is None and d is None, "flow cannot have state instant")
-        if start is not None and end is not None:
-            require(end > start, "invalid window order")
-        if status == "exact":
-            require(
-                start is not None and end is not None,
-                "exact flow needs both boundaries",
-            )
-        else:
-            require(
-                start is None or end is None,
-                "complete interval requires exact precision",
-            )
-        if status == "date_only":
-            require(label is not None, "date-only flow needs native date")
-        if definition.window_mode == "calendar" and status == "exact":
-            require(label is not None, "calendar label required")
-            require(
-                definition.window_unit == "day"
-                and definition.window_duration_basis == "calendar"
-                and definition.window_amount == int(definition.window_amount),
-                "unverified calendar basis",
-            )
-            expected = calendar_window(
-                label.isoformat(), zone, int(definition.window_amount)
-            )
-            require((start, end) == expected, "calendar bounds mismatch")
-    return dict(result, temporal_status=status, source_timezone=zone)
 
 
 def native_rows(source, payload):
@@ -448,6 +349,10 @@ def native_rows(source, payload):
                 require(row["rating"] <= row["rating_upper"], "Arena interval mismatch")
         else:
             raise ValueError("unsupported native adapter")
+        if source in {"hf", "github"} and row.get("status") != "error":
+            from core.benchmark_metric_timing import native_origin
+
+            out["native_created_at"] = native_origin(row.get("raw", row))
         yield out
 
 
@@ -494,7 +399,28 @@ def prepare_rows(contract, source, payload, *, adapter=None):
     required = {key for key, obj in definitions.items() if obj.required}
     result = []
     seen = {}
-    for row in adapter(payload) if adapter else native_rows(source, payload):
+    from core.benchmark_metric_timing import catalog_origins, reported_times
+
+    rows = list(adapter(payload) if adapter else native_rows(source, payload))
+    origins = (
+        catalog_origins([row["source_identifier"] for row in rows])
+        if source == "hf" and "downloads_all_time" in definitions
+        else {}
+    )
+    retained_clocks = (
+        {
+            row["observation_key"]: row
+            for row in CollectionObservation.objects.filter(
+                observation_key__in=[
+                    row["projection_key"] for row in rows if row.get("projection_key")
+                ],
+                source_metadata__projection_kind=SOURCE_STATISTICS_POLICY,
+            ).values("observation_key", "observed_at", "source_metadata")
+        }
+        if statistics
+        else {}
+    )
+    for row in rows:
         identity = row["source_identifier"]
         kind = row["source_subject_kind"]
         scope = row.get("identifier_scope", "")
@@ -601,6 +527,31 @@ def prepare_rows(contract, source, payload, *, adapter=None):
                         continue
                     definition = definitions[metric]
                     try:
+                        timing_context = observation
+                        retained = retained_clocks.get(key)
+                        if retained:
+                            timing_context = {
+                                **observation,
+                                "observed_at": retained["observed_at"],
+                                "source_metadata": {
+                                    **metadata,
+                                    "original_retrieved_at": retained[
+                                        "source_metadata"
+                                    ].get("original_retrieved_at"),
+                                },
+                            }
+                        point, basis = reported_times(
+                            definition,
+                            point,
+                            timing_context,
+                            native_created=row.get("native_created_at"),
+                            catalog_created=origins.get(identity.casefold()),
+                        )
+                        if basis:
+                            metadata.setdefault(
+                                "reported_time",
+                                {"policy": "reported-time-v1", "metrics": {}},
+                            )["metrics"][metric] = basis
                         value = dict(
                             source_metric=definition,
                             **numeric_value(definition, point["value"]),

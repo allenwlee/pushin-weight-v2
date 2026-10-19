@@ -94,10 +94,18 @@ def test_real_hourly_entry_collects_reviewed_source_role_and_leaves_benchmark_fl
     )
     numbers = json.loads(report.getvalue())["values"]
     assert {v["metric"] for v in numbers} == {"downloads", "likes"}
-    assert all(
-        v["native_only"] and v["temporal_status"] == "unknown" and v["as_of_at"] is None
-        for v in numbers
-    )
+    assert all(v["native_only"] and v["temporal_status"] == "exact" for v in numbers)
+    for value in numbers:
+        if value["metric"] == "likes":
+            assert value["as_of_at"] == value["observed_at"]
+        else:
+            assert value["window_end_at"] == value["observed_at"]
+        assert (
+            value["source_evidence"]["reported_time"]["metrics"][value["metric"]][
+                "basis"
+            ]
+            == "original_capture_proxy"
+        )
     assert all(v["source_evidence"]["origin_observation_id"] for v in numbers)
 
 
@@ -189,7 +197,9 @@ def test_fair_selection_excludes_old_manual_jobs_before_limit_and_preserves_cool
     assert job.next_retry_at >= NOW + timedelta(hours=4)
 
 
-def test_partial_continuation_does_not_wait_for_next_days_fresh_inventory_slot(settings):
+def test_partial_continuation_does_not_wait_for_next_days_fresh_inventory_slot(
+    settings,
+):
     from core.collection_scheduling import due_job, take_collection_authority
     from core.collection_state import claim_job, finish_run
 

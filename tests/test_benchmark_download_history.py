@@ -56,7 +56,16 @@ def test_history_replay_keeps_snapshot_dates_separate_from_import_time():
         o.source_metadata["archive_snapshot_date"] for o in run.observations.all()
     } == {"2026-09-10", "2026-09-11"}
     assert all(o.observed_at >= run.started_at for o in run.observations.all())
-    assert MetricValue.objects.filter(window_end_at__isnull=False).count() == 0
+    assert MetricValue.objects.filter(window_end_at__isnull=False).count() == 4
+    for value in MetricValue.objects.select_related("observation", "source_metric"):
+        from datetime import date, timedelta
+
+        day = date.fromisoformat(
+            value.observation.source_metadata["archive_snapshot_date"]
+        )
+        assert value.window_end_at.date() == day + timedelta(days=1)
+        assert value.period_label_date == day
+        assert value.temporal_status == "date_only"
 
 
 def test_hash_mismatch_fails_before_any_write():
@@ -106,3 +115,175 @@ def test_arena_history_keeps_publication_when_selected_cohort_is_empty():
     assert run.raw_payload["coverage"] == "publication_window"
     assert run.source_metadata["publication_dates"] == ["2026-09-10", "2026-09-11"]
     assert not run.observations.exists()
+
+
+def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields():
+    from datetime import UTC, datetime
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from core.models import Product
+
+    contract = configured()
+    Product.objects.filter(repo_id="lab/Model").update(
+        created_at=datetime(2026, 9, 10, 13, tzinfo=UTC)
+    )
+    from core.benchmark_metric_history import import_history
+
+    run = import_history(manifest(contract), apply=True)
+    # Model the pre-policy rows from retained archive evidence.
+    MetricValue.objects.all().update(
+        window_start_at=None,
+        window_end_at=None,
+        period_label_date=None,
+        temporal_status="unknown",
+    )
+    for observation in run.observations.all():
+        metadata = observation.source_metadata
+        metadata.pop("reported_time", None)
+        metadata["unrelated"] = "preserve"
+        type(observation).objects.filter(pk=observation.pk).update(
+            source_metadata=metadata
+        )
+    before = list(
+        MetricValue.objects.order_by("id").values(
+            "id", "integer_value", "window_end_at", "temporal_status"
+        )
+    )
+    cutoff = before[-1]["id"]
+    from django.db import connection
+
+    kwargs = {
+        "database_name": connection.settings_dict["NAME"],
+        "cutoff_value_id": cutoff,
+        "batch_size": 2,
+        "max_batches": 10,
+        "stdout": StringIO(),
+    }
+    call_command("repair_metric_timing", **kwargs)
+    assert (
+        list(
+            MetricValue.objects.order_by("id").values(
+                "id", "integer_value", "window_end_at", "temporal_status"
+            )
+        )
+        == before
+    )
+    call_command(
+        "repair_metric_timing", apply=True, backup_id="verified-test-export", **kwargs
+    )
+    assert MetricValue.objects.filter(window_end_at__isnull=False).count() == 4
+    cumulative = MetricValue.objects.filter(
+        source_metric__metric_key="downloads_all_time"
+    ).first()
+    assert cumulative.window_start_at == datetime(2026, 9, 10, 13, tzinfo=UTC)
+    assert cumulative.window_range.lower < cumulative.window_range.upper
+    saved = list(run.observations.order_by("id").values("source_metadata"))
+    output = StringIO()
+    call_command(
+        "repair_metric_timing",
+        apply=True,
+        backup_id="verified-test-export",
+        **{**kwargs, "stdout": output},
+    )
+    import json
+
+    summary = json.loads(output.getvalue().splitlines()[-1].split(" ", 1)[1])
+    assert summary["changed_values"] == summary["metadata_updates"] == 0
+    assert list(run.observations.order_by("id").values("source_metadata")) == saved
+    call_command(
+        "repair_metric_timing",
+        apply=True,
+        rollback=True,
+        backup_id="verified-test-export",
+        **kwargs,
+    )
+    assert (
+        list(
+            MetricValue.objects.order_by("id").values(
+                "id", "integer_value", "window_end_at", "temporal_status"
+            )
+        )
+        == before
+    )
+    assert all(
+        o.source_metadata["unrelated"] == "preserve" for o in run.observations.all()
+    )
+
+
+@pytest.mark.parametrize(
+    "failure", ["later_timing", "transaction", "busy", "wrong_database"]
+)
+def test_timing_correction_refuses_conflicts_and_rolls_back_failed_batches(
+    failure, monkeypatch
+):
+    from io import StringIO
+
+    from django.core.management import call_command
+    from django.core.management.base import CommandError
+    from django.db import connection
+
+    from core.benchmark_metric_history import import_history
+    from core.benchmark_metric_timing_repair import LOCK_KEY
+    from core.models import CollectionObservation
+
+    run = import_history(manifest(configured()), apply=True)
+    MetricValue.objects.all().update(
+        window_start_at=None,
+        window_end_at=None,
+        period_label_date=None,
+        temporal_status="unknown",
+    )
+    for observation in run.observations.all():
+        metadata = observation.source_metadata
+        metadata.pop("reported_time", None)
+        CollectionObservation.objects.filter(pk=observation.pk).update(
+            source_metadata=metadata
+        )
+    kwargs = {
+        "database_name": connection.settings_dict["NAME"],
+        "cutoff_value_id": MetricValue.objects.order_by("-id").first().pk,
+        "batch_size": 1,
+        "max_batches": 20,
+        "backup_id": "test-export",
+        "stdout": StringIO(),
+        "apply": True,
+    }
+    before = list(MetricValue.objects.order_by("pk").values())
+    if failure == "transaction":
+
+        def fail(*args, **kwargs):
+            raise RuntimeError("simulated write failure")
+
+        monkeypatch.setattr(CollectionObservation.objects, "bulk_update", fail)
+        with pytest.raises(RuntimeError, match="simulated write failure"):
+            call_command("repair_metric_timing", **kwargs)
+        assert list(MetricValue.objects.order_by("pk").values()) == before
+        assert all(
+            "timing_correction_v1" not in o.source_metadata
+            for o in run.observations.all()
+        )
+    elif failure == "busy":
+        import psycopg
+
+        with psycopg.connect(
+            **connection.get_connection_params(), autocommit=True
+        ) as peer:
+            peer.execute("SELECT pg_advisory_lock(%s)", [LOCK_KEY])
+            with pytest.raises(ValueError, match="already running"):
+                call_command("repair_metric_timing", **kwargs)
+    elif failure == "wrong_database":
+        with pytest.raises(CommandError, match="identity mismatch"):
+            call_command("repair_metric_timing", **{**kwargs, "database_name": "wrong"})
+        assert list(MetricValue.objects.order_by("pk").values()) == before
+    else:
+        call_command("repair_metric_timing", **kwargs)
+        value = MetricValue.objects.order_by("pk").first()
+        MetricValue.objects.filter(pk=value.pk).update(window_end_at=None)
+        out = StringIO()
+        call_command("repair_metric_timing", rollback=True, **{**kwargs, "stdout": out})
+        value.refresh_from_db()
+        assert value.window_end_at is None
+        assert value.observation.source_metadata["timing_correction_v1"][str(value.pk)]
+        assert '"conflicts": 1' in out.getvalue().splitlines()[-1]

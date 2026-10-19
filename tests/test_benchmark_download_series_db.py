@@ -84,7 +84,14 @@ def test_percentage_is_change_from_fixed_baseline_with_missing_day_preserved():
     assert [p["percent_change"] for p in line["points"]] == [0.0, None, 10.0, 30.0]
     assert line["points"][1]["coverage"] == "missing"
     assert line["points"][0]["raw_value"] == "10"
-    assert line["points"][0]["window_end_at"] is None
+    assert line["points"][0]["window_end_at"] == "2026-09-11T00:00:00+00:00"
+    assert line["points"][0]["temporal_status"] == "date_only"
+    assert (
+        line["points"][0]["evidence"][0]["archive"]["reported_time"]["metrics"][
+            "downloads"
+        ]["basis"]
+        == "archive_snapshot_date"
+    )
     assert line["baseline"]["date"] == "2026-09-10"
 
 
