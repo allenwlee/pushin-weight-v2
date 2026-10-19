@@ -752,3 +752,26 @@ def test_reported_cumulative_origins_keep_original_capture_and_replay(origin_cas
     assert project(contract, "hf", [snapshot], key="repeat-origin").status == "success"
     assert MetricValue.objects.count() == 3
     assert first.status == "success"
+
+
+@pytest.mark.parametrize(
+    "metric,field",
+    [("downloads", "window_end_at"), ("downloads_all_time", "window_start_at")],
+)
+def test_reported_policy_preserves_a_retained_single_endpoint(metric, field):
+    contract, raw, _, _ = configured()
+    if metric == "downloads_all_time":
+        raw["downloadsAllTime"] = 10
+    known = CAPTURED - timedelta(days=10)
+    snapshot = evidence("hf", raw)
+    snapshot.source_metadata = {
+        "metric_times": {
+            metric: {"temporal_status": "unknown", field: known.isoformat()}
+        }
+    }
+    snapshot.save()
+    assert project(contract, "hf", [snapshot]).status == "success"
+    value = MetricValue.objects.get(source_metric__metric_key=metric)
+    assert getattr(value, field) == known
+    assert value.window_start_at is not None and value.window_end_at is not None
+    assert value.window_range is not None

@@ -270,6 +270,15 @@ def reported_times(
             }
         end = aware_instant(captured)
         basis_name = "original_capture_proxy"
+    if point.get("window_end_at") is not None:
+        retained_end = aware_instant(point["window_end_at"])
+        if day and retained_end != end:
+            return point, {
+                "policy": POLICY,
+                "unknowns": {"end": "retained_endpoint_conflicts_with_reported_date"},
+            }
+        end = retained_end
+        basis_name = "retained_measurement_endpoint"
     precision = "date" if day else "instant"
     basis = {
         "policy": POLICY,
@@ -309,6 +318,18 @@ def reported_times(
                 unknowns["start"] = origin_basis
         else:
             unknowns["start"] = "unsupported_reported_interval"
+        if point.get("window_start_at") is not None:
+            retained_start = aware_instant(point["window_start_at"])
+            if (start and retained_start != start) or retained_start >= end:
+                return point, {
+                    "policy": POLICY,
+                    "unknowns": {
+                        "start": "retained_endpoint_conflicts_with_reported_interval"
+                    },
+                }
+            start = retained_start
+            basis["start_basis"] = "retained_measurement_start"
+            unknowns.pop("start", None)
         if day:
             basis["normalization"] = "UTC_report_day_exclusive_next_midnight"
             basis["native_report_date"] = day.isoformat()

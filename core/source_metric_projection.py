@@ -397,7 +397,7 @@ def evidence_rows(contract, source, evidence):
         ":asset:" + str(dimensions["asset_id"]) if dimensions else ""
     )
     # Native publication/period/revision pins may be supplied by history adapters.
-    # Repository creation/update times are deliberately never effective counter times.
+    # Repository modification times never substitute for a measurement end.
     snapshot = evidence.source_metadata.get("numeric_snapshot_identity")
     snapshot_kind = "publication" if snapshot else "capture"
     if not snapshot:
@@ -441,7 +441,7 @@ def evidence_rows(contract, source, evidence):
         row["published_at"] = evidence.published_at.isoformat()
     if evidence.published_date:
         row["published_date"] = evidence.published_date.isoformat()
-    # History adapters explicitly pin per-field precision. Absence remains unknown.
+    # History adapters pin precision; the shared writer resolves omitted reported timing.
     for key, times in evidence.source_metadata.get("metric_times", {}).items():
         if key in row["metrics"]:
             row["metrics"][key].update(times)
