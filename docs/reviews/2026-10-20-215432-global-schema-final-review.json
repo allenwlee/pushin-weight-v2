@@ -1,0 +1,137 @@
+{
+  "mode": "non-interactive",
+  "document_type": "unified-plan",
+  "artifact_path": "/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md",
+  "document_sha256": "8e31b532a43bca68a7b0366141b07f68696b3f721d73bab6f9708d521213c58b",
+  "status": "review_complete",
+  "review_method": "Sequential role-specific review in main session, following AGENTS.md Task/Subagent mapping. No separate agents or independent model contexts.",
+  "independence_verified": false,
+  "cross_model_review": "not run: project requires sequential main-thread work; no model substitution or external dispatch",
+  "coverage": [
+    "coherence",
+    "feasibility",
+    "scope",
+    "adversarial",
+    "security",
+    "design",
+    "product"
+  ],
+  "fixes_applied": 4,
+  "proposed_fixes_count": 0,
+  "decisions_count": 0,
+  "fyi_count": 0,
+  "original_findings": [
+    {
+      "id": "F1",
+      "issue": "Foundation locale paragraph still named five owner candidates while final manifest has six, including PersonName selection.",
+      "evidence": "Earlier literal: adding the five proposed locale-owner candidates; final manifest person_name_selections plus five other owners.",
+      "disposition": "applied",
+      "reason": "One meaning-preserving count correction, authorized by planning request."
+    },
+    {
+      "id": "F2",
+      "issue": "Definition of Done still treated formerly uncertain field meanings as undecided after final dispositions.",
+      "evidence": "Earlier literal: disposing of every still-open field ...25 strict-review referents and other unresolved main fields.",
+      "disposition": "applied",
+      "reason": "Replaced with implementation-time row/caller reconciliation; preserve honest unmatched values and design-vs-execution distinction."
+    },
+    {
+      "id": "F3",
+      "issue": "Sources footer still called observed-value contribution/warning a later product decision after owner BQ1 settled it.",
+      "evidence": "Earlier literal: ChartEngine eligibility, warning presentation and normalization remain later product decisions. Owner accepts recommendation1.",
+      "disposition": "applied",
+      "reason": "Align footer with BQ1; retain later chart UI implementation boundary."
+    },
+    {
+      "id": "F4",
+      "issue": "X about_profile.source had been treated as a checked internal choice by first-pass classification.",
+      "evidence": "monitor/twitterapi/user_about.py:639 parses provider source with _strict_string; native arbitrary wording is permitted.",
+      "disposition": "applied",
+      "reason": "Retain exact reported_profile_source; qualify unrelated membership/mention/person-text role names. Final existing/pending split is239 checked,377 justified scalar/text, unchanged959 total."
+    }
+  ],
+  "review_outcomes": {
+    "coherence": "Final active owner counts, physical ledger precedence, unit IDs and BQ decisions agree. Historical appendix explicitly non-executable.",
+    "feasibility": "Composite-key PostgreSQL/Django state transition explicit; existing locked migration path reused; selected small candidate and runtime preflights required.",
+    "scope": "64 tables each have current owner/gap and release family; no all-table release; chart implementation deferred.",
+    "adversarial": "Repeated spelling alone does not establish common identity; hashes, unknown values, evidence and incomplete source coverage preserved.",
+    "security": "Serving provider vs source and actor vs login separate; credentials retain encrypted ownership/fingerprint; no keys in artifacts, no trust widening or runtime activation.",
+    "design": "Existing locale fallback, selected edition and frozen publication wording must reconcile; later chart warning behavior settled without UI redesign.",
+    "product": "Whole-DB task preserved; all64 not a prerequisite for each independent foundation release; table count not used as design objective."
+  },
+  "confidence": {
+    "depth": "Deep",
+    "risk": [
+      "database migration",
+      "external-source provenance",
+      "credentials and sensitive actor attribution"
+    ],
+    "targeted_strengthening_completed": [
+      "exact physical field/table ledger",
+      "release-family boundaries",
+      "composite key mechanics",
+      "scheduled-X and range assessments",
+      "business/relationship caller scenarios"
+    ],
+    "remaining_checklist_gaps": 0,
+    "qualification": "Source-level confidence only. Actual legacy value distributions, deployed leaves, lock duration, concurrent writers and environment receipts remain execution checks."
+  },
+  "document_verification": {
+    "scope": "document/source assertions only; no application tests, database or provider execution",
+    "fields": 1013,
+    "existing_pending": 959,
+    "deferred_chart": 54,
+    "new_tables": 64,
+    "existing_pending_table_names": 167,
+    "projected_table_names": 231,
+    "mandatory_retirements": 0,
+    "active_units": [
+      "U23",
+      "U24",
+      "U25",
+      "U26",
+      "U27",
+      "U31",
+      "U28",
+      "U29",
+      "U30"
+    ],
+    "new_json_columns": 0,
+    "fk_target_closure": "passed",
+    "release_family_allocation_total": 64,
+    "source_pins": {
+      "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/g2-pulse/core/models.py": "054ff67b25439e6836244bc4226f2420015a860c0b40ce6dd95077287df9d30a",
+      "/Users/fuchitalee/development/pushin-weight-v2/.worktrees/refactor/g3-collection-relational-json/core/models.py": "14f8200b16f52963536c3da4e2c6046a6c130917c66775c3099ef0d3e70257bd"
+    },
+    "artifacts": {
+      "/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md": "8e31b532a43bca68a7b0366141b07f68696b3f721d73bab6f9708d521213c58b",
+      "/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/analysis/2026-10-20-160626-entire-database-field-decisions.csv": "8183b50d6cb688162f5d8f8d619ad36e4ccd9dfcc58bf9cd4fa2cd3006222ad8",
+      "/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/analysis/2026-10-20-212622-global-schema-table-manifest.csv": "6a48f9dd1bf95707a4f06abafb71ab63baaec89dcc0e5042d7eff3b571400279",
+      "/Users/fuchitalee/.codex/worktrees/ec5a/pushin-weight-v2/docs/analysis/2026-10-20-160626-global-string-field-audit.html": "d5dd4fe64205c0e7707294f92cfc645109a7ff991319f3be32998e84749fb126"
+    },
+    "browser": {
+      "session": "schema-final-01a15790",
+      "desktop_width": 1440,
+      "phone_width": 390,
+      "overflow": false,
+      "rows": 1013,
+      "table_cards": 64,
+      "deferred_filter": 54,
+      "company_hq_search": 1,
+      "missing_anchor_targets": 0,
+      "duplicate_html_ids": 0,
+      "javascript_errors": 0
+    },
+    "ollija_annotation": "unchanged; check passed; on-request delivery"
+  },
+  "unperformed": [
+    "application tests",
+    "migration execution",
+    "database census",
+    "staging rehearsal",
+    "production deployment",
+    "provider requests"
+  ],
+  "coordination": "P023 posted; recipient ACKs pending; no file handover inferred",
+  "created_at": "2026-10-20T21:54:32.435256+09:00"
+}

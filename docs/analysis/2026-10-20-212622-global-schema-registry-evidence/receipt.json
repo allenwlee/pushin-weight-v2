@@ -1,0 +1,18 @@
+[
+  {
+    "name": "tzdata2026e.tar.gz",
+    "url": "https://data.iana.org/time-zones/releases/tzdata2026e.tar.gz",
+    "bytes": 481989,
+    "sha256": "b26882805f26aac59d5b222978e6580484b834ccdc98be89df2f05a6dc53a652",
+    "first_line": "binary archive",
+    "status": "downloaded"
+  },
+  {
+    "name": "language-subtag-registry.txt",
+    "url": "https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry",
+    "bytes": 731819,
+    "sha256": "755fad43283be7b41ebe3c89ad054b6eaf928f404f9c0edb74799e0eab74beb1",
+    "first_line": "File-Date: 2026-09-17",
+    "status": "downloaded"
+  }
+]
