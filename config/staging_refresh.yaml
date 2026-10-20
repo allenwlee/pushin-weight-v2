@@ -33,6 +33,11 @@ production_deny:
 
 relations:
   copied_tables:
+    # Shared catalogues are data, not scheduling or credential authority.
+    - time_zones
+    - languages
+    - locales
+    - measurement_units
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - data_sources
     - taxonomy_versions
@@ -206,6 +211,11 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    # Earlier source snapshots predate the additive foundation migrations.
+    - time_zones
+    - languages
+    - locales
+    - measurement_units
     - provider_batches
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - data_sources

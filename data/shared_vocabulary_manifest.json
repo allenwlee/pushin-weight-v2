@@ -1,0 +1,35 @@
+{
+  "language_registry_date": "2026-09-17",
+  "schema_version": 1,
+  "seeds": {
+    "shared_languages.csv": {
+      "rows": 8163,
+      "sha256": "5765b085f447ba68e02c45668df2629dd38d53eab3dc822c652a839e800e5ae6"
+    },
+    "shared_locales.csv": {
+      "rows": 8172,
+      "sha256": "41387aef88bd2b64eab5fcbb56b3910c8e6a988bc148148dbdeda3b323208446"
+    },
+    "shared_measurement_units.csv": {
+      "rows": 24,
+      "sha256": "f8d7fb4e3c7d14f939424a0fb52fb000bcf47246e645661f301504736681f22c"
+    },
+    "shared_time_zones.csv": {
+      "rows": 597,
+      "sha256": "6ddebeca31b1b623f32ba8e82ba166848a9c8ef75a4c9b58bb3e27668e3b49b8"
+    }
+  },
+  "sources": {
+    "language-subtag-registry.txt": {
+      "bytes": 731819,
+      "sha256": "755fad43283be7b41ebe3c89ad054b6eaf928f404f9c0edb74799e0eab74beb1",
+      "url": "https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry"
+    },
+    "tzdata2026e.tar.gz": {
+      "bytes": 481989,
+      "sha256": "b26882805f26aac59d5b222978e6580484b834ccdc98be89df2f05a6dc53a652",
+      "url": "https://data.iana.org/time-zones/releases/tzdata2026e.tar.gz"
+    }
+  },
+  "tzdata_release": "2026e"
+}

@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-16 JST (repository candidate based on `4e60a2f1`; collection instruction ownership checked against models, migration SQL and isolated PostgreSQL)
+Last verified: 2026-10-21 JST (foundation candidate based on `64b95c26`; shared catalogue boundaries checked against models, migration SQL and isolated PostgreSQL18)
 
-Scope: **151 application tables**, **1968 physical columns**, plus nine compatibility views. Candidate migration boundary: `0092_measurement_window_index`, extending deployed `0090_remove_run_instruction_columns` with one generated measurement-window column and its index. Every physical application column has a Django model field. Runs reference the job owning their source, purpose, contract and frozen scope. This boundary adds or retires no tables.
+Scope: **155 application tables**, **1973 physical columns**, plus nine compatibility views. Candidate migration boundary: `0095_shared_measurement_units`. Three additive migrations introduce four shared catalogues and five columns; existing owner fields, source wording and hash serialization remain unchanged. This describes the repository candidate, not an applied production schema.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -21,6 +21,7 @@ The retired SQLite database and Graphviz image are not current schema sources.
 
 | Subject | Tables | Start here when you need… |
 | --- | ---: | --- |
+| [Shared timezone, language and unit catalogues](#shared-catalogues) | 4 | Canonical timezone, full language-tag and unit identities, plus their offline seed boundary. |
 | [People and job history](#people) | 13 | A person, their optional X identity, roles, employment dates, and evidence. |
 | [Companies, brands, and organization discovery](#organizations) | 11 | Company/brand identity, ownership, associated accounts, and unresolved organizations. |
 | [Accounts, profiles, and lists](#accounts) | 7 | Shared source accounts, X detail profiles, observed history, list membership and post appearances. |
@@ -133,8 +134,8 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 151 application tables appears once in this inventory and once in
-the detailed sections. Subject counts above sum to 151.
+Each of the 155 application tables appears once in this inventory and once in
+the detailed sections. Subject counts above sum to 155.
 
 | Table | Subject | What one row represents |
 | --- | --- | --- |
@@ -185,7 +186,10 @@ the detailed sections. Subject counts above sum to 151.
 | [job_listings](#table-job_listings) | [Job listings and official career-site collection](#jobs) | One advertised position/requisition, including its source identity and current saved details. |
 | [job_source_states](#table-job_source_states) | [Job listings and official career-site collection](#jobs) | One career-site source’s active lease and last successful synchronization state. |
 | [job_source_sync_runs](#table-job_source_sync_runs) | [Job listings and official career-site collection](#jobs) | One attempt to synchronize an official career-site source. |
+| [languages](#table-languages) | [Shared catalogues](#shared-catalogues) | One registered primary-language code. |
+| [locales](#table-locales) | [Shared catalogues](#shared-catalogues) | One full language tag and its registered base language. |
 | [measurement_subjects](#table-measurement_subjects) | [Measurement subjects, metrics and observations](#measurements) | One identity that measurements describe, optionally linked to a product, group, brand or company. |
+| [measurement_units](#table-measurement_units) | [Shared catalogues](#shared-catalogues) | One immutable measurement/window unit identity. |
 | [metric_collection_contracts](#table-metric_collection_contracts) | [Measurement subjects, metrics and observations](#measurements) | One versioned collection contract for a data source. |
 | [metric_types](#table-metric_types) | [Measurement subjects, metrics and observations](#measurements) | One allowed family of measurements and its interpretation. |
 | [metric_values](#table-metric_values) | [Measurement subjects, metrics and observations](#measurements) | One value for a metric in an observation. |
@@ -278,6 +282,7 @@ the detailed sections. Subject counts above sum to 151.
 | [targeted_extraction_attempts](#table-targeted_extraction_attempts) | [Collection, extraction, and processing records](#processing) | One recorded attempt to extract a role-specific fact from a post. |
 | [targeted_extraction_states](#table-targeted_extraction_states) | [Collection, extraction, and processing records](#processing) | One post/role extraction state, used to avoid repeating the same work. |
 | [taxonomy_versions](#table-taxonomy_versions) | [Classification vocabularies and translated labels](#vocabularies) | One versioned taxonomy identity and its manifest. |
+| [time_zones](#table-time_zones) | [Shared catalogues](#shared-catalogues) | One accepted IANA timezone or Link identifier. |
 | [trend_narrative_demands](#table-trend_narrative_demands) | [Authored content and trend publication](#headlines) | One coalesced brand/window headline request and its scheduling state. |
 | [trend_narrative_subjects](#table-trend_narrative_subjects) | [Authored content and trend publication](#headlines) | One reported subject attached to a headline publication. |
 | [trend_narrative_work_slots](#table-trend_narrative_work_slots) | [Authored content and trend publication](#headlines) | One window’s active work claim and optional newer queued cutoff. |
@@ -290,6 +295,115 @@ the detailed sections. Subject counts above sum to 151.
 | [untracked_brand_promotion_labels](#table-untracked_brand_promotion_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated untracked-brand-promotion label. |
 | [x_account_details](#table-x_account_details) | [Accounts, profiles, and lists](#accounts) | One optional current X profile extension for one shared account. |
 
+
+<a id="shared-catalogues"></a>
+
+## Shared timezone, language and unit catalogues
+
+These four catalogues own shared identifiers; existing source text and current
+callers retain their original storage in this additive candidate. There is no
+automatic locale URL change, timezone fallback, unit conversion or measurement
+rewrite. The controlled seed command validates every input hash before inserting
+missing rows and rolls back on canonical identity conflicts. It never contacts a
+provider, prunes additional valid catalogue rows or activates collection.
+
+The offline [manifest](../../data/shared_vocabulary_manifest.json) pins
+IANA tzdata2026e and the language registry dated2026-09-17. The four CSV seeds
+contain597timezone identifiers,8163language codes,8172locale tags and24units.
+Language rows exclude deprecated aliases with preferred replacements and private
+use ranges. Locale rows include each seeded base language plus reviewed script
+and region variants. `und` is explicit undetermined language, not a fallback.
+`Factory` is not a resolved timezone and is excluded from the seed.
+
+`resolve_locale(reported, context="source")` resolves case/underscore aliases
+against the catalogue while preserving a genuine `zh-CN` tag. The explicit
+`app_edition` context maps the app's `zh-cn`/`zh_CN` edition alias to `zh-Hans`.
+Bare `zh` remains `zh`. Timezone lookup preserves exact IANA Link identifiers;
+unknown `CST` stays unresolved. Callers retain the original reported value.
+A new reviewed locale is added as a row/seed entry, without a language-specific
+column or a changed existing historical packet.
+
+The command supports one additive migration boundary at a time:
+
+```bash
+python manage.py seed_shared_vocabulary --catalogue time_zones --dry-run
+python manage.py seed_shared_vocabulary --catalogue time_zones
+python manage.py seed_shared_vocabulary --catalogue languages --catalogue locales
+python manage.py seed_shared_vocabulary --catalogue measurement_units
+```
+
+These examples require the corresponding tables in the explicitly selected
+database. Running the command or these documentation changes grants no live
+migration/seed authority. The [seed builder](../../scripts/build_shared_vocabulary_seeds.py)
+reproduces the CSVs from archived, hash-checked registry bytes without network use.
+
+<a id="table-languages"></a>
+
+### `languages` — Language
+
+One registered canonical primary-language subtag. `und`, `mul` and `zxx` keep their
+registered meanings; unknown reported strings do not become invented rows.
+
+| Column | PostgreSQL type | NULL allowed | Default | Meaning |
+| --- | --- | --- | --- | --- |
+| `code` | varchar(8) | No | None | Primary key; canonical lowercase registry identifier. |
+
+Constraint `ck_language_code_grammar` requires two to eight lowercase ASCII letters.
+Locale's language reference is protected from deletion. Registry membership is
+curated at the controlled seed-write boundary; the grammar check alone does not
+establish that a manually supplied code is registered.
+
+<a id="table-locales"></a>
+
+### `locales` — Locale
+
+One full tag such as `ja`, `zh-Hans` or source `zh-CN`. These rows supply the script
+or region distinction that a primary-language row alone cannot express.
+
+| Column | PostgreSQL type | NULL allowed | Default | Meaning |
+| --- | --- | --- | --- | --- |
+| `code` | varchar(255) | No | None | Primary key; full reviewed language tag. |
+| `language_id` | varchar(8) | No | None | FK to `languages.code`; Django PROTECT. |
+
+`uq_locale_code_casefold` rejects tag duplicates differing only by case.
+`ck_locale_code_grammar` checks the supported tag grammar;
+`ck_locale_primary_language` requires the lowercased first subtag to equal the
+parent language. These checks and the FK cover bulk/direct writes, not just model
+forms. Django adds the ordinary FK index. The seed boundary verifies registry
+membership and canonical spelling; raw unknown tags remain reported evidence.
+
+<a id="table-measurement_units"></a>
+
+### `measurement_units` — MeasurementUnit
+
+One immutable unit identity. `arena_points` and `hf_trending_points` remain
+separate; a shared `day` unit does not equate a calendar day to86400elapsed seconds.
+The existing metric definition retains its duration basis, window and scale.
+
+| Column | PostgreSQL type | NULL allowed | Default | Meaning |
+| --- | --- | --- | --- | --- |
+| `code` | varchar(64) | No | None | Primary key; owned unit identifier. |
+
+`ck_measurement_unit_code_grammar` allows lowercase letters, digits and underscores,
+starting with a letter. Seeds derive from the pinned source-metric definitions
+plus `day`/`second`; no conversion factor or universal count unit is inferred.
+
+<a id="table-time_zones"></a>
+
+### `time_zones` — TimeZone
+
+One accepted IANA identifier, including named Link aliases such as `US/Eastern`.
+No current offset, guessed geographic equivalent or generic unknown row is seeded.
+
+| Column | PostgreSQL type | NULL allowed | Default | Meaning |
+| --- | --- | --- | --- | --- |
+| `code` | varchar(64) | No | None | Primary key; exact registered timezone/Link identifier. |
+
+`ck_time_zone_code_grammar` rejects empty or malformed identifier syntax. Membership
+comes from the pinned registry seed; syntax alone is insufficient to register a
+zone. Existing date precision and exact source spelling remain the owning fact's
+responsibility. There are no new application-owner FKs to this table in this
+additive foundation candidate.
 
 <a id="people"></a>
 

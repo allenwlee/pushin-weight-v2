@@ -27,7 +27,11 @@ preflight compares the source's complete table inventory with the tracked
 policy and fails closed with `source_classified_table_missing:<table>` when a
 required relation is absent; the later shadow migration does not bypass that
 source check. Any optional relation present on the source must have the
-declared grant.
+declared grant. The shared catalogues `time_zones`, `languages`, `locales` and
+`measurement_units` are copied when present and may be absent from pre-foundation
+snapshots. They carry no credentials or scheduling authority. Their source SELECT
+grants are added only after the corresponding source migration, under separate
+operator authority; the conditional statements below safely omit absent tables.
 
 The account-extension candidate requires the source to have migration0084:
 shared publisher identities/ownership replace hf_orgs, and current X fields live
@@ -143,6 +147,13 @@ GRANT MAINTAIN ON
   original_content_selections, trend_narrative_work_slots,
   twitter_list_memberships, twitter_list_sync_state
 TO staging_refresh_reader;
+
+-- Shared catalogue relations are optional on older source snapshots.
+SELECT format('GRANT SELECT ON %I.%I TO staging_refresh_reader', schemaname, tablename)
+FROM pg_tables
+WHERE schemaname = 'public'
+  AND tablename IN ('time_zones', 'languages', 'locales', 'measurement_units')
+\gexec
 
 GRANT SELECT ON
   source_metrics_id_seq, metric_observations_id_seq, metric_values_id_seq,

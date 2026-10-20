@@ -42,6 +42,87 @@ from django.utils import timezone
 
 from core.measurement_time import measurement_window
 
+
+class TimeZone(models.Model):
+    """Shared IANA zone/link identity; never an inferred current UTC offset."""
+
+    code = models.CharField(max_length=64, primary_key=True)
+
+    class Meta:
+        db_table = "time_zones"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    code__regex=r"^[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)*$"
+                ),
+                name="ck_time_zone_code_grammar",
+            ),
+        ]
+
+
+class Language(models.Model):
+    """One registered canonical primary-language subtag, including explicit und."""
+
+    code = models.CharField(max_length=8, primary_key=True)
+
+    class Meta:
+        db_table = "languages"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(
+                condition=models.Q(code__regex=r"^[a-z]{2,8}$"),
+                name="ck_language_code_grammar",
+            ),
+        ]
+
+
+class Locale(models.Model):
+    """A full language tag; source zh-CN and the app's zh-Hans stay distinct."""
+
+    code = models.CharField(max_length=255, primary_key=True)
+    language = models.ForeignKey(
+        Language, on_delete=models.PROTECT, related_name="locales"
+    )
+
+    class Meta:
+        db_table = "locales"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                models.functions.Lower("code"), name="uq_locale_code_casefold"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(code__regex=r"^[a-z]{2,8}(-[A-Za-z0-9]{1,8})*$"),
+                name="ck_locale_code_grammar",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    language_id=models.Func(
+                        models.functions.Lower("code"),
+                        models.Value("-"),
+                        models.Value(1),
+                        function="split_part",
+                        output_field=models.CharField(),
+                    ),
+                ),
+                name="ck_locale_primary_language",
+            ),
+        ]
+
+
+class MeasurementUnit(models.Model):
+    """Immutable unit identity; a shared code does not imply scale conversion."""
+
+    code = models.CharField(max_length=64, primary_key=True)
+
+    class Meta:
+        db_table = "measurement_units"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(
+                condition=models.Q(code__regex=r"^[a-z][a-z0-9_]*$"),
+                name="ck_measurement_unit_code_grammar",
+            ),
+        ]
+
+
 # ============================================================================
 # Enum-family lookup tables (i18n-friendly)
 # ============================================================================

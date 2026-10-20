@@ -379,6 +379,10 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
     policy = load_policy(POLICY_PATH)
 
     assert {
+        "time_zones",
+        "languages",
+        "locales",
+        "measurement_units",
         "provider_batches",
         "data_sources",
         "taxonomy_versions",
@@ -644,3 +648,24 @@ def test_benchmark_evidence_is_copied_with_optional_pre_migration_sources():
     }
     assert sequences <= policy.relations.sequences
     assert sequences <= policy.relations.optional_source_sequences
+
+
+def test_shared_catalogues_are_preserved_and_pre_foundation_sources_remain_supported():
+    policy = load_policy(POLICY_PATH)
+    catalogues = frozenset({"time_zones", "languages", "locales", "measurement_units"})
+    assert catalogues <= policy.relations.copied_tables
+    assert catalogues <= policy.relations.optional_source_tables
+    assert catalogues.isdisjoint(policy.scrub.truncate_tables)
+    current = _inspection(policy, source=True)
+    old = replace(
+        current,
+        base_tables=current.base_tables - catalogues,
+        readable_tables=current.readable_tables - catalogues,
+    )
+    authorize(
+        policy,
+        action="preflight",
+        environ=_environment(policy),
+        source=old,
+        target=_inspection(policy, source=False),
+    )
