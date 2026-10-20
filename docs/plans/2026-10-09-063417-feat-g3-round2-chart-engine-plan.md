@@ -11,8 +11,10 @@ ollija:
   change_id: feat-g3-round2-chart-engine-2026-10-09-063417
   branch: refactor/global-shared-vocabulary-20261021
   workflow: lfg
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  delivery_target: staging
+  delivery_selected_by_user: true
+  delivery_route: staged
+  staging_transport: branch
 type: refactor
 date: "2026-10-09"
 ---
@@ -31,7 +33,7 @@ The completed field ledger covers 959 existing/pending positions and keeps the 5
 <!-- global-schema-execution-contract:start -->
 ## Delivery Exceptions
 
-The owner invoked `compound-engineering:lfg` on2026-10-21. Implementation, local verification, review, commits and an open pull request with CI decided are now authorized. Earlier planning-only boundaries describe the authoring invocation. Staging, production, merge, provider calls and campaign control remain outside this grant. The one canonical plan has transferred from the retained ec5a checkout into the clean integration worktree; its change identity and agreed contract are preserved.
+The owner invoked `compound-engineering:lfg` on2026-10-21, then explicitly overrode the G3 bounded-handover gate and selected continuation through staging. Implementation, verification, review, commits, pushes and staging deployment/verification are authorized. The G3 acknowledgement/handover prerequisite is waived: central integration may snapshot and port accepted source into this clean checkout while preserving peer worktrees. This waiver is not evidence that another session read a notice. Production deployment, production-branch merge, provider calls and campaign control remain outside this grant. Earlier planning-only and PR-only boundaries describe superseded invocations. The one canonical plan has transferred from the retained ec5a checkout into the clean integration worktree; its change identity and agreed contract are preserved. Deliver small compatible batches to staging, beginning with the already tested F0a/b/c foundation, while retaining the remaining global work as incomplete.
 
 ## Goal Capsule
 
@@ -41,7 +43,7 @@ The owner invoked `compound-engineering:lfg` on2026-10-21. Implementation, local
 
 **Authority:** Owner-selected shared vocabulary, naming, evidence preservation and no-new-JSON rules govern this work. This global implementation contract governs U23–U31. Earlier ChartEngine/HF/comparison units are retained context, not executable scope for this refactor. Existing atomic EventDossier chart ownership and CE-R requirements remain unchanged.
 
-**Execution boundary:** This invocation writes the plan and posts the requested coordination notice. Delivery remains `on-request`; it does not authorize application implementation, database mutation, paid provider calls, a production pause or backfill resumption. The staged route below is the proposed delivery contract for a later authorized release.
+**Execution boundary:** The current owner-selected endpoint is staging, through the existing staged delivery route. Implement and verify compatible batches, then deploy and verify them against staging's own database. No production migration/deployment, paid provider call, production pause or backfill resumption is authorized.
 
 **Completion owner:** This session owns the integrated schema and migration graph. G2/G3 and post-backfill may contribute bounded caller changes after acknowledging the shared contract. Their existing worktrees and unpublished changes remain preserved.
 
@@ -106,9 +108,9 @@ The frozen strict 428-field slice records an intermediate review. Its 25 uncerta
 
 ### Key Technical Decisions
 
-- KTD6. **One integration owner, bounded contributors.** This session owns shared model/migration integration across G2/G3; domain sessions contribute caller changes against that contract. It avoids fixing main first and handing back divergent schemas. G3's prior recommendation-only handoff does not authorize editing its dirty worktree; acquire a recorded bounded handover before integration. Implements R39–R40.
+- KTD6. **One integration owner, bounded contributors.** This session owns shared model/migration integration across G2/G3; domain sessions contribute caller changes against that contract. It avoids fixing main first and handing back divergent schemas. The owner's2026-10-21 override permits central snapshot/port integration without another G3 handover or ACK; preserve its dirty worktree and record exact imported file hashes and boundaries. Implements R39–R40.
 - KTD7. **Small compatible release batches.** Each batch has its own expansion, mapping, cutover and retirement boundary (session-settled: user-approved — chosen over one large migration: limits the impact and makes staging evidence attributable). Implements R43–R45.
-- KTD8. **Staging rehearsal, then production migration.** Use separate staging/production databases and the same reviewed candidate per batch. Reuse `docs/deploy/render.md` and `docs/operations/staging-data-refresh.md`; refresh is a staging-only snapshot operation, not production promotion. Implements R44. The current invocation retains on-request delivery.
+- KTD8. **Staging rehearsal, then separately authorized production migration.** Use separate staging/production databases and the same reviewed candidate per batch. Reuse `docs/deploy/render.md` and `docs/operations/staging-data-refresh.md`; refresh is a staging-only snapshot operation, not production promotion. Implements R44. The current invocation is authorized through staging only.
 - KTD9. **Rollback compatible code before destructive schema reversal.** Retain additive storage through the rollback window; preserve writes created after deployment. A Render application rollback does not undo database state, so database recovery and release rollback have separate procedures. Implements R36/R43/R45. [Render rollback behavior](https://render.com/docs/rollbacks).
 - KTD10. **Shared foundational catalogues are explicit.** Initial proposed lookup tables are `time_zones`, `languages`, `locales` and `measurement_units`: four additions, zero table retirements in the foundation batch. Own canonical codes on those tables; existing label tables reference locale/language contracts as their meanings require. Use reviewed, version-pinned seed/mapping data and preserve reported values under R36. The final manifest below accounts separately for all additional actor/method/provider/business tables; four is the initial foundation count, not the global count.
 - KTD11. **Owned translations rather than generic strings.** Reuse CountryLabel/RegionLabel, PersonName, post translation/synthesis text, OriginalContentText and narrative-subject relationships. Six locale/selection/snapshot tables are proposed for Brand, Company, PersonName selection, account profile translations and the two distinct frozen subject-label owners; the final manifest specifies their columns and constraints. Implements R34/R36–R37.
@@ -175,7 +177,7 @@ The final manifest specifies 64 global additions and zero mandatory retirements.
 
 The shared meanings, preservation policies, staged-batch mechanism and notification requirement are settled. Actual row distributions, unmatched legacy values, deployed migration drift, lock duration and production volume are execution-time facts to measure before each database-writing batch. U23 verifies each selected final physical target against current source/deployed ownership; an unresolved target blocks that batch, not all independent foundation work. Owner-only product questions must be asked with concrete examples rather than filled with a new string.
 
-**Current readiness:** The source-level design is complete in the final field/table manifests and release families below. Implementation starts with U23's clean integration workspace, actual migration-leaf verification and bounded contributor handovers, then the selected small foundation candidate. Database-writing operations require their measured value/compatibility preflights and separate delivery authority. Saving this plan grants no implementation, database or release authority.
+**Current readiness:** The source-level design is complete in the final field/table manifests and release families below. The clean integration checkout now owns the selected foundation candidate. Current owner authority covers implementation and staging; the G3 handover/ACK prerequisite has been explicitly waived. Record exact peer source snapshots when porting accepted contributions, preserve peer worktrees, and measure each database-writing batch's value/compatibility preflights. Production remains outside this invocation.
 
 The canonical ChartEngine worktree is old and dirty. U23 must establish a clean current-main integration checkout, preserve all existing dirty worktrees, and transfer this one plan's branch/worktree association through Ollija without creating competing authoritative plans. The file path selected for this planning run remains unchanged.
 
@@ -321,7 +323,7 @@ erDiagram
 
 ### Bounded Release Manifests and Compatibility
 
-Each entry below is repeated through expansion, mapping/cutover and later retirement as needed. Only the selected entry's models/callers and migration dependency closure enter a candidate. A dependency on G3 evidence archives does not justify bundling all 64 additions. Unapplied peer migrations must be integrated into reviewed dependency-sized candidates; applied migration history is never rewritten. U23 verifies current deployed leaves and contributor handover before selecting that integration shape.
+Each entry below is repeated through expansion, mapping/cutover and later retirement as needed. Only the selected entry's models/callers and migration dependency closure enter a candidate. A dependency on G3 evidence archives does not justify bundling all 64 additions. Unapplied peer migrations must be integrated into reviewed dependency-sized candidates; applied migration history is never rewritten. U23 verifies current deployed leaves and exact source snapshots before selecting that integration shape; the owner waived another handover/ACK prerequisite on2026-10-21.
 
 | Release family, in dependency order | Exact scope / additions |
 | --- | --- |
@@ -351,6 +353,16 @@ These allocations sum to 64, with no required retirement. Every candidate record
 **Locale primary-key transition:** Django5.2 does not support ordinary migration operations to/from a composite primary key, and ForeignKey cannot target a composite PK. For each existing `(owner,lang)` label table, first add nullable locale references and bridge writes, retain old owner/lang uniqueness, census inbound SQL dependencies, and report alias collisions before tightening new uniqueness. After compatible readers/writers are deployed, use explicitly reviewed PostgreSQL key DDL paired with Django `SeparateDatabaseAndState`; prove both states match. Never use routine AlterField or `--fake` as evidence that the physical key changed. The account-query optional appearance link similarly needs an explicit SQL composite FK to `(account_key,post_id)` on AccountPostAppearance; two ORM fields alone do not enforce it. Preserve the current deletion/ownership behavior in that constraint. [Django composite-key limitations](https://docs.djangoproject.com/en/5.2/topics/composite-primary-key/).
 
 **Registry inputs:** [archived registry evidence](../analysis/2026-10-20-212622-global-schema-registry-evidence/receipt.json) pins IANA tzdata2026e and the language registry File-Date2026-09-17. The archive hashes are `b26882805f26aac59d5b222978e6580484b834ccdc98be89df2f05a6dc53a652` and `755fad43283be7b41ebe3c89ad054b6eaf928f404f9c0edb74799e0eab74beb1`. Materialize the selected canonical seed files from these reviewed bytes during implementation and retain the derivation/hash. Preserve accepted timezone Link identifiers; ambiguous abbreviations never become UTC. Grandfathered/private-use tags lacking a registered canonical primary language stay exact reported/unresolved evidence rather than invented Language rows. Currency/source-qualified seed sets are built from the existing typed definitions and the batch's pinned authoritative registry snapshot; no spelling-only merge or live external lookup occurs during migration.
+
+### Selected staging batch: F0a/F0b/F0c
+
+This candidate expands four catalogues only: `TimeZone.code`, `Language.code`, `Locale.code/language_id` and `MeasurementUnit.code` (four tables, five physical columns, zero retirements). Exact migrations are `0093_shared_time_zones` -> `0094_shared_languages_locales` -> `0095_shared_measurement_units`, after deployed0092. Existing owner fields, hashes and metric definitions retain their current storage and behavior. G2/G3 reference integration and the other60 proposed additions belong to subsequent compatible candidates.
+
+Seed only from checked-in pinned bytes through `python manage.py seed_shared_vocabulary`:597 timezones,8163 languages,8172 locales and24 units. Run it on the verified staging image after migrations, then repeat and compare complete ordered row hashes. This is an explicit staging data operation, not a provider call or automatic collector activation. Source `zh-CN`, `zh` and app `zh-Hans` stay distinct; unknown source values remain unresolved.
+
+Preflight requires the staging branch/service at the expected predecessor, a free staging migration lane, staging database identity `pushinweight_staging` and no migration-name collision. The existing staging-service SSH path supports database checks when external PostgreSQL network access is denied; do not alter its allowlist. Rehearsal on owned PostgreSQL18 covers each additive boundary, old metric-writer parity, duplicate/case/parent/grammar rejection, seed replay and optional-source refresh policy. Delivery additionally runs `pytest tests/ollija`, Django checks and migration-drift checks.
+
+Verify the exact deployed SHA, all three migration records, four table definitions/constraints, complete seed row hashes and repeat-seed idempotency on staging. Exercise invalid writes in rolled-back transactions and check the staging health route. Retain additive catalogue tables/data for application rollback; do not reverse migrations or remove peer migration files. Production/main remains unchanged. This batch does not establish completion of U23–U31 or of ChartEngine.
 
 ### Scheduled X and Historical Coverage Physical Contract
 
@@ -803,11 +815,18 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `lfg`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Delivery target: `staging`
+- Owner selection recorded: `true`
 - Delivery route: `staged`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
+5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
+6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
+7. Run staging checks. Stop here if they fail.
 
 ### Failure handling
 
