@@ -8732,3 +8732,426 @@ class OfficialCompanyProviderState(models.Model):
 # canonical models and add no tables or duplicate model registration.
 MetricCollectionRun = CollectionRun
 MetricObservation = CollectionObservation
+
+
+# Event Dossier research foundation. Collection and measurement storage stay shared.
+class EventDossier(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_kind = models.CharField(max_length=32)
+    identity_key = models.CharField(max_length=64, unique=True)
+    first_seen_at = models.DateTimeField(default=timezone.now)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+    next_review_at = models.DateTimeField(null=True, blank=True)
+    current_review = models.ForeignKey(
+        "EventDossierReview",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="+",
+    )
+    merged_into = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="merged_dossiers",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "event_dossiers"
+        indexes = [models.Index(fields=["next_review_at"], name="idx_ed_review_due")]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    event_kind__in=["model_release", "personnel_change"]
+                ),
+                name="ck_ed_kind",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(identity_key__regex=r"^[0-9a-f]{64}$"),
+                name="ck_ed_identity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(last_seen_at__gte=models.F("first_seen_at")),
+                name="ck_ed_seen_order",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(merged_into=models.F("id")),
+                name="ck_ed_merge_not_self",
+            ),
+        ]
+
+
+class EventDossierSource(models.Model):
+    event_dossier = models.ForeignKey(
+        EventDossier, on_delete=models.PROTECT, related_name="sources"
+    )
+    post = models.ForeignKey(
+        Post, null=True, on_delete=models.PROTECT, related_name="event_dossier_sources"
+    )
+    collection_observation = models.ForeignKey(
+        CollectionObservation,
+        null=True,
+        on_delete=models.PROTECT,
+        related_name="event_dossier_sources",
+    )
+    linked_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "event_dossier_sources"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(post__isnull=False, collection_observation__isnull=True)
+                    | models.Q(post__isnull=True, collection_observation__isnull=False)
+                ),
+                name="ck_ed_source_xor",
+            ),
+            models.UniqueConstraint(
+                fields=["event_dossier", "post"],
+                condition=models.Q(post__isnull=False),
+                name="uq_ed_source_post",
+            ),
+            models.UniqueConstraint(
+                fields=["event_dossier", "collection_observation"],
+                condition=models.Q(collection_observation__isnull=False),
+                name="uq_ed_source_observation",
+            ),
+        ]
+
+
+_ed_time_columns = (
+    "effective_at",
+    "effective_date",
+    "effective_year",
+    "effective_month",
+    "not_before",
+    "not_after",
+)
+_ed_time_shape = models.Q()
+for _ed_precision, _ed_present in [
+    ("datetime", ("effective_at",)),
+    ("day", ("effective_date",)),
+    ("month", ("effective_year", "effective_month")),
+    ("year", ("effective_year",)),
+    ("unknown", ()),
+]:
+    _ed_time_shape |= models.Q(
+        effective_precision=_ed_precision,
+        **{
+            f"{column}__isnull": column not in _ed_present
+            for column in _ed_time_columns
+        },
+    )
+_ed_time_shape |= models.Q(
+    effective_precision="range",
+    effective_at__isnull=True,
+    effective_date__isnull=True,
+    effective_year__isnull=True,
+    effective_month__isnull=True,
+) & (models.Q(not_before__isnull=False) | models.Q(not_after__isnull=False))
+
+
+class EventDossierClaim(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_dossier_source = models.ForeignKey(
+        EventDossierSource, on_delete=models.PROTECT, related_name="claims"
+    )
+    claim_kind = models.CharField(max_length=64)
+    event_timezone = models.CharField(max_length=64, null=True, blank=True)
+    not_before = models.DateTimeField(null=True, blank=True)
+    not_after = models.DateTimeField(null=True, blank=True)
+    scope_key = models.TextField()
+    claim_hash = models.CharField(max_length=64, unique=True)
+    extraction_version = models.TextField()
+    recorded_at = models.DateTimeField(default=timezone.now)
+    assertion_text = models.TextField()
+    source_excerpt = models.TextField()
+    source_locator = models.TextField(null=True, blank=True)
+    source_hash = models.CharField(max_length=64)
+    effective_at = models.DateTimeField(null=True, blank=True)
+    effective_date = models.DateField(null=True, blank=True)
+    effective_year = models.PositiveSmallIntegerField(null=True, blank=True)
+    effective_month = models.PositiveSmallIntegerField(null=True, blank=True)
+    effective_precision = models.CharField(max_length=16, default="unknown")
+
+    class Meta:
+        db_table = "event_dossier_claims"
+        constraints = [
+            models.CheckConstraint(
+                condition=_ed_time_shape, name="ck_ed_claim_time_shape"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(effective_year__isnull=True)
+                | models.Q(effective_year__range=(1, 9999)),
+                name="ck_ed_claim_year",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(effective_month__isnull=True)
+                | models.Q(effective_month__range=(1, 12)),
+                name="ck_ed_claim_month",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(not_before__isnull=True)
+                | models.Q(not_after__isnull=True)
+                | models.Q(not_after__gte=models.F("not_before")),
+                name="ck_ed_claim_range",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    claim_hash__regex=r"^[0-9a-f]{64}$",
+                    source_hash__regex=r"^[0-9a-f]{64}$",
+                ),
+                name="ck_ed_claim_hashes",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(claim_kind="")
+                & ~models.Q(scope_key="")
+                & ~models.Q(extraction_version="")
+                & ~models.Q(assertion_text="")
+                & ~models.Q(source_excerpt=""),
+                name="ck_ed_claim_text",
+            ),
+        ]
+
+
+class EventDossierReview(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_dossier = models.ForeignKey(
+        EventDossier, on_delete=models.PROTECT, related_name="reviews"
+    )
+    revision = models.PositiveIntegerField()
+    supersedes = models.OneToOneField(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="successor",
+    )
+    reviewed_at = models.DateTimeField()
+    recorded_at = models.DateTimeField(default=timezone.now)
+    evidence_cutoff_at = models.DateTimeField()
+    method_version = models.TextField()
+    actor = models.TextField()
+    reason = models.TextField()
+    run = models.ForeignKey(
+        OriginalContentRun,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="event_dossier_reviews",
+    )
+    input_hash = models.CharField(max_length=64)
+    display_title = models.TextField()
+    review_state = models.CharField(max_length=16)
+    significance_score = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True
+    )
+    ranking_method = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "event_dossier_reviews"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["event_dossier", "revision"], name="uq_ed_review_revision"
+            ),
+            models.UniqueConstraint(
+                fields=["event_dossier", "input_hash"], name="uq_ed_review_replay"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(revision__gte=1), name="ck_ed_review_revision"
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(revision=1, supersedes__isnull=True)
+                    | models.Q(revision__gt=1, supersedes__isnull=False)
+                ),
+                name="ck_ed_review_prior",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    evidence_cutoff_at__lte=models.F("reviewed_at"),
+                    reviewed_at__lte=models.F("recorded_at"),
+                ),
+                name="ck_ed_review_clocks",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    review_state__in=[
+                        "provisional",
+                        "confirmed",
+                        "unresolved",
+                        "retired",
+                    ]
+                ),
+                name="ck_ed_review_state",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(input_hash__regex=r"^[0-9a-f]{64}$"),
+                name="ck_ed_review_hash",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(method_version="")
+                & ~models.Q(actor="")
+                & ~models.Q(reason="")
+                & ~models.Q(display_title=""),
+                name="ck_ed_review_text",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(significance_score__isnull=True, ranking_method="")
+                | (
+                    models.Q(significance_score__range=(-9999.9999, 9999.9999))
+                    & ~models.Q(ranking_method="")
+                ),
+                name="ck_ed_review_ranking",
+            ),
+        ]
+
+
+class EventDossierReviewClaim(models.Model):
+    review = models.ForeignKey(
+        EventDossierReview, on_delete=models.PROTECT, related_name="claim_decisions"
+    )
+    claim = models.ForeignKey(
+        EventDossierClaim, on_delete=models.PROTECT, related_name="review_decisions"
+    )
+    disposition = models.CharField(max_length=16)
+    reason = models.TextField()
+
+    class Meta:
+        db_table = "event_dossier_review_claims"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["review", "claim"], name="uq_ed_review_claim"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    disposition__in=["accepted", "rejected", "uncertain"]
+                ),
+                name="ck_ed_claim_disposition",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(reason=""), name="ck_ed_disposition_reason"
+            ),
+        ]
+
+
+class ModelReleaseDetail(models.Model):
+    review = models.OneToOneField(
+        EventDossierReview,
+        primary_key=True,
+        on_delete=models.PROTECT,
+        related_name="model_release",
+    )
+    product = models.ForeignKey(
+        Product,
+        to_field="product_key",
+        db_column="product_key",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="release_reviews",
+    )
+    observed_name = models.TextField()
+    native_identifier = models.TextField()
+    version_label = models.TextField(null=True, blank=True)
+    variant = models.TextField(null=True, blank=True)
+    release_channel = models.CharField(max_length=16, default="unknown")
+    availability_state = models.CharField(max_length=16, default="unknown")
+    disclosure_state = models.CharField(max_length=16, default="unknown")
+    release_issuer_company = models.ForeignKey(
+        Company,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="release_reviews",
+    )
+
+    class Meta:
+        db_table = "model_release_details"
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(observed_name="") & ~models.Q(native_identifier=""),
+                name="ck_ed_release_identity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    release_channel__in=["stable", "preview", "beta", "unknown"]
+                ),
+                name="ck_ed_release_channel",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    availability_state__in=[
+                        "unknown",
+                        "announced",
+                        "public_test",
+                        "available",
+                        "withdrawn",
+                    ]
+                ),
+                name="ck_ed_release_availability",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    disclosure_state__in=["unknown", "unannounced", "announced"]
+                ),
+                name="ck_ed_release_disclosure",
+            ),
+        ]
+
+
+class PersonnelChangeDetail(models.Model):
+    review = models.OneToOneField(
+        EventDossierReview,
+        primary_key=True,
+        on_delete=models.PROTECT,
+        related_name="personnel_change",
+    )
+    person = models.ForeignKey(
+        Person,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="change_reviews",
+    )
+    observed_person_name = models.TextField()
+    change_kind = models.CharField(max_length=16)
+    from_affiliation = models.ForeignKey(
+        PersonBrandAffiliation,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="departing_reviews",
+    )
+    to_affiliation = models.ForeignKey(
+        PersonBrandAffiliation,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="arriving_reviews",
+    )
+    from_organization_name = models.TextField(null=True, blank=True)
+    to_organization_name = models.TextField(null=True, blank=True)
+    from_title = models.TextField(null=True, blank=True)
+    to_title = models.TextField(null=True, blank=True)
+
+    class Meta:
+        db_table = "personnel_change_details"
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(observed_person_name=""), name="ck_ed_person_name"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    change_kind__in=["join", "leave", "promotion", "move", "other"]
+                ),
+                name="ck_ed_person_change",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(person__isnull=False)
+                | models.Q(from_affiliation__isnull=True, to_affiliation__isnull=True),
+                name="ck_ed_person_role_owner",
+            ),
+        ]
