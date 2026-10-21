@@ -384,6 +384,13 @@ def execute_window(window, *, frozen, cfg, evaluate_at_end=False):
                 "job_id": str(job.pk), "scope_errors": report.get("scope_errors", []),
             })
         job.refresh_from_db()
+        if report.get("state") == "waiting_for_live_writer":
+            emit("WAITING_FOR_LIVE_WRITER", {"job_id": str(job.pk)})
+            # A first invocation has no last_attempt yet. Intentional yielding
+            # is not a stalled collection; the hard deadline above still applies.
+            _wait(15)
+            idle_since = time.monotonic()
+            continue
         emit(
             "COLLECTION",
             {

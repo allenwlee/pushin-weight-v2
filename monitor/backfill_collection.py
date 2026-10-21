@@ -614,6 +614,13 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False):
     if scope.get("deadline") and any(not unit.get("enumeration_complete") for unit in scope["units"]):
         seconds = min(seconds, (datetime.fromisoformat(scope["deadline"]) - datetime.now(UTC)).total_seconds())
     require(seconds > 0, "campaign deadline exhausted")
+    # A legacy continuation copies its saved scopes when claimed. Yield before
+    # creating that attempt, rather than multiplying checkpoints while live
+    # harvesting owns the writer. Per-page locking below still handles a live
+    # arrival between this nonblocking admission probe and the next page.
+    with harvest_writer_lock(execution_mode="backfill", entrypoint="management.backfill.job") as lease:
+        if not lease.acquired:
+            return {"job_id": str(job.pk), "state": "waiting_for_live_writer"}
     claim = claim_job(job.pk, invocation_id=str(uuid4()), manual_authorized=True,
                       continue_from=job.last_attempt_id)
     budget = DurableBudget(claim, job, seconds)

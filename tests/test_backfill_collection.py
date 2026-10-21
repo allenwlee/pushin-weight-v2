@@ -73,6 +73,116 @@ def run(job):
     return json.loads(output.getvalue())
 
 
+@pytest.fixture
+def live_writer():
+    """Hold the real live lock on a separate PostgreSQL session."""
+    from concurrent.futures import ThreadPoolExecutor
+    from contextlib import contextmanager
+    from threading import Event
+
+    from django.db import connections
+
+    from monitor.run_lock import harvest_writer_lock
+
+    @contextmanager
+    def hold():
+        acquired, release = Event(), Event()
+
+        def live():
+            try:
+                with harvest_writer_lock(execution_mode="live", entrypoint="test.live.wait") as lease:
+                    assert lease.acquired
+                    acquired.set()
+                    assert release.wait(15), "test did not release live writer"
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(live)
+            try:
+                assert acquired.wait(5)
+                yield lambda: (release.set(), future.result(timeout=5))
+            finally:
+                release.set()
+                future.result(timeout=5)
+
+    return hold
+
+
+@pytest.mark.parametrize("resuming", [False, True])
+def test_live_writer_wait_creates_no_attempts_or_checkpoints(pipeline, live_writer, resuming):
+    from core.models import CollectionAttempt, CollectionScopeRun
+
+    job = ready_job()
+    if resuming:
+        pipeline.responses.append(page("1", cursor="saved-before-live"))
+        run(job)
+    job.refresh_from_db()
+    before = (CollectionRun.objects.count(), CollectionScopeRun.objects.count(),
+              CollectionAttempt.objects.count(), job.last_attempt_id, len(pipeline.requests))
+    with live_writer():
+        for _ in range(3):
+            report = run(job)  # actual public command, not an admission-helper test
+            assert report == {"job_id": str(job.pk), "state": "waiting_for_live_writer"}
+        job.refresh_from_db()
+        assert (CollectionRun.objects.count(), CollectionScopeRun.objects.count(),
+                CollectionAttempt.objects.count(), job.last_attempt_id, len(pipeline.requests)) == before
+        assert job.active_run_id is None
+    pipeline.responses.append(page("2"))
+    assert run(job)["collection_drained"]
+    assert len(pipeline.requests) == before[-1] + 1
+    if resuming:
+        assert pipeline.requests[-1]["cursor"] == "saved-before-live"
+    assert CollectionRun.objects.count() == before[0] + 1
+    assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
+
+
+@pytest.mark.parametrize("expire", [False, True])
+def test_campaign_waits_without_attempt_and_keeps_deadline(pipeline, live_writer, monkeypatch, expire):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from scripts import backfill_campaign as campaign
+
+    template = ready_job()
+    cfg = load_config(Path("config.yaml"))
+    now = timezone.now()
+    clock = [now]
+    frozen = {"campaign": "wait-test", "instruction_format": "x-backfill-campaign/v2",
+              "deadline": (now + timedelta(hours=1)).isoformat()}
+    window = {"index": 1, "maximum_api_requests": 20, "collection_definition": template.definition}
+    monkeypatch.setenv("DEEPINFRA_ON_DEMAND", "fake-on-demand")
+    monkeypatch.setattr(campaign.timezone, "now", lambda: clock[0])
+    monkeypatch.setattr(campaign.time, "monotonic", lambda: (clock[0] - now).total_seconds())
+    class ReachedEnrichment(Exception):
+        pass
+
+    def reached(*args):
+        raise ReachedEnrichment
+
+    monkeypatch.setattr(campaign, "prepare_current_contract", reached)
+    waits = []
+    with live_writer() as release:
+        def wait(seconds):
+            waits.append(seconds)
+            assert seconds == 15
+            assert not CollectionRun.objects.exists()
+            assert not pipeline.requests
+            clock[0] += timedelta(hours=2) if expire else timedelta(minutes=16)
+            if expire or len(waits) == 2:
+                release()
+
+        monkeypatch.setattr(campaign, "_wait", wait)
+        pipeline.responses.append(page("2"))
+        expected = RuntimeError if expire else ReachedEnrichment
+        with pytest.raises(expected, match="campaign_deadline_exhausted" if expire else None):
+            campaign.execute_window(window, frozen=frozen, cfg=cfg)
+    assert len(waits) == (1 if expire else 2)
+    assert len(pipeline.requests) == (0 if expire else 1)
+    assert CollectionRun.objects.count() == (0 if expire else 1)
+
+
 def test_native_page_yields_to_scheduled_tick_and_resumes_exact_cursor(pipeline, monkeypatch):
     """Real native command, runner, transport and checkpoint meet a live tick."""
     from concurrent.futures import ThreadPoolExecutor
