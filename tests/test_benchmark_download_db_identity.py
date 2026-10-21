@@ -11,7 +11,9 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 def setup_spec():
     from core.benchmark_metric_identity import register_definitions
+    from core.models import TimeZone
 
+    TimeZone.objects.get_or_create(pk="UTC")
     register_definitions()
     # Test-only reviewed grants; real source rights are never inferred from these.
     from core.benchmark_attribution import USES

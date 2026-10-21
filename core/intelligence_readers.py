@@ -222,6 +222,17 @@ def _iso(value) -> str | None:
     return value.isoformat() if value is not None else None
 
 
+def _reported_source_timezone(record: Event | Opportunity) -> str | None:
+    payload = record.raw_payload
+    if isinstance(payload, dict) and "source_timezone" in payload:
+        value = payload["source_timezone"]
+        if value is None:
+            return None
+        normalized = str(value).strip()[:64]
+        return normalized or None
+    return record.source_timezone_reference_id
+
+
 def _effective_date(value: str | None, precision: str) -> dict[str, Any]:
     return {"value": value, "precision": precision}
 
@@ -555,7 +566,7 @@ def event_document(event_id: int, *, as_of: datetime) -> dict[str, Any]:
         "start": _effective_date(event.start_value, event.start_precision),
         "end": _effective_date(event.end_value, event.end_precision),
         "source_status": event.source_status,
-        "source_timezone": event.source_timezone,
+        "source_timezone": _reported_source_timezone(event),
         "source_schedule_text": event.source_schedule_text,
         "lifecycle": event_lifecycle(event, as_of=as_of),
         "as_of": as_of.isoformat(),
@@ -593,7 +604,7 @@ def opportunity_document(opportunity_id: int, *, as_of: datetime) -> dict[str, A
         "opens": _effective_date(row.open_value, row.open_precision),
         "closes": _effective_date(row.close_value, row.close_precision),
         "source_status": row.source_status,
-        "source_timezone": row.source_timezone,
+        "source_timezone": _reported_source_timezone(row),
         "source_availability_text": row.source_availability_text,
         "eligibility": row.eligibility,
         "geographic_restrictions": row.geographic_restrictions,

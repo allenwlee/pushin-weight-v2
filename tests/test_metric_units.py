@@ -6,6 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from io import StringIO
 from threading import Event
+from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
@@ -19,11 +20,16 @@ from core.benchmark_metric_identity import (
     register_definitions,
 )
 from core.metric_units import map_metric_units
-from core.models import MeasurementUnit, SourceMetric
+from core.models import MeasurementUnit, SourceMetric, TimeZone
 from tests.test_benchmark_download_db_identity import setup_spec
 from tests.test_metric_time_zones import LEGACY_SNAPSHOT_FIELDS
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
+
+
+@pytest.fixture(autouse=True)
+def seed_utc_timezone():
+    TimeZone.objects.get_or_create(pk="UTC")
 
 
 def test_original_unit_wording_and_real_collection_packet_characterization():
@@ -257,12 +263,23 @@ def test_populated_migration_reverse_and_old_image_writes_preserve_original_fiel
         ]
     )
     with historical_fixture_models(old):
-        _, spec = setup_spec()
+        from core.benchmark_metric_identity import definition_rows
+
+        historical_rows = definition_rows()
+        for row in historical_rows:
+            row["source_timezone_reference_id"] = None
+        with patch(
+            "core.benchmark_metric_identity.definition_rows",
+            return_value=historical_rows,
+        ):
+            _, spec = setup_spec()
         contract = configure_collection(spec)
     before = list(OldMetric.objects.order_by("pk").values())
     packets = {m.pk: definition_snapshot(m) for m in OldMetric.objects.all()}
     MigrationExecutor(connection).migrate([target])
-    after = list(SourceMetric.objects.order_by("pk").values())
+    target_apps = MigrationExecutor(connection).loader.project_state([target]).apps
+    TargetMetric = target_apps.get_model("core", "SourceMetric")
+    after = list(TargetMetric.objects.order_by("pk").values())
     for row in after:
         assert row.pop("unit_reference_id") == (
             "downloads" if row["unit"] == "downloads" else None

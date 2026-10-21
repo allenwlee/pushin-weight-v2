@@ -47,6 +47,7 @@ from core.person_affiliations import matching_moved_claim, require_claim_owner
 from core.person_identity import subject_person
 from core.product_verification import POLICY_VERSION, source_repo_evidence
 from core.rare_type_search import record_unknown_name_tokens_from_movement
+from core.shared_vocabulary import resolve_time_zone
 from x_monitor.config import TargetedExtractionConfig
 from x_monitor.provider_telemetry import (
     ProviderResponse,
@@ -286,6 +287,11 @@ def _text(value: Any, *, required: bool = False, maximum: int = 20_000) -> str |
             raise ValueError("required text is blank")
         return None
     return parsed[:maximum]
+
+
+def _time_zone_reference_id(value: Any) -> str | None:
+    zone = resolve_time_zone(_text(value, maximum=64))
+    return zone.pk if zone else None
 
 
 def _url(value: Any) -> str | None:
@@ -1315,7 +1321,9 @@ def _persist_events(post: Post, records: list[Mapping[str, Any]], version: str):
                     "start_precision": start_precision,
                     "end_value": end_value,
                     "end_precision": end_precision,
-                    "source_timezone": _text(record.get("source_timezone"), maximum=64),
+                    "source_timezone_reference_id": _time_zone_reference_id(
+                        record.get("source_timezone")
+                    ),
                     "source_schedule_text": _text(record.get("source_schedule_text")),
                     "source_status": source_status,
                     "first_seen_at": post.fetched_at,
@@ -1506,7 +1514,9 @@ def _persist_opportunities(post: Post, records: list[Mapping[str, Any]], version
                 "open_precision": open_precision,
                 "close_value": close_value,
                 "close_precision": close_precision,
-                "source_timezone": _text(record.get("source_timezone"), maximum=64),
+                "source_timezone_reference_id": _time_zone_reference_id(
+                    record.get("source_timezone")
+                ),
                 "source_availability_text": _text(
                     record.get("source_availability_text")
                 ),

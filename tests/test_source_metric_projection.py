@@ -13,11 +13,16 @@ from django.utils import timezone
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import StaleClaim, claim_job
 from core.measurement_taxonomy import configure_taxonomy, digest, subject_id
-from core.models import CollectionObservation, CollectionRun, MetricValue
+from core.models import CollectionObservation, CollectionRun, MetricValue, TimeZone
 from tests.collection_fixtures import evidence_job
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 CAPTURED = datetime(2026, 10, 12, 4, 5, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def seed_utc_timezone():
+    TimeZone.objects.get_or_create(pk="UTC")
 
 
 def configured(source="hf", *, product_type=None, mapped=False):

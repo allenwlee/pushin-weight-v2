@@ -65,9 +65,10 @@ def calendar_window(label, zone, amount=1):
 
 def value_times(definition, point):
     status = point.get("temporal_status", "unknown")
-    zone = point.get("source_timezone", definition.source_timezone)
+    definition_timezone = definition.source_timezone_reference_id or "unknown"
+    zone = point.get("source_timezone", definition_timezone)
     require(
-        zone == definition.source_timezone, "timezone differs from pinned definition"
+        zone == definition_timezone, "timezone differs from pinned definition"
     )
     result = {field: point.get(field) for field in TIME_FIELDS}
     for field, value in result.items():
@@ -227,7 +228,7 @@ def reported_times(
     ):
         return point, None
     unknowns = {"provider_refresh_lag": "not_reported"}
-    if definition.source_timezone == "unknown":
+    if definition.source_timezone_reference_id is None:
         unknowns["provider_timezone"] = "not_reported"
     snapshot = (
         metadata.get("numeric_snapshot_identity")

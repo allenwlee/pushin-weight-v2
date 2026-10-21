@@ -169,7 +169,7 @@ def definition_rows():
             "window_unit": None,
             "window_duration_basis": "none",
             "window_alignment": None,
-            "source_timezone": "unknown",
+            "source_timezone_reference_id": None,
             "required": key
             not in {
                 "variance",
@@ -246,7 +246,7 @@ def definition_rows():
                 window_unit="day",
                 window_duration_basis="calendar",
                 window_alignment="source_local_midnight",
-                source_timezone="UTC",
+                source_timezone_reference_id="UTC",
             )
         if source == "opencode":
             row["definition_metadata"].update(
@@ -401,11 +401,15 @@ DEFINITION_SNAPSHOT_V1_FIELDS = (
 
 
 def definition_snapshot(obj):
-    return {
-        name: (str(value) if isinstance(value, Decimal) else value)
-        for name in DEFINITION_SNAPSHOT_V1_FIELDS
-        for value in [getattr(obj, name)]
-    }
+    snapshot = {}
+    for name in DEFINITION_SNAPSHOT_V1_FIELDS:
+        value = (
+            obj.source_timezone_reference_id or "unknown"
+            if name == "source_timezone"
+            else getattr(obj, name)
+        )
+        snapshot[name] = str(value) if isinstance(value, Decimal) else value
+    return snapshot
 
 
 def validate_evidence_url(value):
@@ -497,9 +501,9 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
             obj = SourceMetric.objects.get(
                 source=source, metric_key=key, version=versions.get(key, 1)
             )
-            if obj.source_timezone != "unknown":
+            if obj.source_timezone_reference_id is not None:
                 try:
-                    ZoneInfo(obj.source_timezone)
+                    ZoneInfo(obj.source_timezone_reference_id)
                 except ZoneInfoNotFoundError as exc:
                     raise ValueError("invalid source timezone") from exc
             definitions.append(definition_snapshot(obj))

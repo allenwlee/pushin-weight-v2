@@ -6576,7 +6576,6 @@ class Event(models.Model):
         choices=TEMPORAL_PRECISION_CHOICES,
         default="unknown",
     )
-    source_timezone = models.CharField(max_length=64, blank=True, null=True)
     source_timezone_reference = models.ForeignKey(
         TimeZone, db_column="source_timezone_id", null=True, on_delete=models.PROTECT
     )
@@ -6605,12 +6604,6 @@ class Event(models.Model):
         db_table = "events"
         ordering = ["-first_seen_at", "id"]
         constraints = [
-            models.CheckConstraint(
-                condition=models.Q(source_timezone_reference__isnull=True)
-                | models.Q(source_timezone__isnull=False,
-                           source_timezone_reference=models.F("source_timezone")),
-                name="ck_events_source_timezone_ref",
-            ),
             models.CheckConstraint(
                 condition=(
                     models.Q(brand__isnull=False, brand_discovery_candidate__isnull=True)
@@ -6832,7 +6825,6 @@ class Opportunity(models.Model):
         choices=TEMPORAL_PRECISION_CHOICES,
         default="unknown",
     )
-    source_timezone = models.CharField(max_length=64, blank=True, null=True)
     source_timezone_reference = models.ForeignKey(
         TimeZone, db_column="source_timezone_id", null=True, on_delete=models.PROTECT
     )
@@ -6861,12 +6853,6 @@ class Opportunity(models.Model):
         db_table = "opportunities"
         ordering = ["-first_seen_at", "id"]
         constraints = [
-            models.CheckConstraint(
-                condition=models.Q(source_timezone_reference__isnull=True)
-                | models.Q(source_timezone__isnull=False,
-                           source_timezone_reference=models.F("source_timezone")),
-                name="ck_opportunities_source_timezone_ref",
-            ),
             models.CheckConstraint(
                 condition=(
                     models.Q(brand__isnull=False, brand_discovery_candidate__isnull=True)
@@ -7952,7 +7938,6 @@ class SourceMetric(models.Model):
     )
     window_duration_basis = models.CharField(max_length=16, default="none")
     window_alignment = models.CharField(max_length=32, null=True)
-    source_timezone = models.CharField(max_length=64, default="unknown")
     source_timezone_reference = models.ForeignKey(
         TimeZone, db_column="source_timezone_id", null=True, on_delete=models.PROTECT
     )
@@ -7974,11 +7959,6 @@ class SourceMetric(models.Model):
             ),
             models.CheckConstraint(
                 condition=models.Q(version__gt=0), name="ck_metric_version"
-            ),
-            models.CheckConstraint(
-                condition=models.Q(source_timezone_reference__isnull=True)
-                | models.Q(source_timezone_reference=models.F("source_timezone")),
-                name="ck_metric_source_timezone_ref",
             ),
             models.CheckConstraint(
                 condition=models.Q(unit_reference__isnull=True)
