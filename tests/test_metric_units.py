@@ -87,6 +87,54 @@ def test_legacy_metric_writer_bridge_keeps_registered_units_consistent():
     assert metric.unit_reference_id == "bytes"
 
 
+@pytest.mark.usefixtures("isolated_migration_database")
+@pytest.mark.django_db(transaction=True)
+def test_metric_unit_cutover_flushes_deferred_fk_events_before_altering_metrics():
+    from django.db.migrations.executor import MigrationExecutor
+
+    base = ("core", "0123_shared_definition_and_service_identities")
+    target = ("core", "0124_metric_unit_writer_cutover")
+    executor = MigrationExecutor(connection)
+    executor.migrate([base])
+    old_apps = MigrationExecutor(connection).loader.project_state([base]).apps
+    DataSource = old_apps.get_model("core", "DataSource")
+    MetricType = old_apps.get_model("core", "MetricType")
+    MeasurementUnit = old_apps.get_model("core", "MeasurementUnit")
+    SourceMetric = old_apps.get_model("core", "SourceMetric")
+    TimeZone = old_apps.get_model("core", "TimeZone")
+
+    DataSource.objects.create(
+        pk="unit-cutover-test", name="Unit cutover test", source_type="benchmark"
+    )
+    MetricType.objects.create(pk="benchmark", name="Benchmark")
+    MeasurementUnit.objects.get_or_create(code="count")
+    TimeZone.objects.get_or_create(code="UTC")
+    metric = SourceMetric.objects.create(
+        source_id="unit-cutover-test",
+        metric_type_id="benchmark",
+        metric_key="legacy-null-reference",
+        version=1,
+        name="Legacy null reference",
+        unit="count",
+        value_kind="integer",
+        quantity_form="count",
+        measurement_kind="state",
+        source_timezone_reference_id="UTC",
+    )
+    # Recreate the deployed legacy condition: source text exists while the
+    # deferrable reference FK is still NULL. Commit this setup before the
+    # migration so only its own backfill queues the pending trigger events.
+    with connection.cursor() as cursor:
+        cursor.execute("ALTER TABLE metrics DISABLE TRIGGER sync_metric_units")
+        cursor.execute("UPDATE metrics SET unit_id=NULL WHERE id=%s", [metric.pk])
+        cursor.execute("ALTER TABLE metrics ENABLE TRIGGER sync_metric_units")
+
+    MigrationExecutor(connection).migrate([target])
+    migrated = MigrationExecutor(connection).loader.project_state([target]).apps
+    CutoverMetric = migrated.get_model("core", "SourceMetric")
+    assert CutoverMetric.objects.get(pk=metric.pk).unit_reference_id == "count"
+
+
 def test_raw_sql_rejects_unregistered_or_role_invalid_unit_references():
     metric = registered_metric()
     with pytest.raises(IntegrityError), transaction.atomic(), connection.cursor() as cursor:

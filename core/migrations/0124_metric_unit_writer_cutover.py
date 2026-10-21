@@ -127,6 +127,10 @@ class Migration(migrations.Migration):
             database_operations=[
                 migrations.RunSQL("SET LOCAL lock_timeout='5s'", migrations.RunSQL.noop),
                 migrations.RunPython(resolve_installed_units, migrations.RunPython.noop),
+                # Existing deferrable FKs queue trigger events during the
+                # backfill. PostgreSQL rejects the following ALTER TABLE
+                # operations on metrics until those events have been checked.
+                migrations.RunSQL("SET CONSTRAINTS ALL IMMEDIATE", migrations.RunSQL.noop),
                 migrations.RunSQL(WRITER_BRIDGE, OLD_WRITER_GUARD),
                 *[
                     operation for operation in state_operations
