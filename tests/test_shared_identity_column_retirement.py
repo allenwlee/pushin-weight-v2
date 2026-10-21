@@ -16,6 +16,7 @@ pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_post
 def test_rg1_removal_drops_only_replaced_columns_and_switches_label_keys():
     cutover = ("core", "0126_remove_countrylabel_ck_country_label_locale_and_more")
     removal = ("core", "0127_remove_legacy_identity_columns")
+    actor_requirement = ("core", "0128_require_correction_actor")
     MigrationExecutor(connection).migrate([cutover])
 
     contract, raw, _, _ = configured(mapped=True, product_type="llm-model")
@@ -74,6 +75,14 @@ def test_rg1_removal_drops_only_replaced_columns_and_switches_label_keys():
         assert cursor.fetchall() == []
         cursor.execute(
             """
+            SELECT is_nullable FROM information_schema.columns
+            WHERE table_schema=current_schema()
+              AND table_name='collection_corrections' AND column_name='actor_id'
+            """
+        )
+        assert cursor.fetchone()[0] == "YES"
+        cursor.execute(
+            """
             SELECT conrelid::regclass::text, conname, pg_get_constraintdef(oid)
             FROM pg_constraint
             WHERE conrelid IN ('country_labels'::regclass,'region_labels'::regclass)
@@ -109,6 +118,64 @@ def test_rg1_removal_drops_only_replaced_columns_and_switches_label_keys():
     correction.refresh_from_db()
     assert correction.actor_id == actor.pk
 
+    MigrationExecutor(connection).migrate([actor_requirement])
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT is_nullable FROM information_schema.columns
+            WHERE table_schema=current_schema()
+              AND table_name='collection_corrections' AND column_name='actor_id'
+            """
+        )
+        assert cursor.fetchone()[0] == "NO"
+
+
+@pytest.mark.usefixtures("isolated_migration_database")
+def test_actor_requirement_migration_refuses_null_rows():
+    cutover = ("core", "0126_remove_countrylabel_ck_country_label_locale_and_more")
+    removal = ("core", "0127_remove_legacy_identity_columns")
+    actor_requirement = ("core", "0128_require_correction_actor")
+    MigrationExecutor(connection).migrate([cutover])
+
+    contract, raw, _, _ = configured(mapped=True, product_type="llm-model")
+    observation = project(contract, "hf", [evidence("hf", raw)]).observations.get()
+    actor = Actor.objects.create(actor_kind="system", actor_key="rg1-null-actor-test")
+    correction = correct_attribution(
+        observation,
+        product=None,
+        mapping=None,
+        actor_identity=actor,
+        reason="incorrect_product",
+    )
+    MigrationExecutor(connection).migrate([removal])
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "ALTER TABLE collection_corrections "
+            "DISABLE TRIGGER collection_correction_guard"
+        )
+        cursor.execute(
+            "UPDATE collection_corrections SET actor_id=NULL WHERE id=%s",
+            [correction.pk],
+        )
+        cursor.execute(
+            "ALTER TABLE collection_corrections "
+            "ENABLE TRIGGER collection_correction_guard"
+        )
+
+    with pytest.raises(RuntimeError, match="without actor_id"), transaction.atomic():
+        MigrationExecutor(connection).migrate([actor_requirement])
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT is_nullable FROM information_schema.columns
+            WHERE table_schema=current_schema()
+              AND table_name='collection_corrections' AND column_name='actor_id'
+            """
+        )
+        assert cursor.fetchone()[0] == "YES"
+
 
 @pytest.mark.usefixtures("isolated_migration_database")
 def test_rg1_removal_blocks_when_a_legacy_value_disagrees_with_its_reference():
@@ -124,9 +191,8 @@ def test_rg1_removal_blocks_when_a_legacy_value_disagrees_with_its_reference():
             "UPDATE metrics SET unit='unregistered-unit' WHERE id=(SELECT min(id) FROM metrics)"
         )
 
-    with pytest.raises(RuntimeError, match="unresolved or inconsistent"):
-        with transaction.atomic():
-            MigrationExecutor(connection).migrate([removal])
+    with pytest.raises(RuntimeError, match="unresolved or inconsistent"), transaction.atomic():
+        MigrationExecutor(connection).migrate([removal])
 
     with connection.cursor() as cursor:
         cursor.execute(
