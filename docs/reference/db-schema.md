@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21 12:06 JST (candidate `4bd6d704` through `0118` on isolated PostgreSQL18.6 and staging PostgreSQL18.4, deployment `dep-dbc2lojm8hqs73bcpvp0`)
+Last verified: 2026-10-21 12:20 JST (working candidate based on `7865d096` through `0119` on isolated PostgreSQL18.6; staging `4bd6d704` remains verified through `0118` on PostgreSQL18.4)
 
-Scope: **172 core application tables**, **2310 physical columns**, plus nine compatibility views. Repository migration boundary: `0118_intelligence_timezone_references`; staging verified at `0118_intelligence_timezone_references` (SHA `4bd6d7049876b3a28fd370c0a38af5dddfd84984`). This guide describes the migration-backed repository candidate.
+Scope: **172 core application tables**, **2312 physical columns**, plus nine compatibility views. Repository migration boundary: `0119_geography_label_locale_references`; staging verified at `0118_intelligence_timezone_references` (SHA `4bd6d7049876b3a28fd370c0a38af5dddfd84984`). This guide describes the migration-backed repository candidate.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -1850,23 +1850,44 @@ One translated label for a country code.
 
 Model: [CountryLabel](../../core/models.py#L958).
 
-**Primary key:** `country, lang`.
+**Primary key:** `country_code, lang` (the existing composite key).
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `country_code` | `varchar(2)` | No | FK → [`countries`](#table-countries) (`code`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `country`. |
-| `lang` | `varchar(16)` | No | PK component. |
-| `label` | `text` | No | Stored value. |
+| `lang` | `varchar(16)` | No | Original app language key and PK component; retained for compatible writers/readers. |
+| `label` | `text` | No | Owned translated wording; preserved exactly. |
+| `locale_id` | `varchar(255)` | Yes | FK → [`locales`](#table-locales) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `locale_reference`. Canonical app-edition locale or unresolved NULL. |
 
 **Named indexes:**
 
-None declared beyond field/FK/constraint indexes.
+- `country_labels_locale_id_39819453`: index on `locale_id`.
+- `country_labels_locale_id_39819453_like`: varchar-pattern index on `locale_id`.
+- `uq_country_label_locale`: unique index on `country_code, locale_id`.
 
 **Named constraints:**
 
-None declared beyond primary keys, field uniqueness and foreign keys.
+- `country_labels_pkey`: existing primary key on `country_code, lang`.
+- `uq_country_label_locale`: unique resolved owner/locale pair; multiple NULL references remain possible during mapping.
+- `ck_country_label_locale`: NULL reference or lower-case locale identity matching normalized app-edition language (underscores become hyphens; Chinese-edition `zh-cn` becomes `zh-hans`).
+- `country_labels_locale_id_39819453_fk_locales_code`: deferred FK to `locales(code)`.
 
-None beyond the column-level keys, uniqueness, nullability, and type checks described above.
+`sync_country_label_locale` invokes `sync_geography_label_locale` before
+inserts/updates. It matches the existing app-edition resolver: case-insensitive
+catalogue lookup, underscore-to-hyphen normalization and the contextual Chinese
+edition mapping to `zh-Hans`. The FK stores the catalogue's actual code. Raw `lang`
+and translated wording remain intact, including unrecognized tags whose reference
+stays NULL. A raw primary-key/language change updates or clears the relationship;
+contradictory references and duplicate resolved owner/locale pairs fail. This
+app-label rule does not reinterpret source-language facts as the app edition.
+
+`map_geography_label_locales --owner country_labels` previews by default; `--apply`
+updates only references. It accepts explicit database/batch limits and the paired
+`--after-owner-key`/`--after-lang` composite cursor. The command reports eligible,
+updated, unmatched and owner/locale collision counts. Mapping refuses existing
+collisions before writes and never merges/deletes their wording. Current composite
+keys and source tags are rechecked after concurrent writes. Country/region
+relationships, original label selections and feed output do not change.
 
 [Back to table inventory](#table-inventory)
 
@@ -1906,23 +1927,44 @@ One translated label for a region.
 
 Model: [RegionLabel](../../core/models.py#L882).
 
-**Primary key:** `region, lang`.
+**Primary key:** `region_key, lang` (the existing composite key).
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `region_key` | `varchar(64)` | No | FK → [`regions`](#table-regions) (`key`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `region`. |
-| `lang` | `varchar(16)` | No | PK component. |
-| `label` | `text` | No | Stored value. |
+| `lang` | `varchar(16)` | No | Original app language key and PK component; retained for compatible writers/readers. |
+| `label` | `text` | No | Owned translated wording; preserved exactly. |
+| `locale_id` | `varchar(255)` | Yes | FK → [`locales`](#table-locales) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `locale_reference`. Canonical app-edition locale or unresolved NULL. |
 
 **Named indexes:**
 
-None declared beyond field/FK/constraint indexes.
+- `region_labels_locale_id_6647bacd`: index on `locale_id`.
+- `region_labels_locale_id_6647bacd_like`: varchar-pattern index on `locale_id`.
+- `uq_region_label_locale`: unique index on `region_key, locale_id`.
 
 **Named constraints:**
 
-None declared beyond primary keys, field uniqueness and foreign keys.
+- `region_labels_pkey`: existing primary key on `region_key, lang`.
+- `uq_region_label_locale`: unique resolved owner/locale pair; multiple NULL references remain possible during mapping.
+- `ck_region_label_locale`: NULL reference or lower-case locale identity matching normalized app-edition language (underscores become hyphens; Chinese-edition `zh-cn` becomes `zh-hans`).
+- `region_labels_locale_id_6647bacd_fk_locales_code`: deferred FK to `locales(code)`.
 
-None beyond the column-level keys, uniqueness, nullability, and type checks described above.
+`sync_region_label_locale` invokes `sync_geography_label_locale` before
+inserts/updates. It matches the existing app-edition resolver: case-insensitive
+catalogue lookup, underscore-to-hyphen normalization and the contextual Chinese
+edition mapping to `zh-Hans`. The FK stores the catalogue's actual code. Raw `lang`
+and translated wording remain intact, including unrecognized tags whose reference
+stays NULL. A raw primary-key/language change updates or clears the relationship;
+contradictory references and duplicate resolved owner/locale pairs fail. This
+app-label rule does not reinterpret source-language facts as the app edition.
+
+`map_geography_label_locales --owner region_labels` previews by default; `--apply`
+updates only references. It accepts explicit database/batch limits and the paired
+`--after-owner-key`/`--after-lang` composite cursor. The command reports eligible,
+updated, unmatched and owner/locale collision counts. Mapping refuses existing
+collisions before writes and never merges/deletes their wording. Current composite
+keys and source tags are rechecked after concurrent writes. Country/region
+relationships, original label selections and feed output do not change.
 
 [Back to table inventory](#table-inventory)
 

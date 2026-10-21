@@ -37,9 +37,11 @@ from urllib.parse import urlparse
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.indexes import GinIndex, GistIndex, OpClass
 from django.db import IntegrityError, models, router, transaction
-from django.db.models.functions import Upper
+from django.db.models.functions import Lower, Upper
+from django.db.models.lookups import Exact
 from django.utils import timezone
 
+from core.locale_identity import app_edition_locale_key
 from core.measurement_time import measurement_window
 
 
@@ -889,10 +891,23 @@ class RegionLabel(models.Model):
         to_field="key",
     )
     lang = models.CharField(max_length=16)
+    locale_reference = models.ForeignKey(
+        Locale, db_column="locale_id", null=True, blank=True, on_delete=models.PROTECT
+    )
     label = models.TextField()
 
     class Meta:
         db_table = "region_labels"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                fields=["region", "locale_reference"], name="uq_region_label_locale"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(locale_reference__isnull=True)
+                | Exact(Lower("locale_reference"), app_edition_locale_key()),
+                name="ck_region_label_locale",
+            ),
+        ]
 
 
 class Country(models.Model):
@@ -965,10 +980,23 @@ class CountryLabel(models.Model):
         to_field="code",
     )
     lang = models.CharField(max_length=16)
+    locale_reference = models.ForeignKey(
+        Locale, db_column="locale_id", null=True, blank=True, on_delete=models.PROTECT
+    )
     label = models.TextField()
 
     class Meta:
         db_table = "country_labels"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                fields=["country", "locale_reference"], name="uq_country_label_locale"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(locale_reference__isnull=True)
+                | Exact(Lower("locale_reference"), app_edition_locale_key()),
+                name="ck_country_label_locale",
+            ),
+        ]
 
 
 class CountryRegion(models.Model):

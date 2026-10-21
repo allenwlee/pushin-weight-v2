@@ -17,7 +17,19 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 @pytest.fixture(autouse=True)
 def _seed_japanese_geography():
+    from importlib import import_module
     from pathlib import Path
+
+    from django.apps import apps
+
+    from core.models import Country
+
+    # Transactional migration tests flush data-migration rows in the reused DB.
+    # Restore the same pinned taxonomy before inserting its Japanese children.
+    if not Country.objects.exists():
+        import_module(
+            "core.migrations.0026_account_geography_taxonomy"
+        ).seed_account_geography(apps, None)
 
     labels = json.loads(
         (Path(__file__).resolve().parents[1] / "monitor/data/account_geography_ja.json").read_text()
