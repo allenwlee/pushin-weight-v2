@@ -21,6 +21,8 @@ class Command(BaseCommand):
         mode.add_argument("--dry-run", action="store_true")
 
     def handle(self, *args, **options):
+        if options["apply"] and options["dry_run"]:
+            raise CommandError("--apply and --dry-run cannot be combined")
         try:
             result = map_metric_time_zones(
                 **{

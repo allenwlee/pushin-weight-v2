@@ -110,6 +110,16 @@ def test_mapping_preview_does_not_write_and_bad_limits_fail():
     ).exists()
 
 
+def test_python_command_call_rejects_apply_and_preview_before_any_write():
+    register_definitions()
+    TimeZone.objects.create(code="UTC")
+    with pytest.raises(CommandError, match="cannot be combined"):
+        call_command("map_metric_time_zones", apply=True, dry_run=True)
+    assert not SourceMetric.objects.filter(
+        source_timezone_reference__isnull=False
+    ).exists()
+
+
 def test_old_writer_changes_keep_exact_reference_or_unknown_without_guessing():
     TimeZone.objects.bulk_create([TimeZone(code="UTC"), TimeZone(code="US/Eastern")])
     register_definitions()
