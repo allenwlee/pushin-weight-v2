@@ -236,29 +236,53 @@ def test_real_chart_summary_equals_exact_source_for_local_days_and_eligibility(
         assert summary[key] == exact[key], (window, zone, filters, key)
 
 
-def test_historical_correction_invalidates_warm_chart_and_recovers_after_refresh(
-    chart_context,
+@pytest.mark.parametrize("window", [7, 30, 365])
+@pytest.mark.parametrize("path", ["/", "/chart.html", "/chart/"])
+@pytest.mark.parametrize("zone", ["UTC", "Asia/Tokyo"])
+def test_historical_correction_recounts_its_whole_bucket_and_reuses_earlier_history(
+    chart_context, window, path, zone,
 ):
     from monitor.home_count_summary import refresh_home_counts
 
     client, brand = chart_context
-    _post(brand, "correction-original", DAY - timedelta(days=2))
+    _post(brand, "correction-prefix", DAY - timedelta(days=5))
+    # Both this existing row and the later insert belong to the same saved
+    # quarter hour. Splitting at the exact dirty timestamp would double-count
+    # this existing row when the raw tail is added.
+    bucket_day = DAY - timedelta(days=2)
+    _post(brand, "correction-original", bucket_day + timedelta(hours=13, minutes=27))
     assert refresh_home_counts()["status"] == "refreshed"
-    params = {"window": 30, "locale": "en"}
-    before = _payload(client.get("/chart.html", params, secure=True))
-    _post(brand, "correction-late", DAY - timedelta(days=2))
+    params = {"window": window, "locale": "en", "timezone": zone}
+    before = _payload(client.get(path, params, secure=True))
+    _post(brand, "correction-late", bucket_day + timedelta(hours=13, minutes=24))
     with CaptureQueriesContext(connection) as queries:
-        dirty = _payload(client.get("/chart.html", params, secure=True))
+        dirty = _payload(client.get(path, params, secure=True))
     assert dirty["totals"][brand.pk] == before["totals"][brand.pk] + 1
-    assert not any(
+    assert any(
         "FROM home_brand_time_counts" in row["sql"] for row in queries.captured_queries
-    )
+    ), "a bounded historical correction must not force a complete year recount"
+    if window == 7:
+        # Short Pulse comparisons retain their existing one-minute cache.
+        assert dirty["pulse"] == before["pulse"]
+    _clear_home_pulse_cache()
+    uncached_dirty = _payload(client.get(path, params, secure=True))
+    assert dirty["series"] == uncached_dirty["series"]
+    if window != 7:
+        assert dirty["pulse"] == uncached_dirty["pulse"]
+    _clear_home_pulse_cache()
+    with patch("monitor.home_count_summary.read_home_counts", return_value=None):
+        exact = _payload(client.get(path, params, secure=True))
+    for key in ("days", "series", "totals", "stacked", "pulse"):
+        assert uncached_dirty[key] == exact[key], (window, path, zone, key)
     assert refresh_home_counts()["status"] == "refreshed"
-    recovered = _payload(client.get("/chart.html", params, secure=True))
+    recovered = _payload(client.get(path, params, secure=True))
     assert recovered["series"] == dirty["series"]
 
 
-@pytest.mark.parametrize("unavailable", ["missing_state", "missing_view", "timeout"])
+@pytest.mark.parametrize(
+    "unavailable",
+    ["missing_state", "missing_view", "timeout", "unknown_boundary", "global_change"],
+)
 def test_real_chart_falls_back_without_broken_transaction_when_summary_is_unavailable(
     chart_context, unavailable
 ):
@@ -290,6 +314,16 @@ def test_real_chart_falls_back_without_broken_transaction_when_summary_is_unavai
         elif unavailable == "missing_view":
             with connection.cursor() as cursor:
                 cursor.execute("DROP MATERIALIZED VIEW home_brand_time_counts")
+        elif unavailable in {"unknown_boundary", "global_change"}:
+            from django.db.models import F
+
+            MaterializationState.objects.update(
+                source_generation=F("source_generation") + 1,
+                dirty_since=(
+                    datetime.min.replace(tzinfo=UTC)
+                    if unavailable == "global_change" else None
+                ),
+            )
         if unavailable == "timeout":
             with connection.execute_wrapper(cancel_summary):
                 actual = _payload(client.get("/chart.html", params, secure=True))
@@ -299,6 +333,76 @@ def test_real_chart_falls_back_without_broken_transaction_when_summary_is_unavai
         assert actual["pulse"] == expected["pulse"]
         assert Post.objects.filter(pk="fallback-history").exists()
         raise RestoreFixture
+
+
+@pytest.mark.parametrize("mutation", ["move_earlier", "move_later", "flag", "delete"])
+def test_dirty_prefix_matches_exact_chart_after_existing_history_changes(
+    chart_context, mutation
+):
+    from core.models import PostUntrackedBrandPromotion
+    from monitor.home_count_summary import refresh_home_counts
+
+    client, brand = chart_context
+    _post(brand, "mutation-prefix", DAY - timedelta(days=20))
+    changed = _post(brand, "mutation-original", DAY - timedelta(days=5, hours=1))
+    assert refresh_home_counts()["status"] == "refreshed"
+    if mutation == "move_earlier":
+        Post.objects.filter(pk=changed.pk).update(created_at=DAY - timedelta(days=10))
+    elif mutation == "move_later":
+        Post.objects.filter(pk=changed.pk).update(created_at=DAY - timedelta(days=2))
+    elif mutation == "flag":
+        PostUntrackedBrandPromotion.objects.create(post=changed, promotion_keys=["ads_spam"])
+    else:
+        PostBrand.objects.filter(post=changed).delete()
+    params = {"window": 365, "locale": "en", "timezone": "Asia/Tokyo"}
+    with CaptureQueriesContext(connection) as queries:
+        actual = _payload(client.get("/chart.html", params, secure=True))
+    assert any("FROM home_brand_time_counts" in row["sql"] for row in queries)
+    _clear_home_pulse_cache()
+    with patch("monitor.home_count_summary.read_home_counts", return_value=None):
+        expected = _payload(client.get("/chart.html", params, secure=True))
+    for key in ("days", "series", "totals", "stacked", "pulse"):
+        assert actual[key] == expected[key], (mutation, key)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_new_older_correction_between_preflight_and_count_uses_new_snapshot(chart_context):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from django.db import connections
+
+    from monitor.home_count_summary import refresh_home_counts
+
+    client, brand = chart_context
+    _post(brand, "race-prefix", DAY - timedelta(days=20))
+    assert refresh_home_counts()["status"] == "refreshed"
+    _post(brand, "race-first-dirty", DAY - timedelta(days=2))
+    changed = False
+
+    def write_older_correction():
+        try:
+            _post(brand, "race-earlier-dirty", DAY - timedelta(days=10))
+        finally:
+            connections.close_all()
+
+    def race(execute, sql, params, many, context):
+        nonlocal changed
+        if "FROM home_brand_time_counts" in sql and not changed:
+            changed = True
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(write_older_correction).result(timeout=5)
+        return execute(sql, params, many, context)
+
+    params = {"window": 365, "locale": "en", "timezone": "Asia/Tokyo"}
+    with connection.execute_wrapper(race):
+        actual = _payload(client.get("/chart.html", params, secure=True))
+    assert changed, "the real chart must read the usable native prefix"
+    assert actual["totals"][brand.pk] == 3
+    _clear_home_pulse_cache()
+    with patch("monitor.home_count_summary.read_home_counts", return_value=None):
+        expected = _payload(client.get("/chart.html", params, secure=True))
+    for key in ("days", "series", "totals", "stacked", "pulse"):
+        assert actual[key] == expected[key], key
 
 
 @pytest.mark.parametrize("window", [30, 365])

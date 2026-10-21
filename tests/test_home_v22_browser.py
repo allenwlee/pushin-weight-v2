@@ -1639,7 +1639,27 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 browser.close()
 
     def test_long_window_switches_commit_before_the_client_timeout(self) -> None:
-        """Cold and warm 30d/365d responses keep the atomic projection usable."""
+        """7d → 365d and warm long-window switches survive a historical correction."""
+        from monitor.home_count_summary import refresh_home_counts
+
+        day = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        brand = Brand.objects.get(pk="deepseek")
+        for key, at in (
+            ("browser-count-prefix", day - timedelta(days=5)),
+            ("browser-count-existing", day - timedelta(days=2) + timedelta(hours=13, minutes=27)),
+        ):
+            PostBrand.objects.create(
+                post=Post.objects.create(tweet_id=key, created_at=at), brand=brand,
+            )
+        self.assertEqual(refresh_home_counts()["status"], "refreshed")
+        PostBrand.objects.create(
+            post=Post.objects.create(
+                tweet_id="browser-count-correction",
+                created_at=day - timedelta(days=2) + timedelta(hours=13, minutes=24),
+            ),
+            brand=brand,
+        )
+        _clear_home_pulse_cache()
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -1660,8 +1680,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 try:
                     page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
                     page.wait_for_function("() => window.pwFilter")
-                    timings: dict[int, list[float]] = {30: [], 365: []}
-                    for window_days in (30, 365, 30, 365):
+                    timings: dict[int, list[float]] = {7: [], 30: [], 365: []}
+                    for window_days in (7, 365, 30, 365, 30, 365):
                         started_at = page.evaluate("performance.now()")
                         with page.expect_response(
                             lambda response: "/chart.html?" in response.url

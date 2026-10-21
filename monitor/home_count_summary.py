@@ -60,7 +60,8 @@ def read_home_counts(
 ) -> list[dict[str, Any]] | None:
     """Read one SQL snapshot of valid history plus its exact live tail.
 
-    Return None for unavailable/dirty history, distinct from a valid empty result.
+    Reuse the unchanged prefix and recount the first dirty bucket onward live.
+    Return None without a usable publication/prefix, distinct from an empty result.
     Bounds before the live UTC day must align with the materialized grain.
     Callers validate every local chart midnight, including DST transitions.
     """
@@ -71,6 +72,24 @@ def read_home_counts(
         return None
     if midpoint is not None and midpoint.timestamp() % 900:
         return None
+    # Writers track the earliest old/new timestamp affected by a count change.
+    # Discard its entire quarter hour so saved and live rows cannot overlap.
+    # Unknown/global invalidation still falls back to the exact source query.
+    health_sql = f"""
+        SELECT boundary FROM (
+            SELECT least(
+                cutoff, %s::timestamptz,
+                CASE WHEN source_generation = published_generation THEN cutoff
+                ELSE date_bin('15 minutes', dirty_since,
+                              TIMESTAMPTZ '2000-01-01 00:00:00+00') END
+            ) AS boundary, {_HISTORY_CLEAN} AS clean
+            FROM materialization_state
+            WHERE dataset_key = %s AND cutoff >= %s
+            AND published_generation IS NOT NULL
+            AND (source_generation = published_generation OR dirty_since IS NOT NULL)
+        ) publication WHERE clean OR boundary > %s
+    """
+    health_params = [day, HOME_COUNTS.dataset_key, day, start]
     try:
         # A catalog/lifecycle preflight avoids taking a read lock on an initially
         # unpopulated view while its first ordinary REFRESH is running.
@@ -78,12 +97,13 @@ def read_home_counts(
             if not _populated(cursor):
                 return None
             cursor.execute(
-                "SELECT 1 FROM materialization_state WHERE dataset_key = %s "
-                f"AND {_HISTORY_CLEAN} AND cutoff >= %s",
-                [HOME_COUNTS.dataset_key, day],
+                f"WITH health AS ({health_sql}) SELECT boundary FROM health",
+                health_params,
             )
-            if not cursor.fetchone():
+            publication = cursor.fetchone()
+            if not publication:
                 return None
+            boundary = publication[0]
             flag_sql = ""
             raw_flag_sql = ""
             for column, alias, value in (
@@ -101,19 +121,19 @@ def read_home_counts(
             else:
                 group_sql = "(bucket_start >= %s)"
                 group_params = [midpoint]
-            # The health row and both count sources share this statement's
-            # MVCC snapshot. Never combine preflight metadata with new data.
+            # Supply a concrete date for the planner's live-tail selectivity.
+            # Recheck its validity in the count statement's MVCC snapshot: an
+            # earlier concurrent correction forces the exact-source fallback.
             cursor.execute(
                 f"""
                 WITH health AS (
-                    SELECT least(cutoff, %s::timestamptz) AS boundary
-                    FROM materialization_state WHERE dataset_key = %s
-                    AND {_HISTORY_CLEAN} AND cutoff >= %s
+                    SELECT boundary FROM ({health_sql}) publication
+                    WHERE boundary >= %s
                 ), counts AS (
                     SELECT brand_id, bucket_start, post_count AS n
                     FROM home_brand_time_counts, health
                     WHERE brand_id = ANY(%s::varchar[] COLLATE case_insensitive)
-                    AND bucket_start >= %s AND bucket_start < least(boundary, %s)
+                    AND bucket_start >= %s AND bucket_start < %s
                     {flag_sql}
                     UNION ALL
                     SELECT b.nickname, p.created_at, 1::bigint
@@ -123,7 +143,7 @@ def read_home_counts(
                     LEFT JOIN posts_unsanctioned_flags f ON f.post_id = p.tweet_id
                     LEFT JOIN posts_untracked_brand_promotions u ON u.post_id = p.tweet_id
                     WHERE b.nickname = ANY(%s::varchar[] COLLATE case_insensitive)
-                    AND p.created_at >= greatest(%s, boundary) AND p.created_at < %s
+                    AND p.created_at >= %s AND p.created_at < %s
                     {raw_flag_sql}
                 ), grouped AS (
                     SELECT brand_id, {group_sql} AS bucket, sum(n)::bigint AS count
@@ -133,14 +153,13 @@ def read_home_counts(
                 FROM (VALUES (1)) seed(n) LEFT JOIN grouped g ON TRUE
                 """,
                 [
-                    day,
-                    HOME_COUNTS.dataset_key,
-                    day,
+                    *health_params,
+                    boundary,
                     brand_ids,
                     start,
-                    end,
+                    min(boundary, end),
                     brand_ids,
-                    start,
+                    max(start, boundary),
                     end,
                     *group_params,
                 ],
