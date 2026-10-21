@@ -189,6 +189,7 @@ def test_selected_runtime_maps_fixed_slots_to_v4_catalog_and_affiliations_for_bo
     ]
     for call in transport.calls:
         request = call["request"]
+        assert request["max_tokens"] == 6000  # Explicit probe budgets stay exact.
         assert request["temperature"] == 1.0
         assert request["top_p"] == 1.0
         assert request["seed"] == 42

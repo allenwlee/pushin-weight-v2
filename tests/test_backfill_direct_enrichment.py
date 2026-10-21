@@ -91,6 +91,81 @@ def test_direct_real_callers_publish_and_reuse_without_file_requests(native):
     assert provider.sent == sent
 
 
+@pytest.mark.parametrize("path", ["live", "backfill"])
+def test_live_and_backfill_classifier_wire_budget_covers_multibrand_packets(native, path):
+    """The real callers must not inherit the old, truncating 4,096-token default."""
+    from django.db import transaction
+
+    from core.models import CollectionRun, Post, PostBrand, PostEnrichmentState
+    from core.provider_batches import record_post_membership
+    from monitor.cycle import CycleRunner
+    from x_monitor.deepinfra import DEEPSEEK_0731_MODEL
+
+    class CapturingProvider(DirectProvider):
+        def __init__(self):
+            super().__init__()
+            self.classifier_requests = []
+
+        def transport(self, body, timeout):
+            if body["model"] == DEEPSEEK_0731_MODEL:
+                with self.lock:
+                    self.classifier_requests.append(body)
+            return super().transport(body, timeout)
+
+    job, cfg, delegates, _ = native
+    identifiers = [f"budget-{i:02}" for i in range(20 if path == "live" else 18)]
+    for identifier in identifiers:
+        post = Post.objects.create(
+            tweet_id=identifier, text="I tried Qwen and DeepSeek today.", lang="en"
+        )
+        PostBrand.objects.create(post=post, brand_id="qwen")
+        PostEnrichmentState.objects.create(post=post)
+    if path == "backfill":
+        with transaction.atomic():
+            record_post_membership(CollectionRun.objects.get(job=job), None, identifiers)
+        identifiers += ["native-1", "native-2"]
+    # Match the retained truncation's shape: 20 Posts and 37 brand decisions.
+    for identifier in identifiers[:17]:
+        PostBrand.objects.create(post_id=identifier, brand_id="deepseek")
+
+    provider = CapturingProvider()
+    if path == "live":
+        clients = {
+            stage: provider.factory(
+                api_key="test", model=client.model, request_profile=client.request_profile
+            )
+            for stage, client in delegates.items()
+        }
+        result = CycleRunner(
+            cfg=cfg, _post_fetch_clients=clients, _max_llm_calls=100
+        )._run_post_fetch([], run_id="classifier-budget-pin", post_ids=set(identifiers))
+        assert result["n_enrichment_succeeded"] == 20, result
+    else:
+        for turn in range(15):
+            result = run_direct(native, provider, initial=turn == 0)
+            if result["status"] == "completed":
+                break
+        assert result["status"] == "completed", result
+        assert result["twitterapi_requests"] == 0
+    assert PostEnrichmentState.objects.filter(
+        pk__in=identifiers,
+        translation_status="succeeded",
+        classification_status="succeeded",
+    ).count() == 20
+    assert len(provider.classifier_requests) == 2
+    assert {
+        "content" if "CONTENT ROLE:" in body["messages"][0]["content"] else "brand"
+        for body in provider.classifier_requests
+    } == {"content", "brand"}
+    for body in provider.classifier_requests:
+        payload = json.loads(next(m["content"] for m in body["messages"] if m["role"] == "user"))
+        assert len(payload["cases"]) == 20
+        assert sum(len(case["brand_decision_slots"]) for case in payload["cases"].values()) == 37
+        assert body["max_tokens"] == 16_384, (
+            f"{path} still sends the 4,096-token classifier cap that truncated a real packet"
+        )
+
+
 @pytest.mark.parametrize("status", [401, 402, 403])
 def test_provider_admission_failure_drains_sent_wave_then_stops(native, status):
     from core.provider_batches import BatchAdmissionError

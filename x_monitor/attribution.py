@@ -4218,7 +4218,7 @@ def classify_batch_pragmatics_full(
     *,
     model: str | None = None,
     on_batch_error: Callable[[list[dict[str, Any]], Exception], None] | None = None,
-    max_tokens: int = 4096,
+    max_tokens: int = 16_384,
     thinking: "dict | None" = None,
     deadline: Any | None = None,
     max_workers: int = 3,
@@ -4227,6 +4227,8 @@ def classify_batch_pragmatics_full(
 ) -> list[dict[str, Any]]:
     """Classify batches with exactly two disjoint, concurrently scheduled roles.
 
+    Each role gets 16,384 output tokens by default: real 20-post, multi-brand
+    packets exceeded the old 4,096 limit. Both live and backfill share this budget.
     Invalid or missing siblings deliberately yield a pending result.  There is
     no reviewer, repair, topic call, or per-post retry topology here.
     """
