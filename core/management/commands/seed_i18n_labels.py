@@ -41,6 +41,7 @@ from core.models import (
     DiscourseLabel,
     GeopoliticalModeKey,
     GeopoliticalModeLabel,
+    Locale,
     NationalismKey,
     NationalismLabel,
     NationalStanceKey,
@@ -58,6 +59,7 @@ from core.models import (
     UntrackedBrandPromotionKey,
     UntrackedBrandPromotionLabel,
 )
+from core.shared_vocabulary import resolve_locale, seed_shared_vocabulary
 from monitor.account_geography import COUNTRY_NAMES, REGION_NAMES
 
 # ---------------------------------------------------------------------------
@@ -310,6 +312,8 @@ class Command(BaseCommand):
 
     def _apply(self, seeds: list[dict]) -> None:
         """Insert key rows and label rows that don't already exist."""
+        # Geography labels now reference the shared language/locale catalogues.
+        seed_shared_vocabulary(catalogues=("languages", "locales"))
         key_inserted = 0
         label_inserted = 0
 
@@ -320,8 +324,16 @@ class Command(BaseCommand):
                 key_model = Country if family == "country" else Region
                 if not key_model.objects.filter(**{key_field: seed["key"]}).exists():
                     continue
+                locale = resolve_locale(seed["lang"], context="app_edition")
+                if locale is None or not Locale.objects.filter(pk=locale.pk).exists():
+                    raise CommandError(
+                        f"Missing shared locale for geography label {seed['lang']!r}"
+                    )
                 _, created = seed["label_model"].objects.get_or_create(
-                    **{family + "_id": seed["key"], "lang": "ja"},
+                    **{
+                        family + "_id": seed["key"],
+                        "locale_reference_id": locale.pk,
+                    },
                     defaults={"label": seed["label"]},
                 )
                 if created:

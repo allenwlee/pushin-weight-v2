@@ -242,6 +242,7 @@ def test_fourth_benchmark_needs_only_its_own_score_definition():
     from core.benchmark_metric_identity import configure_collection
     from core.benchmark_metric_store import persist_source
     from core.models import DataSource, SourceMetric
+    from core.models import MeasurementUnit
 
     _, spec = setup_spec()
     DataSource.objects.create(
@@ -250,13 +251,14 @@ def test_fourth_benchmark_needs_only_its_own_score_definition():
         source_type="benchmark",
         adapter_key="fixture-only",
     )
+    MeasurementUnit.objects.get_or_create(code="fixture_points")
     SourceMetric.objects.create(
         source_id="fixture_bench",
         metric_type_id="benchmark_score",
         metric_key="score",
         version=1,
         name="Score",
-        unit="fixture_points",
+        unit_reference_id="fixture_points",
         value_kind="float",
         quantity_form="score",
         measurement_kind="state",

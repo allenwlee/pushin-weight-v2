@@ -52,27 +52,23 @@ def record_timing_correction(
     after,
     policy,
     reason,
-    actor=None,
     actor_identity=None,
     recorded_at=None,
 ):
     actor_identity = _registered_actor(actor_identity)
-    if actor is None:
-        if actor_identity is None:
-            # This fixed system performer is explicit registration, never
-            # inferred from a caller's legacy text or an operator name.
-            actor_identity, _ = Actor.objects.get_or_create(
-                actor_kind=Actor.Kind.SYSTEM,
-                actor_key="benchmark_metric_timing_repair",
-                defaults={
-                    "id": uuid.uuid5(
-                        uuid.NAMESPACE_URL,
-                        "pushinweight:actor:system:benchmark_metric_timing_repair",
-                    )
-                },
-            )
-        actor = f"{actor_identity.actor_kind}:{actor_identity.actor_key}"
-    require(isinstance(actor, str) and actor.strip(), "correction actor required")
+    if actor_identity is None:
+        # This fixed system performer is explicit registration, never
+        # inferred from caller-provided text or an operator name.
+        actor_identity, _ = Actor.objects.get_or_create(
+            actor_kind=Actor.Kind.SYSTEM,
+            actor_key="benchmark_metric_timing_repair",
+            defaults={
+                "id": uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    "pushinweight:actor:system:benchmark_metric_timing_repair",
+                )
+            },
+        )
     observation = CollectionObservation.objects.select_for_update().get(
         pk=value.observation_id
     )
@@ -102,7 +98,6 @@ def record_timing_correction(
         predecessor=predecessor,
         correction_kind="timing",
         policy_version=policy,
-        actor_identifier=actor,
         actor=actor_identity,
         reason_code=reason,
         recorded_at=recorded_at or timezone.now(),
@@ -117,10 +112,9 @@ def correct_attribution(
     *,
     product,
     mapping,
-    actor,
     reason,
     policy="reviewed-attribution-v1",
-    actor_identity=None,
+    actor_identity,
 ):
     """Change the current view while retaining original contract-pinned admission."""
     from core.collection_identity import qualified_catalog_ownership
@@ -128,8 +122,9 @@ def correct_attribution(
     observation = CollectionObservation.objects.select_for_update().get(
         pk=observation.pk
     )
-    require(actor and reason, "correction actor and reason required")
+    require(reason, "correction reason required")
     actor_identity = _registered_actor(actor_identity)
+    require(actor_identity is not None, "registered correction actor required")
     if mapping is not None:
         require(
             product is not None
@@ -149,7 +144,6 @@ def correct_attribution(
         predecessor=predecessor,
         correction_kind="attribution",
         policy_version=policy,
-        actor_identifier=actor,
         actor=actor_identity,
         reason_code=reason,
         recorded_at=timezone.now(),

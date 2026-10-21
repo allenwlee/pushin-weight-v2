@@ -7,12 +7,13 @@ from decimal import Decimal
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from django.db import transaction
+from django.db import connection, transaction
 
 from core.measurement_taxonomy import digest, require
 from core.models import (
     DataSource,
     MeasurementSubject,
+    MeasurementUnit,
     MetricCollectionContract,
     MetricType,
     SourceMetric,
@@ -363,14 +364,33 @@ def register_definitions():
         MetricType.objects.get_or_create(
             pk=key, defaults={"name": key.replace("_", " ").title()}
         )
-    for row in definition_rows():
+    rows = definition_rows()
+    # These identities come from the installed typed definitions, never a
+    # provider response or a guessed unit alias.
+    units = {row[name] for row in rows for name in ("unit", "window_unit") if row[name]}
+    if MeasurementUnit._meta.db_table in connection.introspection.table_names():
+        MeasurementUnit.objects.bulk_create(
+            [MeasurementUnit(code=code) for code in sorted(units)], ignore_conflicts=True
+        )
+    fields = {field.attname for field in SourceMetric._meta.concrete_fields}
+    for row in rows:
+        values = dict(row)
+        for legacy, canonical in (
+            ("unit", "unit_reference_id"),
+            ("window_unit", "window_unit_reference_id"),
+        ):
+            if legacy not in fields:
+                values[canonical] = values.pop(legacy)
+        # Explicit historical fixture/replay models keep their frozen field set.
+        if "source_timezone_reference_id" not in fields:
+            values["source_timezone"] = values.pop("source_timezone_reference_id") or "unknown"
         lookup = {k: row[k] for k in ("source_id", "metric_key", "version")}
         obj, created = SourceMetric.objects.get_or_create(
-            **lookup, defaults={k: v for k, v in row.items() if k not in lookup}
+            **lookup, defaults={k: v for k, v in values.items() if k not in lookup}
         )
         if not created:
             require(
-                all(getattr(obj, k) == v for k, v in row.items()),
+                all(getattr(obj, k) == v for k, v in values.items()),
                 "definition changed; create a new version",
             )
     return SourceMetric.objects.count()
@@ -402,12 +422,14 @@ DEFINITION_SNAPSHOT_V1_FIELDS = (
 
 def definition_snapshot(obj):
     snapshot = {}
+    fields = {field.name for field in obj._meta.concrete_fields}
     for name in DEFINITION_SNAPSHOT_V1_FIELDS:
-        value = (
-            obj.source_timezone_reference_id or "unknown"
-            if name == "source_timezone"
-            else getattr(obj, name)
-        )
+        if name == "source_timezone" and name not in fields:
+            value = obj.source_timezone_reference_id or "unknown"
+        elif name in {"unit", "window_unit"} and name not in fields:
+            value = getattr(obj, name + "_reference_id")
+        else:
+            value = getattr(obj, name)
         snapshot[name] = str(value) if isinstance(value, Decimal) else value
     return snapshot
 
@@ -501,7 +523,7 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
             obj = SourceMetric.objects.get(
                 source=source, metric_key=key, version=versions.get(key, 1)
             )
-            if obj.source_timezone_reference_id is not None:
+            if getattr(obj, "source_timezone_reference_id", None) is not None:
                 try:
                     ZoneInfo(obj.source_timezone_reference_id)
                 except ZoneInfoNotFoundError as exc:

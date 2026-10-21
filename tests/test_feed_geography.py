@@ -78,8 +78,8 @@ def test_japanese_geography_seed_covers_every_existing_country_and_region():
     )
     call_command("seed_i18n_labels", verbosity=0)
     call_command("seed_i18n_labels", verbosity=0)
-    assert dict(CountryLabel.objects.filter(lang="ja").values_list("country_id", "label")) == catalog["countries"]
-    assert dict(RegionLabel.objects.filter(lang="ja").values_list("region_id", "label")) == catalog["regions"]
+    assert dict(CountryLabel.objects.filter(locale_reference_id="ja").values_list("country_id", "label")) == catalog["countries"]
+    assert dict(RegionLabel.objects.filter(locale_reference_id="ja").values_list("region_id", "label")) == catalog["regions"]
     assert set(Country.objects.values_list("code", flat=True)) == set(catalog["countries"])
     assert set(Region.objects.values_list("key", flat=True)) == set(catalog["regions"])
 

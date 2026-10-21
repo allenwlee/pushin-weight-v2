@@ -163,7 +163,7 @@ def forecast_inputs(
                 "value": str(value.integer_value)
                 if value.integer_value is not None
                 else value.float_value,
-                "unit": definition.unit,
+                "unit": definition.unit_reference_id,
                 "measurement_kind": definition.measurement_kind,
                 "window_mode": definition.window_mode,
                 "source_timezone": value.source_timezone,

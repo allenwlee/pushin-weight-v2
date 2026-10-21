@@ -1,5 +1,6 @@
 code
 accounts
+arena_ips_score
 arena_points
 arena_points_squared
 battles
@@ -18,6 +19,7 @@ position
 repositories
 second
 sessions
+signal_observations
 spaces
 stars
 subscribers

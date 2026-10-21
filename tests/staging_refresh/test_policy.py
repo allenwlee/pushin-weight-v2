@@ -395,6 +395,10 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "locales",
         "measurement_units",
         "actors",
+        "definition_versions",
+        "service_providers",
+        "inference_models",
+        "workflow_stages",
         "event_dossiers",
         "event_dossier_sources",
         "event_dossier_claims",
@@ -684,7 +688,19 @@ def test_benchmark_evidence_is_copied_with_optional_pre_migration_sources():
 
 def test_shared_catalogues_are_preserved_and_pre_foundation_sources_remain_supported():
     policy = load_policy(POLICY_PATH)
-    catalogues = frozenset({"time_zones", "languages", "locales", "measurement_units", "actors"})
+    catalogues = frozenset(
+        {
+            "time_zones",
+            "languages",
+            "locales",
+            "measurement_units",
+            "actors",
+            "definition_versions",
+            "service_providers",
+            "inference_models",
+            "workflow_stages",
+        }
+    )
     assert catalogues <= policy.relations.copied_tables
     assert catalogues <= policy.relations.optional_source_tables
     assert catalogues.isdisjoint(policy.scrub.truncate_tables)
@@ -701,6 +717,24 @@ def test_shared_catalogues_are_preserved_and_pre_foundation_sources_remain_suppo
         source=old,
         target=_inspection(policy, source=False),
     )
+
+
+def test_post_drop_schema_contract_does_not_require_retired_identity_columns():
+    policy = load_policy(POLICY_PATH)
+    required = policy.validation.required_columns
+
+    assert required["metrics"] >= {"unit_id", "window_unit_id", "source_timezone_id"}
+    assert required["events"] >= {"source_timezone_id"}
+    assert required["opportunities"] >= {"source_timezone_id"}
+    assert required["country_labels"] >= {"locale_id"}
+    assert required["region_labels"] >= {"locale_id"}
+    assert "unit" not in required["metrics"]
+    assert "window_unit" not in required["metrics"]
+    assert "source_timezone" not in required["metrics"]
+    assert "source_timezone" not in required["events"]
+    assert "source_timezone" not in required["opportunities"]
+    assert "lang" not in required["country_labels"]
+    assert "lang" not in required["region_labels"]
 
 
 def test_dossier_history_is_copied_and_pre_dossier_sources_remain_supported():

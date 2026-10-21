@@ -86,7 +86,6 @@ def test_shadow_scrub_clears_login_accounts_without_erasing_correction_performer
         observation,
         product=None,
         mapping=None,
-        actor="Original operator wording",
         actor_identity=actor,
         reason="incorrect_product",
     )

@@ -65,7 +65,7 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at
                 "native_only": assignment["product_id"] is None,
                 "metric": definition.metric_key,
                 "version": definition.version,
-                "unit": definition.unit,
+                "unit": definition.unit_reference_id,
                 "measurement_kind": definition.measurement_kind,
                 "value": str(value.integer_value)
                 if value.integer_value is not None

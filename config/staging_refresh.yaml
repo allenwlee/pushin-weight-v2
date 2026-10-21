@@ -39,6 +39,10 @@ relations:
     - locales
     - measurement_units
     - actors
+    - definition_versions
+    - service_providers
+    - inference_models
+    - workflow_stages
     - event_dossiers
     - event_dossier_sources
     - event_dossier_claims
@@ -236,6 +240,10 @@ relations:
     - locales
     - measurement_units
     - actors
+    - definition_versions
+    - service_providers
+    - inference_models
+    - workflow_stages
     - event_dossiers
     - event_dossier_sources
     - event_dossier_claims
@@ -649,29 +657,22 @@ validation:
   required_columns:
     country_labels:
       - country_code
-      - lang
       - label
       - locale_id
     region_labels:
       - region_key
-      - lang
       - label
       - locale_id
     events:
       - id
-      - source_timezone
       - source_timezone_id
     opportunities:
       - id
-      - source_timezone
       - source_timezone_id
     metrics:
       - id
-      - source_timezone
       - source_timezone_id
-      - unit
       - unit_id
-      - window_unit
       - window_unit_id
     actors:
       - id

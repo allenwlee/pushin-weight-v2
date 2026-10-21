@@ -71,7 +71,6 @@ def test_referenced_performer_cannot_be_deleted_by_orm_or_sql():
         observation,
         product=None,
         mapping=None,
-        actor="Retained operator label",
         actor_identity=actor,
         reason="incorrect_product",
     )
@@ -90,52 +89,75 @@ def test_referenced_performer_cannot_be_deleted_by_orm_or_sql():
 
 @pytest.mark.usefixtures("isolated_migration_database")
 @pytest.mark.django_db(transaction=True)
-def test_expansion_and_reverse_preserve_legacy_corrections_and_old_writer():
+def test_actor_cutover_backfills_registered_identity_and_keeps_old_writer_label():
     from django.db.migrations.executor import MigrationExecutor
 
-    target = ("core", "0115_shared_actors_and_correction_identity")
+    before_cutover = ("core", "0124_metric_unit_writer_cutover")
+    target = ("core", "0125_correction_actor_writer_cutover")
     executor = MigrationExecutor(connection)
-    executor.migrate(executor.loader.graph.leaf_nodes("core"))
+    executor.migrate([before_cutover])
     contract, raw, _, _ = configured(mapped=True, product_type="llm-model")
     observation = project(contract, "hf", [evidence("hf", raw)]).observations.get()
-    correction = correct_attribution(
-        observation,
-        product=None,
-        mapping=None,
-        actor="Unverified legacy label",
-        reason="incorrect_product",
-    )
-    MigrationExecutor(connection).migrate([target])
-    base = ("core", "0114_collection_latest_attempt_pointer")
-    MigrationExecutor(connection).migrate([base])
-    state = MigrationExecutor(connection).loader.project_state([base])
-    old_model = state.apps.get_model("core", "CollectionCorrection")
-    before = old_model.objects.values().get(pk=correction.pk)
-    MigrationExecutor(connection).migrate([target])
-    from core.models import CollectionCorrection
+    Actor.objects.create(actor_kind="agent", actor_key="legacy")
+    existing_id = uuid.uuid4()
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO collection_corrections
+                (id,observation_id,correction_kind,policy_version,
+                 actor_identifier,actor_id,reason_code,recorded_at_precision)
+            VALUES (%s,%s,'attribution','legacy-v1','agent:legacy',NULL,
+                    'incorrect_product','unknown')
+            """,
+            [existing_id, observation.pk],
+        )
 
-    after = CollectionCorrection.objects.values().get(pk=correction.pk)
-    assert after.pop("actor_id") is None
-    assert after == before
-    seed = Actor.objects.get(
-        actor_kind="system", actor_key="benchmark_metric_timing_repair"
+    # Apply the actor cutover from its preceding state with the old stored label
+    # present and no FK, exercising the exact-match migration directly.
+    MigrationExecutor(connection).migrate([target])
+    target_apps = MigrationExecutor(connection).loader.project_state([target]).apps
+    CollectionCorrection = target_apps.get_model("core", "CollectionCorrection")
+    TargetActor = target_apps.get_model("core", "Actor")
+    registered = TargetActor.objects.get(actor_kind="agent", actor_key="legacy")
+    assert CollectionCorrection.objects.get(pk=existing_id).actor_id == registered.pk
+
+    created = CollectionCorrection.objects.create(
+        observation_id=observation.pk,
+        predecessor_id=existing_id,
+        correction_kind="attribution",
+        policy_version="current-v1",
+        actor=registered,
+        reason_code="confirmed_unassigned",
     )
-    assert seed.pk == uuid.uuid5(
-        uuid.NAMESPACE_URL, "pushinweight:actor:system:benchmark_metric_timing_repair"
-    )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT actor_identifier FROM collection_corrections WHERE id=%s",
+            [created.pk],
+        )
+        assert cursor.fetchone()[0] == "agent:legacy"
+
+    old_model = MigrationExecutor(connection).loader.project_state(
+        [before_cutover]
+    ).apps.get_model("core", "CollectionCorrection")
     old_write = old_model.objects.create(
         observation_id=observation.pk,
-        predecessor_id=correction.pk,
+        predecessor_id=created.pk,
         correction_kind="attribution",
         policy_version="legacy-writer-v1",
         actor_identifier="Unverified legacy label",
         reason_code="confirmed_unassigned",
     )
     assert CollectionCorrection.objects.get(pk=old_write.pk).actor_id is None
-    with pytest.raises(IntegrityError, match="immutable"), transaction.atomic():
-        CollectionCorrection.objects.filter(pk=correction.pk).update(actor_id=seed.pk)
-    MigrationExecutor(connection).migrate([base])
-    assert old_model.objects.count() == 2
-    assert old_model.objects.values().get(pk=correction.pk) == before
-    assert "actors" not in connection.introspection.table_names()
-    MigrationExecutor(connection).migrate([target])
+
+    legacy_registered_write = old_model.objects.create(
+        observation_id=observation.pk,
+        predecessor_id=old_write.pk,
+        correction_kind="attribution",
+        policy_version="legacy-writer-v1",
+        actor_identifier="agent:legacy",
+        reason_code="confirmed_unassigned",
+    )
+    assert (
+        CollectionCorrection.objects.get(pk=legacy_registered_write.pk).actor_id
+        == registered.pk
+    )

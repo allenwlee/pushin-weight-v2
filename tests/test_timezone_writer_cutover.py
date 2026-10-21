@@ -74,8 +74,8 @@ def _old_rows(apps):
     return metric, event, opportunity
 
 
-def _new_source_metric():
-    return SourceMetric.objects.create(
+def _new_source_metric(model):
+    return model.objects.create(
         source_id="timezone-test",
         metric_type_id="benchmark",
         metric_key="new-zone",
@@ -89,8 +89,8 @@ def _new_source_metric():
     )
 
 
-def _new_event_and_opportunity():
-    event = Event.objects.create(
+def _new_event_and_opportunity(event_model, opportunity_model):
+    event = event_model.objects.create(
         brand_id="timezone-migration-test",
         source_url="https://example.test/new-event",
         title="New event",
@@ -102,7 +102,7 @@ def _new_event_and_opportunity():
         content_hash="c" * 64,
         raw_payload={"source_timezone": "UTC"},
     )
-    opportunity = Opportunity.objects.create(
+    opportunity = opportunity_model.objects.create(
         brand_id="timezone-migration-test",
         related_event=event,
         source_url="https://example.test/new-opportunity",
@@ -130,6 +130,12 @@ def test_writer_cutover_is_compatible_until_old_application_instances_drain():
 
     executor = MigrationExecutor(connection)
     executor.migrate([WRITER_CUTOVER])
+    cutover_apps = MigrationExecutor(connection).loader.project_state(
+        [WRITER_CUTOVER]
+    ).apps
+    CutoverMetric = cutover_apps.get_model("core", "SourceMetric")
+    CutoverEvent = cutover_apps.get_model("core", "Event")
+    CutoverOpportunity = cutover_apps.get_model("core", "Opportunity")
     assert SourceMetric.objects.get(pk=legacy_metric.pk).source_timezone_reference_id == "UTC"
 
     # The old binary can still insert a reported value during a rolling deploy.
@@ -164,8 +170,10 @@ def test_writer_cutover_is_compatible_until_old_application_instances_drain():
 
     # New application writers use the FK only; the transitional trigger does not
     # mirror the FK back into the physical legacy columns.
-    new_metric = _new_source_metric()
-    new_event, new_opportunity = _new_event_and_opportunity()
+    new_metric = _new_source_metric(CutoverMetric)
+    new_event, new_opportunity = _new_event_and_opportunity(
+        CutoverEvent, CutoverOpportunity
+    )
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT source_timezone FROM metrics WHERE id=%s", [new_metric.pk]
@@ -216,7 +224,14 @@ def test_physical_drop_removes_only_legacy_columns_after_writer_cutover():
 
     executor = MigrationExecutor(connection)
     executor.migrate([WRITER_CUTOVER])
-    new_event, new_opportunity = _new_event_and_opportunity()
+    cutover_apps = MigrationExecutor(connection).loader.project_state(
+        [WRITER_CUTOVER]
+    ).apps
+    CutoverEvent = cutover_apps.get_model("core", "Event")
+    CutoverOpportunity = cutover_apps.get_model("core", "Opportunity")
+    new_event, new_opportunity = _new_event_and_opportunity(
+        CutoverEvent, CutoverOpportunity
+    )
 
     executor = MigrationExecutor(connection)
     executor.migrate([PHYSICAL_DROP])

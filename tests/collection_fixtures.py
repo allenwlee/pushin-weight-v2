@@ -43,6 +43,10 @@ def historical_fixture_models(historical):
         name: getattr(current.Product, name)
         for name in ("hf_namespace", "publisher_ownership")
     }
+    job_properties = {
+        name: getattr(current.CollectionJob, name)
+        for name in ("scope", "budgets", "schedule", "campaign_settings", "instructions")
+    }
     replacements = {
         m._meta.model_name: m for m in historical.get_app_config("core").get_models()
     }
@@ -69,6 +73,10 @@ def historical_fixture_models(historical):
         if product:
             for name, value in properties.items():
                 patch.setattr(product, name, value, raising=False)
+        job = replacements.get("collectionjob")
+        if job:
+            for name, value in job_properties.items():
+                patch.setattr(job, name, value, raising=False)
         for module_name, module in list(sys.modules.items()):
             if not module_name.startswith(("core.", "tests.")) or module is None:
                 continue

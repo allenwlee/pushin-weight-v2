@@ -37,11 +37,9 @@ from urllib.parse import urlparse
 from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.indexes import GinIndex, GistIndex, OpClass
 from django.db import IntegrityError, models, router, transaction
-from django.db.models.functions import Lower, Upper
-from django.db.models.lookups import Exact
+from django.db.models.functions import Upper
 from django.utils import timezone
 
-from core.locale_identity import app_edition_locale_key
 from core.measurement_time import measurement_window
 
 
@@ -150,6 +148,168 @@ class MeasurementUnit(models.Model):
             models.CheckConstraint(
                 condition=models.Q(code__regex=r"^[a-z][a-z0-9_]*$"),
                 name="ck_measurement_unit_code_grammar",
+            ),
+        ]
+
+
+class ServiceProvider(models.Model):
+    """Actual request-service identity, distinct from an original data source."""
+
+    code = models.CharField(max_length=64, primary_key=True)
+
+    class Meta:
+        db_table = "service_providers"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(
+                condition=models.Q(code__regex=r"^[a-z][a-z0-9_.-]*$"),
+                name="ck_service_provider_code",
+            ),
+        ]
+
+
+class InferenceModel(models.Model):
+    """Provider-qualified native API model key; an alias proves no checkpoint."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    service_provider = models.ForeignKey(ServiceProvider, on_delete=models.PROTECT)
+    native_model_key = models.CharField(max_length=512)
+
+    class Meta:
+        db_table = "inference_models"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                fields=["service_provider", "native_model_key"],
+                name="uq_inference_model_service_key",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(
+                    native_model_key__regex=r"^[[:space:]]|[[:space:]]$|^$"
+                ),
+                name="ck_inference_model_native_key",
+            ),
+        ]
+
+
+class DefinitionDomain(models.TextChoices):
+    ADAPTER = "adapter", "Adapter"
+    NORMALIZER = "normalizer", "Normalizer"
+    POLICY = "policy", "Policy"
+    WORKFLOW = "workflow", "Workflow"
+    CONTRACT = "contract", "Contract"
+    PROMPT = "prompt", "Prompt"
+    EXTRACTION = "extraction", "Extraction"
+    QUERY_PACK = "query_pack", "Query pack"
+    QUERY_FAMILY = "query_family", "Query family"
+    PROVIDER_BOUNDARY = "provider_boundary", "Provider boundary"
+    TOOL_BOUNDARY = "tool_boundary", "Tool boundary"
+    TAXONOMY = "taxonomy", "Taxonomy"
+    SELECTOR = "selector", "Selector"
+    RANKING_METHOD = "ranking_method", "Ranking method"
+    EVIDENCE_METHOD = "evidence_method", "Evidence method"
+    GEOGRAPHY_SCHEME = "geography_scheme", "Geography scheme"
+    MEMBERSHIP_METHOD = "membership_method", "Membership method"
+    THRESHOLD = "threshold", "Threshold"
+    TIME_POLICY = "time_policy", "Time policy"
+
+
+class DefinitionProvenance(models.TextChoices):
+    IDENTITY_ONLY = "identity_only", "Historical identity; body unavailable"
+    SOURCE_PINNED = "source_pinned", "Pinned source revision"
+    ARCHIVE_PINNED = "archive_pinned", "Pinned evidence archive"
+
+
+class DefinitionVersion(models.Model):
+    """Immutable definition identity and available provenance, without config blobs."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    definition_domain = models.CharField(max_length=64, choices=DefinitionDomain.choices)
+    definition_key = models.CharField(max_length=128)
+    reported_version_token = models.CharField(max_length=256)
+    identity_sha256 = models.CharField(max_length=64, unique=True)
+    content_sha256 = models.CharField(max_length=64, null=True)
+    source_git_commit = models.CharField(max_length=64, null=True)
+    source_path = models.CharField(max_length=512, null=True)
+    evidence_archive = models.ForeignKey(
+        "CollectionEvidenceArchive", null=True, on_delete=models.PROTECT
+    )
+    provenance_state = models.CharField(max_length=24, choices=DefinitionProvenance.choices)
+
+    class Meta:
+        db_table = "definition_versions"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(
+                condition=models.Q(definition_domain__in=DefinitionDomain.values),
+                name="ck_definition_domain",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(
+                    definition_key__regex=r"^[[:space:]]|[[:space:]]$|^$"
+                ) & models.Q(reported_version_token__regex=r"[^[:space:]]"),
+                name="ck_definition_identity_tokens",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(identity_sha256__regex=r"^[0-9a-f]{64}$")
+                & (
+                    models.Q(content_sha256__isnull=True)
+                    | models.Q(content_sha256__regex=r"^[0-9a-f]{64}$")
+                ),
+                name="ck_definition_hashes",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(source_git_commit__isnull=True)
+                | models.Q(source_git_commit__regex=r"^([0-9a-f]{40}|[0-9a-f]{64})$"),
+                name="ck_definition_source_commit",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(source_path__isnull=True)
+                | (
+                    ~models.Q(source_path__regex=r"^[[:space:]/]|[[:space:]]$|^$")
+                    & ~models.Q(source_path__regex=r"(^|/)\.\.(/|$)|[\r\n]")
+                ),
+                name="ck_definition_source_path",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        provenance_state=DefinitionProvenance.IDENTITY_ONLY,
+                        content_sha256__isnull=True,
+                        source_git_commit__isnull=True,
+                        source_path__isnull=True,
+                        evidence_archive__isnull=True,
+                    )
+                    | models.Q(
+                        provenance_state=DefinitionProvenance.SOURCE_PINNED,
+                        content_sha256__isnull=False,
+                        source_git_commit__isnull=False,
+                        source_path__isnull=False,
+                    )
+                    | models.Q(
+                        provenance_state=DefinitionProvenance.ARCHIVE_PINNED,
+                        content_sha256__isnull=False,
+                        evidence_archive__isnull=False,
+                    )
+                ),
+                name="ck_definition_provenance_shape",
+            ),
+        ]
+
+
+class WorkflowStage(models.Model):
+    """A stable stage identity belonging to one workflow or contract version."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workflow_version = models.ForeignKey(DefinitionVersion, on_delete=models.PROTECT)
+    stage_key = models.CharField(max_length=200)
+
+    class Meta:
+        db_table = "workflow_stages"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                fields=["workflow_version", "stage_key"], name="uq_workflow_version_stage"
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(stage_key__regex=r"^[[:space:]]|[[:space:]]$|^$"),
+                name="ck_workflow_stage_key",
             ),
         ]
 
@@ -936,7 +1096,7 @@ class Region(models.Model):
 
 
 class RegionLabel(models.Model):
-    pk = models.CompositePrimaryKey("region", "lang")
+    pk = models.CompositePrimaryKey("region", "locale_reference")
     region = models.ForeignKey(
         Region,
         on_delete=models.CASCADE,
@@ -944,24 +1104,13 @@ class RegionLabel(models.Model):
         db_column="region_key",
         to_field="key",
     )
-    lang = models.CharField(max_length=16)
     locale_reference = models.ForeignKey(
-        Locale, db_column="locale_id", null=True, blank=True, on_delete=models.PROTECT
+        Locale, db_column="locale_id", on_delete=models.PROTECT
     )
     label = models.TextField()
 
     class Meta:
         db_table = "region_labels"
-        constraints: ClassVar[list] = [
-            models.UniqueConstraint(
-                fields=["region", "locale_reference"], name="uq_region_label_locale"
-            ),
-            models.CheckConstraint(
-                condition=models.Q(locale_reference__isnull=True)
-                | Exact(Lower("locale_reference"), app_edition_locale_key()),
-                name="ck_region_label_locale",
-            ),
-        ]
 
 
 class Country(models.Model):
@@ -1025,7 +1174,7 @@ class Country(models.Model):
 
 
 class CountryLabel(models.Model):
-    pk = models.CompositePrimaryKey("country", "lang")
+    pk = models.CompositePrimaryKey("country", "locale_reference")
     country = models.ForeignKey(
         Country,
         on_delete=models.CASCADE,
@@ -1033,24 +1182,13 @@ class CountryLabel(models.Model):
         db_column="country_code",
         to_field="code",
     )
-    lang = models.CharField(max_length=16)
     locale_reference = models.ForeignKey(
-        Locale, db_column="locale_id", null=True, blank=True, on_delete=models.PROTECT
+        Locale, db_column="locale_id", on_delete=models.PROTECT
     )
     label = models.TextField()
 
     class Meta:
         db_table = "country_labels"
-        constraints: ClassVar[list] = [
-            models.UniqueConstraint(
-                fields=["country", "locale_reference"], name="uq_country_label_locale"
-            ),
-            models.CheckConstraint(
-                condition=models.Q(locale_reference__isnull=True)
-                | Exact(Lower("locale_reference"), app_edition_locale_key()),
-                name="ck_country_label_locale",
-            ),
-        ]
 
 
 class CountryRegion(models.Model):
@@ -7920,9 +8058,8 @@ class SourceMetric(models.Model):
     metric_key = models.CharField(max_length=64)
     version = models.PositiveSmallIntegerField()
     name = models.CharField(max_length=128)
-    unit = models.CharField(max_length=64)
     unit_reference = models.ForeignKey(
-        MeasurementUnit, db_column="unit_id", null=True, on_delete=models.PROTECT,
+        MeasurementUnit, db_column="unit_id", on_delete=models.PROTECT,
         related_name="metric_definitions",
     )
     value_kind = models.CharField(max_length=16)
@@ -7931,7 +8068,6 @@ class SourceMetric(models.Model):
     measurement_kind = models.CharField(max_length=24)
     window_mode = models.CharField(max_length=16, default="none")
     window_amount = models.DecimalField(max_digits=12, decimal_places=3, null=True)
-    window_unit = models.CharField(max_length=24, null=True)
     window_unit_reference = models.ForeignKey(
         MeasurementUnit, db_column="window_unit_id", null=True,
         on_delete=models.PROTECT, related_name="metric_window_definitions",
@@ -7961,17 +8097,6 @@ class SourceMetric(models.Model):
                 condition=models.Q(version__gt=0), name="ck_metric_version"
             ),
             models.CheckConstraint(
-                condition=models.Q(unit_reference__isnull=True)
-                | models.Q(unit_reference=models.F("unit")),
-                name="ck_metric_unit_ref",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(window_unit_reference__isnull=True)
-                | models.Q(window_unit__isnull=False,
-                           window_unit_reference=models.F("window_unit")),
-                name="ck_metric_window_unit_ref",
-            ),
-            models.CheckConstraint(
                 condition=models.Q(value_kind__in=["integer", "float"]),
                 name="ck_metric_value_kind",
             ),
@@ -7994,7 +8119,7 @@ class SourceMetric(models.Model):
                         window_mode="none",
                         window_duration_basis="none",
                         window_amount__isnull=True,
-                        window_unit__isnull=True,
+                        window_unit_reference__isnull=True,
                         window_alignment__isnull=True,
                     )
                     | models.Q(
@@ -8002,7 +8127,7 @@ class SourceMetric(models.Model):
                         window_mode="since_origin",
                         window_duration_basis="none",
                         window_amount__isnull=True,
-                        window_unit__isnull=True,
+                        window_unit_reference__isnull=True,
                         window_alignment__isnull=True,
                     )
                     | (
@@ -8012,8 +8137,8 @@ class SourceMetric(models.Model):
                             window_amount__gt=0,
                             window_amount__lt=1000000000,
                             window_amount__isnull=False,
-                            window_unit__in=["day", "second"],
-                            window_unit__isnull=False,
+                            window_unit_reference__in=["day", "second"],
+                            window_unit_reference__isnull=False,
                             window_duration_basis__in=["calendar", "fixed", "unknown"],
                         )
                         & (
@@ -8827,8 +8952,7 @@ class CollectionCorrection(models.Model):
     predecessor = models.ForeignKey("self", null=True, on_delete=models.PROTECT)
     correction_kind = models.CharField(max_length=24)
     policy_version = models.CharField(max_length=64)
-    actor_identifier = models.TextField()
-    actor = models.ForeignKey(Actor, null=True, on_delete=models.PROTECT)
+    actor = models.ForeignKey(Actor, on_delete=models.PROTECT)
     reason_code = models.CharField(max_length=64)
     recorded_at = models.DateTimeField(null=True)
     recorded_at_precision = models.CharField(max_length=16, default="unknown")

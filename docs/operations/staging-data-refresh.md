@@ -1,6 +1,7 @@
 # Staging data refresh
 
-Last verified: 2026-10-12 (collection-schema candidate policy; see release receipts for live checks).
+Last live verification: 2026-10-12 (collection-schema candidate policy; see release receipts for live checks).
+Policy amended: 2026-10-21 for RG1 shared-identity tables and the post-deletion schema. The new grant list has not been applied to a live source database.
 
 This procedure replaces only the isolated `pushinweight_staging` database with
 a current production snapshot. It never changes the production database. The
@@ -15,8 +16,9 @@ source secret. Do not copy either setting to another service.
 
 ## One-time source reader
 
-The allowlist below covers the rare-type/HF schema, G1 identity/media tables and
-shared authored-content tables through migration 0079. The source must already
+The allowlist below follows the relation inventory in
+`config/staging_refresh.yaml`, including the current benchmark, dossier,
+collection, identity/media and authored-content schemas. The source must already
 have the six canonical content base tables and seven compatibility views. A
 pre-rename source fails closed; upgrading the refresh source schema is a separate
 authorized operation, not a step this release performs automatically.
@@ -28,8 +30,10 @@ policy and fails closed with `source_classified_table_missing:<table>` when a
 required relation is absent; the later shadow migration does not bypass that
 source check. Any optional relation present on the source must have the
 declared grant. The shared catalogues `time_zones`, `languages`, `locales` and
-`measurement_units`, plus shared performer identities in `actors`, are copied
-when present and may be absent from earlier snapshots. Actors have no login-account
+`measurement_units`, shared performer identities in `actors`, and RG1's
+`definition_versions`, `service_providers`, `inference_models` and
+`workflow_stages` are copied when present and may be absent from earlier
+snapshots. Actors have no login-account
 foreign key, so clearing excluded authentication data preserves correction history.
 These tables carry no credentials or scheduling authority. Their source SELECT
 grants are added only after the corresponding source migration, under separate
@@ -160,6 +164,7 @@ FROM pg_tables
 WHERE schemaname = 'public'
   AND tablename IN (
     'time_zones', 'languages', 'locales', 'measurement_units', 'actors',
+    'definition_versions', 'service_providers', 'inference_models', 'workflow_stages',
     'event_dossiers', 'event_dossier_sources', 'event_dossier_claims',
     'event_dossier_reviews', 'event_dossier_review_claims',
     'model_release_details', 'personnel_change_details',

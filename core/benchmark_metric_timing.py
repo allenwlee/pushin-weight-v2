@@ -65,11 +65,13 @@ def calendar_window(label, zone, amount=1):
 
 def value_times(definition, point):
     status = point.get("temporal_status", "unknown")
-    definition_timezone = definition.source_timezone_reference_id or "unknown"
-    zone = point.get("source_timezone", definition_timezone)
-    require(
-        zone == definition_timezone, "timezone differs from pinned definition"
+    definition_timezone = (
+        getattr(definition, "source_timezone_reference_id", None)
+        or getattr(definition, "source_timezone", None)
+        or "unknown"
     )
+    zone = point.get("source_timezone", definition_timezone)
+    require(zone == definition_timezone, "timezone differs from pinned definition")
     result = {field: point.get(field) for field in TIME_FIELDS}
     for field, value in result.items():
         if value is not None:
@@ -131,7 +133,7 @@ def value_times(definition, point):
         if definition.window_mode == "calendar" and status == "exact":
             require(label is not None, "calendar label required")
             require(
-                definition.window_unit == "day"
+                _definition_window_unit(definition) == "day"
                 and definition.window_duration_basis == "calendar"
                 and definition.window_amount == int(definition.window_amount),
                 "unverified calendar basis",
@@ -141,6 +143,12 @@ def value_times(definition, point):
             )
             require((start, end) == expected, "calendar bounds mismatch")
     return dict(result, temporal_status=status, source_timezone=zone)
+
+
+def _definition_window_unit(definition):
+    return getattr(definition, "window_unit_reference_id", None) or getattr(
+        definition, "window_unit", None
+    )
 
 
 def catalog_origins(identifiers):
@@ -228,7 +236,10 @@ def reported_times(
     ):
         return point, None
     unknowns = {"provider_refresh_lag": "not_reported"}
-    if definition.source_timezone_reference_id is None:
+    if not (
+        getattr(definition, "source_timezone_reference_id", None)
+        or getattr(definition, "source_timezone", None)
+    ):
         unknowns["provider_timezone"] = "not_reported"
     snapshot = (
         metadata.get("numeric_snapshot_identity")
@@ -300,7 +311,7 @@ def reported_times(
         if (
             definition.window_mode == "rolling"
             and source == "hf"
-            and definition.window_unit == "day"
+            and _definition_window_unit(definition) == "day"
             and definition.window_amount == 30
         ):
             start = end - timedelta(days=30)

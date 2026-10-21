@@ -11,8 +11,8 @@
       "sha256": "41387aef88bd2b64eab5fcbb56b3910c8e6a988bc148148dbdeda3b323208446"
     },
     "shared_measurement_units.csv": {
-      "rows": 24,
-      "sha256": "f8d7fb4e3c7d14f939424a0fb52fb000bcf47246e645661f301504736681f22c"
+      "rows": 26,
+      "sha256": "b2427c1e3ba66011a05c617d3198feeef920636b9d6486813caaef20c627fd9f"
     },
     "shared_time_zones.csv": {
       "rows": 597,

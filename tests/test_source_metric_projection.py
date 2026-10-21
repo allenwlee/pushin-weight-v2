@@ -401,9 +401,9 @@ def test_asset_dimensions_sizes_and_counter_do_not_become_repo_totals():
     }
     assert run.selected_count == run.success_count == 2
     assert values["repository_size_kb"].integer_value == 10
-    assert values["repository_size_kb"].source_metric.unit == "kilobytes"
+    assert values["repository_size_kb"].source_metric.unit_reference_id == "kilobytes"
     assert values["asset_size_bytes"].integer_value == 1024
-    assert values["asset_size_bytes"].source_metric.unit == "bytes"
+    assert values["asset_size_bytes"].source_metric.unit_reference_id == "bytes"
     assert values["asset_downloads"].observation.dimensions == {
         "release_id": 8,
         "asset_id": 7,

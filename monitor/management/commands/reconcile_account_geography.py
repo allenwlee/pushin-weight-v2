@@ -30,6 +30,7 @@ from core.models import (
     Region,
     RegionLabel,
 )
+from core.shared_vocabulary import resolve_locale
 from monitor.account_geography import MANIFEST_SHA256
 from monitor.account_geography_recovery import (
     PRODUCTION_DATABASE_NAME,
@@ -163,15 +164,16 @@ def _verify_taxonomy_seed(manifest: dict[str, Any]) -> None:
         Region.objects.values_list("key", "m49_code", "source", "level", "parent_id")
     )
     expected_region_labels = {
-        (item["key"], lang, label)
+        (item["key"], resolve_locale(lang, context="app_edition").pk, label)
         for item in manifest["regions"]
         for lang, label in item["labels"].items()
     }
     expected_region_labels.update(
-        (key, "ja", label) for key, label in japanese["regions"].items()
+        (key, resolve_locale("ja", context="app_edition").pk, label)
+        for key, label in japanese["regions"].items()
     )
     actual_region_labels = set(
-        RegionLabel.objects.values_list("region_id", "lang", "label")
+        RegionLabel.objects.values_list("region_id", "locale_reference_id", "label")
     )
     expected_countries = {
         (
@@ -191,15 +193,16 @@ def _verify_taxonomy_seed(manifest: dict[str, Any]) -> None:
         )
     )
     expected_country_labels = {
-        (item["code"], lang, label)
+        (item["code"], resolve_locale(lang, context="app_edition").pk, label)
         for item in manifest["countries"]
         for lang, label in item["labels"].items()
     }
     expected_country_labels.update(
-        (code, "ja", label) for code, label in japanese["countries"].items()
+        (code, resolve_locale("ja", context="app_edition").pk, label)
+        for code, label in japanese["countries"].items()
     )
     actual_country_labels = set(
-        CountryLabel.objects.values_list("country_id", "lang", "label")
+        CountryLabel.objects.values_list("country_id", "locale_reference_id", "label")
     )
     expected_country_regions = {
         (

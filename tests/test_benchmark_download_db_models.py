@@ -15,6 +15,8 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
 def measurement():
+    models.MeasurementUnit.objects.get_or_create(code="arena_points")
+    models.MeasurementUnit.objects.get_or_create(code="day")
     source = models.DataSource.objects.create(
         id="arena", name="Arena", source_type="benchmark"
     )
@@ -25,7 +27,7 @@ def measurement():
         metric_key="rating",
         version=1,
         name="Rating",
-        unit="arena_points",
+        unit_reference_id="arena_points",
         value_kind="float",
         quantity_form="score",
         measurement_kind="state",
@@ -111,7 +113,7 @@ def test_state_cannot_claim_rolling_flow_window():
         models.SourceMetric.objects.filter(pk=definition.pk).update(
             window_mode="rolling",
             window_amount=30,
-            window_unit="day",
+            window_unit_reference_id="day",
             window_duration_basis="unknown",
         )
 

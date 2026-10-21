@@ -12,8 +12,12 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 def setup_spec():
     from core.benchmark_metric_identity import register_definitions
     from core.models import TimeZone
+    from django.db import connection
 
-    TimeZone.objects.get_or_create(pk="UTC")
+    # Historical migration rehearsals may run this shared fixture before the
+    # timezone catalogue exists. Seed it only when that schema is present.
+    if TimeZone._meta.db_table in connection.introspection.table_names():
+        TimeZone.objects.get_or_create(pk="UTC")
     register_definitions()
     # Test-only reviewed grants; real source rights are never inferred from these.
     from core.benchmark_attribution import USES

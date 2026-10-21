@@ -78,13 +78,13 @@ def describe(contract, line, definition, mappings, points, baseline):
         "transform": line.get("transform", "identity"),
         "definition_id": definition.pk if definition else None,
         "definition_version": definition.version if definition else 1,
-        "unit": definition.unit if definition else "posts",
+        "unit": definition.unit_reference_id if definition else "posts",
         "measurement_kind": definition.measurement_kind if definition else "flow",
         "window_mode": definition.window_mode if definition else "calendar",
         "window_amount": str(definition.window_amount)
         if definition and definition.window_amount is not None
         else None,
-        "window_unit": definition.window_unit if definition else "day",
+        "window_unit": definition.window_unit_reference_id if definition else "day",
         "source_configuration": {
             "config": contract.source_configuration.get(line["source"], {}).get(
                 "config"

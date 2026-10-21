@@ -1558,11 +1558,11 @@ def _feed_geography_sources(posts: QuerySet | list[Any]) -> dict[str, dict[str, 
     country_labels: dict[str, dict[str, str]] = {
         code: {} for code in all_country_codes
     }
-    for code, lang, label in CountryLabel.objects.filter(
+    for code, locale, label in CountryLabel.objects.filter(
         country_id__in=all_country_codes,
-        lang__in=("en", "zh-cn", "ja"),
-    ).values_list("country_id", "lang", "label"):
-        country_labels[code]["zh_cn" if lang == "zh-cn" else lang] = label
+        locale_reference_id__in=("en", "zh-Hans", "ja"),
+    ).values_list("country_id", "locale_reference_id", "label"):
+        country_labels[code]["zh_cn" if locale == "zh-Hans" else locale] = label
 
     fallback_region_keys = {
         row["region_mapping__region_id"]
@@ -1573,11 +1573,11 @@ def _feed_geography_sources(posts: QuerySet | list[Any]) -> dict[str, dict[str, 
     region_labels: dict[str, dict[str, str]] = {
         key: {} for key in all_region_keys
     }
-    for key, lang, label in RegionLabel.objects.filter(
+    for key, locale, label in RegionLabel.objects.filter(
         region_id__in=all_region_keys,
-        lang__in=("en", "zh-cn", "ja"),
-    ).values_list("region_id", "lang", "label"):
-        region_labels[key]["zh_cn" if lang == "zh-cn" else lang] = label
+        locale_reference_id__in=("en", "zh-Hans", "ja"),
+    ).values_list("region_id", "locale_reference_id", "label"):
+        region_labels[key]["zh_cn" if locale == "zh-Hans" else locale] = label
 
     result: dict[str, dict[str, Any]] = {}
     for author_id, account in accounts.items():

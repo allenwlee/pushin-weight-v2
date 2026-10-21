@@ -21,11 +21,10 @@ def test_current_and_historical_reports_distinguish_corrected_and_recorded_produ
         observation,
         product=None,
         mapping=None,
-        actor="fixture:reviewer",
+        actor_identity=Actor.objects.create(actor_kind="agent", actor_key="fixture:reviewer"),
         reason="incorrect_product",
     )
-    assert correction.actor_id is None
-    assert not Actor.objects.filter(actor_key="fixture:reviewer").exists()
+    assert correction.actor.actor_key == "fixture:reviewer"
     report = resource_statistics(
         contract_id=contract.pk, source="hf", identifier=observation.source_identifier
     )
@@ -57,7 +56,6 @@ def test_registered_correction_performer_preserves_original_label_and_history(ki
         observation,
         product=None,
         mapping=None,
-        actor="Original operator wording",
         actor_identity=identity,
         reason="incorrect_product",
     )
@@ -65,13 +63,13 @@ def test_registered_correction_performer_preserves_original_label_and_history(ki
         observation,
         product=None,
         mapping=None,
-        actor="Legacy repair label",
+        actor_identity=Actor.objects.create(actor_kind="system", actor_key="legacy_repair"),
         reason="confirmed_unassigned",
     )
     first.refresh_from_db()
     assert first.actor == identity
-    assert first.actor_identifier == "Original operator wording"
-    assert second.actor_id is None
+    assert first.actor.actor_key == "registered-reviewer"
+    assert second.actor.actor_key == "legacy_repair"
     assert second.predecessor_id == first.pk
 
 
@@ -85,7 +83,6 @@ def test_unsaved_actor_does_not_create_correction_or_register_inferred_identity(
             observation,
             product=None,
             mapping=None,
-            actor="Unproven name",
             actor_identity=Actor(actor_kind="human", actor_key="unregistered"),
             reason="incorrect_product",
         )

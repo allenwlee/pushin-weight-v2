@@ -20,26 +20,33 @@ def _seed_japanese_geography():
     from importlib import import_module
     from pathlib import Path
 
-    from django.apps import apps
-
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
     from core.models import Country
+
+    call_command("seed_shared_vocabulary", catalogue=["languages", "locales"])
 
     # Transactional migration tests flush data-migration rows in the reused DB.
     # Restore the same pinned taxonomy before inserting its Japanese children.
     if not Country.objects.exists():
         import_module(
             "core.migrations.0026_account_geography_taxonomy"
-        ).seed_account_geography(apps, None)
+        ).seed_account_geography(
+            MigrationExecutor(connection)
+            .loader.project_state([("core", "0125_correction_actor_writer_cutover")])
+            .apps,
+            None,
+        )
 
     labels = json.loads(
         (Path(__file__).resolve().parents[1] / "monitor/data/account_geography_ja.json").read_text()
     )
     CountryLabel.objects.bulk_create([
-        CountryLabel(country_id=code, lang="ja", label=label)
+        CountryLabel(country_id=code, locale_reference_id="ja", label=label)
         for code, label in labels["countries"].items()
     ], ignore_conflicts=True)
     RegionLabel.objects.bulk_create([
-        RegionLabel(region_id=key, lang="ja", label=label)
+        RegionLabel(region_id=key, locale_reference_id="ja", label=label)
         for key, label in labels["regions"].items()
     ], ignore_conflicts=True)
 

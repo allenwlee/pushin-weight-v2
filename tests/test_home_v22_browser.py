@@ -4644,6 +4644,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 browser.close()
 
     def _seed_account_geography_fixture(self) -> None:
+        from django.core.management import call_command
+
         from core.models import (
             Country,
             CountryLabel,
@@ -4651,6 +4653,10 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             Region,
             RegionLabel,
         )
+
+        # TestDatabase flush removes data-migration catalogue rows between
+        # browser cases; seed shared locale identities before inserting labels.
+        call_command("seed_i18n_labels", verbosity=0)
 
         regions = {
             "northern-america": ("021", "Northern America", "北美洲"),
@@ -4673,9 +4679,11 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     "parent_id": None,
                 },
             )
-            for lang, label in (("en", label_en), ("zh-cn", label_zh)):
+            for locale, label in (("en", label_en), ("zh-Hans", label_zh)):
                 RegionLabel.objects.update_or_create(
-                    region_id=key, lang=lang, defaults={"label": label}
+                    region_id=key,
+                    locale_reference_id=locale,
+                    defaults={"label": label},
                 )
 
         countries = {
@@ -4737,9 +4745,11 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     "display_parent_relationship_type": relationship_type,
                 },
             )
-            for lang, label in (("en", label_en), ("zh-cn", label_zh)):
+            for locale, label in (("en", label_en), ("zh-Hans", label_zh)):
                 CountryLabel.objects.update_or_create(
-                    country_id=code, lang=lang, defaults={"label": label}
+                    country_id=code,
+                    locale_reference_id=locale,
+                    defaults={"label": label},
                 )
             CountryRegion.objects.update_or_create(
                 country_id=code,
