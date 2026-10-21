@@ -193,7 +193,6 @@ def test_backfill_dry_run_is_truly_read_only(monkeypatch, tmp_path):
 def test_scheduled_command_waits_for_backfill_then_executes(monkeypatch):
     """A busy historical page must delay a live tick, never discard it."""
     import threading
-    import time
 
     from monitor.management.commands.run_cycle import Command
     from monitor.run_lock import harvest_writer_lock
@@ -220,7 +219,7 @@ def test_scheduled_command_waits_for_backfill_then_executes(monkeypatch):
             assert owner.acquired
             future = pool.submit(scheduled)
             assert attempted.wait(2)
-            time.sleep(0.15)
+            wait_for_live_queue()
             assert not entered.is_set(), "live work must never overlap the historical writer"
         future.result(timeout=5)
     assert entered.is_set(), "scheduled live tick was discarded instead of waiting for backfill"
