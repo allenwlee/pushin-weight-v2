@@ -19,6 +19,7 @@ class PublicHomeWindowCookieTests(SimpleTestCase):
             return HttpResponse("ok")
 
         chart_payload = {
+            "computed_at": "2026-10-17T12:30:00+00:00",
             "top_voices": {"entries": []},
             "trend_narrative": {},
             "pulse": {"entries": []},

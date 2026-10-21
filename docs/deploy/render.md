@@ -478,3 +478,76 @@ create the service by itself. For staging acceptance, sync/apply only
 `render-staging.yaml` in the Render Dashboard before triggering
 `pushinweight-staging-jobs`. Do not apply `render.yaml` during a staging-only
 release; that file defines the production cron.
+
+## Homepage count maintenance
+
+The homepage reads closed UTC days from `home_brand_time_counts`, a native
+PostgreSQL materialized view, and adds exact source counts for the live day.
+Its `home.brand_time_counts.v1` row in shared `materialization_state` records the published cutoff and
+source changes. The 30-day and 365-day percentage comparisons end at UTC
+midnight; chart responses retain their live clock and selected local timezone.
+One-day and seven-day percentage comparisons remain rolling windows.
+
+Migration `0093_homepage_count_materialization` creates the view without data,
+its unique index, the lifecycle table and count-relevant source triggers.
+Migration `0094_shared_materialization_state` preserves that publication while
+generalizing the table to one row per versioned dataset. It rebinds the source
+triggers to the homepage key; the shared refresh implementation in
+`core/materializations.py` uses each definition's own lock, sources and cutoff.
+Other datasets require their own reviewed definition and invalidation migration.
+The state tracks current freshness; immutable article/research results retain
+their saved data and identity separately. The
+ordinary page query remains available while the view is unpopulated or invalid.
+Populate it through the service's managed database configuration:
+
+```bash
+python manage.py refresh_home_counts
+```
+
+The command emits JSON with `status` equal to `refreshed`, `skipped`, `busy`,
+`changed`, or `unavailable`. `changed` means a source write overlapped counting
+and the whole refresh was rolled back; retry at the next poll. A missing
+lifecycle row is repaired in a separate short transaction only when existing
+source writers have finished. A busy source or another refresher causes a
+truthful `busy` result. The repair transaction must commit before counting, so
+run the command outside an enclosing application transaction.
+
+Production `pushinweight-home-counts` runs at minutes `7,22,37,52` UTC. A healthy
+same-day poll skips counting. Normal daily publication begins around 00:07 UTC
+(09:07 Japan time); historical corrections can require additional refreshes.
+The staging counterpart `pushinweight-staging-home-counts` uses the dormant
+`0 0 31 2 *` schedule and is triggered manually. Each job uses only its own
+database and runtime environment; neither receives provider credentials,
+brokers, collection commands or harvest schedules. Provision the new resource
+through the intended Blueprint or a targeted Render service creation; a branch
+deployment alone does not create it.
+
+Verify the native view and publication state on the intended database:
+
+```sql
+SELECT matviewname, ispopulated
+FROM pg_matviews WHERE matviewname = 'home_brand_time_counts';
+SELECT indisvalid, indisready
+FROM pg_index
+WHERE indexrelid = 'home_brand_time_counts_key'::regclass;
+SELECT cutoff, refreshed_at, source_generation, published_generation, dirty_since,
+       (source_generation = published_generation OR dirty_since >= cutoff)
+           AS closed_history_valid
+FROM materialization_state WHERE dataset_key = 'home.brand_time_counts.v1';
+```
+
+Current-day writes advance the source generation without invalidating closed
+history. A generation difference alone therefore does not prove staleness;
+check `dirty_since` and the UTC cutoff too. A stale or historically dirty
+publication uses the exact query until maintenance succeeds. No browser request
+refreshes the view or calculates Top Voices. Saved narrative selection remains
+independent.
+
+After activation, verify real homepage switches to 30 days and one year return
+200 before the browser timeout, replace every associated projection, and log no
+JavaScript errors. Inspect the maintenance JSON and publication fields after a
+scheduled poll. If the release causes incorrect counts or source-write failures,
+roll back the application revision and suspend only the new count-maintenance
+job. The previous application can use the additive schema. Keep source data and
+existing harvest schedules intact; schema reversal is a separate controlled
+operation after consumers no longer use the view.

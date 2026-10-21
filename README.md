@@ -22,6 +22,7 @@ legacy Flask, launchd, Apify, and writable SQLite paths are retired.
 | Enrichment | DeepInfra direct routes: DeepSeek V4 Flash 0731 classifier; Gemma 4 31B IT Turbo translation and post synthesis |
 | Headlines | Queue-isolated Celery worker and broker; never harvests or schedules |
 | Locales | `en`, `zh-cn`, and `ja` |
+| Homepage counts | Native historical count view with shared dataset publication state; [maintenance and activation](docs/deploy/render.md#homepage-count-maintenance) |
 
 The deployed product release is `v0.2.0-beta.1`, product SHA
 `98dee23eda0e5c47b5a39f9c4a384c981285a1e1`. Documentation-only metadata is
@@ -369,7 +370,7 @@ Graphviz schema and legacy SQLite file are read-only historical artifacts.
 - [Domain registration — pushinweight.si / Namecheap](docs/reference/domains.md)
 - [TwitterAPI call inventory](docs/reference/twitterapi-io-calls.md)
 - [Live query composition](docs/reference/twitterapi-live-queries-by-model.md)
-- [Database schema](docs/reference/db-schema.md)
+- [Database schema](docs/reference/db-schema.md), including source tables and derived homepage counts
 - [HF catalog collection, shared storage and recovery](docs/reference/hf-model-catalog.md)
 - [Collection jobs, reviewed provider identities and history](docs/reference/collection-jobs.md)
 - [Staff intake, evidence and reviewed corrections](docs/operations/staff-collection.md)

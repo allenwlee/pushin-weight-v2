@@ -114,7 +114,11 @@ TO staging_refresh_reader;
 
 -- pg_dump takes ACCESS SHARE locks even when table data is excluded. PostgreSQL
 -- 18's MAINTAIN privilege permits that lock without permitting row reads.
+-- Homepage count publication state is environment-local. Its native view
+-- definition travels through pg_dump/restore; after a refresh, run
+-- python manage.py refresh_home_counts before checking materialized-path use.
 GRANT MAINTAIN ON
+  materialization_state,
   editorial_assessments, editorial_budgets, editorial_calls,
   editorial_editions, editorial_heroes, content_pictures, editorial_stories,
   official_company_account_states, official_company_attempts,
