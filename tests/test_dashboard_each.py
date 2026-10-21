@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 import pytest
+from django.db import connection
 from django.test import Client, override_settings
+from django.test.utils import CaptureQueriesContext
 
 from core.classification_contract import (
     CONTRACT_VERSION,
@@ -228,11 +231,19 @@ class DashboardEachTests(PostgreSQLV22TestCase):
         PostBrand.objects.bulk_create(
             [PostBrand(post=post, brand=self.minimax) for post in posts]
         )
-        chart = _each_chart_payload(
-            self.minimax.nickname, "sentiment", 1, "en", now=NOW
-        )
+        with CaptureQueriesContext(connection) as queries:
+            chart = _each_chart_payload(
+                self.minimax.nickname, "sentiment", 1, "en", now=NOW
+            )
         self.assertEqual(sum(chart["totals"]), 1008)
         self.assertEqual(sum(chart["series"]["__unclassified__"]), 1006)
+        # A chart must aggregate current/legacy classifications in one query,
+        # rather than fetch another batch of scalar rows for every 1000 posts.
+        classification_reads = [
+            query["sql"] for query in queries.captured_queries
+            if "posts_brands_classification_states" in query["sql"]
+        ]
+        self.assertEqual(len(classification_reads), 1)
 
     def test_public_route_and_endpoint_keep_home_intact(self):
         client = Client(HTTP_HOST="127.0.0.1")
@@ -262,3 +273,61 @@ class DashboardEachTests(PostgreSQLV22TestCase):
         self.assertEqual(
             client.get("/dashboard/each/chart/", {"brand": "invalid"}).status_code, 400
         )
+
+    def test_sentiment_aggregate_preserves_scalar_ownership_and_window_buckets(self):
+        SentimentKey.objects.get_or_create(key="")
+
+        def add(name, sentiments=(), *, state=None, when=NOW - timedelta(minutes=20),
+                signal_brand=None, state_brand=None):
+            post = Post.objects.create(tweet_id=f"each-parity-{name}", created_at=when)
+            PostBrand.objects.create(post=post, brand=self.minimax)
+            for kind, sentiment in zip(("other", "opinions_reactions", "releases_updates"), sentiments):
+                PostBrandSignal.objects.create(
+                    post=post, brand_id=signal_brand or self.minimax.pk,
+                    post_type_id=kind, sentiment_id=sentiment,
+                )
+            if state is not None:
+                values = {
+                    "contract_version": CONTRACT_VERSION,
+                    "taxonomy_version": TAXONOMY_VERSION,
+                    "prompt_version": "historical-prompt", "model": "test",
+                    "input_context_fingerprint": "7" * 64,
+                    "outcome": "context_missing", "sentiment_id": None,
+                }
+                values.update(state)
+                PostBrandClassificationState.objects.create(
+                    post=post, brand_id=state_brand or self.minimax.pk, **values,
+                )
+            return post
+
+        add("legacy-same", ("positive", "positive"))
+        add("legacy-conflict", ("positive", "negative"))
+        add("literal-sentiment-conflict", ("positive", "POSITIVE"))
+        add("literal-sentiment-value", ("POSITIVE",))
+        add("legacy-empty", ("", "negative"))
+        add("current-owns", ("negative",), state={"sentiment_id": "positive"})
+        add("null-owns", ("positive",), state={})
+        add("old-contract", ("positive",), state={"contract_version": "unknown"})
+        add("old-taxonomy", ("positive",), state={"taxonomy_version": "unknown"})
+        add("v2-owns", ("negative",), state={
+            "taxonomy_version": STAGE1_TAXONOMY_V2_VERSION, "sentiment_id": "neutral",
+        })
+        add("other-brand", ("positive",), signal_brand=self.qwen.pk,
+            state={"sentiment_id": "negative"}, state_brand=self.qwen.pk)
+        add("literal-state-key", ("negative",), state={"sentiment_id": "positive"},
+            state_brand=self.minimax.pk.upper())
+        add("literal-signal-key", ("positive",), signal_brand=self.minimax.pk.upper())
+        add("start-included", ("positive",), when=NOW - timedelta(days=1))
+        add("start-excluded", ("negative",), when=NOW - timedelta(days=1, microseconds=1))
+        add("end-excluded", ("negative",), when=NOW)
+        add("null-date", ("positive",), when=None)
+        add("long-history", ("neutral",), when=NOW - timedelta(days=200))
+        for brand in (self.minimax.pk, self.minimax.pk.upper()):
+            for days in (1, 7, 30, 365):
+                for timezone in ("UTC", "Asia/Tokyo", "America/Los_Angeles", "Pacific/Chatham"):
+                    with self.subTest(brand=brand, days=days, timezone=timezone):
+                        arguments = {"now": NOW, "bucket_timezone": timezone}
+                        with patch("monitor.views.aggregate_brand_sentiment_counts", return_value=None):
+                            reference = _each_chart_payload(brand, "sentiment", days, "en", **arguments)
+                        actual = _each_chart_payload(brand, "sentiment", days, "en", **arguments)
+                        self.assertEqual(actual, reference)
