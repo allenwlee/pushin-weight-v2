@@ -160,6 +160,8 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   excluded_tables:
+    # Publication state is valid only for the local materialized view.
+    - materialization_state
     # Editorial jobs, accepted editions and media are one environment-local graph.
     - editorial_assessments
     - editorial_budgets
@@ -241,6 +243,7 @@ relations:
     - event_dossier_review_claims
     - model_release_details
     - personnel_change_details
+    - materialization_state
     - provider_batches
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - data_sources
@@ -524,6 +527,7 @@ relations:
 
 scrub:
   truncate_tables:
+    - materialization_state
     - provider_batches
     - editorial_assessments
     - editorial_budgets

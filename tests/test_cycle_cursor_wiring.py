@@ -19,7 +19,7 @@ a successful sweep (KTD5) while a failure must not advance.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from django.test import override_settings
@@ -82,6 +82,7 @@ def wired(monkeypatch, seeded_policy_keywords):
         raise_exc=None,
         settings_over=None,
         cycle_kind="scheduled",
+        runner_options=None,
     ):
         calls = calls or [_planned()]
         api = FakeApi(results=results, raise_exc=raise_exc)
@@ -104,11 +105,62 @@ def wired(monkeypatch, seeded_policy_keywords):
             CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
         )
         with override_settings(**(settings_over or {})):
-            runner = CycleRunner(cycle_kind=cycle_kind)
+            runner = CycleRunner(cycle_kind=cycle_kind, **(runner_options or {}))
             stats = runner.run()
         return api, stats
 
     return _run
+
+
+def test_delayed_live_cycle_keeps_original_window_and_runtime_deadline(wired, monkeypatch):
+    import time
+
+    from x_monitor.config import HarvestConfig
+
+    observed = []
+    original_start = HarvestConfig.start_deadline
+
+    def start_deadline(self, **kwargs):
+        result = original_start(self, **kwargs)
+        observed.append(result)
+        return result
+
+    monkeypatch.setattr(HarvestConfig, "start_deadline", start_deadline)
+    scheduled_at = datetime.now(UTC) - timedelta(minutes=3)
+    acquired_at = scheduled_at + timedelta(seconds=75)
+    started_monotonic = time.monotonic() - 75
+    tweet = {**_tweet("99912345"), "text": "MiniMax release is great"}
+    api, stats = wired(
+        results=[tweet],
+        runner_options={"_clock": lambda: acquired_at, "_collection_window_end": scheduled_at,
+                        "_cycle_started_monotonic": started_monotonic},
+    )
+    assert stats["totals"]["n_inserted"] == 1
+    assert len(api.calls) == 1
+    assert api.calls[0]["until_time"] == int(scheduled_at.timestamp())
+    assert api.calls[0]["since_time"] < api.calls[0]["until_time"]
+    from core.models import CallState
+
+    assert CallState.objects.get().last_completed_at == scheduled_at.replace(microsecond=0)
+    assert observed[-1].started_at == started_monotonic
+    assert observed[-1].remaining() < observed[-1].deadline_at - observed[-1].started_at - 74
+    # Start includes the wait; real completion/receipt clocks remain current.
+    assert stats["started_at"] == scheduled_at.isoformat(timespec="seconds")
+    assert stats["finished_at"] == acquired_at.isoformat(timespec="seconds")
+
+
+def test_delayed_live_rare_search_keeps_original_scheduled_slot(wired, monkeypatch):
+    captured = []
+    scheduled_at = datetime.now(UTC) - timedelta(minutes=3)
+
+    def rare(self, call, api, *, now):
+        captured.append(now)
+        return {"status": "no_results", "provider_called": False}
+
+    monkeypatch.setattr(CycleRunner, "_run_rare_type_search", rare)
+    wired(calls=[_planned("RARE_EXTRA")],
+          runner_options={"_collection_window_end": scheduled_at})
+    assert captured == [scheduled_at]
 
 
 # --- the core regression: scheduled calls are time-bounded ---------------

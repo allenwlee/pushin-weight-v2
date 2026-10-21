@@ -130,7 +130,6 @@ def _patches_active():
         patch("monitor.views._enrich_posts_with_classifications", return_value=[]),
         patch("monitor.views._build_brands_context", return_value=BRAND_CONTEXT),
         patch("monitor.views._build_home_chart_payload", return_value=CHART_PAYLOAD),
-        patch("monitor.views._multi_top_voices", return_value=[]),
         patch("monitor.views._post_to_wire", return_value=FAKE_ROW),
     ]
 

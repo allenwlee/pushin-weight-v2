@@ -290,7 +290,9 @@ def test_home_chart_filters_narrow_counts():
         filters={"discourse": ["genuine_hype"]},
     )
     assert default["totals"]["minimax"] == 3
-    assert filtered["totals"]["minimax"] == 1
+    # The legacy serializer keeps unclassified posts visible, as its filter
+    # contract specifies. One classified mismatch is excluded; the empty row stays.
+    assert filtered["totals"]["minimax"] == 2
 
 
 def test_home_chart_brand_with_zero_matches_renders_as_zero_line():

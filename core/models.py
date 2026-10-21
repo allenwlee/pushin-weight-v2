@@ -559,6 +559,60 @@ class Brand(models.Model):
         return self.nickname
 
 
+class MaterializationState(models.Model):
+    """Current publication of one versioned, rebuildable derived dataset."""
+
+    dataset_key = models.CharField(max_length=160, primary_key=True, db_collation="C")
+    source_generation = models.PositiveBigIntegerField(default=0)
+    published_generation = models.PositiveBigIntegerField(null=True)
+    dirty_since = models.DateTimeField(null=True)
+    cutoff = models.DateTimeField(null=True)
+    refreshed_at = models.DateTimeField(null=True)
+
+    class Meta:
+        db_table = "materialization_state"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(
+                condition=models.Q(dataset_key__regex=r"^[a-z][a-z0-9_.-]*\.v[1-9][0-9]*$"),
+                name="ck_materialization_key",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(published_generation__isnull=True)
+                | models.Q(published_generation__lte=models.F("source_generation")),
+                name="ck_materialization_generation",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    published_generation__isnull=True,
+                    cutoff__isnull=True,
+                    refreshed_at__isnull=True,
+                )
+                | models.Q(
+                    published_generation__isnull=False,
+                    cutoff__isnull=False,
+                    refreshed_at__isnull=False,
+                ),
+                name="ck_materialization_publication",
+            ),
+        ]
+
+
+class HomeBrandTimeCount(models.Model):
+    """Read-only mapping of native materialized post/brand counts."""
+
+    pk = models.CompositePrimaryKey("brand_id", "bucket_start", "legacy_flag", "promotion_flag")
+    # The view's canonical Brand nickname has no foreign-key constraint.
+    brand_id = models.CharField(max_length=64, db_collation="case_insensitive")
+    bucket_start = models.DateTimeField()
+    legacy_flag = models.BooleanField()
+    promotion_flag = models.BooleanField()
+    post_count = models.BigIntegerField()
+
+    class Meta:
+        managed = False
+        db_table = "home_brand_time_counts"
+
+
 # ============================================================================
 # Companies
 # ============================================================================

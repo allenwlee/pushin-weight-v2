@@ -73,6 +73,66 @@ def run(job):
     return json.loads(output.getvalue())
 
 
+def test_native_page_yields_to_scheduled_tick_and_resumes_exact_cursor(pipeline, monkeypatch):
+    """Real native command, runner, transport and checkpoint meet a live tick."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from django.db import connections
+
+    from monitor.management.commands.run_cycle import Command
+    from tests.test_cycle_run_lock import wait_for_live_queue
+    from x_monitor import apify
+
+    job = ready_job(requests=3)
+    pipeline.responses.extend([page("1", cursor="after-paid-page"), page("2")])
+    original_get = apify.requests.get
+    scheduled_futures = []
+    live_saw_checkpoint = []
+
+    def execute_live(self, *args, **options):
+        # The queued scheduled command executes only after the paid historical
+        # page has committed membership and its exact continuation.
+        old = CollectionRun.objects.filter(job=job).order_by("started_at").first()
+        saved_scope = old.scopes.get()
+        live_saw_checkpoint.append((saved_scope.cursor, Post.objects.filter(pk="1").exists()))
+        Post.objects.create(tweet_id="live-tick-proof", text="scheduled collection proof")
+
+    monkeypatch.setattr(Command, "_handle", execute_live)
+
+    def scheduled():
+        try:
+            call_command("run_cycle", scheduled=True, stdout=StringIO(), stderr=StringIO())
+        finally:
+            connections["default"].close()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        def fetch(*args, **kwargs):
+            if not scheduled_futures:
+                scheduled_futures.append(pool.submit(scheduled))
+                wait_for_live_queue()
+            return original_get(*args, **kwargs)
+
+        monkeypatch.setattr("x_monitor.apify.requests.get", fetch)
+        first = run(job)
+        scheduled_futures[0].result(timeout=5)
+    assert len(pipeline.requests) == 1
+    assert live_saw_checkpoint == [("after-paid-page", True)]
+    assert Post.objects.filter(pk="live-tick-proof").exists()
+    first_run = CollectionRun.objects.get(pk=first["run_id"])
+    assert first_run.request_count == 1
+    assert first_run.scopes.get().cursor == "after-paid-page"
+    monkeypatch.setattr("x_monitor.apify.requests.get", original_get)
+    resumed = run(job)
+    assert resumed["collection_drained"]
+    assert pipeline.requests[1]["cursor"] == "after-paid-page"
+    assert pipeline.requests[0]["query"] == pipeline.requests[1]["query"]
+    assert resumed["recovered_post_ids"] == ["1", "2"]
+    first_run.refresh_from_db()
+    assert first_run.request_count == 1
+    assert first_run.scopes.get().cursor == "after-paid-page"
+    assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
+
+
 def test_database_job_resumes_exact_page_and_preserves_previous_attempt(pipeline):
     job = ready_job()
     pipeline.responses.append(page("1", cursor="second-page"))

@@ -183,6 +183,8 @@ def test_feed_aliases_emit_canonical_keys_and_keep_cursor_results_equivalent(
 def test_chart_endpoints_emit_canonical_filters_and_reuse_one_cache_entry(
     client, django_user_model, compatible_taxonomy_rows, monkeypatch
 ):
+    now = timezone.now()
+    monkeypatch.setattr(views, "_dashboard_now", lambda: now)
     brand, _posts = compatible_taxonomy_rows
     monkeypatch.setattr(
         views, "_tracked_home_brand_nicknames", lambda: (brand.nickname,),

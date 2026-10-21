@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import hashlib
+import logging
+import math
 import os
 import re
 import threading
+import time
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from django.core.exceptions import ImproperlyConfigured
@@ -17,6 +21,10 @@ from django.db import DatabaseError, connections
 _CONTEXT_SAFE = re.compile(r"[^A-Za-z0-9_.:-]+")
 _CONTENTION_COUNTS: dict[tuple[int, int], int] = {}
 _COUNTS_LOCK = threading.Lock()
+_BACKGROUND_WRITER: ContextVar[tuple[str, int, int] | None] = ContextVar(
+    "harvest_background_writer", default=None,
+)
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -56,6 +64,39 @@ class WriterLockLease:
     run_id: str
     backend_pid: int | None
     contention: WriterLockContention | None = None
+    waited_seconds: float = 0.0
+
+
+def background_writer_identity() -> tuple[str, int, int] | None:
+    return _BACKGROUND_WRITER.get()
+
+
+def backfill_yield_requested(identity: tuple[str, int, int] | None = None) -> bool:
+    """Stop starting paid background work while PostgreSQL queues live work.
+
+    Only the owning background execution checks this seam. The current request
+    may finish and checkpoint under its existing lock; no writer is preempted.
+    PostgreSQL's queue prevents the next background page from barging ahead.
+    """
+    active = identity or background_writer_identity()
+    if active is None:
+        return False
+    using, class_id, object_id = active
+    with connections[using].cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM pg_locks AS waiting
+                JOIN pg_stat_activity AS activity ON activity.pid = waiting.pid
+                WHERE waiting.locktype = 'advisory' AND NOT waiting.granted
+                  AND waiting.objsubid = 2 AND waiting.classid::bigint = %s
+                  AND waiting.objid::bigint = %s
+                  AND activity.application_name LIKE 'harvest:live:%%'
+            )
+            """,
+            [class_id, object_id],
+        )
+        return bool(cursor.fetchone()[0])
 
 
 def _lock_keys(environment: str, lock_scope: str = "harvest-writer") -> tuple[int, int, int, int]:
@@ -109,8 +150,9 @@ def harvest_writer_lock(
     using: str = "default",
     contention_alert_threshold: int = 1,
     on_contention: Callable[[WriterLockContention], None] | None = None,
+    wait_for_backfill_seconds: float = 0,
 ) -> Iterator[WriterLockLease]:
-    """Try the shared session lock once; never wait, steal, or use SQLite.
+    """Keep one writer; scheduled live work may queue behind a backfill page.
 
     The lock is session-scoped so PostgreSQL releases it automatically if the
     owner process or database connection dies. Contention performs only
@@ -118,7 +160,14 @@ def harvest_writer_lock(
     and alert handling. Render starts cron runs in fresh processes, so the
     default alerts on the first observed contention; the in-process count is
     diagnostic context only and is never relied on for durable detection.
+    Waiting is opt-in, limited to 120 seconds, and only behind a positively
+    identified backfill owner. Live/live and other writers remain nonblocking.
     """
+
+    if not math.isfinite(wait_for_backfill_seconds) or not 0 <= wait_for_backfill_seconds <= 120:
+        raise ValueError("backfill writer wait must be between 0 and 120 seconds")
+    if wait_for_backfill_seconds and (execution_mode != "live" or lock_scope != "harvest-writer"):
+        raise ValueError("only the live harvest writer may wait for backfill")
 
     database = connections[using]
     if database.vendor != "postgresql":
@@ -139,30 +188,63 @@ def harvest_writer_lock(
     application_name = _safe_context(execution_mode, entrypoint, run_id, lock_scope)
 
     database.ensure_connection()
+    owner_connection = database.connection
     previous_application_name = ""
+    previous_lock_timeout: str | None = None
     acquired = False
+    waited_seconds = 0.0
+    timed_out = False
+    background_token = None
     backend_pid: int | None = None
-    with database.cursor() as cursor:
-        cursor.execute("SHOW application_name")
-        previous_application_name = str(cursor.fetchone()[0] or "")
-        cursor.execute(
-            "SELECT set_config('application_name', %s, false)", [application_name]
-        )
-        cursor.execute("SELECT pg_backend_pid()")
-        backend_pid = int(cursor.fetchone()[0])
-        cursor.execute(
-            "SELECT pg_try_advisory_lock(%s, %s)",
-            [signed_class, signed_object],
-        )
-        acquired = bool(cursor.fetchone()[0])
+    try:
+        with database.cursor() as cursor:
+            cursor.execute("SHOW application_name")
+            previous_application_name = str(cursor.fetchone()[0] or "")
+            cursor.execute("SELECT set_config('application_name', %s, false)", [application_name])
+            cursor.execute("SELECT pg_backend_pid()")
+            backend_pid = int(cursor.fetchone()[0])
+            cursor.execute("SELECT pg_try_advisory_lock(%s, %s)", [signed_class, signed_object])
+            acquired = bool(cursor.fetchone()[0])
+            owner_pid, owner_context = (None, "unknown")
+            if not acquired:
+                owner_pid, owner_context = _owner_context(cursor, class_id, object_id)
+            if not acquired and wait_for_backfill_seconds and owner_pid is None:
+                # The last historical page can release between the failed try
+                # and inspection. An empty owner must not discard the live tick.
+                cursor.execute("SELECT pg_try_advisory_lock(%s, %s)", [signed_class, signed_object])
+                acquired = bool(cursor.fetchone()[0])
+                if not acquired:
+                    owner_pid, owner_context = _owner_context(cursor, class_id, object_id)
+            if not acquired and wait_for_backfill_seconds and owner_context.startswith("harvest:backfill:"):
+                cursor.execute("SHOW lock_timeout")
+                previous_lock_timeout = str(cursor.fetchone()[0])
+                cursor.execute("SELECT set_config('lock_timeout', %s, false)",
+                               [f"{max(1, int(wait_for_backfill_seconds * 1000))}ms"])
+                logger.info("Live harvest waiting for backfill writer: owner=%s", owner_context)
+                started = time.monotonic()
+                try:
+                    # Unlike polling, a queued PostgreSQL lock request prevents
+                    # newly arriving background pages from reacquiring first.
+                    cursor.execute("SELECT pg_advisory_lock(%s, %s)", [signed_class, signed_object])
+                    acquired = True
+                except DatabaseError as exc:
+                    cause = exc.__cause__
+                    code = getattr(cause, "sqlstate", None) or getattr(cause, "pgcode", None)
+                    if code != "55P03":
+                        raise
+                    timed_out = True
+                finally:
+                    waited_seconds = time.monotonic() - started
+                    cursor.execute("SELECT set_config('lock_timeout', %s, false)", [previous_lock_timeout])
+            if not acquired:
+                owner_pid, owner_context = _owner_context(cursor, class_id, object_id)
 
         if not acquired:
-            owner_pid, owner_context = _owner_context(cursor, class_id, object_id)
             with _COUNTS_LOCK:
                 count = _CONTENTION_COUNTS.get(lock_identity, 0) + 1
                 _CONTENTION_COUNTS[lock_identity] = count
             contention = WriterLockContention(
-                kind="writer_lock_contended",
+                kind="writer_lock_wait_timeout" if timed_out else "writer_lock_contended",
                 environment=environment,
                 execution_mode=execution_mode,
                 entrypoint=entrypoint,
@@ -171,10 +253,6 @@ def harvest_writer_lock(
                 owner_context=owner_context,
                 consecutive_count=count,
                 alert_required=count >= contention_alert_threshold,
-            )
-            cursor.execute(
-                "SELECT set_config('application_name', %s, false)",
-                [previous_application_name],
             )
             if on_contention is not None:
                 on_contention(contention)
@@ -186,13 +264,15 @@ def harvest_writer_lock(
                 run_id=run_id,
                 backend_pid=backend_pid,
                 contention=contention,
+                waited_seconds=waited_seconds,
             )
             return
 
-    with _COUNTS_LOCK:
-        _CONTENTION_COUNTS.pop(lock_identity, None)
+        with _COUNTS_LOCK:
+            _CONTENTION_COUNTS.pop(lock_identity, None)
 
-    try:
+        if execution_mode == "backfill" and lock_scope == "harvest-writer":
+            background_token = _BACKGROUND_WRITER.set((using, class_id, object_id))
         yield WriterLockLease(
             acquired=True,
             environment=environment,
@@ -200,17 +280,18 @@ def harvest_writer_lock(
             entrypoint=entrypoint,
             run_id=run_id,
             backend_pid=backend_pid,
+            waited_seconds=waited_seconds,
         )
     finally:
+        if background_token is not None:
+            _BACKGROUND_WRITER.reset(background_token)
         # A closed/broken connection already released the session lock. Do not
         # reconnect merely to unlock: that would target a different backend.
-        if acquired and database.connection is not None:
+        if database.connection is owner_connection and owner_connection is not None:
             try:
                 with database.cursor() as cursor:
-                    cursor.execute(
-                        "SELECT pg_advisory_unlock(%s, %s)",
-                        [signed_class, signed_object],
-                    )
+                    if acquired:
+                        cursor.execute("SELECT pg_advisory_unlock(%s, %s)", [signed_class, signed_object])
                     cursor.execute(
                         "SELECT set_config('application_name', %s, false)",
                         [previous_application_name],

@@ -2535,6 +2535,8 @@ class CycleRunner:
         _post_fetch_clients: dict[str, Any] | None = None,
         _clock=None,
         _monotonic=None,
+        _collection_window_end: datetime | None = None,
+        _cycle_started_monotonic: float | None = None,
     ) -> None:
         # Single config source-of-truth (plan 2026-08-01-001). When None,
         # load from config.yaml at the repo root. Tests pass a pre-built
@@ -2568,6 +2570,8 @@ class CycleRunner:
         # proof. Production defaults remain the wall/monotonic clocks.
         self._clock = _clock or (lambda: datetime.now(timezone.utc))
         self._monotonic = _monotonic or time.monotonic
+        self._collection_window_end = _collection_window_end
+        self._cycle_started_monotonic = _cycle_started_monotonic
         self._llm_call_count: int = 0
 
         # Per-cycle accumulators for the run summary
@@ -2742,6 +2746,7 @@ class CycleRunner:
         sweep a historical span, so advancing the live cursor to their upper
         bound would skip everything in between.  R6.
         """
+        now = self._collection_window_end or now
         op_since = getattr(settings, "X_MONITOR_CYCLE_SINCE_TIME", None)
         op_until = getattr(settings, "X_MONITOR_CYCLE_UNTIL_TIME", None)
         # `is not None`, not a falsy check: epoch 0 is a legitimate (if exotic)
@@ -5130,16 +5135,18 @@ class CycleRunner:
 
         Returns a run summary dict (compatible with LATEST.json shape).
         """
-        cycle_started_wall = self._wall_now()
+        cycle_started_wall = self._collection_window_end or self._wall_now()
         self._optional_calls_remaining = self.cfg.targeted_extraction.max_calls_per_cycle
         cycle_started_at = cycle_started_wall.isoformat(timespec="seconds")
-        t0 = self._monotonic()
+        t0 = self._cycle_started_monotonic if self._cycle_started_monotonic is not None else self._monotonic()
         run_id = (
             f"{cycle_started_at.replace(':', '').replace('+', '_').replace('-', '')}"
             f"-{uuid.uuid4().hex[:8]}"
         )
         started_at = cycle_started_at
         deadline = self.cfg.harvest.start_deadline()
+        if self._cycle_started_monotonic is not None:
+            deadline = self.cfg.harvest.start_deadline(monotonic=lambda: t0)
         if self._backfill_context is not None:
             deadline = self._backfill_context.budget
 
@@ -5303,7 +5310,7 @@ class CycleRunner:
 
             if call.call_id == RARE_EXTRA_CALL_ID and self._backfill_context is None:
                 rare_result = self._run_rare_type_search(
-                    call, api, now=self._wall_now()
+                    call, api, now=self._collection_window_end or self._wall_now()
                 )
                 call_entry.update(rare_result)
                 call_entry["n_results"] = rare_result.get("raw_count", 0)
