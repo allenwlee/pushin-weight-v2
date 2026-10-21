@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21T18:51:27+09:00, product source `ab9b8fd7`, schema through `0122_remove_timezone_source_columns`. Table inventory and columns are checked against isolated PostgreSQL18.6. The production migration ledger at `7d4fec90` confirms the same migration boundary; this check does not claim a fresh audit of every production constraint.
+Last verified: 2026-10-21T21:18:31+09:00, product source `86f4c4f7`, schema through `0127_remove_legacy_identity_columns`. Table inventory, columns and affected constraints are checked against isolated PostgreSQL18.6 migrated through this boundary; this is not a fresh production constraint audit.
 
-Scope: **173 core application tables**, **2315 physical table columns**, nine compatibility views and one native materialized view with five columns. Repository and isolated migration boundary: `0122_remove_timezone_source_columns`. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys.
+Scope: **177 core application tables**, **2327 physical table columns**, nine compatibility views and one native materialized view with five columns. Repository and isolated migration boundary: `0127_remove_legacy_identity_columns`. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -20,7 +20,7 @@ The retired SQLite database and Graphviz image are not current schema sources.
 
 | Subject | Tables | Start here when you need… |
 | --- | ---: | --- |
-| [Shared catalogues and performer identities](#shared-catalogues) | 5 | Canonical timezone, language-tag, unit and internal performer identities. |
+| [Shared catalogues and performer identities](#shared-catalogues) | 9 | Canonical timezone, language-tag and unit values; internal performers; immutable definition, provider, model and workflow-stage identities. |
 | [People and job history](#people) | 13 | A person, their optional X identity, roles, employment dates, and evidence. |
 | [Companies, brands, and organization discovery](#organizations) | 11 | Company/brand identity, ownership, associated accounts, and unresolved organizations. |
 | [Accounts, profiles, and lists](#accounts) | 7 | Shared source accounts, X detail profiles, observed history, list membership and post appearances. |
@@ -135,8 +135,8 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 173 core application tables appears once in this inventory and once in
-the detailed sections. Subject table counts above sum to 173. The native view is
+Each of the 177 core application tables appears once in this inventory and once in
+the detailed sections. Subject table counts above sum to 177. The native view is
 listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 
 | Table | Subject | What one row represents |
@@ -180,6 +180,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [country_codes_region](#table-country_codes_region) | [Countries and regions](#geography) | One country’s assigned region and the source of that assignment. |
 | [country_labels](#table-country_labels) | [Countries and regions](#geography) | One translated label for a country code. |
 | [data_sources](#table-data_sources) | [Accounts, profiles, and lists](#accounts) | One stable collection-source identity, distinct from original authored content. |
+| [definition_versions](#table-definition_versions) | [Shared catalogues and performer identities](#shared-catalogues) | One immutable identity and provenance record for a versioned software or policy definition. |
 | [discourse_keys](#table-discourse_keys) | [Classification vocabularies and translated labels](#vocabularies) | One legacy pragmatic-register vocabulary key. |
 | [discourse_labels](#table-discourse_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated legacy pragmatic-register label. |
 | [editorial_assessments](#table-editorial_assessments) | [Compatible editorial input storage and pictures](#editorial) | One fenced quarter-hour editorial or content-picture assessment, with frozen evidence and outcome. |
@@ -203,6 +204,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [job_listings](#table-job_listings) | [Job listings and official career-site collection](#jobs) | One advertised position/requisition, including its source identity and current saved details. |
 | [job_source_states](#table-job_source_states) | [Job listings and official career-site collection](#jobs) | One career-site source’s active lease and last successful synchronization state. |
 | [job_source_sync_runs](#table-job_source_sync_runs) | [Job listings and official career-site collection](#jobs) | One attempt to synchronize an official career-site source. |
+| [inference_models](#table-inference_models) | [Shared catalogues and performer identities](#shared-catalogues) | One provider-qualified native model identifier requested from an inference service. |
 | [languages](#table-languages) | [Shared catalogues](#shared-catalogues) | One registered primary-language code. |
 | [locales](#table-locales) | [Shared catalogues](#shared-catalogues) | One full language tag and its registered base language. |
 | [materialization_state](#table-materialization_state) | [Homepage counts](#homepage-counts) | Current publication, coverage and source-change state for one versioned derived dataset in this environment. |
@@ -293,6 +295,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [search_queries](#table-search_queries) | [Collection, extraction, and processing records](#processing) | One saved collection/discovery query identity and associated brand/keywords. |
 | [sentiment_keys](#table-sentiment_keys) | [Classification vocabularies and translated labels](#vocabularies) | One sentiment vocabulary key. |
 | [sentiment_labels](#table-sentiment_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated sentiment label. |
+| [service_providers](#table-service_providers) | [Shared catalogues and performer identities](#shared-catalogues) | One identity for a service that receives a model request. |
 | [source_subject_mappings](#table-source_subject_mappings) | [Measurement subjects, metrics and observations](#measurements) | One external source identifier mapped to a measurement subject. |
 | [staff_collection_work](#table-staff_collection_work) | [Collection, extraction, and processing records](#processing) | One person/source-fingerprint/policy unit of resumable collection work. |
 | [staff_intakes](#table-staff_intakes) | [Collection, extraction, and processing records](#processing) | One versioned staff-source observation, including eligibility and its input payload. |
@@ -307,6 +310,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [trend_narrative_subjects](#table-trend_narrative_subjects) | [Authored content and trend publication](#headlines) | One reported subject attached to a headline publication. |
 | [trend_narrative_work_slots](#table-trend_narrative_work_slots) | [Authored content and trend publication](#headlines) | One window’s active work claim and optional newer queued cutoff. |
 | [trend_narratives](#table-trend_narratives) | [Authored content and trend publication](#headlines) | One durable attempt/version of a shared time-window headline. |
+| [workflow_stages](#table-workflow_stages) | [Shared catalogues and performer identities](#shared-catalogues) | One stable stage identity within a versioned workflow or contract. |
 | [twitter_list_memberships](#table-twitter_list_memberships) | [Accounts, profiles, and lists](#accounts) | One account’s membership state in one X list. |
 | [twitter_list_sync_state](#table-twitter_list_sync_state) | [Accounts, profiles, and lists](#accounts) | One X list’s last completed membership synchronization. |
 | [unsanctioned_flag_keys](#table-unsanctioned_flag_keys) | [Classification vocabularies and translated labels](#vocabularies) | One legacy unsanctioned-flag vocabulary key; there is no paired label table. |
@@ -319,16 +323,26 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 
 ## Shared catalogues and performer identities
 
-These four catalogues own shared identifiers; existing source text and current
-callers retain their original storage in this additive candidate. There is no
-automatic locale URL change, timezone fallback, unit conversion or measurement
-rewrite. The controlled seed command validates every input hash before inserting
-missing rows and rolls back on canonical identity conflicts. It never contacts a
-provider, prunes additional valid catalogue rows or activates collection.
+The timezone, language, locale and measurement-unit catalogues own shared values;
+the provider, requested-model, definition-version and workflow-stage registries
+own distinct identities. Existing request records and owning domain rows link to
+these identities where implemented. There is no automatic locale URL change,
+timezone fallback, unit conversion or measurement rewrite. The controlled seed
+command validates every input hash before inserting missing catalogue rows and
+rolls back on canonical identity conflicts. It never contacts a provider, prunes
+additional valid catalogue rows or activates collection.
 
 The actor registry identifies internal performers independently of authentication
 accounts and the researched people/platform accounts elsewhere in the schema.
 An actor record does not establish approval, login access or authorization.
+
+`definition_versions` records exact version identity and available source/archive
+provenance; `service_providers` identifies the service receiving a request;
+`inference_models` stores the native model key qualified by that provider; and
+`workflow_stages` gives a stable stage identity scoped to a workflow or contract
+definition. These registries do not infer a served checkpoint or store packed
+configuration bodies. Definition and stage identities are immutable in the
+database. Model identity cannot be reassigned to another provider or native key.
 
 The offline [manifest](../../data/shared_vocabulary_manifest.json) pins
 IANA tzdata2026e and the language registry dated2026-09-17. The four CSV seeds
@@ -382,10 +396,118 @@ actors cannot be deleted through their correction FK; Django uses `PROTECT`.
 
 Migration0115 registers system `benchmark_metric_timing_repair` using a stable
 UUID. The actual timing-repair path explicitly reuses/registers that known system;
-arbitrary legacy text never creates a registry entry. Correction callers can
-supply a registered identity separately from their original recorded label.
-Actors are copied during staging refresh without carrying login credentials or
-links into the excluded authentication graph.
+arbitrary legacy text never creates a registry entry. Current correction rows
+refer to the registered actor directly; the duplicated legacy actor-label column
+has been removed. Actors are copied during staging refresh without carrying login
+credentials or links into the excluded authentication graph.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-definition_versions"></a>
+
+### `definition_versions` — DefinitionVersion
+
+One immutable version identity for a workflow, policy, prompt, taxonomy,
+normalizer or other named definition, with optional pinned-source or archived
+content provenance. A row identifies a definition; it does not store an
+unstructured configuration body.
+
+Model: [DefinitionVersion](../../core/models.py#L221).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | PK; Django generates a UUID. |
+| `definition_domain` | `varchar(64)` | No | Choice: adapter, normalizer, policy, workflow, contract, prompt, extraction, query_pack, query_family, provider_boundary, tool_boundary, taxonomy, selector, ranking_method, evidence_method, geography_scheme, membership_method, threshold or time_policy. |
+| `definition_key` | `varchar(128)` | No | Stable owned name within its domain; nonempty and without surrounding whitespace. |
+| `reported_version_token` | `varchar(256)` | No | Exact non-whitespace version token reported by the owner. |
+| `identity_sha256` | `varchar(64)` | No | Unique lowercase SHA-256 identity for the definition version. |
+| `content_sha256` | `varchar(64)` | Yes | Optional lowercase SHA-256 of available pinned definition content. |
+| `source_git_commit` | `varchar(64)` | Yes | Optional 40- or 64-character lowercase Git commit. |
+| `source_path` | `varchar(512)` | Yes | Optional relative repository path; absolute, blank, parent-traversal and newline paths are rejected. |
+| `provenance_state` | `varchar(24)` | No | Choice: `identity_only`, `source_pinned` or `archive_pinned`; check enforces the required provenance shape. |
+| `evidence_archive_id` | `uuid` | Yes | FK → [`collection_evidence_archives`](#table-collection_evidence_archives) (`id`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `evidence_archive`. |
+
+**Named indexes:** `definition_versions_pkey` on `id`; `definition_versions_identity_sha256_key` unique on `identity_sha256`; `definition_versions_identity_sha256_2f2c84c1_like` pattern index on `identity_sha256`; `definition_versions_evidence_archive_id_92e943f7` on `evidence_archive_id`.
+
+**Named constraints:** `ck_definition_domain` limits domains to the choices above; `ck_definition_identity_tokens` rejects blank/edge-whitespace keys and whitespace-only version tokens; `ck_definition_hashes` validates the identity hash and any content hash; `ck_definition_source_commit` validates commit shape; `ck_definition_source_path` rejects unsafe paths; `ck_definition_provenance_shape` enforces the field combination appropriate to each provenance state; `definition_versions_evidence_archive_id_92e943f7_fk_collectio` is the deferred archive FK.
+
+`guard_definition_version_identity` rejects updates and deletes, preserving the registered identity and its provenance record.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-inference_models"></a>
+
+### `inference_models` — InferenceModel
+
+One native model key requested from one service provider. The provider-qualified
+key records request identity; it does not prove which checkpoint the service
+actually served.
+
+Model: [InferenceModel](../../core/models.py#L170).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | PK; Django generates a UUID. |
+| `service_provider_id` | `varchar(64)` | No | FK → [`service_providers`](#table-service_providers) (`code`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `service_provider`. |
+| `native_model_key` | `varchar(512)` | No | Exact native API model key; must be nonempty and have no surrounding whitespace. |
+
+**Named indexes:** `inference_models_pkey` on `id`; `uq_inference_model_service_key` unique on `(service_provider_id, native_model_key)`; `inference_models_service_provider_id_35e2269f` and its pattern index on `service_provider_id`.
+
+**Named constraints:** `ck_inference_model_native_key` rejects blank or edge-whitespace keys; `inference_models_service_provider_id_35e2269f_fk_service_p` is the deferred provider FK.
+
+`guard_inference_model_identity` prevents updates to the ID, provider or native key after registration.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-service_providers"></a>
+
+### `service_providers` — ServiceProvider
+
+One service identity used to qualify the native model key sent with an
+inference request. It is distinct from a source that supplies collected facts.
+
+Model: [ServiceProvider](../../core/models.py#L155).
+
+**Primary key:** `code`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `code` | `varchar(64)` | No | PK; lowercase provider code beginning with a letter and containing only lowercase letters, digits, underscore, dot or hyphen. |
+
+**Named indexes:** `service_providers_pkey` on `code`; `service_providers_code_8cf5f9bd_like` pattern index on `code`.
+
+**Named constraints:** `ck_service_provider_code` enforces the code grammar.
+
+`guard_service_provider_identity` rejects updates after a provider code is registered.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-workflow_stages"></a>
+
+### `workflow_stages` — WorkflowStage
+
+One stable stage key belonging to a workflow or contract definition version.
+The referenced definition must have the `workflow` or `contract` domain.
+
+Model: [WorkflowStage](../../core/models.py#L297).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | PK; Django generates a UUID. |
+| `workflow_version_id` | `uuid` | No | FK → [`definition_versions`](#table-definition_versions) (`id`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `workflow_version`. |
+| `stage_key` | `varchar(200)` | No | Stable nonempty key within the referenced workflow/contract version; no surrounding whitespace. |
+
+**Named indexes:** `workflow_stages_pkey` on `id`; `workflow_stages_workflow_version_id_af5e4d2e` on `workflow_version_id`; `uq_workflow_version_stage` unique on `(workflow_version_id, stage_key)`.
+
+**Named constraints:** `ck_workflow_stage_key` rejects blank or edge-whitespace keys; `workflow_stages_workflow_version_id_af5e4d2e_fk_definitio` is the deferred FK.
+
+`guard_workflow_stage_definition` rejects a reference to a definition outside the workflow/contract domains. `guard_workflow_stage_identity` rejects updates and deletes after registration.
 
 [Back to table inventory](#table-inventory)
 
@@ -1862,48 +1984,37 @@ None declared beyond field/FK/constraint indexes.
 
 ### `country_labels` — CountryLabel
 
-One translated label for a country code.
+One translated label for a country code and canonical application locale.
 
-Model: [CountryLabel](../../core/models.py#L1027).
+Model: [CountryLabel](../../core/models.py#L1176).
 
-**Primary key:** `country_code, lang` (the existing composite key).
+**Primary key:** `(country_code, locale_id)`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `country_code` | `varchar(2)` | No | FK → [`countries`](#table-countries) (`code`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `country`. |
-| `lang` | `varchar(16)` | No | Original app language key and PK component; retained for compatible writers/readers. |
 | `label` | `text` | No | Owned translated wording; preserved exactly. |
-| `locale_id` | `varchar(255)` | Yes | FK → [`locales`](#table-locales) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `locale_reference`. Canonical app-edition locale or unresolved NULL. |
+| `locale_id` | `varchar(255)` | No | FK → [`locales`](#table-locales) (`code`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `locale_reference`. Canonical application-edition locale and second PK component. |
 
 **Named indexes:**
 
 - `country_labels_locale_id_39819453`: index on `locale_id`.
 - `country_labels_locale_id_39819453_like`: varchar-pattern index on `locale_id`.
-- `uq_country_label_locale`: unique index on `country_code, locale_id`.
+- `country_labels_country_code_f55e9c01`: index on `country_code`.
+- `country_labels_country_code_f55e9c01_like`: varchar-pattern index on `country_code`.
 
 **Named constraints:**
 
-- `country_labels_pkey`: existing primary key on `country_code, lang`.
-- `uq_country_label_locale`: unique resolved owner/locale pair; multiple NULL references remain possible during mapping.
-- `ck_country_label_locale`: NULL reference or lower-case locale identity matching normalized app-edition language (underscores become hyphens; Chinese-edition `zh-cn` becomes `zh-hans`).
+- `country_labels_pkey`: primary key on `(country_code, locale_id)`.
+- `country_labels_country_code_f55e9c01_fk_countries_code`: deferred FK to `countries(code)`.
 - `country_labels_locale_id_39819453_fk_locales_code`: deferred FK to `locales(code)`.
 
-`sync_country_label_locale` invokes `sync_geography_label_locale` before
-inserts/updates. It matches the existing app-edition resolver: case-insensitive
-catalogue lookup, underscore-to-hyphen normalization and the contextual Chinese
-edition mapping to `zh-Hans`. The FK stores the catalogue's actual code. Raw `lang`
-and translated wording remain intact, including unrecognized tags whose reference
-stays NULL. A raw primary-key/language change updates or clears the relationship;
-contradictory references and duplicate resolved owner/locale pairs fail. This
-app-label rule does not reinterpret source-language facts as the app edition.
-
-`map_geography_label_locales --owner country_labels` previews by default; `--apply`
-updates only references. It accepts explicit database/batch limits and the paired
-`--after-owner-key`/`--after-lang` composite cursor. The command reports eligible,
-updated, unmatched and owner/locale collision counts. Mapping refuses existing
-collisions before writes and never merges/deletes their wording. Current composite
-keys and source tags are rechecked after concurrent writes. Country/region
-relationships, original label selections and feed output do not change.
+The seed command resolves its input language label through the app-edition locale
+catalogue and writes only the canonical `locale_id`; the raw seed spelling is not
+stored in this table. In particular, the app's `zh-cn` edition alias resolves to
+`zh-Hans`. The database requires both identity components and enforces their
+uniqueness through the composite primary key. Label wording and country identity
+remain unchanged. This app-label locale does not reinterpret source-language facts.
 
 [Back to table inventory](#table-inventory)
 
@@ -1939,48 +2050,37 @@ None declared beyond field/FK/constraint indexes.
 
 ### `region_labels` — RegionLabel
 
-One translated label for a region.
+One translated label for a region and canonical application locale.
 
-Model: [RegionLabel](../../core/models.py#L938).
+Model: [RegionLabel](../../core/models.py#L1098).
 
-**Primary key:** `region_key, lang` (the existing composite key).
+**Primary key:** `(region_key, locale_id)`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `region_key` | `varchar(64)` | No | FK → [`regions`](#table-regions) (`key`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `region`. |
-| `lang` | `varchar(16)` | No | Original app language key and PK component; retained for compatible writers/readers. |
 | `label` | `text` | No | Owned translated wording; preserved exactly. |
-| `locale_id` | `varchar(255)` | Yes | FK → [`locales`](#table-locales) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `locale_reference`. Canonical app-edition locale or unresolved NULL. |
+| `locale_id` | `varchar(255)` | No | FK → [`locales`](#table-locales) (`code`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `locale_reference`. Canonical application-edition locale and second PK component. |
 
 **Named indexes:**
 
 - `region_labels_locale_id_6647bacd`: index on `locale_id`.
 - `region_labels_locale_id_6647bacd_like`: varchar-pattern index on `locale_id`.
-- `uq_region_label_locale`: unique index on `region_key, locale_id`.
+- `region_labels_region_key_8efd2411`: index on `region_key`.
+- `region_labels_region_key_8efd2411_like`: varchar-pattern index on `region_key`.
 
 **Named constraints:**
 
-- `region_labels_pkey`: existing primary key on `region_key, lang`.
-- `uq_region_label_locale`: unique resolved owner/locale pair; multiple NULL references remain possible during mapping.
-- `ck_region_label_locale`: NULL reference or lower-case locale identity matching normalized app-edition language (underscores become hyphens; Chinese-edition `zh-cn` becomes `zh-hans`).
+- `region_labels_pkey`: primary key on `(region_key, locale_id)`.
+- `region_labels_region_key_8efd2411_fk_regions_key`: deferred FK to `regions(key)`.
 - `region_labels_locale_id_6647bacd_fk_locales_code`: deferred FK to `locales(code)`.
 
-`sync_region_label_locale` invokes `sync_geography_label_locale` before
-inserts/updates. It matches the existing app-edition resolver: case-insensitive
-catalogue lookup, underscore-to-hyphen normalization and the contextual Chinese
-edition mapping to `zh-Hans`. The FK stores the catalogue's actual code. Raw `lang`
-and translated wording remain intact, including unrecognized tags whose reference
-stays NULL. A raw primary-key/language change updates or clears the relationship;
-contradictory references and duplicate resolved owner/locale pairs fail. This
-app-label rule does not reinterpret source-language facts as the app edition.
-
-`map_geography_label_locales --owner region_labels` previews by default; `--apply`
-updates only references. It accepts explicit database/batch limits and the paired
-`--after-owner-key`/`--after-lang` composite cursor. The command reports eligible,
-updated, unmatched and owner/locale collision counts. Mapping refuses existing
-collisions before writes and never merges/deletes their wording. Current composite
-keys and source tags are rechecked after concurrent writes. Country/region
-relationships, original label selections and feed output do not change.
+The seed command resolves its input language label through the app-edition locale
+catalogue and writes only the canonical `locale_id`; the raw seed spelling is not
+stored in this table. In particular, the app's `zh-cn` edition alias resolves to
+`zh-Hans`. The database requires both identity components and enforces their
+uniqueness through the composite primary key. Label wording and region identity
+remain unchanged. This app-label locale does not reinterpret source-language facts.
 
 [Back to table inventory](#table-inventory)
 
@@ -2653,10 +2753,14 @@ and [0094_shared_materialization_state](../../core/migrations/0094_shared_materi
 Count-relevant triggers cover post timestamps/deletes, post-brand relationships,
 legacy/promotion eligibility presence and canonical brand spelling. Current-day
 writes advance the generation while preserving valid closed history when
-`dirty_since >= cutoff`. Historical changes invalidate it. Refresh and conditional
-publication commit together; failed or overlapping refreshes retain the previous
-committed publication. Readers verify health and counts within one SQL snapshot,
-using exact source queries when the summary is unavailable or invalid.
+`dirty_since >= cutoff`. Historical changes mark the affected suffix dirty. The homepage reader reuses
+only the prefix before the earliest dirty15minute bucket and counts that entire
+bucket onward from exact sources. It supplies a concrete boundary for date-index
+planning, then rechecks that boundary in the count statement; an earlier concurrent
+correction forces full source fallback. Unknown or global invalidation also uses
+full source queries. Refresh and conditional publication commit together; failed
+or overlapping refreshes retain the previous committed publication. Both count
+sources and the validity check share one SQL snapshot.
 
 [Back to table inventory](#table-inventory)
 
@@ -6654,7 +6758,7 @@ Model: [CollectionCampaign](../../core/models.py#L8603).
 
 One immutable before/after correction to measurement attribution or timing.
 
-Model: [CollectionCorrection](../../core/models.py#L8841).
+Model: [CollectionCorrection](../../core/models.py#L8947).
 
 **Primary key:** `id`.
 
@@ -6663,8 +6767,7 @@ Model: [CollectionCorrection](../../core/models.py#L8841).
 | `id` | `uuid` | No | Primary key. |
 | `correction_kind` | `character varying(24)` | No | Correction kind. |
 | `policy_version` | `character varying(64)` | No | Policy version. |
-| `actor_identifier` | `text` | No | Exact recorded performer label, including unresolved legacy wording. |
-| `actor_id` | `uuid` | Yes | FK → [`actors`](#table-actors) (`id`); Django deletion: `PROTECT`. Explicit registered performer; NULL means unresolved legacy attribution. |
+| `actor_id` | `uuid` | Yes | FK → [`actors`](#table-actors) (`id`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `actor`. The current Django writer requires an actor, while PostgreSQL through0127 still permits NULL. |
 | `reason_code` | `character varying(64)` | No | Reason code. |
 | `recorded_at` | `timestamp with time zone` | Yes | Recorded at. |
 | `recorded_at_precision` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
@@ -7683,7 +7786,7 @@ WHERE m.measurement_kind = 'flow' AND window_range IS NULL;
 
 One metric definition with units, scale and methodology.
 
-Model: [SourceMetric](../../core/models.py#L7931).
+Model: [SourceMetric](../../core/models.py#L8049).
 
 **Primary key:** `id`.
 
@@ -7695,21 +7798,19 @@ Model: [SourceMetric](../../core/models.py#L7931).
 | `metric_key` | `varchar(64)` | No | Stored value. |
 | `version` | `smallint` | No | Stored value. |
 | `name` | `varchar(128)` | No | Stored value. |
-| `unit` | `varchar(64)` | No | Original unit code retained for compatible writers and frozen definition snapshots. |
 | `value_kind` | `varchar(16)` | No | Stored value. |
 | `quantity_form` | `varchar(16)` | No | Stored value. |
 | `value_role` | `varchar(32)` | No | Django default: `'value'` (not an assumed SQL default). |
 | `measurement_kind` | `varchar(24)` | No | Stored value. |
 | `window_mode` | `varchar(16)` | No | Django default: `'none'` (not an assumed SQL default). |
 | `window_amount` | `numeric(12, 3)` | Yes | Stored value. |
-| `window_unit` | `varchar(24)` | Yes | Original window-unit code; `day`/`second` when required by the checked window shape, otherwise NULL. |
 | `window_duration_basis` | `varchar(16)` | No | Django default: `'none'` (not an assumed SQL default). |
 | `window_alignment` | `varchar(32)` | Yes | Stored value. |
 | `required` | `boolean` | No | Django default: `True` (not an assumed SQL default). |
 | `definition_metadata` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
 | `created_at` | `timestamp with time zone` | No | Django default: `now` (not an assumed SQL default). |
 | `source_timezone_id` | `varchar(64)` | Yes | FK → [`time_zones`](#table-time_zones) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `source_timezone_reference`. Exact registered code or unresolved NULL. |
-| `unit_id` | `varchar(64)` | Yes | FK → [`measurement_units`](#table-measurement_units) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `unit_reference`. Exact registered unit or unresolved NULL. |
+| `unit_id` | `varchar(64)` | No | Required FK → [`measurement_units`](#table-measurement_units) (`code`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `unit_reference`. Exact registered unit code. |
 | `window_unit_id` | `varchar(64)` | Yes | FK → [`measurement_units`](#table-measurement_units) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `window_unit_reference`. Same catalogue, distinct duration role. NULL when no window unit or no exact registered code. |
 
 **Named indexes:**
@@ -7721,68 +7822,39 @@ Model: [SourceMetric](../../core/models.py#L7931).
 - `metrics_unit_id_6337e316_like`: varchar-pattern index on `unit_id`.
 - `metrics_window_unit_id_2fe033ff`: index on `window_unit_id`.
 - `metrics_window_unit_id_2fe033ff_like`: varchar-pattern index on `window_unit_id`.
+- `source_metrics_pkey`: primary-key index on `id`.
+- `source_metrics_source_id_d7b688a7` and `source_metrics_source_id_d7b688a7_like`: indexes on `source_id`.
+- `source_metrics_metric_type_id_a11a87f9` and `source_metrics_metric_type_id_a11a87f9_like`: indexes on `metric_type_id`.
 
 **Named constraints:**
 
 - `uq_source_metric_version`: `CONSTRAINT "uq_source_metric_version" UNIQUE ("source_id", "metric_key", "version")`.
 - `ck_metric_version`: `CONSTRAINT "ck_metric_version" CHECK ("version" > 0)`.
+- `source_metrics_version_check`: retained migration-level `CHECK (version >= 0)` from the positive-small-integer column definition; `ck_metric_version` further requires versions greater than zero.
+- `source_metrics_source_id_d7b688a7_fk_data_sources_id`: deferred FK from `source_id` to `data_sources(id)`.
+- `source_metrics_metric_type_id_a11a87f9_fk_metric_types_id`: deferred FK from `metric_type_id` to `metric_types(id)`.
 - `metrics_source_timezone_id_183a4919_fk_time_zones_code`: deferred FK from `source_timezone_id` to `time_zones(code)`.
-- `ck_metric_unit_ref`: `CHECK (unit_id IS NULL OR unit_id = unit)`.
-- `ck_metric_window_unit_ref`: `CHECK (window_unit_id IS NULL OR (window_unit IS NOT NULL AND window_unit_id = window_unit))`.
 - `metrics_unit_id_6337e316_fk_measurement_units_code`: deferred FK from `unit_id` to `measurement_units(code)`.
 - `metrics_window_unit_id_2fe033ff_fk_measurement_units_code`: deferred FK from `window_unit_id` to `measurement_units(code)`.
 - `ck_metric_value_kind`: `CONSTRAINT "ck_metric_value_kind" CHECK ("value_kind" IN ('integer', 'float'))`.
 - `ck_metric_quantity`: `CONSTRAINT "ck_metric_quantity" CHECK ("quantity_form" IN ('count', 'score', 'rank', 'variance', 'ratio'))`.
 - `ck_metric_value_role`: `CONSTRAINT "ck_metric_value_role" CHECK ("value_role" IN ('value', 'lower_bound', 'upper_bound'))`.
-- `ck_metric_kind_window`: `CONSTRAINT "ck_metric_kind_window" CHECK ((("measurement_kind" = 'state' AND "window_alignment" IS NULL AND "window_amount" IS NULL AND "window_duration_basis" = 'none' AND "window_mode" = 'none' AND "window_unit" IS NULL) OR ("measurement_kind" = 'flow' AND "window_alignment" IS NULL AND "window_amount" IS NULL AND "window_duration_basis" = 'none' AND "window_mode" = 'since_origin' AND "window_unit" IS NULL) OR ("measurement_kind" = 'flow' AND "window_amount" > 0 AND "window_amount" IS NOT NULL AND "window_amount" < 1000000000 AND "window_duration_basis" IN ('calendar', 'fixed', 'unknown') AND "window_mode" IN ('rolling', 'calendar', 'fixed') AND "window_unit" IN ('day', 'second') AND "window_unit" IS NOT NULL AND (("window_alignment" IN ('source_local_midnight', 'provider_defined') AND "window_alignment" IS NOT NULL AND "window_mode" = 'calendar') OR ("window_alignment" IS NULL AND NOT ("window_mode" = 'calendar'))))))`.
+- `ck_metric_kind_window`: `CHECK (((((measurement_kind)::text = 'state'::text) AND (window_alignment IS NULL) AND (window_amount IS NULL) AND ((window_duration_basis)::text = 'none'::text) AND ((window_mode)::text = 'none'::text) AND (window_unit_id IS NULL)) OR (((measurement_kind)::text = 'flow'::text) AND (window_alignment IS NULL) AND (window_amount IS NULL) AND ((window_duration_basis)::text = 'none'::text) AND ((window_mode)::text = 'since_origin'::text) AND (window_unit_id IS NULL)) OR (((measurement_kind)::text = 'flow'::text) AND (window_amount > (0)::numeric) AND (window_amount IS NOT NULL) AND (window_amount < (1000000000)::numeric) AND ((window_duration_basis)::text = ANY ((ARRAY['calendar'::character varying, 'fixed'::character varying, 'unknown'::character varying])::text[])) AND ((window_mode)::text = ANY ((ARRAY['rolling'::character varying, 'calendar'::character varying, 'fixed'::character varying])::text[])) AND ((window_unit_id)::text = ANY ((ARRAY['day'::character varying, 'second'::character varying])::text[])) AND (window_unit_id IS NOT NULL) AND ((((window_alignment)::text = ANY ((ARRAY['source_local_midnight'::character varying, 'provider_defined'::character varying])::text[])) AND (window_alignment IS NOT NULL) AND ((window_mode)::text = 'calendar'::text)) OR ((window_alignment IS NULL) AND (NOT ((window_mode)::text = 'calendar'::text)))))))`. It allows state metrics without a window, flow `since_origin` metrics without a bounded unit, and rolling/calendar/fixed flow windows only when the amount, duration basis, mode, registered `day`/`second` unit and calendar alignment have a valid shape.
 
-Application writers resolve registered IANA zones and Link aliases to the
-optional `source_timezone_reference`. Unknown, ambiguous or absent codes remain
-unresolved; no UTC default or invented catalogue record is created. Frozen
-definition snapshots retain their own reported timezone evidence. No timezone
-synchronization trigger or separate timezone string column is present.
-
-The `sync_metric_units` PostgreSQL trigger maintains both unit references for
-ORM, raw SQL and older writers. Each reference resolves only its own exact
-reported code. Changing the wording updates or clears that role; a supplied
-contradictory reference fails. Unknown general units retain their wording and
-NULL reference. A missing window has no unit reference, and membership in the
-shared catalogue does not make a non-time unit valid in a window. The existing
-window check still accepts only `day`/`second` in that role. Unit references do
-not convert measurements, imply averaging eligibility or make a calendar day
-an elapsed duration of 86,400 seconds.
-
-After explicit catalogue seeding, `map_metric_units` previews or applies exact
-matches for either role in bounded transactions:
-
-```bash
-python manage.py map_metric_units --database default --batch-size 500 --max-batches 1
-python manage.py map_metric_units --database default --batch-size 500 --max-batches 1 --apply
-```
-
-The command reports examined/updated definition rows, an `after_metric_id`
-resume cursor, remaining resolvable rows and separate unmatched general/window
-unit counts. Absent windows are excluded from unmatched-window counts. Repeated
-runs do not update resolved rows. Current raw values are rechecked after a
-concurrent writer; no stale reference is installed. Both the command line and
-Python `call_command` reject simultaneous `apply` and `dry_run` before writing.
+Application writers store the required unit FK directly. Window units use the
+same catalogue in a separate role and are required only for bounded flow windows;
+the database check accepts only `day` or `second` there. Membership in the shared
+catalogue does not convert measurements, imply averaging eligibility or equate a
+calendar day to 86,400 elapsed seconds. The old `unit` and `window_unit` columns,
+their synchronization trigger, and the redundant-reference checks have been
+removed. The optional source-timezone FK remains separate from unit identity.
 
 Collection-contract schema1 snapshots retain their explicit nineteen-field shape;
 the relational reference is not added to old packets or hashes. Numeric values,
 calendar/elapsed duration distinctions and source timezone wording are unchanged.
-A fresh or older-source database can migrate without catalogue seeds; after
-explicit seeding, `map_metric_time_zones` fills only exact registered matches.
-
-```bash
-python manage.py map_metric_time_zones --database default --batch-size 500 --max-batches 1
-python manage.py map_metric_time_zones --database default --batch-size 500 --max-batches 1 --apply
-```
-
-The first command previews; writes require `--apply`. Each bounded run reports its
-last metric ID, actual updates, remaining resolvable rows and unmatched count.
-`--after-metric-id` resumes a scan; rerunning from0 safely catches concurrent or
-late-registry matches. The command changes only the relationship column and never
-activates a source or calls a provider.
+`map_metric_units` is now a read-only audit of registered references; normal
+application writes use those FKs directly. Frozen schema1 collection-contract
+snapshots retain their nineteen-field shape and hashes.
 
 [Back to table inventory](#table-inventory)
 
