@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21 12:20 JST (working candidate based on `7865d096` through `0119` on isolated PostgreSQL18.6; staging `4bd6d704` remains verified through `0118` on PostgreSQL18.4)
+Last verified: 2026-10-21 12:46 JST, candidate `4a5a3a78` through `0119` on isolated PostgreSQL18.6 and staging PostgreSQL18.4, deployment `dep-dbc35srm8hqs73bd9i4g`.
 
-Scope: **172 core application tables**, **2312 physical columns**, plus nine compatibility views. Repository migration boundary: `0119_geography_label_locale_references`; staging verified at `0118_intelligence_timezone_references` (SHA `4bd6d7049876b3a28fd370c0a38af5dddfd84984`). This guide describes the migration-backed repository candidate.
+Scope: **172 core application tables**, **2312 physical columns**, plus nine compatibility views. Repository and verified staging migration boundary: `0119_geography_label_locale_references` (SHA `4a5a3a78bb83f09181bc86a0309501175f110dbb`). This guide describes that migration-backed candidate; independent staging deployments may add objects beyond this verified boundary.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
