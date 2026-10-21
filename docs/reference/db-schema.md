@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21 11:49 JST (candidate `c7bf7aaa` through `0117` on isolated PostgreSQL18.6 and staging PostgreSQL18.4, deployment `dep-dbc2e7g473hc739uv5m0`)
+Last verified: 2026-10-21 11:54 JST (working candidate based on `1e4b1ef6` through `0118` on isolated PostgreSQL18.6; staging `c7bf7aaa` remains verified through `0117` on PostgreSQL18.4)
 
-Scope: **172 core application tables**, **2308 physical columns**, plus nine compatibility views. Repository migration boundary: `0117_metric_unit_references`; staging verified at `0117_metric_unit_references` (SHA `c7bf7aaa56728b736cbe0d3990ef2974dedfe73d`). This guide describes the migration-backed repository candidate.
+Scope: **172 core application tables**, **2310 physical columns**, plus nine compatibility views. Repository migration boundary: `0118_intelligence_timezone_references`; staging verified at `0117_metric_unit_references` (SHA `c7bf7aaa56728b736cbe0d3990ef2974dedfe73d`). This guide describes the migration-backed repository candidate.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -3850,6 +3850,24 @@ state, nonnegative benefit values, and comparable date order are constrained
 where shown. See [rare-type readers and extraction](rare-types.md).
 
 
+Known event/opportunity timezone codes also reference the shared catalogue.
+Preserve source wording beside those optional relationships; date-only or partial
+dates do not become instants. After explicit catalogue seeding, operators can
+preview or apply bounded exact mapping for one owner:
+
+```bash
+python manage.py map_intelligence_time_zones --owner events --batch-size 500 --max-batches 1
+python manage.py map_intelligence_time_zones --owner opportunities --batch-size 500 --max-batches 1 --apply
+```
+
+The command defaults to preview and accepts an explicit database and `--after-id`
+resume cursor. It reports examined/updated rows, remaining exact matches,
+nonempty unmatched values and NULL/empty absent values separately. Concurrent
+raw changes are rechecked before updating only the reference; invalid limits,
+unknown owners and conflicting apply/preview controls fail before writing.
+
+
+
 <a id="event-dossiers"></a>
 
 ## Event dossiers and evidence
@@ -3888,7 +3906,8 @@ Model: [Event](../../core/models.py#L6430).
 | `start_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `datetime`, `day`, `month`, `year`, `unknown`. |
 | `end_value` | `varchar(64)` | Yes | Stored value. |
 | `end_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `datetime`, `day`, `month`, `year`, `unknown`. |
-| `source_timezone` | `varchar(64)` | Yes | Stored value. |
+| `source_timezone` | `varchar(64)` | Yes | Original reported timezone wording, including absent or unmatched values. |
+| `source_timezone_id` | `varchar(64)` | Yes | FK → [`time_zones`](#table-time_zones) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `source_timezone_reference`. Exact registered code or unresolved NULL. |
 | `source_schedule_text` | `text` | Yes | Stored value. |
 | `source_status` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `scheduled`, `live`, `completed`, `cancelled`, `postponed`, `unknown`. |
 | `first_seen_at` | `timestamp with time zone` | No | Stored value. |
@@ -3904,9 +3923,13 @@ Model: [Event](../../core/models.py#L6430).
 
 **Named indexes:**
 
-None declared beyond field/FK/constraint indexes.
+- `events_source_timezone_id_e372622e`: index on `source_timezone_id`.
+- `events_source_timezone_id_e372622e_like`: varchar-pattern index on `source_timezone_id`.
 
 **Named constraints:**
+
+- `ck_events_source_timezone_ref`: `CHECK (source_timezone_id IS NULL OR (source_timezone IS NOT NULL AND source_timezone_id = source_timezone))`.
+- `events_source_timezone_id_e372622e_fk_time_zones_code`: deferred FK from `source_timezone_id` to `time_zones(code)`.
 
 - `ck_events_one_organization`: `CONSTRAINT "ck_events_one_organization" CHECK ((("brand_id" IS NOT NULL AND "brand_discovery_candidate_id" IS NULL) OR ("brand_id" IS NULL AND "brand_discovery_candidate_id" IS NOT NULL)))`.
 - `ck_events_attendance_mode`: `CONSTRAINT "ck_events_attendance_mode" CHECK ("attendance_mode" IN ('in_person', 'online_live', 'hybrid', 'unknown'))`.
@@ -3917,6 +3940,14 @@ None declared beyond field/FK/constraint indexes.
 - `ck_events_start_precision`: `CONSTRAINT "ck_events_start_precision" CHECK ((("start_precision" = 'unknown' AND "start_value" IS NULL) OR ("start_precision" = 'day' AND "start_value"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') OR ("start_precision" = 'month' AND "start_value"::text ~ '^[0-9]{4}-[0-9]{2}$') OR ("start_precision" = 'year' AND "start_value"::text ~ '^[0-9]{4}$') OR ("start_precision" = 'datetime' AND "start_value"::text ~  E'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?(Z\|[+-][0-9]{2}:[0-9]{2})$')))`.
 - `ck_events_end_precision`: `CONSTRAINT "ck_events_end_precision" CHECK ((("end_precision" = 'unknown' AND "end_value" IS NULL) OR ("end_precision" = 'day' AND "end_value"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') OR ("end_precision" = 'month' AND "end_value"::text ~ '^[0-9]{4}-[0-9]{2}$') OR ("end_precision" = 'year' AND "end_value"::text ~ '^[0-9]{4}$') OR ("end_precision" = 'datetime' AND "end_value"::text ~  E'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?(Z\|[+-][0-9]{2}:[0-9]{2})$')))`.
 - `ck_events_extraction_conf`: `CONSTRAINT "ck_events_extraction_conf" CHECK (("extraction_confidence" IS NULL OR ("extraction_confidence" >= 0.0 AND "extraction_confidence" <= 1.0)))`.
+
+`sync_events_source_timezone` invokes the shared
+`sync_intelligence_source_timezone` PostgreSQL function before inserts/updates.
+It resolves only exact catalogue codes, maintains the reference when an old
+writer changes the wording, and rejects a contradictory supplied reference.
+NULL/empty strings and ambiguous `UTC+8`/`CST` remain unresolved with their original
+wording. The reference does not change date precision, evidence/content hashes,
+source payloads, observation timestamps or the explicit reader document.
 
 [Back to table inventory](#table-inventory)
 
@@ -3995,7 +4026,8 @@ Model: [Opportunity](../../core/models.py#L6664).
 | `open_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `datetime`, `day`, `month`, `year`, `unknown`. |
 | `close_value` | `varchar(64)` | Yes | Stored value. |
 | `close_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `datetime`, `day`, `month`, `year`, `unknown`. |
-| `source_timezone` | `varchar(64)` | Yes | Stored value. |
+| `source_timezone` | `varchar(64)` | Yes | Original reported timezone wording, including absent or unmatched values. |
+| `source_timezone_id` | `varchar(64)` | Yes | FK → [`time_zones`](#table-time_zones) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `source_timezone_reference`. Exact registered code or unresolved NULL. |
 | `source_availability_text` | `text` | Yes | Stored value. |
 | `source_status` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `upcoming`, `open`, `closed`, `cancelled`, `unknown`. |
 | `first_seen_at` | `timestamp with time zone` | No | Stored value. |
@@ -4011,9 +4043,13 @@ Model: [Opportunity](../../core/models.py#L6664).
 
 **Named indexes:**
 
-None declared beyond field/FK/constraint indexes.
+- `opportunities_source_timezone_id_1eaf0cd8`: index on `source_timezone_id`.
+- `opportunities_source_timezone_id_1eaf0cd8_like`: varchar-pattern index on `source_timezone_id`.
 
 **Named constraints:**
+
+- `ck_opportunities_source_timezone_ref`: `CHECK (source_timezone_id IS NULL OR (source_timezone IS NOT NULL AND source_timezone_id = source_timezone))`.
+- `opportunities_source_timezone_id_1eaf0cd8_fk_time_zones_code`: deferred FK from `source_timezone_id` to `time_zones(code)`.
 
 - `ck_opportunities_one_organization`: `CONSTRAINT "ck_opportunities_one_organization" CHECK ((("brand_id" IS NOT NULL AND "brand_discovery_candidate_id" IS NULL) OR ("brand_id" IS NULL AND "brand_discovery_candidate_id" IS NOT NULL)))`.
 - `ck_opportunities_type`: `CONSTRAINT "ck_opportunities_type" CHECK ("opportunity_type" IN ('giveaway', 'discount', 'free_credits', 'beta_access', 'grant', 'bounty', 'contest', 'referral', 'collaboration', 'other'))`.
@@ -4024,6 +4060,14 @@ None declared beyond field/FK/constraint indexes.
 - `ck_opportunities_open_precision`: `CONSTRAINT "ck_opportunities_open_precision" CHECK ((("open_precision" = 'unknown' AND "open_value" IS NULL) OR ("open_precision" = 'day' AND "open_value"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') OR ("open_precision" = 'month' AND "open_value"::text ~ '^[0-9]{4}-[0-9]{2}$') OR ("open_precision" = 'year' AND "open_value"::text ~ '^[0-9]{4}$') OR ("open_precision" = 'datetime' AND "open_value"::text ~  E'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?(Z\|[+-][0-9]{2}:[0-9]{2})$')))`.
 - `ck_opportunities_close_precision`: `CONSTRAINT "ck_opportunities_close_precision" CHECK ((("close_precision" = 'unknown' AND "close_value" IS NULL) OR ("close_precision" = 'day' AND "close_value"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') OR ("close_precision" = 'month' AND "close_value"::text ~ '^[0-9]{4}-[0-9]{2}$') OR ("close_precision" = 'year' AND "close_value"::text ~ '^[0-9]{4}$') OR ("close_precision" = 'datetime' AND "close_value"::text ~  E'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?(Z\|[+-][0-9]{2}:[0-9]{2})$')))`.
 - `ck_opportunities_extraction_conf`: `CONSTRAINT "ck_opportunities_extraction_conf" CHECK (("extraction_confidence" IS NULL OR ("extraction_confidence" >= 0.0 AND "extraction_confidence" <= 1.0)))`.
+
+`sync_opportunities_source_timezone` invokes the shared
+`sync_intelligence_source_timezone` PostgreSQL function before inserts/updates.
+It resolves only exact catalogue codes, maintains the reference when an old
+writer changes the wording, and rejects a contradictory supplied reference.
+NULL/empty strings and ambiguous `UTC+8`/`CST` remain unresolved with their original
+wording. The reference does not change date precision, evidence/content hashes,
+source payloads, observation timestamps or the explicit reader document.
 
 [Back to table inventory](#table-inventory)
 

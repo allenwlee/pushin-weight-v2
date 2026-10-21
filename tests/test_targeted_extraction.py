@@ -22,6 +22,7 @@ from core.models import (
     PostBrand,
     TargetedExtractionAttempt,
     TargetedExtractionState,
+    TimeZone,
 )
 from core.profile_snapshots import capture_post_profile_snapshot
 from core.targeted_extraction import (
@@ -883,6 +884,7 @@ def test_profile_account_link_is_reused_by_later_official_handle_announcement():
 
 
 def test_event_and_opportunity_multi_label_routes_once_each():
+    TimeZone.objects.bulk_create([TimeZone(code="Asia/Tokyo"), TimeZone(code="UTC")])
     post = _post("dual", text="Attend live and submit by Friday to win credits.")
     responses = {
         "event_extraction": {
@@ -893,6 +895,7 @@ def test_event_and_opportunity_multi_label_routes_once_each():
                     "title": "Live workshop",
                     "attendance_mode": "online_live",
                     "start_value": "2026-09-18T10:00:00+09:00",
+                    "source_timezone": "Asia/Tokyo",
                     "start_precision": "datetime",
                     "end_value": None,
                     "end_precision": "unknown",
@@ -910,6 +913,7 @@ def test_event_and_opportunity_multi_label_routes_once_each():
                     "benefit_type": "free_credits",
                     "benefit_text": "$300 in credits",
                     "close_value": "2026-09-19",
+                    "source_timezone": "UTC",
                     "close_precision": "day",
                     "source_status": "open",
                 }
@@ -940,6 +944,8 @@ def test_event_and_opportunity_multi_label_routes_once_each():
     assert event.attendance_mode == "online_live"
     assert opportunity.action_type == "submit an essay"
     assert opportunity.related_event == event
+    assert event.source_timezone_reference_id == "Asia/Tokyo"
+    assert opportunity.source_timezone_reference_id == "UTC"
 
 
 def test_event_mentions_resolve_to_occurrence_and_keep_distinct_windows():

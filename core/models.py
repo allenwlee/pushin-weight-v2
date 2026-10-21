@@ -6495,6 +6495,9 @@ class Event(models.Model):
         default="unknown",
     )
     source_timezone = models.CharField(max_length=64, blank=True, null=True)
+    source_timezone_reference = models.ForeignKey(
+        TimeZone, db_column="source_timezone_id", null=True, on_delete=models.PROTECT
+    )
     source_schedule_text = models.TextField(blank=True, null=True)
     source_status = models.CharField(
         max_length=16,
@@ -6520,6 +6523,12 @@ class Event(models.Model):
         db_table = "events"
         ordering = ["-first_seen_at", "id"]
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(source_timezone_reference__isnull=True)
+                | models.Q(source_timezone__isnull=False,
+                           source_timezone_reference=models.F("source_timezone")),
+                name="ck_events_source_timezone_ref",
+            ),
             models.CheckConstraint(
                 condition=(
                     models.Q(brand__isnull=False, brand_discovery_candidate__isnull=True)
@@ -6742,6 +6751,9 @@ class Opportunity(models.Model):
         default="unknown",
     )
     source_timezone = models.CharField(max_length=64, blank=True, null=True)
+    source_timezone_reference = models.ForeignKey(
+        TimeZone, db_column="source_timezone_id", null=True, on_delete=models.PROTECT
+    )
     source_availability_text = models.TextField(blank=True, null=True)
     source_status = models.CharField(
         max_length=16,
@@ -6767,6 +6779,12 @@ class Opportunity(models.Model):
         db_table = "opportunities"
         ordering = ["-first_seen_at", "id"]
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(source_timezone_reference__isnull=True)
+                | models.Q(source_timezone__isnull=False,
+                           source_timezone_reference=models.F("source_timezone")),
+                name="ck_opportunities_source_timezone_ref",
+            ),
             models.CheckConstraint(
                 condition=(
                     models.Q(brand__isnull=False, brand_discovery_candidate__isnull=True)

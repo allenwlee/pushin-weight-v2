@@ -643,6 +643,14 @@ validation:
   forward_migration_count_deltas: {}
   forward_migration_translation_count_deltas: {}
   required_columns:
+    events:
+      - id
+      - source_timezone
+      - source_timezone_id
+    opportunities:
+      - id
+      - source_timezone
+      - source_timezone_id
     metrics:
       - id
       - source_timezone
