@@ -72,7 +72,10 @@ from core.classification_contract import (
     taxonomy_crosswalk_rows,
 )
 from core.classification_labels import CLASSIFICATION_LABELS
-from core.classification_readers import read_brand_scalars_many
+from core.classification_readers import (
+    aggregate_brand_sentiment_counts,
+    read_brand_scalars_many,
+)
 from core.job_sources.registry import SOURCES as JOB_SOURCES
 from core.models import (
     AudienceTopicConcept,
@@ -4238,11 +4241,24 @@ def _each_chart_payload(
             return index if index < len(labels) else None
         return day_index.get(created.astimezone(tzinfo).date().isoformat())
 
+    sentiment_counts = aggregate_brand_sentiment_counts(
+        brand_id=brand, start=start, end=at,
+        day_timezone=timezone_name if window_days > 1 else None,
+    ) if tab == "sentiment" else None
+    if sentiment_counts is not None:
+        for bucket, sentiment, count in sentiment_counts:
+            index = day_index.get(bucket.isoformat()) if window_days > 1 else bucket
+            if index is not None and 0 <= index < len(labels):
+                totals[index] += count
+                key = sentiment or _FILTER_UNCLASSIFIED
+                if key in series:
+                    series[key][index] += count
+
     rows = PostBrand.objects.filter(
         brand_id=brand, post__created_at__gte=start, post__created_at__lt=at,
     ).order_by("post_id").values_list(
         "post_id", "post__created_at", "post__lang_detected", "post__author_id",
-    ).iterator(chunk_size=1000)
+    ).iterator(chunk_size=1000) if sentiment_counts is None else iter(())
     audience_revision = None
     if tab == "audience_topics":
         audience_revision = AudienceTopicScheme.objects.filter(

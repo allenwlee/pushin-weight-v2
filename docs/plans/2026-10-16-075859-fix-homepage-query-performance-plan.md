@@ -13,9 +13,8 @@ ollija:
   workflow: plan
   delivery_target: production
   delivery_selected_by_user: true
-  delivery_route: staged
-  delivery_route_selected_by_user: false
-  staging_transport: branch
+  delivery_route: direct
+  delivery_route_selected_by_user: true
 ---
 
 # Homepage count materialization and Top Voices removal - Plan
@@ -34,7 +33,7 @@ The one-day chart keeps its five-minute detail.
 
 Completion requires count-for-count comparisons against the original query, real PostgreSQL migration/concurrency proofs, browser coverage in all supported locales, measured improvement, and the exact final revision observed in production with the materialized path active.
 Production delivery is authorized.
-The existing staged route and its authentication controls still apply.
+The owner explicitly selects direct production on October21, after checking with the active G2 database-refactor session. Shared staging is excluded from this release.
 
 **October18 owner scope update — reusable state:** the owner requires the new
 snapshot lifecycle table to serve future snapshots and asks that the design
@@ -64,6 +63,10 @@ staged route and access controls remain selected; no harvest pause, campaign
 restart, peer-schema integration or staging takeover is implied. The older dated
 proposal/diagnosis states below describe their capture time. Implementation
 progress and verification receipts live in Git and task-owned local evidence.
+
+## October21 direct delivery selection
+
+The later owner instruction selects direct production, superseding the staged-route/access prerequisite in the earlier dated continuation and diagnosis below. G2 session coordination precedes production changes. All seven hosted checks and the exact-candidate local PostgreSQL/UI/performance receipts cover457b346d; this delivery-only plan update does not change product source or require a new source commit.
 
 ## October21 live 30-day diagnosis
 
@@ -155,20 +158,16 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - Workflow: `plan`
 - Delivery target: `production`
 - Owner selection recorded: `true`
-- Delivery route: `staged`
+- Delivery route: `direct`
 
 1. Complete implementation and the plan's verification contract.
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+4. On the owner-selected direct route, fetch the remote production lane: `git fetch origin refs/heads/main`.
+5. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+6. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+7. After step 6 succeeds, perform worktree cleanup as the final filesystem action:
     - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/homepage-query-performance` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
     - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/homepage-query-performance` without `--force`.
     - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
@@ -187,9 +186,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-None.
-The owner's October17 production request extends the existing release scope; it does not select direct production.
-Finish independent implementation and verification before escalating a genuinely unresolved delivery prerequisite.
+October21: the owner says “deploy directly, but first check with g2 session which is refactoring db.” This selects direct production and waives staging acceptance, staging authentication, staging branch transport and staging count-cron provisioning for PR62. Check the active G2 schema/deployment claim before production mutation; preserve G2 staging and unfinished migrations. Keep the exact reviewed candidate, strict regression evidence, live-harvest priority, source preservation and observed production/maintenance activation. No new approval is required for the already selected production endpoint.
 
 ---
 
@@ -199,7 +196,7 @@ Finish independent implementation and verification before escalating a genuinely
 - **Means:** Native PostgreSQL count materialization with exact fallback and removal of request-time voice ranking, per KTD1–KTD6.
 - **Authority:** Current owner request and AGENTS.md govern; this Product Contract owns behavior and KTDs own mechanisms.
 - **Execution:** Implement the dependency-ordered units with strict characterization and failing caller-level regressions before product changes.
-- **Endpoint and owner:** Parent workflow owns reviewed implementation, publication, staged acceptance, non-forced production promotion, observed activation and guarded cleanup. PR62 alone is intermediate.
+- **Endpoint and owner:** Parent workflow owns reviewed implementation, publication, owner-selected direct non-forced production promotion, observed activation and guarded cleanup. PR62 alone is intermediate.
 - **Stop conditions:** Do not weaken a required check, fabricate count parity, change access controls or pause harvest to make this release pass. Investigate failures and preserve other owners' state.
 
 ---
@@ -512,11 +509,11 @@ No strategy document was found; CONCEPTS.md and the General Launch Charter suppl
 **Requirements:** R12–R14; SC1–SC5.
 **Dependencies:** U2–U5.
 **Files:** Existing plan; applicable delivery/reference docs including docs/reference/db-schema.md and its README link; existing assurance source identity; .github/workflows/homepage-counts.yml; existing collection-schema inventory regression; same PR62; task-owned private receipts.
-**Approach:** Reconcile only already-promoted main changes before final candidate checks. Review migration/data integrity, invalidation races, query correctness and Top Voices removal. Use the selected staged route, fresh service/DB ownership checks and an existing authorized authenticated browser path. Provision only the new bounded count-maintenance resource as part of this release.
+**Approach:** Reconcile only already-promoted main changes before final candidate checks. Review migration/data integrity, invalidation races, query correctness and Top Voices removal. Use the owner-selected direct route after G2 coordination, fresh production service/DB ownership checks and the normal production browser path; preserve access controls. Provision only the new bounded count-maintenance resource as part of this release.
 **Test scenarios:**
 
 1. Exact candidate's required local/hosted suites, normalized UI obligations and sealed performance all pass.
-2. Staging deployment uses the exact candidate, migrations complete, sources are preserved, initial refresh succeeds and owner-authenticated browser actions prove the materialized path.
+2. Direct production is selected by the owner; staging acceptance is waived. Check G2 schema/release ownership before mutation and preserve its independent staging state.
 3. Non-forced production promotion yields the same candidate revision in every affected active consumer and new maintenance resource.
 4. Production schema/index/trigger/dataset state is correct; real homepage/30-day/365-day actions return200, show no Top Voices and produce no JavaScript errors.
 5. Observe the scheduled maintenance command after deployment; a healthy same-day poll truthfully skips, while a necessary refresh publishes valid state.
@@ -540,7 +537,7 @@ Keep prior1693 results as baseline evidence only; application/model/template/JS 
 | Stateful browser assurance | Existing validate/prescribe, affected gate, then candidate gate with candidate performance |0failed/skipped/errored/missing/unknown normalized obligations |
 | Numeric performance | Frozen same-data/runtime baseline versus candidate; cold/warm cases separated | SC1, SC2 and independently correct results |
 | Real browser | Homepage and30/365switches, filters, locale, responsive and request-race scenarios | SC3, voice-region absence, complete atomic projections |
-| Deployment | Exact-SHA staged and production/runtime checks, source preservation, active materialized reads and maintenance | R14; no false claim from branch/PR state |
+| Deployment | Owner-selected direct exact-SHA production/runtime checks, source preservation, active materialized reads and maintenance | R14; no false claim from branch/PR state |
 
 Use the repository's existing candidate-gate and receipt wrapper, supplying the final product-source SHA and required sealed performance inputs.
 For focused tests, the minimum invocation is the Django pytest runner over tests/test_home_chart_pulse.py, tests/test_home_chart.py, tests/test_public_home_window_cookie.py, tests/test_home_chart_materialization.py, tests/test_home_count_summary_migrations.py, tests/test_refresh_home_counts.py and tests/test_trend_narrative_projection.py; U2/U3 explicitly add the three new summary/command test modules.
@@ -577,3 +574,41 @@ These results establish the starting point, not verification of this expanded ma
 Private baseline receipts remain under .ollija/state/homepage-query-release-20261016 in the authoritative repository.
 At planning fetch, origin/main is67fae386 and already includes the separate metrics-refresh release; reconcile that promoted base before final verification.
 No production application/schema change or test execution was performed while authoring this plan.
+
+
+## October21 production completion receipt
+
+Owner-selected direct delivery completed at revision `457b346d8bcfde63f45429d9811682a975d5e862`, after active G2 session01a15790 inspected the count schema and confirmed no dependency or production-lane conflict. G2 retains staging4a5a3a78/0119; its later integration will preserve both applied histories and explicitly merge its latest migration leaf with0094_shared_materialization_state. No staging change or production-to-stage refresh was performed here.
+
+- Exact nonforced main promotion merged PR62; all six existing active production services and the new count cron were observed live at457b346d.
+- ProductionPG18.4 applied0093/0094. Native view/index/16triggers/shared state and narrow MAINTAIN-without-SELECT exporter privileges passed runtime checks. Frozen100Post hash and all183Brand-row hash matched before/after; zero waiting locks.
+- Blueprint auto-sync created `pushinweight-home-counts` / `crn-dbc33qhsrm7s739g28dg` at03:30:50UTC. The guarded targeted helper detected it and refused a duplicate; inspection confirmed main/exactcandidate, correct productionDB, precisely four provider-free environment keys and schedule7,22,37,52UTC.
+- First natural scheduled run03:37UTC succeeded: statusrefreshed, generation70, cutoff2026-10-21T00:00:00Z, publication03:37:43.674359UTC. Publication remained clean at final readback.
+- Six normal production Chromium actions EN/ZH/JA×30/365 returned200 in0.590–2.977seconds with synchronized clock/projections, empty compatibility voices and no TopVoices region or JavaScript errors. Desktop1440/mobile390 canvases are visible/nonzero; screenshots inspected, no failed requests in responsive proof.
+- Read-only runtime jobjob-dbc37n7avr4c73emoj50 independently established four native/source-count parity cases (chart and comparison for30/365), and actual caller tracing saw two native count queries per window. Its auxiliary full-caller read-only trace logged caught SELECTFORUPDATE failures in the unchanged narrative lifecycle; this scope limitation is retained in the evidence and does not describe normal browser requests. The unrestricted production browser checks passed. No worker-timeout/traceback logs appeared after first publication through the final bounded check; a03:33:20pre-publication timeout is retained separately.
+- Scheduled03:30harvest, begun on prior eddb01f0, overlapped the new schema and completed03:36:48UTC:95inserted/12updated/0persistencefailures. All existing harvest command/schedule/provider settings remain intact; this is persistence proof, not a new claim that preexisting classifier health is repaired.
+- Previously completed exactcandidate344tests+75subtests/178requiredPG,5028UI obligations, sealed performance95875981480306038a234ba0 and all7hosted checks remain applicable because this continuation changed only delivery documentation. Additional route-guide tests36passed. Staging acceptance is waived, never passed.
+
+Durable receipts and hashes: `.ollija/state/home-count-materialization-forward-20261021/` under the authoritative root, including production browser/native/publication/source/service/cron evidence. U6/R14 production endpoint is complete; no required product work remains. Retain the canonical worktree because this owner-route/completion plan edit is uncommitted; never force removal or discard it. Task-owned local previews/PostgreSQL remain stopped.
+
+
+## U8. October21 reopened availability defect — Each chart
+
+Owner reports a homepage502 after count materialization activation. Fresh main homepage and custom-domain requests are200/1.69s and200/1.47s; native state remains clean. Logs confirm03:43:49UTC WORKERTIMEOUT onGET/dashboard/each at_each_chart_payload:4252opening its ordered servercursor. One sync webworker makes a long Each request monopolize page serving. The previously verified native Pulse path is not this stream.
+
+Frozen read-only production365-day DeepSeek sentiment calculation covers172361posts: defaultcursor35.979s; full-result cursor19.193s, identical payload digest. A DB-side aggregate prototype returns508groups in4.678s and matches every original daily/category count under one repeatable-read snapshot (original18.108s). No production data or schema was changed for these measurements. Current classifier mainb5b15d6d is integrated; preserve that independently released harvest-priority repair and G2 migration history/staging claims.
+
+**Scope:** `core/classification_readers.py` and `_each_chart_payload` in`monitor/views.py`; existing Each tests/browser checks and the established homepage regression net. Count default sentiment buckets in SQL using exactly current-state ownership, recognized contract/taxonomy, explicit nulls, unambiguous legacy values and conflict rejection. Keep one-post totals, five-minute/day/IANA boundaries, category colors/order/locales, all other tabs, narratives and other callers. Plan any remaining full-result cursors locally for all rows with transaction-scoped/restored settings, never global database settings. No new persistence, migrations, tables, materialized views, scheduler/provider/auth/UI redesign or harvest changes.
+
+**Strict regression unit:** test first in existing Each module. Assert full native-vs-existing reader payload equality across current/legacy/empty/conflicting/unrecognized states, taxonomy eras, other-brand contamination, window boundaries and timezones. Pin default sentiment's bounded aggregate path rather than per-post streaming. Verify cursor planning is correctly scoped/restored on success/error and nested transactions if that measured change is retained. Existing tabs/caller/browser/locale/count/filter suites remain strict. Run required PostgreSQL with zero skips/errors and scoped lint; refresh applicable candidate assurance/performance evidence for changed source. Reuse evidence only within unchanged scope. Repeat the original production calculation/browser path and homepage coexistence after direct exact-SHA release. Do not mark this incident complete based on the prior six homepage checks alone.
+
+**Delivery:** existing owner-selected direct production applies to this necessary availability correction. Coordinate live branch ownership; integrate classifierb5b15d6d before candidate publication. G2 has no production claim and is joining the earlier count migrations independently on staging. Keep its current staging topology/claims intact. Review and observe actual deployed revision/activation; no additional approval gate. Endpoint remains pending this reopened defect's fix and verification.
+
+
+### U8 candidate verification before publication
+
+Implemented a shared native sentiment aggregate in`core/classification_readers.py`, used only by Each sentiment. It returns grouped counts instead of transferring every Post. The original scalar row reader remains the non-PostgreSQL path and characterization oracle. Preserve its literal Python-key comparisons despite the case-insensitive foreign keys: both brand ownership and sentiment conflicts/grouping use binary comparisons; indexable identity predicates remain too. Native red cases were observed before fixing both pitfalls. The ordinary Each cursors/settings for other tabs were not changed; no transaction-setting change is retained.
+
+The >1000-post regression fails old code with2classifier queries and passes the new1query. Focused/broader124tests/124PG+48subtests pass; separate homepage/General185tests/68PG+39subtests pass,0requiredskips/errors. Full32subcase payload parity covers1/7/30/365,UTC/Tokyo/LosAngeles/Chatham,current and legacy values, null/unknown versions, historical conflicts, literal-case keys, cross-brand rows and start/end bounds. Existing Each browser interaction passes. Scoped lint introduces0violations; monitor/views.py's21existing violations are unchanged.
+
+Exact candidate functions were loaded only in memory in provider-free read-only auxiliary jobjob-dbc3l16q1p3s73c6al0g on production b5b15d6d; this is pre-deployment evidence, not deployed candidate code. Three same-snapshot full-payload comparisons pass:1day0.171s vs0.258s;30day3.900s vs6.230s;365day4.168s vs27.370s,172384Posts. FunctionsSHA2566790eeed8d2b4015dd00be6c6bf6f953bce5cd62fac5c1f7fc722a01c1f76387. Buffers were not flushed. Prior default-cursor365 measurement35.979s remains distinct. Six code-review lenses and three simplification passes ran sequentially inline under user AGENTS mapping,0actionablefindings, no independentpeer claimed. Reviewreceipt`/tmp/compound-engineering-501/ce-code-review/20261021-each-i48usazj/review.json`. Exact candidate assurance/performance/hosted and production Each/homepage coexistence remain next; no weakening of required checks.
