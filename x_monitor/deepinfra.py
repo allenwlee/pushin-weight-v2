@@ -655,7 +655,20 @@ class DeepInfraChatCompletionsClient:
         """Validate an already received reply without sending or retrying anything."""
         usage, content = self._validated_response(decoded)
         try:
-            parsed = json.loads(_strip_json_fence(content), object_pairs_hook=_json_without_duplicate_keys)
+            document = _strip_json_fence(content)
+            try:
+                parsed = json.loads(document, object_pairs_hook=_json_without_duplicate_keys)
+            except json.JSONDecodeError:
+                document = document.rstrip(" \t\r\n")
+                if (
+                    self.model != DEEPSEEK_0731_MODEL
+                    or self.request_profile != "deepseek_0731"
+                    or not document.endswith("}")
+                ):
+                    raise
+                # The selected classifier sometimes appends one extra brace.
+                # Reparse the whole remaining document with the same guards.
+                parsed = json.loads(document[:-1], object_pairs_hook=_json_without_duplicate_keys)
         except (TypeError, ValueError) as exc:
             raise DeepInfraPermanentError("deepinfra_response_content_invalid", provider_usage=usage) from exc
         if not isinstance(parsed, dict):

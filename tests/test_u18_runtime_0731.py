@@ -189,6 +189,7 @@ def test_selected_runtime_maps_fixed_slots_to_v4_catalog_and_affiliations_for_bo
     ]
     for call in transport.calls:
         request = call["request"]
+        assert request["max_tokens"] == 6000  # Explicit probe budgets stay exact.
         assert request["temperature"] == 1.0
         assert request["top_p"] == 1.0
         assert request["seed"] == 42
@@ -261,6 +262,48 @@ def test_selected_runtime_accepts_fixed_slot_maps_in_any_json_object_order():
 
     assert len(rows) == 20
     assert all(row["valid"] is True for row in rows)
+
+
+@pytest.mark.parametrize("fault", ["none", "invalid_sentiment", "invisible_evidence", "missing_slot"])
+def test_extra_brace_normalization_preserves_canonical_classifier_validation(fault):
+    from tests.test_deepinfra import _response
+    from x_monitor.attribution import classify_batch_pragmatics_full
+    from x_monitor.deepinfra import DEEPSEEK_0731_MODEL, DeepInfraChatCompletionsClient
+
+    fixture = FixedSlotTransport()
+
+    def transport(body, timeout):
+        reply = fixture.messages_create(
+            system=next(m["content"] for m in body["messages"] if m["role"] == "system"),
+            messages=[m for m in body["messages"] if m["role"] == "user"],
+        )
+        content = "post_promotions" in reply
+        if fault == "invalid_sentiment" and not content:
+            reply["decisions"]["D02"]["sentiment"] = "invented_sentiment"
+        elif fault == "invisible_evidence" and content:
+            reply["post_promotions"]["P01"] = ["general"]
+            reply["promoted_subjects"]["P01"] = [{
+                "name": "Unseen advertiser", "handle": None, "domain": None,
+                "account_handle": None, "evidence": "This quote appears nowhere in the visible source.",
+            }]
+        elif fault == "missing_slot" and content:
+            reply["decisions"].pop("D02")
+        return _response(DEEPSEEK_0731_MODEL, json.dumps(reply) + "}")
+
+    client = DeepInfraChatCompletionsClient(
+        api_key="test", model=DEEPSEEK_0731_MODEL, request_profile="deepseek_0731",
+        transport=transport,
+    )
+    rows = classify_batch_pragmatics_full(_tweets(2), [], client)
+
+    assert len(fixture.calls) == 2, "format normalization must not buy retry/repair calls"
+    if fault == "missing_slot":
+        assert all(not row["valid"] for row in rows)
+    else:
+        assert rows[1]["valid"] is True, "the independently valid Post must survive"
+        assert rows[0]["valid"] is (fault == "none")
+        if fault != "none":
+            assert rows[0]["by_brand"] == {}
 
 
 def test_selected_runtime_makes_other_axes_unavailable_for_context_missing():

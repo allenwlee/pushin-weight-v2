@@ -23,7 +23,7 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 native = native_fixture
 
 
-def _rejected_packet(native):
+def _rejected_packet(native, *, extra_brace=False):
     provider = DirectProvider()
     for turn in range(10):
         result = run_direct(native, provider, initial=turn == 0)
@@ -46,6 +46,11 @@ def _rejected_packet(native):
             old.request_identity = uuid4().hex
             old.batch_key = uuid4().hex
             old.reserved_at = original.reserved_at + timedelta(microseconds=index + 1)
+            if extra_brace:
+                old.response_payload["choices"][0]["message"]["content"] += "}"
+                old.response_hash = digest(old.response_payload)
+                old.error_code = "cached_response_validation_failed"
+                old.import_evidence = {"validation": "failed"}
             old.save(force_insert=True)
         latest.append(old.pk)
     PostEnrichmentState.objects.filter(pk="native-1").update(classification_status="pending")
@@ -144,6 +149,26 @@ def test_replays_valid_saved_member_after_three_failures_without_payment(native)
         assert audit["selected_member_ids"] == ["native-1"]
     assert _replay(native, ids)["replayed"] == []
     assert all(len(c.import_evidence["revalidation_history"]) == 1 for c in OriginalContentCall.objects.filter(pk__in=ids))
+
+
+def test_saved_extra_brace_replies_replay_without_rewriting_paid_history_or_resending(native):
+    provider, ids = _rejected_packet(native, extra_brace=True)
+    before = _paid_history()
+    sent = provider.sent
+    assert all(
+        c.response_payload["choices"][0]["message"]["content"].endswith("}}")
+        for c in OriginalContentCall.objects.filter(pk__in=ids)
+    )
+
+    result = _replay(native, ids)
+
+    assert result["replayed"] == ["native-1"]
+    assert all(all(f.values()) for f in completion_facts(["native-1", "native-2"]).values())
+    assert _paid_history() == before
+    assert provider.sent == sent
+    assert all(c.import_state == "applied" for c in OriginalContentCall.objects.filter(pk__in=ids))
+    assert _replay(native, ids)["replayed"] == []
+    assert _paid_history() == before and provider.sent == sent
 
 
 @pytest.mark.parametrize("blocker", ["source_changed", "post_claim", "batch_claim", "sent", "unknown"])

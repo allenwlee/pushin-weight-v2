@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from copy import deepcopy
+
 import pytest
 
 from x_monitor.deepinfra import (
@@ -131,6 +134,67 @@ def test_direct_response_validation_fails_closed(payload, error):
         client.messages_create(model=DEEPSEEK_0731_MODEL, max_tokens=20, messages=[])
     assert caught.value.provider_usage["provider_request_id"] == "deepinfra-test-1"
     assert caught.value.provider_usage["total_tokens"] == 19
+
+
+@pytest.mark.parametrize("suffix", ["}", " \n}\t\r\n"])
+@pytest.mark.parametrize("fenced", [False, True])
+def test_classifier_accepts_only_one_extra_final_brace_without_changing_receipt(suffix, fenced):
+    expected = {"decisions": {"D01": {"text": 'literal } and "quotes"', "nested": [{"ok": True}]}}}
+    content = json.dumps(expected) + suffix
+    if fenced:
+        content = "```json\n" + content + "\n```"
+    payload = _response(DEEPSEEK_0731_MODEL, content)
+    original = deepcopy(payload)
+    client = DeepInfraChatCompletionsClient(
+        api_key="test", model=DEEPSEEK_0731_MODEL, request_profile="deepseek_0731",
+    )
+
+    result = client.parse_response(payload)
+
+    assert result == expected
+    assert payload == original
+    assert result.provider_usage["provider_request_id"] == "deepinfra-test-1"
+    assert result.provider_usage["output_tokens"] == 7
+    assert result.provider_usage["cost_usd"] == 0.000123
+
+
+@pytest.mark.parametrize("content", [
+    '{} }}', '{} {}', '{} } commentary', '{"a": } }', '{"a": 1,} }',
+    '{"a": 1, "a": 2}}', '{"nested": {"a": 1, "a": 2}}}',
+    '[]}', '"text"}', 'null}', '{"a":', '{} }\u00a0',
+    '```json\n{}\n```}',
+])
+def test_classifier_extra_brace_handling_still_rejects_other_invalid_documents(content):
+    client = DeepInfraChatCompletionsClient(
+        api_key="test", model=DEEPSEEK_0731_MODEL, request_profile="deepseek_0731",
+    )
+    with pytest.raises(DeepInfraPermanentError):
+        client.parse_response(_response(DEEPSEEK_0731_MODEL, content))
+
+
+@pytest.mark.parametrize("finish_reason", ["length", "content_filter", None])
+def test_extra_brace_never_makes_an_incomplete_classifier_reply_acceptable(finish_reason):
+    client = DeepInfraChatCompletionsClient(
+        api_key="test", model=DEEPSEEK_0731_MODEL, request_profile="deepseek_0731",
+    )
+    with pytest.raises(DeepInfraPermanentError, match="incomplete"):
+        client.parse_response(_response(DEEPSEEK_0731_MODEL, '{}}', finish_reason=finish_reason))
+
+
+@pytest.mark.parametrize(("model", "profile"), [
+    (DEEPSEEK_0731_MODEL, None),
+    (DEEPSEEK_0731_MODEL, "headline_editor_v1"),
+    (GEMMA_4_31B_MODEL, "gemma4_translation_v1"),
+    (GEMMA_4_31B_MODEL, "deepseek_0731"),
+])
+def test_extra_brace_handling_does_not_change_other_models_or_profiles(model, profile):
+    payload = _response(model, '{}}')
+    payload["service_tier"] = "priority"
+    payload["usage"]["completion_tokens_details"]["reasoning_tokens"] = 0
+    client = DeepInfraChatCompletionsClient(api_key="test", model=model, request_profile=profile)
+    with pytest.raises(DeepInfraPermanentError, match="content_invalid"):
+        client.parse_response(payload)
+    assert client.parse_text_response(payload).text == '{}}'
 
 
 def test_from_env_uses_only_deepinfra_key(monkeypatch):
