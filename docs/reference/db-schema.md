@@ -1,6 +1,6 @@
 # Database schema reference
 
-Repository candidate: integration of global `0119` and homepage `0094` with merge `0120`; local verification pending. Staging verification of the global branch covers `4a5a3a78`/`0119` on PostgreSQL18.4 (deployment `dep-dbc35srm8hqs73bd9i4g`).
+Last verified: 2026-10-21 JST, integration `e8622da8` through `0120` on isolated PostgreSQL18.6. Staging verification of the global branch covers `4a5a3a78`/`0119` on PostgreSQL18.4 (deployment `dep-dbc35srm8hqs73bd9i4g`); the classifier slot subsequently added the two disjoint homepage migrations and restored that source revision.
 
 Scope: **173 core application tables**, **2318 physical table columns**, nine compatibility views and one native materialized view with five columns. Candidate migration boundary: `0120_merge_homepage_shared_vocabulary`. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys. This guide describes the integrated repository candidate; its new merge is not yet verified on staging.
 
