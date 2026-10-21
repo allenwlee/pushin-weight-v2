@@ -503,7 +503,7 @@ def _drain_historical_rare(claim, job, cfg, budget):
         # cumulative admission on CollectionRun, never a live scheduler slot.
         gate.lane = f"bf:{job.pk}:{str(claim.run_id)[:8]}:{position // 5}"
         hit = RareTypeSearchHit.objects.get(pk=hit_id)
-        if hit.post_id or hit.gate_state == "junk":
+        if hit.post_id or hit.gate_state in {"junk", "review_needed", "kept"}:
             continue
         if not budget.can_start(cfg.discovery.rare_types.jev.request_timeout_seconds):
             break
@@ -567,6 +567,30 @@ def _report(job, run_id):
         # The typed ledger is complete. Later enrichment can read this scalar
         # without materializing the compatibility receipt or every member ID.
         report["post_membership"] = {"version": 1, "distinct_posts": len(ids)}
+    if job.definition["scope"].get("adapter") == POLICY_ADAPTER_VERSION:
+        from collections import Counter
+
+        from core.models import RareTypeSearchHit
+
+        hit_ids = {hit for row in rows for envelope in row.envelopes
+                   for hit in envelope.get("rare_hit_ids", [])}
+        hits = list(RareTypeSearchHit.objects.filter(pk__in=hit_ids)
+                    .values("pk", "gate_state", "post_id"))
+        missing = sorted(hit_ids - {h["pk"] for h in hits})
+        review = sorted(h["pk"] for h in hits if h["gate_state"] == "review_needed")
+        unfinished = sorted(h["pk"] for h in hits
+                            if h["gate_state"] not in {"junk", "review_needed"}
+                            and not (h["gate_state"] == "kept" and h["post_id"] is not None))
+        # Review is a completed adjudication with uncertainty, not unfinished
+        # provider work. Retain its identity; success never asserts full recall.
+        report.update({
+            "rare_gate_pending": len(unfinished) + len(missing),
+            "rare_gate_pending_hit_ids": unfinished,
+            "rare_gate_missing_hit_ids": missing,
+            "rare_gate_review_needed": len(review),
+            "rare_gate_review_hit_ids": review,
+            "rare_gate_state_counts": dict(Counter(h["gate_state"] for h in hits)),
+        })
     return report
 
 
@@ -686,14 +710,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False):
                    "scope_errors": scope_errors})
     if global_failure is not None:
         report["global_failure"] = global_failure
-    if current_policy:
-        hit_ids = {hit for row in CollectionScopeRun.objects.filter(run_id=claim.run_id)
-                   for envelope in row.envelopes for hit in envelope.get("rare_hit_ids", [])}
-        from core.models import RareTypeSearchHit
-        pending = RareTypeSearchHit.objects.filter(pk__in=hit_ids, post_id__isnull=True).exclude(gate_state="junk").count()
-        report["rare_gate_pending"] = pending
-    else:
-        pending = 0
+    pending = report.get("rare_gate_pending", 0)
     status = "failed" if error else ("success" if report["collection_drained"] and not pending else "partial")
     finish_run(claim, status=status, report=report, retry_at=retry_at,
                error_code=type(error).__name__ if error else None)

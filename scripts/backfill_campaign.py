@@ -249,20 +249,22 @@ def prepare_current_contract(job, cfg):
         if not ids:
             return
         after = ids[-1]
-        own_historical_posts(job, ids)
         with transaction.atomic():
             CollectionJob.objects.select_for_update().get(pk=job.pk)
             states = {
                 s.post_id: s
                 for s in PostEnrichmentState.objects.select_for_update().filter(
                     pk__in=ids
-                )
+                ).order_by("pk")
             }
+            list(Post.objects.select_for_update().filter(pk__in=ids).order_by("pk"))
             posts = Post.objects.filter(pk__in=ids).prefetch_related(
                 "translation_artifacts", "classification_states", "brands"
             )
             for post in posts:
                 state = states[post.pk]
+                if state.claim_expires_at and state.claim_expires_at > timezone.now():
+                    continue
                 current_translation = any(
                     a.is_current
                     and a.state == "succeeded"
@@ -289,6 +291,10 @@ def prepare_current_contract(job, cfg):
                         setattr(state, stage + "_status", "pending")
                         setattr(state, stage + "_next_attempt_at", None)
                 state.save()
+            # Leave genuinely outstanding foreign work with its original
+            # owner. Aggregate execution derives these member deferrals again
+            # from the retained state and calls after every restart.
+            own_historical_posts(job, ids, defer_conflicts=True)
 
 
 def _wait(seconds):
