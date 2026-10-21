@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21 JST, integration `e8622da8` through `0120` on isolated PostgreSQL18.6. Staging verification of the global branch covers `4a5a3a78`/`0119` on PostgreSQL18.4 (deployment `dep-dbc35srm8hqs73bd9i4g`); the classifier slot subsequently added the two disjoint homepage migrations and restored that source revision.
+Last verified: 2026-10-21 13:14 JST, candidate `48537a28` through `0120` on isolated PostgreSQL18.6 and staging PostgreSQL18.4, deployment `dep-dbc3mc6q1p3s73biko90`.
 
-Scope: **173 core application tables**, **2318 physical table columns**, nine compatibility views and one native materialized view with five columns. Candidate migration boundary: `0120_merge_homepage_shared_vocabulary`. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys. This guide describes the integrated repository candidate; its new merge is not yet verified on staging.
+Scope: **173 core application tables**, **2318 physical table columns**, nine compatibility views and one native materialized view with five columns. Repository and verified staging migration boundary: `0120_merge_homepage_shared_vocabulary`. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys. The merge joins both applied histories and makes no schema or data change.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
