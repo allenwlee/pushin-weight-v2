@@ -21,6 +21,7 @@ from core.classification_contract import (
 )
 from core.intelligence_readers import (
     _parse_temporal,
+    _reported_source_timezone,
     event_lifecycle,
     opportunity_lifecycle,
 )
@@ -191,7 +192,6 @@ def temporal_facts(post_ids, section, *, as_of):
             )
             .exclude(review_status="rejected")
             .distinct()
-            .defer("raw_payload")
             .order_by("id")
             .prefetch_related(
                 Prefetch(
@@ -206,7 +206,6 @@ def temporal_facts(post_ids, section, *, as_of):
         records = (
             Opportunity.objects.filter(source_post_id__in=post_ids)
             .exclude(review_status="rejected")
-            .defer("raw_payload")
             .order_by("id")
         )
     for row in records:
@@ -235,7 +234,7 @@ def temporal_facts(post_ids, section, *, as_of):
             "start": start,
             "end": end,
             "state": state,
-            "timezone": row.source_timezone,
+            "timezone": _reported_source_timezone(row),
             "schedule": row.source_schedule_text
             if is_event
             else row.source_availability_text,

@@ -1,9 +1,11 @@
 from datetime import timedelta
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from core.models import Event, EventEvidence, Opportunity
-from monitor.general_readers import general_feed
+from monitor.general_readers import general_feed, temporal_facts
 from tests.general_helpers import NOW, classified_post
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
@@ -25,6 +27,35 @@ def event(post, start=0, end=1, **overrides):
         "end_precision": "datetime",
     }
     return Event.objects.create(**(values | overrides))
+
+
+@pytest.mark.parametrize("section", ["calendar", "free"])
+def test_timezone_evidence_reads_remain_batched_as_more_facts_are_displayed(section):
+    posts = []
+
+    def add_fact(index):
+        post = classified_post(str(2600 + index), "events" if section == "calendar" else "opportunities")
+        posts.append(post.pk)
+        if section == "calendar":
+            event(post, raw_payload={"source_timezone": "GMT+8"})
+        else:
+            Opportunity.objects.create(
+                brand_id="qwen", source_post=post, sponsor_name="Qwen",
+                opportunity_type="free_credits", action_type="apply", benefit_type="credits",
+                first_seen_at=NOW, last_seen_at=NOW, opportunity_identity=post.pk,
+                raw_payload={"source_timezone": "GMT+8"},
+            )
+
+    add_fact(0)
+    with CaptureQueriesContext(connection) as one:
+        temporal_facts(posts, section, as_of=NOW)
+    for index in range(1, 20):
+        add_fact(index)
+    with CaptureQueriesContext(connection) as many:
+        facts = temporal_facts(posts, section, as_of=NOW)
+    assert len(many) == len(one)
+    assert len(facts) == 20
+    assert all(facts[post_id][0]["timezone"] == "GMT+8" for post_id in posts)
 
 
 def test_lifecycle_order_is_independent_of_when_the_announcement_was_fetched():

@@ -20,6 +20,7 @@ from collections import OrderedDict
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
+from functools import wraps
 from threading import Lock
 from time import monotonic
 from typing import Any
@@ -4208,6 +4209,27 @@ def _each_tab_entries(locale: str) -> dict[str, list[dict[str, Any]]]:
     }
 
 
+def _each_post_type_plan(build_payload):
+    """Scope full-result planning to the complete Post Type calculation."""
+    @wraps(build_payload)
+    def planned(brand, tab, window_days, locale, **options):
+        if tab != "post_types" or connection.vendor != "postgresql":
+            return build_payload(brand, tab, window_days, locale, **options)
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("SHOW cursor_tuple_fraction")
+                previous = cursor.fetchone()[0]
+                cursor.execute("SELECT set_config('cursor_tuple_fraction', '1.0', true)")
+            payload = build_payload(brand, tab, window_days, locale, **options)
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT set_config('cursor_tuple_fraction', %s, true)", [previous]
+                )
+            return payload
+    return planned
+
+
+@_each_post_type_plan
 def _each_chart_payload(
     brand: str, tab: str, window_days: int, locale: str,
     *, now: datetime | None = None, bucket_timezone: str = "UTC", _rank: bool = True,
