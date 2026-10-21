@@ -831,6 +831,32 @@ class TestWalkSearch:
             assert truncated is False
 
 
+    def test_later_page_failure_retains_received_posts(self):
+        client = self._client()
+        first = {"tweets": [_tweet("first")], "has_next_page": True, "next_cursor": "next"}
+        with patch.object(client, "_get", side_effect=[first, TwitterApiServerError("fake 503")]):
+            items, truncated = client.run_search("DeepSeek", max_results=100)
+        assert [item["id"] for item in items] == ["first"]
+        assert truncated is True
+
+    def test_underfilled_page_with_continuation_is_not_provider_end(self):
+        client = self._client()
+        first = {"tweets": [_tweet("first")], "has_next_page": True, "next_cursor": "next"}
+        second = {"tweets": [_tweet("second")], "has_next_page": False, "next_cursor": "unused"}
+        with patch.object(client, "_get", side_effect=[first, second]) as get:
+            items, truncated = client.run_search("DeepSeek", max_results=100)
+        assert [item["id"] for item in items] == ["first", "second"]
+        assert get.call_count == 2
+        assert truncated is False
+
+    def test_missing_continuation_is_incomplete(self):
+        client = self._client()
+        with patch.object(client, "_get", return_value={"tweets": [_tweet("first")], "has_next_page": True}):
+            items, truncated = client.run_search("DeepSeek", max_results=100)
+        assert [item["id"] for item in items] == ["first"]
+        assert truncated is True
+
+
 class TestRunSearch:
     """TwitterApiClient.run_search uses _walk_search + handles since:. """
 

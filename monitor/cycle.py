@@ -2829,23 +2829,27 @@ class CycleRunner:
         if affordable_results is not None:
             max_results_cap = min(max_results_cap, affordable_results)
         if tip_only:
-            # Scheduled delivery is breadth-first: admit one fresh page for
-            # every logical call before bounded backlog/deep-page work starts.
             max_results_cap = min(max_results_cap, max_per_page_cap)
             max_pages_cap = 1
+        page_admission = {}
         if deadline is not None:
             request_envelope = (
                 float(getattr(api, "timeout_s", 60))
                 * (int(getattr(api, "max_retries", 2)) + 1)
                 + 8.0
             )
-            page_budget = int(deadline.remaining() // request_envelope)
-            if page_budget < 1:
-                return [], "truncated"
-            max_pages_cap = min(max_pages_cap, page_budget)
-            max_results_cap = min(
-                max_results_cap, max_pages_cap * max_per_page_cap
-            )
+            if self.cycle_kind == "scheduled":
+                page_admission["can_start_page"] = (
+                    lambda: deadline.remaining() >= request_envelope
+                )
+            else:
+                page_budget = int(deadline.remaining() // request_envelope)
+                if page_budget < 1:
+                    return [], "truncated"
+                max_pages_cap = min(max_pages_cap, page_budget)
+                max_results_cap = min(
+                    max_results_cap, max_pages_cap * max_per_page_cap
+                )
         since_time, until_time = window
 
         logger.info(
@@ -2915,6 +2919,7 @@ class CycleRunner:
                     max_per_page=max_per_page_cap,
                     since_time=since_time,
                     until_time=cur_until,
+                    **page_admission,
                 )
             except TwitterApiAuthError as exc:
                 logger.error(
@@ -5353,8 +5358,11 @@ class CycleRunner:
                 call,
                 api,
                 window=(since_epoch, until_epoch),
-                tip_only=(self.cycle_kind == "scheduled" and cursor_owned),
-                deadline=(deadline if self._backfill_context is not None else None),
+                # Scheduled A/B/C searches drain provider cursors through the
+                # shared page iterator before enrichment. Backlog is recovery
+                # for actual interruptions, not the normal continuation path.
+                deadline=(deadline if self._backfill_context is not None
+                          or self.cycle_kind == "scheduled" else None),
             )
             if self._backfill_context is not None:
                 call_entry["backfill_progress"] = dict(self._backfill_fetch_receipt)

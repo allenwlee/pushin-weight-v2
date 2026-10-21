@@ -82,3 +82,31 @@ def test_deadline_reduces_deep_page_budget_before_starting(call):
     _runner()._fetch_tweets(call, api, window=(100, 200), deadline=Deadline())
     assert api.kwargs["max_pages"] == 2
     assert api.kwargs["max_results"] == 22
+
+
+def test_scheduled_search_checks_remaining_time_between_pages(call, monkeypatch):
+    from x_monitor.apify import TwitterApiClient
+
+    class Deadline:
+        @staticmethod
+        def remaining():
+            # Fast responses must not be capped at floor(400 / 188) == two pages.
+            return 400.0
+
+    api = TwitterApiClient(api_key="fake", timeout_s=60, max_retries=2)
+    requests = []
+
+    def get(path, params):
+        requests.append(dict(params))
+        n = len(requests)
+        return {
+            "tweets": [{"id": str(n), "text": "DeepSeek"}],
+            "has_next_page": n < 5, "next_cursor": str(n) if n < 5 else "",
+        }
+
+    monkeypatch.setattr(api, "_get", get)
+    runner = CycleRunner(cfg=Config(enabled_models=["deepseek"], daily_ceiling=100, search=SearchConfig(max_results=100, max_pages=10)), cycle_kind="scheduled")
+    items, outcome = runner._fetch_tweets(call, api, window=(100, 200), deadline=Deadline())
+    assert outcome == "ok"
+    assert [item["id"] for item in items] == ["1", "2", "3", "4", "5"]
+    assert len(requests) == 5

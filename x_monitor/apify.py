@@ -385,20 +385,39 @@ class TwitterApiClient:
         max_pages: int = 5,
         max_per_page: int = 20,
         since_time: int | None = None,
+        can_start_page: Callable[[], bool] | None = None,
     ) -> tuple[list[dict[str, Any]], bool]:
         """Aggregate page-wise progress for compatibility with older callers."""
 
         out: list[dict[str, Any]] = []
         truncated = False
-        for page in self._iter_search_pages(
+        pages = self._iter_search_pages(
             query,
             max_results,
             max_pages=max_pages,
             max_per_page=max_per_page,
             since_time=since_time,
-        ):
+        )
+        while True:
+            # Check immediately before advancing the shared lazy iterator;
+            # fast pages may continue without a pessimistic upfront page cap.
+            if can_start_page is not None and not can_start_page():
+                return out, True
+            try:
+                page = next(pages)
+            except StopIteration:
+                break
+            except Exception as exc:
+                if not out:
+                    raise
+                # Persist the paid prefix and retain incomplete coverage when
+                # a later request or normalization fails, as backfill does.
+                log.warning("Search interrupted after %s posts: %s", len(out), type(exc).__name__)
+                return out, True
             out.extend(page.items)
-            truncated = page.has_more
+            truncated = page.has_more or page.continuation_invalid
+            if not truncated or page.continuation_invalid or page.clipped:
+                break
         return out, truncated
 
     @staticmethod
@@ -512,6 +531,7 @@ class TwitterApiClient:
         max_per_page: int = 20,
         since_time: int | None = None,
         until_time: int | None = None,
+        can_start_page: Callable[[], bool] | None = None,
     ) -> tuple[list[dict[str, Any]], bool]:
         """Run an X advanced-search query via TwitterAPI.io.
 
@@ -556,12 +576,14 @@ class TwitterApiClient:
             since_time=since_time,
             until_time=until_time,
         )
+        admission = {"can_start_page": can_start_page} if can_start_page is not None else {}
         return self._walk_search(
             effective_query,
             max_results,
             max_pages=max_pages,
             max_per_page=max_per_page,
             since_time=since_time,
+            **admission,
         )
 
     def run_list_members(

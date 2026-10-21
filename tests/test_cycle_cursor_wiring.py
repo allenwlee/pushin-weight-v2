@@ -664,8 +664,8 @@ def test_c1_uses_shared_config_ceiling(wired, monkeypatch):
         X_MONITOR_CYCLE_MAX_PAGES_PER_CALL=5,
     ):
         CycleRunner(cycle_kind="scheduled").run()
-    assert seen["max_results"] == 20, seen
-    assert seen["max_pages"] == 1, seen
+    assert seen["max_results"] == 50, seen
+    assert seen["max_pages"] == 5, seen
 
 
 def test_truncated_empty_result_transfers_full_interval(wired, monkeypatch):
