@@ -7845,6 +7845,9 @@ class SourceMetric(models.Model):
     window_duration_basis = models.CharField(max_length=16, default="none")
     window_alignment = models.CharField(max_length=32, null=True)
     source_timezone = models.CharField(max_length=64, default="unknown")
+    source_timezone_reference = models.ForeignKey(
+        TimeZone, db_column="source_timezone_id", null=True, on_delete=models.PROTECT
+    )
     required = models.BooleanField(default=True)
     definition_metadata = models.JSONField(default=dict)
     created_at = models.DateTimeField(default=timezone.now)
@@ -7863,6 +7866,11 @@ class SourceMetric(models.Model):
             ),
             models.CheckConstraint(
                 condition=models.Q(version__gt=0), name="ck_metric_version"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(source_timezone_reference__isnull=True)
+                | models.Q(source_timezone_reference=models.F("source_timezone")),
+                name="ck_metric_source_timezone_ref",
             ),
             models.CheckConstraint(
                 condition=models.Q(value_kind__in=["integer", "float"]),

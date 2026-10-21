@@ -94,7 +94,8 @@ def test_expansion_and_reverse_preserve_legacy_corrections_and_old_writer():
     from django.db.migrations.executor import MigrationExecutor
 
     target = ("core", "0115_shared_actors_and_correction_identity")
-    MigrationExecutor(connection).migrate([target])
+    executor = MigrationExecutor(connection)
+    executor.migrate(executor.loader.graph.leaf_nodes("core"))
     contract, raw, _, _ = configured(mapped=True, product_type="llm-model")
     observation = project(contract, "hf", [evidence("hf", raw)]).observations.get()
     correction = correct_attribution(
@@ -104,6 +105,7 @@ def test_expansion_and_reverse_preserve_legacy_corrections_and_old_writer():
         actor="Unverified legacy label",
         reason="incorrect_product",
     )
+    MigrationExecutor(connection).migrate([target])
     base = ("core", "0114_collection_latest_attempt_pointer")
     MigrationExecutor(connection).migrate([base])
     state = MigrationExecutor(connection).loader.project_state([base])

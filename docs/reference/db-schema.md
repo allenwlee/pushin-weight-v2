@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21 10:41 JST (repository candidate `1269cc68`, migration-backed through `0115` in isolated PostgreSQL18.6 and staging deployment `dep-dbc1e0gu01pc73cp1sv0` on PostgreSQL18.4)
+Last verified: 2026-10-21 11:02 JST (working candidate based on `674b003b` through `0116` in isolated PostgreSQL18.6; staging deployment `dep-dbc1e0gu01pc73cp1sv0` remains verified through `0115` on PostgreSQL18.4)
 
-Scope: **172 core application tables**, **2305 physical columns**, plus nine compatibility views. Repository and staging migration boundary: `0115_shared_actors_and_correction_identity` (staging SHA `1269cc6888485e23a9900b3e6a22426c2c78bdda`). This guide describes the migration-backed repository candidate.
+Scope: **172 core application tables**, **2306 physical columns**, plus nine compatibility views. Repository migration boundary: `0116_metric_source_timezone_reference`; staging remains at `0115_shared_actors_and_correction_identity` (SHA `1269cc6888485e23a9900b3e6a22426c2c78bdda`). This guide describes the migration-backed repository candidate.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -4033,7 +4033,7 @@ None declared beyond field/FK/constraint indexes.
 
 One extracted assertion from an attached source, with its scope, excerpt, method version and date precision.
 
-Model: [EventDossierClaim](../../core/models.py#L9320).
+Model: [EventDossierClaim](../../core/models.py#L9328).
 
 **Primary key:** `id`.
 
@@ -4090,7 +4090,7 @@ Model: [EventDossierClaim](../../core/models.py#L9320).
 
 One claim and its disposition within a review revision.
 
-Model: [EventDossierReviewClaim](../../core/models.py#L9476).
+Model: [EventDossierReviewClaim](../../core/models.py#L9484).
 
 **Primary key:** `id`.
 
@@ -4129,7 +4129,7 @@ Model: [EventDossierReviewClaim](../../core/models.py#L9476).
 
 One immutable revision that records a decision about the dossier at a stated evidence cutoff.
 
-Model: [EventDossierReview](../../core/models.py#L9383).
+Model: [EventDossierReview](../../core/models.py#L9391).
 
 **Primary key:** `id`.
 
@@ -4188,7 +4188,7 @@ Model: [EventDossierReview](../../core/models.py#L9383).
 
 One source document attached to a dossier, preserving either a Post or collection observation as evidence.
 
-Model: [EventDossierSource](../../core/models.py#L9250).
+Model: [EventDossierSource](../../core/models.py#L9258).
 
 **Primary key:** `id`.
 
@@ -4230,7 +4230,7 @@ Model: [EventDossierSource](../../core/models.py#L9250).
 
 One stable identity for a source-backed event or personnel change, with first/last seen dates and a pointer to its current review.
 
-Model: [EventDossier](../../core/models.py#L9202).
+Model: [EventDossier](../../core/models.py#L9210).
 
 **Primary key:** `id`.
 
@@ -4277,7 +4277,7 @@ Model: [EventDossier](../../core/models.py#L9202).
 
 One typed model release projection owned by a particular dossier review.
 
-Model: [ModelReleaseDetail](../../core/models.py#L9504).
+Model: [ModelReleaseDetail](../../core/models.py#L9512).
 
 **Primary key:** `review_id`.
 
@@ -4323,7 +4323,7 @@ Model: [ModelReleaseDetail](../../core/models.py#L9504).
 
 One typed personnel change projection owned by a particular dossier review.
 
-Model: [PersonnelChangeDetail](../../core/models.py#L9569).
+Model: [PersonnelChangeDetail](../../core/models.py#L9577).
 
 **Primary key:** `review_id`.
 
@@ -5424,7 +5424,7 @@ can progress while a video task is collected.
 
 One fenced quarter-hour editorial or content-picture assessment, with frozen evidence and outcome.
 
-Model: [EditorialAssessment](../../core/models.py#L8776).
+Model: [EditorialAssessment](../../core/models.py#L8784).
 
 **Primary key:** `id`.
 
@@ -5459,7 +5459,7 @@ Model: [EditorialAssessment](../../core/models.py#L8776).
 
 One UTC day of conservative spend reservations and text/media call counts.
 
-Model: [EditorialBudget](../../core/models.py#L8805).
+Model: [EditorialBudget](../../core/models.py#L8813).
 
 **Primary key:** `day`.
 
@@ -5488,7 +5488,7 @@ None beyond primary-key, unique-field and automatic FK indexes.
 
 One reserved provider stage and its saved response or uncertain-send outcome.
 
-Model: [EditorialCall](../../core/models.py#L8821).
+Model: [EditorialCall](../../core/models.py#L8829).
 
 **Primary key:** `id`.
 
@@ -5522,7 +5522,7 @@ Model: [EditorialCall](../../core/models.py#L8821).
 
 One permanent development identity with original-post anchors.
 
-Model: [EditorialStory](../../core/models.py#L8853).
+Model: [EditorialStory](../../core/models.py#L8861).
 
 **Primary key:** `id`.
 
@@ -5551,7 +5551,7 @@ None beyond the keys and field checks described above.
 
 One immutable accepted story edition for a track, locale and revision.
 
-Model: [EditorialEdition](../../core/models.py#L8864).
+Model: [EditorialEdition](../../core/models.py#L8872).
 
 **Primary key:** `id`.
 
@@ -5595,7 +5595,7 @@ Model: [EditorialEdition](../../core/models.py#L8864).
 
 One current hero pointer, or the shared provider-lock row.
 
-Model: [EditorialHero](../../core/models.py#L8920).
+Model: [EditorialHero](../../core/models.py#L8928).
 
 **Primary key:** `key`.
 
@@ -5625,7 +5625,7 @@ None beyond the keys and field checks described above.
 
 One optional generic source/derivative attachment, with protected optional shared text/run relationships.
 
-Model: [ContentPicture](../../core/models.py#L8928).
+Model: [ContentPicture](../../core/models.py#L8936).
 
 **Primary key:** `id`.
 
@@ -6373,7 +6373,7 @@ Reservations commit before HTTP. They count toward lifetime per-person, per-run 
 
 One separately admitted execution of a logical collection run, including its limits and outcome.
 
-Model: [CollectionAttempt](../../core/models.py#L8533).
+Model: [CollectionAttempt](../../core/models.py#L8541).
 
 **Primary key:** `id`.
 
@@ -6433,7 +6433,7 @@ Model: [CollectionAttempt](../../core/models.py#L8533).
 
 One bounded collection campaign that coordinates related jobs and records.
 
-Model: [CollectionCampaign](../../core/models.py#L8476).
+Model: [CollectionCampaign](../../core/models.py#L8484).
 
 **Primary key:** `id`.
 
@@ -6472,7 +6472,7 @@ Model: [CollectionCampaign](../../core/models.py#L8476).
 
 One immutable before/after correction to measurement attribution or timing.
 
-Model: [CollectionCorrection](../../core/models.py#L8714).
+Model: [CollectionCorrection](../../core/models.py#L8722).
 
 **Primary key:** `id`.
 
@@ -6566,7 +6566,7 @@ Model: [CollectionCorrection](../../core/models.py#L8714).
 
 One immutable, content-addressed response body stored as opaque bytes.
 
-Model: [CollectionEvidenceArchive](../../core/models.py#L8568).
+Model: [CollectionEvidenceArchive](../../core/models.py#L8576).
 
 **Primary key:** `id`.
 
@@ -6604,7 +6604,7 @@ None declared beyond primary/unique constraints.
 
 One frozen target or query that a collection job intends to process.
 
-Model: [CollectionJobTarget](../../core/models.py#L8495).
+Model: [CollectionJobTarget](../../core/models.py#L8503).
 
 **Primary key:** `id`.
 
@@ -6674,7 +6674,7 @@ Model: [CollectionJobTarget](../../core/models.py#L8495).
 
 One selected metric that was absent from an observation, with reason and recoverability.
 
-Model: [CollectionMetricGap](../../core/models.py#L8695).
+Model: [CollectionMetricGap](../../core/models.py#L8703).
 
 **Primary key:** `id`.
 
@@ -6712,7 +6712,7 @@ Model: [CollectionMetricGap](../../core/models.py#L8695).
 
 One link from an observation to the request or preceding observation that supports it.
 
-Model: [CollectionObservationInput](../../core/models.py#L8635).
+Model: [CollectionObservationInput](../../core/models.py#L8643).
 
 **Primary key:** `id`.
 
@@ -6755,7 +6755,7 @@ Model: [CollectionObservationInput](../../core/models.py#L8635).
 
 One physical transport request, its outcome and any retained response evidence.
 
-Model: [CollectionRequest](../../core/models.py#L8592).
+Model: [CollectionRequest](../../core/models.py#L8600).
 
 **Primary key:** `id`.
 
@@ -6824,7 +6824,7 @@ Model: [CollectionRequest](../../core/models.py#L8592).
 
 One captured set of nonnumeric facts about a collected resource at an observation.
 
-Model: [CollectionResourceSnapshot](../../core/models.py#L8655).
+Model: [CollectionResourceSnapshot](../../core/models.py#L8663).
 
 **Primary key:** `observation_id`.
 
@@ -6936,7 +6936,7 @@ The definition contains frozen selections, schedules and budgets; it is hashed
 with source, purpose, operation, mode and contract. Registration creates paused
 instructions and does not activate a source or scheduler.
 
-Model: [CollectionJob](../../core/models.py#L8045). **Primary key:** `id`.
+Model: [CollectionJob](../../core/models.py#L8053). **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
@@ -7149,7 +7149,7 @@ None declared beyond field/FK/constraint indexes.
 
 One versioned collection contract for a data source.
 
-Model: [MetricCollectionContract](../../core/models.py#L7933).
+Model: [MetricCollectionContract](../../core/models.py#L7941).
 
 **Primary key:** `id`.
 
@@ -7193,7 +7193,7 @@ None declared beyond field/FK/constraint indexes.
 
 One execution record for numeric measurements, catalog discovery or content invocation accounting. Every run references the job owning its source, purpose, contract and frozen scope. Catalog partial runs resume; content attempts remain separate terminal receipts. Instance properties expose job-owned instructions for existing Python callers; ORM queries use `job__source`, `job__purpose` and other job relations.
 
-Model: [CollectionRun](../../core/models.py#L8151).
+Model: [CollectionRun](../../core/models.py#L8159).
 
 **Primary key:** `id`.
 
@@ -7272,7 +7272,7 @@ The `collection_run_job_instructions` trigger validates lifecycle against the li
 
 One sourced evidence record: numeric rows are immutable evidence, catalog rows retain repository enrichment progress, and typed Post rows prove collection membership.
 
-Model: [CollectionObservation](../../core/models.py#L8235).
+Model: [CollectionObservation](../../core/models.py#L8243).
 
 **Primary key:** `id`.
 
@@ -7407,7 +7407,7 @@ None declared beyond primary keys, field uniqueness and foreign keys.
 
 One value for a metric in an observation.
 
-Model: [MetricValue](../../core/models.py#L8373).
+Model: [MetricValue](../../core/models.py#L8381).
 
 **Primary key:** `id`.
 
@@ -7525,19 +7525,48 @@ Model: [SourceMetric](../../core/models.py#L7831).
 | `required` | `boolean` | No | Django default: `True` (not an assumed SQL default). |
 | `definition_metadata` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
 | `created_at` | `timestamp with time zone` | No | Django default: `now` (not an assumed SQL default). |
+| `source_timezone_id` | `varchar(64)` | Yes | FK → [`time_zones`](#table-time_zones) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `source_timezone_reference`. Exact registered code or unresolved NULL. |
 
 **Named indexes:**
 
 - `idx_metric_type_source`: `CREATE INDEX "idx_metric_type_source" ON "metrics" ("metric_type_id", "source_id")`.
+- `metrics_source_timezone_id_183a4919`: index on `source_timezone_id`.
+- `metrics_source_timezone_id_183a4919_like`: varchar-pattern index on `source_timezone_id`.
 
 **Named constraints:**
 
 - `uq_source_metric_version`: `CONSTRAINT "uq_source_metric_version" UNIQUE ("source_id", "metric_key", "version")`.
 - `ck_metric_version`: `CONSTRAINT "ck_metric_version" CHECK ("version" > 0)`.
+- `ck_metric_source_timezone_ref`: `CHECK (source_timezone_id IS NULL OR source_timezone_id = source_timezone)`.
+- `metrics_source_timezone_id_183a4919_fk_time_zones_code`: deferred FK from `source_timezone_id` to `time_zones(code)`.
 - `ck_metric_value_kind`: `CONSTRAINT "ck_metric_value_kind" CHECK ("value_kind" IN ('integer', 'float'))`.
 - `ck_metric_quantity`: `CONSTRAINT "ck_metric_quantity" CHECK ("quantity_form" IN ('count', 'score', 'rank', 'variance', 'ratio'))`.
 - `ck_metric_value_role`: `CONSTRAINT "ck_metric_value_role" CHECK ("value_role" IN ('value', 'lower_bound', 'upper_bound'))`.
 - `ck_metric_kind_window`: `CONSTRAINT "ck_metric_kind_window" CHECK ((("measurement_kind" = 'state' AND "window_alignment" IS NULL AND "window_amount" IS NULL AND "window_duration_basis" = 'none' AND "window_mode" = 'none' AND "window_unit" IS NULL) OR ("measurement_kind" = 'flow' AND "window_alignment" IS NULL AND "window_amount" IS NULL AND "window_duration_basis" = 'none' AND "window_mode" = 'since_origin' AND "window_unit" IS NULL) OR ("measurement_kind" = 'flow' AND "window_amount" > 0 AND "window_amount" IS NOT NULL AND "window_amount" < 1000000000 AND "window_duration_basis" IN ('calendar', 'fixed', 'unknown') AND "window_mode" IN ('rolling', 'calendar', 'fixed') AND "window_unit" IN ('day', 'second') AND "window_unit" IS NOT NULL AND (("window_alignment" IN ('source_local_midnight', 'provider_defined') AND "window_alignment" IS NOT NULL AND "window_mode" = 'calendar') OR ("window_alignment" IS NULL AND NOT ("window_mode" = 'calendar'))))))`.
+
+The `sync_metric_source_timezone` PostgreSQL trigger keeps the optional reference
+consistent with exact reported wording for old and new writers. A registered IANA
+zone or Link alias resolves to its own catalogue code. `unknown`, `CST` and absent
+codes remain unresolved; no UTC default or invented lookup record is created.
+Changing the raw timezone through an old writer updates or clears the reference.
+A supplied contradictory FK is rejected. The compatibility text remains available.
+
+Collection-contract schema1 snapshots retain their explicit nineteen-field shape;
+the relational reference is not added to old packets or hashes. Numeric values,
+calendar/elapsed duration distinctions and source timezone wording are unchanged.
+A fresh or older-source database can migrate without catalogue seeds; after
+explicit seeding, `map_metric_time_zones` fills only exact registered matches.
+
+```bash
+python manage.py map_metric_time_zones --database default --batch-size 500 --max-batches 1
+python manage.py map_metric_time_zones --database default --batch-size 500 --max-batches 1 --apply
+```
+
+The first command previews; writes require `--apply`. Each bounded run reports its
+last metric ID, actual updates, remaining resolvable rows and unmatched count.
+`--after-metric-id` resumes a scan; rerunning from0 safely catches concurrent or
+late-registry matches. The command changes only the relationship column and never
+activates a source or calls a provider.
 
 [Back to table inventory](#table-inventory)
 
@@ -7584,7 +7613,7 @@ One reviewed external source identifier mapped to a measurement subject. Catalog
 relations can represent a family repository shared by multiple models; they do
 not automatically admit numeric measurements under a metric contract.
 
-Model: [SourceSubjectMapping](../../core/models.py#L7970).
+Model: [SourceSubjectMapping](../../core/models.py#L7978).
 
 **Primary key:** `id`.
 
@@ -7671,7 +7700,7 @@ None declared beyond field/FK/constraint indexes.
 
 One official-company account collection state and cursor.
 
-Model: [OfficialCompanyAccountState](../../core/models.py#L8990).
+Model: [OfficialCompanyAccountState](../../core/models.py#L8998).
 
 **Primary key:** `id`.
 
@@ -7716,7 +7745,7 @@ Model: [OfficialCompanyAccountState](../../core/models.py#L8990).
 
 One official-company provider attempt with its budget charge and state.
 
-Model: [OfficialCompanyAttempt](../../core/models.py#L9072).
+Model: [OfficialCompanyAttempt](../../core/models.py#L9080).
 
 **Primary key:** `id`.
 
@@ -7756,7 +7785,7 @@ None declared beyond field/FK/constraint indexes.
 
 One period of reserved official-company collection spend.
 
-Model: [OfficialCompanyBudget](../../core/models.py#L9057).
+Model: [OfficialCompanyBudget](../../core/models.py#L9065).
 
 **Primary key:** `key`.
 
@@ -7782,7 +7811,7 @@ None declared beyond field/FK/constraint indexes.
 
 One desired official-company list membership action.
 
-Model: [OfficialCompanyListIntent](../../core/models.py#L9105).
+Model: [OfficialCompanyListIntent](../../core/models.py#L9113).
 
 **Primary key:** `id`.
 
@@ -7823,7 +7852,7 @@ Model: [OfficialCompanyListIntent](../../core/models.py#L9105).
 
 One owner-scoped credential reference; secret material is not documented here.
 
-Model: [OfficialCompanyOwnerCredential](../../core/models.py#L9166).
+Model: [OfficialCompanyOwnerCredential](../../core/models.py#L9174).
 
 **Primary key:** `key`.
 
@@ -7851,7 +7880,7 @@ None declared beyond field/FK/constraint indexes.
 
 One provider lifecycle/control record for official-company collection.
 
-Model: [OfficialCompanyProviderState](../../core/models.py#L9185).
+Model: [OfficialCompanyProviderState](../../core/models.py#L9193).
 
 **Primary key:** `key`.
 
@@ -7878,7 +7907,7 @@ None declared beyond primary keys, field uniqueness and foreign keys.
 
 One official-company account scan and its outcome.
 
-Model: [OfficialCompanyScan](../../core/models.py#L8977).
+Model: [OfficialCompanyScan](../../core/models.py#L8985).
 
 **Primary key:** `key`.
 

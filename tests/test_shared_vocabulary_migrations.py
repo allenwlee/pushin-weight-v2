@@ -11,11 +11,14 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 @pytest.mark.usefixtures("isolated_migration_database")
 def test_catalogue_boundaries_preserve_existing_writer_and_allow_seed_replay():
     from core.benchmark_metric_identity import register_definitions
-    from core.models import SourceMetric
+    from tests.collection_fixtures import historical_fixture_models
 
     base = ("core", "0092_measurement_window_index")
     MigrationExecutor(connection).migrate([base])
-    register_definitions()
+    historical = MigrationExecutor(connection).loader.project_state([base]).apps
+    SourceMetric = historical.get_model("core", "SourceMetric")
+    with historical_fixture_models(historical):
+        register_definitions()
     before = list(SourceMetric.objects.order_by("pk").values())
     before_tables = set(connection.introspection.table_names())
     assert (
@@ -46,5 +49,6 @@ def test_catalogue_boundaries_preserve_existing_writer_and_allow_seed_replay():
         "measurement_units",
     }
     assert list(SourceMetric.objects.order_by("pk").values()) == before
-    register_definitions()  # Existing writer still accepts its original unit/timezone strings.
+    with historical_fixture_models(historical):
+        register_definitions()  # Exercise the writer's actual preceding field set.
     assert list(SourceMetric.objects.order_by("pk").values()) == before

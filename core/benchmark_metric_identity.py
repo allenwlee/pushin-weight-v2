@@ -376,12 +376,35 @@ def register_definitions():
     return SourceMetric.objects.count()
 
 
+# Collection-contract schema v1 is frozen; relational metadata cannot add keys.
+DEFINITION_SNAPSHOT_V1_FIELDS = (
+    "id",
+    "source_id",
+    "metric_type_id",
+    "metric_key",
+    "version",
+    "name",
+    "unit",
+    "value_kind",
+    "quantity_form",
+    "value_role",
+    "measurement_kind",
+    "window_mode",
+    "window_amount",
+    "window_unit",
+    "window_duration_basis",
+    "window_alignment",
+    "source_timezone",
+    "required",
+    "definition_metadata",
+)
+
+
 def definition_snapshot(obj):
     return {
-        field.attname: (str(value) if isinstance(value, Decimal) else value)
-        for field in obj._meta.concrete_fields
-        if field.name not in {"created_at"}
-        for value in [getattr(obj, field.attname)]
+        name: (str(value) if isinstance(value, Decimal) else value)
+        for name in DEFINITION_SNAPSHOT_V1_FIELDS
+        for value in [getattr(obj, name)]
     }
 
 

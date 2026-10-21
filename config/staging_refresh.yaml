@@ -643,6 +643,10 @@ validation:
   forward_migration_count_deltas: {}
   forward_migration_translation_count_deltas: {}
   required_columns:
+    metrics:
+      - id
+      - source_timezone
+      - source_timezone_id
     actors:
       - id
       - actor_kind

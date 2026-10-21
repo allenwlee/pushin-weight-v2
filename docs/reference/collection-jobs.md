@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-21 10:41 JST, repository candidate `1269cc68` through migration `0115_shared_actors_and_correction_identity` on isolated PostgreSQL18.6 and staging deployment `dep-dbc1e0gu01pc73cp1sv0` on PostgreSQL18.4.
+Last verified: 2026-10-21 11:02 JST, working candidate based on `674b003b` through migration `0116_metric_source_timezone_reference` on isolated PostgreSQL18.6. Staging deployment `dep-dbc1e0gu01pc73cp1sv0` remains verified through0115 on PostgreSQL18.4.
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
@@ -8,6 +8,8 @@ that instruction was attempted. Scoped progress makes a partial run resumable;
 observations retain provider evidence, and metric values hold admitted numbers.
 All authoritative business state lives in PostgreSQL. JSON input files and
 optional exports are transport, not a second runtime database.
+
+Metric definitions can reference a shared timezone through `metrics.source_timezone_id`. Their original timezone wording and schema1 nineteen-field definition snapshots remain unchanged. Adding this relationship creates no new collection-contract identity, changes no measurement value and does not infer a timezone for unresolved source evidence. See the [metric definition and bounded mapping contract](db-schema.md#table-metrics).
 
 Immutable correction records retain their exact recorded performer label and an
 optional `actor_id` to the shared performer registry. The timing-repair command
