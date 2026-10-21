@@ -114,7 +114,7 @@ this documented project continuation after its implementation/review result; do 
 PR or ask for the same authorization. Missing credentials and occupied environments require
 cause-specific repair, not empty commits. Waived checks remain waived, never passed.
 
-After exact-SHA production verification and the required learning checkpoint, the generated guide directs the
+After exact-SHA production verification, the generated guide directs the
 parent workflow to run guarded `git worktree remove` cleanup only for the
 canonical linked worktree. Require it to remain registered, clean, unlocked,
 and at the verified candidate SHA; run from the authoritative root without
@@ -122,20 +122,6 @@ and at the verified candidate SHA; run from the authoritative root without
 action. Retain staging-only, failed, unauthorized, dirty, locked,
 noncanonical, or candidate-mismatched worktrees. Ollija provides guidance and
 does not remove the worktree itself.
-
-## Production batch learning checkpoint
-
-After every production deployment, once its required verification is complete,
-run `ce-compound` before guarded worktree cleanup, closing the batch or starting the next one. This is an
-owner-required step for every batch, including routine releases. Record the
-skill result and learning links in the existing plan; a reasoned no-new-learning
-result is valid. Follow the skill's durable-learning bar and avoid duplicate docs.
-Before implementing the next batch, read the applicable learnings and turn them
-into concrete preflight, implementation, verification or regression steps in that
-same plan. Record any unresolved material finding as follow-up for the affected
-batch. Budget about five minutes for an ordinary checkpoint; do not repeat valid
-release checks merely to produce a learning. This step adds no deployment,
-provider-call or messaging authority.
 
 ## file names
 'YYYY-MM-DD-HHMMSS-description' should overrule compound-engineering file naming rules
