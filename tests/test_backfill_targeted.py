@@ -6,6 +6,7 @@ import pytest
 
 from core.models import (
     Event,
+    Opportunity,
     OriginalContentCall,
     Post,
     PostBrandSignal,
@@ -19,6 +20,93 @@ from tests.test_backfill_verify import accepted as accepted_fixture
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 native = native_fixture
 accepted = accepted_fixture
+
+
+@pytest.mark.parametrize("zone", ["Asia/Tokyo", "Pacific Time"])
+@pytest.mark.parametrize("role", ["event_extraction", "opportunity_extraction"])
+def test_saved_timezone_reply_replays_after_legacy_columns_are_removed(
+    accepted, native, role, zone,
+):
+    from django.db import connection
+
+    from core.models import TimeZone
+
+    ids, cfg = accepted
+    cfg.targeted_extraction.enabled = True
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT table_name FROM information_schema.columns "
+            "WHERE table_schema=current_schema() "
+            "AND table_name IN ('events','opportunities','metrics') "
+            "AND column_name='source_timezone'"
+        )
+        assert cursor.fetchall() == [], "test must exercise the actual post-cutover schema"
+    TimeZone.objects.get_or_create(code="Asia/Tokyo")
+    kind = "events" if role == "event_extraction" else "opportunities"
+    PostBrandSignal.objects.create(
+        post_id=ids[0], brand_id="qwen", post_type_id=kind, sentiment_id="neutral",
+    )
+    record = {
+        "brand_id": "qwen", "organization_name": "Qwen",
+        "source_timezone": zone,
+    }
+    if role == "event_extraction":
+        record |= {
+            "title": "Live workshop", "attendance_mode": "online_live",
+            "start_value": "2026-08-10T10:00:00+09:00", "start_precision": "datetime",
+            "end_value": None, "end_precision": "unknown", "source_status": "scheduled",
+        }
+        model = Event
+    else:
+        record |= {
+            "opportunity_type": "contest", "action_type": "submit a project",
+            "benefit_type": "prize", "open_value": None, "open_precision": "unknown",
+            "close_value": None, "close_precision": "unknown", "source_status": "open",
+        }
+        model = Opportunity
+
+    class SavedReplyProvider(DirectProvider):
+        def transport(self, body, timeout):
+            self.sent += 1
+            return {
+                "model": body["model"],
+                "choices": [{"finish_reason": "stop", "message": {
+                    "content": json.dumps({"records": [record]}),
+                }}],
+                "usage": {"prompt_tokens": 20, "completion_tokens": 30},
+            }
+
+    provider = SavedReplyProvider()
+    kwargs = {
+        "cfg": cfg, "api_key": "test", "delegate": native[2]["classification"],
+        "post_ids": [ids[0]],
+    }
+    advance_targeted(native[0].pk, **kwargs, client_factory=provider.factory)
+    call = OriginalContentCall.objects.get(provenance__context__operation="post_targeted_extraction")
+    assert provider.sent == 1 and call.state == "completed" and call.import_state == "pending"
+    assert not model.objects.exists()
+    paid_before = OriginalContentCall.objects.values().get(pk=call.pk)
+
+    def no_additional_http(**kwargs):
+        raise AssertionError("saved reply was repurchased during post-cutover replay")
+
+    for _ in range(3):
+        result = advance_targeted(native[0].pk, **kwargs, client_factory=no_additional_http)
+        if result["status"] == "completed":
+            break
+    assert result["status"] == "completed", result
+    row = model.objects.get()
+    assert row.source_timezone_reference_id == (zone if zone == "Asia/Tokyo" else None)
+    assert row.raw_payload["source_timezone"] == zone
+    assert not incomplete_roles(Post.objects.get(pk=ids[0]), cfg)
+    call.refresh_from_db()
+    assert call.import_state == "applied"
+    paid_after = OriginalContentCall.objects.values().get(pk=call.pk)
+    for field in ("import_state", "import_evidence"):
+        paid_before.pop(field)
+        paid_after.pop(field)
+    assert paid_after == paid_before
+    assert provider.sent == 1 and model.objects.count() == 1
 
 
 class ExtractionProvider(DirectProvider):

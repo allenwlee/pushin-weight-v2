@@ -71,6 +71,7 @@ def test_aggregate_mode_attempts_later_windows_after_quality_and_provider_failur
         "enrichment_provider_admission_http_401",
         "enrichment_provider_admission_http_402",
         "enrichment_provider_admission_http_403",
+        "backfill_storage_schema_incompatible",
     ],
 )
 def test_aggregate_evaluation_preserves_global_safety_guards(code):
@@ -107,6 +108,21 @@ def test_normal_cursor_reads_and_post_writes_remain_allowed():
     assert len(captured) == 2
 
 
+@pytest.mark.parametrize("revision,configuration", [("c" * 40, "saved"), ("b" * 40, "changed")])
+def test_selected_runtime_does_not_bypass_revision_or_configuration_pins(
+    monkeypatch, revision, configuration,
+):
+    from scripts import backfill_campaign as campaign
+
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "b" * 40)
+    monkeypatch.setattr(campaign, "configuration_pin", lambda cfg: configuration)
+    with pytest.raises(RuntimeError, match="pinned_runtime_changed"):
+        campaign.run(
+            {"revision": "a" * 40, "configuration_pin": "saved"},
+            None, runtime_revision=revision,
+        )
+
+
 @pytest.mark.parametrize("status", [401, 402, 403])
 def test_permanent_provider_admission_failure_stops_aggregate_campaign(status):
     from monitor.backfill_collection import BackfillProviderSafetyError
@@ -120,3 +136,40 @@ def test_permanent_provider_admission_failure_stops_aggregate_campaign(status):
     with pytest.raises(BackfillProviderSafetyError):
         run_sequence([1, 2], run, evaluate_at_end=True)
     assert visited == [1]
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+@pytest.mark.parametrize("table", ["events", "opportunities"])
+def test_missing_timezone_reference_stops_campaign_before_any_paid_work(
+    settings, monkeypatch, table,
+):
+    from pathlib import Path
+
+    import psycopg
+    from django.db import connection, transaction
+
+    from scripts import backfill_campaign as campaign
+    from x_monitor.config import load_config
+
+    settings.X_MONITOR_LIST_ID = 123
+    cfg = load_config(Path("config.yaml"))
+    frozen = campaign.manifest(
+        cfg, windows=[("2026-08-01", "2026-08-02")],
+        campaign_name="timezone-preflight", expected_revision="a" * 40,
+    )
+    monkeypatch.setenv("RENDER_GIT_COMMIT", "b" * 40)
+
+    def must_not_advance(*args, **kwargs):
+        raise AssertionError("campaign advanced before checking storage compatibility")
+
+    monkeypatch.setattr(psycopg, "connect", must_not_advance)
+    monkeypatch.setattr(campaign, "run_sequence", must_not_advance)
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f'ALTER TABLE "{table}" RENAME COLUMN source_timezone_id TO missing_timezone_reference'
+            )
+        with pytest.raises(RuntimeError, match="backfill_storage_schema_incompatible"):
+            campaign.run(frozen, cfg, runtime_revision="b" * 40)
+        transaction.set_rollback(True)

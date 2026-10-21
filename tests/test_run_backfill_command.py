@@ -85,6 +85,46 @@ def test_saved_manifest_preserves_deadline_and_allowances(planned, tmp_path):
     assert not CollectionJob.objects.exists()
 
 
+def test_saved_campaign_can_select_a_new_exact_runtime_without_rewriting_instructions(
+    planned, tmp_path, monkeypatch,
+):
+    import monitor.management.commands.run_backfill as command
+
+    output = StringIO()
+    call_command("run_backfill", since="2026-08-01", until="2026-08-02", stdout=output)
+    frozen = json.loads(output.getvalue()) | {"revision": "a" * 40}
+    saved = tmp_path / "saved.json"
+    saved.write_text(json.dumps(frozen))
+    original_bytes = saved.read_bytes()
+    observed = []
+    monkeypatch.setattr(command, "run", lambda manifest, cfg, **kw: observed.append((manifest, kw)))
+    call_command(
+        "run_backfill", manifest=saved, execute=True,
+        runtime_revision="b" * 40, evaluate_at_end=True,
+    )
+    assert observed == [(frozen, {"evaluate_at_end": True, "runtime_revision": "b" * 40})]
+    assert saved.read_bytes() == original_bytes
+    assert not CollectionJob.objects.exists() and not OriginalContentCall.objects.exists()
+
+
+@pytest.mark.parametrize("revision", ["main", "b" * 39, "b" * 41, "z" * 40])
+def test_runtime_selection_requires_full_commit_sha_before_execution(planned, tmp_path, revision):
+    saved = tmp_path / "saved.json"
+    saved.write_text("{}")
+    with pytest.raises(CommandError, match="full 40-character commit SHA"):
+        call_command("run_backfill", manifest=saved, runtime_revision=revision, execute=True)
+    assert not CollectionJob.objects.exists() and not OriginalContentCall.objects.exists()
+
+
+def test_runtime_selection_requires_an_existing_manifest(planned):
+    with pytest.raises(CommandError, match="requires --manifest"):
+        call_command(
+            "run_backfill", since="2026-08-01", until="2026-08-02",
+            runtime_revision="b" * 40, execute=True,
+        )
+    assert not CollectionJob.objects.exists() and not OriginalContentCall.objects.exists()
+
+
 def test_aggregate_execution_mode_does_not_change_saved_manifest(
     planned, tmp_path, monkeypatch
 ):

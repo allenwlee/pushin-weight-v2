@@ -28,6 +28,8 @@ from core.models import (
     CollectionObservation,
     CollectionRun,
     DataSource,
+    Event,
+    Opportunity,
     OriginalContentCall,
     Post,
     PostEnrichmentState,
@@ -70,6 +72,23 @@ def database_identity():
         cursor.execute("SELECT current_database(),current_user")
         name, role = cursor.fetchone()
     return {"name": name, "user": role}
+
+
+def validate_storage_schema():
+    """Check shared timezone storage before starting any paid historical work."""
+    required = {
+        (model._meta.db_table, model._meta.get_field("source_timezone_reference").column)
+        for model in (Event, Opportunity)
+    }
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT table_name,column_name FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name IN (%s,%s)",
+            [Event._meta.db_table, Opportunity._meta.db_table],
+        )
+        present = set(cursor.fetchall())
+    if not required <= present:
+        raise RuntimeError("backfill_storage_schema_incompatible")
 
 
 def _utc_epoch(value):
@@ -189,6 +208,7 @@ def safety_failure(exc):
             "policy_changed",
             "immutable_campaign_manifest",
             "live_cursor_write",
+            "backfill_storage_schema_incompatible",
             "source_changed",
             "source_definition_changed",
             "deadline_exhausted",
@@ -658,6 +678,7 @@ def run(frozen, cfg, *, evaluate_at_end=False, runtime_revision=None):
             frozen["database"]["user"],
         ):
             raise RuntimeError("campaign_database_identity_rejected")
+    validate_storage_schema()
     # A dedicated session keeps this campaign lock while ordinary connections
     # close between waits. No application row or transaction remains locked.
     import psycopg

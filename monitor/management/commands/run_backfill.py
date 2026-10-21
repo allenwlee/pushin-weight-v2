@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
@@ -46,6 +47,10 @@ class Command(BaseCommand):
             type=Path,
             help="Resume an exact previously saved plan, preserving limits and deadline.",
         )
+        parser.add_argument(
+            "--runtime-revision",
+            help="Full tested commit SHA to run a saved --manifest; its original instructions stay unchanged.",
+        )
         mode = parser.add_mutually_exclusive_group()
         mode.add_argument(
             "--execute",
@@ -61,6 +66,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         cfg = load_config(Path("config.yaml"))
         try:
+            revision = options["runtime_revision"]
+            if revision is not None:
+                if not options["manifest"]:
+                    raise CommandError("--runtime-revision requires --manifest")
+                if not re.fullmatch(r"[0-9a-f]{40}", revision):
+                    raise CommandError("--runtime-revision requires a full 40-character commit SHA")
             if options["manifest"]:
                 if any(
                     options[key]
@@ -112,7 +123,10 @@ class Command(BaseCommand):
                 )
             self.result = frozen
             if options["execute"]:
-                run(frozen, cfg, evaluate_at_end=options["evaluate_at_end"])
+                execution = {"evaluate_at_end": options["evaluate_at_end"]}
+                if revision is not None:
+                    execution["runtime_revision"] = revision
+                run(frozen, cfg, **execution)
             else:
                 self.stdout.write(json.dumps(frozen, sort_keys=True))
         except (OSError, ValueError, KeyError, TypeError) as exc:
