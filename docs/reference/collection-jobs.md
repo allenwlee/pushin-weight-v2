@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-21 10:25 JST, working repository candidate based on `215a9103` through migration `0115_shared_actors_and_correction_identity` on isolated PostgreSQL 18.6. Staging deployment `dep-dbc0q5ou01pc73codnhg` is verified through0114 on PostgreSQL18.4.
+Last verified: 2026-10-21 10:41 JST, repository candidate `1269cc68` through migration `0115_shared_actors_and_correction_identity` on isolated PostgreSQL18.6 and staging deployment `dep-dbc1e0gu01pc73cp1sv0` on PostgreSQL18.4.
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
