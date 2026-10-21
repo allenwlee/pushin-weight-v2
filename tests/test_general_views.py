@@ -3,8 +3,8 @@ from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from core.models import PostSynthesisDemand
-from tests.general_helpers import classified_post, saved_commentary
+from core.models import Event, Opportunity, PostSynthesisDemand, TimeZone
+from tests.general_helpers import NOW, classified_post, saved_commentary
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
@@ -24,23 +24,62 @@ def test_general_route_exposes_its_actual_deployment_revision(client, monkeypatc
     assert response["X-Bridgewright-Revision"] == "d" * 40
 
 
-def test_general_is_anonymous_server_rendered_and_feed_matches_its_projection(client):
+@pytest.mark.parametrize("locale", ["en", "zh_hans", "ja"])
+@pytest.mark.parametrize(
+    "zone,payload,reported_zone",
+    [
+        ("Asia/Tokyo", {}, "Asia/Tokyo"),
+        (None, {"source_timezone": " Pacific Time "}, "Pacific Time"),
+        (None, {}, None),
+        ("UTC", {"source_timezone": None}, None),
+    ],
+)
+def test_general_is_anonymous_server_rendered_and_feed_matches_its_projection(
+    client, monkeypatch, locale, zone, payload, reported_zone
+):
+    posts = {}
     for index, category in enumerate(
         ("events", "opportunities", "job_listings", "personnel_changes")
     ):
-        saved_commentary(classified_post(str(5100 + index), category))
+        posts[category] = classified_post(str(5100 + index), category)
+        saved_commentary(posts[category])
+    if zone:
+        TimeZone.objects.get_or_create(code=zone)
+    shared = {
+        "brand_id": "qwen",
+        "source_timezone_reference_id": zone,
+        "raw_payload": payload,
+        "first_seen_at": NOW,
+        "last_seen_at": NOW,
+        "review_status": "confirmed",
+    }
+    Event.objects.create(
+        **shared, source_post=posts["events"], title="Developer workshop",
+        organizer_name="Qwen", event_identity="general-timezone-event",
+    )
+    Opportunity.objects.create(
+        **shared, source_post=posts["opportunities"], sponsor_name="Qwen",
+        opportunity_type="free_credits", action_type="apply", benefit_type="credits",
+        benefit_text="Timezone credits", opportunity_identity="general-timezone-offer",
+    )
+    monkeypatch.setattr("monitor.general_views.timezone.now", lambda: NOW)
     with CaptureQueriesContext(connection) as queries:
-        response = client.get("/general/?lang=en", secure=True)
+        response = client.get(f"/general/?lang={locale}", secure=True)
     assert response.status_code == 200
     body = response.content.decode()
     for section in ("calendar", "free", "jobs", "moving"):
         assert f'id="{section}"' in body
         payload = client.get(
-            f"/general/feed/?section={section}&lang=en", secure=True
+            f"/general/feed/?section={section}&lang={locale}", secure=True
         ).json()
         assert len(payload["items"]) == 1
         assert payload["items"][0]["url"] in body
         assert payload["items"][0]["commentary"]["text"] in body
+        if section in {"calendar", "free"}:
+            assert payload["items"][0]["facts"][0]["timezone"] == reported_zone
+            assert response.context["panels"][section]["items"][0]["facts"][0]["timezone"] == reported_zone
+    assert response.context["panels"]["calendar"]["items"][0]["facts"][0]["title"] == "Developer workshop"
+    assert response.context["panels"]["free"]["items"][0]["facts"][0]["title"] == "Timezone credits"
     assert "/accounts/login/" in body and 'method="post"' not in body
     assert PostSynthesisDemand.objects.count() == 0
     assert not any(

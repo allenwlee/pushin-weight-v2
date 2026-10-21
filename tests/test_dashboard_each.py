@@ -6,7 +6,8 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
 import pytest
-from django.db import connection
+from django.db import connection, transaction
+from django.db.models import QuerySet
 from django.test import Client, override_settings
 from django.test.utils import CaptureQueriesContext
 
@@ -119,6 +120,85 @@ class DashboardEachTests(PostgreSQLV22TestCase):
                 ("positive", "#3b82f6"),
             ],
         )
+
+    def test_post_type_route_plans_for_all_rows_and_restores_outer_transaction(self):
+        original_iterator = QuerySet.iterator
+        observed = []
+
+        def inspect_iterator(queryset, *args, **kwargs):
+            if queryset.model is PostBrand:
+                with connection.cursor() as cursor:
+                    cursor.execute("SHOW cursor_tuple_fraction")
+                    observed.append(float(cursor.fetchone()[0]))
+            yield from original_iterator(queryset, *args, **kwargs)
+
+        for days in (7, 30, 365):
+            with self.subTest(days=days), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT set_config('cursor_tuple_fraction', '0.35', true)")
+                observed.clear()
+                with patch.object(QuerySet, "iterator", inspect_iterator), patch(
+                    "monitor.views._dashboard_now", return_value=NOW
+                ):
+                    response = self.client.get(
+                        "/dashboard/each/chart/",
+                        {"brand": self.minimax.nickname, "tab": "post_types",
+                         "window": days, "locale": "en", "tz": "Asia/Tokyo"},
+                    )
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(observed)
+                self.assertTrue(all(value == 1.0 for value in observed), observed)
+                self.assertEqual(sum(response.json()["totals"]), 3)
+                self.assertEqual(sum(response.json()["series"]["other"]), 2)
+                self.assertEqual(sum(response.json()["series"]["__unclassified__"]), 1)
+                with connection.cursor() as cursor:
+                    cursor.execute("SHOW cursor_tuple_fraction")
+                    self.assertEqual(float(cursor.fetchone()[0]), 0.35)
+
+    def test_failed_post_type_route_restores_its_previous_cursor_plan(self):
+        observed = []
+
+        def failed_iterator(queryset, *args, **kwargs):
+            if queryset.model is PostBrand:
+                with connection.cursor() as cursor:
+                    cursor.execute("SHOW cursor_tuple_fraction")
+                    observed.append(float(cursor.fetchone()[0]))
+                raise RuntimeError("owned iterator failure")
+            yield from ()
+
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT set_config('cursor_tuple_fraction', '0.35', true)")
+            with patch.object(QuerySet, "iterator", failed_iterator), self.assertRaisesRegex(
+                RuntimeError, "owned iterator failure"
+            ):
+                self.client.get(
+                    "/dashboard/each/chart/",
+                    {"brand": self.minimax.nickname, "tab": "post_types", "window": 7},
+                )
+            self.assertEqual(observed, [1.0])
+            with connection.cursor() as cursor:
+                cursor.execute("SHOW cursor_tuple_fraction")
+                self.assertEqual(float(cursor.fetchone()[0]), 0.35)
+
+    def test_post_type_consumer_error_restores_plan_while_traceback_is_alive(self):
+        with transaction.atomic():
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT set_config('cursor_tuple_fraction', '0.35', true)")
+            with patch.object(
+                PostBrandSignal.objects, "filter", side_effect=RuntimeError("edge read failure")
+            ):
+                try:
+                    _each_chart_payload(
+                        self.minimax.nickname, "post_types", 7, "en", now=NOW
+                    )
+                except RuntimeError as error:
+                    self.assertEqual(str(error), "edge read failure")
+                    with connection.cursor() as cursor:
+                        cursor.execute("SHOW cursor_tuple_fraction")
+                        self.assertEqual(float(cursor.fetchone()[0]), 0.35)
+                else:
+                    self.fail("Expected the owned edge-reader failure")
 
     def test_deepseek_three_day_ranking_is_shared_by_other_models(self):
         for index, (kind, age) in enumerate((

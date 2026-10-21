@@ -13,6 +13,7 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.test import override_settings
 from playwright.sync_api import expect, sync_playwright
 
+from core.models import Event, Opportunity, TimeZone
 from tests.general_helpers import NOW, classified_post, saved_commentary
 from tests.ui_assurance.general import load_general_declaration, write_general_evidence
 
@@ -40,6 +41,44 @@ class GeneralBrowserTests(StaticLiveServerTestCase):
         return pw.chromium.launch(
             **({"executable_path": executable} if executable else {})
         )
+
+    def test_populated_calendar_and_free_cards_render_after_timezone_cutover(self):
+        TimeZone.objects.get_or_create(code="Asia/Tokyo")
+        Event.objects.create(
+            brand_id="qwen", source_post_id="6100", title="Timezone workshop",
+            organizer_name="Qwen", source_timezone_reference_id="Asia/Tokyo",
+            first_seen_at=NOW, last_seen_at=NOW, event_identity="browser-zone-event",
+        )
+        Opportunity.objects.create(
+            brand_id="qwen", source_post_id="6101", sponsor_name="Qwen",
+            opportunity_type="free_credits", action_type="apply", benefit_type="credits",
+            raw_payload={"source_timezone": "CST"},
+            first_seen_at=NOW, last_seen_at=NOW, opportunity_identity="browser-zone-offer",
+        )
+        with sync_playwright() as pw:
+            browser = self.browser(pw)
+            try:
+                page = browser.new_page(viewport={"width": 1440, "height": 900})
+                errors = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                for locale in ("en", "zh_hans", "ja"):
+                    response = page.goto(f"{self.live_server_url}/general/?lang={locale}")
+                    self.assertEqual(response.status, 200)
+                    for section, post_id, zone in (
+                        ("calendar", "6100", "Asia/Tokyo"),
+                        ("free", "6101", "CST"),
+                    ):
+                        card = page.locator(f'#{section} [data-post-id="{post_id}"]')
+                        expect(card).to_be_visible()
+                        self.assertGreater(card.bounding_box()["width"], 100)
+                        payload = page.request.get(
+                            f"{self.live_server_url}/general/feed/?section={section}&lang={locale}"
+                        )
+                        self.assertEqual(payload.status, 200)
+                        self.assertEqual(payload.json()["items"][0]["facts"][0]["timezone"], zone)
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
 
     def test_closed_weights_notice_preserves_the_independent_open_selection(self):
         with sync_playwright() as pw:
