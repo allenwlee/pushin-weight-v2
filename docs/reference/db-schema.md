@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21, candidate `3b7e729d` through `0120` on production PostgreSQL18.4, web deployment `dep-dbc45t95efls73bbustg`; the same candidate passed staging deployment `dep-dbc40iek1f9s73bo0m80`. Isolated migration rehearsals used PostgreSQL18.6.
+Last verified: 2026-10-21T18:51:27+09:00, product source `ab9b8fd7`, schema through `0122_remove_timezone_source_columns`. Table inventory and columns are checked against isolated PostgreSQL18.6. The production migration ledger at `7d4fec90` confirms the same migration boundary; this check does not claim a fresh audit of every production constraint.
 
-Scope: **173 core application tables**, **2318 physical table columns**, nine compatibility views and one native materialized view with five columns. Repository and verified staging/production migration boundary: `0120_merge_homepage_shared_vocabulary`. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys. The merge joins both applied histories and makes no schema or data change.
+Scope: **173 core application tables**, **2315 physical table columns**, nine compatibility views and one native materialized view with five columns. Repository and isolated migration boundary: `0122_remove_timezone_source_columns`. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -10,7 +10,7 @@ to jump directly to any table. Every inventory entry has a full column reference
 
 The schema is defined by [core/models.py](../../core/models.py) and the
 [ordered Django migrations](../../core/migrations/). This snapshot describes
-that repository schema, checked against Django models, migration state and the named isolated, staging and production databases. Other deployments require their own migration verification. Django’s own
+that repository schema, checked against Django models, migration state and the isolated database. Production migration-ledger verification is scoped above; other deployments require their own migration verification. Django’s own
 authentication, session, content-type, and migration-ledger tables are outside
 this **application-table** count. `DiscoveryRunBase` is an abstract model, not
 another table; its columns are included under both discovery-run tables.
@@ -461,9 +461,11 @@ No current offset, guessed geographic equivalent or generic unknown row is seede
 comes from the pinned registry seed; syntax alone is insufficient to register a
 zone. Existing date precision and exact source spelling remain the owning fact's
 responsibility. Metrics, events and opportunities have protected optional
-`source_timezone_id` references to this catalogue, beside their original
-reported timezone wording. Exact registered matches resolve; unknown wording
-stays unchanged with a NULL reference.
+`source_timezone_id` references to this catalogue. Event and opportunity reported
+wording remains in their owned `raw_payload` evidence. Exact registered matches
+resolve; unknown wording remains evidence with a NULL reference. Metric definitions
+use the reference and frozen definition snapshots; no separate timezone string
+column exists on `metrics`.
 
 [Back to table inventory](#table-inventory)
 
@@ -4048,7 +4050,6 @@ Model: [Event](../../core/models.py#L6512).
 | `start_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `datetime`, `day`, `month`, `year`, `unknown`. |
 | `end_value` | `varchar(64)` | Yes | Stored value. |
 | `end_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `datetime`, `day`, `month`, `year`, `unknown`. |
-| `source_timezone` | `varchar(64)` | Yes | Original reported timezone wording, including absent or unmatched values. |
 | `source_timezone_id` | `varchar(64)` | Yes | FK → [`time_zones`](#table-time_zones) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `source_timezone_reference`. Exact registered code or unresolved NULL. |
 | `source_schedule_text` | `text` | Yes | Stored value. |
 | `source_status` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `scheduled`, `live`, `completed`, `cancelled`, `postponed`, `unknown`. |
@@ -4070,7 +4071,6 @@ Model: [Event](../../core/models.py#L6512).
 
 **Named constraints:**
 
-- `ck_events_source_timezone_ref`: `CHECK (source_timezone_id IS NULL OR (source_timezone IS NOT NULL AND source_timezone_id = source_timezone))`.
 - `events_source_timezone_id_e372622e_fk_time_zones_code`: deferred FK from `source_timezone_id` to `time_zones(code)`.
 
 - `ck_events_one_organization`: `CONSTRAINT "ck_events_one_organization" CHECK ((("brand_id" IS NOT NULL AND "brand_discovery_candidate_id" IS NULL) OR ("brand_id" IS NULL AND "brand_discovery_candidate_id" IS NOT NULL)))`.
@@ -4083,13 +4083,12 @@ Model: [Event](../../core/models.py#L6512).
 - `ck_events_end_precision`: `CONSTRAINT "ck_events_end_precision" CHECK ((("end_precision" = 'unknown' AND "end_value" IS NULL) OR ("end_precision" = 'day' AND "end_value"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') OR ("end_precision" = 'month' AND "end_value"::text ~ '^[0-9]{4}-[0-9]{2}$') OR ("end_precision" = 'year' AND "end_value"::text ~ '^[0-9]{4}$') OR ("end_precision" = 'datetime' AND "end_value"::text ~  E'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?(Z\|[+-][0-9]{2}:[0-9]{2})$')))`.
 - `ck_events_extraction_conf`: `CONSTRAINT "ck_events_extraction_conf" CHECK (("extraction_confidence" IS NULL OR ("extraction_confidence" >= 0.0 AND "extraction_confidence" <= 1.0)))`.
 
-`sync_events_source_timezone` invokes the shared
-`sync_intelligence_source_timezone` PostgreSQL function before inserts/updates.
-It resolves only exact catalogue codes, maintains the reference when an old
-writer changes the wording, and rejects a contradictory supplied reference.
-NULL/empty strings and ambiguous `UTC+8`/`CST` remain unresolved with their original
-wording. The reference does not change date precision, evidence/content hashes,
-source payloads, observation timestamps or the explicit reader document.
+Application writers resolve exact registered timezone codes to the protected
+reference. Original reported wording remains in `raw_payload`; readers preserve
+explicit null evidence and unmatched wording, falling back to the reference only
+when the evidence has no timezone key. No timezone synchronization trigger or
+legacy string column is present. Date precision, source evidence, content hashes
+and observation timestamps keep their existing meaning.
 
 [Back to table inventory](#table-inventory)
 
@@ -4168,7 +4167,6 @@ Model: [Opportunity](../../core/models.py#L6755).
 | `open_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `datetime`, `day`, `month`, `year`, `unknown`. |
 | `close_value` | `varchar(64)` | Yes | Stored value. |
 | `close_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `datetime`, `day`, `month`, `year`, `unknown`. |
-| `source_timezone` | `varchar(64)` | Yes | Original reported timezone wording, including absent or unmatched values. |
 | `source_timezone_id` | `varchar(64)` | Yes | FK → [`time_zones`](#table-time_zones) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `source_timezone_reference`. Exact registered code or unresolved NULL. |
 | `source_availability_text` | `text` | Yes | Stored value. |
 | `source_status` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `upcoming`, `open`, `closed`, `cancelled`, `unknown`. |
@@ -4190,7 +4188,6 @@ Model: [Opportunity](../../core/models.py#L6755).
 
 **Named constraints:**
 
-- `ck_opportunities_source_timezone_ref`: `CHECK (source_timezone_id IS NULL OR (source_timezone IS NOT NULL AND source_timezone_id = source_timezone))`.
 - `opportunities_source_timezone_id_1eaf0cd8_fk_time_zones_code`: deferred FK from `source_timezone_id` to `time_zones(code)`.
 
 - `ck_opportunities_one_organization`: `CONSTRAINT "ck_opportunities_one_organization" CHECK ((("brand_id" IS NOT NULL AND "brand_discovery_candidate_id" IS NULL) OR ("brand_id" IS NULL AND "brand_discovery_candidate_id" IS NOT NULL)))`.
@@ -4203,13 +4200,12 @@ Model: [Opportunity](../../core/models.py#L6755).
 - `ck_opportunities_close_precision`: `CONSTRAINT "ck_opportunities_close_precision" CHECK ((("close_precision" = 'unknown' AND "close_value" IS NULL) OR ("close_precision" = 'day' AND "close_value"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') OR ("close_precision" = 'month' AND "close_value"::text ~ '^[0-9]{4}-[0-9]{2}$') OR ("close_precision" = 'year' AND "close_value"::text ~ '^[0-9]{4}$') OR ("close_precision" = 'datetime' AND "close_value"::text ~  E'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?(Z\|[+-][0-9]{2}:[0-9]{2})$')))`.
 - `ck_opportunities_extraction_conf`: `CONSTRAINT "ck_opportunities_extraction_conf" CHECK (("extraction_confidence" IS NULL OR ("extraction_confidence" >= 0.0 AND "extraction_confidence" <= 1.0)))`.
 
-`sync_opportunities_source_timezone` invokes the shared
-`sync_intelligence_source_timezone` PostgreSQL function before inserts/updates.
-It resolves only exact catalogue codes, maintains the reference when an old
-writer changes the wording, and rejects a contradictory supplied reference.
-NULL/empty strings and ambiguous `UTC+8`/`CST` remain unresolved with their original
-wording. The reference does not change date precision, evidence/content hashes,
-source payloads, observation timestamps or the explicit reader document.
+Application writers resolve exact registered timezone codes to the protected
+reference. Original reported wording remains in `raw_payload`; readers preserve
+explicit null evidence and unmatched wording, falling back to the reference only
+when the evidence has no timezone key. No timezone synchronization trigger or
+legacy string column is present. Date precision, source evidence, content hashes
+and observation timestamps keep their existing meaning.
 
 [Back to table inventory](#table-inventory)
 
@@ -7709,7 +7705,6 @@ Model: [SourceMetric](../../core/models.py#L7931).
 | `window_unit` | `varchar(24)` | Yes | Original window-unit code; `day`/`second` when required by the checked window shape, otherwise NULL. |
 | `window_duration_basis` | `varchar(16)` | No | Django default: `'none'` (not an assumed SQL default). |
 | `window_alignment` | `varchar(32)` | Yes | Stored value. |
-| `source_timezone` | `varchar(64)` | No | Django default: `'unknown'` (not an assumed SQL default). |
 | `required` | `boolean` | No | Django default: `True` (not an assumed SQL default). |
 | `definition_metadata` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
 | `created_at` | `timestamp with time zone` | No | Django default: `now` (not an assumed SQL default). |
@@ -7731,7 +7726,6 @@ Model: [SourceMetric](../../core/models.py#L7931).
 
 - `uq_source_metric_version`: `CONSTRAINT "uq_source_metric_version" UNIQUE ("source_id", "metric_key", "version")`.
 - `ck_metric_version`: `CONSTRAINT "ck_metric_version" CHECK ("version" > 0)`.
-- `ck_metric_source_timezone_ref`: `CHECK (source_timezone_id IS NULL OR source_timezone_id = source_timezone)`.
 - `metrics_source_timezone_id_183a4919_fk_time_zones_code`: deferred FK from `source_timezone_id` to `time_zones(code)`.
 - `ck_metric_unit_ref`: `CHECK (unit_id IS NULL OR unit_id = unit)`.
 - `ck_metric_window_unit_ref`: `CHECK (window_unit_id IS NULL OR (window_unit IS NOT NULL AND window_unit_id = window_unit))`.
@@ -7742,12 +7736,11 @@ Model: [SourceMetric](../../core/models.py#L7931).
 - `ck_metric_value_role`: `CONSTRAINT "ck_metric_value_role" CHECK ("value_role" IN ('value', 'lower_bound', 'upper_bound'))`.
 - `ck_metric_kind_window`: `CONSTRAINT "ck_metric_kind_window" CHECK ((("measurement_kind" = 'state' AND "window_alignment" IS NULL AND "window_amount" IS NULL AND "window_duration_basis" = 'none' AND "window_mode" = 'none' AND "window_unit" IS NULL) OR ("measurement_kind" = 'flow' AND "window_alignment" IS NULL AND "window_amount" IS NULL AND "window_duration_basis" = 'none' AND "window_mode" = 'since_origin' AND "window_unit" IS NULL) OR ("measurement_kind" = 'flow' AND "window_amount" > 0 AND "window_amount" IS NOT NULL AND "window_amount" < 1000000000 AND "window_duration_basis" IN ('calendar', 'fixed', 'unknown') AND "window_mode" IN ('rolling', 'calendar', 'fixed') AND "window_unit" IN ('day', 'second') AND "window_unit" IS NOT NULL AND (("window_alignment" IN ('source_local_midnight', 'provider_defined') AND "window_alignment" IS NOT NULL AND "window_mode" = 'calendar') OR ("window_alignment" IS NULL AND NOT ("window_mode" = 'calendar'))))))`.
 
-The `sync_metric_source_timezone` PostgreSQL trigger keeps the optional reference
-consistent with exact reported wording for old and new writers. A registered IANA
-zone or Link alias resolves to its own catalogue code. `unknown`, `CST` and absent
-codes remain unresolved; no UTC default or invented lookup record is created.
-Changing the raw timezone through an old writer updates or clears the reference.
-A supplied contradictory FK is rejected. The compatibility text remains available.
+Application writers resolve registered IANA zones and Link aliases to the
+optional `source_timezone_reference`. Unknown, ambiguous or absent codes remain
+unresolved; no UTC default or invented catalogue record is created. Frozen
+definition snapshots retain their own reported timezone evidence. No timezone
+synchronization trigger or separate timezone string column is present.
 
 The `sync_metric_units` PostgreSQL trigger maintains both unit references for
 ORM, raw SQL and older writers. Each reference resolves only its own exact

@@ -214,3 +214,18 @@ declaration is refreshed to worktree-sha256:7d9179f41508d7c12921ddb9037ff1baaea5
    Inspect bounded new logs. Do not infer web performance from auxiliary probes.
 6. Archive receipts on fuchitalee, release the shared claim, stop only owned local
    resources, and apply the generated guarded worktree cleanup contract.
+
+### Hosted schema-reference correction
+
+The first hosted homepage suite executes211requiredPGtests but fails its existing
+all-table documentation oracle: db-schema.md still lists source_timezone on
+events, opportunities and metrics after0122. This is pre-existing schema-reference
+drift, not a runtime-test failure. Correct only those removed columns, constraints,
+trigger descriptions, the three-column total and verified migration boundary.
+Preserve the oracle and all product source. Peer schema worktree has no edits to
+this reference. Reuse ab9b8fd7 product verification because source, assets, tests,
+fixtures and dependencies are unchanged; the final release receipt records the
+documentation-only descendant and exact live deployment identity. Rerun the
+existing all-table oracle and hosted checks; do not weaken or waive them.
+
+Existing all-table oracle now passes1/1requiredPostgreSQL,0skips/errors. Verified173concreteapplicationtables/2315columns. Product diff fromab9b8fd7 is empty; only this plan and db-schema.md change. Root README links remain valid and unchanged.
