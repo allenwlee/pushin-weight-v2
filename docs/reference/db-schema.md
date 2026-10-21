@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21 13:14 JST, candidate `48537a28` through `0120` on isolated PostgreSQL18.6 and staging PostgreSQL18.4, deployment `dep-dbc3mc6q1p3s73biko90`.
+Last verified: 2026-10-21, candidate `3b7e729d` through `0120` on production PostgreSQL18.4, web deployment `dep-dbc45t95efls73bbustg`; the same candidate passed staging deployment `dep-dbc40iek1f9s73bo0m80`. Isolated migration rehearsals used PostgreSQL18.6.
 
-Scope: **173 core application tables**, **2318 physical table columns**, nine compatibility views and one native materialized view with five columns. Repository and verified staging migration boundary: `0120_merge_homepage_shared_vocabulary`. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys. The merge joins both applied histories and makes no schema or data change.
+Scope: **173 core application tables**, **2318 physical table columns**, nine compatibility views and one native materialized view with five columns. Repository and verified staging/production migration boundary: `0120_merge_homepage_shared_vocabulary`. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys. The merge joins both applied histories and makes no schema or data change.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -10,8 +10,7 @@ to jump directly to any table. Every inventory entry has a full column reference
 
 The schema is defined by [core/models.py](../../core/models.py) and the
 [ordered Django migrations](../../core/migrations/). This snapshot describes
-that repository schema, checked against Django models, migration state and an isolated PostgreSQL database; it does not
-assert that a particular deployment has applied every migration. Django’s own
+that repository schema, checked against Django models, migration state and the named isolated, staging and production databases. Other deployments require their own migration verification. Django’s own
 authentication, session, content-type, and migration-ledger tables are outside
 this **application-table** count. `DiscoveryRunBase` is an abstract model, not
 another table; its columns are included under both discovery-run tables.

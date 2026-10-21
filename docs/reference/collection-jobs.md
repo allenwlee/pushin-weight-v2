@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-21 13:14 JST, candidate `48537a28` through migration `0120_merge_homepage_shared_vocabulary` on isolated PostgreSQL18.6 and staging PostgreSQL18.4, deployment `dep-dbc3mc6q1p3s73biko90`.
+Last verified: 2026-10-21, candidate `3b7e729d` through migration `0120_merge_homepage_shared_vocabulary` on production PostgreSQL18.4, web deployment `dep-dbc45t95efls73bbustg`; the same candidate passed staging deployment `dep-dbc40iek1f9s73bo0m80`. Isolated migration rehearsals used PostgreSQL18.6. Production authority, budget, legacy-job scope and frozen metric-definition readers passed provider-free checks.
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
