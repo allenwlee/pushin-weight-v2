@@ -92,7 +92,8 @@ def test_direct_real_callers_publish_and_reuse_without_file_requests(native):
 
 
 @pytest.mark.parametrize("path", ["live", "backfill"])
-def test_live_and_backfill_classifier_wire_budget_covers_multibrand_packets(native, path):
+@pytest.mark.parametrize("extra_brace", [False, True])
+def test_live_and_backfill_classifier_wire_budget_covers_multibrand_packets(native, path, extra_brace):
     """The real callers must not inherit the old, truncating 4,096-token default."""
     from django.db import transaction
 
@@ -110,7 +111,10 @@ def test_live_and_backfill_classifier_wire_budget_covers_multibrand_packets(nati
             if body["model"] == DEEPSEEK_0731_MODEL:
                 with self.lock:
                     self.classifier_requests.append(body)
-            return super().transport(body, timeout)
+            reply = super().transport(body, timeout)
+            if extra_brace and body["model"] == DEEPSEEK_0731_MODEL:
+                reply["choices"][0]["message"]["content"] += "}"
+            return reply
 
     job, cfg, delegates, _ = native
     identifiers = [f"budget-{i:02}" for i in range(20 if path == "live" else 18)]
@@ -161,8 +165,8 @@ def test_live_and_backfill_classifier_wire_budget_covers_multibrand_packets(nati
         payload = json.loads(next(m["content"] for m in body["messages"] if m["role"] == "user"))
         assert len(payload["cases"]) == 20
         assert sum(len(case["brand_decision_slots"]) for case in payload["cases"].values()) == 37
-        assert body["max_tokens"] == 16_384, (
-            f"{path} still sends the 4,096-token classifier cap that truncated a real packet"
+        assert body["max_tokens"] == 65_536, (
+            f"{path} must send the selected 65,536-token budget for both classifier roles"
         )
 
 
