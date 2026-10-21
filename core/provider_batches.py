@@ -31,7 +31,9 @@ from x_monitor.provider_telemetry import normalize_usage
 
 
 class BatchAdmissionError(RuntimeError):
-    pass
+    def __init__(self, message, *, member_ids=()):
+        super().__init__(message)
+        self.member_ids = tuple(sorted(set(member_ids)))
 
 
 class StaleBatchClaim(RuntimeError):
@@ -194,7 +196,31 @@ def record_post_membership(run, scope, post_ids, *, observed_at=None):
     ).update(source_collection_job_id=run.job_id)
 
 
-def own_historical_posts(job, post_ids):
+def historical_ownership_conflicts(job, states):
+    """Derive per-member blockers from durable claims and outstanding paid work."""
+    now = timezone.now()
+    pending = {
+        s.post_id: s for s in states
+        if (s.translation_status, s.classification_status) != ("succeeded", "succeeded")
+    }
+    conflicts = {
+        p: "historical_state_missing_or_claimed" for p, s in pending.items()
+        if s.claim_expires_at and s.claim_expires_at > now
+    }
+    foreign = {p for p, s in pending.items()
+               if s.source_collection_job_id not in {None, job.pk}}
+    if foreign:
+        outstanding = OriginalContentCall.objects.filter(
+            member_post_ids__overlap=sorted(foreign), import_state="pending",
+            state__in=["reserved", "sent", "ambiguous", "completed"],
+        ).values_list("member_post_ids", flat=True)
+        for members in outstanding:
+            for p in foreign.intersection(members):
+                conflicts.setdefault(p, "historical_state_owned_elsewhere")
+    return conflicts
+
+
+def own_historical_posts(job, post_ids, *, defer_conflicts=False):
     ids = sorted({str(value) for value in post_ids})
     if not 0 < len(ids) <= 100:
         raise BatchAdmissionError("historical_ownership_page_limit")
@@ -209,24 +235,21 @@ def own_historical_posts(job, post_ids):
         if members != set(ids):
             raise BatchAdmissionError("historical_membership_missing")
         states = list(
-            PostEnrichmentState.objects.select_for_update().filter(post_id__in=ids)
+            PostEnrichmentState.objects.select_for_update().filter(post_id__in=ids).order_by("pk")
         )
-        now = timezone.now()
-        if len(states) != len(ids) or any(
-            s.claim_expires_at and s.claim_expires_at > now for s in states
-        ):
+        list(Post.objects.select_for_update().filter(pk__in=ids).order_by("pk"))
+        if len(states) != len(ids):
             raise BatchAdmissionError("historical_state_missing_or_claimed")
-        if any(s.source_collection_job_id not in {None, job.pk} for s in states):
-            outstanding = OriginalContentCall.objects.filter(
-                member_post_ids__overlap=ids,
-                import_state="pending",
-                state__in=["reserved", "sent", "ambiguous", "completed"],
-            )
-            if outstanding.exists():
-                raise BatchAdmissionError("historical_state_owned_elsewhere")
-        PostEnrichmentState.objects.filter(post_id__in=ids).update(
+        conflicts = historical_ownership_conflicts(job, states)
+        if conflicts and not defer_conflicts:
+            raise BatchAdmissionError(next(iter(conflicts.values())))
+        eligible = [s.post_id for s in states if s.post_id not in conflicts
+                    and (s.translation_status, s.classification_status)
+                    != ("succeeded", "succeeded")]
+        PostEnrichmentState.objects.filter(post_id__in=eligible).update(
             source_collection_job=job
         )
+        return conflicts
 
 
 @dataclass(frozen=True)
@@ -363,6 +386,10 @@ def reserve_requests(claim, requests):
         )
         if len(all_members) > 2000:
             raise BatchAdmissionError("batch_post_page_limit")
+        # Shared enrichment publication locks states before Posts. Ownership
+        # and paid admission use that same order across overlapping campaigns.
+        states = {s.post_id: s for s in PostEnrichmentState.objects.select_for_update()
+                  .filter(post_id__in=all_members).order_by("pk")}
         # Locks also serialize overlapping campaign reservations, rather than
         # relying on an expiring per-Post worker claim for paid deduplication.
         posts = list(
@@ -379,10 +406,21 @@ def reserve_requests(claim, requests):
         )
         if len(posts) != len(all_members) or members != set(all_members):
             raise BatchAdmissionError("batch_membership_missing")
-        if PostEnrichmentState.objects.filter(
-            post_id__in=all_members, source_collection_job=job
-        ).count() != len(all_members):
-            raise BatchAdmissionError("batch_historical_ownership_missing")
+        for request in requests:
+            for post_id in request["context"]["post_ids"]:
+                state = states.get(str(post_id))
+                if state is not None and state.source_collection_job_id == job.pk:
+                    continue
+                # Base ownership records translation/classification execution.
+                # A separate targeted operation may use a completed shared
+                # Post without rewriting that earlier campaign's ownership.
+                if (
+                    state is None
+                    or request["context"].get("operation") != "post_targeted_extraction"
+                    or (state.translation_status, state.classification_status) != ("succeeded", "succeeded")
+                    or (state.claim_expires_at and state.claim_expires_at > timezone.now())
+                ):
+                    raise BatchAdmissionError("batch_historical_ownership_missing")
         calls = OriginalContentCall.objects.filter(
             provider_batch__source_collection_job=job
         )
@@ -409,7 +447,7 @@ def reserve_requests(claim, requests):
                 .exists()
             ):
                 raise BatchAdmissionError(
-                    "model_request_already_outstanding_or_complete"
+                    "model_request_already_outstanding_or_complete", member_ids=ids,
                 )
             pending = OriginalContentCall.objects.filter(
                 model=batch.model,
@@ -427,20 +465,19 @@ def reserve_requests(claim, requests):
                     continue
                 overlap = set(ids) & set(previous.member_post_ids)
                 if context["stage"] == "classification":
-                    same = any(
-                        old.get("input_fingerprints", {}).get(p)
+                    blocked = {
+                        p for p in overlap if old.get("input_fingerprints", {}).get(p)
                         == context.get("input_fingerprints", {}).get(p)
-                        for p in overlap
-                    )
+                    }
                 else:
-                    same = old.get("source_fingerprint") == context.get(
+                    blocked = overlap if old.get("source_fingerprint") == context.get(
                         "source_fingerprint"
-                    )
-                if same:
-                    raise BatchAdmissionError("model_member_work_already_outstanding")
+                    ) else set()
+                if blocked:
+                    raise BatchAdmissionError("model_member_work_already_outstanding", member_ids=blocked)
             attempt = calls.filter(request_hash=logical_hash).count() + 1
             if attempt > int(batch.policy["max_attempts"]):
-                raise BatchAdmissionError("model_attempt_allowance_exhausted")
+                raise BatchAdmissionError("model_attempt_allowance_exhausted", member_ids=ids)
             usd, input_bound, output_bound = conservative_reservation(
                 body, batch.policy["prices"]
             )

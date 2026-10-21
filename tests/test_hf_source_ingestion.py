@@ -1,5 +1,7 @@
 """HF acquisition and saved replay reach the shared numeric writer without HTTP replay."""
 
+from datetime import timedelta
+
 import httpx
 import pytest
 
@@ -260,9 +262,9 @@ def test_fresh_run_refreshes_unchanged_sha_and_observes_old_created_new_repo():
     ).order_by("observation__observed_at")
     assert [int(v.integer_value) for v in downloads] == [0, 1, 1]
     assert all(
-        v.temporal_status == "unknown"
-        and v.window_start_at is None
-        and v.window_end_at is None
+        v.temporal_status == "exact"
+        and v.window_start_at == v.observation.observed_at - timedelta(days=30)
+        and v.window_end_at == v.observation.observed_at
         for v in downloads
     )
 
@@ -379,4 +381,7 @@ def test_supported_optional_account_counts_and_trending_share_writer_and_profile
         ).count()
         == 2
     )
-    assert all(v.temporal_status == "unknown" and v.as_of_at is None for v in values)
+    assert all(
+        v.temporal_status == "exact" and v.as_of_at == v.observation.observed_at
+        for v in values
+    )

@@ -109,16 +109,15 @@ def _prepare(job, post, cfg, delegate):
     cached = {
         c.request_hash: c
         for c in OriginalContentCall.objects.filter(
-            provider_batch__source_collection_job=job,
             member_post_ids__contains=[str(post.pk)],
             provenance__context__operation=OPERATION,
             state="completed",
             import_state__in=["pending", "applied"],
         )
+        if c.provenance.get("post_snapshots", {}).get(str(post.pk)) == post_snapshot(post)
     }
     outstanding = set(
         OriginalContentCall.objects.filter(
-            provider_batch__source_collection_job=job,
             member_post_ids__contains=[str(post.pk)],
             provenance__context__operation=OPERATION,
             state__in=["reserved", "sent", "ambiguous"],
@@ -196,7 +195,9 @@ def _prepare(job, post, cfg, delegate):
             transaction.set_rollback(True)
         else:
             applied = not result.failed_roles and not result.deferred_roles
-            OriginalContentCall.objects.filter(pk__in=consumed).update(
+            OriginalContentCall.objects.filter(
+                pk__in=consumed, provider_batch__source_collection_job=job,
+            ).update(
                 import_state="applied" if applied else "error",
                 import_evidence={
                     "validation": "passed"
@@ -248,6 +249,7 @@ def advance_targeted(
             client_factory=client_factory,
         )
     prepared, pending, scanned, after = [], 0, 0, ""
+    deferred = {}
     if defer_failures:
         deferred = deferred_enrichment_work(
             job,
@@ -272,7 +274,12 @@ def advance_targeted(
             scanned += 1
             if incomplete_roles(post, cfg):
                 pending += 1
-                prepared.extend(_prepare(job, post, cfg, delegate))
+                try:
+                    prepared.extend(_prepare(job, post, cfg, delegate))
+                except ValueError as exc:
+                    if not defer_failures or str(exc) != "targeted_extraction_canonical_publication_failed":
+                        raise
+                    deferred[post.pk] = "canonical_targeted_validation_failed"
                 if len(prepared) >= direct_concurrency * 2:
                     break
         if len(prepared) >= direct_concurrency * 2:
@@ -284,6 +291,7 @@ def advance_targeted(
         cfg,
         transport="direct",
         allow_drained_ambiguous=defer_failures,
+        deferred=deferred if defer_failures else None,
     ):
         advance_direct(
             identifier,

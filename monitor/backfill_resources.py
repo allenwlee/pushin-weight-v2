@@ -29,6 +29,7 @@ class BackfillBudget:
         self._llm_requests = 0
         self._api_responses: list[dict[str, Any]] = []
         self._model_responses: list[dict[str, Any]] = []
+        self._writer_identity: tuple[str, int, int] | None = None
 
     @property
     def remaining_seconds(self) -> float:
@@ -51,6 +52,7 @@ class BackfillBudget:
         return worst_case_seconds <= self.remaining_seconds
 
     def claim_api_request(self, timeout_seconds: float = 0) -> None:
+        self._yield_to_live_writer()
         with self._lock:
             if self.remaining_seconds <= timeout_seconds:
                 raise BackfillBudgetExhausted("backfill API deadline exhausted")
@@ -59,12 +61,26 @@ class BackfillBudget:
             self._api_requests += 1
 
     def claim_llm_request(self, timeout_seconds: float = 0) -> None:
+        self._yield_to_live_writer()
         with self._lock:
             if self.remaining_seconds <= timeout_seconds:
                 raise BackfillBudgetExhausted("backfill model deadline exhausted")
             if self._llm_requests >= self._llm_limit:
                 raise BackfillBudgetExhausted("backfill model request cap exhausted")
             self._llm_requests += 1
+
+    def _yield_to_live_writer(self) -> None:
+        from monitor.run_lock import (
+            backfill_yield_requested,
+            background_writer_identity,
+        )
+
+        # Carry the owning lease into provider worker threads, whose ContextVars
+        # do not inherit the caller's context. The shared budget precedes HTTP.
+        if self._writer_identity is None:
+            self._writer_identity = background_writer_identity()
+        if self._writer_identity is not None and backfill_yield_requested(self._writer_identity):
+            raise BackfillBudgetExhausted("backfill yielding to queued live harvest")
 
     def record_api_response(self, response: dict[str, Any]) -> None:
         with self._lock:

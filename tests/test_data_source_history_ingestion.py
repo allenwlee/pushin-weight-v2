@@ -1,7 +1,7 @@
 """Publication campaigns automatically project typed values from durable evidence."""
 
 import copy
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import patch
 
 import httpx
@@ -834,12 +834,23 @@ def test_sparse_hf_archive_acquisition_automatically_projects_without_interpolat
         MetricValue.objects.filter(source_metric__metric_key="likes").values_list(
             "as_of_date", flat=True
         )
-    ) == {datetime(2026, 9, 2).date(), datetime(2026, 9, 9).date()}
-    assert set(
-        MetricValue.objects.filter(source_metric__metric_key="downloads").values_list(
-            "temporal_status", flat=True
-        )
-    ) == {"unknown"}
+    ) == {date(2026, 9, 2), date(2026, 9, 9)}
+    downloads = list(
+        MetricValue.objects.filter(source_metric__metric_key="downloads")
+    )
+    expected_ends = {
+        date(2026, 9, 2): datetime(2026, 9, 3, tzinfo=UTC),
+        date(2026, 9, 9): datetime(2026, 9, 10, tzinfo=UTC),
+    }
+    assert len(downloads) == 4
+    assert {value.period_label_date for value in downloads} == set(expected_ends)
+    for value in downloads:
+        assert value.temporal_status == "date_only"
+        assert value.window_end_at == expected_ends[value.period_label_date]
+        assert value.window_start_at == value.window_end_at - timedelta(days=30)
+        assert value.window_range.lower == value.window_start_at
+        assert value.window_range.upper == value.window_end_at
+        assert value.window_range.lower_inc and not value.window_range.upper_inc
 
 
 def test_existing_completed_or_day_reuses_original_contract_and_only_acquires_gap():

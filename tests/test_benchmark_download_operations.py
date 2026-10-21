@@ -16,12 +16,14 @@ def test_health_separates_last_attempt_success_and_effective_time():
 
     _, spec = setup_spec()
     contract = configure_collection(spec)
+    captured = timezone.now() - timedelta(days=10)
     payload = {
         "status": "ok",
         "rows": [
             {
                 "repo_id": "lab/Model",
                 "status": "ok",
+                "observed_at": captured.isoformat(),
                 "raw": {"downloads": 10, "downloadsAllTime": 50},
             }
         ],
@@ -34,8 +36,14 @@ def test_health_separates_last_attempt_success_and_effective_time():
     assert result["last_attempt"]["run_id"] == str(failed.pk)
     assert result["last_success"]["run_id"] == str(successful.pk)
     assert result["retrieval_freshness"] == "stale"
-    assert result["latest_effective_date"] is None
-    assert result["effective_freshness"] == "unknown"
+    assert result["latest_effective_date"] == captured.date().isoformat()
+    assert result["effective_freshness"] == "stale"
+    observation = successful.observations.get()
+    assert observation.observed_at == captured
+    assert (
+        observation.source_metadata["reported_time"]["metrics"]["downloads"]["basis"]
+        == "original_capture_proxy"
+    )
     assert result["scheduling_enabled"] is False
 
 
@@ -141,7 +149,9 @@ def test_daily_hf_schedule_dispatches_at_utc_slot_once(now, previous, due, setti
             "monitor.management.commands.collect_benchmark_due.timezone.now",
             return_value=datetime.fromisoformat(now),
         ),
-        patch("monitor.management.commands.collect_benchmark_due.call_command") as collect,
+        patch(
+            "monitor.management.commands.collect_benchmark_due.call_command"
+        ) as collect,
     ):
         call_command(
             "collect_benchmark_due",
@@ -181,11 +191,18 @@ def test_daily_slot_batch_is_stable_and_health_exposes_schedule():
                 "monitor.management.commands.collect_benchmark_due.timezone.now",
                 return_value=datetime(2026, 10, 9, hour, tzinfo=UTC),
             ),
-            patch("monitor.management.commands.collect_benchmark_due.call_command") as collect,
-            patch("monitor.management.commands.collect_benchmark_due.settings.BENCHMARK_COLLECTION_ENABLED", True),
+            patch(
+                "monitor.management.commands.collect_benchmark_due.call_command"
+            ) as collect,
+            patch(
+                "monitor.management.commands.collect_benchmark_due.settings.BENCHMARK_COLLECTION_ENABLED",
+                True,
+            ),
         ):
             call_command(
-                "collect_benchmark_due", contract=str(contract.pk), apply=True,
+                "collect_benchmark_due",
+                contract=str(contract.pk),
+                apply=True,
                 stdout=StringIO(),
             )
         batches.append(collect.call_args.kwargs["batch_id"])
@@ -245,7 +262,9 @@ def test_daily_hf_real_command_persists_once_without_provider_calls(settings):
             ),
         ):
             call_command(
-                "collect_benchmark_due", contract=str(contract.pk), apply=True,
+                "collect_benchmark_due",
+                contract=str(contract.pk),
+                apply=True,
                 stdout=StringIO(),
             )
             if hour == 10:
@@ -274,7 +293,9 @@ def test_hf_daily_override_preserves_other_provider_intervals(settings):
         ("opencode", "tokens", 3600),
     ):
         spec["source_configuration"][source] = {
-            "metrics": [metric], "poll_seconds": interval, "scheduling_enabled": True,
+            "metrics": [metric],
+            "poll_seconds": interval,
+            "scheduling_enabled": True,
         }
     contract = configure_collection(spec)
     DataSource.objects.filter(pk__in=spec["source_configuration"]).update(enabled=True)
@@ -299,10 +320,14 @@ def test_hf_daily_override_preserves_other_provider_intervals(settings):
             "monitor.management.commands.collect_benchmark_due.timezone.now",
             return_value=datetime(2026, 10, 9, 10, tzinfo=UTC),
         ),
-        patch("monitor.management.commands.collect_benchmark_due.call_command") as collect,
+        patch(
+            "monitor.management.commands.collect_benchmark_due.call_command"
+        ) as collect,
     ):
         call_command(
-            "collect_benchmark_due", contract=str(contract.pk), apply=True,
+            "collect_benchmark_due",
+            contract=str(contract.pk),
+            apply=True,
             stdout=StringIO(),
         )
     calls = {call.kwargs["source"]: call.kwargs for call in collect.call_args_list}

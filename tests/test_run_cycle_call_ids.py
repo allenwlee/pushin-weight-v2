@@ -112,6 +112,33 @@ def command_runtime(monkeypatch):
     return captured
 
 
+def test_scheduled_wait_threads_original_start_to_actual_runner(command_runtime, monkeypatch):
+    from datetime import UTC, datetime
+
+    original = datetime(2026, 10, 21, 1, 15, 20, tzinfo=UTC)
+    captured = {}
+
+    class Clock:
+        @staticmethod
+        def now(tz):
+            assert tz is UTC
+            return original
+
+    @contextmanager
+    def delayed_lock(**kwargs):
+        captured.update(kwargs)
+        yield SimpleNamespace(acquired=True, contention=None, waited_seconds=75)
+
+    monkeypatch.setattr("monitor.management.commands.run_cycle.datetime", Clock)
+    monkeypatch.setattr("monitor.management.commands.run_cycle.time.monotonic", lambda: 100.0)
+    monkeypatch.setattr("monitor.run_lock.harvest_writer_lock", delayed_lock)
+    call_command("run_cycle", "--json", scheduled=True, stdout=StringIO(), stderr=StringIO())
+    assert captured["wait_for_backfill_seconds"] == 120
+    kwargs = command_runtime["runner_kwargs"]
+    assert kwargs["_collection_window_end"] == original
+    assert kwargs["_cycle_started_monotonic"] == 100.0
+
+
 def test_manual_call_ids_reach_real_command_caller_and_narrow_execution(
     command_runtime,
 ):

@@ -96,6 +96,56 @@ def test_structured_extraction_uses_paid_ledger_and_shared_publisher(accepted, n
     assert provider.sent == 2
 
 
+@pytest.mark.parametrize("saved_targeted_reply", [False, True])
+def test_inherited_base_completion_can_extract_without_reassigning_base_ownership(
+    accepted, native, saved_targeted_reply,
+):
+    from core.models import PostEnrichmentState
+    from tests.test_backfill_independent_progress import _aggregate, _new_campaign
+
+    ids, cfg = accepted
+    original_owner = PostEnrichmentState.objects.get(pk=ids[0]).source_collection_job_id
+    campaign = _new_campaign(native)
+    base_provider = DirectProvider()
+    for turn in range(8):
+        base = _aggregate(campaign, base_provider, initial=turn == 0)
+        if base["status"] == "completed":
+            break
+    assert base["status"] == "completed"
+    assert PostEnrichmentState.objects.get(pk=ids[0]).source_collection_job_id == original_owner
+    # Add the targeted requirement after the base contract has been checked;
+    # its fixture signal is intentionally outside the base classifier reply.
+    cfg.targeted_extraction.enabled = True
+    PostBrandSignal.objects.create(
+        post_id=ids[0], brand_id="qwen", post_type_id="events", sentiment_id="neutral",
+    )
+    if saved_targeted_reply:
+        old_provider = ExtractionProvider()
+        for _ in range(4):
+            old = advance_targeted(
+                native[0].pk, cfg=cfg, api_key="test", delegate=native[2]["classification"],
+                client_factory=old_provider.factory,
+            )
+            if old["status"] == "completed":
+                break
+        assert old["status"] == "completed" and old_provider.sent == 1
+        TargetedExtractionState.objects.filter(post_id=ids[0]).delete()
+    original_calls = list(OriginalContentCall.objects.order_by("pk").values())
+    provider = ExtractionProvider()
+    for _ in range(4):
+        result = advance_targeted(
+            campaign[0].pk, cfg=cfg, api_key="test", delegate=native[2]["classification"],
+            client_factory=provider.factory, defer_failures=True,
+        )
+        if result["status"] == "completed":
+            break
+    assert result["status"] == "completed" and Event.objects.count() == 1
+    assert provider.sent == (0 if saved_targeted_reply else 1)
+    assert PostEnrichmentState.objects.get(pk=ids[0]).source_collection_job_id == original_owner
+    assert list(OriginalContentCall.objects.filter(pk__in=[c["id"] for c in original_calls])
+                .order_by("pk").values()) == original_calls
+
+
 def test_read_only_checker_rejects_skipped_extraction(accepted):
     from scripts.backfill_verify import verify_posts
 

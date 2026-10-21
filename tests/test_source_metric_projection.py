@@ -163,13 +163,15 @@ def test_saved_native_counters_write_and_cross_job_replay_reuses_original_clock(
     assert observation.mapping_id is None and observation.product_id is None
     assert observation.source_metadata["native_only"] is True
     assert observation.observed_at == CAPTURED
-    assert all(
-        v.temporal_status == "unknown"
-        and v.as_of_at is None
-        and v.window_start_at is None
-        and v.window_end_at is None
-        for v in observation.values.all()
-    )
+    for value in observation.values.all():
+        if value.source_metric.measurement_kind == "state":
+            assert value.as_of_at == CAPTURED
+            assert value.window_range is None
+        else:
+            assert value.window_end_at == CAPTURED
+            assert value.window_start_at == CAPTURED - timedelta(days=30)
+        assert value.temporal_status == "exact"
+    assert observation.source_metadata["reported_time"]["policy"] == "reported-time-v1"
     assert any(v.integer_value == 0 for v in observation.values.all())
     second = project(contract, source, [snapshot], key="second")
     assert second.status == "success" and MetricValue.objects.count() == count
@@ -381,11 +383,14 @@ def test_asset_dimensions_sizes_and_counter_do_not_become_repo_totals():
     assert values["stars"].observation.dimensions == {}
 
 
-def test_published_revision_reuses_identity_and_conflicting_number_fails_visibly():
+@pytest.mark.parametrize("publication_day", ["2026-10-01", None])
+def test_published_revision_reuses_identity_and_conflicting_number_fails_visibly(
+    publication_day,
+):
     contract, raw, _, _ = configured()
     first = evidence("hf", raw)
     first.source_metadata = {
-        "numeric_snapshot_identity": {"date": "2026-10-01", "revision": "v1"},
+        "numeric_snapshot_identity": {"date": publication_day, "revision": "v1"},
         "metric_times": {
             "likes": {"temporal_status": "date_only", "as_of_date": "2026-10-01"}
         },
@@ -544,7 +549,10 @@ def test_concurrent_different_jobs_replay_one_snapshot_without_reparenting():
             project_evidence(claim, [snapshot.pk])
     assert MetricValue.objects.count() == 2
     assert CollectionObservation.objects.count() == 2
-    assert CollectionRun.objects.filter(job__purpose="metric", status="success").count() == 2
+    assert (
+        CollectionRun.objects.filter(job__purpose="metric", status="success").count()
+        == 2
+    )
     assert (
         sum(
             r.report["projection"]["written_values"]
@@ -697,3 +705,73 @@ def test_saved_projection_enforces_its_pinned_byte_budget():
     with pytest.raises(ValueError, match="projection byte budget"):
         project(contract, "hf", [evidence("hf", raw)])
     assert not MetricValue.objects.exists()
+
+
+@pytest.mark.parametrize(
+    "origin_case", ["native", "catalog", "conflict", "floor", "missing", "after"]
+)
+def test_reported_cumulative_origins_keep_original_capture_and_replay(origin_case):
+    contract, raw, product, _ = configured()
+    origin = datetime(2026, 10, 1, 13, 30, tzinfo=UTC)
+    if origin_case in {"native", "conflict", "floor", "after"}:
+        raw["createdAt"] = (
+            datetime(2022, 1, 1, tzinfo=UTC)
+            if origin_case == "floor"
+            else CAPTURED + timedelta(days=2)
+            if origin_case == "after"
+            else origin
+        ).isoformat()
+    if origin_case in {"catalog", "conflict"}:
+        product.created_at = (
+            origin + timedelta(hours=1) if origin_case == "conflict" else origin
+        )
+        product.save(update_fields=["created_at"])
+    raw["downloadsAllTime"] = 0
+    snapshot = evidence("hf", raw)
+    snapshot.source_metadata = {
+        "archive_snapshot_date": "2026-10-01",
+        "numeric_fields": ["downloads", "downloadsAllTime", "likes"],
+    }
+    snapshot.save()
+    first = project(contract, "hf", [snapshot])
+    value = MetricValue.objects.get(source_metric__metric_key="downloads_all_time")
+    assert value.integer_value == 0
+    assert value.window_end_at == datetime(2026, 10, 2, tzinfo=UTC)
+    assert value.period_label_date.isoformat() == "2026-10-01"
+    assert value.temporal_status == "date_only"
+    basis = value.observation.source_metadata["reported_time"]["metrics"][
+        "downloads_all_time"
+    ]
+    if origin_case in {"native", "catalog"}:
+        assert value.window_start_at == origin
+        assert value.window_range.lower == origin
+    else:
+        assert value.window_start_at is None
+        assert basis["unknowns"]["start"]
+    assert value.observation.observed_at == CAPTURED
+    assert project(contract, "hf", [snapshot], key="repeat-origin").status == "success"
+    assert MetricValue.objects.count() == 3
+    assert first.status == "success"
+
+
+@pytest.mark.parametrize(
+    "metric,field",
+    [("downloads", "window_end_at"), ("downloads_all_time", "window_start_at")],
+)
+def test_reported_policy_preserves_a_retained_single_endpoint(metric, field):
+    contract, raw, _, _ = configured()
+    if metric == "downloads_all_time":
+        raw["downloadsAllTime"] = 10
+    known = CAPTURED - timedelta(days=10)
+    snapshot = evidence("hf", raw)
+    snapshot.source_metadata = {
+        "metric_times": {
+            metric: {"temporal_status": "unknown", field: known.isoformat()}
+        }
+    }
+    snapshot.save()
+    assert project(contract, "hf", [snapshot]).status == "success"
+    value = MetricValue.objects.get(source_metric__metric_key=metric)
+    assert getattr(value, field) == known
+    assert value.window_start_at is not None and value.window_end_at is not None
+    assert value.window_range is not None

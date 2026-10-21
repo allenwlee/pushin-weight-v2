@@ -132,8 +132,9 @@ def test_hourly_replay_deduplicates_values_and_retains_corrected_partial_windows
         source_metric__metric_key="tokens", period_label_date="2026-10-07"
     )
     assert partial.window_start_at == datetime(2026, 10, 7, tzinfo=UTC)
-    assert partial.window_end_at is None and partial.temporal_status == "date_only"
-    assert partial.window_range is None
+    assert partial.window_end_at == datetime(2026, 10, 7, 12, 44, 18, tzinfo=UTC)
+    assert partial.temporal_status == "date_only"
+    assert partial.window_range.upper == partial.window_end_at
     completed = MetricValue.objects.get(
         source_metric__metric_key="tokens", period_label_date="2026-10-06"
     )
@@ -358,7 +359,7 @@ def test_operational_cutoff_and_raw_snapshot_export_never_include_later_poll():
     assert str(later.pk) not in str(result)
     assert any(
         v["source_metadata"]["period_status"] == "partial"
-        and v["window_end_at"] is None
+        and v["window_end_at"] == "2026-10-07T12:44:18+00:00"
         for v in result["values"]
     )
     output = StringIO()
@@ -404,9 +405,6 @@ def test_history_command_keeps_endpoint_metadata_and_is_idempotent(tmp_path):
                 stdout=StringIO(),
             )
     assert MetricValue.objects.count() == 6
-    assert (
-        MetricValue.objects.get(
-            source_metric__metric_key="tokens", period_label_date="2026-10-07"
-        ).window_end_at
-        is None
-    )
+    assert MetricValue.objects.get(
+        source_metric__metric_key="tokens", period_label_date="2026-10-07"
+    ).window_end_at == datetime(2026, 10, 7, 12, 44, 18, tzinfo=UTC)

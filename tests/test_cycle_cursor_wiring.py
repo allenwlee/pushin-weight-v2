@@ -19,7 +19,7 @@ a successful sweep (KTD5) while a failure must not advance.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from django.test import override_settings
@@ -82,6 +82,7 @@ def wired(monkeypatch, seeded_policy_keywords):
         raise_exc=None,
         settings_over=None,
         cycle_kind="scheduled",
+        runner_options=None,
     ):
         calls = calls or [_planned()]
         api = FakeApi(results=results, raise_exc=raise_exc)
@@ -104,11 +105,62 @@ def wired(monkeypatch, seeded_policy_keywords):
             CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: {}, raising=False
         )
         with override_settings(**(settings_over or {})):
-            runner = CycleRunner(cycle_kind=cycle_kind)
+            runner = CycleRunner(cycle_kind=cycle_kind, **(runner_options or {}))
             stats = runner.run()
         return api, stats
 
     return _run
+
+
+def test_delayed_live_cycle_keeps_original_window_and_runtime_deadline(wired, monkeypatch):
+    import time
+
+    from x_monitor.config import HarvestConfig
+
+    observed = []
+    original_start = HarvestConfig.start_deadline
+
+    def start_deadline(self, **kwargs):
+        result = original_start(self, **kwargs)
+        observed.append(result)
+        return result
+
+    monkeypatch.setattr(HarvestConfig, "start_deadline", start_deadline)
+    scheduled_at = datetime.now(UTC) - timedelta(minutes=3)
+    acquired_at = scheduled_at + timedelta(seconds=75)
+    started_monotonic = time.monotonic() - 75
+    tweet = {**_tweet("99912345"), "text": "MiniMax release is great"}
+    api, stats = wired(
+        results=[tweet],
+        runner_options={"_clock": lambda: acquired_at, "_collection_window_end": scheduled_at,
+                        "_cycle_started_monotonic": started_monotonic},
+    )
+    assert stats["totals"]["n_inserted"] == 1
+    assert len(api.calls) == 1
+    assert api.calls[0]["until_time"] == int(scheduled_at.timestamp())
+    assert api.calls[0]["since_time"] < api.calls[0]["until_time"]
+    from core.models import CallState
+
+    assert CallState.objects.get().last_completed_at == scheduled_at.replace(microsecond=0)
+    assert observed[-1].started_at == started_monotonic
+    assert observed[-1].remaining() < observed[-1].deadline_at - observed[-1].started_at - 74
+    # Start includes the wait; real completion/receipt clocks remain current.
+    assert stats["started_at"] == scheduled_at.isoformat(timespec="seconds")
+    assert stats["finished_at"] == acquired_at.isoformat(timespec="seconds")
+
+
+def test_delayed_live_rare_search_keeps_original_scheduled_slot(wired, monkeypatch):
+    captured = []
+    scheduled_at = datetime.now(UTC) - timedelta(minutes=3)
+
+    def rare(self, call, api, *, now):
+        captured.append(now)
+        return {"status": "no_results", "provider_called": False}
+
+    monkeypatch.setattr(CycleRunner, "_run_rare_type_search", rare)
+    wired(calls=[_planned("RARE_EXTRA")],
+          runner_options={"_collection_window_end": scheduled_at})
+    assert captured == [scheduled_at]
 
 
 # --- the core regression: scheduled calls are time-bounded ---------------
@@ -140,6 +192,35 @@ def test_backfill_cycle_skips_unrelated_metrics_refresh(wired, monkeypatch):
 
     assert refresh_calls == []
     assert "metrics_refresh" not in stats
+
+
+@pytest.mark.parametrize("cycle_kind", ["scheduled", "backfill"])
+def test_cycle_persists_normalized_initial_zero_engagement(wired, cycle_kind):
+    from core.models import Post
+    from x_monitor.apify import _normalize_tweet
+
+    # The provider adapter supplies zeros even when initial counters are absent.
+    # Previously the shared writer discarded these zeros as false values.
+    tweet = _normalize_tweet(
+        {
+            "id": "1234567890",
+            "text": "MiniMax release is great",
+            "lang": "en",
+            "createdAt": "Sat Jul 25 12:00:00 +0000 2026",
+            "author": {"id": "zero-author", "userName": "zero_author"},
+        }
+    )
+    api, stats = wired(results=[tweet], cycle_kind=cycle_kind)
+
+    assert len(api.calls) == 1
+    assert stats["totals"]["n_inserted"] == 1
+    post = Post.objects.get(tweet_id="1234567890")
+    assert (post.like_count, post.retweet_count, post.reply_count, post.quote_count) == (
+        0, 0, 0, 0
+    )
+    assert post.metrics_refreshed_at is None
+    assert post.view_count is None
+    assert post.bookmark_count is None
 
 
 def test_scheduled_call_passes_both_time_bounds(wired):

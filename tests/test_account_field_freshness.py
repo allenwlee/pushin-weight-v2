@@ -10,6 +10,58 @@ from monitor.cycle import _upsert_account, _upsert_post
 pytestmark = pytest.mark.django_db
 
 
+@pytest.mark.requires_postgres
+@pytest.mark.parametrize(
+    ("snake_value", "camel_value", "expected"),
+    [(0, None, 0), (0, 99, 0), (7, 99, 7), (None, 0, 0), (None, 9, 9)],
+)
+def test_post_engagement_counters_preserve_values_on_insert_and_update(
+    snake_value, camel_value, expected
+):
+    fields = {
+        "like_count": "likeCount",
+        "retweet_count": "retweetCount",
+        "reply_count": "replyCount",
+        "quote_count": "quoteCount",
+    }
+    counters = {key: snake_value for key in fields}
+    if camel_value is not None:
+        counters.update({key: camel_value for key in fields.values()})
+
+    post, created = _upsert_post({"id": "counter-create", **counters})
+    assert created is True
+    post.refresh_from_db()
+    assert [getattr(post, key) for key in fields] == [expected] * 4
+
+    post, _ = _upsert_post({"id": "counter-update", **dict.fromkeys(fields, 12)})
+    post, created = _upsert_post({"id": post.tweet_id, **counters})
+    assert created is False
+    post.refresh_from_db()
+    assert [getattr(post, key) for key in fields] == [expected] * 4
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.parametrize(
+    "missing",
+    [{}, dict.fromkeys(["like_count", "retweet_count", "reply_count", "quote_count"])],
+)
+def test_sparse_post_update_preserves_known_engagement_and_unknown_optional_counts(missing):
+    fields = ["like_count", "retweet_count", "reply_count", "quote_count"]
+    sparse_post, _ = _upsert_post({"id": "sparse-create", **missing})
+    sparse_post.refresh_from_db()
+    assert [getattr(sparse_post, key) for key in fields] == [None] * 4
+
+    post, _ = _upsert_post({"id": "sparse-counters", **dict.fromkeys(fields, 12)})
+
+    post, created = _upsert_post({"id": post.tweet_id, **missing})
+
+    assert created is False
+    post.refresh_from_db()
+    assert [getattr(post, key) for key in fields] == [12] * 4
+    assert post.view_count is None
+    assert post.bookmark_count is None
+
+
 def test_equal_follower_observation_advances_freshness():
     t1 = datetime(2026, 8, 28, tzinfo=UTC)
     t2 = t1 + timedelta(days=1)
