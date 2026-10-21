@@ -383,6 +383,7 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "languages",
         "locales",
         "measurement_units",
+        "actors",
         "event_dossiers",
         "event_dossier_sources",
         "event_dossier_claims",
@@ -671,7 +672,7 @@ def test_benchmark_evidence_is_copied_with_optional_pre_migration_sources():
 
 def test_shared_catalogues_are_preserved_and_pre_foundation_sources_remain_supported():
     policy = load_policy(POLICY_PATH)
-    catalogues = frozenset({"time_zones", "languages", "locales", "measurement_units"})
+    catalogues = frozenset({"time_zones", "languages", "locales", "measurement_units", "actors"})
     assert catalogues <= policy.relations.copied_tables
     assert catalogues <= policy.relations.optional_source_tables
     assert catalogues.isdisjoint(policy.scrub.truncate_tables)

@@ -43,6 +43,35 @@ from django.utils import timezone
 from core.measurement_time import measurement_window
 
 
+class Actor(models.Model):
+    """Stable internal performer identity, independent of login accounts."""
+
+    class Kind(models.TextChoices):
+        HUMAN = "human", "Human"
+        AGENT = "agent", "Agent"
+        SYSTEM = "system", "System"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    actor_kind = models.CharField(max_length=16, choices=Kind.choices)
+    actor_key = models.CharField(max_length=128)
+
+    class Meta:
+        db_table = "actors"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                fields=["actor_kind", "actor_key"], name="uq_actor_kind_key"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(actor_kind__in=["human", "agent", "system"]),
+                name="ck_actor_kind",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(actor_key__regex=r"^[[:space:]]|[[:space:]]$|^$"),
+                name="ck_actor_key",
+            ),
+        ]
+
+
 class TimeZone(models.Model):
     """Shared IANA zone/link identity; never an inferred current UTC offset."""
 
@@ -8692,6 +8721,7 @@ class CollectionCorrection(models.Model):
     correction_kind = models.CharField(max_length=24)
     policy_version = models.CharField(max_length=64)
     actor_identifier = models.TextField()
+    actor = models.ForeignKey(Actor, null=True, on_delete=models.PROTECT)
     reason_code = models.CharField(max_length=64)
     recorded_at = models.DateTimeField(null=True)
     recorded_at_precision = models.CharField(max_length=16, default="unknown")

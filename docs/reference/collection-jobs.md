@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-21 10:00 JST, repository candidate `369fb845` through migration `0114_collection_latest_attempt_pointer` on isolated PostgreSQL 18.6. Staging deployment `dep-dbc0q5ou01pc73codnhg` is verified through the same migration on PostgreSQL 18.4.
+Last verified: 2026-10-21 10:25 JST, working repository candidate based on `215a9103` through migration `0115_shared_actors_and_correction_identity` on isolated PostgreSQL 18.6. Staging deployment `dep-dbc0q5ou01pc73codnhg` is verified through0114 on PostgreSQL18.4.
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
@@ -8,6 +8,15 @@ that instruction was attempted. Scoped progress makes a partial run resumable;
 observations retain provider evidence, and metric values hold admitted numbers.
 All authoritative business state lives in PostgreSQL. JSON input files and
 optional exports are transport, not a second runtime database.
+
+Immutable correction records retain their exact recorded performer label and an
+optional `actor_id` to the shared performer registry. The timing-repair command
+records the known `benchmark_metric_timing_repair` system actor. Explicitly
+registered performers may be supplied for attribution corrections; unverified
+legacy labels remain unresolved. An actor identifies a performer and grants no
+approval or access rights. Existing correction rows are never rewritten to infer
+an actor, and staging refresh preserves actor/correction history while clearing
+environment-local login accounts.
 
 ```mermaid
 flowchart TD

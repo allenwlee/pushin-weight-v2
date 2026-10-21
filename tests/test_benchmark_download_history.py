@@ -176,6 +176,10 @@ def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields():
     from core.models import CollectionCorrection
 
     assert CollectionCorrection.objects.count() == 4
+    for correction in CollectionCorrection.objects.select_related("actor"):
+        assert correction.actor_identifier == "system:benchmark_metric_timing_repair"
+        assert correction.actor.actor_kind == "system"
+        assert correction.actor.actor_key == "benchmark_metric_timing_repair"
     assert all(row.before_window_end_at is None and row.after_window_end_at is not None for row in CollectionCorrection.objects.all())
     assert MetricValue.objects.filter(window_end_at__isnull=False).count() == 4
     cumulative = MetricValue.objects.filter(

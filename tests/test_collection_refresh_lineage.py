@@ -65,3 +65,37 @@ def test_shadow_scrub_preserves_dossier_sources_linked_to_catalog_observations()
     assert CollectionObservation.objects.filter(pk=observation.pk).exists()
     source.refresh_from_db()
     assert source.collection_observation_id == observation.pk
+
+
+def test_shadow_scrub_clears_login_accounts_without_erasing_correction_performers():
+    from pathlib import Path
+
+    from django.contrib.auth import get_user_model
+
+    from core.collection_corrections import correct_attribution
+    from core.models import Actor, CollectionCorrection
+    from scripts.staging_refresh.database import scrub_candidate_data
+    from scripts.staging_refresh.policy import load_policy
+    from tests.test_source_metric_projection import configured, evidence, project
+
+    get_user_model().objects.create_user(username="environment-local-operator")
+    contract, raw, _, _ = configured(mapped=True, product_type="llm-model")
+    observation = project(contract, "hf", [evidence("hf", raw)]).observations.get()
+    actor = Actor.objects.create(actor_kind="human", actor_key="stable-operator")
+    correction = correct_attribution(
+        observation,
+        product=None,
+        mapping=None,
+        actor="Original operator wording",
+        actor_identity=actor,
+        reason="incorrect_product",
+    )
+    before = CollectionCorrection.objects.values().get(pk=correction.pk)
+    policy = load_policy(
+        Path(__file__).resolve().parents[1] / "config/staging_refresh.yaml"
+    )
+    with transaction.atomic(), connection.cursor() as cursor:
+        scrub_candidate_data(cursor, policy)
+    assert not get_user_model().objects.exists()
+    assert Actor.objects.get(pk=actor.pk).actor_key == "stable-operator"
+    assert CollectionCorrection.objects.values().get(pk=correction.pk) == before

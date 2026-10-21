@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.benchmark_metric_timing import TIME_FIELDS
 from core.measurement_taxonomy import digest, require
-from core.models import CollectionCorrection, CollectionObservation
+from core.models import Actor, CollectionCorrection, CollectionObservation
 
 TIME_STATE_FIELDS = (*TIME_FIELDS, "temporal_status", "source_timezone")
 TIME_BASIS_FIELDS = (
@@ -21,6 +21,15 @@ TIME_BASIS_FIELDS = (
     "reported_time_policy",
     "provenance_precision",
 )
+
+
+def _registered_actor(actor_identity):
+    if actor_identity is not None:
+        require(
+            isinstance(actor_identity, Actor) and not actor_identity._state.adding,
+            "existing registered actor required",
+        )
+    return actor_identity
 
 
 def correction_head(observation, *, metric_value=None, kind):
@@ -43,9 +52,27 @@ def record_timing_correction(
     after,
     policy,
     reason,
-    actor="system:benchmark_metric_timing_repair",
+    actor=None,
+    actor_identity=None,
     recorded_at=None,
 ):
+    actor_identity = _registered_actor(actor_identity)
+    if actor is None:
+        if actor_identity is None:
+            # This fixed system performer is explicit registration, never
+            # inferred from a caller's legacy text or an operator name.
+            actor_identity, _ = Actor.objects.get_or_create(
+                actor_kind=Actor.Kind.SYSTEM,
+                actor_key="benchmark_metric_timing_repair",
+                defaults={
+                    "id": uuid.uuid5(
+                        uuid.NAMESPACE_URL,
+                        "pushinweight:actor:system:benchmark_metric_timing_repair",
+                    )
+                },
+            )
+        actor = f"{actor_identity.actor_kind}:{actor_identity.actor_key}"
+    require(isinstance(actor, str) and actor.strip(), "correction actor required")
     observation = CollectionObservation.objects.select_for_update().get(
         pk=value.observation_id
     )
@@ -76,6 +103,7 @@ def record_timing_correction(
         correction_kind="timing",
         policy_version=policy,
         actor_identifier=actor,
+        actor=actor_identity,
         reason_code=reason,
         recorded_at=recorded_at or timezone.now(),
         recorded_at_precision="instant",
@@ -85,7 +113,14 @@ def record_timing_correction(
 
 @transaction.atomic
 def correct_attribution(
-    observation, *, product, mapping, actor, reason, policy="reviewed-attribution-v1"
+    observation,
+    *,
+    product,
+    mapping,
+    actor,
+    reason,
+    policy="reviewed-attribution-v1",
+    actor_identity=None,
 ):
     """Change the current view while retaining original contract-pinned admission."""
     from core.collection_identity import qualified_catalog_ownership
@@ -94,6 +129,7 @@ def correct_attribution(
         pk=observation.pk
     )
     require(actor and reason, "correction actor and reason required")
+    actor_identity = _registered_actor(actor_identity)
     if mapping is not None:
         require(
             product is not None
@@ -114,6 +150,7 @@ def correct_attribution(
         correction_kind="attribution",
         policy_version=policy,
         actor_identifier=actor,
+        actor=actor_identity,
         reason_code=reason,
         recorded_at=timezone.now(),
         recorded_at_precision="instant",

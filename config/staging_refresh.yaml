@@ -38,6 +38,7 @@ relations:
     - languages
     - locales
     - measurement_units
+    - actors
     - event_dossiers
     - event_dossier_sources
     - event_dossier_claims
@@ -232,6 +233,7 @@ relations:
     - languages
     - locales
     - measurement_units
+    - actors
     - event_dossiers
     - event_dossier_sources
     - event_dossier_claims
@@ -641,6 +643,10 @@ validation:
   forward_migration_count_deltas: {}
   forward_migration_translation_count_deltas: {}
   required_columns:
+    actors:
+      - id
+      - actor_kind
+      - actor_key
     accounts:
       - account_key
       - data_source_id

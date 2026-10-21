@@ -28,8 +28,10 @@ policy and fails closed with `source_classified_table_missing:<table>` when a
 required relation is absent; the later shadow migration does not bypass that
 source check. Any optional relation present on the source must have the
 declared grant. The shared catalogues `time_zones`, `languages`, `locales` and
-`measurement_units` are copied when present and may be absent from pre-foundation
-snapshots. They carry no credentials or scheduling authority. Their source SELECT
+`measurement_units`, plus shared performer identities in `actors`, are copied
+when present and may be absent from earlier snapshots. Actors have no login-account
+foreign key, so clearing excluded authentication data preserves correction history.
+These tables carry no credentials or scheduling authority. Their source SELECT
 grants are added only after the corresponding source migration, under separate
 operator authority; the conditional statements below safely omit absent tables.
 
@@ -153,7 +155,7 @@ SELECT format('GRANT SELECT ON %I.%I TO staging_refresh_reader', schemaname, tab
 FROM pg_tables
 WHERE schemaname = 'public'
   AND tablename IN (
-    'time_zones', 'languages', 'locales', 'measurement_units',
+    'time_zones', 'languages', 'locales', 'measurement_units', 'actors',
     'event_dossiers', 'event_dossier_sources', 'event_dossier_claims',
     'event_dossier_reviews', 'event_dossier_review_claims',
     'model_release_details', 'personnel_change_details',
