@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21T21:18:31+09:00, product source `86f4c4f7`, schema through `0127_remove_legacy_identity_columns`. Table inventory, columns and affected constraints are checked against isolated PostgreSQL18.6 migrated through this boundary; this is not a fresh production constraint audit.
+Last verified: 2026-10-21T21:26:13+09:00, homepage product source `86f4c4f7`, schema through `0128_require_correction_actor`. Table inventory, columns and affected constraints are checked against isolated PostgreSQL18.6 migrated through this boundary; this is not a fresh production constraint audit.
 
-Scope: **177 core application tables**, **2327 physical table columns**, nine compatibility views and one native materialized view with five columns. Repository and isolated migration boundary: `0127_remove_legacy_identity_columns`. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys.
+Scope: **177 core application tables**, **2327 physical table columns**, nine compatibility views and one native materialized view with five columns. Repository and isolated migration boundary: `0128_require_correction_actor`. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -6767,7 +6767,7 @@ Model: [CollectionCorrection](../../core/models.py#L8947).
 | `id` | `uuid` | No | Primary key. |
 | `correction_kind` | `character varying(24)` | No | Correction kind. |
 | `policy_version` | `character varying(64)` | No | Policy version. |
-| `actor_id` | `uuid` | Yes | FK → [`actors`](#table-actors) (`id`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `actor`. The current Django writer requires an actor, while PostgreSQL through0127 still permits NULL. |
+| `actor_id` | `uuid` | No | Required FK → [`actors`](#table-actors) (`id`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `actor`. |
 | `reason_code` | `character varying(64)` | No | Reason code. |
 | `recorded_at` | `timestamp with time zone` | Yes | Recorded at. |
 | `recorded_at_precision` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
@@ -6838,6 +6838,7 @@ Model: [CollectionCorrection](../../core/models.py#L8947).
 - `collection_corrections_after_product_id_3be27113_fk_products_id`: `FOREIGN KEY (after_product_id) REFERENCES products(id) DEFERRABLE INITIALLY DEFERRED`.
 - `collection_corrections_pkey`: `PRIMARY KEY (id)`.
 - `collection_corrections_actor_id_eb29b69e_fk_actors_id`: `FOREIGN KEY (actor_id) REFERENCES actors(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_corrections_actor_id_not_null`: PostgreSQL NOT NULL constraint. Migration0128 preflights for missing actors before enforcing it; the Django field has been required since the correction identity cutover.
 
 **Migration-level triggers:**
 
