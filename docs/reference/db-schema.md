@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21 09:52 JST (repository candidate based on `aa5faf3f`, migration-backed through `0114` and checked in isolated PostgreSQL18.6; staging verified through `0097_event_dossier_integrity`)
+Last verified: 2026-10-21 10:00 JST (repository candidate `369fb845`, migration-backed through `0114` in isolated PostgreSQL 18.6; staging deployment `dep-dbc0q5ou01pc73codnhg` verified through `0114` in PostgreSQL 18.4)
 
-Scope: **171 core application tables**, **2301 physical columns**, plus nine compatibility views. Repository candidate migration boundary: `0114_collection_latest_attempt_pointer`; staging is verified through `0097_event_dossier_integrity`. This guide describes the migration-backed repository candidate, not the deployed staging schema.
+Scope: **171 core application tables**, **2301 physical columns**, plus nine compatibility views. Repository candidate and staging migration boundary: `0114_collection_latest_attempt_pointer` (staging SHA `369fb8451f5fd0e0ef176ad53517b41de889be66`). This guide describes the migration-backed repository candidate, not the deployed staging schema.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)

@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-21 09:52 JST, repository candidate based on `aa5faf3f`, through migration `0114_collection_latest_attempt_pointer` on isolated PostgreSQL 18.6. Staging is verified through `0097_event_dossier_integrity`; this reference does not claim that the later candidate migrations are deployed there.
+Last verified: 2026-10-21 10:00 JST, repository candidate `369fb845` through migration `0114_collection_latest_attempt_pointer` on isolated PostgreSQL 18.6. Staging deployment `dep-dbc0q5ou01pc73codnhg` is verified through the same migration on PostgreSQL 18.4.
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
