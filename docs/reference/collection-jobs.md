@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-21 11:34 JST, candidate `d48f591b` through migration `0116_metric_source_timezone_reference` on isolated PostgreSQL18.6 and staging PostgreSQL18.4, deployment `dep-dbc26f6q1p3s73bh8ik0`.
+Last verified: 2026-10-21 11:37 JST, working candidate based on `e39d3c93` through migration `0117_metric_unit_references` on isolated PostgreSQL18.6. Staging deployment `dep-dbc26f6q1p3s73bh8ik0` remains verified through0116 on PostgreSQL18.4.
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
@@ -10,6 +10,15 @@ All authoritative business state lives in PostgreSQL. JSON input files and
 optional exports are transport, not a second runtime database.
 
 Metric definitions can reference a shared timezone through `metrics.source_timezone_id`. Their original timezone wording and schema1 nineteen-field definition snapshots remain unchanged. Adding this relationship creates no new collection-contract identity, changes no measurement value and does not infer a timezone for unresolved source evidence. See the [metric definition and bounded mapping contract](db-schema.md#table-metrics).
+
+The repository also defines optional `metrics.unit_id` and `metrics.window_unit_id`
+references to the shared unit catalogue. Both preserve their original strings
+and the same nineteen-field snapshots. The database keeps exact registered
+codes consistent for old and new writers; unknown codes remain unresolved.
+Window units still follow the existing `day`/`second` and calendar/elapsed rules.
+`map_metric_units` previews by default and applies bounded exact mapping only
+with `--apply`. These references neither change saved contract identity nor
+authorize unit conversion.
 
 Immutable correction records retain their exact recorded performer label and an
 optional `actor_id` to the shared performer registry. The timing-repair command

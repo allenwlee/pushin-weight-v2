@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21 11:34 JST (candidate `d48f591b` through `0116` on isolated PostgreSQL18.6 and staging PostgreSQL18.4, deployment `dep-dbc26f6q1p3s73bh8ik0`)
+Last verified: 2026-10-21 11:37 JST (working candidate based on `e39d3c93` through `0117` on isolated PostgreSQL18.6; staging `d48f591b` remains verified through `0116` on PostgreSQL18.4)
 
-Scope: **172 core application tables**, **2306 physical columns**, plus nine compatibility views. Repository migration boundary: `0116_metric_source_timezone_reference`; staging verified at `0116_metric_source_timezone_reference` (SHA `d48f591b37fdc0ba3cca22643d069d06e4d8cb97`). This guide describes the migration-backed repository candidate.
+Scope: **172 core application tables**, **2308 physical columns**, plus nine compatibility views. Repository migration boundary: `0117_metric_unit_references`; staging verified at `0116_metric_source_timezone_reference` (SHA `d48f591b37fdc0ba3cca22643d069d06e4d8cb97`). This guide describes the migration-backed repository candidate.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -7511,14 +7511,14 @@ Model: [SourceMetric](../../core/models.py#L7831).
 | `metric_key` | `varchar(64)` | No | Stored value. |
 | `version` | `smallint` | No | Stored value. |
 | `name` | `varchar(128)` | No | Stored value. |
-| `unit` | `varchar(64)` | No | Stored value. |
+| `unit` | `varchar(64)` | No | Original unit code retained for compatible writers and frozen definition snapshots. |
 | `value_kind` | `varchar(16)` | No | Stored value. |
 | `quantity_form` | `varchar(16)` | No | Stored value. |
 | `value_role` | `varchar(32)` | No | Django default: `'value'` (not an assumed SQL default). |
 | `measurement_kind` | `varchar(24)` | No | Stored value. |
 | `window_mode` | `varchar(16)` | No | Django default: `'none'` (not an assumed SQL default). |
 | `window_amount` | `numeric(12, 3)` | Yes | Stored value. |
-| `window_unit` | `varchar(24)` | Yes | Stored value. |
+| `window_unit` | `varchar(24)` | Yes | Original window-unit code; `day`/`second` when required by the checked window shape, otherwise NULL. |
 | `window_duration_basis` | `varchar(16)` | No | Django default: `'none'` (not an assumed SQL default). |
 | `window_alignment` | `varchar(32)` | Yes | Stored value. |
 | `source_timezone` | `varchar(64)` | No | Django default: `'unknown'` (not an assumed SQL default). |
@@ -7526,12 +7526,18 @@ Model: [SourceMetric](../../core/models.py#L7831).
 | `definition_metadata` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
 | `created_at` | `timestamp with time zone` | No | Django default: `now` (not an assumed SQL default). |
 | `source_timezone_id` | `varchar(64)` | Yes | FK → [`time_zones`](#table-time_zones) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `source_timezone_reference`. Exact registered code or unresolved NULL. |
+| `unit_id` | `varchar(64)` | Yes | FK → [`measurement_units`](#table-measurement_units) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `unit_reference`. Exact registered unit or unresolved NULL. |
+| `window_unit_id` | `varchar(64)` | Yes | FK → [`measurement_units`](#table-measurement_units) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `window_unit_reference`. Same catalogue, distinct duration role. NULL when no window unit or no exact registered code. |
 
 **Named indexes:**
 
 - `idx_metric_type_source`: `CREATE INDEX "idx_metric_type_source" ON "metrics" ("metric_type_id", "source_id")`.
 - `metrics_source_timezone_id_183a4919`: index on `source_timezone_id`.
 - `metrics_source_timezone_id_183a4919_like`: varchar-pattern index on `source_timezone_id`.
+- `metrics_unit_id_6337e316`: index on `unit_id`.
+- `metrics_unit_id_6337e316_like`: varchar-pattern index on `unit_id`.
+- `metrics_window_unit_id_2fe033ff`: index on `window_unit_id`.
+- `metrics_window_unit_id_2fe033ff_like`: varchar-pattern index on `window_unit_id`.
 
 **Named constraints:**
 
@@ -7539,6 +7545,10 @@ Model: [SourceMetric](../../core/models.py#L7831).
 - `ck_metric_version`: `CONSTRAINT "ck_metric_version" CHECK ("version" > 0)`.
 - `ck_metric_source_timezone_ref`: `CHECK (source_timezone_id IS NULL OR source_timezone_id = source_timezone)`.
 - `metrics_source_timezone_id_183a4919_fk_time_zones_code`: deferred FK from `source_timezone_id` to `time_zones(code)`.
+- `ck_metric_unit_ref`: `CHECK (unit_id IS NULL OR unit_id = unit)`.
+- `ck_metric_window_unit_ref`: `CHECK (window_unit_id IS NULL OR (window_unit IS NOT NULL AND window_unit_id = window_unit))`.
+- `metrics_unit_id_6337e316_fk_measurement_units_code`: deferred FK from `unit_id` to `measurement_units(code)`.
+- `metrics_window_unit_id_2fe033ff_fk_measurement_units_code`: deferred FK from `window_unit_id` to `measurement_units(code)`.
 - `ck_metric_value_kind`: `CONSTRAINT "ck_metric_value_kind" CHECK ("value_kind" IN ('integer', 'float'))`.
 - `ck_metric_quantity`: `CONSTRAINT "ck_metric_quantity" CHECK ("quantity_form" IN ('count', 'score', 'rank', 'variance', 'ratio'))`.
 - `ck_metric_value_role`: `CONSTRAINT "ck_metric_value_role" CHECK ("value_role" IN ('value', 'lower_bound', 'upper_bound'))`.
@@ -7550,6 +7560,31 @@ zone or Link alias resolves to its own catalogue code. `unknown`, `CST` and abse
 codes remain unresolved; no UTC default or invented lookup record is created.
 Changing the raw timezone through an old writer updates or clears the reference.
 A supplied contradictory FK is rejected. The compatibility text remains available.
+
+The `sync_metric_units` PostgreSQL trigger maintains both unit references for
+ORM, raw SQL and older writers. Each reference resolves only its own exact
+reported code. Changing the wording updates or clears that role; a supplied
+contradictory reference fails. Unknown general units retain their wording and
+NULL reference. A missing window has no unit reference, and membership in the
+shared catalogue does not make a non-time unit valid in a window. The existing
+window check still accepts only `day`/`second` in that role. Unit references do
+not convert measurements, imply averaging eligibility or make a calendar day
+an elapsed duration of 86,400 seconds.
+
+After explicit catalogue seeding, `map_metric_units` previews or applies exact
+matches for either role in bounded transactions:
+
+```bash
+python manage.py map_metric_units --database default --batch-size 500 --max-batches 1
+python manage.py map_metric_units --database default --batch-size 500 --max-batches 1 --apply
+```
+
+The command reports examined/updated definition rows, an `after_metric_id`
+resume cursor, remaining resolvable rows and separate unmatched general/window
+unit counts. Absent windows are excluded from unmatched-window counts. Repeated
+runs do not update resolved rows. Current raw values are rechecked after a
+concurrent writer; no stale reference is installed. Both the command line and
+Python `call_command` reject simultaneous `apply` and `dry_run` before writing.
 
 Collection-contract schema1 snapshots retain their explicit nineteen-field shape;
 the relational reference is not added to old packets or hashes. Numeric values,

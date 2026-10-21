@@ -647,6 +647,10 @@ validation:
       - id
       - source_timezone
       - source_timezone_id
+      - unit
+      - unit_id
+      - window_unit
+      - window_unit_id
     actors:
       - id
       - actor_kind

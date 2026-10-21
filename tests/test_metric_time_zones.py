@@ -229,23 +229,26 @@ def test_populated_mapping_and_reverse_preserve_original_packets_and_old_writers
         row.pk: definition_snapshot(row) for row in OldMetric.objects.all()
     }
     MigrationExecutor(connection).migrate([target])
-    after = list(SourceMetric.objects.order_by("pk").values())
+    current = MigrationExecutor(connection).loader.project_state([target]).apps
+    TargetMetric = current.get_model("core", "SourceMetric")
+    after = list(TargetMetric.objects.order_by("pk").values())
     for row in after:
         reference = row.pop("source_timezone_reference_id")
         assert reference == ("UTC" if row["source_timezone"] == "UTC" else None)
     assert after == before
     assert {
-        row.pk: definition_snapshot(row) for row in SourceMetric.objects.all()
+        row.pk: definition_snapshot(row) for row in TargetMetric.objects.all()
     } == before_packets
-    replay = configure_collection(copy.deepcopy(spec))
+    with historical_fixture_models(current):
+        replay = configure_collection(copy.deepcopy(spec))
     assert replay.pk == contract.pk and replay.contract_hash == original_hash
     fields = next(row for row in before if row["source_timezone"] == "UTC").copy()
     fields.pop("id")
     fields["metric_key"] = "legacy-zone-writer"
     legacy = OldMetric.objects.create(**fields)
-    assert SourceMetric.objects.get(pk=legacy.pk).source_timezone_reference_id == "UTC"
+    assert TargetMetric.objects.get(pk=legacy.pk).source_timezone_reference_id == "UTC"
     OldMetric.objects.filter(pk=legacy.pk).update(source_timezone="CST")
-    assert SourceMetric.objects.get(pk=legacy.pk).source_timezone_reference_id is None
+    assert TargetMetric.objects.get(pk=legacy.pk).source_timezone_reference_id is None
     MigrationExecutor(connection).migrate([base])
     assert (
         list(OldMetric.objects.exclude(pk=legacy.pk).order_by("pk").values()) == before

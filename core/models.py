@@ -7835,6 +7835,10 @@ class SourceMetric(models.Model):
     version = models.PositiveSmallIntegerField()
     name = models.CharField(max_length=128)
     unit = models.CharField(max_length=64)
+    unit_reference = models.ForeignKey(
+        MeasurementUnit, db_column="unit_id", null=True, on_delete=models.PROTECT,
+        related_name="metric_definitions",
+    )
     value_kind = models.CharField(max_length=16)
     quantity_form = models.CharField(max_length=16)
     value_role = models.CharField(max_length=32, default="value")
@@ -7842,6 +7846,10 @@ class SourceMetric(models.Model):
     window_mode = models.CharField(max_length=16, default="none")
     window_amount = models.DecimalField(max_digits=12, decimal_places=3, null=True)
     window_unit = models.CharField(max_length=24, null=True)
+    window_unit_reference = models.ForeignKey(
+        MeasurementUnit, db_column="window_unit_id", null=True,
+        on_delete=models.PROTECT, related_name="metric_window_definitions",
+    )
     window_duration_basis = models.CharField(max_length=16, default="none")
     window_alignment = models.CharField(max_length=32, null=True)
     source_timezone = models.CharField(max_length=64, default="unknown")
@@ -7871,6 +7879,17 @@ class SourceMetric(models.Model):
                 condition=models.Q(source_timezone_reference__isnull=True)
                 | models.Q(source_timezone_reference=models.F("source_timezone")),
                 name="ck_metric_source_timezone_ref",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(unit_reference__isnull=True)
+                | models.Q(unit_reference=models.F("unit")),
+                name="ck_metric_unit_ref",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(window_unit_reference__isnull=True)
+                | models.Q(window_unit__isnull=False,
+                           window_unit_reference=models.F("window_unit")),
+                name="ck_metric_window_unit_ref",
             ),
             models.CheckConstraint(
                 condition=models.Q(value_kind__in=["integer", "float"]),
