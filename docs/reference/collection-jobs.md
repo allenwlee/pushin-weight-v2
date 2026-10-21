@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-21 11:02 JST, working candidate based on `674b003b` through migration `0116_metric_source_timezone_reference` on isolated PostgreSQL18.6. Staging deployment `dep-dbc1e0gu01pc73cp1sv0` remains verified through0115 on PostgreSQL18.4.
+Last verified: 2026-10-21 11:34 JST, candidate `d48f591b` through migration `0116_metric_source_timezone_reference` on isolated PostgreSQL18.6 and staging PostgreSQL18.4, deployment `dep-dbc26f6q1p3s73bh8ik0`.
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
