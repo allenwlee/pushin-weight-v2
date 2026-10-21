@@ -12,6 +12,7 @@ pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 BASE = ("core", "0120_merge_homepage_shared_vocabulary")
 WRITER_CUTOVER = ("core", "0121_timezone_source_writer_cutover")
+PHYSICAL_DROP = ("core", "0122_remove_timezone_source_columns")
 NOW = datetime(2026, 10, 21, 0, 0, tzinfo=UTC)
 
 
@@ -202,4 +203,79 @@ def test_writer_cutover_is_compatible_until_old_application_instances_drain():
     assert OldEvent.objects.get(pk=legacy_insert.pk).source_timezone == "Asia/Tokyo"
     assert (
         OldOpportunity.objects.get(pk=legacy_opportunity.pk).source_timezone == "GMT+8"
+    )
+
+
+@pytest.mark.usefixtures("isolated_migration_database")
+@pytest.mark.django_db(transaction=True)
+def test_physical_drop_removes_only_legacy_columns_after_writer_cutover():
+    executor = MigrationExecutor(connection)
+    executor.migrate([BASE])
+    old_apps = MigrationExecutor(connection).loader.project_state([BASE]).apps
+    _legacy_metric, legacy_event, legacy_opportunity = _old_rows(old_apps)
+
+    executor = MigrationExecutor(connection)
+    executor.migrate([WRITER_CUTOVER])
+    new_event, new_opportunity = _new_event_and_opportunity()
+
+    executor = MigrationExecutor(connection)
+    executor.migrate([PHYSICAL_DROP])
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT table_name
+            FROM information_schema.columns
+            WHERE table_schema=current_schema()
+              AND table_name IN ('metrics', 'events', 'opportunities')
+              AND column_name='source_timezone'
+            """
+        )
+        assert cursor.fetchall() == []
+        cursor.execute(
+            """
+            SELECT table_name
+            FROM information_schema.columns
+            WHERE table_schema=current_schema()
+              AND table_name IN ('metrics', 'events', 'opportunities')
+              AND column_name='source_timezone_id'
+            """
+        )
+        assert len(cursor.fetchall()) == 3
+        cursor.execute(
+            """
+            SELECT tgname
+            FROM pg_trigger
+            WHERE tgrelid IN ('metrics'::regclass, 'events'::regclass,
+                              'opportunities'::regclass)
+              AND tgname IN ('sync_metric_source_timezone',
+                             'sync_events_source_timezone',
+                             'sync_opportunities_source_timezone')
+              AND NOT tgisinternal
+            """
+        )
+        assert cursor.fetchall() == []
+        cursor.execute(
+            """
+            SELECT proname
+            FROM pg_proc
+            WHERE pronamespace=current_schema()::regnamespace
+              AND proname IN ('sync_metric_source_timezone',
+                              'sync_intelligence_source_timezone')
+            """
+        )
+        assert cursor.fetchall() == []
+
+    assert Event.objects.get(pk=legacy_event.pk).source_timezone_reference_id is None
+    assert (
+        Event.objects.get(pk=new_event.pk).source_timezone_reference_id == "UTC"
+    )
+    assert (
+        Opportunity.objects.get(pk=legacy_opportunity.pk)
+        .source_timezone_reference_id
+        is None
+    )
+    assert (
+        Opportunity.objects.get(pk=new_opportunity.pk).source_timezone_reference_id
+        == "UTC"
     )
