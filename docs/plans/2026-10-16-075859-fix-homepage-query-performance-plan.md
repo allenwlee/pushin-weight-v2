@@ -2,7 +2,7 @@
 title: Homepage count materialization and Top Voices removal - Plan
 type: perf
 date: 2026-10-16
-updated: 2026-10-17
+updated: 2026-10-21
 artifact_contract: ce-unified-plan/v1
 artifact_readiness: implementation-ready
 product_contract_source: ce-plan-bootstrap
@@ -35,6 +35,97 @@ The one-day chart keeps its five-minute detail.
 Completion requires count-for-count comparisons against the original query, real PostgreSQL migration/concurrency proofs, browser coverage in all supported locales, measured improvement, and the exact final revision observed in production with the materialized path active.
 Production delivery is authorized.
 The existing staged route and its authentication controls still apply.
+
+**October18 owner scope update — reusable state:** the owner requires the new
+snapshot lifecycle table to serve future snapshots and asks that the design
+account for G2's upcoming ChartEngine integration. The verified ef1788f5
+implementation still has a homepage-only singleton; it does not meet this new
+requirement. The [shared-state walkthrough](../analysis/2026-10-18-063708-shared-materialization-state-walkthrough.html)
+proposes a concrete `materialization_state` table keyed by versioned dataset,
+with independent source/publication generations, cutoff and refresh time.
+The proposed physical name and minimal code registry are agent recommendations,
+not implemented schema or owner-selected field names. One shared lifecycle
+table replaces the candidate's one new table; no second state table or future
+chart materialized view is added by the design. G2's proposed immutable
+SummaryRun results and G3 saved edition evidence retain their own storage and
+identity; they must not be overwritten by refreshing an aggregate. Detailed
+implementation and caller/native-database regression amendments remain pending
+before another candidate can satisfy the expanded scope. Existing unaffected
+evidence remains valid only within its recorded code/fixture/environment scope.
+This is a design discussion, with no schema/deployment action taken and no
+change to the selected production endpoint, staged route or access prerequisite.
+
+## October21 authorized continuation
+
+After the diagnosis below, the owner asks to pull PR62 forward. Reuse this plan
+and canonical worktree, merge current main, complete the reusable-state scope
+through R15/U7, and preserve all newer releases. The existing production endpoint,
+staged route and access controls remain selected; no harvest pause, campaign
+restart, peer-schema integration or staging takeover is implied. The older dated
+proposal/diagnosis states below describe their capture time. Implementation
+progress and verification receipts live in Git and task-owned local evidence.
+
+## October21 live 30-day diagnosis
+
+The owner reports that 30d does not render and requests a check. This bounded
+continuation is diagnosis only; no application, migration, service, scheduler,
+authentication or production-data change was made. Preserve the October18
+reusable-state requirement and the current G2/F1a staging claimant.
+
+- Fresh production web deployment `dep-dbc1aj0u01pc73cots4g` is live at
+  `eddb01f048f07c0c91e3e8eab8c22fc2977c2010`; main matches. PR62 remains open
+  and its unchanged feature head is ef1788f5. No new candidate was produced.
+- Anonymous Chromium on the production homepage first returned HTML200 after
+  18.648s, with multiple CSS/JavaScript502 responses and no rendered30d after
+  30s. A separate direct-network browser attempt returned Render's502 page
+  immediately. Subsequent light static-file HTTP reads returned200, so this
+  is intermittent availability rather than proof of missing static assets.
+- A direct GET `/chart.html?window=30&locale=en&timezone=UTC` received zero
+  bytes and hit its45.008s observation deadline. This is the numeric red check;
+  no corrected candidate was measured. Do not repeat expensive live probes
+  merely to collect a larger sample during the incident.
+- Render logs show repeated CRITICAL WORKER TIMEOUT events between
+  02:20:22Z and02:24:51Z. The chart stack is
+  `monitor/views.py:5606 chart_html` → `:3544 _build_home_chart_payload` →
+  `:3869 _build_home_pulse_payload` → ORM SQL execution → Gunicorn abort.
+- A bounded read-only production PostgreSQL inspection found the matching
+  Brand/Pulse SELECT active for29s, `wait_event_type=IO`,
+  `wait_event=DataFileRead`, and zero blocking sessions. This supports source
+  count I/O as the current failing phase; it does not measure later chart
+  aggregation or voice ranking, because this request had not reached them.
+- Deployed `monitor/views.py:3851–3887` still computes two correlated counts
+  per brand while holding the shared Pulse cache lock. Deployed
+  `monitor/static/pw-chart.js:14,1071–1095` aborts chart fetches at12s and
+  suppresses AbortError, leaving the previously committed chart unchanged.
+  The slow count blocks the payload before a new30d chart can be delivered;
+  the server's worker deadline is then exceeded, yielding observed502s and
+  worker restarts.
+- Production is PostgreSQL18.4, database `pushinweight_shadow`, latest core
+  migration `0092_measurement_window_index`. The native count view,
+  `home_count_snapshot` and `materialization_state` all resolve absent.
+  Staging/main have advanced independently since this feature was verified;
+  the old ef1788f5 candidate cannot be promoted unchanged over current main.
+
+Recommended correction remains the already reviewed date-bounded grouped count
+and narrowed cache-lock path in PR62, reconciled onto current main. Any new
+materialization table must also satisfy the owner's reusable-state requirement.
+Keep existing caller regressions in `tests/test_home_chart_pulse.py` and the
+materialization modules. The deployed small-fixture query test only requires
+one SQL statement and explicitly expects nested SELECT COUNT expressions; it
+cannot establish bounded production work. The updated caller/SQL-shape and
+native performance checks must exercise the correction, then exact revision
+browser/release proof must show the30d request finishes within its actual12s
+client budget. UI handling of timeout feedback is a separate observed weakness,
+not a substitute for fixing count-query cost. No fix or recovery is claimed.
+
+Machine-local evidence on fuchitalee:
+`/Users/fuchitalee/development/pushin-weight-v2/.local/home-30d-check-20261021T022106Z/`.
+`browser.json` / `browser-direct.json` and screenshots preserve real-browser
+failures; `chart30-timing.json` records45s with no bytes; `timeouts.json` and
+`render-logs.json` record worker deaths and the exact failing stack;
+`production-activity.txt` records the read-only I/O/no-blocker/schema census.
+No application tests were run for this diagnosis and no old green result is
+being claimed as a verified repair of today's incident.
 
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -154,6 +245,7 @@ These single samples establish motivation, not a production latency distribution
 - R12. Preserve source records, identities, constraints, current harvest/provider policies and the15-minute harvest schedule; add only the derived-storage maintenance needed for this feature.
 - R13. Enforce the strict regression net and measurable acceptance criteria below with zero required skips/errors.
 - R14. Observe the final exact revision deployed to production, its materialized read path active, its maintenance job configured and functioning, and the original browser actions succeeding.
+- R15. Reuse one materialization-state table and refresh lifecycle across versioned derived datasets. Isolate each dataset's source changes, publication, coverage, lock and cadence; retain frozen G2 research results and saved ChartEngine/article editions separately.
 
 ### Key Decisions
 
@@ -209,13 +301,13 @@ Existing mobile rendering/Lighthouse residuals are not claimed solved by faster 
 ### Key Technical Decisions
 
 - KTD1. Use one native materialized relation at UTC15-minute grain for all closed UTC days in the existing PostgreSQL source history, with a shared reader for Pulse and long charts. Avoid a moving retention floor that could silently remove the preceding365-day comparison when a fixed staging/test clock is older than wall time. A daily UTC grain cannot reproduce Tokyo/California local-day graphs, while15-minute buckets support the common quarter/half-hour offsets. Validate bucket-to-local-day alignment; use the exact query for any unsupported historical offset or boundary rather than approximate. Bound full-refresh duration through KTD5 and measure cardinality before release. The grain is a reversible tuning choice, not a separate architecture needing competing implementations. Governs R1–R6.
-- KTD2. Add one HomeCountSnapshot-style singleton lifecycle table and one materialized count relation: **two derived relations, one ordinary table plus one materialized view; zero source tables retired or source columns added**. The singleton records source generation, published generation, earliest changed source time, published cutoff and successful refresh time. The view groups canonical Brand identities, bucket start and two boolean eligibility dimensions (legacy unsanctioned and untracked promotion), with a suitable all-row unique index. Lifecycle metadata has no natural home in measurement, collection or publication records. Plain metric/provider storage would misstate ownership and provenance. Governs R4, R7, R12.
-- KTD3. Invalidate historical summaries at the database boundary. Statement-level transition-table triggers on count-relevant PostBrand, Post.created_at and eligibility writes increment the singleton's source generation transactionally and retain the earliest affected source timestamp. Current-day changes remain live and do not invalidate closed-day history; recording their generation is necessary to catch transactions that span UTC midnight while maintenance publishes the new cutoff. Deletions/cascades with unavailable parent time invalidate conservatively; TRUNCATE is covered. Ignore metric/text-only updates and empty/no-op statements. Compare old/new values, not only named UPDATE columns. Use bulk statement-level work rather than one counter update per row; source writes must not wait for a long refresh. Existing writers keep their API and semantics. Governs R6, R12. [PostgreSQL trigger semantics](https://www.postgresql.org/docs/18/sql-createtrigger.html).
-- KTD4. Refresh and publish metadata in one database transaction, protected against a second refresher by a dedicated nonblocking advisory key. Readers evaluate generation validity and the earliest changed timestamp against the published cutoff, then aggregate counts in one SQL snapshot; concurrent refresh leaves the previous committed summary readable. Before initial population, a cheap lifecycle/catalog preflight selects raw fallback so readers do not queue on the ordinary REFRESH lock. If lifecycle state is missing, initialize it in a separate committed transaction under the same maintenance advisory key and a short NOWAIT barrier on the count-relevant source tables. This drains or refuses previously untracked writers before a new clean publication can exist; never hold those source locks during counting. Refuse missing-state initialization inside an enclosing application transaction, and do not recreate a deleted singleton inside the refresh transaction. Keep refresh computation outside a row lock on the singleton; capture the source generation before refresh and publish with an atomic conditional update only if it is unchanged. Update publication fields and clear the earliest-change marker only under that generation comparison: never save an old source-generation value over a concurrent increment. Roll back the entire refresh transaction if publication fails or the generation changes. Process death therefore preserves the previous committed count/cutoff pair. Governs R6, R7. [PostgreSQL18 REFRESH dispatch](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/backend/tcop/utility.c) and [materialized-view transaction locks](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/backend/commands/matview.c).
+- KTD2. Add one shared MaterializationState lifecycle table keyed by a versioned dataset definition and one materialized count relation: **two derived relations, one ordinary table plus one materialized view; zero source tables retired or source columns added**. Each dataset row records source generation, published generation, earliest changed source time, published cutoff and successful refresh time. The view groups canonical Brand identities, bucket start and two boolean eligibility dimensions (legacy unsanctioned and untracked promotion), with a suitable all-row unique index. Lifecycle metadata has no natural home in measurement, collection or publication records. Plain metric/provider storage would misstate ownership and provenance. Governs R4, R7, R12.
+- KTD3. Invalidate historical summaries at the database boundary. Statement-level transition-table triggers on count-relevant PostBrand, Post.created_at and eligibility writes increment the homepage dataset row's source generation transactionally and retain the earliest affected source timestamp. Current-day changes remain live and do not invalidate closed-day history; recording their generation is necessary to catch transactions that span UTC midnight while maintenance publishes the new cutoff. Deletions/cascades with unavailable parent time invalidate conservatively; TRUNCATE is covered. Ignore metric/text-only updates and empty/no-op statements. Compare old/new values, not only named UPDATE columns. Use bulk statement-level work rather than one counter update per row; source writes must not wait for a long refresh. Existing writers keep their API and semantics. Governs R6, R12. [PostgreSQL trigger semantics](https://www.postgresql.org/docs/18/sql-createtrigger.html).
+- KTD4. Refresh and publish metadata in one database transaction, protected against a second refresher by a dedicated nonblocking advisory key. Readers evaluate generation validity and the earliest changed timestamp against the published cutoff, then aggregate counts in one SQL snapshot; concurrent refresh leaves the previous committed summary readable. Before initial population, a cheap lifecycle/catalog preflight selects raw fallback so readers do not queue on the ordinary REFRESH lock. If lifecycle state is missing, initialize it in a separate committed transaction under the same maintenance advisory key and a short NOWAIT barrier on the count-relevant source tables. This drains or refuses previously untracked writers before a new clean publication can exist; never hold those source locks during counting. Refuse missing-state initialization inside an enclosing application transaction, and do not recreate a deleted dataset row inside the refresh transaction. Keep refresh computation outside a row lock on the dataset state; capture the source generation before refresh and publish with an atomic conditional update only if it is unchanged. Update publication fields and clear the earliest-change marker only under that generation comparison: never save an old source-generation value over a concurrent increment. Roll back the entire refresh transaction if publication fails or the generation changes. Process death therefore preserves the previous committed count/cutoff pair. Governs R6, R7. [PostgreSQL18 REFRESH dispatch](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/backend/tcop/utility.c) and [materialized-view transaction locks](https://github.com/postgres/postgres/blob/REL_18_STABLE/src/backend/commands/matview.c).
 - KTD5. Add a provider-free maintenance management command and an additive Render cron at minutes7,22,37,52UTC. Normal work refreshes once per new UTC day; the other polls exit cheaply unless history was invalidated. Corrections may rebuild counts without advancing the daily comparison cutoff. Normal first publication is approximately00:07UTC/09:07JST, replacing the previously unselected00:15proposal. Initial population uses ordinary REFRESH while readers use fallback; later population uses CONCURRENTLY with a120-second statement timeout,2-second lock timeout and suitable unique index. Derive the refresh cutoff from the transaction's UTC day, keeping the view definition and published metadata on that same database clock. No request refreshes the view. No new worker, beat or harvest behavior. Governs R1, R6, R7, R12. [Refresh constraints](https://www.postgresql.org/docs/18/sql-refreshmaterializedview.html), [Render UTC scheduling](https://render.com/docs/cronjobs).
 - KTD6. Keep the exact source aggregate as the common fallback and regression oracle. Only use the materialized path for the represented brand/time/default-eligibility predicates. Sum eligible historical buckets, add the exact current-day source tail, and add existing direct jobs separately. For a fixed historical request/staging clock, the historical/tail split is the earlier of the published cutoff and that request's UTC midnight; cap both portions at the requested window end. Pulse30/365 sums all eligibility dimensions through the requested comparison-day cutoff;1/7 keeps its live reader. Keep response computed_at live and add comparison_as_of for the daily-count meaning. Cache counts separately from response timestamps. Never substitute the comparison clock for chart/feed/narrative time. Governs R1–R5, R7, R10.
 - KTD7. Remove the Top Voices helper call and its unused cache/scoring implementation from these callers, remove the fresh HTML region and JS rendering, and retain an empty compatibility object only where old payload validation requires it. Keep remaining validators and atomic chart/Pulse/narrative updates strict. Cache locks cover lookup/publication only, not expensive database work; summary-dependent cache identity includes cutoff/generation so validity changes are not hidden beyond the established cache policy. Chart-cache lifetime remains independent of the daily Pulse cache, and a daily comparison timestamp cannot prematurely expire every chart entry. Governs R8–R11.
-- KTD8. Implement schema through Django migrations: managed singleton model plus explicit reversible native view/index/trigger operations. Create derived storage without data during schema migration, seed only lifecycle state, and populate through maintenance. Preserve Django model state with RunSQL/SeparateDatabaseAndState as appropriate; inspect the final migration graph before choosing the next number. Existing multi-service migration serialization remains authoritative. Governs R7, R12. [Django5.2 migration operations](https://docs.djangoproject.com/en/5.2/ref/migration-operations/).
+- KTD8. Implement schema through Django migrations: managed shared-state model plus explicit reversible native view/index/trigger operations. Create derived storage without data during schema migration, seed only lifecycle state, and populate through maintenance. Preserve Django model state with RunSQL/SeparateDatabaseAndState as appropriate; inspect the final migration graph before choosing the next number. Existing multi-service migration serialization remains authoritative. Governs R7, R12. [Django5.2 migration operations](https://docs.djangoproject.com/en/5.2/ref/migration-operations/).
 
 ### High-Level Technical Design
 
@@ -288,8 +380,8 @@ flowchart TB
 
 - Fine-grain cardinality and full-refresh cost require production-shaped measurement; native REFRESH is not incremental.
 - Historical-write invalidation must include default promotion/legacy exclusions and cascade/TRUNCATE paths; relying on Post.fetched_at alone misses attribution changes.
-- Avoid global application locks during SQL and singleton row locks during REFRESH; measure historical bulk-write overhead and lock duration.
-- An empty or missing singleton/view must be an explicit fallback, including after disposable test-database flushes; do not infer freshness from MAX(event time).
+- Avoid global application locks during SQL and dataset-state row locks during REFRESH; measure historical bulk-write overhead and lock duration.
+- An empty or missing dataset row/view must be an explicit fallback, including after disposable test-database flushes; do not infer freshness from MAX(event time).
 - Do not mask unexpected programming/SQL errors as empty data. Only recognized availability/validity conditions select fallback.
 - New maintenance service provisioning and staging authentication are execution-time environment checks. The prior release lacked owner sessions; recheck current access and documented QA routes before asserting the same blocker still exists.
 - Do not expand owner allowlists, disable middleware, forge an unrelated identity or alter authentication configuration. If a normal existing authenticated staging path cannot be established, complete the concrete package and request only the missing access/route selection.
@@ -342,7 +434,7 @@ No strategy document was found; CONCEPTS.md and the General Launch Charter suppl
 4. Same-day inserts, metrics-only updates, weight-only relationship changes and empty/no-op statements avoid unnecessary historical invalidation.
 5. Invalidations roll back with failed source transactions; bulk statements do bounded counter work.
 6. Canonical collation, zero/empty state, missing lifecycle row and test-database flushes fail safely.
-7. Measure historical bulk-write overhead on the frozen workload; verify refresh does not hold the singleton lock during counting.
+7. Measure historical bulk-write overhead on the frozen workload; verify refresh does not hold the dataset-state lock during counting.
 8. Staging refresh excludes and scrubs environment-local publication state, permits pre-migration sources, and preserves its exhaustive relation guards. Grant only MAINTAIN on the new state table to an existing staging exporter; native PostgreSQL verifies no SELECT or INSERT privilege. Native materialized-view definitions carry through pg_dump/restore; an absent publication row forces fallback until local maintenance publishes.
 
 **Verification:** Real PostgreSQL object/data inspection and writer call-chain tests prove validity tracking beyond ORM signals.
@@ -402,6 +494,18 @@ No strategy document was found; CONCEPTS.md and the General Launch Charter suppl
 
 **Verification:** Real browser DOM/state evidence and captured production-call-chain SQL prove both visual removal and zero request-time ranking.
 
+### U7. Share lifecycle state for future derived datasets
+
+**Goal:** The homepage is the first consumer of reusable publication state without changing source/evidence ownership.
+**Requirements:** R6, R7, R12, R13, R15.
+**Dependencies:** U2–U4.
+**Files:** core/models.py; core/materializations.py; core/migrations/0094_shared_materialization_state.py; monitor/home_count_summary.py; existing count/refresh/caller/staging tests; schema and maintenance references.
+**Approach:** Preserve frozen0093, then rename its managed model/table and replace singleton id with binary-collated dataset_key. Preserve all five lifecycle values and rebind existing source triggers to home.brand_time_counts.v1. A frozen code definition supplies relation, source dependencies, stable advisory key and database cutoff expression to the shared refresh helper; homepage readers bind their own key. Other actual datasets can provide reviewed definitions/invalidation without creating another state table. No future chart view or generic result/SQL-payload store is added.
+**Field review:** dataset_key is a versioned compiled-definition identity owned by application code, one key per reusable dataset. It is neither user-selected prose nor concatenated subject/filter membership, so it has no existing catalogue/FK target. Binary CharField(160) plus a versioned-key database check preserves exact identity and bounds index size. Definitions are never accepted from HTTP/CLI SQL input. Existing counters and timestamps keep their meanings. No JSON fields, source table/column additions or retired source tables; the same one derived managed table and native view remain.
+**Execution note:** Pin source-write/management-command isolation before implementation; use real native second-dataset/independent-lock and populated forward/reverse migration proofs. Do not weaken missing-state writer-drain or atomic publication safeguards.
+**Test scenarios:** Other-key state survives home source correction/refresh; an independent native dataset refreshes under its own lock/cutoff while the home lock is held; native dirty/rebuild/skip works;0093 publication survives0094and reversal; rollback refuses rather than drops another dataset; existing parity/fallback/concurrency/staging export checks retain their full scope.
+**Verification:** Native caller/source-state readback, own-view counts, independent connection locks, migration values/source preservation and zero required skips/errors. U6 still owns final candidate/release proof.
+
 ### U6. Verify the final candidate and deliver production activation
 
 **Goal:** Deliver the measured, correct feature through the authorized production endpoint.
@@ -414,7 +518,7 @@ No strategy document was found; CONCEPTS.md and the General Launch Charter suppl
 1. Exact candidate's required local/hosted suites, normalized UI obligations and sealed performance all pass.
 2. Staging deployment uses the exact candidate, migrations complete, sources are preserved, initial refresh succeeds and owner-authenticated browser actions prove the materialized path.
 3. Non-forced production promotion yields the same candidate revision in every affected active consumer and new maintenance resource.
-4. Production schema/index/trigger/singleton state is correct; real homepage/30-day/365-day actions return200, show no Top Voices and produce no JavaScript errors.
+4. Production schema/index/trigger/dataset state is correct; real homepage/30-day/365-day actions return200, show no Top Voices and produce no JavaScript errors.
 5. Observe the scheduled maintenance command after deployment; a healthy same-day poll truthfully skips, while a necessary refresh publishes valid state.
 6. Verify source-generation/summary mode logs tie activation to real requests; report fallback observations separately.
 7. Cleanup removes only the clean, unlocked, registered canonical worktree at the verified final SHA, as the final filesystem action; preserve branches and retain the worktree if a guard fails.

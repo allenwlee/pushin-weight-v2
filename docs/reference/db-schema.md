@@ -182,12 +182,12 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [geopolitical_mode_keys](#table-geopolitical_mode_keys) | [Classification vocabularies and translated labels](#vocabularies) | One geopolitical-mode vocabulary key. |
 | [geopolitical_mode_labels](#table-geopolitical_mode_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated geopolitical-mode label. |
 | [harvest_backlog_windows](#table-harvest_backlog_windows) | [Collection, extraction, and processing records](#processing) | One bounded time window still owed collection coverage. |
-| [home_count_snapshot](#table-home_count_snapshot) | [Homepage counts](#homepage-counts) | One environment’s count publication, cutoff and source-change state. |
 | [job_discovery_runs](#table-job_discovery_runs) | [Job listings and official career-site collection](#jobs) | One job-search query/window run, including coverage, cost, and extracted listing count. |
 | [job_listing_evidence](#table-job_listing_evidence) | [Job listings and official career-site collection](#jobs) | One source observation supporting a job listing. |
 | [job_listings](#table-job_listings) | [Job listings and official career-site collection](#jobs) | One advertised position/requisition, including its source identity and current saved details. |
 | [job_source_states](#table-job_source_states) | [Job listings and official career-site collection](#jobs) | One career-site source’s active lease and last successful synchronization state. |
 | [job_source_sync_runs](#table-job_source_sync_runs) | [Job listings and official career-site collection](#jobs) | One attempt to synchronize an official career-site source. |
+| [materialization_state](#table-materialization_state) | [Homepage counts](#homepage-counts) | Current publication, coverage and source-change state for one versioned derived dataset in this environment. |
 | [measurement_subjects](#table-measurement_subjects) | [Measurement subjects, metrics and observations](#measurements) | One identity that measurements describe, optionally linked to a product, group, brand or company. |
 | [metric_collection_contracts](#table-metric_collection_contracts) | [Measurement subjects, metrics and observations](#measurements) | One versioned collection contract for a data source. |
 | [metric_types](#table-metric_types) | [Measurement subjects, metrics and observations](#measurements) | One allowed family of measurements and its interpretation. |
@@ -335,7 +335,7 @@ and [profile observations](../../core/profile_snapshots.py) for identity creatio
 
 One person, whether or not they have an X account.
 
-Model: [Person](../../core/models.py#L4856).
+Model: [Person](../../core/models.py#L4859).
 
 **Primary key:** `id`.
 
@@ -375,7 +375,7 @@ None declared beyond field/FK/constraint indexes.
 
 One proposed or reviewed link between a person and an X account.
 
-Model: [PersonAccount](../../core/models.py#L5255).
+Model: [PersonAccount](../../core/models.py#L5258).
 
 **Primary key:** `person, account`.
 
@@ -412,7 +412,7 @@ None declared beyond field/FK/constraint indexes.
 
 One claim about a person’s role or relationship with an organization.
 
-Model: [PersonBrandAffiliation](../../core/models.py#L5444).
+Model: [PersonBrandAffiliation](../../core/models.py#L5447).
 
 **Primary key:** `id`.
 
@@ -480,7 +480,7 @@ Migration 0063 enforces same-person/organization replacement, complete review me
 
 One source observation supporting an affiliation claim.
 
-Model: [PersonBrandAffiliationEvidence](../../core/models.py#L5619).
+Model: [PersonBrandAffiliationEvidence](../../core/models.py#L5622).
 
 **Primary key:** `id`.
 
@@ -524,7 +524,7 @@ None declared beyond field/FK/constraint indexes.
 
 One observed profile change queued for personnel-movement interpretation.
 
-Model: [ProfileMovementCandidate](../../core/models.py#L5390).
+Model: [ProfileMovementCandidate](../../core/models.py#L5393).
 
 **Primary key:** `id`.
 
@@ -566,7 +566,7 @@ None declared beyond field/FK/constraint indexes.
 
 One personnel-search query/window run, including coverage, cost, and extraction counts.
 
-Model: [PersonnelDiscoveryRun](../../core/models.py#L6327).
+Model: [PersonnelDiscoveryRun](../../core/models.py#L6330).
 
 **Primary key:** `id`.
 
@@ -624,7 +624,7 @@ None declared beyond field/FK/constraint indexes.
 
 One sourced spelling of a person’s full name, with optional evidenced components.
 
-Model: [PersonName](../../core/models.py#L4937).
+Model: [PersonName](../../core/models.py#L4940).
 
 **Primary key:** `id`.
 
@@ -670,7 +670,7 @@ Migration 0060 installs `g1_person_name_guard` on this table and `g1_person_name
 
 One observation supporting a name or explicitly supported name components.
 
-Model: [PersonNameEvidence](../../core/models.py#L4991).
+Model: [PersonNameEvidence](../../core/models.py#L4994).
 
 **Primary key:** `id`.
 
@@ -707,7 +707,7 @@ Several observations can corroborate the same representation. Source excerpts, o
 
 One immutable source version of biography, role, title, location or job-description prose, with separately reviewed attribution.
 
-Model: [PersonText](../../core/models.py#L5197).
+Model: [PersonText](../../core/models.py#L5200).
 
 **Primary key:** `id`.
 
@@ -751,7 +751,7 @@ Migration 0064 prevents changing captured wording, language, source, version, or
 
 One cached translation of a specific original prose version and provider configuration.
 
-Model: [PersonTextTranslation](../../core/models.py#L5234).
+Model: [PersonTextTranslation](../../core/models.py#L5237).
 
 **Primary key:** `id`.
 
@@ -784,7 +784,7 @@ English/Japanese display text stays linked to the exact original. Missing or fai
 
 One operator's reviewed account confirmation, merge or selective split. This is
 
-Model: [PersonIdentityCorrection](../../core/models.py#L4910).
+Model: [PersonIdentityCorrection](../../core/models.py#L4913).
 
 **Primary key:** `id`.
 
@@ -818,7 +818,7 @@ None declared beyond field/FK/constraint indexes.
 
 One person-specific attribution of an image or video reference to a source.
 
-Model: [PersonMedia](../../core/models.py#L5146).
+Model: [PersonMedia](../../core/models.py#L5149).
 
 **Primary key:** `id`.
 
@@ -865,7 +865,7 @@ Multiple publisher attributions may point to identical media bytes. Source verif
 
 One validated image file, addressed by its SHA-256 content hash.
 
-Model: [StaffMediaObject](../../core/models.py#L5133).
+Model: [StaffMediaObject](../../core/models.py#L5136).
 
 **Primary key:** `sha256`.
 
@@ -916,7 +916,7 @@ and the [lookup guide](lookup-tables.md).
 
 One company identity, including its recorded headquarters country.
 
-Model: [Company](../../core/models.py#L506).
+Model: [Company](../../core/models.py#L509).
 
 **Primary key:** `nickname`.
 
@@ -981,7 +981,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One ownership relationship between a brand and a company.
 
-Model: [BrandCompany](../../core/models.py#L2152).
+Model: [BrandCompany](../../core/models.py#L2155).
 
 **Primary key:** `brand, company`.
 
@@ -1009,7 +1009,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One account’s role for a brand, such as official or researcher.
 
-Model: [BrandAccount](../../core/models.py#L2174).
+Model: [BrandAccount](../../core/models.py#L2177).
 
 **Primary key:** `brand, account`.
 
@@ -1039,7 +1039,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One account’s role and ownership-review state for a company.
 
-Model: [CompanyAccount](../../core/models.py#L2207).
+Model: [CompanyAccount](../../core/models.py#L2210).
 
 **Primary key:** `company, account`.
 
@@ -1077,7 +1077,7 @@ account creation dates remain unknown unless observed independently.
 
 One unresolved organization identity awaiting review against known brands.
 
-Model: [BrandDiscoveryCandidate](../../core/models.py#L5691).
+Model: [BrandDiscoveryCandidate](../../core/models.py#L5694).
 
 **Primary key:** `id`.
 
@@ -1121,7 +1121,7 @@ None declared beyond field/FK/constraint indexes.
 
 One exact observed spelling or handle for an unresolved organization.
 
-Model: [BrandDiscoveryCandidateToken](../../core/models.py#L5761).
+Model: [BrandDiscoveryCandidateToken](../../core/models.py#L5764).
 
 **Primary key:** `id`.
 
@@ -1156,7 +1156,7 @@ None declared beyond field/FK/constraint indexes.
 
 One source observation supporting an organization token.
 
-Model: [BrandDiscoveryCandidateTokenEvidence](../../core/models.py#L5806).
+Model: [BrandDiscoveryCandidateTokenEvidence](../../core/models.py#L5809).
 
 **Primary key:** `id`.
 
@@ -1190,7 +1190,7 @@ None declared beyond field/FK/constraint indexes.
 
 One literal or regular-expression matching pattern for a brand.
 
-Model: [BrandKeyword](../../core/models.py#L3186).
+Model: [BrandKeyword](../../core/models.py#L3189).
 
 **Primary key:** `brand, pattern`.
 
@@ -1220,7 +1220,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One search term associated with a brand.
 
-Model: [BrandSearchTerm](../../core/models.py#L3170).
+Model: [BrandSearchTerm](../../core/models.py#L3173).
 
 **Primary key:** `brand, term`.
 
@@ -1248,7 +1248,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One hashtag associated with a brand.
 
-Model: [BrandHashtag](../../core/models.py#L3209).
+Model: [BrandHashtag](../../core/models.py#L3212).
 
 **Primary key:** `brand, hashtag`.
 
@@ -1301,7 +1301,7 @@ and [collection behavior](twitterapi-io-calls.md).
 
 One source account with a UUID identity, source/native key and current saved profile.
 
-Model: [Account](../../core/models.py#L1075).
+Model: [Account](../../core/models.py#L1078).
 
 **Primary key:** `account_key`.
 
@@ -1380,7 +1380,7 @@ Badge/affiliation labels, X native counts, username-change evidence and raw
 “based in” observations belong here; normalized country/region links remain
 on the account. Historical profiles remain in account_profile_snapshots.
 
-Model: [XAccountDetail](../../core/models.py#L982).
+Model: [XAccountDetail](../../core/models.py#L985).
 
 **Primary key:** `account_key`.
 
@@ -1448,7 +1448,7 @@ Model: [XAccountDetail](../../core/models.py#L982).
 
 One consecutive observation period during which an account’s saved profile hash is unchanged.
 
-Model: [AccountProfileSnapshot](../../core/models.py#L5321).
+Model: [AccountProfileSnapshot](../../core/models.py#L5324).
 
 **Primary key:** `id`.
 
@@ -1503,7 +1503,7 @@ Model: [AccountProfileSnapshot](../../core/models.py#L5321).
 
 One account’s membership state in one X list.
 
-Model: [TwitterListMembership](../../core/models.py#L1462).
+Model: [TwitterListMembership](../../core/models.py#L1465).
 
 **Primary key:** `id`.
 
@@ -1538,7 +1538,7 @@ Model: [TwitterListMembership](../../core/models.py#L1462).
 
 One X list’s last completed membership synchronization.
 
-Model: [TwitterListSyncState](../../core/models.py#L1511).
+Model: [TwitterListSyncState](../../core/models.py#L1514).
 
 **Primary key:** `list_id`.
 
@@ -1566,7 +1566,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One account’s appearance in one collected post, with collection context.
 
-Model: [AccountPostAppearance](../../core/models.py#L2886).
+Model: [AccountPostAppearance](../../core/models.py#L2889).
 
 **Primary key:** `account, post`.
 
@@ -1596,7 +1596,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One stable collection-source identity, distinct from original authored content.
 
-Model: [DataSource](../../core/models.py#L7567).
+Model: [DataSource](../../core/models.py#L7570).
 
 **Primary key:** `id`.
 
@@ -1641,7 +1641,7 @@ does not change a country/territory’s stored identity.
 
 One country/territory code and optional display-parent relationship.
 
-Model: [Country](../../core/models.py#L839).
+Model: [Country](../../core/models.py#L842).
 
 **Primary key:** `code`.
 
@@ -1670,7 +1670,7 @@ None declared beyond field/FK/constraint indexes.
 
 One translated label for a country code.
 
-Model: [CountryLabel](../../core/models.py#L899).
+Model: [CountryLabel](../../core/models.py#L902).
 
 **Primary key:** `country, lang`.
 
@@ -1698,7 +1698,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One region in the geographic hierarchy.
 
-Model: [Region](../../core/models.py#L793).
+Model: [Region](../../core/models.py#L796).
 
 **Primary key:** `key`.
 
@@ -1726,7 +1726,7 @@ None declared beyond field/FK/constraint indexes.
 
 One translated label for a region.
 
-Model: [RegionLabel](../../core/models.py#L823).
+Model: [RegionLabel](../../core/models.py#L826).
 
 **Primary key:** `region, lang`.
 
@@ -1754,7 +1754,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One country’s assigned region and the source of that assignment.
 
-Model: [CountryRegion](../../core/models.py#L915).
+Model: [CountryRegion](../../core/models.py#L918).
 
 **Primary key:** `country_code`.
 
@@ -1782,7 +1782,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One reviewed mapping from an X “based in” string to a country or region.
 
-Model: [AccountBasedInMapping](../../core/models.py#L937).
+Model: [AccountBasedInMapping](../../core/models.py#L940).
 
 **Primary key:** `value`.
 
@@ -1836,7 +1836,7 @@ current saved profile, not an automatic reconstruction from every post snapshot.
 
 One collected X post, its source text, metrics, and author snapshot.
 
-Model: [Post](../../core/models.py#L1527).
+Model: [Post](../../core/models.py#L1530).
 
 **Primary key:** `tweet_id`.
 
@@ -1953,7 +1953,7 @@ SQL clauses to every Django `on_delete=SET_NULL` field.
 
 One post-to-brand attribution and its relevance weight.
 
-Model: [PostBrand](../../core/models.py#L2241).
+Model: [PostBrand](../../core/models.py#L2244).
 
 **Primary key:** `post, brand`.
 
@@ -1981,7 +1981,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One matching source that connected a post to a brand.
 
-Model: [PostBrandMention](../../core/models.py#L2266).
+Model: [PostBrandMention](../../core/models.py#L2269).
 
 **Primary key:** `post, brand, source`.
 
@@ -2011,7 +2011,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One post type and sentiment assignment for a post/brand pair.
 
-Model: [PostBrandSignal](../../core/models.py#L2295).
+Model: [PostBrandSignal](../../core/models.py#L2298).
 
 **Primary key:** `post, brand, post_type`.
 
@@ -2041,7 +2041,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One current versioned classification state for a post/brand pair.
 
-Model: [PostBrandClassificationState](../../core/models.py#L2340).
+Model: [PostBrandClassificationState](../../core/models.py#L2343).
 
 **Primary key:** `post, brand`.
 
@@ -2083,7 +2083,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One recorded stage of a classifier judgment, including inputs and validation.
 
-Model: [PostBrandClassificationJudgment](../../core/models.py#L2525).
+Model: [PostBrandClassificationJudgment](../../core/models.py#L2528).
 
 **Primary key:** `id`.
 
@@ -2128,7 +2128,7 @@ Model: [PostBrandClassificationJudgment](../../core/models.py#L2525).
 
 One audience-topic assignment for a post/brand pair.
 
-Model: [PostBrandAudienceTopic](../../core/models.py#L2413).
+Model: [PostBrandAudienceTopic](../../core/models.py#L2416).
 
 **Primary key:** `post, brand, concept`.
 
@@ -2165,7 +2165,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One geopolitical-mode assignment for a post/brand pair.
 
-Model: [PostBrandGeopoliticalMode](../../core/models.py#L2472).
+Model: [PostBrandGeopoliticalMode](../../core/models.py#L2475).
 
 **Primary key:** `post, brand, geopolitical_mode`.
 
@@ -2201,7 +2201,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One independent product-feedback label for a post/brand pair.
 
-Model: [PostBrandProductLabel](../../core/models.py#L2644).
+Model: [PostBrandProductLabel](../../core/models.py#L2647).
 
 **Primary key:** `post, brand, product_label`.
 
@@ -2229,7 +2229,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One legacy pragmatic speech-act assignment for a post/brand pair.
 
-Model: [PostBrandDiscourse](../../core/models.py#L2671).
+Model: [PostBrandDiscourse](../../core/models.py#L2674).
 
 **Primary key:** `post, brand, discourse, act_id`.
 
@@ -2262,7 +2262,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One current post-level judgment about promotion of an untracked brand.
 
-Model: [PostUntrackedBrandPromotion](../../core/models.py#L2769).
+Model: [PostUntrackedBrandPromotion](../../core/models.py#L2772).
 
 **Primary key:** `post_id`.
 
@@ -2297,7 +2297,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One visible promoted subject supporting an untracked-brand judgment.
 
-Model: [UntrackedBrandPromotionEvidence](../../core/models.py#L2806).
+Model: [UntrackedBrandPromotionEvidence](../../core/models.py#L2809).
 
 **Primary key:** `id`.
 
@@ -2343,7 +2343,7 @@ Model: [UntrackedBrandPromotionEvidence](../../core/models.py#L2806).
 
 One post’s legacy unsanctioned-flag assignment.
 
-Model: [PostUnsanctionedFlag](../../core/models.py#L2739).
+Model: [PostUnsanctionedFlag](../../core/models.py#L2742).
 
 **Primary key:** `post_id`.
 
@@ -2378,36 +2378,40 @@ rankings. Publication state belongs to one database, so staging copies exclude
 and scrub it. See [count maintenance](../deploy/render.md#homepage-count-maintenance)
 for refresh commands, the UTC schedule, fallback and rollback.
 
-<a id="table-home_count_snapshot"></a>
+<a id="table-materialization_state"></a>
 
-### `home_count_snapshot` — HomeCountSnapshot
+### `materialization_state` — MaterializationState
 
-One singleton records which source generation the local native view represents.
+One row records which source generation a versioned derived dataset represents.
+The homepage uses key `home.brand_time_counts.v1`; other code-defined datasets
+use independent rows, locks, dependency invalidation and coverage policies.
 This validity state cannot live in a post/brand row or collection execution:
 source changes arrive through multiple writers, and publication must describe
 one atomic view refresh. The table has no foreign keys or source identity role.
 
-Model: [HomeCountSnapshot](../../core/models.py#L450). Native implementation:
-[0093_homepage_count_materialization](../../core/migrations/0093_homepage_count_materialization.py).
+Model: [MaterializationState](../../core/models.py#L450). Lifecycle implementation:
+[core/materializations.py](../../core/materializations.py). Native migrations:
+[0093_homepage_count_materialization](../../core/migrations/0093_homepage_count_materialization.py)
+and [0094_shared_materialization_state](../../core/migrations/0094_shared_materialization_state.py).
 
-**Primary key:** `id`, constrained to `1`.
+**Primary key:** `dataset_key`, a versioned code-definition identity under binary collation.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
-| `id` | `smallint` | No | Singleton PK. Django default: `1`; no database default. |
-| `source_generation` | `bigint` | No | Nonnegative source-change counter. Django default: `0`; no database default. Statement triggers advance it once per count-relevant statement. |
+| `dataset_key` | `varchar(160)` | No | Versioned code-owned dataset identity and PK, with `C` collation. No default or foreign key; it does not identify an article, provider measurement or mutable shared catalogue. |
+| `source_generation` | `bigint` | No | Nonnegative source-change counter for this dataset. Django default: `0`; no database default. Homepage statement triggers advance only its own key once per count-relevant statement. |
 | `published_generation` | `bigint` | Yes | Source generation captured by the last committed refresh. NULL before publication. |
 | `dirty_since` | `timestamp with time zone` | Yes | Earliest affected source-post timestamp since publication, not the write observation time. NULL after publication. A conservative year-0001 sentinel handles cascades/TRUNCATE when source timing cannot be recovered. |
-| `cutoff` | `timestamp with time zone` | Yes | Exclusive UTC-midnight boundary represented by the view. Published with its generation and refresh time. |
+| `cutoff` | `timestamp with time zone` | Yes | Exclusive coverage boundary represented by the dataset, published with its generation and refresh time. The homepage definition uses UTC midnight; other definitions own their clock. |
 | `refreshed_at` | `timestamp with time zone` | Yes | Database clock time of the publication update, committed with the refreshed view; not a source event time. |
 
 **Named indexes:** none beyond the primary-key index.
 
 **Named constraints:**
 
-- `ck_home_count_singleton`: only `id = 1` is allowed.
-- `ck_home_count_generation`: published generation is NULL or no greater than the source generation.
-- `ck_home_count_publication`: cutoff, published generation and refresh time are all NULL or all non-NULL.
+- `ck_materialization_key`: key matches `^[a-z][a-z0-9_.-]*\.v[1-9][0-9]*$`; ordinary names without a definition version are rejected.
+- `ck_materialization_generation`: published generation is NULL or no greater than the source generation.
+- `ck_materialization_publication`: cutoff, published generation and refresh time are all NULL or all non-NULL.
 - Positive-integer fields also have database nonnegative checks.
 
 Count-relevant triggers cover post timestamps/deletes, post-brand relationships,
@@ -2431,7 +2435,7 @@ fixed historical request clocks. Refresh rebuilds this derived result from
 `posts`, `posts_brands`, `brands`, `posts_unsanctioned_flags` and
 `posts_untracked_brand_promotions`; it does not collect data.
 
-Model: [HomeBrandTimeCount](../../core/models.py#L485), `managed = False`. Migration
+Model: [HomeBrandTimeCount](../../core/models.py#L488), `managed = False`. Migration
 SQL creates the native view with no data; maintenance performs its first refresh.
 Django maps a composite key, but the view has no SQL PK or FK constraints.
 
@@ -3080,7 +3084,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One versioned taxonomy identity and its manifest.
 
-Model: [TaxonomyVersion](../../core/models.py#L7587).
+Model: [TaxonomyVersion](../../core/models.py#L7590).
 
 **Primary key:** `id`.
 
@@ -3135,7 +3139,7 @@ collection. Raw JSON columns remain separate from selected searchable fields.
 
 One model/product identity, with optional Hugging Face repository metadata.
 
-Model: [Product](../../core/models.py#L2918).
+Model: [Product](../../core/models.py#L2921).
 
 **Primary key:** `id`.
 
@@ -3192,7 +3196,7 @@ Model: [Product](../../core/models.py#L2918).
 
 One source-backed claim that a post names an exact product for a brand.
 
-Model: [PostBrandProduct](../../core/models.py#L3022).
+Model: [PostBrandProduct](../../core/models.py#L3025).
 
 **Primary key:** `post, brand, product`.
 
@@ -3224,7 +3228,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One reviewable proposal to resolve an observed product name to a product.
 
-Model: [ProductVerificationProposal](../../core/models.py#L3057).
+Model: [ProductVerificationProposal](../../core/models.py#L3060).
 
 **Primary key:** `id`.
 
@@ -3274,7 +3278,7 @@ Model: [ProductVerificationProposal](../../core/models.py#L3057).
 
 One source-backed model-release occurrence and its stated date precision.
 
-Model: [ModelRelease](../../core/models.py#L6768).
+Model: [ModelRelease](../../core/models.py#L6771).
 
 **Primary key:** `id`.
 
@@ -3314,7 +3318,7 @@ None declared beyond field/FK/constraint indexes.
 
 One observed source claim supporting a model release.
 
-Model: [ModelReleaseEvidence](../../core/models.py#L6822).
+Model: [ModelReleaseEvidence](../../core/models.py#L6825).
 
 **Primary key:** `id`.
 
@@ -3346,7 +3350,7 @@ None declared beyond field/FK/constraint indexes.
 
 One stable grouping identity for related products.
 
-Model: [ProductGroup](../../core/models.py#L7600).
+Model: [ProductGroup](../../core/models.py#L7603).
 
 **Primary key:** `id`.
 
@@ -3383,7 +3387,7 @@ None declared beyond field/FK/constraint indexes.
 
 One product belonging to a versioned group.
 
-Model: [ProductGroupMembership](../../core/models.py#L7647).
+Model: [ProductGroupMembership](../../core/models.py#L7650).
 
 **Primary key:** `id`.
 
@@ -3416,7 +3420,7 @@ Model: [ProductGroupMembership](../../core/models.py#L7647).
 
 One typed relationship between two products.
 
-Model: [ProductRelationship](../../core/models.py#L7623).
+Model: [ProductRelationship](../../core/models.py#L7626).
 
 **Primary key:** `id`.
 
@@ -3480,7 +3484,7 @@ and [official jobs runbook](../deploy/render.md#official-ai-lab-jobs-sync).
 
 One advertised position/requisition, including its source identity and current saved details.
 
-Model: [JobListing](../../core/models.py#L5884).
+Model: [JobListing](../../core/models.py#L5887).
 
 **Primary key:** `id`.
 
@@ -3570,7 +3574,7 @@ Model: [JobListing](../../core/models.py#L5884).
 
 One source observation supporting a job listing.
 
-Model: [JobListingEvidence](../../core/models.py#L6165).
+Model: [JobListingEvidence](../../core/models.py#L6168).
 
 **Primary key:** `id`.
 
@@ -3616,7 +3620,7 @@ None declared beyond field/FK/constraint indexes.
 
 One attempt to synchronize an official career-site source.
 
-Model: [JobSourceSyncRun](../../core/models.py#L6082).
+Model: [JobSourceSyncRun](../../core/models.py#L6085).
 
 **Primary key:** `id`.
 
@@ -3654,7 +3658,7 @@ Model: [JobSourceSyncRun](../../core/models.py#L6082).
 
 One career-site source’s active lease and last successful synchronization state.
 
-Model: [JobSourceState](../../core/models.py#L6126).
+Model: [JobSourceState](../../core/models.py#L6129).
 
 **Primary key:** `source_key`.
 
@@ -3685,7 +3689,7 @@ None declared beyond field/FK/constraint indexes.
 
 One job-search query/window run, including coverage, cost, and extracted listing count.
 
-Model: [JobDiscoveryRun](../../core/models.py#L6305).
+Model: [JobDiscoveryRun](../../core/models.py#L6308).
 
 **Primary key:** `id`.
 
@@ -3760,7 +3764,7 @@ where shown. See [rare-type readers and extraction](rare-types.md).
 
 One attendance-bearing occurrence, such as a conference or meetup.
 
-Model: [Event](../../core/models.py#L6350).
+Model: [Event](../../core/models.py#L6353).
 
 **Primary key:** `id`.
 
@@ -3824,7 +3828,7 @@ None declared beyond field/FK/constraint indexes.
 
 One source observation supporting an event occurrence.
 
-Model: [EventEvidence](../../core/models.py#L6516).
+Model: [EventEvidence](../../core/models.py#L6519).
 
 **Primary key:** `id`.
 
@@ -3866,7 +3870,7 @@ None declared beyond field/FK/constraint indexes.
 
 One bounded offer in which an action can provide a benefit, optionally linked to an event.
 
-Model: [Opportunity](../../core/models.py#L6584).
+Model: [Opportunity](../../core/models.py#L6587).
 
 **Primary key:** `id`.
 
@@ -3950,7 +3954,7 @@ translation](translator-output.md) and [post commentary](commenter.md).
 
 One post’s replayable translation/classification progress and diagnostics.
 
-Model: [PostEnrichmentState](../../core/models.py#L1665).
+Model: [PostEnrichmentState](../../core/models.py#L1668).
 
 **Primary key:** `post_id`.
 
@@ -4002,7 +4006,7 @@ brand's final judgment; a succeeded flag alone is insufficient.
 
 One versioned literal-translation attempt/state for a post body.
 
-Model: [PostTranslationArtifact](../../core/models.py#L1726).
+Model: [PostTranslationArtifact](../../core/models.py#L1729).
 
 **Primary key:** `id`.
 
@@ -4046,7 +4050,7 @@ Model: [PostTranslationArtifact](../../core/models.py#L1726).
 
 One locale’s validated literal text within a translation artifact.
 
-Model: [PostTranslationText](../../core/models.py#L1807).
+Model: [PostTranslationText](../../core/models.py#L1810).
 
 **Primary key:** `id`.
 
@@ -4077,7 +4081,7 @@ None declared beyond field/FK/constraint indexes.
 
 One validated locale chunk retained for resuming a long post translation.
 
-Model: [PostTranslationChunk](../../core/models.py#L1834).
+Model: [PostTranslationChunk](../../core/models.py#L1837).
 
 **Primary key:** `id`.
 
@@ -4115,7 +4119,7 @@ None declared beyond field/FK/constraint indexes.
 
 One versioned commentary artifact for a post and its context.
 
-Model: [PostSynthesisArtifact](../../core/models.py#L1878).
+Model: [PostSynthesisArtifact](../../core/models.py#L1881).
 
 **Primary key:** `id`.
 
@@ -4161,7 +4165,7 @@ Model: [PostSynthesisArtifact](../../core/models.py#L1878).
 
 One locale’s commentary text within a synthesis artifact.
 
-Model: [PostSynthesisText](../../core/models.py#L1961).
+Model: [PostSynthesisText](../../core/models.py#L1964).
 
 **Primary key:** `id`.
 
@@ -4191,7 +4195,7 @@ None declared beyond field/FK/constraint indexes.
 
 One coalesced request for post commentary, including its worker claim and retry state.
 
-Model: [PostSynthesisDemand](../../core/models.py#L1987).
+Model: [PostSynthesisDemand](../../core/models.py#L1990).
 
 **Primary key:** `id`.
 
@@ -4241,7 +4245,7 @@ Model: [PostSynthesisDemand](../../core/models.py#L1987).
 
 One day’s commentary request/token budget accounting.
 
-Model: [PostSynthesisDailyBudget](../../core/models.py#L2098).
+Model: [PostSynthesisDailyBudget](../../core/models.py#L2101).
 
 **Primary key:** `id`.
 
@@ -4276,7 +4280,7 @@ None declared beyond field/FK/constraint indexes.
 
 One request-throttle bucket keyed without storing a user ID or IP address.
 
-Model: [PostSynthesisRateLimitBucket](../../core/models.py#L2123).
+Model: [PostSynthesisRateLimitBucket](../../core/models.py#L2126).
 
 **Primary key:** `id`.
 
@@ -4327,7 +4331,7 @@ behavior. The SQL view `trend_narrative_versions` is listed separately below.
 
 One durable attempt/version of a shared time-window headline.
 
-Model: [TrendNarrative](../../core/models.py#L3603).
+Model: [TrendNarrative](../../core/models.py#L3606).
 
 **Primary key:** `id`.
 
@@ -4421,7 +4425,7 @@ Model: [TrendNarrative](../../core/models.py#L3603).
 
 One reported subject attached to a headline publication.
 
-Model: [TrendNarrativeSubject](../../core/models.py#L4637).
+Model: [TrendNarrativeSubject](../../core/models.py#L4640).
 
 **Primary key:** `id`.
 
@@ -4465,7 +4469,7 @@ None declared beyond field/FK/constraint indexes.
 
 One evidence preparation/dispatch execution and its immutable cutoff/configuration snapshot.
 
-Model: [OriginalContentRun](../../core/models.py#L3918).
+Model: [OriginalContentRun](../../core/models.py#L3921).
 
 **Primary key:** `id`.
 
@@ -4522,7 +4526,7 @@ Model: [OriginalContentRun](../../core/models.py#L3918).
 
 One authored output version or held headline outcome, grouped by its producing workflow.
 
-Model: [OriginalContent](../../core/models.py#L4404).
+Model: [OriginalContent](../../core/models.py#L4407).
 
 **Primary key:** `id`.
 
@@ -4597,7 +4601,7 @@ Model: [OriginalContent](../../core/models.py#L4404).
 
 One saved language/version with exact copy, a public UUID and producing-call provenance.
 
-Model: [OriginalContentText](../../core/models.py#L4567).
+Model: [OriginalContentText](../../core/models.py#L4570).
 
 **Primary key:** `id`.
 
@@ -4633,7 +4637,7 @@ None declared beyond field/FK/constraint indexes.
 
 One selected all-brand window run or exact featured locale/version.
 
-Model: [OriginalContentSelection](../../core/models.py#L4091).
+Model: [OriginalContentSelection](../../core/models.py#L4094).
 
 **Primary key:** `id`.
 
@@ -4665,7 +4669,7 @@ None declared beyond field/FK/constraint indexes.
 
 One window’s active work claim and optional newer queued cutoff.
 
-Model: [TrendNarrativeWorkSlot](../../core/models.py#L4011).
+Model: [TrendNarrativeWorkSlot](../../core/models.py#L4014).
 
 **Primary key:** `window_days`.
 
@@ -4702,7 +4706,7 @@ None declared beyond field/FK/constraint indexes.
 
 One coalesced brand/window headline request and its scheduling state.
 
-Model: [TrendNarrativeDemand](../../core/models.py#L4126).
+Model: [TrendNarrativeDemand](../../core/models.py#L4129).
 
 **Primary key:** `id`.
 
@@ -4757,7 +4761,7 @@ Model: [TrendNarrativeDemand](../../core/models.py#L4126).
 
 One physical provider attempt with its actual request identity, pessimistic reservation and completion/uncertainty state. Its owner is exactly one authored-content run or provider batch.
 
-Model: [OriginalContentCall](../../core/models.py#L4283).
+Model: [OriginalContentCall](../../core/models.py#L4286).
 
 **Primary key:** `id`.
 
@@ -4841,7 +4845,7 @@ One resumable group of provider requests for a real source CollectionJob.
 The group owns external file/submission/poll/import progress; child
 OriginalContentCall rows own each physical model attempt and its cost.
 
-Model: [ProviderBatch](../../core/models.py#L4225).
+Model: [ProviderBatch](../../core/models.py#L4228).
 Migration: [0085_provider_batch_enrichment](../../core/migrations/0085_provider_batch_enrichment.py).
 
 **Primary key:** `id` (UUID; no generated-ID sequence).
@@ -4921,7 +4925,7 @@ evidence rather than silently discarding it.
 
 One distinct cited post supporting one saved locale/version, with immutable ordered URL/author/hash snapshots.
 
-Model: [OriginalContentSource](../../core/models.py#L4613).
+Model: [OriginalContentSource](../../core/models.py#L4616).
 
 **Primary key:** `id`.
 
@@ -4969,7 +4973,7 @@ can progress while a video task is collected.
 
 One fenced quarter-hour editorial or content-picture assessment, with frozen evidence and outcome.
 
-Model: [EditorialAssessment](../../core/models.py#L8282).
+Model: [EditorialAssessment](../../core/models.py#L8285).
 
 **Primary key:** `id`.
 
@@ -5004,7 +5008,7 @@ Model: [EditorialAssessment](../../core/models.py#L8282).
 
 One UTC day of conservative spend reservations and text/media call counts.
 
-Model: [EditorialBudget](../../core/models.py#L8311).
+Model: [EditorialBudget](../../core/models.py#L8314).
 
 **Primary key:** `day`.
 
@@ -5033,7 +5037,7 @@ None beyond primary-key, unique-field and automatic FK indexes.
 
 One reserved provider stage and its saved response or uncertain-send outcome.
 
-Model: [EditorialCall](../../core/models.py#L8327).
+Model: [EditorialCall](../../core/models.py#L8330).
 
 **Primary key:** `id`.
 
@@ -5067,7 +5071,7 @@ Model: [EditorialCall](../../core/models.py#L8327).
 
 One permanent development identity with original-post anchors.
 
-Model: [EditorialStory](../../core/models.py#L8359).
+Model: [EditorialStory](../../core/models.py#L8362).
 
 **Primary key:** `id`.
 
@@ -5096,7 +5100,7 @@ None beyond the keys and field checks described above.
 
 One immutable accepted story edition for a track, locale and revision.
 
-Model: [EditorialEdition](../../core/models.py#L8370).
+Model: [EditorialEdition](../../core/models.py#L8373).
 
 **Primary key:** `id`.
 
@@ -5140,7 +5144,7 @@ Model: [EditorialEdition](../../core/models.py#L8370).
 
 One current hero pointer, or the shared provider-lock row.
 
-Model: [EditorialHero](../../core/models.py#L8426).
+Model: [EditorialHero](../../core/models.py#L8429).
 
 **Primary key:** `key`.
 
@@ -5170,7 +5174,7 @@ None beyond the keys and field checks described above.
 
 One optional generic source/derivative attachment, with protected optional shared text/run relationships.
 
-Model: [ContentPicture](../../core/models.py#L8434).
+Model: [ContentPicture](../../core/models.py#L8437).
 
 **Primary key:** `id`.
 
@@ -5234,7 +5238,7 @@ See [Rare-type intelligence](rare-types.md) and [collection calls](twitterapi-io
 
 One saved collection/discovery query identity and associated brand/keywords.
 
-Model: [SearchQuery](../../core/models.py#L3235).
+Model: [SearchQuery](../../core/models.py#L3238).
 
 **Primary key:** `id`.
 
@@ -5265,7 +5269,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One harvest cursor for a brand, call, bucket, and query combination.
 
-Model: [CallState](../../core/models.py#L3260).
+Model: [CallState](../../core/models.py#L3263).
 
 **Primary key:** `brand_id, call_id, call_kind, bucket, query_id`.
 
@@ -5297,7 +5301,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One bounded time window still owed collection coverage.
 
-Model: [HarvestBacklogWindow](../../core/models.py#L3509).
+Model: [HarvestBacklogWindow](../../core/models.py#L3512).
 
 **Primary key:** `id`.
 
@@ -5350,7 +5354,7 @@ Model: [HarvestBacklogWindow](../../core/models.py#L3509).
 
 One configuration artifact’s last applied content hash.
 
-Model: [AppliedConfigSnapshot](../../core/models.py#L4779).
+Model: [AppliedConfigSnapshot](../../core/models.py#L4782).
 
 **Primary key:** `artifact`.
 
@@ -5378,7 +5382,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One post/role extraction state, used to avoid repeating the same work.
 
-Model: [TargetedExtractionState](../../core/models.py#L6887).
+Model: [TargetedExtractionState](../../core/models.py#L6890).
 
 **Primary key:** `id`.
 
@@ -5417,7 +5421,7 @@ Model: [TargetedExtractionState](../../core/models.py#L6887).
 
 One recorded attempt to extract a role-specific fact from a post.
 
-Model: [TargetedExtractionAttempt](../../core/models.py#L6944).
+Model: [TargetedExtractionAttempt](../../core/models.py#L6947).
 
 **Primary key:** `id`.
 
@@ -5451,7 +5455,7 @@ None declared beyond field/FK/constraint indexes.
 
 One source-backed rare-category assignment for a post and organization.
 
-Model: [RareTypeCategoryAssignment](../../core/models.py#L6844).
+Model: [RareTypeCategoryAssignment](../../core/models.py#L6847).
 
 **Primary key:** `id`.
 
@@ -5484,7 +5488,7 @@ None declared beyond field/FK/constraint indexes.
 
 One search lane’s budget accounting for a UTC day.
 
-Model: [RareTypeSearchDailyBudget](../../core/models.py#L6982).
+Model: [RareTypeSearchDailyBudget](../../core/models.py#L6985).
 
 **Primary key:** `id`.
 
@@ -5520,7 +5524,7 @@ None declared beyond field/FK/constraint indexes.
 
 One paid rare-type search time slot and its coverage/cost record.
 
-Model: [RareTypeSearchRun](../../core/models.py#L7022).
+Model: [RareTypeSearchRun](../../core/models.py#L7025).
 
 **Primary key:** `id`.
 
@@ -5593,7 +5597,7 @@ Model: [RareTypeSearchRun](../../core/models.py#L7022).
 
 One durable inbox result from an already-paid rare-type search.
 
-Model: [RareTypeSearchHit](../../core/models.py#L7476).
+Model: [RareTypeSearchHit](../../core/models.py#L7479).
 
 **Primary key:** `id`.
 
@@ -5645,7 +5649,7 @@ Model: [RareTypeSearchHit](../../core/models.py#L7476).
 
 One reusable, versioned relevance interpretation of a provider result.
 
-Model: [RareTypeDecision](../../core/models.py#L7272).
+Model: [RareTypeDecision](../../core/models.py#L7275).
 
 **Primary key:** `id`.
 
@@ -5699,7 +5703,7 @@ Model: [RareTypeDecision](../../core/models.py#L7272).
 
 One processing time slot that funds relevance-decision attempts.
 
-Model: [RareTypeDecisionProcessingCycle](../../core/models.py#L7207).
+Model: [RareTypeDecisionProcessingCycle](../../core/models.py#L7210).
 
 **Primary key:** `id`.
 
@@ -5744,7 +5748,7 @@ None declared beyond field/FK/constraint indexes.
 
 One funded provider attempt for a relevance decision, with one settlement record.
 
-Model: [RareTypeDecisionAttempt](../../core/models.py#L7391).
+Model: [RareTypeDecisionAttempt](../../core/models.py#L7394).
 
 **Primary key:** `id`.
 
@@ -5790,7 +5794,7 @@ None declared beyond field/FK/constraint indexes.
 
 One versioned staff-source observation, including eligibility and its input payload.
 
-Model: [StaffIntake](../../core/models.py#L5017).
+Model: [StaffIntake](../../core/models.py#L5020).
 
 **Primary key:** `id`.
 
@@ -5825,7 +5829,7 @@ Migration 0064 prevents updates to the source key, fingerprint, payload and capt
 
 One person/source-fingerprint/policy unit of resumable collection work.
 
-Model: [StaffCollectionWork](../../core/models.py#L5043).
+Model: [StaffCollectionWork](../../core/models.py#L5046).
 
 **Primary key:** `id`.
 
@@ -5866,7 +5870,7 @@ Source writers register work after commit; periodic catch-up covers bulk writes.
 
 One reserved provider request, its outcome and safe response evidence.
 
-Model: [StaffProviderRequest](../../core/models.py#L5102).
+Model: [StaffProviderRequest](../../core/models.py#L5105).
 
 **Primary key:** `id`.
 
@@ -5958,7 +5962,7 @@ The definition contains frozen selections, schedules and budgets; it is hashed
 with source, purpose, operation, mode and contract. Registration creates paused
 instructions and does not activate a source or scheduler.
 
-Model: [CollectionJob](../../core/models.py#L7954). **Primary key:** `id`.
+Model: [CollectionJob](../../core/models.py#L7957). **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
@@ -5999,7 +6003,7 @@ next_due_at)`. Field-level uniqueness on `job_key` uses
 
 One source scope’s pagination, ownership and request progress within a collection run.
 
-Model: [CollectionScopeRun](../../core/models.py#L3141).
+Model: [CollectionScopeRun](../../core/models.py#L3144).
 
 **Primary key:** `id`.
 
@@ -6033,7 +6037,7 @@ None beyond field/FK/constraint indexes.
 
 One identity that measurements describe, optionally linked to a product, group, brand or company.
 
-Model: [MeasurementSubject](../../core/models.py#L7667).
+Model: [MeasurementSubject](../../core/models.py#L7670).
 
 **Primary key:** `id`.
 
@@ -6064,7 +6068,7 @@ None declared beyond field/FK/constraint indexes.
 
 One versioned collection contract for a data source.
 
-Model: [MetricCollectionContract](../../core/models.py#L7842).
+Model: [MetricCollectionContract](../../core/models.py#L7845).
 
 **Primary key:** `id`.
 
@@ -6108,7 +6112,7 @@ None declared beyond field/FK/constraint indexes.
 
 One execution record for numeric measurements, catalog discovery or content invocation accounting. Every run references the job owning its source, purpose, contract and frozen scope. Catalog partial runs resume; content attempts remain separate terminal receipts. Instance properties expose job-owned instructions for existing Python callers; ORM queries use `job__source`, `job__purpose` and other job relations.
 
-Model: [CollectionRun](../../core/models.py#L7988).
+Model: [CollectionRun](../../core/models.py#L7991).
 
 **Primary key:** `id`.
 
@@ -6164,7 +6168,7 @@ The `collection_run_job_instructions` trigger validates lifecycle against the li
 
 One sourced evidence record: numeric rows are immutable evidence, catalog rows retain repository enrichment progress, and typed Post rows prove collection membership.
 
-Model: [CollectionObservation](../../core/models.py#L8067).
+Model: [CollectionObservation](../../core/models.py#L8070).
 
 **Primary key:** `id`.
 
@@ -6233,7 +6237,7 @@ Older reports retain bounded, exact page-receipt reconciliation.
 
 One allowed family of measurements and its interpretation.
 
-Model: [MetricType](../../core/models.py#L7731).
+Model: [MetricType](../../core/models.py#L7734).
 
 **Primary key:** `id`.
 
@@ -6259,7 +6263,7 @@ None declared beyond primary keys, field uniqueness and foreign keys.
 
 One value for a metric in an observation.
 
-Model: [MetricValue](../../core/models.py#L8187).
+Model: [MetricValue](../../core/models.py#L8190).
 
 **Primary key:** `id`.
 
@@ -6332,7 +6336,7 @@ WHERE m.measurement_kind = 'flow' AND window_range IS NULL;
 
 One metric definition with units, scale and methodology.
 
-Model: [SourceMetric](../../core/models.py#L7740).
+Model: [SourceMetric](../../core/models.py#L7743).
 
 **Primary key:** `id`.
 
@@ -6380,7 +6384,7 @@ Model: [SourceMetric](../../core/models.py#L7740).
 
 One sourced post linked to a measurement subject.
 
-Model: [PostSubjectAttribution](../../core/models.py#L7710).
+Model: [PostSubjectAttribution](../../core/models.py#L7713).
 
 **Primary key:** `id`.
 
@@ -6417,7 +6421,7 @@ One reviewed external source identifier mapped to a measurement subject. Catalog
 relations can represent a family repository shared by multiple models; they do
 not automatically admit numeric measurements under a metric contract.
 
-Model: [SourceSubjectMapping](../../core/models.py#L7879).
+Model: [SourceSubjectMapping](../../core/models.py#L7882).
 
 **Primary key:** `id`.
 
@@ -6463,7 +6467,7 @@ Model: [SourceSubjectMapping](../../core/models.py#L7879).
 
 One typed relationship between measurement subjects.
 
-Model: [SubjectRelationship](../../core/models.py#L7688).
+Model: [SubjectRelationship](../../core/models.py#L7691).
 
 **Primary key:** `id`.
 
@@ -6504,7 +6508,7 @@ None declared beyond field/FK/constraint indexes.
 
 One official-company account collection state and cursor.
 
-Model: [OfficialCompanyAccountState](../../core/models.py#L8496).
+Model: [OfficialCompanyAccountState](../../core/models.py#L8499).
 
 **Primary key:** `id`.
 
@@ -6549,7 +6553,7 @@ Model: [OfficialCompanyAccountState](../../core/models.py#L8496).
 
 One official-company provider attempt with its budget charge and state.
 
-Model: [OfficialCompanyAttempt](../../core/models.py#L8578).
+Model: [OfficialCompanyAttempt](../../core/models.py#L8581).
 
 **Primary key:** `id`.
 
@@ -6589,7 +6593,7 @@ None declared beyond field/FK/constraint indexes.
 
 One period of reserved official-company collection spend.
 
-Model: [OfficialCompanyBudget](../../core/models.py#L8563).
+Model: [OfficialCompanyBudget](../../core/models.py#L8566).
 
 **Primary key:** `key`.
 
@@ -6615,7 +6619,7 @@ None declared beyond field/FK/constraint indexes.
 
 One desired official-company list membership action.
 
-Model: [OfficialCompanyListIntent](../../core/models.py#L8611).
+Model: [OfficialCompanyListIntent](../../core/models.py#L8614).
 
 **Primary key:** `id`.
 
@@ -6656,7 +6660,7 @@ Model: [OfficialCompanyListIntent](../../core/models.py#L8611).
 
 One owner-scoped credential reference; secret material is not documented here.
 
-Model: [OfficialCompanyOwnerCredential](../../core/models.py#L8672).
+Model: [OfficialCompanyOwnerCredential](../../core/models.py#L8675).
 
 **Primary key:** `key`.
 
@@ -6684,7 +6688,7 @@ None declared beyond field/FK/constraint indexes.
 
 One provider lifecycle/control record for official-company collection.
 
-Model: [OfficialCompanyProviderState](../../core/models.py#L8691).
+Model: [OfficialCompanyProviderState](../../core/models.py#L8694).
 
 **Primary key:** `key`.
 
@@ -6711,7 +6715,7 @@ None declared beyond primary keys, field uniqueness and foreign keys.
 
 One official-company account scan and its outcome.
 
-Model: [OfficialCompanyScan](../../core/models.py#L8483).
+Model: [OfficialCompanyScan](../../core/models.py#L8486).
 
 **Primary key:** `key`.
 

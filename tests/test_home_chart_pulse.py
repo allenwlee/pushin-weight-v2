@@ -430,7 +430,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
         self.assertGreater(len(cold_queries), 0)
         health_reads = [row["sql"] for row in warm_queries if row["sql"].lstrip().upper().startswith("SELECT")]
         self.assertEqual(len(health_reads), 1)
-        self.assertIn("FROM home_count_snapshot", health_reads[0])
+        self.assertIn("FROM materialization_state", health_reads[0])
         self.assertEqual(warm, cold)
         self.assertIsNot(warm, cold)
 

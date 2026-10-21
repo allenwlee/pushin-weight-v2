@@ -483,13 +483,20 @@ release; that file defines the production cron.
 
 The homepage reads closed UTC days from `home_brand_time_counts`, a native
 PostgreSQL materialized view, and adds exact source counts for the live day.
-Its lifecycle row in `home_count_snapshot` records the published cutoff and
+Its `home.brand_time_counts.v1` row in shared `materialization_state` records the published cutoff and
 source changes. The 30-day and 365-day percentage comparisons end at UTC
 midnight; chart responses retain their live clock and selected local timezone.
 One-day and seven-day percentage comparisons remain rolling windows.
 
 Migration `0093_homepage_count_materialization` creates the view without data,
-its unique index, the lifecycle table and count-relevant source triggers. The
+its unique index, the lifecycle table and count-relevant source triggers.
+Migration `0094_shared_materialization_state` preserves that publication while
+generalizing the table to one row per versioned dataset. It rebinds the source
+triggers to the homepage key; the shared refresh implementation in
+`core/materializations.py` uses each definition's own lock, sources and cutoff.
+Other datasets require their own reviewed definition and invalidation migration.
+The state tracks current freshness; immutable article/research results retain
+their saved data and identity separately. The
 ordinary page query remains available while the view is unpopulated or invalid.
 Populate it through the service's managed database configuration:
 
@@ -526,7 +533,7 @@ WHERE indexrelid = 'home_brand_time_counts_key'::regclass;
 SELECT cutoff, refreshed_at, source_generation, published_generation, dirty_since,
        (source_generation = published_generation OR dirty_since >= cutoff)
            AS closed_history_valid
-FROM home_count_snapshot WHERE id = 1;
+FROM materialization_state WHERE dataset_key = 'home.brand_time_counts.v1';
 ```
 
 Current-day writes advance the source generation without invalidating closed

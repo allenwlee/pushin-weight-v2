@@ -288,10 +288,10 @@ def test_runbook_source_grants_cover_the_exhaustive_copy_policy() -> None:
 
 def test_home_count_publication_is_environment_local_after_data_refresh() -> None:
     policy = load_policy(POLICY_PATH)
-    assert "home_count_snapshot" in policy.relations.excluded_tables
-    assert "home_count_snapshot" in policy.relations.optional_source_tables
-    assert "home_count_snapshot" in policy.scrub.truncate_tables
-    assert "home_count_snapshot" not in policy.relations.copied_tables
+    assert "materialization_state" in policy.relations.excluded_tables
+    assert "materialization_state" in policy.relations.optional_source_tables
+    assert "materialization_state" in policy.scrub.truncate_tables
+    assert "materialization_state" not in policy.relations.copied_tables
     # pg_dump carries native materialized-view definitions, rather than COPY
     # rows. They must never enter a base-table TRUNCATE or SELECT grant list.
     assert "home_brand_time_counts" not in policy.relations.classified_tables
@@ -391,7 +391,7 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
 
     assert {
         "provider_batches",
-        "home_count_snapshot",
+        "materialization_state",
         "data_sources",
         "taxonomy_versions",
         "product_groups",

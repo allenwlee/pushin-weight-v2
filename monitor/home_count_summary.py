@@ -8,14 +8,32 @@ from typing import Any
 from django.db import DatabaseError, connection, transaction
 from django.db.backends.utils import CursorWrapper
 
-# Separate from collection/migration locks. Only maintenance takes this key.
+from core.materializations import (
+    HISTORY_CLEAN_SQL,
+    MaterializationDefinition,
+    is_populated,
+    refresh_materialization,
+)
+from core.materializations import (
+    sqlstate as _sqlstate,
+)
+
 REFRESH_LOCK = 726_514_093
 _RECOVERABLE = {"42P01", "55000", "55P03", "57014"}
-_HISTORY_CLEAN = "(source_generation = published_generation OR dirty_since >= cutoff)"
-
-
-def _sqlstate(error: BaseException) -> str | None:
-    return getattr(error.__cause__, "sqlstate", None)
+_HISTORY_CLEAN = HISTORY_CLEAN_SQL
+HOME_COUNTS = MaterializationDefinition(
+    dataset_key="home.brand_time_counts.v1",
+    relation="home_brand_time_counts",
+    source_tables=(
+        "brands",
+        "posts",
+        "posts_brands",
+        "posts_unsanctioned_flags",
+        "posts_untracked_brand_promotions",
+    ),
+    lock_id=REFRESH_LOCK,
+    cutoff_sql="date_trunc('day', transaction_timestamp(), 'UTC')",
+)
 
 
 def utc_day(at: datetime) -> datetime:
@@ -23,96 +41,11 @@ def utc_day(at: datetime) -> datetime:
 
 
 def _populated(cursor: CursorWrapper) -> bool:
-    cursor.execute(
-        "SELECT relispopulated FROM pg_class "
-        "WHERE oid = to_regclass('home_brand_time_counts') AND relkind = 'm'"
-    )
-    row = cursor.fetchone()
-    return bool(row and row[0])
-
-
-class _SourceChanged(Exception):
-    pass
-
-
-def _initialize_snapshot() -> bool:
-    """Repair missing state after previously untracked source writers finish."""
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT 1 FROM home_count_snapshot WHERE id = 1")
-        if cursor.fetchone():
-            return True
-    if connection.in_atomic_block:
-        raise RuntimeError(
-            "Missing home count state must be initialized outside a transaction"
-        )
-    # Commit this short barrier before counting. A pre-existing writer might
-    # have run its trigger while no singleton existed. NOWAIT avoids waiting
-    # on it or creating a lock-order deadlock; the next maintenance poll retries.
-    with transaction.atomic(), connection.cursor() as cursor:
-        cursor.execute("SELECT pg_try_advisory_xact_lock(%s)", [REFRESH_LOCK])
-        if not cursor.fetchone()[0]:
-            return False
-        cursor.execute("SET LOCAL lock_timeout = '2s'")
-        cursor.execute(
-            "LOCK TABLE brands, posts, posts_brands, posts_unsanctioned_flags, "
-            "posts_untracked_brand_promotions IN SHARE ROW EXCLUSIVE MODE NOWAIT"
-        )
-        cursor.execute(
-            "INSERT INTO home_count_snapshot (id, source_generation) "
-            "VALUES (1, 0) ON CONFLICT DO NOTHING"
-        )
-    return True
+    return is_populated(cursor, HOME_COUNTS)
 
 
 def refresh_home_counts() -> dict[str, str | int]:
-    """Publish the view and its cutoff atomically; never lock writers to count."""
-    try:
-        if not _initialize_snapshot():
-            return {"status": "busy"}
-        with transaction.atomic(), connection.cursor() as cursor:
-            cursor.execute("SELECT pg_try_advisory_xact_lock(%s)", [REFRESH_LOCK])
-            if not cursor.fetchone()[0]:
-                return {"status": "busy"}
-            cursor.execute("SET LOCAL lock_timeout = '2s'")
-            cursor.execute("SET LOCAL statement_timeout = '120s'")
-            cursor.execute(
-                f"SELECT source_generation, {_HISTORY_CLEAN}, cutoff, "
-                "date_trunc('day', transaction_timestamp(), 'UTC') "
-                "FROM home_count_snapshot WHERE id = 1"
-            )
-            state = cursor.fetchone()
-            if state is None:
-                return {"status": "unavailable"}
-            generation, clean, cutoff, today = state
-            populated = _populated(cursor)
-            if populated and clean and cutoff == today:
-                return {"status": "skipped", "cutoff": cutoff.isoformat()}
-            cursor.execute(
-                "REFRESH MATERIALIZED VIEW "
-                + ("CONCURRENTLY " if populated else "")
-                + "home_brand_time_counts"
-            )
-            cursor.execute(
-                "UPDATE home_count_snapshot SET published_generation = %s, "
-                "cutoff = %s, refreshed_at = clock_timestamp(), dirty_since = NULL "
-                "WHERE id = 1 AND source_generation = %s",
-                [generation, today, generation],
-            )
-            if cursor.rowcount != 1:
-                # Roll back the REFRESH as well as publication. A source
-                # commit during counting must never appear clean.
-                raise _SourceChanged
-            return {
-                "status": "refreshed",
-                "cutoff": today.isoformat(),
-                "generation": generation,
-            }
-    except _SourceChanged:
-        return {"status": "changed"}
-    except DatabaseError as error:
-        if _sqlstate(error) == "55P03":
-            return {"status": "busy"}
-        raise
+    return refresh_materialization(HOME_COUNTS)
 
 
 def read_home_counts(
@@ -145,9 +78,9 @@ def read_home_counts(
             if not _populated(cursor):
                 return None
             cursor.execute(
-                "SELECT 1 FROM home_count_snapshot WHERE id = 1 "
+                "SELECT 1 FROM materialization_state WHERE dataset_key = %s "
                 f"AND {_HISTORY_CLEAN} AND cutoff >= %s",
-                [day],
+                [HOME_COUNTS.dataset_key, day],
             )
             if not cursor.fetchone():
                 return None
@@ -174,7 +107,7 @@ def read_home_counts(
                 f"""
                 WITH health AS (
                     SELECT least(cutoff, %s::timestamptz) AS boundary
-                    FROM home_count_snapshot WHERE id = 1
+                    FROM materialization_state WHERE dataset_key = %s
                     AND {_HISTORY_CLEAN} AND cutoff >= %s
                 ), counts AS (
                     SELECT brand_id, bucket_start, post_count AS n
@@ -201,6 +134,7 @@ def read_home_counts(
                 """,
                 [
                     day,
+                    HOME_COUNTS.dataset_key,
                     day,
                     brand_ids,
                     start,
@@ -241,7 +175,8 @@ def home_count_cache_token() -> tuple | None:
                 "SELECT published_generation, cutoff, "
                 f"{_HISTORY_CLEAN}, "
                 "CASE WHEN dirty_since < cutoff THEN source_generation ELSE 0 END "
-                "FROM home_count_snapshot WHERE id = 1"
+                "FROM materialization_state WHERE dataset_key = %s",
+                [HOME_COUNTS.dataset_key],
             )
             row = cursor.fetchone()
             return tuple(row) if row else None

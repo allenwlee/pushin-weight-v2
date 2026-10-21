@@ -447,10 +447,10 @@ class Brand(models.Model):
         return self.nickname
 
 
-class HomeCountSnapshot(models.Model):
-    """Publication state for the rebuildable homepage count summary."""
+class MaterializationState(models.Model):
+    """Current publication of one versioned, rebuildable derived dataset."""
 
-    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    dataset_key = models.CharField(max_length=160, primary_key=True, db_collation="C")
     source_generation = models.PositiveBigIntegerField(default=0)
     published_generation = models.PositiveBigIntegerField(null=True)
     dirty_since = models.DateTimeField(null=True)
@@ -458,13 +458,16 @@ class HomeCountSnapshot(models.Model):
     refreshed_at = models.DateTimeField(null=True)
 
     class Meta:
-        db_table = "home_count_snapshot"
+        db_table = "materialization_state"
         constraints: ClassVar[list] = [
-            models.CheckConstraint(condition=models.Q(id=1), name="ck_home_count_singleton"),
+            models.CheckConstraint(
+                condition=models.Q(dataset_key__regex=r"^[a-z][a-z0-9_.-]*\.v[1-9][0-9]*$"),
+                name="ck_materialization_key",
+            ),
             models.CheckConstraint(
                 condition=models.Q(published_generation__isnull=True)
                 | models.Q(published_generation__lte=models.F("source_generation")),
-                name="ck_home_count_generation",
+                name="ck_materialization_generation",
             ),
             models.CheckConstraint(
                 condition=models.Q(
@@ -477,7 +480,7 @@ class HomeCountSnapshot(models.Model):
                     cutoff__isnull=False,
                     refreshed_at__isnull=False,
                 ),
-                name="ck_home_count_publication",
+                name="ck_materialization_publication",
             ),
         ]
 

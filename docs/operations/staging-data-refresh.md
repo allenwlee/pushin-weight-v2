@@ -118,7 +118,7 @@ TO staging_refresh_reader;
 -- definition travels through pg_dump/restore; after a refresh, run
 -- python manage.py refresh_home_counts before checking materialized-path use.
 GRANT MAINTAIN ON
-  home_count_snapshot,
+  materialization_state,
   editorial_assessments, editorial_budgets, editorial_calls,
   editorial_editions, editorial_heroes, content_pictures, editorial_stories,
   official_company_account_states, official_company_attempts,

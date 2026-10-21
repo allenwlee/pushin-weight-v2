@@ -12,7 +12,7 @@ from django.db import connection
 from django.test import Client, override_settings
 from django.test.utils import CaptureQueriesContext
 
-from core.models import Account, Brand, Post, PostBrand
+from core.models import Account, Brand, MaterializationState, Post, PostBrand
 from monitor.views import _clear_home_pulse_cache
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
@@ -34,6 +34,7 @@ class _ChartPayload(HTMLParser):
 
 @pytest.fixture
 def chart_context():
+    MaterializationState.objects.get_or_create(pk="home.brand_time_counts.v1")
     brand = Brand.objects.create(
         nickname="materialized-test",
         display_name="Count fixture",
@@ -263,7 +264,7 @@ def test_real_chart_falls_back_without_broken_transaction_when_summary_is_unavai
 ):
     from django.db import transaction
 
-    from core.models import HomeCountSnapshot
+    from core.models import MaterializationState
     from monitor.home_count_summary import refresh_home_counts
 
     client, brand = chart_context
@@ -285,7 +286,7 @@ def test_real_chart_falls_back_without_broken_transaction_when_summary_is_unavai
 
     with pytest.raises(RestoreFixture), transaction.atomic():
         if unavailable == "missing_state":
-            HomeCountSnapshot.objects.all().delete()
+            MaterializationState.objects.all().delete()
         elif unavailable == "missing_view":
             with connection.cursor() as cursor:
                 cursor.execute("DROP MATERIALIZED VIEW home_brand_time_counts")

@@ -9,7 +9,7 @@ from django.core.management import call_command
 from django.db import connection
 from django.utils import timezone
 
-from core.models import Brand, HomeCountSnapshot, Post, PostBrand
+from core.models import Brand, MaterializationState, Post, PostBrand
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
@@ -18,6 +18,131 @@ def run_refresh():
     output = StringIO()
     call_command("refresh_home_counts", stdout=output)
     return json.loads(output.getvalue())
+
+
+def test_command_and_source_writer_leave_other_dataset_publication_unchanged():
+    from core.models import MaterializationState
+
+    other = MaterializationState.objects.create(
+        dataset_key="chart.attention_daily.v1",
+        source_generation=12,
+        published_generation=11,
+        dirty_since=timezone.now() - timedelta(days=3),
+        cutoff=timezone.now() - timedelta(days=1),
+        refreshed_at=timezone.now(),
+    )
+    before = MaterializationState.objects.filter(pk=other.pk).values().get()
+    post = history()
+    assert run_refresh()["status"] == "refreshed"
+    published = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
+    assert published.source_generation == published.published_generation
+    Post.objects.filter(pk=post.pk).update(
+        created_at=timezone.now() - timedelta(days=4)
+    )
+    assert run_refresh()["status"] == "refreshed"
+    assert MaterializationState.objects.filter(pk=other.pk).values().get() == before
+
+
+@pytest.fixture
+def alternate_materialization():
+    from core.materializations import MaterializationDefinition
+
+    definition = MaterializationDefinition(
+        dataset_key="test.independent_counts.v1",
+        relation="materialization_fixture_counts",
+        source_tables=("materialization_fixture_inputs",),
+        lock_id=726_514_094,
+        cutoff_sql="date_trunc('hour', transaction_timestamp(), 'UTC')",
+    )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "CREATE TABLE materialization_fixture_inputs (id integer PRIMARY KEY)"
+        )
+        cursor.execute(
+            "CREATE MATERIALIZED VIEW materialization_fixture_counts AS "
+            "SELECT 1 AS id, count(*)::bigint AS n FROM materialization_fixture_inputs WITH NO DATA"
+        )
+        cursor.execute(
+            "CREATE UNIQUE INDEX materialization_fixture_key ON materialization_fixture_counts (id)"
+        )
+        cursor.execute("""
+            CREATE FUNCTION materialization_fixture_dirty() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+                UPDATE materialization_state SET source_generation=source_generation+1,
+                    dirty_since='0001-01-01 00:00:00+00'::timestamptz
+                WHERE dataset_key='test.independent_counts.v1';
+                RETURN NULL;
+            END $$;
+            CREATE TRIGGER materialization_fixture_dirty AFTER INSERT ON materialization_fixture_inputs
+            FOR EACH STATEMENT EXECUTE FUNCTION materialization_fixture_dirty();
+        """)
+    try:
+        yield definition
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute("DROP MATERIALIZED VIEW materialization_fixture_counts")
+            cursor.execute("DROP TABLE materialization_fixture_inputs")
+            cursor.execute("DROP FUNCTION materialization_fixture_dirty()")
+
+
+def test_shared_refresh_honors_other_definition_clock_sources_and_lock(
+    alternate_materialization,
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from django.db import connections, transaction
+
+    from core.materializations import refresh_materialization
+    from core.models import MaterializationState
+    from monitor.home_count_summary import REFRESH_LOCK
+
+    history()
+    assert run_refresh()["status"] == "refreshed"
+    home = (
+        MaterializationState.objects.filter(pk="home.brand_time_counts.v1")
+        .values()
+        .get()
+    )
+    entered, release = Event(), Event()
+
+    def hold_home_lock():
+        db = connections["default"]
+        try:
+            with transaction.atomic(), db.cursor() as cursor:
+                cursor.execute("SELECT pg_advisory_xact_lock(%s)", [REFRESH_LOCK])
+                entered.set()
+                assert release.wait(5)
+        finally:
+            db.close()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        worker = pool.submit(hold_home_lock)
+        try:
+            assert entered.wait(5)
+            assert (
+                refresh_materialization(alternate_materialization)["status"]
+                == "refreshed"
+            )
+        finally:
+            release.set()
+        worker.result(timeout=5)
+    state = MaterializationState.objects.get(pk=alternate_materialization.dataset_key)
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT date_trunc('hour', transaction_timestamp(), 'UTC')")
+        assert state.cutoff == cursor.fetchone()[0]
+        cursor.execute("INSERT INTO materialization_fixture_inputs VALUES (1), (2)")
+    state.refresh_from_db()
+    assert state.source_generation > state.published_generation
+    assert refresh_materialization(alternate_materialization)["status"] == "refreshed"
+    assert refresh_materialization(alternate_materialization)["status"] == "skipped"
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT n FROM materialization_fixture_counts")
+        assert cursor.fetchone()[0] == 2
+    assert (
+        MaterializationState.objects.filter(pk=home["dataset_key"]).values().get()
+        == home
+    )
 
 
 def history():
@@ -32,7 +157,7 @@ def history():
 def test_command_populates_native_view_skips_healthy_poll_and_rebuilds_correction():
     post = history()
     assert run_refresh()["status"] == "refreshed"
-    first = HomeCountSnapshot.objects.get(pk=1)
+    first = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
     assert first.published_generation == first.source_generation
     with connection.cursor() as cursor:
         cursor.execute(
@@ -42,7 +167,7 @@ def test_command_populates_native_view_skips_healthy_poll_and_rebuilds_correctio
     assert run_refresh()["status"] == "skipped"
     Post.objects.filter(pk=post.pk).update(created_at=timezone.now())
     assert run_refresh()["status"] == "refreshed"
-    corrected = HomeCountSnapshot.objects.get(pk=1)
+    corrected = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
     assert corrected.cutoff == first.cutoff
     assert (
         corrected.published_generation
@@ -83,7 +208,7 @@ def test_concurrent_historical_commit_cannot_publish_clean_and_does_not_wait_for
 
     post = history()
     assert run_refresh()["status"] == "refreshed"
-    old = HomeCountSnapshot.objects.get(pk=1)
+    old = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
     Post.objects.filter(pk=post.pk).update(
         created_at=timezone.now() - timedelta(days=3)
     )
@@ -119,20 +244,23 @@ def test_concurrent_historical_commit_cannot_publish_clean_and_does_not_wait_for
     assert observed == [1], (
         "reader must see the previous committed view without blocking"
     )
-    state = HomeCountSnapshot.objects.get(pk=1)
+    state = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
     assert state.published_generation == old.published_generation
     assert state.source_generation > state.published_generation
     assert state.cutoff == old.cutoff
     assert run_refresh()["status"] == "refreshed"
     assert (
-        HomeCountSnapshot.objects.get(pk=1).source_generation == state.source_generation
+        MaterializationState.objects.get(
+            pk="home.brand_time_counts.v1"
+        ).source_generation
+        == state.source_generation
     )
 
 
 def test_publication_exception_rolls_back_the_refresh_and_leaves_source_rows():
     post = history()
     assert run_refresh()["status"] == "refreshed"
-    previous = HomeCountSnapshot.objects.get(pk=1)
+    previous = MaterializationState.objects.get(pk="home.brand_time_counts.v1")
     Post.objects.filter(pk=post.pk).update(created_at=timezone.now())
 
     def crash(execute, sql, params, many, context):
@@ -148,7 +276,9 @@ def test_publication_exception_rolls_back_the_refresh_and_leaves_source_rows():
         run_refresh()
     assert Post.objects.filter(pk=post.pk).exists()
     assert (
-        HomeCountSnapshot.objects.get(pk=1).published_generation
+        MaterializationState.objects.get(
+            pk="home.brand_time_counts.v1"
+        ).published_generation
         == previous.published_generation
     )
     with connection.cursor() as cursor:
@@ -203,7 +333,7 @@ def test_missing_state_recovery_must_include_an_already_untracked_writer():
     post = Post.objects.create(
         tweet_id="missing-state-race", created_at=timezone.now() - timedelta(days=2)
     )
-    HomeCountSnapshot.objects.all().delete()
+    MaterializationState.objects.all().delete()
     entered, release = Event(), Event()
 
     def writer():
@@ -255,7 +385,7 @@ def test_missing_state_repair_reports_busy_until_an_untracked_writer_commits():
     post = Post.objects.create(
         tweet_id="busy-missing-state", created_at=timezone.now() - timedelta(days=2)
     )
-    HomeCountSnapshot.objects.all().delete()
+    MaterializationState.objects.all().delete()
     entered, release = Event(), Event()
 
     def writer():
@@ -273,7 +403,7 @@ def test_missing_state_repair_reports_busy_until_an_untracked_writer_commits():
         try:
             assert entered.wait(5)
             assert run_refresh()["status"] == "busy"
-            assert not HomeCountSnapshot.objects.exists()
+            assert not MaterializationState.objects.exists()
         finally:
             release.set()
         worker.result(timeout=5)
@@ -290,11 +420,11 @@ def test_missing_state_repair_requires_its_own_commit_before_counting():
     from django.db import transaction
 
     history()
-    HomeCountSnapshot.objects.all().delete()
+    MaterializationState.objects.all().delete()
     with (
         transaction.atomic(),
         pytest.raises(RuntimeError, match="outside a transaction"),
     ):
         run_refresh()
-    assert not HomeCountSnapshot.objects.exists()
+    assert not MaterializationState.objects.exists()
     assert run_refresh()["status"] == "refreshed"
