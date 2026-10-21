@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21 11:37 JST (working candidate based on `e39d3c93` through `0117` on isolated PostgreSQL18.6; staging `d48f591b` remains verified through `0116` on PostgreSQL18.4)
+Last verified: 2026-10-21 11:49 JST (candidate `c7bf7aaa` through `0117` on isolated PostgreSQL18.6 and staging PostgreSQL18.4, deployment `dep-dbc2e7g473hc739uv5m0`)
 
-Scope: **172 core application tables**, **2308 physical columns**, plus nine compatibility views. Repository migration boundary: `0117_metric_unit_references`; staging verified at `0116_metric_source_timezone_reference` (SHA `d48f591b37fdc0ba3cca22643d069d06e4d8cb97`). This guide describes the migration-backed repository candidate.
+Scope: **172 core application tables**, **2308 physical columns**, plus nine compatibility views. Repository migration boundary: `0117_metric_unit_references`; staging verified at `0117_metric_unit_references` (SHA `c7bf7aaa56728b736cbe0d3990ef2974dedfe73d`). This guide describes the migration-backed repository candidate.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)

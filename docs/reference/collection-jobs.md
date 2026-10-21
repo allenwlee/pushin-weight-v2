@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-21 11:37 JST, working candidate based on `e39d3c93` through migration `0117_metric_unit_references` on isolated PostgreSQL18.6. Staging deployment `dep-dbc26f6q1p3s73bh8ik0` remains verified through0116 on PostgreSQL18.4.
+Last verified: 2026-10-21 11:49 JST, candidate `c7bf7aaa` through migration `0117_metric_unit_references` on isolated PostgreSQL18.6 and staging PostgreSQL18.4, deployment `dep-dbc2e7g473hc739uv5m0`.
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
@@ -11,7 +11,7 @@ optional exports are transport, not a second runtime database.
 
 Metric definitions can reference a shared timezone through `metrics.source_timezone_id`. Their original timezone wording and schema1 nineteen-field definition snapshots remain unchanged. Adding this relationship creates no new collection-contract identity, changes no measurement value and does not infer a timezone for unresolved source evidence. See the [metric definition and bounded mapping contract](db-schema.md#table-metrics).
 
-The repository also defines optional `metrics.unit_id` and `metrics.window_unit_id`
+Metric definitions also have optional `metrics.unit_id` and `metrics.window_unit_id`
 references to the shared unit catalogue. Both preserve their original strings
 and the same nineteen-field snapshots. The database keeps exact registered
 codes consistent for old and new writers; unknown codes remain unresolved.
