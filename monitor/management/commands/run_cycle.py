@@ -25,7 +25,9 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from contextlib import ExitStack
+from datetime import UTC, datetime
 from pathlib import Path
 
 from django.conf import settings
@@ -239,15 +241,20 @@ class Command(BaseCommand):
 
             from monitor.run_lock import harvest_writer_lock
 
+            scheduled_at = datetime.now(UTC)
+            scheduled_monotonic = time.monotonic()
             with harvest_writer_lock(
                 execution_mode=(
                     "staging-acceptance" if prepared is not None else "live"
                 ),
                 entrypoint="management.run_cycle",
                 environment=(prepared.profile.environment if prepared else None),
+                wait_for_backfill_seconds=(120 if options["scheduled"] and prepared is None else 0),
             ) as lease:
                 if not lease.acquired:
                     payload = lease.contention.as_dict() if lease.contention else {}
+                    if payload.get("kind") == "writer_lock_wait_timeout":
+                        raise CommandError("live_harvest_backfill_writer_wait_timeout")
                     if options["as_json"] or prepared is not None:
                         output = {"status": "skipped", **payload}
                         if prepared is not None:
@@ -261,6 +268,9 @@ class Command(BaseCommand):
                             )
                         )
                     return None
+                if options["scheduled"] and getattr(lease, "waited_seconds", 0):
+                    options["_collection_window_end"] = scheduled_at
+                    options["_cycle_started_monotonic"] = scheduled_monotonic
                 return self._handle(*args, **options)
 
     def _handle(self, *args, **options) -> None:
@@ -352,6 +362,9 @@ class Command(BaseCommand):
             "_relevancy_llm_call": relevancy_llm_call,
             "_targeted_extraction_calls": targeted_extraction_calls,
         }
+        if options.get("_collection_window_end") is not None:
+            runner_options["_collection_window_end"] = options["_collection_window_end"]
+            runner_options["_cycle_started_monotonic"] = options["_cycle_started_monotonic"]
         if prepared is not None:
             runner_options["_backfill_call_ids"] = [prepared.profile.selected_call]
         elif selected_call_ids is not None:
