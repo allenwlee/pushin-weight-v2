@@ -173,6 +173,10 @@ def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields():
     call_command(
         "repair_metric_timing", apply=True, backup_id="verified-test-export", **kwargs
     )
+    from core.models import CollectionCorrection
+
+    assert CollectionCorrection.objects.count() == 4
+    assert all(row.before_window_end_at is None and row.after_window_end_at is not None for row in CollectionCorrection.objects.all())
     assert MetricValue.objects.filter(window_end_at__isnull=False).count() == 4
     cumulative = MetricValue.objects.filter(
         source_metric__metric_key="downloads_all_time"
@@ -191,6 +195,7 @@ def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields():
 
     summary = json.loads(output.getvalue().splitlines()[-1].split(" ", 1)[1])
     assert summary["changed_values"] == summary["metadata_updates"] == 0
+    assert CollectionCorrection.objects.count() == 4
     assert list(run.observations.order_by("id").values("source_metadata")) == saved
     call_command(
         "repair_metric_timing",
@@ -210,6 +215,7 @@ def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields():
     assert all(
         o.source_metadata["unrelated"] == "preserve" for o in run.observations.all()
     )
+    assert CollectionCorrection.objects.count() == 8
 
 
 @pytest.mark.parametrize(

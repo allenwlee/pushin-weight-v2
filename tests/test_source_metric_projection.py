@@ -172,6 +172,7 @@ def test_saved_native_counters_write_and_cross_job_replay_reuses_original_clock(
             assert value.window_start_at == CAPTURED - timedelta(days=30)
         assert value.temporal_status == "exact"
     assert observation.source_metadata["reported_time"]["policy"] == "reported-time-v1"
+    assert all(value.reported_time_policy == "reported-time-v1" for value in observation.values.all())
     assert any(v.integer_value == 0 for v in observation.values.all())
     second = project(contract, source, [snapshot], key="second")
     assert second.status == "success" and MetricValue.objects.count() == count
@@ -195,6 +196,28 @@ def test_bad_optional_fields_do_not_drop_other_numbers_and_new_capture_is_distin
     newer = evidence("hf", raw, observed_at=CAPTURED + timedelta(days=1))
     project(contract, "hf", [newer], key="new-capture")
     assert MetricValue.objects.count() == 2
+
+
+def test_projection_links_saved_input_and_records_absent_and_invalid_selected_metrics():
+    from core.models import CollectionMetricGap, CollectionObservationInput
+
+    contract, raw, _, _ = configured()
+    raw["likes"] = "invalid"
+    source = evidence("hf", raw)
+    run = project(contract, "hf", [source])
+    numeric = run.observations.get()
+    assert CollectionObservationInput.objects.get(observation=numeric).input_observation_id == source.pk
+    assert numeric.projection_kind == "source-statistics-v1"
+    assert numeric.definition_sha256
+    gaps = {g.source_metric.metric_key: g for g in CollectionMetricGap.objects.filter(observation=numeric).select_related("source_metric")}
+    assert set(gaps) == {"likes", "downloads_all_time"}
+    assert gaps["likes"].reason_code == "invalid_metric_value"
+    assert gaps["downloads_all_time"].reason_code == "selected_field_not_returned"
+    assert not any(g.source_metric.metric_key == "followers" for g in gaps.values())
+    assert numeric.values.get().integer_value == 0
+    project(contract, "hf", [source], key="replay-gaps")
+    assert CollectionMetricGap.objects.count() == 2
+    assert CollectionObservationInput.objects.count() == 1
 
 
 def test_other_model_admission_is_separate_from_text_benchmark_policy():
@@ -697,6 +720,10 @@ def test_new_optional_number_attaches_to_existing_publication_with_provenance():
     assert additional.report["projection"]["source_observation_ids"] == [second.pk]
     assert MetricValue.objects.count() == 2
     assert initial.observations.get().values.count() == 2
+    numeric = initial.observations.get()
+    assert set(numeric.inputs.values_list("input_observation_id", flat=True)) == {first.pk, second.pk}
+    assert numeric.observed_at == CAPTURED
+    assert not numeric.metric_gaps.filter(source_metric__metric_key="likes").exists()
 
 
 def test_saved_projection_enforces_its_pinned_byte_budget():

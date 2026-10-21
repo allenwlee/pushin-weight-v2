@@ -32,7 +32,7 @@ class Command(BaseCommand):
                 prepared = service.prepare_campaign(specifications)
                 if apply:
                     jobs = service.register_campaign(specifications)
-                    selection = {'campaign_key': jobs[0].definition['campaign']['key']}
+                    selection = {'campaign_key': jobs[0].campaign_settings['key']}
                     report = service.report_campaign(**selection)
                 else:
                     report = {'job_keys': [spec['job_key'] for spec in prepared], 'writes': 0}

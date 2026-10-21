@@ -54,7 +54,13 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
         ]
     )
     executor.migrate(target)
-    contract = configured()
+    if legacy_source is False:
+        contract = configured()
+    else:
+        from tests.collection_fixtures import historical_fixture_models
+
+        with historical_fixture_models(executor.loader.project_state(target).apps):
+            contract = configured()
     if legacy_source is False:
         numeric = persist_source(
             contract, "hf", "9" * 64, payload(downloads=4_000_000_000)

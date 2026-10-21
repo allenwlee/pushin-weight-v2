@@ -171,15 +171,21 @@ def test_two_page_inventory_resumes_and_distinct_events_keep_native_clocks():
         != commits.first().source_metadata["clocks"]["committer_at"]
     )
     assert MetricValue.objects.count() == 0
+    assert second.attempts.count() == 2
+    assert sum(attempt.requests.count() for attempt in second.attempts.all()) == len(
+        seen
+    )
+    assert (
+        commits.first().resource_snapshot.authored_at
+        != commits.first().resource_snapshot.committed_at
+    )
 
 
 def test_native_repository_commit_pagination_checkpoints_and_resumes():
     obj, repo = configured()
     seen = []
     ordinary = responses(repo, seen)
-    continuation = (
-        "https://api.github.com/repositories/123/commits?per_page=100&page=2"
-    )
+    continuation = "https://api.github.com/repositories/123/commits?per_page=100&page=2"
 
     def response(request):
         if request.url.path in {
@@ -271,6 +277,7 @@ def test_not_modified_page_reuses_evidence_without_treating_inventory_as_empty()
     obj, repo = configured()
     initial = execute_github_catalog(obj.pk, client=reader(responses(repo, []), 20))
     assert initial.status == "success"
+    initial.scopes.update(envelopes=[])
 
     def response(request):
         if (
@@ -286,6 +293,22 @@ def test_not_modified_page_reuses_evidence_without_treating_inventory_as_empty()
     captured = later.observations.get(dimensions__kind="repository")
     assert captured.source_metadata["reused_from"]["run_id"] == str(initial.pk)
     assert later.scopes.get(scope_kind="publisher_repos").raw_count == 1
+    prior = initial.observations.get(observation_kind="repository")
+    assert captured.observed_at == prior.observed_at
+    reused_input = captured.inputs.get(input_role="cached_response")
+    assert reused_input.input_observation_id == prior.pk
+    validation = captured.inputs.get(input_role="cache_validation").input_request
+    assert validation.http_status == 304 and validation.archive_id is None
+    assert validation.scope_run.run_id == later.pk
+    assert captured.input_set_sha256 and captured.values.count() == 0
+    assert validation.etag == validation.response_etag == '"page1"'
+    later.scopes.update(envelopes=[])
+    third = execute_github_catalog(obj.pk, client=reader(response, 20))
+    assert third.status == "success"
+    newest = third.observations.get(observation_kind="repository")
+    assert newest.observed_at == prior.observed_at
+    assert newest.inputs.get(input_role="cached_response").input_observation_id == captured.pk
+    assert newest.inputs.get(input_role="cache_validation").input_request.http_status == 304
 
 
 def test_late_provider_response_cannot_write_after_reclaim():
@@ -365,3 +388,10 @@ def test_authenticated_draft_releases_never_enter_saved_public_evidence():
         assert "UNPUBLISHED_SENTINEL" not in json.dumps(scope.envelopes)
     for row in run.observations.all():
         assert "UNPUBLISHED_SENTINEL" not in json.dumps(row.listing)
+    from core.models import CollectionEvidenceArchive
+
+    assert CollectionEvidenceArchive.objects.exists()
+    assert all(
+        b"UNPUBLISHED_SENTINEL" not in bytes(archive.body)
+        for archive in CollectionEvidenceArchive.objects.all()
+    )

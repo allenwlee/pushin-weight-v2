@@ -6,11 +6,13 @@ from core.hf_catalog import execute_catalog, resolve_scope
 from core.hf_metadata_client import HFMetadataClient
 from core.models import Brand, BrandCompany, CollectionRun, Company, Product
 from core.publisher_accounts import publisher_links
+from tests.collection_fixtures import with_database_models
 from tests.publisher_fixtures import hf_publisher
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
+@with_database_models
 def scope(brands=("lab",)):
     company = Company.objects.create(nickname="lab")
     for name in brands:
@@ -169,14 +171,23 @@ def test_archived_partial_catalog_reuses_pages_without_rewriting_unknown_budgets
     previous = previous_catalog_module(historical)
     first = previous.execute_catalog(scope=scope(), hf=api(budget=2))
     run = historical.get_model("core", "CollectionRun").objects.get(pk=first["run_id"])
-    scopes = list(run.scopes.values_list("pk", flat=True))
-    observations = list(run.observations.values_list("pk", flat=True))
-    MigrationExecutor(connection).migrate([("core", "0090_remove_run_instruction_columns")])
-    run = CollectionRun.objects.get(pk=run.pk)
-    archive_id = run.job_id
-    definition = copy.deepcopy(run.job.definition)
+    scopes = list(run.scopes.order_by("pk").values_list("pk", flat=True))
+    observations = list(run.observations.order_by("pk").values_list("pk", flat=True))
+    target = [("core", "0090_remove_run_instruction_columns")]
+    executor = MigrationExecutor(connection)
+    executor.migrate(target)
+    historical_0090 = executor.loader.project_state(target).apps
+    ArchivedRun = historical_0090.get_model("core", "CollectionRun")
+    archived_run = ArchivedRun.objects.get(pk=run.pk)
+    archive_id = archived_run.job_id
+    definition = copy.deepcopy(archived_run.job.definition)
     assert definition["budgets"] is None
     assert definition["schedule"] is None
+
+    # Resume with the current reader only after upgrading its complete schema.
+    executor = MigrationExecutor(connection)
+    executor.migrate(executor.loader.graph.leaf_nodes())
+    run = CollectionRun.objects.get(pk=run.pk)
 
     def no_saved_pages(request):
         assert request.url.path.startswith("/api/models/lab/")
@@ -186,8 +197,8 @@ def test_archived_partial_catalog_reuses_pages_without_rewriting_unknown_budgets
     assert resumed["complete"] and resumed["requests"] == 4
     assert run.job_id == archive_id
     assert run.job.definition == definition
-    assert list(run.scopes.values_list("pk", flat=True)) == scopes
-    assert list(run.observations.values_list("pk", flat=True)) == observations
+    assert list(run.scopes.order_by("pk").values_list("pk", flat=True)) == scopes
+    assert list(run.observations.order_by("pk").values_list("pk", flat=True)) == observations
     assert run.invocations[-1]["max_requests"] == 7
     assert run.invocations[-1]["max_seconds"] == 60
 

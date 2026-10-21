@@ -97,7 +97,7 @@ def validate_scope(job, cfg):
     validate_job(job)
     require((job.source_id, job.purpose, job.operation, job.mode) ==
             ("x", "content", "x_backfill", "historical"), "historical X job required")
-    scope = job.definition["scope"]
+    scope = job.scope
     version = scope.get("adapter")
     require(version in {ADAPTER_VERSION, POLICY_ADAPTER_VERSION}, "unsupported X adapter")
     require(scope.get("credential_purpose") == TwitterApiCredentialPurpose.ON_DEMAND.value,
@@ -107,7 +107,7 @@ def validate_scope(job, cfg):
     require(scope.get("config_digest") == config_digest(cfg, version=version), "backfill configuration changed")
     units = scope.get("units")
     require(isinstance(units, list) and bool(units), "frozen units required")
-    require(len(units) <= job.definition["budgets"]["items"], "scope item allowance exceeded")
+    require(len(units) <= job.budgets["items"], "scope item allowance exceeded")
     keys = set()
     for unit in units:
         key, owner = unit.get("scope_key"), unit.get("ownership", {})
@@ -234,9 +234,9 @@ class DurableBudget(BackfillBudget):
     """Conservative paid-request admission survives process death and retries."""
 
     def __init__(self, claim, job, seconds):
-        limits = job.definition["budgets"]
+        limits = job.budgets
         super().__init__(max_api_requests=limits["requests"],
-                         max_llm_calls=job.definition["scope"].get("model_requests_per_run", 0),
+                         max_llm_calls=job.scope.get("model_requests_per_run", 0),
                          run_seconds=seconds)
         self.claim = claim
 
@@ -244,7 +244,7 @@ class DurableBudget(BackfillBudget):
         super().claim_llm_request(timeout_seconds)
         with fenced_run(self.claim) as (job, run):
             count = sum(r.report.get("model_requests", 0) for r in job.runs.all())
-            if count >= job.definition["scope"].get("maximum_model_requests", 0):
+            if count >= job.scope.get("maximum_model_requests", 0):
                 raise BackfillBudgetExhausted("durable model allowance exhausted")
             run.report = {**run.report, "model_requests": run.report.get("model_requests", 0) + 1}
             run.save(update_fields=["report", "updated_at"])
@@ -309,7 +309,7 @@ class DurableBudget(BackfillBudget):
     def claim_api_request(self, timeout_seconds=0):
         super().claim_api_request(timeout_seconds)
         with fenced_run(self.claim) as (job, run):
-            limits, scope = job.definition["budgets"], job.definition["scope"]
+            limits, scope = job.budgets, job.scope
             prior = job.runs.aggregate(total=Sum("request_count"))["total"] or 0
             if (scope["prior_api_requests"] + prior >= scope["maximum_api_requests"]
                     or run.request_count >= limits["requests"]
@@ -503,7 +503,7 @@ def _drain_historical_rare(claim, job, cfg, budget):
         # cumulative admission on CollectionRun, never a live scheduler slot.
         gate.lane = f"bf:{job.pk}:{str(claim.run_id)[:8]}:{position // 5}"
         hit = RareTypeSearchHit.objects.get(pk=hit_id)
-        if hit.post_id or hit.gate_state == "junk":
+        if hit.post_id or hit.gate_state in {"junk", "review_needed", "kept"}:
             continue
         if not budget.can_start(cfg.discovery.rare_types.jev.request_timeout_seconds):
             break
@@ -521,7 +521,7 @@ def _drain_historical_rare(claim, job, cfg, budget):
             while True:
                 result = runner._ingest_kept_rare_type_hits(
                     run_id=str(claim.run_id), hit_ids=hit_ids,
-                    index=_build_brand_index(job.definition["scope"]["brands"]),
+                    index=_build_brand_index(job.scope["brands"]),
                     search_terms=_load_brand_search_terms(),
                 )
                 if result["selected"] == 0 or result["failed"]:
@@ -544,7 +544,7 @@ def _report(job, run_id):
     rows = list(CollectionScopeRun.objects.filter(run_id=run_id, scope_kind="x_query"))
     ids = sorted({str(pid) for row in rows for envelope in row.envelopes
                   for pid in envelope.get("post_ids", [])})
-    require(len(rows) == len(job.definition["scope"]["units"]), "incomplete scope ledger")
+    require(len(rows) == len(job.scope["units"]), "incomplete scope ledger")
     require(Post.objects.filter(pk__in=ids).count() == len(ids), "checkpoint Posts missing")
     complete = PostEnrichmentState.objects.filter(
         post_id__in=ids, translation_status="succeeded", classification_status="succeeded",
@@ -557,7 +557,7 @@ def _report(job, run_id):
         "scopes_complete": sum(row.enumeration_complete for row in rows), "scopes_total": len(rows),
         "recovered_post_ids": ids, "enrichment_complete_count": complete,
         "enrichment_pending_count": len(ids) - complete,
-        "cumulative_api_requests": job.definition["scope"]["prior_api_requests"] + requests,
+        "cumulative_api_requests": job.scope["prior_api_requests"] + requests,
         "provider_billing": None,
     }
     members = set(CollectionObservation.objects.filter(
@@ -567,6 +567,30 @@ def _report(job, run_id):
         # The typed ledger is complete. Later enrichment can read this scalar
         # without materializing the compatibility receipt or every member ID.
         report["post_membership"] = {"version": 1, "distinct_posts": len(ids)}
+    if job.scope.get("adapter") == POLICY_ADAPTER_VERSION:
+        from collections import Counter
+
+        from core.models import RareTypeSearchHit
+
+        hit_ids = {hit for row in rows for envelope in row.envelopes
+                   for hit in envelope.get("rare_hit_ids", [])}
+        hits = list(RareTypeSearchHit.objects.filter(pk__in=hit_ids)
+                    .values("pk", "gate_state", "post_id"))
+        missing = sorted(hit_ids - {h["pk"] for h in hits})
+        review = sorted(h["pk"] for h in hits if h["gate_state"] == "review_needed")
+        unfinished = sorted(h["pk"] for h in hits
+                            if h["gate_state"] not in {"junk", "review_needed"}
+                            and not (h["gate_state"] == "kept" and h["post_id"] is not None))
+        # Review is a completed adjudication with uncertainty, not unfinished
+        # provider work. Retain its identity; success never asserts full recall.
+        report.update({
+            "rare_gate_pending": len(unfinished) + len(missing),
+            "rare_gate_pending_hit_ids": unfinished,
+            "rare_gate_missing_hit_ids": missing,
+            "rare_gate_review_needed": len(review),
+            "rare_gate_review_hit_ids": review,
+            "rare_gate_state_counts": dict(Counter(h["gate_state"] for h in hits)),
+        })
     return report
 
 
@@ -574,7 +598,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False):
     from monitor.cycle import CycleRunner
 
     job = CollectionJob.objects.get(pk=job_id)
-    current_policy = job.definition["scope"].get("adapter") == POLICY_ADAPTER_VERSION
+    current_policy = job.scope.get("adapter") == POLICY_ADAPTER_VERSION
     raw_cfg = load_config(Path("config.yaml"))
     cfg = bounded_backfill_config(raw_cfg, enrichment_limit=1, collection_policy=current_policy)
     scope = validate_scope(job, raw_cfg if current_policy else cfg)
@@ -586,7 +610,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False):
         raise BackfillProviderSafetyError(429, retry_after_seconds=min(300, remaining))
     # Resolve this exact key before claiming or sending any HTTP request.
     require_twitterapi_api_key(TwitterApiCredentialPurpose.ON_DEMAND)
-    seconds = job.definition["budgets"]["seconds"]
+    seconds = job.budgets["seconds"]
     if scope.get("deadline") and any(not unit.get("enumeration_complete") for unit in scope["units"]):
         seconds = min(seconds, (datetime.fromisoformat(scope["deadline"]) - datetime.now(UTC)).total_seconds())
     require(seconds > 0, "campaign deadline exhausted")
@@ -607,7 +631,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False):
         if retry_blocked:
             with fenced_run(claim):
                 CollectionScopeRun.objects.filter(run_id=claim.run_id, outcome="blocked").update(outcome="pending")
-        for _ in range(job.definition["budgets"]["requests"]):
+        for _ in range(job.budgets["requests"]):
             requests = job.runs.aggregate(total=Sum("request_count"))["total"] or 0
             if scope["prior_api_requests"] + requests >= scope["maximum_api_requests"]:
                 break
@@ -686,14 +710,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False):
                    "scope_errors": scope_errors})
     if global_failure is not None:
         report["global_failure"] = global_failure
-    if current_policy:
-        hit_ids = {hit for row in CollectionScopeRun.objects.filter(run_id=claim.run_id)
-                   for envelope in row.envelopes for hit in envelope.get("rare_hit_ids", [])}
-        from core.models import RareTypeSearchHit
-        pending = RareTypeSearchHit.objects.filter(pk__in=hit_ids, post_id__isnull=True).exclude(gate_state="junk").count()
-        report["rare_gate_pending"] = pending
-    else:
-        pending = 0
+    pending = report.get("rare_gate_pending", 0)
     status = "failed" if error else ("success" if report["collection_drained"] and not pending else "partial")
     finish_run(claim, status=status, report=report, retry_at=retry_at,
                error_code=type(error).__name__ if error else None)

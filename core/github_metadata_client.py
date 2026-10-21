@@ -35,11 +35,14 @@ class GitHubResponse:
     etag: str | None = None
     retry_at: datetime | None = None
     observed_at: datetime | None = None
+    collection_request_id: str | None = None
 
 
 class GitHubMetadataClient:
     def __init__(self, budget: Budget, *, key=None):
         self.budget, self.key = budget, key
+        self.capture = None
+        self.collection_scope = None
 
     @staticmethod
     def checked_url(url):
@@ -102,6 +105,11 @@ class GitHubMetadataClient:
             headers["If-None-Match"] = etag
         request = self.budget.public_request(url, params, headers=headers)
         self.checked_url(str(request.url))
+        receipt = (
+            self.capture.start(self.collection_scope, str(request.url), etag=etag)
+            if self.capture
+            else None
+        )
         try:
             with closing(
                 self.budget.client.send(
@@ -115,12 +123,48 @@ class GitHubMetadataClient:
                     try:
                         payload = json.loads(body)
                     except (ValueError, UnicodeDecodeError) as exc:
+                        if receipt:
+                            self.capture.received(
+                                receipt,
+                                body=None,
+                                status=status,
+                                response_bytes=len(body),
+                                error_code="malformed_json",
+                            )
                         raise SourceError("malformed_json") from exc
+                    if receipt:
+                        path = urlsplit(str(request.url)).path
+                        reason = None
+                        if path.endswith("/releases"):
+                            reason = "awaiting_public_release_selection"
+                        elif re.fullmatch(r"/repos/[^/]+/[^/]+", path) and (
+                            not isinstance(payload, dict)
+                            or payload.get("private") is not False
+                        ):
+                            reason = "repository_not_proven_public"
+                        elif path.endswith("/repos") and (
+                            not isinstance(payload, list)
+                            or any(
+                                not isinstance(row, dict)
+                                or row.get("private") is not False
+                                for row in payload
+                            )
+                        ):
+                            reason = "inventory_not_proven_public"
+                        self.capture.received(
+                            receipt,
+                            body=body if reason is None else None,
+                            status=status,
+                            response_bytes=len(body),
+                            error_code=reason,
+                        )
                     require(
                         isinstance(payload, (dict, list)), "malformed GitHub payload"
                     )
                 else:
                     payload = None
+                    if receipt:
+                        self.capture.received(receipt, body=None, status=status)
                 next_url = response.links.get("next", {}).get("url")
                 if next_url:
                     require(
@@ -147,6 +191,13 @@ class GitHubMetadataClient:
                         except (OverflowError, ValueError, OSError):
                             pass
                     retry_at = max(candidates)
+                if receipt:
+                    self.capture.response_metadata(
+                        receipt,
+                        etag=response.headers.get("etag"),
+                        cursor=next_url,
+                        retry_after_at=retry_at,
+                    )
                 return GitHubResponse(
                     status,
                     payload,
@@ -155,9 +206,16 @@ class GitHubMetadataClient:
                     response.headers.get("etag"),
                     retry_at,
                     now,
+                    str(receipt.pk) if receipt else None,
                 )
         except httpx.HTTPError as exc:
+            if receipt:
+                self.capture.failed(receipt)
             raise SourceError("request_error") from exc
+        except SourceError as exc:
+            if receipt:
+                self.capture.failed(receipt, error_code=str(exc))
+            raise
 
     def owner(self, login):
         require(

@@ -75,6 +75,8 @@ class Budget:
         self.cumulative = cumulative
         self.opencode_bytes = 0
         self.total_bytes_read = 0
+        self.capture = None
+        self.collection_scope = None
 
     def public_request(self, url, params=None, *, headers=None):
         """Build independently of client cookies, default credentials and redirects."""
@@ -147,19 +149,26 @@ class Budget:
         require(not asset or not key, "asset_credentials_forbidden")
         for attempt in range(3):
             headers = {"Authorization": f"Bearer {key}"} if key else {}
+            receipt = None
             try:
                 # Build independently: do not inherit client cookies/default credentials.
                 request = self.public_request(
                     url, None if asset else params, headers=headers
                 )
+                if self.capture:
+                    receipt = self.capture.start(self.collection_scope, str(request.url))
                 with closing(
                     self.client.send(
                         request, stream=True, auth=None, follow_redirects=False
                     )
                 ) as response:
                     if asset and response.is_redirect:
+                        if receipt:
+                            self.capture.received(receipt, body=None, status=response.status_code, response_bytes=0)
                         return {"redirect": response.headers.get("location", "")}
                     if response.status_code != 200:
+                        if receipt:
+                            self.capture.received(receipt, body=None, status=response.status_code, response_bytes=0)
                         code = f"http_{response.status_code}"
                         retry = (
                             response.status_code == 429 or response.status_code >= 500
@@ -169,6 +178,8 @@ class Budget:
                         )
                     else:
                         content = self.response_bytes(response, opencode=opencode)
+                        if receipt:
+                            self.capture.received(receipt, body=content, status=200, response_bytes=len(content), media_type=response.headers.get("content-type", "application/octet-stream" if asset else "application/json").split(";")[0])
                         if asset:
                             return bytes(content)
                         try:
@@ -179,7 +190,13 @@ class Budget:
                             raise SourceError("malformed_payload")
                         return payload
             except httpx.HTTPError:
+                if receipt:
+                    self.capture.failed(receipt)
                 code, retry, delay = "request_error", True, 2**attempt
+            except SourceError as exc:
+                if receipt:
+                    self.capture.failed(receipt, error_code=str(exc))
+                raise
             if not retry or attempt == 2:
                 raise SourceError(code)
             if self.clock() + delay >= self.deadline or self.remaining <= 0:
@@ -214,6 +231,7 @@ class Budget:
             clock=self.clock,
             sleep=self.sleep,
         )
+        client.capture, client.collection_scope = self.capture, self.collection_scope
         try:
             result = (
                 client.account_counts(repo_id, account_kind)

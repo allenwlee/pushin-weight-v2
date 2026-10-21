@@ -117,6 +117,9 @@ class HFMetadataClient:
         self.requests = 0
         self.retries = 0
         self.on_attempt = None
+        self.on_result = None
+        self.capture = None
+        self.collection_scope = None
 
     @property
     def stop_reason(self) -> str | None:
@@ -151,6 +154,9 @@ class HFMetadataClient:
                 self.on_attempt(envelope)
             delay = float(2**attempt_number)
             transient = False
+            captured_body = None
+            bytes_before = self.bytes_received
+            receipt = None
             try:
                 # Explicit auth=None defeats client-level auth. Never inherit
                 # authorization headers even from an injected caller's client.
@@ -168,6 +174,9 @@ class HFMetadataClient:
                         ).as_dict()
                     },
                 )
+                if self.capture:
+                    receipt = self.capture.start(self.collection_scope, str(request.url))
+                    envelope["collection_request_id"] = str(receipt.pk)
                 with closing(
                     self.client.send(
                         request, stream=True, auth=None, follow_redirects=False
@@ -196,6 +205,7 @@ class HFMetadataClient:
                             except (ValueError, UnicodeDecodeError):
                                 envelope["outcome"] = "malformed"
                         envelope["link"] = response.headers.get("link", "")
+                        captured_body = bytes(chunks)
                     else:
                         envelope["outcome"] = {
                             401: "unauthorized",
@@ -245,10 +255,18 @@ class HFMetadataClient:
                                 envelope["payload"] = json.loads(body)
                             except ValueError:
                                 pass
+                        captured_body = bytes(body)
             except httpx.HTTPError:
                 envelope["outcome"] = "request_error"
                 transient = True
             envelope["observed_at"] = utc_now()
+            if receipt:
+                if envelope["http_status"] is not None:
+                    self.capture.received(receipt, body=captured_body, status=envelope["http_status"], response_bytes=self.bytes_received - bytes_before)
+                else:
+                    self.capture.failed(receipt)
+            if self.on_result:
+                self.on_result(envelope, captured_body, self.bytes_received - bytes_before)
             attempts.append(envelope)
             if not transient or attempt_number == 2:
                 return MetadataResponse(

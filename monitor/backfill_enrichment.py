@@ -7,7 +7,7 @@ import inspect
 import json
 import threading
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import timedelta
 from decimal import Decimal
 
@@ -34,6 +34,7 @@ from core.provider_batches import (
     enrichment_control_status,
     enrichment_policy_definition,
     fenced_batch,
+    historical_ownership_conflicts,
     import_response,
     mark_submitting,
     own_historical_posts,
@@ -212,7 +213,7 @@ def reopen_incomplete_successes(job, observations):
         after = ids[-1]
         with transaction.atomic():
             states = list(
-                PostEnrichmentState.objects.select_for_update().filter(pk__in=ids)
+                PostEnrichmentState.objects.select_for_update().filter(pk__in=ids).order_by("pk")
             )
             list(Post.objects.select_for_update().filter(pk__in=ids).order_by("pk"))
             facts = completion_facts(ids)
@@ -232,8 +233,8 @@ def reopen_incomplete_successes(job, observations):
                         )
                         reopened = True
                 if reopened:
-                    state.source_collection_job = job
                     state.save()
+            own_historical_posts(job, ids, defer_conflicts=True)
 
 
 def policy_snapshot(
@@ -579,7 +580,6 @@ def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot
     }
     calls = list(
         OriginalContentCall.objects.filter(
-            provider_batch__source_collection_job=job,
             member_post_ids__overlap=ids,
             state="completed",
             import_state__in=["pending", "applied"],
@@ -587,10 +587,19 @@ def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot
         .select_related("provider_batch")
         .order_by("reserved_at")
     )
+    current_snapshots = {
+        str(p.pk): post_snapshot(p)
+        for p in Post.objects.filter(pk__in=ids).prefetch_related("brands")
+    }
+    # An exact paid reply can outlive its source job. Its original ownership,
+    # charge and full packet remain attached to the original call.
+    calls = [call for call in calls if all(
+        call.provenance.get("post_snapshots", {}).get(p) == current_snapshots[p]
+        for p in set(call.member_post_ids).intersection(current_snapshots)
+    )]
     cached = {call.request_hash: call for call in calls}
     outstanding = set(
         OriginalContentCall.objects.filter(
-            provider_batch__source_collection_job=job,
             member_post_ids__overlap=ids,
             state__in=["reserved", "sent", "ambiguous"],
             import_state="pending",
@@ -683,6 +692,9 @@ def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot
             for call in calls:
                 if call.pk not in consumed:
                     continue
+                if call.provider_batch.source_collection_job_id != job.pk:
+                    # Reuse does not rewrite another campaign's import audit.
+                    continue
                 prefix = call.stage
                 claimed_ids = set(
                     result.get("enrichment_current_cycle_post_ids", [])
@@ -724,6 +736,7 @@ def prepare_page(job, ids, cfg, *, delegates=None, classification_input_snapshot
             CollectionJob.objects.select_for_update().get(pk=job.pk)
             for call in OriginalContentCall.objects.select_for_update().filter(
                 pk__in=rejected,
+                provider_batch__source_collection_job=job,
                 state="completed",
                 import_state__in=["pending", "applied"],
             ):
@@ -754,7 +767,12 @@ def deferred_enrichment_work(job, *, max_attempts, operation_scope="all"):
     independent members without reissuing the paid request.
     """
     failures, usable, latest_failure = defaultdict(int), {}, {}
-    deferred = {}
+    deferred = historical_ownership_conflicts(
+        job, PostEnrichmentState.objects.filter(
+            post__collection_observations__run__job=job,
+            post__collection_observations__source_subject_kind="post",
+        ).distinct(),
+    )
     calls = (
         OriginalContentCall.objects.filter(
             provider_batch__source_collection_job=job,
@@ -822,7 +840,7 @@ def deferred_enrichment_work(job, *, max_attempts, operation_scope="all"):
     return deferred
 
 
-def saved_classifier_input(call):
+def saved_classifier_input(call, *, post_ids=None):
     """Recover the submitted positional packet, keeping source and slots pinned."""
     from x_monitor.attribution import _validated_tracked_brand_catalog_snapshot
 
@@ -848,10 +866,13 @@ def saved_classifier_input(call):
             "context": evidence["context"],
             "affiliations": evidence["author_affiliations"],
         }
-    snapshots = call.provenance["post_snapshots"]
+    selected = set(ids) if post_ids is None else set(post_ids)
+    if not selected <= set(ids):
+        raise BatchAdmissionError("saved_classifier_packet_members_mismatch")
+    snapshots = {p: call.provenance["post_snapshots"][p] for p in selected}
     current = {
         str(p.pk): post_snapshot(p)
-        for p in Post.objects.filter(pk__in=ids).prefetch_related("brands")
+        for p in Post.objects.filter(pk__in=selected).prefetch_related("brands")
     }
     if current != snapshots:
         raise BatchAdmissionError("saved_classifier_packet_source_changed")
@@ -866,6 +887,7 @@ def _replay_pending_classifier_packets(
     delegates,
     limit,
     excluded_post_ids=(),
+    defer_failures=False,
 ):
     """Consume paid replies in their original packets before regrouping Posts."""
     pending = (
@@ -878,10 +900,9 @@ def _replay_pending_classifier_packets(
         .values("post_id")
     )
     replies = OriginalContentCall.objects.filter(
-        provider_batch__source_collection_job=job,
         stage="classification",
         state="completed",
-        import_state="pending",
+        import_state__in=["pending", "applied"],
         member_post_ids__overlap=ArraySubquery(pending),
     )
     replies = replies.filter(
@@ -889,25 +910,40 @@ def _replay_pending_classifier_packets(
     )
     if selection:
         replies = replies.filter(member_post_ids__overlap=selection)
-    packets = list(replies.order_by("reserved_at")[:40])
-    requests, seen = [], set()
-    for reply in packets:
+    requests, seen, stale = [], set(), []
+    for reply in replies.order_by("reserved_at").iterator(chunk_size=40):
         ids = reply.member_post_ids
         packet = tuple(sorted(ids))
         if packet in seen:
             continue
-        seen.add(packet)
+        members = set(CollectionObservation.objects.filter(
+            run__job=job, post_id__in=packet, source_subject_kind="post",
+        ).values_list("post_id", flat=True))
         selected = [
             p
             for p in packet
-            if p not in excluded_post_ids and (not selection or p in selection)
+            if p in members and p not in excluded_post_ids and (not selection or p in selection)
         ]
+        if not selected:
+            continue
+        try:
+            saved_input = saved_classifier_input(reply, post_ids=selected)
+        except BatchAdmissionError as exc:
+            if str(exc) != "saved_classifier_packet_source_changed" or (
+                not defer_failures and reply.import_state == "pending"
+            ):
+                raise
+            # This saved packet cannot authorize publication of changed
+            # members. Fresh preparation retains normal paid deduplication.
+            stale.append(reply.pk)
+            continue
+        seen.add(packet)
         prepared, _, _ = prepare_page(
             job,
             selected,
             cfg,
             delegates=delegates,
-            classification_input_snapshot=saved_classifier_input(reply),
+            classification_input_snapshot=saved_input,
         )
         requests.extend(prepared)
         # Publication can reject a newer attempt while an older paid reply is
@@ -917,7 +953,9 @@ def _replay_pending_classifier_packets(
             break
     # A saved packet may still need another reply. Keep its identity and let
     # those dependencies finish instead of buying a differently packed copy.
-    return requests, replies.exists()
+    blocked = {p for ids in replies.exclude(pk__in=stale)
+               .values_list("member_post_ids", flat=True) for p in ids}
+    return requests, blocked.intersection(pending.values_list("post_id", flat=True))
 
 
 def _update(claim, **values):
@@ -1110,7 +1148,8 @@ def _blocking_model_groups(job, model, *, allow_drained_ambiguous):
 
 
 def _register_requests(
-    job, requests, policy, cfg, *, transport="batch", allow_drained_ambiguous=False
+    job, requests, policy, cfg, *, transport="batch", allow_drained_ambiguous=False,
+    deferred=None,
 ):
     models = defaultdict(list)
     for request in requests:
@@ -1183,9 +1222,42 @@ def _register_requests(
                 deadline_at=timezone.datetime.fromisoformat(policy["deadline"]),
             )
             claim = claim_batch(batch.pk, owner=f"register:{uuid.uuid4().hex}")
-            reserve_requests(claim, selected)
+            if deferred is None:
+                reserve_requests(claim, selected)
+            else:
+                # Each child retains the same fenced, Post-locked admission.
+                # A duplicate racing preparation cannot roll back siblings.
+                for request in selected:
+                    try:
+                        with transaction.atomic():
+                            reserve_requests(claim, [request])
+                    except BatchAdmissionError as exc:
+                        if str(exc) not in {
+                            "model_request_already_outstanding_or_complete",
+                            "model_member_work_already_outstanding",
+                            "model_attempt_allowance_exhausted",
+                        }:
+                            raise
+                        deferred.update({p: str(exc) for p in exc.member_ids})
+                admitted = list(batch.calls.order_by("request_hash"))
+                admitted_manifest = digest([c.request_hash for c in admitted])
+                if admitted_manifest != manifest:
+                    admitted_attempt = ProviderBatch.objects.filter(
+                        source_collection_job=job, manifest_hash=admitted_manifest,
+                    ).exclude(pk=batch.pk).count() + 1
+                    batch.manifest_hash = admitted_manifest
+                    batch.group_key = digest({"manifest": admitted_manifest, "attempt": admitted_attempt})
+                    batch.cohort_hash = digest(sorted({p for c in admitted for p in c.member_post_ids}))
+                    batch.save(update_fields=["manifest_hash", "group_key", "cohort_hash", "updated_at"])
+                if not admitted:
+                    # Retain the policy anchor after an all-duplicate race.
+                    # This zero-send group is terminal and never reaches HTTP.
+                    batch.state = "completed"
+                    batch.completed_at = timezone.now()
+                    batch.save(update_fields=["state", "completed_at", "updated_at"])
             release_batch(claim)
-        created.append(batch.pk)
+        if batch.calls.exists():
+            created.append(batch.pk)
     return created
 
 
@@ -1227,7 +1299,7 @@ def execute_enrichment(
         or job.operation != "x_backfill"
     ):
         raise BatchAdmissionError("enrichment_requires_real_x_backfill_job")
-    pinned_database = job.definition.get("scope", {}).get("database", {})
+    pinned_database = job.scope.get("database", {})
     with connection.cursor() as cursor:
         # Match the login saved by the collector, including SET ROLE sessions.
         cursor.execute("SELECT current_database(), session_user")
@@ -1270,6 +1342,10 @@ def execute_enrichment(
         try:
             if existing is None:
                 reopen_incomplete_successes(job, observations)
+                if defer_failures:
+                    deferred = deferred_enrichment_work(
+                        job, max_attempts=int(policy["max_attempts"]), operation_scope="base",
+                    )
             for batch in list(
                 job.provider_batches.filter(state__in=ACTIVE_STATES).order_by(
                     "created_at"
@@ -1277,13 +1353,14 @@ def execute_enrichment(
             ):
                 advance(batch)
             request_limit = direct_concurrency * 2 if transport == "direct" else 2000
-            requests, cached_packets_remain = _replay_pending_classifier_packets(
+            requests, cached_packet_members = _replay_pending_classifier_packets(
                 job,
                 cfg,
                 selection=selection,
                 delegates=delegates,
                 limit=request_limit,
                 excluded_post_ids=deferred,
+                defer_failures=defer_failures,
             )
             after = ""
             work = observations.filter(
@@ -1292,7 +1369,9 @@ def execute_enrichment(
             )
             if deferred:
                 work = work.exclude(post_id__in=deferred)
-            for _ in range(0 if cached_packets_remain else 20):
+            if cached_packet_members:
+                work = work.exclude(post_id__in=cached_packet_members)
+            for _ in range(20):
                 ids = list(
                     work.filter(post_id__gt=after)
                     .order_by("post_id")
@@ -1323,6 +1402,7 @@ def execute_enrichment(
                 cfg,
                 transport=transport,
                 allow_drained_ambiguous=defer_failures,
+                deferred=deferred if defer_failures else None,
             ):
                 advance(ProviderBatch.objects.get(pk=batch_id))
         except BatchAdmissionError as exc:
@@ -1371,6 +1451,7 @@ def execute_enrichment(
         "pending_count": pending_count,
         "actionable_pending_count": actionable_pending_count,
         "deferred_post_count": len(deferred),
+        "deferred_reasons": dict(Counter(deferred.values())),
         "persisted_output_invalid_count": len(invalid) if invalid is not None else None,
         "model_requests_reserved": calls.count(),
         "model_requests_sent": calls.exclude(sent_at=None).count(),

@@ -1,14 +1,25 @@
 """Stable read-only reports of jobs, scopes, provenance and qualified coverage."""
 
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.utils import timezone
 
 from core.measurement_taxonomy import require
-from core.models import CollectionJob, MetricCollectionContract, MetricValue
+from core.models import (
+    CollectionCorrection,
+    CollectionJob,
+    MetricCollectionContract,
+    MetricValue,
+)
 
 
-def resource_statistics(*, contract_id, source, identifier, limit=1000):
-    """Read native snapshots without promoting them into canonical model series."""
+def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at=None):
+    """Read native snapshots, with current or time-qualified attribution.
+
+    known_at limits attribution corrections; it does not certify which provider
+    data was publicly available at that time.
+    """
+    from core.collection_corrections import attribution_at
+
     require(type(limit) is int and 0 < limit <= 1000, "invalid numeric report limit")
     contract = MetricCollectionContract.objects.get(pk=contract_id)
     require(source in contract.source_configuration, "source outside contract")
@@ -21,12 +32,22 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000):
             observation__run__status__in=["success", "partial"],
         )
         .select_related("observation__run", "source_metric")
+        .prefetch_related(
+            Prefetch(
+                "observation__corrections",
+                queryset=CollectionCorrection.objects.filter(
+                    correction_kind="attribution"
+                ),
+                to_attr="attribution_history",
+            )
+        )
         .order_by("-observation__observed_at", "pk")
     )
     values = list(query[: limit + 1])
     rows = []
     for value in values[:limit]:
         observation, definition = value.observation, value.source_metric
+        assignment = attribution_at(observation, known_at=known_at)
         rows.append(
             {
                 "value_id": value.pk,
@@ -34,8 +55,14 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000):
                 "run_id": str(observation.run_id),
                 "source_identifier": observation.source_identifier,
                 "source_subject_kind": observation.source_subject_kind,
-                "canonical_product_id": observation.product_id,
-                "native_only": observation.product_id is None,
+                "canonical_product_id": assignment["product_id"],
+                "recorded_product_id": observation.product_id,
+                "attribution_correction_id": str(assignment["correction_id"])
+                if assignment["correction_id"]
+                else None,
+                "attribution_complete": assignment["assignment_complete"],
+                "attribution_uncertainty_reason": assignment["uncertainty_reason"],
+                "native_only": assignment["product_id"] is None,
                 "metric": definition.metric_key,
                 "version": definition.version,
                 "unit": definition.unit,
@@ -114,7 +141,7 @@ def _job_status(job_id, *, now=None):
     ).get(pk=job_id)
     active = job.active_run
     attempt = job.last_attempt
-    scope = job.definition["scope"]
+    scope = job.scope
     health = (
         "expired_lease"
         if active and active.lease_expires_at <= now
@@ -159,7 +186,7 @@ def _job_status(job_id, *, now=None):
         else None,
         "next_due_at": job.next_due_at.isoformat() if job.next_due_at else None,
         "next_retry_at": job.next_retry_at.isoformat() if job.next_retry_at else None,
-        "budgets": job.definition["budgets"],
+        "budgets": job.budgets,
         "scopes": [
             {
                 "scope_run_id": s.pk,

@@ -103,6 +103,8 @@ def test_openrouter_model_catalog_correlates_api_only_creation_through_reviewed_
         and observation.listing["canonical_slug"] == "publisher/distinct"
     )
     assert observation.values.count() == 0
+    assert run.attempts.get().requests.get().archive_id
+    assert observation.inputs.get().input_request_id
     jobs = freeze(brands, cutoff)
     selected = next(
         j
@@ -147,3 +149,47 @@ def test_hf_creation_inventory_uses_current_product_projection_under_shared_fenc
     assert run.scopes.filter(enumeration_complete=True).count() == 2
     assert Product.objects.get(repo_id="Fixture0/NewModel").created_at.year == 2026
     assert CollectionRun.objects.count() == 1
+    requests = run.attempts.get().requests.filter(transport_outcome="received")
+    assert requests.count() == 2
+    assert all(request.archive_id is not None for request in requests)
+    assert all(observation.inputs.count() == 1 for observation in run.observations.all())
+    assert all(observation.resource_snapshot.provider_created_at.year == 2026 for observation in run.observations.all())
+
+
+def test_account_owned_typed_job_executes_real_hf_inventory_without_embedded_membership():
+    from core.models import Account
+
+    brands, _, _ = inventory()
+    frozen = resolve_scope(brands=[brands[0]], companies=[], rules=[])
+    entry = frozen["namespaces"][0]
+    owner = Account.objects.get(data_source_id="hf", normalized_identifier=entry["namespace"].casefold())
+    company_subject, _ = MeasurementSubject.objects.get_or_create(subject_kind="company", company_id=entry["company"])
+    targets = [{"target_key": "company", "subject_id": company_subject.pk, "target_kind": "company", "target_role": "owner", "resolution_state": "resolved"}]
+    for brand in entry["brands"]:
+        subject, _ = MeasurementSubject.objects.get_or_create(subject_kind="brand", brand_id=brand)
+        targets.append({"target_key": "brand:" + brand, "subject_id": subject.pk, "target_kind": "brand", "target_role": "selected", "resolution_state": "resolved"})
+    source = DataSource.objects.get(pk="hf")
+    source.enabled = True
+    source.adapter_key = "hf-catalog-v1"
+    source.save(update_fields=["enabled", "adapter_key"])
+    job = register_job(
+        job_key="typed-hf-inventory", source=source, purpose="catalog", operation="model_inventory", mode="historical",
+        definition={"version": 2, "options": {}}, targets=targets,
+        settings={"owner_kind": "account", "owner_account_id": owner.pk, "schedule_kind": "manual", "schedule_driver": "manual", "max_requests": 10, "max_bytes": 100000, "max_seconds": 60, "max_items": 100},
+    )
+    set_job_state(job.pk, "ready")
+
+    def handler(request):
+        assert request.url.params["author"] == entry["namespace"]
+        return httpx.Response(200, json=[{"id": entry["namespace"] + "/TypedModel", "author": entry["namespace"], "private": False, "createdAt": "2026-09-01T00:00:00Z"}])
+
+    run = execute_model_inventory(job.pk, budget=Budget(httpx.Client(transport=httpx.MockTransport(handler))))
+    assert run.status == "success"
+    assert run.attempts.get().requests.count() == 1
+    assert run.observations.get().inputs.count() == 1
+    snapshot = run.observations.get().resource_snapshot
+    assert snapshot.publisher_account_id == owner.pk
+    assert snapshot.native_stable_id is None  # HF's route/name can be renamed.
+    job.refresh_from_db()
+    assert job.definition == {"version": 2, "options": {}}
+    assert job.last_success_id == run.pk

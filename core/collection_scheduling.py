@@ -8,6 +8,7 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from core.collection_jobs import validate_job
@@ -17,41 +18,87 @@ from core.models import CollectionJob, CollectionRun, DataSource
 
 
 def metric_authority(source, contract_id):
-    return source.metadata.get("collection_job_authorities", {}).get(str(contract_id))
+    identifier = (
+        CollectionJob.objects.filter(
+            source=source,
+            contract_id=contract_id,
+            purpose="metric",
+            authority_enabled=True,
+        )
+        .values_list("pk", flat=True)
+        .first()
+    )
+    return str(identifier) if identifier else None
 
 
-def collection_authority(source, role):
-    return source.metadata.get("collection_role_authorities", {}).get(role)
+def collection_authority(source, role, *, owner_account_id=None):
+    identifier = (
+        CollectionJob.objects.filter(
+            source=source,
+            routine_role=role,
+            owner_account_id=owner_account_id,
+            purpose="catalog",
+            authority_enabled=True,
+        )
+        .values_list("pk", flat=True)
+        .first()
+    )
+    return str(identifier) if identifier else None
+
+
+def _retain_previous_dispatch_pointer(source, job):
+    """Keep the deployed v1 dispatcher usable until its separate retirement."""
+    if job.instruction_version != 1 or job.owner_account_id is not None:
+        return
+    key = (
+        "collection_job_authorities"
+        if job.purpose == "metric"
+        else "collection_role_authorities"
+    )
+    coordinate = str(job.contract_id) if job.purpose == "metric" else job.routine_role
+    source.metadata = {
+        **source.metadata,
+        key: {**source.metadata.get(key, {}), coordinate: str(job.pk)},
+    }
+    source.save(update_fields=["metadata"])
 
 
 @transaction.atomic
 def take_collection_authority(job_id):
     """Explicitly attach one recurring source role to the existing hourly runner."""
     job = CollectionJob.objects.select_for_update().get(pk=job_id)
+    source = DataSource.objects.select_for_update().get(pk=job.source_id)
     validate_job(job)
-    role = job.definition["scope"].get("routine_role")
+    role = job.scope.get("routine_role")
     require(
         job.purpose == "catalog"
         and job.mode == "recurring"
         and job.source_id in {"hf", "github", "openrouter", "arena"}
-        and job.definition["schedule"]["driver"] == "shared"
+        and job.schedule["driver"] == "shared"
         and isinstance(role, str)
         and 0 < len(role) <= 128,
         "reviewed recurring source role required",
     )
-    source = DataSource.objects.select_for_update().get(pk=job.source_id)
-    pointers = dict(source.metadata.get("collection_role_authorities", {}))
-    previous = pointers.get(role)
+    previous = (
+        CollectionJob.objects.select_for_update(nowait=True).filter(
+            source=source,
+            purpose="catalog",
+            routine_role=role,
+            owner_account_id=job.owner_account_id,
+            authority_enabled=True,
+        )
+        .exclude(pk=job.pk)
+        .first()
+    )
     require(
-        previous in (None, str(job.pk))
-        or CollectionJob.objects.filter(
-            pk=previous, source=source, state="cancelled"
-        ).exists(),
+        previous is None or previous.state == "cancelled",
         "another job owns collection role dispatch",
     )
-    pointers[role] = str(job.pk)
-    source.metadata = {**source.metadata, "collection_role_authorities": pointers}
-    source.save(update_fields=["metadata"])
+    if previous:
+        CollectionJob.objects.filter(pk=previous.pk).update(authority_enabled=False)
+    job.routine_role, job.authority_enabled = role, True
+    job.save(update_fields=["routine_role", "authority_enabled"])
+    _retain_previous_dispatch_pointer(source, job)
     return job
 
 
@@ -67,43 +114,26 @@ def dispatch_collection_roles(*, execute=False, now=None):
     )
     output = []
     for source in DataSource.objects.order_by("pk"):
-        pointers = source.metadata.get("collection_role_authorities", {})
-        require(
-            isinstance(pointers, dict) and len(pointers) <= 1000,
-            "invalid collection role authorities",
-        )
-        if not pointers:
-            continue
-        jobs = []
-        for role, identifier in pointers.items():
-            try:
-                job = CollectionJob.objects.get(
-                    pk=uuid.UUID(identifier),
-                    source=source,
-                    purpose="catalog",
-                    mode="recurring",
-                )
-            except (ValueError, TypeError, CollectionJob.DoesNotExist) as exc:
-                raise ValueError("invalid collection role authority identity") from exc
-            require(
-                job.definition["scope"].get("routine_role") == role,
-                "collection role authority scope mismatch",
-            )
-            jobs.append(job.pk)
         if execute:
-            limits = source.metadata.get(
-                "collection_role_dispatch_budget",
-                {
-                    "requests": 100,
-                    "seconds": 300,
-                    "bytes": 8 * 1024 * 1024,
-                },
-            )
-            require(
-                isinstance(limits, dict)
-                and set(limits) == {"requests", "seconds", "bytes"},
-                "invalid source dispatch budget",
-            )
+            from core.collection_publisher_jobs import enroll_confirmed_accounts
+
+            enroll_confirmed_accounts(source.pk)
+        jobs = list(
+            CollectionJob.objects.filter(
+                source=source,
+                purpose="catalog",
+                mode="recurring",
+                authority_enabled=True,
+            ).values_list("pk", flat=True)
+        )
+        if not jobs:
+            continue
+        if execute:
+            limits = {
+                "requests": source.dispatch_max_requests,
+                "seconds": source.dispatch_max_seconds,
+                "bytes": source.dispatch_max_bytes,
+            }
             with httpx.Client(trust_env=False) as client:
                 budget = invocation_budget(
                     client,
@@ -121,29 +151,33 @@ def dispatch_collection_roles(*, execute=False, now=None):
 @transaction.atomic
 def take_metric_authority(job_id):
     """Registration alone does not replace the current benchmark scheduler."""
-    job = (
-        CollectionJob.objects.select_for_update()
-        .select_related("source")
-        .get(pk=job_id)
-    )
+    job = CollectionJob.objects.select_for_update().get(pk=job_id)
+    source = DataSource.objects.select_for_update().get(pk=job.source_id)
     validate_job(job)
     require(
         job.operation == "collect_metrics" and job.mode == "recurring",
         "recurring metric job required",
     )
-    source = DataSource.objects.select_for_update().get(pk=job.source_id)
-    pointers = dict(source.metadata.get("collection_job_authorities", {}))
-    old = pointers.get(str(job.contract_id))
-    require(old in (None, str(job.pk)), "another job owns metric dispatch")
-    pointers[str(job.contract_id)] = str(job.pk)
-    source.metadata = {**source.metadata, "collection_job_authorities": pointers}
-    source.save(update_fields=["metadata"])
+    previous = (
+        CollectionJob.objects.filter(
+            source=source,
+            purpose="metric",
+            contract_id=job.contract_id,
+            authority_enabled=True,
+        )
+        .exclude(pk=job.pk)
+        .exists()
+    )
+    require(not previous, "another job owns metric dispatch")
+    job.authority_enabled = True
+    job.save(update_fields=["authority_enabled"])
+    _retain_previous_dispatch_pointer(source, job)
     return job
 
 
 def schedule_slot(job, now):
     now = now.astimezone(UTC)
-    schedule = job.definition["schedule"]
+    schedule = job.schedule
     if schedule["kind"] == "daily_utc":
         slot = now.replace(hour=schedule["hour"], minute=0, second=0, microsecond=0)
         return slot, slot + timedelta(days=1)
@@ -158,21 +192,25 @@ def due_job(job, *, now=None):
     now = now or timezone.now()
     validate_job(job)
     reason, slot, following = "due", None, None
-    if job.mode != "recurring" or job.definition["schedule"]["driver"] != "shared":
+    if job.mode != "recurring" or job.schedule["driver"] != "shared":
         reason = "external_or_manual_driver"
     elif job.state != "ready" or not job.source.enabled:
         reason = "paused_or_disabled"
     elif (
         job.purpose == "catalog"
-        and job.definition["scope"].get("routine_role")
+        and job.scope.get("routine_role")
         and (not settings.BENCHMARK_COLLECTION_ENABLED)
     ):
         reason = "source_collection_disabled"
     elif (
         job.purpose == "catalog"
-        and job.definition["scope"].get("routine_role")
+        and job.scope.get("routine_role")
         and (
-            collection_authority(job.source, job.definition["scope"]["routine_role"])
+            collection_authority(
+                job.source,
+                job.scope["routine_role"],
+                owner_account_id=job.owner_account_id,
+            )
             != str(job.pk)
         )
     ):
@@ -199,7 +237,8 @@ def due_job(job, *, now=None):
     else:
         continuation = (
             job.last_attempt
-            if job.purpose == "catalog"
+            if job.instruction_version == 1
+            and job.purpose == "catalog"
             and job.last_attempt_id
             and job.last_attempt.status == "partial"
             and job.last_attempt.completed_at is None
@@ -334,7 +373,10 @@ def dispatch_due(
         jobs = jobs.filter(pk__in=job_ids)
     else:
         # Imported/manual projection receipts must not consume the dispatch cap.
-        jobs = jobs.filter(mode="recurring", definition__schedule__driver="shared")
+        jobs = jobs.filter(mode="recurring").filter(
+            Q(instruction_version=2, schedule_driver="shared")
+            | Q(instruction_version=1, definition__schedule__driver="shared")
+        )
     # Numeric work precedes catalog maintenance in a bounded invocation.
     candidates = [(job, due_job(job, now=now)) for job in jobs]
     candidates.sort(

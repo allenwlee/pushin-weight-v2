@@ -576,6 +576,111 @@ def test_historical_rare_unknown_model_outcome_is_not_resent(pipeline, monkeypat
     assert attempt.state == "retained" and attempt.error_code == "timeout"
 
 
+def test_terminal_rare_review_finishes_collection_and_verifies_saved_posts(pipeline, monkeypatch, tmp_path):
+    from decimal import Decimal
+
+    from core.models import PostEnrichmentState, RareTypeSearchHit
+    from monitor.backfill_enrichment import execute_enrichment, policy_snapshot
+    from monitor.cycle import CycleRunner
+    from scripts.backfill_verify import verify_window
+    from tests.test_backfill_direct_enrichment import DirectProvider
+    from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+    from x_monitor.jev_decisions import QUESTION_SET, JevDecisionsClient, JevResponse
+
+    job = policy_job(monkeypatch, tmp_path, calls={"RARE_EXTRA"}, rare=True)
+    monkeypatch.setenv("TYPESAFE_API_KEY", "test-typesafe")
+    outcomes = iter(["kept", "review", "junk"])
+    gate_calls = []
+
+    def model(self, request_bytes, **kwargs):
+        outcome = next(outcomes)
+        gate_calls.append(outcome)
+        probabilities = {key: .1 for key in QUESTION_SET}
+        if outcome == "kept":
+            probabilities.update(ai_related=.95, role_opening=.95)
+        elif outcome == "review":
+            probabilities.update(ai_related=.5, role_opening=.95)
+        return JevResponse("response-" + outcome, probabilities, 1200, 0, Decimal("0.00005"))
+
+    monkeypatch.setattr(JevDecisionsClient, "submit", model)
+    body = page("rare-kept")
+    body["tweets"][0]["text"] = "I tried Qwen today."
+    body["tweets"].extend(page("rare-review")["tweets"] + page("rare-junk")["tweets"])
+    pipeline.responses.append(body)
+    report = run(job)
+    assert report["collection_drained"] and report["rare_gate_pending"] == 0
+    assert report["rare_gate_review_needed"] == 1
+    assert report["rare_gate_state_counts"] == {"kept": 1, "review_needed": 1, "junk": 1}
+    review = RareTypeSearchHit.objects.get(provider_post_id="rare-review")
+    assert report["rare_gate_review_hit_ids"] == [review.pk]
+    job.refresh_from_db()
+    assert job.state == "completed" and job.last_success.status == "success"
+    assert run(job)["report"]["rare_gate_review_needed"] == 1
+    assert gate_calls == ["kept", "review", "junk"]
+    assert len(pipeline.requests) == 1
+
+    # Restore the real shared publisher replaced by the collection fixture.
+    # A real verifier then inspects the accepted Post, independently of review.
+    monkeypatch.setattr(CycleRunner, "_run_post_fetch", pipeline.post_fetch_method)
+    call_command("seed_i18n_labels", stdout=StringIO())
+    cfg = load_config(Path("config.yaml"))
+    cfg.llm.literal_translation_v2_enabled = True
+    provider = DirectProvider()
+    delegates = {
+        role: DeepInfraChatCompletionsClient(
+            api_key="test", model=model, request_profile=profile,
+            transport=lambda *a, **k: pytest.fail("uncaptured inference"),
+        ) for role, model, profile in [
+            ("translation", cfg.llm.translator_model, cfg.llm.translator_deepinfra_request_profile),
+            ("classification", cfg.llm.classifier_model, cfg.llm.classifier_deepinfra_request_profile),
+        ]
+    }
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    policy = policy_snapshot(max_usd="5", deadline=timezone.now() + timedelta(hours=1))
+    for turn in range(8):
+        result = execute_enrichment(
+            job.pk, cfg=cfg, api_key="test", delegates=delegates,
+            policy=policy if turn == 0 else None, transport="direct",
+            direct_client_factory=provider.factory,
+        )
+        if result["status"] == "completed":
+            break
+    verified = verify_window(job.pk, cfg=cfg)
+    assert verified["status"] == "verified" and verified["checked_posts"] == 1
+    PostEnrichmentState.objects.filter(post_id="rare-kept").update(translation_status="pending")
+    failed = verify_window(job.pk, cfg=cfg)
+    assert failed["status"] == "failed" and failed["checked_posts"] == 1
+    assert gate_calls == ["kept", "review", "junk"]
+
+
+@pytest.mark.parametrize("gate_state", ["decision_pending", "provider_failed", "expired_unprocessed"])
+@pytest.mark.parametrize("posted", [False, True])
+def test_rare_unfinished_states_stay_pending_even_with_an_existing_post(
+    pipeline, monkeypatch, tmp_path, gate_state, posted,
+):
+    from core.models import RareTypeSearchHit
+    from monitor.backfill_collection import _report
+    from x_monitor.jev_decisions import JevDecisionError, JevDecisionsClient
+
+    job = policy_job(monkeypatch, tmp_path, calls={"RARE_EXTRA"}, rare=True)
+    monkeypatch.setenv("TYPESAFE_API_KEY", "test-typesafe")
+    monkeypatch.setattr(JevDecisionsClient, "submit", lambda *a, **k: (_ for _ in ()).throw(JevDecisionError("timeout")))
+    pipeline.responses.append(page("unresolved"))
+    first = run(job)
+    hit = RareTypeSearchHit.objects.get()
+    hit.gate_state = gate_state
+    if posted:
+        hit.post = Post.objects.create(tweet_id="unresolved", text="Qwen model release")
+    hit.save()
+    report = _report(job, first["run_id"])
+    assert report["rare_gate_pending"] == 1
+    assert report["rare_gate_pending_hit_ids"] == [hit.pk]
+    assert report["rare_gate_review_needed"] == 0
+
+
 def test_page_ledger_reconciles_duplicate_ids_and_every_deterministic_rejection(pipeline, monkeypatch):
     from dataclasses import replace
 

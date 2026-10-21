@@ -25,7 +25,7 @@ def invocation_budget(client, *, requests=20, seconds=120, max_bytes=8388608):
 
 def job_budget(parent, job):
     parent.check()
-    limits = job.definition["budgets"]
+    limits = job.budgets
     child = Budget(
         parent.client,
         max_requests=min(parent.remaining, limits["requests"]),

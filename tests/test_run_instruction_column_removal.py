@@ -293,7 +293,7 @@ def test_local_run_checks_survive_physical_drop(changes):
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.usefixtures("isolated_migration_database")
+@pytest.mark.usefixtures("collection_instruction_bridge")
 def test_drop_lock_timeout_rolls_back_function_and_columns_then_retry_succeeds():
     import psycopg
 
@@ -321,7 +321,7 @@ def test_drop_lock_timeout_rolls_back_function_and_columns_then_retry_succeeds()
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.usefixtures("isolated_migration_database")
+@pytest.mark.usefixtures("collection_instruction_bridge")
 def test_scope_sql_null_rejection_and_present_json_values_match_the_bridge():
     from psycopg.types.json import Jsonb
 

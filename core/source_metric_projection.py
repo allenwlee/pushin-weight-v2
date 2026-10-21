@@ -576,7 +576,7 @@ def _project_evidence(
     require(
         len(evidence_ids)
         == len(set(evidence_ids))
-        <= job.definition["budgets"]["items"],
+        <= job.budgets["items"],
         "projection item budget exceeded or duplicate evidence",
     )
     from core.benchmark_attribution import enforce_source_collection
@@ -591,13 +591,13 @@ def _project_evidence(
     require(len(selected) == len(evidence_ids), "source evidence missing")
     require(
         sum(_evidence_bytes(evidence) for evidence in selected)
-        <= job.definition["budgets"]["bytes"],
+        <= job.budgets["bytes"],
         "projection byte budget exceeded",
     )
     prepared, rejections, terminal_ids = [], [], []
     for evidence in selected:
         require(
-            monotonic() - started <= job.definition["budgets"]["seconds"]
+            monotonic() - started <= job.budgets["seconds"]
             and (deadline is None or monotonic() < deadline),
             "projection time budget exceeded",
         )
@@ -792,8 +792,8 @@ def replay_saved_evidence(job_id):
     """Default CLI hook: bounded database cursor; no provider client is constructed."""
     started = monotonic()
     job = CollectionJob.objects.select_related("contract").get(pk=job_id)
-    deadline = started + job.definition["budgets"]["seconds"]
-    scope = job.definition["scope"]
+    deadline = started + job.budgets["seconds"]
+    scope = job.scope
     runs, jobs = scope.get("origin_run_ids", []), scope.get("origin_job_ids", [])
     require(
         isinstance(runs, list)
@@ -844,7 +844,7 @@ def replay_saved_evidence(job_id):
         selected = selected.filter(dimensions__kind="publication_row")
     ids, consumed, complete = [], 0, True
     evidence_rows = selected.only("id", "listing", "source_metadata", "dimensions")[
-        : job.definition["budgets"]["items"] + 1
+        : job.budgets["items"] + 1
     ].iterator(chunk_size=1)
     for evidence in evidence_rows:
         if monotonic() >= deadline:
@@ -852,12 +852,12 @@ def replay_saved_evidence(job_id):
             break
         size = _evidence_bytes(evidence)
         require(
-            size <= job.definition["budgets"]["bytes"],
+            size <= job.budgets["bytes"],
             "projection byte budget exceeded for one snapshot",
         )
         if (
-            len(ids) == job.definition["budgets"]["items"]
-            or consumed + size > job.definition["budgets"]["bytes"]
+            len(ids) == job.budgets["items"]
+            or consumed + size > job.budgets["bytes"]
             or monotonic() >= deadline
         ):
             complete = False
@@ -912,7 +912,7 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
     with _projection_origin(catalog_job_id, origin_claim) as origin:
         validate_job(origin)
         require(origin.purpose == "catalog", "catalog projection origin required")
-    limits = origin.definition["budgets"]
+    limits = origin.budgets
     started = monotonic()
     usage = {"items": 0, "bytes": 0}
     if budget is not None:
@@ -959,7 +959,7 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
             "schedule": {"kind": "manual", "driver": "manual"},
             "budgets": {**limits, "requests": 1},
         }
-        campaign = origin.definition.get("campaign")
+        campaign = origin.campaign_settings
         if campaign:
             definition["campaign"] = {
                 **campaign,

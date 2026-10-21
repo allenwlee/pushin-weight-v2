@@ -152,7 +152,27 @@ TO staging_refresh_reader;
 SELECT format('GRANT SELECT ON %I.%I TO staging_refresh_reader', schemaname, tablename)
 FROM pg_tables
 WHERE schemaname = 'public'
-  AND tablename IN ('time_zones', 'languages', 'locales', 'measurement_units')
+  AND tablename IN (
+    'time_zones', 'languages', 'locales', 'measurement_units',
+    'event_dossiers', 'event_dossier_sources', 'event_dossier_claims',
+    'event_dossier_reviews', 'event_dossier_review_claims',
+    'model_release_details', 'personnel_change_details',
+    'collection_campaigns', 'collection_job_targets', 'collection_attempts',
+    'collection_requests', 'collection_evidence_archives',
+    'collection_observation_inputs', 'collection_resource_snapshots',
+    'collection_metric_gaps', 'collection_corrections'
+  )
+\gexec
+
+-- New generated-ID sequences are optional on older source snapshots.
+SELECT format('GRANT SELECT ON SEQUENCE %I.%I TO staging_refresh_reader', schemaname, sequencename)
+FROM pg_sequences
+WHERE schemaname = 'public'
+  AND sequencename IN (
+    'event_dossier_sources_id_seq', 'event_dossier_review_claims_id_seq',
+    'collection_job_targets_id_seq', 'collection_observation_inputs_id_seq',
+    'collection_metric_gaps_id_seq'
+  )
 \gexec
 
 GRANT SELECT ON

@@ -4,6 +4,7 @@ import json
 import os
 import uuid
 from contextlib import nullcontext
+from datetime import date
 
 import httpx
 from django.core.exceptions import ObjectDoesNotExist
@@ -87,7 +88,7 @@ class Command(BaseCommand):
                 if (
                     selected.contract_id != contract.pk
                     or selected.source_id != source
-                    or selected.definition.get("campaign", {}).get("phase") != "replay"
+                    or selected.campaign_settings.get("phase") != "replay"
                 ):
                     raise ValueError(
                         "source-statistics acquisition hook is unavailable; select a saved-evidence replay job"
@@ -125,7 +126,7 @@ class Command(BaseCommand):
                     ("max_seconds", "seconds"),
                     ("max_bytes", "bytes"),
                 ):
-                    options[flag] = min(options[flag], job.definition["budgets"][name])
+                    options[flag] = min(options[flag], job.budgets[name])
                 claim = claim_job(job.pk)
                 with fenced_run(claim) as (_, active):
                     active.report = {**active.report, "schedule_slot": options["slot"]}
@@ -219,11 +220,23 @@ class Command(BaseCommand):
                     result["request_count"] = options["max_requests"] - budget.remaining
                     return result
 
-                fetched = fetch() if claim is not None else None
+                fetched = None
+                if claim is not None:
+                    from core.collection_capture import capture_budget
+
+                    with capture_budget(
+                        claim,
+                        budget,
+                        scope_kind="metric_fetch",
+                        scope_key="source",
+                        ownership={"contract_id": str(contract.pk)},
+                        requested_start_date=date.fromisoformat(params["start_date"]),
+                        requested_end_date=date.fromisoformat(params["end_date"]),
+                    ):
+                        fetched = fetch()
                 if (
                     claim is not None
-                    and len(fetched.get("rows", []))
-                    > job.definition["budgets"]["items"]
+                    and len(fetched.get("rows", [])) > job.budgets["items"]
                 ):
                     raise ValueError("metric job item cap")
                 run = persist_source(
@@ -244,6 +257,7 @@ class Command(BaseCommand):
                     fetch=fetch if claim is None else None,
                     batch_id=batch,
                     claim=claim,
+                    transport_budget=budget,
                 )
             self.stdout.write(
                 json.dumps(

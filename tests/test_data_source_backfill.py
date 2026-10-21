@@ -61,6 +61,8 @@ def test_registration_is_paused_idempotent_and_rejects_changed_partition():
     spec = specification()
     first = register_campaign([spec])[0]
     assert first.state == 'paused'
+    assert first.campaign.campaign_key == 'campaign'
+    assert first.campaign.max_attempts == 2
     assert register_campaign([spec])[0].pk == first.pk
     spec['definition']['campaign']['cohort_hash'] = 'b' * 64
     with pytest.raises(ValueError, match='immutable|cohort'):
@@ -145,6 +147,10 @@ def test_campaign_ceiling_is_shared_across_source_jobs_and_accounting_can_releas
     # promise all unused reservation remains charged, including across crashes.
     finish_run(claim, status='success', request_count=3,
                report={'physical_accounting_complete': True})
+    assert campaign_usage(second) == {'invocations': 1, 'reserved_requests': 3, 'recorded_requests': 3}
+    run = CollectionRun.objects.get(pk=claim.run_id)
+    run.report = {}
+    run.save(update_fields=['report'])
     assert campaign_usage(second) == {'invocations': 1, 'reserved_requests': 3, 'recorded_requests': 3}
     set_job_state(second.pk, 'ready')
     second_claim = claim_job(second.pk)

@@ -19,7 +19,12 @@ from django.utils import timezone
 from core.benchmark_metric_store import safe_payload
 from core.collection_jobs import validate_job
 from core.measurement_taxonomy import digest, require
-from core.models import CollectionJob, CollectionRun, CollectionScopeRun
+from core.models import (
+    CollectionAttempt,
+    CollectionJob,
+    CollectionRun,
+    CollectionScopeRun,
+)
 
 
 class BusyJob(ValueError):
@@ -36,6 +41,79 @@ class RunClaim:
     run_id: uuid.UUID
     lease_token: uuid.UUID
     direct_driver: str | None = None
+    attempt_id: uuid.UUID | None = None
+
+
+def _begin_attempt(run, *, attempt_key, limits, now):
+    """Called only while the owning job/run is locked, before provider work."""
+    run.attempts.filter(outcome="running").update(
+        outcome="interrupted",
+        stop_reason="expired_lease",
+    )
+    previous = run.attempts.order_by("-ordinal").first()
+    return CollectionAttempt.objects.create(
+        run=run,
+        attempt_key=attempt_key,
+        ordinal=previous.ordinal + 1 if previous else 1,
+        lease_token=run.lease_token,
+        lease_expires_at=run.lease_expires_at,
+        started_at=now,
+        outcome="running",
+        reserved_requests=limits.get("requests"),
+        reserved_bytes=limits.get("bytes"),
+        effective_seconds=limits.get("seconds"),
+        effective_items=limits.get("items"),
+    )
+
+
+def complete_attempt(
+    claim,
+    run,
+    *,
+    status,
+    request_count=None,
+    accounting_complete=False,
+    error_code=None,
+    now=None,
+):
+    """Finish an attempt inside the caller's already-fenced transaction."""
+    run.execution_state = (
+        "completed"
+        if status == "success"
+        else "yielded"
+        if status == "partial"
+        else status
+    )
+    run.coverage_state = (
+        "complete"
+        if status == "success"
+        and not run.observations.filter(metric_gaps__isnull=False).exists()
+        else "partial"
+        if status in {"partial", "success"}
+        else "unavailable"
+    )
+    run.save(update_fields=["execution_state", "coverage_state"])
+    if claim.attempt_id is None:
+        return
+    attempt = CollectionAttempt.objects.select_for_update().get(
+        pk=claim.attempt_id, run=run
+    )
+    prior_requests = sum(
+        run.attempts.exclude(pk=attempt.pk).values_list("actual_requests", flat=True)
+    )
+    if request_count is not None:
+        attempt.actual_requests = max(
+            attempt.actual_requests, request_count - prior_requests
+        )
+    attempt.outcome = status
+    attempt.finished_at = now or timezone.now()
+    attempt.stop_reason = error_code
+    attempt.accounting_complete = (
+        accounting_complete
+        and request_count is not None
+        and attempt.unknown_sent_requests == 0
+    )
+    attempt.save()
 
 
 @transaction.atomic
@@ -140,10 +218,17 @@ def claim_direct_run(run, *, driver, seconds, limits, now=None):
     now = now or timezone.now()
     run.job = job
     run.status, run.completed_at = "running", None
+    run.execution_state = "running"
     run.lease_token = uuid.uuid4()
     run.lease_expires_at = now + timedelta(seconds=seconds)
     run.save()
-    return RunClaim(job.pk, run.pk, run.lease_token, driver)
+    attempt = _begin_attempt(
+        run,
+        attempt_key=digest([str(run.pk), str(run.lease_token)]),
+        limits=limits,
+        now=now,
+    )
+    return RunClaim(job.pk, run.pk, run.lease_token, driver, attempt.pk)
 
 
 def _key(job, invocation_id):
@@ -162,20 +247,25 @@ def claim_job(
     # Campaign peers share a finite reservation ceiling. Lock in one order before
     # the selected job, including on reclaim, without affecting legacy/X claims.
     candidate = CollectionJob.objects.get(pk=job_id)
-    campaign = candidate.definition.get("campaign", {})
+    campaign = candidate.campaign_settings
     bounded_campaign = (
         isinstance(campaign, dict)
         and campaign.get("kind") == "backfiller-data-source-v1"
     )
     if bounded_campaign:
-        list(
-            CollectionJob.objects.select_for_update()
-            .filter(
-                definition__campaign__kind="backfiller-data-source-v1",
-                definition__campaign__key=campaign["key"],
+        if candidate.campaign_id:
+            from core.models import CollectionCampaign
+
+            CollectionCampaign.objects.select_for_update().get(pk=candidate.campaign_id)
+        else:
+            list(
+                CollectionJob.objects.select_for_update()
+                .filter(
+                    definition__campaign__kind="backfiller-data-source-v1",
+                    definition__campaign__key=campaign["key"],
+                )
+                .order_by("pk")
             )
-            .order_by("pk")
-        )
     job = (
         CollectionJob.objects.select_for_update(of=("self",))
         .select_related("source", "contract")
@@ -201,8 +291,10 @@ def claim_job(
         if active.status == "running" and active.lease_expires_at > now:
             raise BusyJob("job lease is active")
         if active.status == "running":
-            active.status = "interrupted" if job.purpose == "catalog" else "aborted"
-            active.completed_at = None if job.purpose == "catalog" else now
+            resumable = job.purpose == "catalog" or job.instruction_version == 2
+            active.status = "interrupted" if resumable else "aborted"
+            active.completed_at = None if resumable else now
+            active.execution_state = "interrupted"
             active.error_code = "expired_lease"
             active.report = {
                 **active.report,
@@ -212,35 +304,63 @@ def claim_job(
                 },
             }
             active.save()
+            active.attempts.filter(outcome="running").update(
+                outcome="interrupted",
+                stop_reason="expired_lease",
+            )
     if bounded_campaign:
         from core.data_source_backfill import campaign_usage, validate_campaign
 
-        campaign = validate_campaign(job.definition, contract_id=job.contract_id)
+        campaign = validate_campaign(job.instructions, contract_id=job.contract_id)
         usage = campaign_usage(job)
         require(
             usage["invocations"] < campaign["max_invocations"]
-            and usage["reserved_requests"] + job.definition["budgets"]["requests"]
+            and usage["reserved_requests"] + job.budgets["requests"]
             <= campaign["max_requests"],
             "campaign invocation/request limit exhausted",
         )
     invocation_id = invocation_id or str(uuid.uuid4())
     ingestion_key = _key(job, invocation_id)
     require(
-        not CollectionRun.objects.filter(ingestion_key=ingestion_key).exists(),
+        not CollectionRun.objects.filter(ingestion_key=ingestion_key).exists()
+        and not CollectionAttempt.objects.filter(attempt_key=ingestion_key).exists(),
         "invocation already recorded",
     )
-    if job.purpose == "catalog" and job.last_attempt_id:
+    slot = None
+    if job.instruction_version == 2 and job.mode == "recurring":
+        from core.collection_scheduling import schedule_slot
+
+        slot, _ = schedule_slot(job, now)
+    if (
+        job.purpose == "catalog" or job.instruction_version == 2
+    ) and job.last_attempt_id:
         previous = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
-        run = previous if previous.completed_at is None else None
+        run = (
+            previous
+            if previous.completed_at is None
+            and (slot is None or previous.scheduled_slot_at == slot)
+            else None
+        )
     else:
         run = None
+    if continue_from is not None and job.instruction_version == 2:
+        run = CollectionRun.objects.select_for_update().get(pk=continue_from)
+        require(
+            run.job_id == job.pk and run.completed_at is None,
+            "continuation must resume an unfinished collection of this job",
+        )
+        require(
+            active is None or active.pk == run.pk or active.completed_at is not None,
+            "another unfinished collection owns the active slot",
+        )
     token = uuid.uuid4()
-    lease = now + timedelta(seconds=job.definition["budgets"]["seconds"] + 60)
+    lease = now + timedelta(seconds=job.budgets["seconds"] + 60)
     if run is None:
         run = CollectionRun(
             job=job,
             ingestion_key=ingestion_key,
             started_at=now,
+            scheduled_slot_at=slot,
             report={"definition_sha256": job.definition_sha256},
         )
     if bounded_campaign:
@@ -250,14 +370,15 @@ def claim_job(
             "campaign_usage": {
                 "invocations": prior_usage.get("invocations", 0) + 1,
                 "reserved_requests": prior_usage.get("reserved_requests", 0)
-                + job.definition["budgets"]["requests"],
+                + job.budgets["requests"],
                 "reserved_before_current": prior_usage.get("reserved_requests", 0),
                 "recorded_before_current": run.request_count,
-                "current_invocation_reservation": job.definition["budgets"]["requests"],
+                "current_invocation_reservation": job.budgets["requests"],
                 "accounting": "conservative_reservation",
             },
         }
     run.status, run.completed_at = "running", None
+    run.execution_state = "running"
     run.lease_token, run.lease_expires_at = token, lease
     run.error_code = None
     run.invocations = [
@@ -265,6 +386,9 @@ def claim_job(
         {"invocation_id": invocation_id, "started_at": now.isoformat()},
     ]
     run.save()
+    attempt = _begin_attempt(
+        run, attempt_key=ingestion_key, limits=job.budgets, now=now
+    )
     if bounded_campaign and job.purpose == "metric" and job.last_attempt_id:
         previous = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
         if previous.status == "partial" and previous.completed_at is not None:
@@ -278,7 +402,12 @@ def claim_job(
                 scope.save(force_insert=True)
             run.report = {**run.report, "continued_from": str(previous.pk)}
             run.save(update_fields=["report", "updated_at"])
-    if continue_from is not None:
+    if continue_from is not None and job.instruction_version == 2:
+        require(
+            str(continue_from) == str(run.pk),
+            "continuation must resume the same logical collection",
+        )
+    elif continue_from is not None:
         require(
             job.purpose == "content" and job.mode == "historical",
             "only a frozen backfill campaign may copy scopes",
@@ -301,9 +430,10 @@ def claim_job(
         run.report = {**run.report, "continued_from": str(previous.pk)}
         run.save(update_fields=["report", "updated_at"])
     job.active_run, job.last_attempt = run, run
+    job.last_attempt_attempt = attempt
     job.next_retry_at = None
     job.save()
-    return RunClaim(job.pk, run.pk, token)
+    return RunClaim(job.pk, run.pk, token, attempt_id=attempt.pk)
 
 
 @contextmanager
@@ -334,7 +464,20 @@ def fenced_run(claim: RunClaim, *, now=None):
             and run.lease_expires_at > now
         ):
             raise StaleClaim("execution claim has expired or been replaced")
-        validate_job(job)
+        # The claim already verified frozen membership. Database seal guards
+        # prevent changing it; avoid rereading every target on each checkpoint.
+        validate_job(job, deep=False)
+        if (
+            claim.attempt_id is not None
+            and not CollectionAttempt.objects.filter(
+                pk=claim.attempt_id,
+                run=run,
+                outcome="running",
+                lease_token=claim.lease_token,
+                lease_expires_at__gt=now,
+            ).exists()
+        ):
+            raise StaleClaim("execution attempt has expired or been replaced")
         run.job = job
         yield job, run
 
@@ -351,6 +494,8 @@ def checkpoint_scope(
     enumeration_complete=False,
     envelopes=None,
     raw_count=None,
+    requested_start_at=None,
+    requested_end_at=None,
     write: Callable | None = None,
 ):
     require(
@@ -368,17 +513,83 @@ def checkpoint_scope(
         "invalid raw count",
     )
     with fenced_run(claim) as (_, run):
+        target = (
+            run.job.targets.filter(target_key=scope_key).first()
+            if run.job.instruction_version == 2 and scope_kind == "product_match"
+            else None
+        )
         scope, created = CollectionScopeRun.objects.get_or_create(
             run=run,
             scope_kind=scope_kind,
             scope_key=scope_key,
-            defaults={"ownership": ownership},
+            defaults={"ownership": ownership, "job_target": target},
         )
         require(created or scope.ownership == ownership, "scope ownership pin changed")
+        for field, value in (
+            ("requested_start_at", requested_start_at),
+            ("requested_end_at", requested_end_at),
+        ):
+            if value is not None:
+                from core.benchmark_metric_store import aware_instant
+
+                value = aware_instant(value)
+                require(
+                    getattr(scope, field) in (None, value),
+                    "scope request bounds changed",
+                )
+                setattr(scope, field, value)
+        last_observation = (
+            scope.observations.order_by("-pk").values_list("pk", flat=True).first() or 0
+        )
         if write is not None:
             write(run, scope)
+        if envelopes or scope.requests.exists():
+            from core.collection_capture import link_request
+            from core.models import CollectionObservationInput, CollectionRequest
+
+            identifiers = (
+                {
+                    envelope["collection_request_id"]
+                    for envelope in envelopes
+                    if envelope.get("collection_request_id")
+                    and (
+                        envelope.get("outcome") == "ok" or envelope.get("status") == 200
+                    )
+                }
+                if envelopes
+                else set()
+            )
+            identifiers.update(
+                scope.requests.filter(transport_outcome="received").values_list(
+                    "pk", flat=True
+                )
+            )
+            used = CollectionObservationInput.objects.filter(
+                observation__scope_run=scope,
+                input_request_id__in=identifiers,
+            ).values_list("input_request_id", flat=True)
+            requests = CollectionRequest.objects.filter(
+                pk__in=identifiers, archive__isnull=False
+            ).exclude(pk__in=used)
+            for observation in scope.observations.filter(pk__gt=last_observation):
+                for request in requests:
+                    link_request(
+                        observation, request, row_locator=observation.source_identifier
+                    )
+                from core.collection_resources import project_observation_facts
+
+                project_observation_facts(observation)
         scope.cursor, scope.outcome = cursor, outcome
         scope.enumeration_complete = enumeration_complete
+        scope.execution_state = "completed" if enumeration_complete else "yielded"
+        scope.coverage_state = (
+            "complete"
+            if enumeration_complete
+            and outcome in {"complete", "observed", "success", "ok"}
+            else "partial"
+            if not enumeration_complete
+            else "unavailable"
+        )
         if cursor_history is not None:
             scope.cursor_history = cursor_history
         if envelopes is not None:
@@ -411,7 +622,10 @@ def finish_run(
         now = now or timezone.now()
         run.status = status
         run.completed_at = (
-            None if job.purpose == "catalog" and status == "partial" else now
+            None
+            if (job.purpose == "catalog" or job.instruction_version == 2)
+            and status == "partial"
+            else now
         )
         run.report = {**run.report, **(report or {})}
         require(
@@ -421,7 +635,7 @@ def finish_run(
         # Only an adapter proving complete physical accounting may release unused
         # reservation. Interrupted/ambiguous attempts retain their conservative cap.
         reservation = run.report.get("campaign_usage")
-        campaign = job.definition.get("campaign")
+        campaign = job.campaign_settings
         if (
             isinstance(campaign, dict)
             and campaign.get("kind") == "backfiller-data-source-v1"
@@ -469,6 +683,16 @@ def finish_run(
             "successful count exceeds selected count",
         )
         run.save()
+        complete_attempt(
+            claim,
+            run,
+            status=status,
+            request_count=request_count,
+            accounting_complete=(report or {}).get("physical_accounting_complete")
+            is True,
+            error_code=error_code,
+            now=now,
+        )
         job.active_run = None
         if status == "success":
             job.last_success = run
@@ -542,7 +766,7 @@ def import_scope_checkpoints(claim: RunClaim, *, definition_sha256, scopes, prov
             "checkpoint instruction identity mismatch",
         )
         require(
-            len(scopes) <= job.definition["budgets"]["items"],
+            len(scopes) <= job.budgets["items"],
             "checkpoint item budget exceeded",
         )
         for scope in scopes:

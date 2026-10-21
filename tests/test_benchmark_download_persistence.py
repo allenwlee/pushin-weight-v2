@@ -5,12 +5,13 @@ from uuid import uuid4
 import pytest
 
 from core.models import CollectionObservation, CollectionRun, MetricValue
-from tests.collection_fixtures import evidence_job
+from tests.collection_fixtures import evidence_job, with_database_models
 from tests.test_benchmark_download_db_identity import setup_spec
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
+@with_database_models
 def configured():
     from core.benchmark_metric_identity import configure_collection
 

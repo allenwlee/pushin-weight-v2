@@ -22,13 +22,20 @@ from scripts.benchmark_download_collector.sources import (
 
 
 def _openrouter(claim, job, budget, key):
-    ownership = {"authors": job.definition["scope"].get("authors", [])}
+    from core.collection_capture import capture_budget
+
+    with capture_budget(claim, budget, scope_kind="model_catalog", scope_key="models", ownership={"authors": job.scope.get("authors", [])}):
+        return _openrouter_pages(claim, job, budget, key)
+
+
+def _openrouter_pages(claim, job, budget, key):
+    ownership = {"authors": job.scope.get("authors", [])}
     scoped = CollectionScopeRun.objects.filter(
         run_id=claim.run_id, scope_kind="model_catalog", scope_key="models"
     ).first()
     count = 0
     while scoped is None or not scoped.enumeration_complete:
-        remaining = job.definition["budgets"]["items"] - count
+        remaining = job.budgets["items"] - count
         if remaining <= 0:
             raise SourceError("item_cap")
         offset = int(scoped.cursor) if scoped and scoped.cursor else 0
@@ -93,7 +100,7 @@ def _openrouter(claim, job, budget, key):
 
 
 def _hf(claim, job, budget):
-    frozen = job.definition["scope"]["hf_scope"]
+    frozen = job.scope["hf_scope"]
     rules = frozen["rules"]
     count = 0
     before = budget.remaining
@@ -109,7 +116,18 @@ def _hf(claim, job, budget):
     )
 
     def record_attempt(envelope):
+        import httpx
+
+        from core.collection_capture import begin_request
+        from core.models import CollectionAttempt
+
         with fenced_run(claim) as (_, run):
+            request = begin_request(
+                CollectionAttempt.objects.get(pk=claim.attempt_id), client.collection_scope,
+                endpoint_url=str(httpx.Request("GET", envelope["endpoint"], params=envelope["parameters"]).url),
+                cursor=client.collection_scope.cursor,
+            )
+            envelope["collection_request_id"] = str(request.pk)
             run.request_count += 1
             run.report = {
                 **run.report,
@@ -123,12 +141,27 @@ def _hf(claim, job, budget):
             run.save(update_fields=["request_count", "report", "updated_at"])
 
     client.on_attempt = record_attempt
+
+    def record_result(envelope, body, response_bytes):
+        from core.collection_capture import finish_request
+        from core.models import CollectionRequest
+
+        finish_request(
+            CollectionRequest.objects.get(pk=envelope["collection_request_id"]),
+            outcome="received" if envelope["http_status"] is not None else "transport_error",
+            body=body, http_status=envelope["http_status"],
+            error_code=None if envelope["outcome"] == "ok" else envelope["outcome"],
+            response_bytes=response_bytes,
+            body_encoding="decoded-body-v1",
+        )
+
+    client.on_result = record_result
     contract = None
-    if job.definition["scope"].get("numeric_contract_id"):
+    if job.scope.get("numeric_contract_id"):
         from core.models import MetricCollectionContract
 
         contract = MetricCollectionContract.objects.get(
-            pk=job.definition["scope"]["numeric_contract_id"]
+            pk=job.scope["numeric_contract_id"]
         )
     try:
         for entry in frozen["namespaces"]:
@@ -137,8 +170,11 @@ def _hf(claim, job, budget):
                 run_id=claim.run_id, scope_kind="namespace", scope_key=namespace
             ).first()
             while scoped is None or not scoped.enumeration_complete:
-                remaining = job.definition["budgets"]["items"] - count
-                watch_exception = job.definition["scope"].get(
+                if scoped is None:
+                    scoped = checkpoint_scope(claim, scope_key=namespace, ownership=entry)
+                client.collection_scope = scoped
+                remaining = job.budgets["items"] - count
+                watch_exception = job.scope.get(
                     "watch_inventory"
                 ) and entry["company"].casefold() in {"google", "nvidia"}
                 if watch_exception:
@@ -284,7 +320,7 @@ def _hf(claim, job, budget):
                     write=write,
                 )
                 count += len(result.payload)
-            if job.definition["scope"].get("ingest_metadata"):
+            if job.scope.get("ingest_metadata"):
                 _hf_metadata(claim, job, client, entry, rules, contract)
     finally:
         budget.remaining = before - client.requests
@@ -305,14 +341,14 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
         import httpx
 
         owned = httpx.Client(trust_env=False)
-        limits = job.definition["budgets"]
+        limits = job.budgets
         budget = Budget(
             owned,
             max_requests=limits["requests"],
             max_seconds=limits["seconds"],
             max_bytes=limits["bytes"],
         )
-    limits = job.definition["budgets"]
+    limits = job.budgets
     budget.cumulative = True
     budget.remaining = min(budget.remaining, limits["requests"])
     budget.max_bytes = min(budget.max_bytes, limits["bytes"])
@@ -321,7 +357,7 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
     reason, items = None, 0
     projection = None
     try:
-        if job.definition["scope"].get("numeric_contract_id"):
+        if job.scope.get("numeric_contract_id"):
             from core.source_metric_projection import drain_pending_projections
 
             projection = drain_pending_projections(
@@ -345,7 +381,7 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
         if owned:
             owned.close()
     run = CollectionRun.objects.get(pk=claim.run_id)
-    if job.definition["scope"].get("numeric_contract_id"):
+    if job.scope.get("numeric_contract_id"):
         from core.source_metric_projection import drain_pending_projections
 
         try:
@@ -368,9 +404,9 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
     items = total_items - prior_items
     if (
         job.source_id == "hf"
-        and job.definition["scope"].get("hf_scope", {}).get("gaps")
+        and job.scope.get("hf_scope", {}).get("gaps")
         and reason is None
-        and not job.definition["scope"].get("numeric_contract_id")
+        and not job.scope.get("numeric_contract_id")
     ):
         reason = "inventory_scope_incomplete"
     return finish_run(
@@ -387,7 +423,7 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
             "numeric_projection": projection,
             "scope_coverage": [
                 {**gap, "outcome": "unavailable"}
-                for gap in job.definition["scope"].get("hf_scope", {}).get("gaps", [])
+                for gap in job.scope.get("hf_scope", {}).get("gaps", [])
             ],
             "metadata_coverage": list(
                 run.scopes.filter(scope_kind__in=["hf_metadata", "hf_profile"]).values(
@@ -427,6 +463,11 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
             ).first()
             if existing and existing.enumeration_complete:
                 continue
+            client.collection_scope = existing or checkpoint_scope(
+                claim, scope_kind="hf_metadata",
+                scope_key=listing.source_identifier + ":" + group,
+                ownership={"namespace": entry["namespace"], "repository": listing.source_identifier},
+            )
             result = client.model_group(listing.source_identifier, group)
             observed_at = timezone.now()
             accepted = result.outcome in {"ok", "partial_expansion"}
@@ -547,6 +588,10 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
         account = Account.objects.get(
             data_source_id="hf", normalized_identifier=entry["namespace"].casefold()
         )
+        client.collection_scope = profile or checkpoint_scope(
+            claim, scope_kind="hf_profile", scope_key=entry["namespace"],
+            ownership={"account_id": str(account.pk)},
+        )
         response = (
             client.account_counts(entry["namespace"], account.account_kind)
             if account.account_kind in {"organization", "individual"}
@@ -620,7 +665,7 @@ def _hf_missing_fields(run, job):
     """Explicit terminal gaps for optional selected fields absent from all groups."""
     from core.models import MetricCollectionContract
 
-    contract_id = job.definition["scope"].get("numeric_contract_id")
+    contract_id = job.scope.get("numeric_contract_id")
     if not contract_id:
         return []
     contract = MetricCollectionContract.objects.get(pk=contract_id)

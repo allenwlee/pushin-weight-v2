@@ -20,7 +20,7 @@ MIGRATION = "core.migrations.0088_archive_run_instructions"
 
 
 @pytest.fixture
-def historical_schema(isolated_migration_database, monkeypatch):
+def historical_schema(isolated_migration_database, monkeypatch, request):
     """Old rows belong to historical models on the actual old schema."""
     executor = MigrationExecutor(connection)
     target = [("core", "0088_archive_run_instructions")]
@@ -33,7 +33,13 @@ def historical_schema(isolated_migration_database, monkeypatch):
     monkeypatch.setitem(
         globals(), "CollectionJob", historical.get_model("core", "CollectionJob")
     )
-    return historical
+    if request.node.name == "test_current_reader_includes_finished_old_writer_evidence_after_catchup":
+        yield historical
+    else:
+        from tests.collection_bridge_fixture import bridge_runtime
+
+        with bridge_runtime(historical, job_owned=False):
+            yield historical
 
 
 def legacy_persist(contract, *args, **kwargs):
@@ -88,6 +94,17 @@ def previous_module(name, historical=None):
             )
 
         module.get_publisher = historical_publisher
+    from tests.collection_fixtures import historical_fixture_models
+
+    for entry in ("persist_source", "execute_catalog"):
+        if hasattr(module, entry):
+            original_entry = getattr(module, entry)
+
+            def historical_entry(*args, _entry=original_entry, **kwargs):
+                with historical_fixture_models(model_apps):
+                    return _entry(*args, **kwargs)
+
+            setattr(module, entry, historical_entry)
     return module
 
 
@@ -182,8 +199,8 @@ def test_frozen_legacy_bootstrap_launcher_runs_only_with_its_historical_orm(
     )
     run = legacy_persist(contract, "hf", "9" * 64, payload(), batch_id=batch)
     settings.BENCHMARK_COLLECTION_ENABLED = True
-    # Keep the current command's own imports bound to current model classes;
-    # only the frozen inline caller receives its historical ORM imports.
+    # The historical launcher uses its deployed scheduler. Current services
+    # require the expanded schema and are tested after migration below.
     importlib.import_module("monitor.management.commands.collect_benchmark_due")
     monkeypatch.setattr(models, "MetricCollectionRun", CollectionRun)
     monkeypatch.setattr(

@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21 JST (foundation candidate based on `64b95c26`; shared catalogue boundaries checked against models, migration SQL and isolated PostgreSQL18)
+Last verified: 2026-10-21 09:52 JST (repository candidate based on `aa5faf3f`, migration-backed through `0114` and checked in isolated PostgreSQL18.6; staging verified through `0097_event_dossier_integrity`)
 
-Scope: **155 application tables**, **1973 physical columns**, plus nine compatibility views. Candidate migration boundary: `0095_shared_measurement_units`. Three additive migrations introduce four shared catalogues and five columns; existing owner fields, source wording and hash serialization remain unchanged. This describes the repository candidate, not an applied production schema.
+Scope: **171 core application tables**, **2301 physical columns**, plus nine compatibility views. Repository candidate migration boundary: `0114_collection_latest_attempt_pointer`; staging is verified through `0097_event_dossier_integrity`. This guide describes the migration-backed repository candidate, not the deployed staging schema.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -31,10 +31,11 @@ The retired SQLite database and Graphviz image are not current schema sources.
 | [Products, model releases, and Hugging Face catalog](#products) | 8 | Exact products, release claims, and catalog observations. |
 | [Job listings and official career-site collection](#jobs) | 5 | Advertised roles, their sources, and career-site synchronization status. |
 | [Events and opportunities](#events) | 3 | Attendable occurrences and action-for-benefit offers. |
+| [Event dossiers and evidence](#event-dossiers) | 7 | Source-backed event identity, claims, review history and typed projections. |
 | [Post translation and commentary](#translation) | 9 | Literal post translations, generated commentary, retries, and budgets. |
 | [Authored content and trend publication](#headlines) | 11 | Prepared headline text, publication pointers, provider batches, work requests, and provider costs. |
 | [Compatible editorial input storage and pictures](#editorial) | 7 | Story identities, accepted editions, quarter-hour decisions, spend and optional assets. |
-| [Collection, extraction, and processing records](#processing) | 16 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
+| [Collection, extraction, and processing records](#processing) | 25 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
 | [Measurement subjects, metrics and observations](#measurements) | 12 | Sourced measurements and their collection state. |
 | [Official-company collection](#official-companies) | 7 | Official-company account collection, attempts and spending. |
 
@@ -134,8 +135,8 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 155 application tables appears once in this inventory and once in
-the detailed sections. Subject counts above sum to 155.
+Each of the 171 core application tables appears once in this inventory and once in
+the detailed sections. Subject counts above sum to 171.
 
 | Table | Subject | What one row represents |
 | --- | --- | --- |
@@ -157,8 +158,17 @@ the detailed sections. Subject counts above sum to 155.
 | [brands_accounts](#table-brands_accounts) | [Companies, brands, and organization discovery](#organizations) | One account’s role for a brand, such as official or researcher. |
 | [brands_companies](#table-brands_companies) | [Companies, brands, and organization discovery](#organizations) | One ownership relationship between a brand and a company. |
 | [call_state](#table-call_state) | [Collection, extraction, and processing records](#processing) | One harvest cursor for a brand, call, bucket, and query combination. |
+| [collection_attempts](#table-collection_attempts) | [Collection, extraction, and processing records](#processing) | One separately admitted execution attempt in a logical run. |
+| [collection_campaigns](#table-collection_campaigns) | [Collection, extraction, and processing records](#processing) | One bounded campaign spanning related collection jobs. |
+| [collection_corrections](#table-collection_corrections) | [Collection, extraction, and processing records](#processing) | One immutable correction to an observation or attribution. |
+| [collection_evidence_archives](#table-collection_evidence_archives) | [Collection, extraction, and processing records](#processing) | One immutable content-addressed captured response body. |
+| [collection_job_targets](#table-collection_job_targets) | [Collection, extraction, and processing records](#processing) | One frozen target or query attached to a collection job. |
 | [collection_jobs](#table-collection_jobs) | [Measurement subjects, metrics and observations](#measurements) | One immutable instruction with mutable coordination pointers. |
+| [collection_metric_gaps](#table-collection_metric_gaps) | [Collection, extraction, and processing records](#processing) | One selected counter missing from an observation, with a reason. |
+| [collection_observation_inputs](#table-collection_observation_inputs) | [Collection, extraction, and processing records](#processing) | One provenance link from an observation to its request or prior observation. |
 | [collection_observations](#table-collection_observations) | [Measurement subjects, metrics and observations](#measurements) | One sourced, dated observation in a collection run. |
+| [collection_requests](#table-collection_requests) | [Collection, extraction, and processing records](#processing) | One transport request and its outcome. |
+| [collection_resource_snapshots](#table-collection_resource_snapshots) | [Collection, extraction, and processing records](#processing) | One nonnumeric historical snapshot of a collected resource. |
 | [collection_runs](#table-collection_runs) | [Measurement subjects, metrics and observations](#measurements) | One source collection run, for numeric measurements or catalog discovery. |
 | [collection_scope_runs](#table-collection_scope_runs) | [Measurement subjects, metrics and observations](#measurements) | One source scope’s pagination and ownership progress within a collection run. |
 | [companies](#table-companies) | [Companies, brands, and organization discovery](#organizations) | One company identity, including its recorded headquarters country. |
@@ -176,6 +186,11 @@ the detailed sections. Subject counts above sum to 155.
 | [editorial_editions](#table-editorial_editions) | [Compatible editorial input storage and pictures](#editorial) | One immutable accepted story edition for a track, locale and revision. |
 | [editorial_heroes](#table-editorial_heroes) | [Compatible editorial input storage and pictures](#editorial) | One current hero pointer, or the shared provider-lock row. |
 | [editorial_stories](#table-editorial_stories) | [Compatible editorial input storage and pictures](#editorial) | One permanent development identity with original-post anchors. |
+| [event_dossier_claims](#table-event_dossier_claims) | [Event dossiers and evidence](#event-dossiers) | One extracted assertion with evidence, scope and typed time precision. |
+| [event_dossier_review_claims](#table-event_dossier_review_claims) | [Event dossiers and evidence](#event-dossiers) | One claim disposition included in a review revision. |
+| [event_dossier_reviews](#table-event_dossier_reviews) | [Event dossiers and evidence](#event-dossiers) | One immutable dossier decision revision and evidence cutoff. |
+| [event_dossier_sources](#table-event_dossier_sources) | [Event dossiers and evidence](#event-dossiers) | One captured source attached to one dossier. |
+| [event_dossiers](#table-event_dossiers) | [Event dossiers and evidence](#event-dossiers) | One versioned event identity and its current review pointer. |
 | [event_evidence](#table-event_evidence) | [Events and opportunities](#events) | One source observation supporting an event occurrence. |
 | [events](#table-events) | [Events and opportunities](#events) | One attendance-bearing occurrence, such as a conference or meetup. |
 | [geopolitical_mode_keys](#table-geopolitical_mode_keys) | [Classification vocabularies and translated labels](#vocabularies) | One geopolitical-mode vocabulary key. |
@@ -194,6 +209,7 @@ the detailed sections. Subject counts above sum to 155.
 | [metric_types](#table-metric_types) | [Measurement subjects, metrics and observations](#measurements) | One allowed family of measurements and its interpretation. |
 | [metric_values](#table-metric_values) | [Measurement subjects, metrics and observations](#measurements) | One value for a metric in an observation. |
 | [metrics](#table-metrics) | [Measurement subjects, metrics and observations](#measurements) | One metric definition with units, scale and methodology. |
+| [model_release_details](#table-model_release_details) | [Event dossiers and evidence](#event-dossiers) | One typed model-release projection owned by a dossier review. |
 | [model_release_evidence](#table-model_release_evidence) | [Products, model releases, and Hugging Face catalog](#products) | One observed source claim supporting a model release. |
 | [model_releases](#table-model_releases) | [Products, model releases, and Hugging Face catalog](#products) | One source-backed model-release occurrence and its stated date precision. |
 | [national_stance_keys](#table-national_stance_keys) | [Classification vocabularies and translated labels](#vocabularies) | One China/US national-stance direction vocabulary key. |
@@ -224,6 +240,7 @@ the detailed sections. Subject counts above sum to 155.
 | [people_names](#table-people_names) | [People and job history](#people) | One sourced spelling of a person’s full name, with optional evidenced components. |
 | [people_text_translations](#table-people_text_translations) | [People and job history](#people) | One cached translation of a specific original prose version and provider configuration. |
 | [people_texts](#table-people_texts) | [People and job history](#people) | One immutable version of original biography, role, location or job-description prose. |
+| [personnel_change_details](#table-personnel_change_details) | [Event dossiers and evidence](#event-dossiers) | One typed personnel-change projection owned by a dossier review. |
 | [personnel_discovery_runs](#table-personnel_discovery_runs) | [People and job history](#people) | One personnel-search query/window run, including coverage, cost, and extraction counts. |
 | [post_enrichment_states](#table-post_enrichment_states) | [Post translation and commentary](#translation) | One post’s replayable translation/classification progress and diagnostics. |
 | [post_subject_attributions](#table-post_subject_attributions) | [Measurement subjects, metrics and observations](#measurements) | One sourced post linked to a measurement subject. |
@@ -294,7 +311,6 @@ the detailed sections. Subject counts above sum to 155.
 | [untracked_brand_promotion_keys](#table-untracked_brand_promotion_keys) | [Classification vocabularies and translated labels](#vocabularies) | One current untracked-brand-promotion vocabulary key. |
 | [untracked_brand_promotion_labels](#table-untracked_brand_promotion_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated untracked-brand-promotion label. |
 | [x_account_details](#table-x_account_details) | [Accounts, profiles, and lists](#accounts) | One optional current X profile extension for one shared account. |
-
 
 <a id="shared-catalogues"></a>
 
@@ -1713,15 +1729,18 @@ Model: [DataSource](../../core/models.py#L7514).
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
-| `id` | `varchar(32)` | No | PK component. |
-| `name` | `varchar(128)` | No | Stored value. |
-| `source_type` | `varchar(32)` | No | Stored value. |
+| `id` | `character varying(32)` | No | PK component. |
+| `name` | `character varying(128)` | No | Stored value. |
+| `source_type` | `character varying(32)` | No | Stored value. |
 | `enabled` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
 | `metadata` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `website_url` | `varchar(2048)` | No | Django default: `''` (not an assumed SQL default). |
-| `identifier_normalizer` | `varchar(32)` | No | Django default: `'exact-v1'` (not an assumed SQL default). |
-| `adapter_key` | `varchar(64)` | Yes | Stored value. |
+| `adapter_key` | `character varying(64)` | Yes | Stored value. |
 | `created_at` | `timestamp with time zone` | No | Django default: `now` (not an assumed SQL default). |
+| `identifier_normalizer` | `character varying(32)` | No | Django default: `'exact-v1'` (not an assumed SQL default). |
+| `website_url` | `character varying(2048)` | No | Django default: `''` (not an assumed SQL default). |
+| `dispatch_max_bytes` | `bigint` | No | Django default: `8388608` (not an assumed SQL default). |
+| `dispatch_max_requests` | `integer` | No | Django default: `100` (not an assumed SQL default). |
+| `dispatch_max_seconds` | `integer` | No | Django default: `300` (not an assumed SQL default). |
 
 **Named indexes:**
 
@@ -1732,6 +1751,22 @@ Model: [DataSource](../../core/models.py#L7514).
 - `ck_source_type`: `CONSTRAINT "ck_source_type" CHECK ("source_type" IN ('benchmark', 'model_adoption', 'social'))`.
 - `ck_source_enabled_adapter`: `CONSTRAINT "ck_source_enabled_adapter" CHECK ((NOT "enabled" OR ("adapter_key" IS NOT NULL AND NOT ("adapter_key" = '' AND "adapter_key" IS NOT NULL))))`.
 
+
+**Additional named indexes in the candidate schema at boundary `0114`:**
+
+- `data_sources_id_67cb0f7d_like`: `CREATE INDEX data_sources_id_67cb0f7d_like ON public.data_sources USING btree (id varchar_pattern_ops)`.
+
+**Additional named constraints in the candidate schema at boundary `0114`:**
+
+- `ck_source_dispatch_limits`: `CHECK (((dispatch_max_bytes >= 1) AND (dispatch_max_bytes <= 33554432) AND (dispatch_max_requests >= 1) AND (dispatch_max_requests <= 10000) AND (dispatch_max_seconds >= 1) AND (dispatch_max_seconds <= 3600)))`.
+- `data_sources_dispatch_max_bytes_check`: `CHECK ((dispatch_max_bytes >= 0))`.
+- `data_sources_dispatch_max_requests_check`: `CHECK ((dispatch_max_requests >= 0))`.
+- `data_sources_dispatch_max_seconds_check`: `CHECK ((dispatch_max_seconds >= 0))`.
+- `data_sources_pkey`: `PRIMARY KEY (id)`.
+
+**Additional migration-level triggers in the candidate schema at boundary `0114`:**
+
+- `collection_previous_dispatch_bridge`: `CREATE TRIGGER collection_previous_dispatch_bridge BEFORE UPDATE ON public.data_sources FOR EACH ROW EXECUTE FUNCTION collection_previous_dispatch_bridge()`.
 [Back to table inventory](#table-inventory)
 
 <a id="geography"></a>
@@ -3783,6 +3818,12 @@ state, nonnegative benefit values, and comparable date order are constrained
 where shown. See [rare-type readers and extraction](rare-types.md).
 
 
+<a id="event-dossiers"></a>
+
+## Event dossiers and evidence
+
+An EventDossier owns one source-backed event or change identity. Sources, claims and successive reviews have separate rows so evidence remains fixed while interpretation changes. Reviews can own typed model-release or personnel-change detail. A source may retain a link to a collection observation without becoming a Post. One chart belongs to one dossier; comparisons relate that atomic chart to other dossiers.
+
 <a id="table-events"></a>
 
 ### `events` — Event
@@ -3953,6 +3994,344 @@ None declared beyond field/FK/constraint indexes.
 - `ck_opportunities_extraction_conf`: `CONSTRAINT "ck_opportunities_extraction_conf" CHECK (("extraction_confidence" IS NULL OR ("extraction_confidence" >= 0.0 AND "extraction_confidence" <= 1.0)))`.
 
 [Back to table inventory](#table-inventory)
+
+<a id="table-event_dossier_claims"></a>
+
+### `event_dossier_claims` — EventDossierClaim
+
+One extracted assertion from an attached source, with its scope, excerpt, method version and date precision.
+
+Model: [EventDossierClaim](../../core/models.py#L9290).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key. |
+| `claim_kind` | `character varying(64)` | No | Claim kind. |
+| `event_timezone` | `character varying(64)` | Yes | Event timezone. |
+| `not_before` | `timestamp with time zone` | Yes | Not before. |
+| `not_after` | `timestamp with time zone` | Yes | Not after. |
+| `scope_key` | `text` | No | Scope key. |
+| `claim_hash` | `character varying(64)` | No | Unique. |
+| `extraction_version` | `text` | No | Extraction version. |
+| `recorded_at` | `timestamp with time zone` | No | Recorded at. |
+| `assertion_text` | `text` | No | Assertion text. |
+| `source_excerpt` | `text` | No | Source excerpt. |
+| `source_locator` | `text` | Yes | Source locator. |
+| `source_hash` | `character varying(64)` | No | Source hash. |
+| `effective_at` | `timestamp with time zone` | Yes | Effective at. |
+| `effective_date` | `date` | Yes | Effective date. |
+| `effective_year` | `smallint` | Yes | Effective year. |
+| `effective_month` | `smallint` | Yes | Effective month. |
+| `effective_precision` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
+| `event_dossier_source_id` | `bigint` | No | FK → [`event_dossier_sources`](#table-event_dossier_sources) (`id`); Django deletion: `PROTECT`. Model field: `event_dossier_source`. |
+
+**Named indexes:**
+
+- `event_dossier_claims_claim_hash_974506f2_like`: `CREATE INDEX event_dossier_claims_claim_hash_974506f2_like ON public.event_dossier_claims USING btree (claim_hash varchar_pattern_ops)`.
+- `event_dossier_claims_event_dossier_source_id_bbd7477c`: `CREATE INDEX event_dossier_claims_event_dossier_source_id_bbd7477c ON public.event_dossier_claims USING btree (event_dossier_source_id)`.
+
+**Named constraints:**
+
+- `ck_ed_claim_hashes`: `CHECK ((((claim_hash)::text ~ '^[0-9a-f]{64}$'::text) AND ((source_hash)::text ~ '^[0-9a-f]{64}$'::text)))`.
+- `ck_ed_claim_month`: `CHECK (((effective_month IS NULL) OR ((effective_month >= 1) AND (effective_month <= 12))))`.
+- `ck_ed_claim_range`: `CHECK (((not_before IS NULL) OR (not_after IS NULL) OR (not_after >= not_before)))`.
+- `ck_ed_claim_text`: `CHECK (((NOT ((claim_kind)::text = ''::text)) AND (NOT (scope_key = ''::text)) AND (NOT (extraction_version = ''::text)) AND (NOT (assertion_text = ''::text)) AND (NOT (source_excerpt = ''::text))))`.
+- `ck_ed_claim_time_shape`: `CHECK ((((effective_at IS NOT NULL) AND (effective_date IS NULL) AND (effective_month IS NULL) AND ((effective_precision)::text = 'datetime'::text) AND (effective_year IS NULL) AND (not_after IS NULL) AND (not_before IS NULL)) OR ((effective_at IS NULL) AND (effective_date IS NOT NULL) AND (effective_month IS NULL) AND ((effective_precision)::text = 'day'::text) AND (effective_year IS NULL) AND (not_after IS NULL) AND (not_before IS NULL)) OR ((effective_at IS NULL) AND (effective_date IS NULL) AND (effective_month IS NOT NULL) AND ((effective_precision)::text = 'month'::text) AND (effective_year IS NOT NULL) AND (not_after IS NULL) AND (not_before IS NULL)) OR ((effective_at IS NULL) AND (effective_date IS NULL) AND (effective_month IS NULL) AND ((effective_precision)::text = 'year'::text) AND (effective_year IS NOT NULL) AND (not_after IS NULL) AND (not_before IS NULL)) OR ((effective_at IS NULL) AND (effective_date IS NULL) AND (effective_month IS NULL) AND ((effective_precision)::text = 'unknown'::text) AND (effective_year IS NULL) AND (not_after IS NULL) AND (not_before IS NULL)) OR ((effective_at IS NULL) AND (effective_date IS NULL) AND (effective_month IS NULL) AND ((effective_precision)::text = 'range'::text) AND (effective_year IS NULL) AND ((not_before IS NOT NULL) OR (not_after IS NOT NULL)))))`.
+- `ck_ed_claim_year`: `CHECK (((effective_year IS NULL) OR ((effective_year >= 1) AND (effective_year <= 9999))))`.
+- `event_dossier_claims_claim_hash_key`: `UNIQUE (claim_hash)`.
+- `event_dossier_claims_effective_month_check`: `CHECK ((effective_month >= 0))`.
+- `event_dossier_claims_effective_year_check`: `CHECK ((effective_year >= 0))`.
+- `event_dossier_claims_event_dossier_source_bbd7477c_fk_event_dos`: `FOREIGN KEY (event_dossier_source_id) REFERENCES event_dossier_sources(id) DEFERRABLE INITIALLY DEFERRED`.
+- `event_dossier_claims_pkey`: `PRIMARY KEY (id)`.
+
+**Migration-level triggers:**
+
+- `ed_frozen`: `CREATE TRIGGER ed_frozen BEFORE DELETE OR UPDATE ON public.event_dossier_claims FOR EACH ROW EXECUTE FUNCTION ed_frozen_v1()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-event_dossier_review_claims"></a>
+
+### `event_dossier_review_claims` — EventDossierReviewClaim
+
+One claim and its disposition within a review revision.
+
+Model: [EventDossierReviewClaim](../../core/models.py#L9446).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. |
+| `disposition` | `character varying(16)` | No | Disposition. |
+| `reason` | `text` | No | Reason. |
+| `claim_id` | `uuid` | No | FK → [`event_dossier_claims`](#table-event_dossier_claims) (`id`); Django deletion: `PROTECT`. Model field: `claim`. |
+| `review_id` | `uuid` | No | FK → [`event_dossier_reviews`](#table-event_dossier_reviews) (`id`); Django deletion: `PROTECT`. Model field: `review`. |
+
+**Named indexes:**
+
+- `event_dossier_review_claims_claim_id_18066bdf`: `CREATE INDEX event_dossier_review_claims_claim_id_18066bdf ON public.event_dossier_review_claims USING btree (claim_id)`.
+- `event_dossier_review_claims_review_id_ec39bbe5`: `CREATE INDEX event_dossier_review_claims_review_id_ec39bbe5 ON public.event_dossier_review_claims USING btree (review_id)`.
+
+**Named constraints:**
+
+- `ck_ed_claim_disposition`: `CHECK (((disposition)::text = ANY ((ARRAY['accepted'::character varying, 'rejected'::character varying, 'uncertain'::character varying])::text[])))`.
+- `ck_ed_disposition_reason`: `CHECK ((NOT (reason = ''::text)))`.
+- `event_dossier_review_claim_id_18066bdf_fk_event_dos`: `FOREIGN KEY (claim_id) REFERENCES event_dossier_claims(id) DEFERRABLE INITIALLY DEFERRED`.
+- `event_dossier_review_claims_pkey`: `PRIMARY KEY (id)`.
+- `event_dossier_review_review_id_ec39bbe5_fk_event_dos`: `FOREIGN KEY (review_id) REFERENCES event_dossier_reviews(id) DEFERRABLE INITIALLY DEFERRED`.
+- `uq_ed_review_claim`: `UNIQUE (review_id, claim_id)`.
+
+**Migration-level triggers:**
+
+- `ed_child`: `CREATE TRIGGER ed_child BEFORE INSERT ON public.event_dossier_review_claims FOR EACH ROW EXECUTE FUNCTION ed_child_v1()`.
+- `ed_frozen`: `CREATE TRIGGER ed_frozen BEFORE DELETE OR UPDATE ON public.event_dossier_review_claims FOR EACH ROW EXECUTE FUNCTION ed_frozen_v1()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-event_dossier_reviews"></a>
+
+### `event_dossier_reviews` — EventDossierReview
+
+One immutable revision that records a decision about the dossier at a stated evidence cutoff.
+
+Model: [EventDossierReview](../../core/models.py#L9353).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key. |
+| `revision` | `integer` | No | Revision. |
+| `reviewed_at` | `timestamp with time zone` | No | Reviewed at. |
+| `recorded_at` | `timestamp with time zone` | No | Recorded at. |
+| `evidence_cutoff_at` | `timestamp with time zone` | No | Evidence cutoff at. |
+| `method_version` | `text` | No | Method version. |
+| `actor` | `text` | No | Actor. |
+| `reason` | `text` | No | Reason. |
+| `input_hash` | `character varying(64)` | No | Input hash. |
+| `display_title` | `text` | No | Display title. |
+| `review_state` | `character varying(16)` | No | Review state. |
+| `significance_score` | `numeric(8,4)` | Yes | Significance score. |
+| `ranking_method` | `text` | No | Django default: `` (not an assumed SQL default). |
+| `event_dossier_id` | `uuid` | No | FK → [`event_dossiers`](#table-event_dossiers) (`id`); Django deletion: `PROTECT`. Model field: `event_dossier`. |
+| `run_id` | `bigint` | Yes | FK → [`original_content_runs`](#table-original_content_runs) (`id`); Django deletion: `PROTECT`. Model field: `run`. |
+| `supersedes_id` | `uuid` | Yes | FK → [`event_dossier_reviews`](#table-event_dossier_reviews) (`id`); Django deletion: `PROTECT`. Model field: `supersedes`. |
+
+**Named indexes:**
+
+- `event_dossier_reviews_event_dossier_id_4378325d`: `CREATE INDEX event_dossier_reviews_event_dossier_id_4378325d ON public.event_dossier_reviews USING btree (event_dossier_id)`.
+- `event_dossier_reviews_run_id_a6411d15`: `CREATE INDEX event_dossier_reviews_run_id_a6411d15 ON public.event_dossier_reviews USING btree (run_id)`.
+
+**Named constraints:**
+
+- `ck_ed_review_clocks`: `CHECK (((evidence_cutoff_at <= reviewed_at) AND (reviewed_at <= recorded_at)))`.
+- `ck_ed_review_hash`: `CHECK (((input_hash)::text ~ '^[0-9a-f]{64}$'::text))`.
+- `ck_ed_review_prior`: `CHECK ((((revision = 1) AND (supersedes_id IS NULL)) OR ((revision > 1) AND (supersedes_id IS NOT NULL))))`.
+- `ck_ed_review_ranking`: `CHECK ((((ranking_method = ''::text) AND (significance_score IS NULL)) OR (((significance_score >= '-9999.9999'::numeric) AND (significance_score <= 9999.9999)) AND (NOT (ranking_method = ''::text)))))`.
+- `ck_ed_review_revision`: `CHECK ((revision >= 1))`.
+- `ck_ed_review_state`: `CHECK (((review_state)::text = ANY ((ARRAY['provisional'::character varying, 'confirmed'::character varying, 'unresolved'::character varying, 'retired'::character varying])::text[])))`.
+- `ck_ed_review_text`: `CHECK (((NOT (method_version = ''::text)) AND (NOT (actor = ''::text)) AND (NOT (reason = ''::text)) AND (NOT (display_title = ''::text))))`.
+- `event_dossier_review_event_dossier_id_4378325d_fk_event_dos`: `FOREIGN KEY (event_dossier_id) REFERENCES event_dossiers(id) DEFERRABLE INITIALLY DEFERRED`.
+- `event_dossier_review_run_id_a6411d15_fk_original_`: `FOREIGN KEY (run_id) REFERENCES original_content_runs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `event_dossier_review_supersedes_id_40158ad9_fk_event_dos`: `FOREIGN KEY (supersedes_id) REFERENCES event_dossier_reviews(id) DEFERRABLE INITIALLY DEFERRED`.
+- `event_dossier_reviews_pkey`: `PRIMARY KEY (id)`.
+- `event_dossier_reviews_revision_check`: `CHECK ((revision >= 0))`.
+- `event_dossier_reviews_supersedes_id_key`: `UNIQUE (supersedes_id)`.
+- `uq_ed_review_replay`: `UNIQUE (event_dossier_id, input_hash)`.
+- `uq_ed_review_revision`: `UNIQUE (event_dossier_id, revision)`.
+
+**Migration-level triggers:**
+
+- `ed_frozen`: `CREATE TRIGGER ed_frozen BEFORE DELETE OR UPDATE ON public.event_dossier_reviews FOR EACH ROW EXECUTE FUNCTION ed_frozen_v1()`.
+- `ed_review_complete`: `CREATE CONSTRAINT TRIGGER ed_review_complete AFTER INSERT ON public.event_dossier_reviews DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ed_complete_v1()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-event_dossier_sources"></a>
+
+### `event_dossier_sources` — EventDossierSource
+
+One source document attached to a dossier, preserving either a Post or collection observation as evidence.
+
+Model: [EventDossierSource](../../core/models.py#L9220).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. |
+| `linked_at` | `timestamp with time zone` | No | Linked at. |
+| `collection_observation_id` | `bigint` | Yes | FK → [`collection_observations`](#table-collection_observations) (`id`); Django deletion: `PROTECT`. Model field: `collection_observation`. |
+| `event_dossier_id` | `uuid` | No | FK → [`event_dossiers`](#table-event_dossiers) (`id`); Django deletion: `PROTECT`. Model field: `event_dossier`. |
+| `post_id` | `text` | Yes | FK → [`posts`](#table-posts) (`tweet_id`); Django deletion: `PROTECT`. Model field: `post`. |
+
+**Named indexes:**
+
+- `event_dossier_sources_collection_observation_id_abbb8fe8`: `CREATE INDEX event_dossier_sources_collection_observation_id_abbb8fe8 ON public.event_dossier_sources USING btree (collection_observation_id)`.
+- `event_dossier_sources_event_dossier_id_53b3b124`: `CREATE INDEX event_dossier_sources_event_dossier_id_53b3b124 ON public.event_dossier_sources USING btree (event_dossier_id)`.
+- `event_dossier_sources_post_id_5fa717ac`: `CREATE INDEX event_dossier_sources_post_id_5fa717ac ON public.event_dossier_sources USING btree (post_id)`.
+- `event_dossier_sources_post_id_5fa717ac_like`: `CREATE INDEX event_dossier_sources_post_id_5fa717ac_like ON public.event_dossier_sources USING btree (post_id text_pattern_ops)`.
+- `uq_ed_source_observation`: `CREATE UNIQUE INDEX uq_ed_source_observation ON public.event_dossier_sources USING btree (event_dossier_id, collection_observation_id) WHERE (collection_observation_id IS NOT NULL)`.
+- `uq_ed_source_post`: `CREATE UNIQUE INDEX uq_ed_source_post ON public.event_dossier_sources USING btree (event_dossier_id, post_id) WHERE (post_id IS NOT NULL)`.
+
+**Named constraints:**
+
+- `ck_ed_source_xor`: `CHECK ((((collection_observation_id IS NULL) AND (post_id IS NOT NULL)) OR ((collection_observation_id IS NOT NULL) AND (post_id IS NULL))))`.
+- `event_dossier_source_collection_observati_abbb8fe8_fk_collectio`: `FOREIGN KEY (collection_observation_id) REFERENCES collection_observations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `event_dossier_source_event_dossier_id_53b3b124_fk_event_dos`: `FOREIGN KEY (event_dossier_id) REFERENCES event_dossiers(id) DEFERRABLE INITIALLY DEFERRED`.
+- `event_dossier_sources_pkey`: `PRIMARY KEY (id)`.
+- `event_dossier_sources_post_id_5fa717ac_fk_posts_tweet_id`: `FOREIGN KEY (post_id) REFERENCES posts(tweet_id) DEFERRABLE INITIALLY DEFERRED`.
+
+**Migration-level triggers:**
+
+- `ed_frozen`: `CREATE TRIGGER ed_frozen BEFORE DELETE OR UPDATE ON public.event_dossier_sources FOR EACH ROW EXECUTE FUNCTION ed_frozen_v1()`.
+- `ed_source_canonical`: `CREATE TRIGGER ed_source_canonical BEFORE INSERT ON public.event_dossier_sources FOR EACH ROW EXECUTE FUNCTION ed_source_v1()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-event_dossiers"></a>
+
+### `event_dossiers` — EventDossier
+
+One stable identity for a source-backed event or personnel change, with first/last seen dates and a pointer to its current review.
+
+Model: [EventDossier](../../core/models.py#L9172).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key. |
+| `event_kind` | `character varying(32)` | No | Event kind. |
+| `identity_key` | `character varying(64)` | No | Unique. |
+| `first_seen_at` | `timestamp with time zone` | No | First seen at. |
+| `last_seen_at` | `timestamp with time zone` | No | Last seen at. |
+| `next_review_at` | `timestamp with time zone` | Yes | Next review at. |
+| `created_at` | `timestamp with time zone` | No | Created at. |
+| `merged_into_id` | `uuid` | Yes | FK → [`event_dossiers`](#table-event_dossiers) (`id`); Django deletion: `PROTECT`. Model field: `merged_into`. |
+| `current_review_id` | `uuid` | Yes | FK → [`event_dossier_reviews`](#table-event_dossier_reviews) (`id`); Django deletion: `PROTECT`. Model field: `current_review`. |
+
+**Named indexes:**
+
+- `event_dossiers_current_review_id_de7fc66c`: `CREATE INDEX event_dossiers_current_review_id_de7fc66c ON public.event_dossiers USING btree (current_review_id)`.
+- `event_dossiers_identity_key_faadbe87_like`: `CREATE INDEX event_dossiers_identity_key_faadbe87_like ON public.event_dossiers USING btree (identity_key varchar_pattern_ops)`.
+- `event_dossiers_merged_into_id_fcf699f6`: `CREATE INDEX event_dossiers_merged_into_id_fcf699f6 ON public.event_dossiers USING btree (merged_into_id)`.
+- `idx_ed_review_due`: `CREATE INDEX idx_ed_review_due ON public.event_dossiers USING btree (next_review_at)`.
+
+**Named constraints:**
+
+- `ck_ed_identity`: `CHECK (((identity_key)::text ~ '^[0-9a-f]{64}$'::text))`.
+- `ck_ed_kind`: `CHECK (((event_kind)::text = ANY ((ARRAY['model_release'::character varying, 'personnel_change'::character varying])::text[])))`.
+- `ck_ed_merge_not_self`: `CHECK ((NOT ((merged_into_id = id) AND (merged_into_id IS NOT NULL))))`.
+- `ck_ed_seen_order`: `CHECK ((last_seen_at >= first_seen_at))`.
+- `event_dossiers_current_review_id_de7fc66c_fk_event_dos`: `FOREIGN KEY (current_review_id) REFERENCES event_dossier_reviews(id) DEFERRABLE INITIALLY DEFERRED`.
+- `event_dossiers_identity_key_key`: `UNIQUE (identity_key)`.
+- `event_dossiers_merged_into_id_fcf699f6_fk_event_dossiers_id`: `FOREIGN KEY (merged_into_id) REFERENCES event_dossiers(id) DEFERRABLE INITIALLY DEFERRED`.
+- `event_dossiers_pkey`: `PRIMARY KEY (id)`.
+
+**Migration-level triggers:**
+
+- `ed_dossier_complete`: `CREATE CONSTRAINT TRIGGER ed_dossier_complete AFTER INSERT OR UPDATE ON public.event_dossiers DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ed_complete_v1()`.
+- `ed_identity_frozen`: `CREATE TRIGGER ed_identity_frozen BEFORE UPDATE ON public.event_dossiers FOR EACH ROW EXECUTE FUNCTION ed_identity_v1()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-model_release_details"></a>
+
+### `model_release_details` — ModelReleaseDetail
+
+One typed model release projection owned by a particular dossier review.
+
+Model: [ModelReleaseDetail](../../core/models.py#L9474).
+
+**Primary key:** `review_id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `review_id` | `uuid` | No | Primary key. |
+| `observed_name` | `text` | No | Observed name. |
+| `native_identifier` | `text` | No | Native identifier. |
+| `version_label` | `text` | Yes | Version label. |
+| `variant` | `text` | Yes | Variant. |
+| `release_channel` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
+| `availability_state` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
+| `disclosure_state` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
+| `product_key` | `uuid` | Yes | FK → [`products`](#table-products) (`product_key`); Django deletion: `PROTECT`. Model field: `product`. |
+| `release_issuer_company_id` | `character varying(64)` | Yes | FK → [`companies`](#table-companies) (`nickname`); Django deletion: `PROTECT`. Model field: `release_issuer_company`. |
+
+**Named indexes:**
+
+- `model_release_details_product_key_985a0e29`: `CREATE INDEX model_release_details_product_key_985a0e29 ON public.model_release_details USING btree (product_key)`.
+- `model_release_details_release_issuer_company_id_ccfc1783`: `CREATE INDEX model_release_details_release_issuer_company_id_ccfc1783 ON public.model_release_details USING btree (release_issuer_company_id)`.
+
+**Named constraints:**
+
+- `ck_ed_release_availability`: `CHECK (((availability_state)::text = ANY ((ARRAY['unknown'::character varying, 'announced'::character varying, 'public_test'::character varying, 'available'::character varying, 'withdrawn'::character varying])::text[])))`.
+- `ck_ed_release_channel`: `CHECK (((release_channel)::text = ANY ((ARRAY['stable'::character varying, 'preview'::character varying, 'beta'::character varying, 'unknown'::character varying])::text[])))`.
+- `ck_ed_release_disclosure`: `CHECK (((disclosure_state)::text = ANY ((ARRAY['unknown'::character varying, 'unannounced'::character varying, 'announced'::character varying])::text[])))`.
+- `ck_ed_release_identity`: `CHECK (((NOT (observed_name = ''::text)) AND (NOT (native_identifier = ''::text))))`.
+- `model_release_detail_product_key_985a0e29_fk_products_`: `FOREIGN KEY (product_key) REFERENCES products(product_key) DEFERRABLE INITIALLY DEFERRED`.
+- `model_release_detail_release_issuer_compa_ccfc1783_fk_companies`: `FOREIGN KEY (release_issuer_company_id) REFERENCES companies(nickname) DEFERRABLE INITIALLY DEFERRED`.
+- `model_release_detail_review_id_4b1ee480_fk_event_dos`: `FOREIGN KEY (review_id) REFERENCES event_dossier_reviews(id) DEFERRABLE INITIALLY DEFERRED`.
+- `model_release_details_pkey`: `PRIMARY KEY (review_id)`.
+
+**Migration-level triggers:**
+
+- `ed_child`: `CREATE TRIGGER ed_child BEFORE INSERT ON public.model_release_details FOR EACH ROW EXECUTE FUNCTION ed_child_v1()`.
+- `ed_frozen`: `CREATE TRIGGER ed_frozen BEFORE DELETE OR UPDATE ON public.model_release_details FOR EACH ROW EXECUTE FUNCTION ed_frozen_v1()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-personnel_change_details"></a>
+
+### `personnel_change_details` — PersonnelChangeDetail
+
+One typed personnel change projection owned by a particular dossier review.
+
+Model: [PersonnelChangeDetail](../../core/models.py#L9539).
+
+**Primary key:** `review_id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `review_id` | `uuid` | No | Primary key. |
+| `observed_person_name` | `text` | No | Observed person name. |
+| `change_kind` | `character varying(16)` | No | Change kind. |
+| `from_organization_name` | `text` | Yes | From organization name. |
+| `to_organization_name` | `text` | Yes | To organization name. |
+| `from_title` | `text` | Yes | From title. |
+| `to_title` | `text` | Yes | To title. |
+| `from_affiliation_id` | `bigint` | Yes | FK → [`people_brand_affiliations`](#table-people_brand_affiliations) (`id`); Django deletion: `PROTECT`. Model field: `from_affiliation`. |
+| `person_id` | `uuid` | Yes | FK → [`people`](#table-people) (`id`); Django deletion: `PROTECT`. Model field: `person`. |
+| `to_affiliation_id` | `bigint` | Yes | FK → [`people_brand_affiliations`](#table-people_brand_affiliations) (`id`); Django deletion: `PROTECT`. Model field: `to_affiliation`. |
+
+**Named indexes:**
+
+- `personnel_change_details_from_affiliation_id_113dac1d`: `CREATE INDEX personnel_change_details_from_affiliation_id_113dac1d ON public.personnel_change_details USING btree (from_affiliation_id)`.
+- `personnel_change_details_person_id_835848de`: `CREATE INDEX personnel_change_details_person_id_835848de ON public.personnel_change_details USING btree (person_id)`.
+- `personnel_change_details_to_affiliation_id_93cf285e`: `CREATE INDEX personnel_change_details_to_affiliation_id_93cf285e ON public.personnel_change_details USING btree (to_affiliation_id)`.
+
+**Named constraints:**
+
+- `ck_ed_person_change`: `CHECK (((change_kind)::text = ANY ((ARRAY['join'::character varying, 'leave'::character varying, 'promotion'::character varying, 'move'::character varying, 'other'::character varying])::text[])))`.
+- `ck_ed_person_name`: `CHECK ((NOT (observed_person_name = ''::text)))`.
+- `ck_ed_person_role_owner`: `CHECK (((person_id IS NOT NULL) OR ((from_affiliation_id IS NULL) AND (to_affiliation_id IS NULL))))`.
+- `personnel_change_det_from_affiliation_id_113dac1d_fk_people_br`: `FOREIGN KEY (from_affiliation_id) REFERENCES people_brand_affiliations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `personnel_change_det_review_id_4314be91_fk_event_dos`: `FOREIGN KEY (review_id) REFERENCES event_dossier_reviews(id) DEFERRABLE INITIALLY DEFERRED`.
+- `personnel_change_det_to_affiliation_id_93cf285e_fk_people_br`: `FOREIGN KEY (to_affiliation_id) REFERENCES people_brand_affiliations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `personnel_change_details_person_id_835848de_fk_people_id`: `FOREIGN KEY (person_id) REFERENCES people(id) DEFERRABLE INITIALLY DEFERRED`.
+- `personnel_change_details_pkey`: `PRIMARY KEY (review_id)`.
+
+**Migration-level triggers:**
+
+- `ed_child`: `CREATE TRIGGER ed_child BEFORE INSERT ON public.personnel_change_details FOR EACH ROW EXECUTE FUNCTION ed_child_v1()`.
+- `ed_frozen`: `CREATE TRIGGER ed_frozen BEFORE DELETE OR UPDATE ON public.personnel_change_details FOR EACH ROW EXECUTE FUNCTION ed_frozen_v1()`.
+
+[Back to table inventory](#table-inventory)
+
 
 <a id="translation"></a>
 
@@ -4793,43 +5172,43 @@ Model: [OriginalContentCall](../../core/models.py#L4230).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `run_id` | `bigint` | Yes | Authored owner → [`original_content_runs`](#table-original_content_runs) (`id`). Exactly one owner must be set. Django deletion: `PROTECT`; PostgreSQL NO ACTION, deferred. Model field: `run`. |
-| `provider_batch_id` | `uuid` | Yes | Batch owner → [`provider_batches`](#table-provider_batches) (`id`). Django deletion: `PROTECT`; PostgreSQL NO ACTION, deferred. Model field: `provider_batch`. |
-| `member_post_ids` | `varchar(128)[20]` | No | Exact bounded Post identifiers used by this model request, indexed for overlapping outstanding work. Django and SQL default: `[]`. Authored calls require empty; batch calls require 1–20 members. PostgreSQL's array size declaration alone does not enforce this bound; the check below does. |
-| `import_state` | `varchar(24)` | No | Django and SQL default: `not_applicable`. Authored calls require that value; batch calls use `pending`, `applied`, `stale`, or `error`. Provider completion and validated application import are separate. |
-| `import_evidence` | `jsonb` | No | Django and SQL default: `{}`. Bounded source snapshots, role lineage and validation/import evidence. |
-| `stage` | `varchar(200)` | No | Stored value. |
-| `batch_key` | `varchar(200)` | No | Django default: `''` (not an assumed SQL default). |
-| `request_identity` | `varchar(128)` | No | Stored value. |
-| `request_hash` | `varchar(64)` | Yes | Stored value. |
-| `workflow_key` | `varchar(80)` | Yes | Stored value. |
-| `workflow_version` | `varchar(64)` | No | Django default: `''` (not an assumed SQL default). |
-| `kind` | `varchar(16)` | No | Django default: `'text'` (not an assumed SQL default). |
-| `provider` | `varchar(80)` | No | Django default: `''` (not an assumed SQL default). |
-| `model` | `varchar(160)` | No | Django default: `''` (not an assumed SQL default). |
-| `budget_scope` | `varchar(80)` | No | Django default: `'headlines'` (not an assumed SQL default). |
-| `budget_day` | `date` | Yes | Stored value. |
-| `reserved_usd` | `numeric(12, 6)` | No | Django default: `0` (not an assumed SQL default). |
-| `actual_usd` | `numeric(12, 6)` | Yes | Stored value. |
-| `provenance` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `legacy_import` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
-| `response_hash` | `varchar(64)` | No | Django default: `''` (not an assumed SQL default). |
+| `stage` | `character varying(200)` | No | Stored value. |
+| `batch_key` | `character varying(200)` | No | Django default: `''` (not an assumed SQL default). |
+| `request_identity` | `character varying(128)` | No | Stored value. |
+| `request_hash` | `character varying(64)` | Yes | Stored value. |
+| `response_hash` | `character varying(64)` | No | Django default: `''` (not an assumed SQL default). |
 | `request_packet` | `jsonb` | Yes | Stored value. |
 | `response_payload` | `jsonb` | Yes | Stored value. |
-| `state` | `varchar(16)` | No | Django default: `OriginalContentCall.State.RESERVED` (not an assumed SQL default). Choices: `reserved`, `sent`, `completed`, `ambiguous`, `failed`. |
-| `claim_owner` | `varchar(128)` | No | Django default: `''` (not an assumed SQL default). |
+| `state` | `character varying(16)` | No | Django default: `OriginalContentCall.State.RESERVED` (not an assumed SQL default). Choices: `reserved`, `sent`, `completed`, `ambiguous`, `failed`. |
+| `claim_owner` | `character varying(128)` | No | Django default: `''` (not an assumed SQL default). |
 | `claim_fence` | `integer` | No | Django default: `0` (not an assumed SQL default). |
 | `claimed_at` | `timestamp with time zone` | Yes | Stored value. |
 | `claim_expires_at` | `timestamp with time zone` | Yes | Stored value. |
 | `reserved_at` | `timestamp with time zone` | No | Stored value. |
 | `sent_at` | `timestamp with time zone` | Yes | Stored value. |
 | `completed_at` | `timestamp with time zone` | Yes | Stored value. |
-| `error_code` | `varchar(64)` | No | Django default: `''` (not an assumed SQL default). |
+| `error_code` | `character varying(64)` | No | Django default: `''` (not an assumed SQL default). |
 | `input_tokens` | `integer` | No | Django default: `0` (not an assumed SQL default). |
 | `output_tokens` | `integer` | No | Django default: `0` (not an assumed SQL default). |
 | `latency_ms` | `integer` | Yes | Nonnegative. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
+| `run_id` | `bigint` | Yes | Authored owner → [`original_content_runs`](#table-original_content_runs) (`id`). Exactly one owner must be set. Django deletion: `PROTECT`; PostgreSQL NO ACTION, deferred. Model field: `run`. |
+| `actual_usd` | `numeric(12,6)` | Yes | Stored value. |
+| `budget_day` | `date` | Yes | Stored value. |
+| `budget_scope` | `character varying(80)` | No | Django default: `'headlines'` (not an assumed SQL default). |
+| `kind` | `character varying(16)` | No | Django default: `'text'` (not an assumed SQL default). |
+| `legacy_import` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
+| `model` | `character varying(160)` | No | Django default: `''` (not an assumed SQL default). |
+| `provenance` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
+| `provider` | `character varying(80)` | No | Django default: `''` (not an assumed SQL default). |
+| `reserved_usd` | `numeric(12,6)` | No | Django default: `0` (not an assumed SQL default). |
+| `workflow_key` | `character varying(80)` | Yes | Stored value. |
+| `workflow_version` | `character varying(64)` | No | Django default: `''` (not an assumed SQL default). |
+| `import_evidence` | `jsonb` | No | Django and SQL default: `{}`. Bounded source snapshots, role lineage and validation/import evidence. |
+| `import_state` | `character varying(24)` | No | Django and SQL default: `not_applicable`. Authored calls require that value; batch calls use `pending`, `applied`, `stale`, or `error`. Provider completion and validated application import are separate. |
+| `member_post_ids` | `character varying(128)[]` | No | Exact bounded Post identifiers used by this model request, indexed for overlapping outstanding work. Django and SQL default: `[]`. Authored calls require empty; batch calls require 1–20 members. PostgreSQL's array size declaration alone does not enforce this bound; the check below does. |
+| `provider_batch_id` | `uuid` | Yes | Batch owner → [`provider_batches`](#table-provider_batches) (`id`). Django deletion: `PROTECT`; PostgreSQL NO ACTION, deferred. Model field: `provider_batch`. |
 
 **Named indexes:**
 
@@ -4860,6 +5239,21 @@ counted on their parent and never inserted as charged model calls. Unknown
 actual cost remains NULL with its reservation retained. SQL defaults on the
 three import/member fields allow older authored writers during additive rollout.
 
+
+**Additional named indexes in the candidate schema at boundary `0114`:**
+
+- `original_content_calls_provider_batch_id_e7638c84`: `CREATE INDEX original_content_calls_provider_batch_id_e7638c84 ON public.original_content_calls USING btree (provider_batch_id)`.
+- `trend_narrative_provider_calls_run_id_2b76c94a`: `CREATE INDEX trend_narrative_provider_calls_run_id_2b76c94a ON public.original_content_calls USING btree (run_id)`.
+
+**Additional named constraints in the candidate schema at boundary `0114`:**
+
+- `original_content_cal_provider_batch_id_e7638c84_fk_provider_`: `FOREIGN KEY (provider_batch_id) REFERENCES provider_batches(id) DEFERRABLE INITIALLY DEFERRED`.
+- `original_content_cal_run_id_a224ecf0_fk_original_`: `FOREIGN KEY (run_id) REFERENCES original_content_runs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `trend_narrative_provider_calls_claim_fence_check`: `CHECK ((claim_fence >= 0))`.
+- `trend_narrative_provider_calls_input_tokens_check`: `CHECK ((input_tokens >= 0))`.
+- `trend_narrative_provider_calls_latency_ms_check`: `CHECK ((latency_ms >= 0))`.
+- `trend_narrative_provider_calls_output_tokens_check`: `CHECK ((output_tokens >= 0))`.
+- `trend_narrative_provider_calls_pkey`: `PRIMARY KEY (id)`.
 [Back to table inventory](#table-inventory)
 
 <a id="table-provider_batches"></a>
@@ -5241,9 +5635,7 @@ Model: [ContentPicture](../../core/models.py#L8385).
 
 ## Collection, extraction, and processing records
 
-These tables describe collection and interpretation work. A query identity,
-a completed cursor, a missing coverage window, a paid search result, and an
-accepted domain fact are different units. `call_state` advances completed
+These tables describe collection instructions, execution attempts, physical requests, immutable evidence, resource observations and interpretation work. A query identity, a logical run, an individual attempt, a missing coverage window, a paid search result and an accepted domain fact are different units. `call_state` advances completed
 collection progress; `harvest_backlog_windows` records bounded coverage still
 owed without storing tweet/provider payloads. The cursor’s text `brand_id`
 is not a foreign key and can use `'*'` for a combined query.
@@ -5271,10 +5663,11 @@ Model: [SearchQuery](../../core/models.py#L3182).
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
 | `query_id` | `text` | No | Unique. Field-level unique. |
-| `brand_id` | `varchar(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
 | `keywords_json` | `jsonb` | Yes | Model: `keywords`. Model field: `keywords`. |
 | `plan_calls_run_id` | `text` | Yes | Stored value. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
+| `brand_id` | `character varying(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
+| `query_text` | `text` | Yes | Query text. |
 
 **Named indexes:**
 
@@ -5286,6 +5679,21 @@ None declared beyond primary keys, field uniqueness and foreign keys.
 
 None beyond the column-level keys, uniqueness, nullability, and type checks described above.
 
+
+**Additional named indexes in the candidate schema at boundary `0114`:**
+
+- `search_queries_brand_id_f9525644`: `CREATE INDEX search_queries_brand_id_f9525644 ON public.search_queries USING btree (brand_id)`.
+- `search_queries_query_id_f17f82e2_like`: `CREATE INDEX search_queries_query_id_f17f82e2_like ON public.search_queries USING btree (query_id text_pattern_ops)`.
+
+**Additional named constraints in the candidate schema at boundary `0114`:**
+
+- `search_queries_brand_id_f9525644_fk_brands_nickname`: `FOREIGN KEY (brand_id) REFERENCES brands(nickname) DEFERRABLE INITIALLY DEFERRED`.
+- `search_queries_pkey`: `PRIMARY KEY (id)`.
+- `search_queries_query_id_key`: `UNIQUE (query_id)`.
+
+**Additional migration-level triggers in the candidate schema at boundary `0114`:**
+
+- `collection_frozen_query_guard`: `CREATE TRIGGER collection_frozen_query_guard BEFORE UPDATE ON public.search_queries FOR EACH ROW EXECUTE FUNCTION collection_frozen_query_guard()`.
 [Back to table inventory](#table-inventory)
 
 <a id="table-call_state"></a>
@@ -5927,6 +6335,514 @@ Reservations commit before HTTP. They count toward lifetime per-person, per-run 
 
 [Back to table inventory](#table-inventory)
 
+<a id="table-collection_attempts"></a>
+
+### `collection_attempts` — CollectionAttempt
+
+One separately admitted execution of a logical collection run, including its limits and outcome.
+
+Model: [CollectionAttempt](../../core/models.py#L8504).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key. |
+| `attempt_key` | `character varying(64)` | No | Unique. |
+| `ordinal` | `integer` | No | Ordinal. |
+| `lease_token` | `uuid` | Yes | Lease token. |
+| `lease_expires_at` | `timestamp with time zone` | Yes | Lease expires at. |
+| `started_at` | `timestamp with time zone` | Yes | Started at. |
+| `finished_at` | `timestamp with time zone` | Yes | Finished at. |
+| `outcome` | `character varying(24)` | No | Django default: `pending` (not an assumed SQL default). |
+| `stop_reason` | `character varying(64)` | Yes | Stop reason. |
+| `credential_purpose` | `character varying(32)` | Yes | Credential purpose. |
+| `reserved_requests` | `integer` | Yes | Reserved requests. |
+| `reserved_bytes` | `bigint` | Yes | Reserved bytes. |
+| `effective_seconds` | `integer` | Yes | Effective seconds. |
+| `effective_items` | `integer` | Yes | Effective items. |
+| `actual_requests` | `integer` | No | Django default: `0` (not an assumed SQL default). |
+| `actual_response_bytes` | `bigint` | No | Django default: `0` (not an assumed SQL default). |
+| `actual_items` | `integer` | No | Django default: `0` (not an assumed SQL default). |
+| `unknown_sent_requests` | `integer` | No | Django default: `0` (not an assumed SQL default). |
+| `accounting_complete` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
+| `imported_at` | `timestamp with time zone` | Yes | Imported at. |
+| `run_id` | `uuid` | No | FK → [`collection_runs`](#table-collection_runs) (`id`); Django deletion: `PROTECT`. Model field: `run`. |
+
+**Named indexes:**
+
+- `collection_attempts_attempt_key_6b24c3a3_like`: `CREATE INDEX collection_attempts_attempt_key_6b24c3a3_like ON public.collection_attempts USING btree (attempt_key varchar_pattern_ops)`.
+- `collection_attempts_run_id_33cbfaa7`: `CREATE INDEX collection_attempts_run_id_33cbfaa7 ON public.collection_attempts USING btree (run_id)`.
+- `uq_collection_live_attempt`: `CREATE UNIQUE INDEX uq_collection_live_attempt ON public.collection_attempts USING btree (run_id) WHERE ((outcome)::text = 'running'::text)`.
+
+**Named constraints:**
+
+- `ck_collection_attempt_clocks`: `CHECK (((started_at IS NULL) OR (finished_at IS NULL) OR (finished_at >= started_at)))`.
+- `ck_collection_attempt_ordinal`: `CHECK ((ordinal > 0))`.
+- `collection_attempts_actual_items_check`: `CHECK ((actual_items >= 0))`.
+- `collection_attempts_actual_requests_check`: `CHECK ((actual_requests >= 0))`.
+- `collection_attempts_actual_response_bytes_check`: `CHECK ((actual_response_bytes >= 0))`.
+- `collection_attempts_attempt_key_key`: `UNIQUE (attempt_key)`.
+- `collection_attempts_effective_items_check`: `CHECK ((effective_items >= 0))`.
+- `collection_attempts_effective_seconds_check`: `CHECK ((effective_seconds >= 0))`.
+- `collection_attempts_ordinal_check`: `CHECK ((ordinal >= 0))`.
+- `collection_attempts_pkey`: `PRIMARY KEY (id)`.
+- `collection_attempts_reserved_bytes_check`: `CHECK ((reserved_bytes >= 0))`.
+- `collection_attempts_reserved_requests_check`: `CHECK ((reserved_requests >= 0))`.
+- `collection_attempts_run_id_33cbfaa7_fk_collection_runs_id`: `FOREIGN KEY (run_id) REFERENCES collection_runs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_attempts_unknown_sent_requests_check`: `CHECK ((unknown_sent_requests >= 0))`.
+- `uq_collection_attempt_ordinal`: `UNIQUE (run_id, ordinal)`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-collection_campaigns"></a>
+
+### `collection_campaigns` — CollectionCampaign
+
+One bounded collection campaign that coordinates related jobs and records.
+
+Model: [CollectionCampaign](../../core/models.py#L8447).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key. |
+| `campaign_key` | `character varying(128)` | No | Unique. |
+| `cohort_hash` | `character varying(64)` | No | Cohort hash. |
+| `policy_version` | `character varying(64)` | No | Policy version. |
+| `max_attempts` | `integer` | No | Max attempts. |
+| `max_requests` | `integer` | No | Max requests. |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+- `collection_campaigns_campaign_key_d6a22475_like`: `CREATE INDEX collection_campaigns_campaign_key_d6a22475_like ON public.collection_campaigns USING btree (campaign_key varchar_pattern_ops)`.
+
+**Named constraints:**
+
+- `ck_campaign_cohort_hash`: `CHECK (((cohort_hash)::text ~ '^[0-9a-f]{64}$'::text))`.
+- `ck_campaign_positive_limits`: `CHECK (((max_attempts > 0) AND (max_requests > 0)))`.
+- `collection_campaigns_campaign_key_key`: `UNIQUE (campaign_key)`.
+- `collection_campaigns_max_attempts_check`: `CHECK ((max_attempts >= 0))`.
+- `collection_campaigns_max_requests_check`: `CHECK ((max_requests >= 0))`.
+- `collection_campaigns_pkey`: `PRIMARY KEY (id)`.
+
+**Migration-level triggers:**
+
+- `collection_campaign_seal_guard`: `CREATE TRIGGER collection_campaign_seal_guard BEFORE DELETE OR UPDATE ON public.collection_campaigns FOR EACH ROW EXECUTE FUNCTION collection_campaign_seal_guard()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-collection_corrections"></a>
+
+### `collection_corrections` — CollectionCorrection
+
+One immutable before/after correction to measurement attribution or timing.
+
+Model: [CollectionCorrection](../../core/models.py#L8685).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key. |
+| `correction_kind` | `character varying(24)` | No | Correction kind. |
+| `policy_version` | `character varying(64)` | No | Policy version. |
+| `actor_identifier` | `text` | No | Actor identifier. |
+| `reason_code` | `character varying(64)` | No | Reason code. |
+| `recorded_at` | `timestamp with time zone` | Yes | Recorded at. |
+| `recorded_at_precision` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
+| `imported_at` | `timestamp with time zone` | Yes | Imported at. |
+| `before_temporal_status` | `character varying(16)` | Yes | Before temporal status. |
+| `after_temporal_status` | `character varying(16)` | Yes | After temporal status. |
+| `before_source_timezone` | `character varying(64)` | Yes | Before source timezone. |
+| `after_source_timezone` | `character varying(64)` | Yes | After source timezone. |
+| `before_as_of_at` | `timestamp with time zone` | Yes | Before as of at. |
+| `after_as_of_at` | `timestamp with time zone` | Yes | After as of at. |
+| `before_as_of_date` | `date` | Yes | Before as of date. |
+| `after_as_of_date` | `date` | Yes | After as of date. |
+| `before_window_start_at` | `timestamp with time zone` | Yes | Before window start at. |
+| `after_window_start_at` | `timestamp with time zone` | Yes | After window start at. |
+| `before_window_end_at` | `timestamp with time zone` | Yes | Before window end at. |
+| `after_window_end_at` | `timestamp with time zone` | Yes | After window end at. |
+| `before_period_label_date` | `date` | Yes | Before period label date. |
+| `after_period_label_date` | `date` | Yes | After period label date. |
+| `before_as_of_basis` | `character varying(128)` | Yes | Before as of basis. |
+| `after_as_of_basis` | `character varying(128)` | Yes | After as of basis. |
+| `before_window_start_basis` | `character varying(128)` | Yes | Before window start basis. |
+| `after_window_start_basis` | `character varying(128)` | Yes | After window start basis. |
+| `before_window_end_basis` | `character varying(128)` | Yes | Before window end basis. |
+| `after_window_end_basis` | `character varying(128)` | Yes | After window end basis. |
+| `before_as_of_unknown_reason` | `character varying(128)` | Yes | Before as of unknown reason. |
+| `after_as_of_unknown_reason` | `character varying(128)` | Yes | After as of unknown reason. |
+| `before_window_start_unknown_reason` | `character varying(128)` | Yes | Before window start unknown reason. |
+| `after_window_start_unknown_reason` | `character varying(128)` | Yes | After window start unknown reason. |
+| `before_window_end_unknown_reason` | `character varying(128)` | Yes | Before window end unknown reason. |
+| `after_window_end_unknown_reason` | `character varying(128)` | Yes | After window end unknown reason. |
+| `before_reported_time_policy` | `character varying(64)` | Yes | Before reported time policy. |
+| `after_reported_time_policy` | `character varying(64)` | Yes | After reported time policy. |
+| `before_provenance_precision` | `character varying(32)` | Yes | Before provenance precision. |
+| `after_provenance_precision` | `character varying(32)` | Yes | After provenance precision. |
+| `after_mapping_id` | `uuid` | Yes | FK → [`source_subject_mappings`](#table-source_subject_mappings) (`id`); Django deletion: `PROTECT`. Model field: `after_mapping`. |
+| `after_product_id` | `bigint` | Yes | FK → [`products`](#table-products) (`id`); Django deletion: `PROTECT`. Model field: `after_product`. |
+| `before_mapping_id` | `uuid` | Yes | FK → [`source_subject_mappings`](#table-source_subject_mappings) (`id`); Django deletion: `PROTECT`. Model field: `before_mapping`. |
+| `before_product_id` | `bigint` | Yes | FK → [`products`](#table-products) (`id`); Django deletion: `PROTECT`. Model field: `before_product`. |
+| `metric_value_id` | `bigint` | Yes | FK → [`metric_values`](#table-metric_values) (`id`); Django deletion: `PROTECT`. Model field: `metric_value`. |
+| `observation_id` | `bigint` | No | FK → [`collection_observations`](#table-collection_observations) (`id`); Django deletion: `PROTECT`. Model field: `observation`. |
+| `predecessor_id` | `uuid` | Yes | FK → [`collection_corrections`](#table-collection_corrections) (`id`); Django deletion: `PROTECT`. Model field: `predecessor`. |
+
+**Named indexes:**
+
+- `collection_corrections_after_mapping_id_9891f1b9`: `CREATE INDEX collection_corrections_after_mapping_id_9891f1b9 ON public.collection_corrections USING btree (after_mapping_id)`.
+- `collection_corrections_after_product_id_3be27113`: `CREATE INDEX collection_corrections_after_product_id_3be27113 ON public.collection_corrections USING btree (after_product_id)`.
+- `collection_corrections_before_mapping_id_398c0767`: `CREATE INDEX collection_corrections_before_mapping_id_398c0767 ON public.collection_corrections USING btree (before_mapping_id)`.
+- `collection_corrections_before_product_id_35a56d68`: `CREATE INDEX collection_corrections_before_product_id_35a56d68 ON public.collection_corrections USING btree (before_product_id)`.
+- `collection_corrections_metric_value_id_ca2dd06b`: `CREATE INDEX collection_corrections_metric_value_id_ca2dd06b ON public.collection_corrections USING btree (metric_value_id)`.
+- `collection_corrections_observation_id_f5ef2b3a`: `CREATE INDEX collection_corrections_observation_id_f5ef2b3a ON public.collection_corrections USING btree (observation_id)`.
+- `collection_corrections_predecessor_id_76f7f257`: `CREATE INDEX collection_corrections_predecessor_id_76f7f257 ON public.collection_corrections USING btree (predecessor_id)`.
+- `idx_collection_correction_time`: `CREATE INDEX idx_collection_correction_time ON public.collection_corrections USING btree (observation_id, recorded_at)`.
+- `uq_collection_attribution_root`: `CREATE UNIQUE INDEX uq_collection_attribution_root ON public.collection_corrections USING btree (observation_id) WHERE (((correction_kind)::text = 'attribution'::text) AND (predecessor_id IS NULL))`.
+- `uq_collection_correction_child`: `CREATE UNIQUE INDEX uq_collection_correction_child ON public.collection_corrections USING btree (predecessor_id) WHERE (predecessor_id IS NOT NULL)`.
+- `uq_collection_timing_root`: `CREATE UNIQUE INDEX uq_collection_timing_root ON public.collection_corrections USING btree (metric_value_id) WHERE (((correction_kind)::text = 'timing'::text) AND (predecessor_id IS NULL))`.
+
+**Named constraints:**
+
+- `ck_collection_correction_clock`: `CHECK ((((recorded_at IS NULL) AND ((recorded_at_precision)::text = 'unknown'::text)) OR ((recorded_at IS NOT NULL) AND ((recorded_at_precision)::text = 'instant'::text))))`.
+- `ck_collection_correction_kind`: `CHECK (((((correction_kind)::text = 'timing'::text) AND (metric_value_id IS NOT NULL)) OR (((correction_kind)::text = 'attribution'::text) AND (metric_value_id IS NULL))))`.
+- `collection_correctio_after_mapping_id_9891f1b9_fk_source_su`: `FOREIGN KEY (after_mapping_id) REFERENCES source_subject_mappings(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_correctio_before_mapping_id_398c0767_fk_source_su`: `FOREIGN KEY (before_mapping_id) REFERENCES source_subject_mappings(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_correctio_before_product_id_35a56d68_fk_products_`: `FOREIGN KEY (before_product_id) REFERENCES products(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_correctio_metric_value_id_ca2dd06b_fk_metric_va`: `FOREIGN KEY (metric_value_id) REFERENCES metric_values(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_correctio_observation_id_f5ef2b3a_fk_collectio`: `FOREIGN KEY (observation_id) REFERENCES collection_observations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_correctio_predecessor_id_76f7f257_fk_collectio`: `FOREIGN KEY (predecessor_id) REFERENCES collection_corrections(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_corrections_after_product_id_3be27113_fk_products_id`: `FOREIGN KEY (after_product_id) REFERENCES products(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_corrections_pkey`: `PRIMARY KEY (id)`.
+
+**Migration-level triggers:**
+
+- `collection_correction_guard`: `CREATE TRIGGER collection_correction_guard BEFORE INSERT OR DELETE OR UPDATE ON public.collection_corrections FOR EACH ROW EXECUTE FUNCTION collection_correction_guard()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-collection_evidence_archives"></a>
+
+### `collection_evidence_archives` — CollectionEvidenceArchive
+
+One immutable, content-addressed response body stored as opaque bytes.
+
+Model: [CollectionEvidenceArchive](../../core/models.py#L8539).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key. |
+| `content_sha256` | `character varying(64)` | No | Content sha256. |
+| `encoding` | `character varying(32)` | No | Encoding. |
+| `media_type` | `character varying(128)` | No | Media type. |
+| `byte_count` | `bigint` | No | Byte count. |
+| `body` | `bytea` | No | Body. |
+| `capture_kind` | `character varying(32)` | No | Capture kind. |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named indexes:**
+
+None declared beyond primary/unique constraints.
+
+**Named constraints:**
+
+- `ck_collection_archive_hash`: `CHECK (((content_sha256)::text ~ '^[0-9a-f]{64}$'::text))`.
+- `collection_evidence_archives_byte_count_check`: `CHECK ((byte_count >= 0))`.
+- `collection_evidence_archives_pkey`: `PRIMARY KEY (id)`.
+- `uq_collection_archive_content`: `UNIQUE (content_sha256, encoding)`.
+
+**Migration-level triggers:**
+
+- `collection_archive_guard`: `CREATE TRIGGER collection_archive_guard BEFORE INSERT OR DELETE OR UPDATE ON public.collection_evidence_archives FOR EACH ROW EXECUTE FUNCTION collection_archive_guard()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-collection_job_targets"></a>
+
+### `collection_job_targets` — CollectionJobTarget
+
+One frozen target or query that a collection job intends to process.
+
+Model: [CollectionJobTarget](../../core/models.py#L8466).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. |
+| `target_key` | `character varying(256)` | No | Target key. |
+| `ordinal` | `integer` | No | Ordinal. |
+| `native_identifier` | `text` | Yes | Native identifier. |
+| `target_kind` | `character varying(32)` | No | Target kind. |
+| `target_role` | `character varying(32)` | No | Target role. |
+| `resolution_state` | `character varying(16)` | No | Resolution state. |
+| `gap_reason` | `character varying(64)` | No | Django default: `` (not an assumed SQL default). |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+| `evidence_observation_id` | `bigint` | Yes | FK → [`collection_observations`](#table-collection_observations) (`id`); Django deletion: `PROTECT`. Model field: `evidence_observation`. |
+| `job_id` | `uuid` | No | FK → [`collection_jobs`](#table-collection_jobs) (`id`); Django deletion: `PROTECT`. Model field: `job`. |
+| `mapping_id` | `uuid` | Yes | FK → [`source_subject_mappings`](#table-source_subject_mappings) (`id`); Django deletion: `PROTECT`. Model field: `mapping`. |
+| `subject_id` | `uuid` | Yes | FK → [`measurement_subjects`](#table-measurement_subjects) (`id`); Django deletion: `PROTECT`. Model field: `subject`. |
+| `last_reconciled_at` | `timestamp with time zone` | Yes | Last reconciled at. |
+| `membership_run_reference` | `text` | Yes | Membership run reference. |
+| `membership_source` | `character varying(64)` | Yes | Membership source. |
+| `parent_target_id` | `bigint` | Yes | FK → [`collection_job_targets`](#table-collection_job_targets) (`id`); Django deletion: `PROTECT`. Model field: `parent_target`. |
+| `requested_end_at` | `timestamp with time zone` | Yes | Requested end at. |
+| `requested_start_at` | `timestamp with time zone` | Yes | Requested start at. |
+| `search_query_id` | `bigint` | Yes | FK → [`search_queries`](#table-search_queries) (`id`); Django deletion: `PROTECT`. Model field: `search_query`. |
+| `selection_basis` | `character varying(64)` | Yes | Selection basis. |
+| `selection_sha256` | `character varying(64)` | Yes | Selection sha256. |
+| `identifier_scope` | `character varying(32)` | Yes | Identifier scope. |
+| `review_confirmed` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
+| `source_row_index` | `integer` | Yes | Source row index. |
+
+**Named indexes:**
+
+- `collection_job_targets_evidence_observation_id_1b0030bd`: `CREATE INDEX collection_job_targets_evidence_observation_id_1b0030bd ON public.collection_job_targets USING btree (evidence_observation_id)`.
+- `collection_job_targets_job_id_4f234a89`: `CREATE INDEX collection_job_targets_job_id_4f234a89 ON public.collection_job_targets USING btree (job_id)`.
+- `collection_job_targets_mapping_id_2b476910`: `CREATE INDEX collection_job_targets_mapping_id_2b476910 ON public.collection_job_targets USING btree (mapping_id)`.
+- `collection_job_targets_parent_target_id_81c53a12`: `CREATE INDEX collection_job_targets_parent_target_id_81c53a12 ON public.collection_job_targets USING btree (parent_target_id)`.
+- `collection_job_targets_search_query_id_4e8ef175`: `CREATE INDEX collection_job_targets_search_query_id_4e8ef175 ON public.collection_job_targets USING btree (search_query_id)`.
+- `collection_job_targets_subject_id_4a8e8962`: `CREATE INDEX collection_job_targets_subject_id_4a8e8962 ON public.collection_job_targets USING btree (subject_id)`.
+
+**Named constraints:**
+
+- `ck_collection_target_bounds`: `CHECK (((requested_start_at IS NULL) OR (requested_end_at IS NULL) OR (requested_end_at > requested_start_at)))`.
+- `ck_collection_target_resolution`: `CHECK (((((gap_reason)::text = ''::text) AND ((resolution_state)::text = 'resolved'::text) AND (search_query_id IS NULL) AND (subject_id IS NOT NULL)) OR (((gap_reason)::text = ''::text) AND ((resolution_state)::text = 'resolved'::text) AND (search_query_id IS NOT NULL) AND (subject_id IS NULL) AND ((target_kind)::text = 'query'::text)) OR ((mapping_id IS NULL) AND ((resolution_state)::text = 'unresolved'::text) AND (search_query_id IS NULL) AND (subject_id IS NULL) AND (NOT ((gap_reason)::text = ''::text)))))`.
+- `collection_job_targe_evidence_observation_1b0030bd_fk_collectio`: `FOREIGN KEY (evidence_observation_id) REFERENCES collection_observations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_job_targe_mapping_id_2b476910_fk_source_su`: `FOREIGN KEY (mapping_id) REFERENCES source_subject_mappings(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_job_targe_parent_target_id_81c53a12_fk_collectio`: `FOREIGN KEY (parent_target_id) REFERENCES collection_job_targets(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_job_targe_search_query_id_4e8ef175_fk_search_qu`: `FOREIGN KEY (search_query_id) REFERENCES search_queries(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_job_targe_subject_id_4a8e8962_fk_measureme`: `FOREIGN KEY (subject_id) REFERENCES measurement_subjects(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_job_targets_job_id_4f234a89_fk_collection_jobs_id`: `FOREIGN KEY (job_id) REFERENCES collection_jobs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_job_targets_ordinal_check`: `CHECK ((ordinal >= 0))`.
+- `collection_job_targets_pkey`: `PRIMARY KEY (id)`.
+- `collection_job_targets_source_row_index_check`: `CHECK ((source_row_index >= 0))`.
+- `uq_collection_target_key`: `UNIQUE (job_id, target_key)`.
+- `uq_collection_target_ordinal`: `UNIQUE (job_id, ordinal)`.
+
+**Migration-level triggers:**
+
+- `collection_target_parent_guard`: `CREATE TRIGGER collection_target_parent_guard BEFORE INSERT OR UPDATE ON public.collection_job_targets FOR EACH ROW EXECUTE FUNCTION collection_target_parent_guard()`.
+- `collection_target_seal_guard`: `CREATE TRIGGER collection_target_seal_guard BEFORE INSERT OR DELETE OR UPDATE ON public.collection_job_targets FOR EACH ROW EXECUTE FUNCTION collection_target_seal_guard()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-collection_metric_gaps"></a>
+
+### `collection_metric_gaps` — CollectionMetricGap
+
+One selected metric that was absent from an observation, with reason and recoverability.
+
+Model: [CollectionMetricGap](../../core/models.py#L8666).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. |
+| `reason_code` | `character varying(64)` | No | Reason code. |
+| `recoverable` | `boolean` | No | Recoverable. |
+| `first_confirmed_at` | `timestamp with time zone` | Yes | First confirmed at. |
+| `last_confirmed_at` | `timestamp with time zone` | Yes | Last confirmed at. |
+| `observation_id` | `bigint` | No | FK → [`collection_observations`](#table-collection_observations) (`id`); Django deletion: `PROTECT`. Model field: `observation`. |
+| `source_metric_id` | `bigint` | No | FK → [`metrics`](#table-metrics) (`id`); Django deletion: `PROTECT`. Model field: `source_metric`. |
+| `evidence_request_id` | `uuid` | Yes | FK → [`collection_requests`](#table-collection_requests) (`id`); Django deletion: `PROTECT`. Model field: `evidence_request`. |
+
+**Named indexes:**
+
+- `collection_metric_gaps_evidence_request_id_ffc5e6b2`: `CREATE INDEX collection_metric_gaps_evidence_request_id_ffc5e6b2 ON public.collection_metric_gaps USING btree (evidence_request_id)`.
+- `collection_metric_gaps_observation_id_a90e4d75`: `CREATE INDEX collection_metric_gaps_observation_id_a90e4d75 ON public.collection_metric_gaps USING btree (observation_id)`.
+- `collection_metric_gaps_source_metric_id_e99c9988`: `CREATE INDEX collection_metric_gaps_source_metric_id_e99c9988 ON public.collection_metric_gaps USING btree (source_metric_id)`.
+
+**Named constraints:**
+
+- `ck_collection_gap_reason`: `CHECK ((NOT ((reason_code)::text = ''::text)))`.
+- `collection_metric_ga_evidence_request_id_ffc5e6b2_fk_collectio`: `FOREIGN KEY (evidence_request_id) REFERENCES collection_requests(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_metric_ga_observation_id_a90e4d75_fk_collectio`: `FOREIGN KEY (observation_id) REFERENCES collection_observations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_metric_gaps_pkey`: `PRIMARY KEY (id)`.
+- `collection_metric_gaps_source_metric_id_e99c9988_fk_metrics_id`: `FOREIGN KEY (source_metric_id) REFERENCES metrics(id) DEFERRABLE INITIALLY DEFERRED`.
+- `uq_collection_metric_gap`: `UNIQUE (observation_id, source_metric_id)`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-collection_observation_inputs"></a>
+
+### `collection_observation_inputs` — CollectionObservationInput
+
+One link from an observation to the request or preceding observation that supports it.
+
+Model: [CollectionObservationInput](../../core/models.py#L8606).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. |
+| `input_role` | `character varying(32)` | No | Input role. |
+| `row_locator` | `text` | Yes | Row locator. |
+| `input_sha256` | `character varying(64)` | Yes | Input sha256. |
+| `input_observation_id` | `bigint` | Yes | FK → [`collection_observations`](#table-collection_observations) (`id`); Django deletion: `PROTECT`. Model field: `input_observation`. |
+| `observation_id` | `bigint` | No | FK → [`collection_observations`](#table-collection_observations) (`id`); Django deletion: `PROTECT`. Model field: `observation`. |
+| `input_request_id` | `uuid` | Yes | FK → [`collection_requests`](#table-collection_requests) (`id`); Django deletion: `PROTECT`. Model field: `input_request`. |
+
+**Named indexes:**
+
+- `collection_observation_inputs_input_observation_id_204649b6`: `CREATE INDEX collection_observation_inputs_input_observation_id_204649b6 ON public.collection_observation_inputs USING btree (input_observation_id)`.
+- `collection_observation_inputs_input_request_id_cc08db0c`: `CREATE INDEX collection_observation_inputs_input_request_id_cc08db0c ON public.collection_observation_inputs USING btree (input_request_id)`.
+- `collection_observation_inputs_observation_id_70a3b9f1`: `CREATE INDEX collection_observation_inputs_observation_id_70a3b9f1 ON public.collection_observation_inputs USING btree (observation_id)`.
+- `uq_collection_input_observation`: `CREATE UNIQUE INDEX uq_collection_input_observation ON public.collection_observation_inputs USING btree (observation_id, input_observation_id, input_role) WHERE (input_observation_id IS NOT NULL)`.
+- `uq_collection_input_request`: `CREATE UNIQUE INDEX uq_collection_input_request ON public.collection_observation_inputs USING btree (observation_id, input_request_id, input_role) WHERE (input_request_id IS NOT NULL)`.
+
+**Named constraints:**
+
+- `ck_collection_input_not_self`: `CHECK ((NOT ((observation_id = input_observation_id) AND (input_observation_id IS NOT NULL))))`.
+- `ck_collection_input_one_owner`: `CHECK ((((input_observation_id IS NULL) AND (input_request_id IS NOT NULL)) OR ((input_observation_id IS NOT NULL) AND (input_request_id IS NULL))))`.
+- `collection_observati_input_observation_id_204649b6_fk_collectio`: `FOREIGN KEY (input_observation_id) REFERENCES collection_observations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_observati_input_request_id_cc08db0c_fk_collectio`: `FOREIGN KEY (input_request_id) REFERENCES collection_requests(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_observati_observation_id_70a3b9f1_fk_collectio`: `FOREIGN KEY (observation_id) REFERENCES collection_observations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_observation_inputs_pkey`: `PRIMARY KEY (id)`.
+
+**Migration-level triggers:**
+
+- `collection_input_membership`: `CREATE TRIGGER collection_input_membership BEFORE INSERT OR UPDATE ON public.collection_observation_inputs FOR EACH ROW EXECUTE FUNCTION collection_input_membership()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-collection_requests"></a>
+
+### `collection_requests` — CollectionRequest
+
+One physical transport request, its outcome and any retained response evidence.
+
+Model: [CollectionRequest](../../core/models.py#L8563).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key. |
+| `ordinal` | `integer` | No | Ordinal. |
+| `receipt_kind` | `character varying(24)` | No | Django default: `physical` (not an assumed SQL default). |
+| `http_method` | `character varying(8)` | Yes | Choices: GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS. |
+| `endpoint_url` | `text` | Yes | Endpoint url. |
+| `requested_start_at` | `timestamp with time zone` | Yes | Requested start at. |
+| `requested_end_at` | `timestamp with time zone` | Yes | Requested end at. |
+| `requested_start_date` | `date` | Yes | Requested start date. |
+| `requested_end_date` | `date` | Yes | Requested end date. |
+| `request_revision` | `text` | Yes | Request revision. |
+| `request_group` | `character varying(64)` | Yes | Request group. |
+| `request_config` | `character varying(128)` | Yes | Request config. |
+| `request_category` | `character varying(128)` | Yes | Request category. |
+| `cursor_before` | `text` | Yes | Cursor before. |
+| `cursor_after` | `text` | Yes | Cursor after. |
+| `started_at` | `timestamp with time zone` | Yes | Started at. |
+| `received_at` | `timestamp with time zone` | Yes | Received at. |
+| `transport_outcome` | `character varying(32)` | No | Django default: `pending` (not an assumed SQL default). |
+| `http_status` | `smallint` | Yes | Http status. |
+| `error_code` | `character varying(64)` | Yes | Error code. |
+| `retry_after_at` | `timestamp with time zone` | Yes | Retry after at. |
+| `response_bytes` | `bigint` | Yes | Response bytes. |
+| `etag` | `text` | Yes | Etag. |
+| `accounting_complete` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
+| `archive_id` | `uuid` | Yes | FK → [`collection_evidence_archives`](#table-collection_evidence_archives) (`id`); Django deletion: `PROTECT`. Model field: `archive`. |
+| `attempt_id` | `uuid` | No | FK → [`collection_attempts`](#table-collection_attempts) (`id`); Django deletion: `PROTECT`. Model field: `attempt`. |
+| `scope_run_id` | `bigint` | No | FK → [`collection_scope_runs`](#table-collection_scope_runs) (`id`); Django deletion: `PROTECT`. Model field: `scope_run`. |
+| `response_etag` | `text` | Yes | Response etag. |
+
+**Named indexes:**
+
+- `collection_requests_archive_id_aa2d3e71`: `CREATE INDEX collection_requests_archive_id_aa2d3e71 ON public.collection_requests USING btree (archive_id)`.
+- `collection_requests_attempt_id_1685a500`: `CREATE INDEX collection_requests_attempt_id_1685a500 ON public.collection_requests USING btree (attempt_id)`.
+- `collection_requests_scope_run_id_839916de`: `CREATE INDEX collection_requests_scope_run_id_839916de ON public.collection_requests USING btree (scope_run_id)`.
+
+**Named constraints:**
+
+- `ck_collection_request_http_method`: `CHECK (((http_method IS NULL) OR ((http_method)::text = ANY ((ARRAY['GET'::character varying, 'HEAD'::character varying, 'POST'::character varying, 'PUT'::character varying, 'PATCH'::character varying, 'DELETE'::character varying, 'OPTIONS'::character varying])::text[]))))`.
+- `ck_collection_request_kind`: `CHECK (((receipt_kind)::text = ANY ((ARRAY['physical'::character varying, 'legacy_receipt'::character varying])::text[])))`.
+- `ck_collection_request_ordinal`: `CHECK ((ordinal > 0))`.
+- `ck_collection_request_status`: `CHECK (((http_status IS NULL) OR ((http_status >= 100) AND (http_status <= 599))))`.
+- `collection_requests_archive_id_aa2d3e71_fk_collectio`: `FOREIGN KEY (archive_id) REFERENCES collection_evidence_archives(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_requests_attempt_id_1685a500_fk_collectio`: `FOREIGN KEY (attempt_id) REFERENCES collection_attempts(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_requests_http_status_check`: `CHECK ((http_status >= 0))`.
+- `collection_requests_ordinal_check`: `CHECK ((ordinal >= 0))`.
+- `collection_requests_pkey`: `PRIMARY KEY (id)`.
+- `collection_requests_response_bytes_check`: `CHECK ((response_bytes >= 0))`.
+- `collection_requests_scope_run_id_839916de_fk_collectio`: `FOREIGN KEY (scope_run_id) REFERENCES collection_scope_runs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `uq_collection_request_ordinal`: `UNIQUE (attempt_id, ordinal)`.
+
+**Migration-level triggers:**
+
+- `collection_request_archive_guard`: `CREATE TRIGGER collection_request_archive_guard BEFORE UPDATE ON public.collection_requests FOR EACH ROW EXECUTE FUNCTION collection_request_archive_guard()`.
+- `collection_request_membership`: `CREATE TRIGGER collection_request_membership BEFORE INSERT OR UPDATE ON public.collection_requests FOR EACH ROW EXECUTE FUNCTION collection_request_membership()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-collection_resource_snapshots"></a>
+
+### `collection_resource_snapshots` — CollectionResourceSnapshot
+
+One captured set of nonnumeric facts about a collected resource at an observation.
+
+Model: [CollectionResourceSnapshot](../../core/models.py#L8626).
+
+**Primary key:** `observation_id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `observation_id` | `bigint` | No | Primary key. |
+| `resource_kind` | `character varying(32)` | No | Resource kind. |
+| `native_identifier` | `text` | No | Native identifier. |
+| `native_stable_id` | `text` | Yes | Native stable id. |
+| `display_name` | `text` | Yes | Display name. |
+| `provider_created_at` | `timestamp with time zone` | Yes | Provider created at. |
+| `provider_created_date` | `date` | Yes | Provider created date. |
+| `provider_created_precision` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
+| `provider_modified_at` | `timestamp with time zone` | Yes | Provider modified at. |
+| `provider_modified_date` | `date` | Yes | Provider modified date. |
+| `provider_modified_precision` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
+| `authored_at` | `timestamp with time zone` | Yes | Authored at. |
+| `committed_at` | `timestamp with time zone` | Yes | Committed at. |
+| `revision` | `text` | Yes | Revision. |
+| `tree_revision` | `text` | Yes | Tree revision. |
+| `content_hash` | `text` | Yes | Content hash. |
+| `hash_algorithm` | `character varying(16)` | Yes | Hash algorithm. |
+| `is_private` | `boolean` | Yes | Is private. |
+| `gated_status` | `character varying(32)` | Yes | Gated status. |
+| `is_disabled` | `boolean` | Yes | Is disabled. |
+| `pipeline_tag` | `character varying(128)` | Yes | Pipeline tag. |
+| `library_name` | `character varying(128)` | Yes | Library name. |
+| `file_change_kind` | `character varying(32)` | Yes | File change kind. |
+| `file_comparison_basis` | `character varying(64)` | Yes | File comparison basis. |
+| `prior_snapshot_id` | `bigint` | Yes | FK → [`collection_resource_snapshots`](#table-collection_resource_snapshots) (`observation_id`); Django deletion: `PROTECT`. Model field: `prior_snapshot`. |
+| `publisher_account_id` | `uuid` | Yes | FK → [`accounts`](#table-accounts) (`account_key`); Django deletion: `PROTECT`. Model field: `publisher_account`. |
+| `provider_created_unknown_reason` | `character varying(64)` | Yes | Provider created unknown reason. |
+| `provider_modified_unknown_reason` | `character varying(64)` | Yes | Provider modified unknown reason. |
+
+**Named indexes:**
+
+- `collection_resource_snapshots_prior_snapshot_id_27fecbf9`: `CREATE INDEX collection_resource_snapshots_prior_snapshot_id_27fecbf9 ON public.collection_resource_snapshots USING btree (prior_snapshot_id)`.
+- `collection_resource_snapshots_publisher_account_id_1167dac2`: `CREATE INDEX collection_resource_snapshots_publisher_account_id_1167dac2 ON public.collection_resource_snapshots USING btree (publisher_account_id)`.
+
+**Named constraints:**
+
+- `ck_resource_created_precision`: `CHECK ((((provider_created_at IS NULL) AND (provider_created_date IS NULL) AND ((provider_created_precision)::text = 'unknown'::text)) OR ((provider_created_at IS NOT NULL) AND (provider_created_date IS NULL) AND ((provider_created_precision)::text = 'instant'::text)) OR ((provider_created_at IS NULL) AND (provider_created_date IS NOT NULL) AND ((provider_created_precision)::text = 'date'::text))))`.
+- `ck_resource_modified_precision`: `CHECK ((((provider_modified_at IS NULL) AND (provider_modified_date IS NULL) AND ((provider_modified_precision)::text = 'unknown'::text)) OR ((provider_modified_at IS NOT NULL) AND (provider_modified_date IS NULL) AND ((provider_modified_precision)::text = 'instant'::text)) OR ((provider_modified_at IS NULL) AND (provider_modified_date IS NOT NULL) AND ((provider_modified_precision)::text = 'date'::text))))`.
+- `collection_resource__observation_id_8383e149_fk_collectio`: `FOREIGN KEY (observation_id) REFERENCES collection_observations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_resource__prior_snapshot_id_27fecbf9_fk_collectio`: `FOREIGN KEY (prior_snapshot_id) REFERENCES collection_resource_snapshots(observation_id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_resource__publisher_account_id_1167dac2_fk_accounts_`: `FOREIGN KEY (publisher_account_id) REFERENCES accounts(account_key) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_resource_snapshots_pkey`: `PRIMARY KEY (observation_id)`.
+
+[Back to table inventory](#table-inventory)
+
+
+<a id="compatibility-views"></a>
+
 ## Compatibility views and schema boundary
 
 `trend_narrative_versions` is a PostgreSQL **view**, outside the application-table count, with no Django model. [Migration 0014](../../core/migrations/0014_expand_trend_narrative.py)
@@ -5990,22 +6906,44 @@ Model: [CollectionJob](../../core/models.py#L7901). **Primary key:** `id`.
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `uuid` | No | PK; Django default `uuid4`, no SQL default. |
-| `job_key` | `varchar(128)` | No | Unique immutable operator/campaign key. |
-| `source_id` | `varchar(32)` | No | FK → [`data_sources`](#table-data_sources); Django `PROTECT`, PostgreSQL deferred NO ACTION. |
-| `purpose` | `varchar(16)` | No | `metric`, `catalog` or `content`. |
-| `operation` | `varchar(64)` | No | Validated adapter operation. |
-| `mode` | `varchar(16)` | No | `manual`, `historical` or `recurring`. |
-| `contract_id` | `uuid` | Yes | FK → [`metric_collection_contracts`](#table-metric_collection_contracts); required only for metric purpose. Django `PROTECT`, PostgreSQL deferred NO ACTION. |
+| `job_key` | `character varying(128)` | No | Unique immutable operator/campaign key. |
+| `purpose` | `character varying(16)` | No | `metric`, `catalog` or `content`. |
+| `operation` | `character varying(64)` | No | Validated adapter operation. |
+| `mode` | `character varying(16)` | No | `manual`, `historical` or `recurring`. |
 | `definition` | `jsonb` | No | Immutable versioned instruction; contains no credentials. |
-| `definition_sha256` | `varchar(64)` | No | SHA-256 of instruction identity. |
-| `state` | `varchar(16)` | No | `paused`, `ready`, `completed`, `cancelled`; Django default `paused`, no SQL default. |
+| `definition_sha256` | `character varying(64)` | No | SHA-256 of instruction identity. |
+| `state` | `character varying(16)` | No | `paused`, `ready`, `completed`, `cancelled`; Django default `paused`, no SQL default. |
 | `next_due_at` | `timestamp with time zone` | Yes | Next recurring dispatch opportunity. |
 | `next_retry_at` | `timestamp with time zone` | Yes | Failed/yielded attempt cooldown, separate from success. |
-| `active_run_id` | `uuid` | Yes | FK → [`collection_runs`](#table-collection_runs); active claim. Django `SET_NULL`, PostgreSQL deferred NO ACTION. |
-| `last_attempt_id` | `uuid` | Yes | FK → [`collection_runs`](#table-collection_runs); most recent claimed attempt. Django `SET_NULL`, PostgreSQL deferred NO ACTION. |
-| `last_success_id` | `uuid` | Yes | FK → [`collection_runs`](#table-collection_runs); latest successful attempt. Django `SET_NULL`, PostgreSQL deferred NO ACTION. |
 | `created_at` | `timestamp with time zone` | No | Django `auto_now_add`; instruction registration time. |
 | `updated_at` | `timestamp with time zone` | No | Django `auto_now`; coordination update time. |
+| `active_run_id` | `uuid` | Yes | FK → [`collection_runs`](#table-collection_runs); active claim. Django `SET_NULL`, PostgreSQL deferred NO ACTION. |
+| `contract_id` | `uuid` | Yes | FK → [`metric_collection_contracts`](#table-metric_collection_contracts); required only for metric purpose. Django `PROTECT`, PostgreSQL deferred NO ACTION. |
+| `last_attempt_id` | `uuid` | Yes | Compatibility pointer to the most recent logical run. Django `SET_NULL`, PostgreSQL deferred NO ACTION. |
+| `last_success_id` | `uuid` | Yes | FK → [`collection_runs`](#table-collection_runs); latest successful attempt. Django `SET_NULL`, PostgreSQL deferred NO ACTION. |
+| `source_id` | `character varying(32)` | No | FK → [`data_sources`](#table-data_sources); Django `PROTECT`, PostgreSQL deferred NO ACTION. |
+| `authority_enabled` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
+| `campaign_id` | `uuid` | Yes | FK → [`collection_campaigns`](#table-collection_campaigns) (`id`); Django deletion: `PROTECT`. Model field: `campaign`. |
+| `campaign_phase` | `character varying(24)` | Yes | Campaign phase. |
+| `campaign_role` | `character varying(24)` | Yes | Campaign role. |
+| `daily_utc_hour` | `smallint` | Yes | Daily utc hour. |
+| `instruction_version` | `smallint` | No | Django default: `1` (not an assumed SQL default). |
+| `instructions_sealed_at` | `timestamp with time zone` | Yes | Instructions sealed at. |
+| `interval_seconds` | `integer` | Yes | Interval seconds. |
+| `legacy_archive_id` | `uuid` | Yes | FK → [`collection_evidence_archives`](#table-collection_evidence_archives) (`id`); Django deletion: `PROTECT`. Model field: `legacy_archive`. |
+| `max_bytes` | `bigint` | Yes | Max bytes. |
+| `max_items` | `integer` | Yes | Max items. |
+| `max_requests` | `integer` | Yes | Max requests. |
+| `max_seconds` | `integer` | Yes | Max seconds. |
+| `numeric_contract_id` | `uuid` | Yes | FK → [`metric_collection_contracts`](#table-metric_collection_contracts) (`id`); Django deletion: `PROTECT`. Model field: `numeric_contract`. |
+| `origin_job_id` | `uuid` | Yes | FK → [`collection_jobs`](#table-collection_jobs) (`id`); Django deletion: `PROTECT`. Model field: `origin_job`. |
+| `owner_account_id` | `uuid` | Yes | FK → [`accounts`](#table-accounts) (`account_key`); Django deletion: `PROTECT`. Model field: `owner_account`. |
+| `owner_kind` | `character varying(24)` | No | Django default: `legacy_unresolved` (not an assumed SQL default). |
+| `relational_sha256` | `character varying(64)` | Yes | Relational sha256. |
+| `routine_role` | `character varying(64)` | Yes | Routine role. |
+| `schedule_driver` | `character varying(32)` | Yes | Schedule driver. |
+| `schedule_kind` | `character varying(24)` | Yes | Schedule kind. |
+| `last_attempt_attempt_id` | `uuid` | Yes | FK → [`collection_attempts`](#table-collection_attempts) (`id`); Django deletion: `SET_NULL`. Model field: `last_attempt_attempt`. |
 
 **Named indexes and constraints:** `idx_collection_job_due` indexes `(state,
 next_due_at)`. Field-level uniqueness on `job_key` uses
@@ -6016,6 +6954,51 @@ next_due_at)`. Field-level uniqueness on `job_key` uses
 `ck_collection_job_hash` requires 64 lowercase hexadecimal characters;
 `ck_collection_job_key` forbids an empty key. The `collection_job_immutable_instructions` trigger rejects updates to identity, source, purpose, contract, operation, mode, job key, definition or definition hash; state, dates and run pointers remain mutable. Application services validate definition hashes, allowed operations and matching instructions on all pointed-to runs. Archival and legacy-direct receipt jobs are completed, with no active run or future dispatch dates; shared scheduling never executes them. The job-backed instruction migration is forward-only; rolling application code back requires a compatible revision.
 
+
+**Additional named indexes in the candidate schema at boundary `0114`:**
+
+- `collection_jobs_active_run_id_130d6af5`: `CREATE INDEX collection_jobs_active_run_id_130d6af5 ON public.collection_jobs USING btree (active_run_id)`.
+- `collection_jobs_campaign_id_85ab85d1`: `CREATE INDEX collection_jobs_campaign_id_85ab85d1 ON public.collection_jobs USING btree (campaign_id)`.
+- `collection_jobs_contract_id_2e5e8eea`: `CREATE INDEX collection_jobs_contract_id_2e5e8eea ON public.collection_jobs USING btree (contract_id)`.
+- `collection_jobs_job_key_76b562ca_like`: `CREATE INDEX collection_jobs_job_key_76b562ca_like ON public.collection_jobs USING btree (job_key varchar_pattern_ops)`.
+- `collection_jobs_last_attempt_attempt_id_27c832ff`: `CREATE INDEX collection_jobs_last_attempt_attempt_id_27c832ff ON public.collection_jobs USING btree (last_attempt_attempt_id)`.
+- `collection_jobs_last_attempt_id_6fbf87bb`: `CREATE INDEX collection_jobs_last_attempt_id_6fbf87bb ON public.collection_jobs USING btree (last_attempt_id)`.
+- `collection_jobs_last_success_id_fa60d012`: `CREATE INDEX collection_jobs_last_success_id_fa60d012 ON public.collection_jobs USING btree (last_success_id)`.
+- `collection_jobs_legacy_archive_id_a7772f9e`: `CREATE INDEX collection_jobs_legacy_archive_id_a7772f9e ON public.collection_jobs USING btree (legacy_archive_id)`.
+- `collection_jobs_numeric_contract_id_bad77aeb`: `CREATE INDEX collection_jobs_numeric_contract_id_bad77aeb ON public.collection_jobs USING btree (numeric_contract_id)`.
+- `collection_jobs_origin_job_id_45082f49`: `CREATE INDEX collection_jobs_origin_job_id_45082f49 ON public.collection_jobs USING btree (origin_job_id)`.
+- `collection_jobs_owner_account_id_922c4ae0`: `CREATE INDEX collection_jobs_owner_account_id_922c4ae0 ON public.collection_jobs USING btree (owner_account_id)`.
+- `collection_jobs_source_id_2b90e790`: `CREATE INDEX collection_jobs_source_id_2b90e790 ON public.collection_jobs USING btree (source_id)`.
+- `collection_jobs_source_id_2b90e790_like`: `CREATE INDEX collection_jobs_source_id_2b90e790_like ON public.collection_jobs USING btree (source_id varchar_pattern_ops)`.
+- `uq_collection_metric_authority`: `CREATE UNIQUE INDEX uq_collection_metric_authority ON public.collection_jobs USING btree (source_id, contract_id) WHERE (authority_enabled AND ((purpose)::text = 'metric'::text))`.
+- `uq_collection_role_authority`: `CREATE UNIQUE INDEX uq_collection_role_authority ON public.collection_jobs USING btree (source_id, routine_role, owner_account_id) NULLS NOT DISTINCT WHERE (authority_enabled AND ((purpose)::text = 'catalog'::text))`.
+
+**Additional named constraints in the candidate schema at boundary `0114`:**
+
+- `collection_jobs_active_run_id_130d6af5_fk_collection_runs_id`: `FOREIGN KEY (active_run_id) REFERENCES collection_runs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_jobs_campaign_id_85ab85d1_fk_collection_campaigns_id`: `FOREIGN KEY (campaign_id) REFERENCES collection_campaigns(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_jobs_contract_id_2e5e8eea_fk_metric_co`: `FOREIGN KEY (contract_id) REFERENCES metric_collection_contracts(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_jobs_daily_utc_hour_check`: `CHECK ((daily_utc_hour >= 0))`.
+- `collection_jobs_instruction_version_check`: `CHECK ((instruction_version >= 0))`.
+- `collection_jobs_interval_seconds_check`: `CHECK ((interval_seconds >= 0))`.
+- `collection_jobs_last_attempt_attempt_27c832ff_fk_collectio`: `FOREIGN KEY (last_attempt_attempt_id) REFERENCES collection_attempts(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_jobs_last_attempt_id_6fbf87bb_fk_collection_runs_id`: `FOREIGN KEY (last_attempt_id) REFERENCES collection_runs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_jobs_last_success_id_fa60d012_fk_collection_runs_id`: `FOREIGN KEY (last_success_id) REFERENCES collection_runs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_jobs_legacy_archive_id_a7772f9e_fk_collectio`: `FOREIGN KEY (legacy_archive_id) REFERENCES collection_evidence_archives(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_jobs_max_bytes_check`: `CHECK ((max_bytes >= 0))`.
+- `collection_jobs_max_items_check`: `CHECK ((max_items >= 0))`.
+- `collection_jobs_max_requests_check`: `CHECK ((max_requests >= 0))`.
+- `collection_jobs_max_seconds_check`: `CHECK ((max_seconds >= 0))`.
+- `collection_jobs_numeric_contract_id_bad77aeb_fk_metric_co`: `FOREIGN KEY (numeric_contract_id) REFERENCES metric_collection_contracts(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_jobs_origin_job_id_45082f49_fk_collection_jobs_id`: `FOREIGN KEY (origin_job_id) REFERENCES collection_jobs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_jobs_owner_account_id_922c4ae0_fk_accounts_`: `FOREIGN KEY (owner_account_id) REFERENCES accounts(account_key) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_jobs_pkey`: `PRIMARY KEY (id)`.
+- `collection_jobs_source_id_2b90e790_fk_data_sources_id`: `FOREIGN KEY (source_id) REFERENCES data_sources(id) DEFERRABLE INITIALLY DEFERRED`.
+
+**Additional migration-level triggers in the candidate schema at boundary `0114`:**
+
+- `collection_typed_instruction_guard`: `CREATE TRIGGER collection_typed_instruction_guard BEFORE INSERT OR UPDATE ON public.collection_jobs FOR EACH ROW EXECUTE FUNCTION collection_typed_instruction_guard()`.
+- `trg_sync_collection_job_attempt_pointer`: `CREATE TRIGGER trg_sync_collection_job_attempt_pointer BEFORE INSERT OR UPDATE OF last_attempt_id, last_attempt_attempt_id ON public.collection_jobs FOR EACH ROW EXECUTE FUNCTION sync_collection_job_attempt_pointer()`.
 [Back to table inventory](#table-inventory)
 
 <a id="table-hf_model_catalog_namespace_runs"></a>
@@ -6033,16 +7016,36 @@ Model: [CollectionScopeRun](../../core/models.py#L3088).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `run_id` | `uuid` | No | FK → [`collection_runs`](#table-collection_runs) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
-| `scope_kind` | `varchar(32)` | No | Scope interpretation; HF uses `namespace`. Django default: `'namespace'`. |
-| `scope_key` | `varchar(256)` | No | Native source scope identity, such as an HF namespace. |
+| `scope_key` | `character varying(256)` | No | Native source scope identity, such as an HF namespace. |
 | `ownership` | `jsonb` | No | Frozen verified ownership evidence. |
 | `cursor` | `text` | Yes | Saved next-page continuation. |
 | `cursor_history` | `jsonb` | No | Continuation values used to detect repeated cursors. Django default: `list`. |
 | `enumeration_complete` | `boolean` | No | Whether the scope listing was exhausted. Django default: `False`. |
-| `outcome` | `varchar(64)` | No | Django default: `'pending'`. |
+| `outcome` | `character varying(64)` | No | Django default: `'pending'`. |
 | `envelopes` | `jsonb` | No | Preserved request/response attempts and native revision evidence. Django default: `list`. |
 | `raw_count` | `bigint` | No | Raw returned records, including duplicates; not the distinct repository count. Django default: `0`. |
+| `run_id` | `uuid` | No | FK → [`collection_runs`](#table-collection_runs) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
+| `scope_kind` | `character varying(32)` | No | Scope interpretation; HF uses `namespace`. Django default: `'namespace'`. |
+| `coverage_state` | `character varying(16)` | No | Django default: `pending` (not an assumed SQL default). |
+| `error_code` | `character varying(64)` | Yes | Error code. |
+| `execution_state` | `character varying(16)` | No | Django default: `pending` (not an assumed SQL default). |
+| `job_target_id` | `bigint` | Yes | FK → [`collection_job_targets`](#table-collection_job_targets) (`id`); Django deletion: `PROTECT`. Model field: `job_target`. |
+| `legacy_archive_id` | `uuid` | Yes | FK → [`collection_evidence_archives`](#table-collection_evidence_archives) (`id`); Django deletion: `PROTECT`. Model field: `legacy_archive`. |
+| `parent_scope_id` | `bigint` | Yes | FK → [`collection_scope_runs`](#table-collection_scope_runs) (`id`); Django deletion: `PROTECT`. Model field: `parent_scope`. |
+| `phase` | `character varying(32)` | Yes | Phase. |
+| `prerequisite_scope_id` | `bigint` | Yes | FK → [`collection_scope_runs`](#table-collection_scope_runs) (`id`); Django deletion: `PROTECT`. Model field: `prerequisite_scope`. |
+| `requested_end_at` | `timestamp with time zone` | Yes | Requested end at. |
+| `requested_end_date` | `date` | Yes | Requested end date. |
+| `requested_revision` | `text` | Yes | Requested revision. |
+| `requested_start_at` | `timestamp with time zone` | Yes | Requested start at. |
+| `requested_start_date` | `date` | Yes | Requested start date. |
+| `retry_at` | `timestamp with time zone` | Yes | Retry at. |
+| `admission_outcome` | `character varying(32)` | Yes | Admission outcome. |
+| `confidence_pct` | `smallint` | Yes | Confidence pct. |
+| `resource_observation_id` | `bigint` | Yes | FK → [`collection_observations`](#table-collection_observations) (`id`); Django deletion: `PROTECT`. Model field: `resource_observation`. |
+| `resource_path` | `text` | Yes | Resource path. |
+| `reviewed_at` | `timestamp with time zone` | Yes | Reviewed at. |
+| `reviewed_by` | `text` | Yes | Reviewed by. |
 
 **Named indexes:**
 
@@ -6052,6 +7055,26 @@ None beyond field/FK/constraint indexes.
 
 - `uq_collection_run_scope`: `ALTER TABLE "collection_scope_runs" ADD CONSTRAINT "uq_collection_run_scope" UNIQUE ("run_id", "scope_kind", "scope_key")`.
 
+
+**Additional named indexes in the candidate schema at boundary `0114`:**
+
+- `collection_scope_runs_job_target_id_b8390640`: `CREATE INDEX collection_scope_runs_job_target_id_b8390640 ON public.collection_scope_runs USING btree (job_target_id)`.
+- `collection_scope_runs_legacy_archive_id_514458e3`: `CREATE INDEX collection_scope_runs_legacy_archive_id_514458e3 ON public.collection_scope_runs USING btree (legacy_archive_id)`.
+- `collection_scope_runs_parent_scope_id_59e36b8f`: `CREATE INDEX collection_scope_runs_parent_scope_id_59e36b8f ON public.collection_scope_runs USING btree (parent_scope_id)`.
+- `collection_scope_runs_prerequisite_scope_id_e1ba7b4c`: `CREATE INDEX collection_scope_runs_prerequisite_scope_id_e1ba7b4c ON public.collection_scope_runs USING btree (prerequisite_scope_id)`.
+- `collection_scope_runs_resource_observation_id_59a616ca`: `CREATE INDEX collection_scope_runs_resource_observation_id_59a616ca ON public.collection_scope_runs USING btree (resource_observation_id)`.
+- `hf_model_catalog_namespace_runs_run_id_6dbc05b8`: `CREATE INDEX hf_model_catalog_namespace_runs_run_id_6dbc05b8 ON public.collection_scope_runs USING btree (run_id)`.
+
+**Additional named constraints in the candidate schema at boundary `0114`:**
+
+- `collection_scope_run_job_target_id_b8390640_fk_collectio`: `FOREIGN KEY (job_target_id) REFERENCES collection_job_targets(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_scope_run_legacy_archive_id_514458e3_fk_collectio`: `FOREIGN KEY (legacy_archive_id) REFERENCES collection_evidence_archives(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_scope_run_parent_scope_id_59e36b8f_fk_collectio`: `FOREIGN KEY (parent_scope_id) REFERENCES collection_scope_runs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_scope_run_prerequisite_scope_i_e1ba7b4c_fk_collectio`: `FOREIGN KEY (prerequisite_scope_id) REFERENCES collection_scope_runs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_scope_run_resource_observation_59a616ca_fk_collectio`: `FOREIGN KEY (resource_observation_id) REFERENCES collection_observations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_scope_runs_confidence_pct_check`: `CHECK ((confidence_pct >= 0))`.
+- `hf_model_catalog_nam_run_id_6dbc05b8_fk_metric_co`: `FOREIGN KEY (run_id) REFERENCES collection_runs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `hf_model_catalog_namespace_runs_pkey`: `PRIMARY KEY (id)`.
 [Back to table inventory](#table-inventory)
 
 <a id="table-measurement_subjects"></a>
@@ -6143,13 +7166,8 @@ Model: [CollectionRun](../../core/models.py#L7935).
 | --- | --- | --- | --- |
 | `id` | `uuid` | No | PK. Django default: `uuid4`. |
 | `batch_id` | `uuid` | No | Django default: `uuid4`. |
-| `job_id` | `uuid` | No | Required instruction owner → [`collection_jobs`](#table-collection_jobs); Django `PROTECT`, PostgreSQL deferred NO ACTION. |
-| `lease_token` | `uuid` | Yes | Rotating execution token; late responses cannot use a replaced claim. |
-| `invocations` | `jsonb` | No | Append-preserved invocation budgets, counters and results. Django default: `list`. SQL default: `[]`. |
-| `report` | `jsonb` | No | Latest collection summary. Django default: `dict`. SQL default: `{}`. |
-| `updated_at` | `timestamp with time zone` | Yes | Set by Django on save; original migrated timestamp preserved, unknown prior numeric timestamps stay NULL. |
-| `ingestion_key` | `varchar(64)` | No | Field-level unique. |
-| `status` | `varchar(16)` | No | Django default: `'running'`. |
+| `ingestion_key` | `character varying(64)` | No | Field-level unique. |
+| `status` | `character varying(16)` | No | Django default: `'running'`. |
 | `started_at` | `timestamp with time zone` | No | Django default: `now`. |
 | `lease_expires_at` | `timestamp with time zone` | Yes | Stored value. |
 | `observed_at` | `timestamp with time zone` | Yes | Stored value. |
@@ -6161,9 +7179,19 @@ Model: [CollectionRun](../../core/models.py#L7935).
 | `request_count` | `integer` | No | Django default: `0`. |
 | `selected_count` | `integer` | No | Django default: `0`. |
 | `success_count` | `integer` | No | Django default: `0`. |
-| `payload_sha256` | `varchar(64)` | Yes | Stored value. |
+| `payload_sha256` | `character varying(64)` | Yes | Stored value. |
 | `raw_payload` | `jsonb` | Yes | Stored value. |
-| `error_code` | `varchar(64)` | Yes | Stored value. |
+| `error_code` | `character varying(64)` | Yes | Stored value. |
+| `invocations` | `jsonb` | No | Append-preserved invocation budgets, counters and results. Django default: `list`. SQL default: `[]`. |
+| `report` | `jsonb` | No | Latest collection summary. Django default: `dict`. SQL default: `{}`. |
+| `updated_at` | `timestamp with time zone` | Yes | Set by Django on save; original migrated timestamp preserved, unknown prior numeric timestamps stay NULL. |
+| `lease_token` | `uuid` | Yes | Rotating execution token; late responses cannot use a replaced claim. |
+| `job_id` | `uuid` | No | Required instruction owner → [`collection_jobs`](#table-collection_jobs); Django `PROTECT`, PostgreSQL deferred NO ACTION. |
+| `continuation_of_id` | `uuid` | Yes | FK → [`collection_runs`](#table-collection_runs) (`id`); Django deletion: `PROTECT`. Model field: `continuation_of`. |
+| `coverage_state` | `character varying(16)` | No | Django default: `pending` (not an assumed SQL default). |
+| `execution_state` | `character varying(16)` | No | Django default: `pending` (not an assumed SQL default). |
+| `legacy_archive_id` | `uuid` | Yes | FK → [`collection_evidence_archives`](#table-collection_evidence_archives) (`id`); Django deletion: `PROTECT`. Model field: `legacy_archive`. |
+| `scheduled_slot_at` | `timestamp with time zone` | Yes | Scheduled slot at. |
 
 **Named indexes:**
 
@@ -6179,6 +7207,24 @@ Model: [CollectionRun](../../core/models.py#L7935).
 
 The `collection_run_job_instructions` trigger validates lifecycle against the linked job on every insert/update. Numeric runs require a contract and lease expiry; running means no completion timestamp, while success/partial/failed/aborted requires one. Catalog jobs have no numeric contract: pending/running/partial/interrupted has no completion timestamp; success/failed/aborted requires one. Content jobs have no numeric contract: running has no completion timestamp, while success/partial/failed/aborted requires one. The run has no physical source, purpose, contract or scope copies. The linked job supplies those instructions to readers and lifecycle validation. Imported legacy identities remain in `source_metadata.legacy_catalog`.
 
+
+**Additional named indexes in the candidate schema at boundary `0114`:**
+
+- `collection_runs_continuation_of_id_2c019f58`: `CREATE INDEX collection_runs_continuation_of_id_2c019f58 ON public.collection_runs USING btree (continuation_of_id)`.
+- `collection_runs_job_id_fce2e7f0`: `CREATE INDEX collection_runs_job_id_fce2e7f0 ON public.collection_runs USING btree (job_id)`.
+- `collection_runs_legacy_archive_id_d9282e96`: `CREATE INDEX collection_runs_legacy_archive_id_d9282e96 ON public.collection_runs USING btree (legacy_archive_id)`.
+- `metric_collection_runs_ingestion_key_c9c9ce0c_like`: `CREATE INDEX metric_collection_runs_ingestion_key_c9c9ce0c_like ON public.collection_runs USING btree (ingestion_key varchar_pattern_ops)`.
+
+**Additional named constraints in the candidate schema at boundary `0114`:**
+
+- `collection_runs_continuation_of_id_2c019f58_fk_collectio`: `FOREIGN KEY (continuation_of_id) REFERENCES collection_runs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_runs_job_id_fce2e7f0_fk_collection_jobs_id`: `FOREIGN KEY (job_id) REFERENCES collection_jobs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_runs_legacy_archive_id_d9282e96_fk_collectio`: `FOREIGN KEY (legacy_archive_id) REFERENCES collection_evidence_archives(id) DEFERRABLE INITIALLY DEFERRED`.
+- `metric_collection_runs_ingestion_key_key`: `UNIQUE (ingestion_key)`.
+- `metric_collection_runs_pkey`: `PRIMARY KEY (id)`.
+- `metric_collection_runs_request_count_check`: `CHECK ((request_count >= 0))`.
+- `metric_collection_runs_selected_count_check`: `CHECK ((selected_count >= 0))`.
+- `metric_collection_runs_success_count_check`: `CHECK ((success_count >= 0))`.
 [Back to table inventory](#table-inventory)
 
 <a id="table-metric_observations"></a>
@@ -6198,29 +7244,47 @@ Model: [CollectionObservation](../../core/models.py#L8033).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
+| `source_identifier` | `character varying(256)` | No | Stored value. |
+| `source_subject_kind` | `character varying(32)` | No | Stored value. |
+| `observed_at` | `timestamp with time zone` | No | Django default: `now`. |
+| `dimensions` | `jsonb` | No | Django default: `dict`. |
+| `source_metadata` | `jsonb` | No | Django default: `dict`. |
+| `observation_key` | `character varying(64)` | No | Stored value. |
+| `status` | `character varying(16)` | No | Django default: `'ok'`. |
+| `published_at` | `timestamp with time zone` | Yes | Stored value. |
+| `published_date` | `date` | Yes | Stored value. |
+| `publication_precision` | `character varying(16)` | No | Django default: `'unknown'`. |
+| `error_code` | `character varying(64)` | Yes | Stored value. |
 | `run_id` | `uuid` | No | FK → [`collection_runs`](#table-collection_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
+| `mapping_id` | `uuid` | Yes | FK → [`source_subject_mappings`](#table-source_subject_mappings) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `mapping`. |
 | `scope_run_id` | `bigint` | Yes | FK → [`collection_scope_runs`](#table-collection_scope_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `scope_run`. |
-| `post_id` | `text` | Yes | Typed Post membership → [`posts`](#table-posts) (`tweet_id`). Django deletion: `PROTECT`; PostgreSQL NO ACTION, deferred. Required exactly when subject kind is `post`; identifier must match. |
-| `resource_key` | `varchar(256)` | Yes | Normalized catalog resource identity within its scope. |
+| `resource_key` | `character varying(256)` | Yes | Normalized catalog resource identity within its scope. |
 | `product_id` | `bigint` | Yes | FK → [`products`](#table-products) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `product`. |
 | `created_product` | `boolean` | No | Whether this run created the linked Product. Django default: `False`. SQL default: `False`. |
 | `listing` | `jsonb` | No | Native source listing payload. Django default: `dict`. SQL default: `{}`. |
 | `envelopes` | `jsonb` | No | Preserved request/response attempts and native revision evidence. Django default: `list`. SQL default: `[]`. |
 | `groups` | `jsonb` | No | Per-group collection and projection outcomes. Django default: `dict`. SQL default: `{}`. |
-| `processing_outcome` | `varchar(64)` | Yes | Catalog enrichment outcome; independent of evidence `status`. |
+| `processing_outcome` | `character varying(64)` | Yes | Catalog enrichment outcome; independent of evidence `status`. |
 | `updated_at` | `timestamp with time zone` | Yes | Set by Django on save; original migrated timestamp preserved, unknown prior numeric timestamps stay NULL. |
-| `mapping_id` | `uuid` | Yes | FK → [`source_subject_mappings`](#table-source_subject_mappings) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `mapping`. |
-| `source_identifier` | `varchar(256)` | No | Stored value. |
-| `source_subject_kind` | `varchar(32)` | No | Stored value. |
-| `observed_at` | `timestamp with time zone` | No | Django default: `now`. |
-| `dimensions` | `jsonb` | No | Django default: `dict`. |
-| `source_metadata` | `jsonb` | No | Django default: `dict`. |
-| `observation_key` | `varchar(64)` | No | Stored value. |
-| `status` | `varchar(16)` | No | Django default: `'ok'`. |
-| `published_at` | `timestamp with time zone` | Yes | Stored value. |
-| `published_date` | `date` | Yes | Stored value. |
-| `publication_precision` | `varchar(16)` | No | Django default: `'unknown'`. |
-| `error_code` | `varchar(64)` | Yes | Stored value. |
+| `post_id` | `text` | Yes | Typed Post membership → [`posts`](#table-posts) (`tweet_id`). Django deletion: `PROTECT`; PostgreSQL NO ACTION, deferred. Required exactly when subject kind is `post`; identifier must match. |
+| `archive_snapshot_date` | `date` | Yes | Archive snapshot date. |
+| `category_key` | `character varying(128)` | Yes | Category key. |
+| `config_key` | `character varying(128)` | Yes | Config key. |
+| `coordinate_key` | `text` | Yes | Coordinate key. |
+| `definition_sha256` | `character varying(64)` | Yes | Definition sha256. |
+| `historical_visibility_proven` | `boolean` | Yes | Historical visibility proven. |
+| `input_set_sha256` | `character varying(64)` | Yes | Input set sha256. |
+| `legacy_archive_id` | `uuid` | Yes | FK → [`collection_evidence_archives`](#table-collection_evidence_archives) (`id`); Django deletion: `PROTECT`. Model field: `legacy_archive`. |
+| `mapping_sha256` | `character varying(64)` | Yes | Mapping sha256. |
+| `observation_kind` | `character varying(32)` | Yes | Observation kind. |
+| `original_retrieved_at` | `timestamp with time zone` | Yes | Original retrieved at. |
+| `payload_sha256` | `character varying(64)` | Yes | Payload sha256. |
+| `period_status` | `character varying(16)` | Yes | Period status. |
+| `projection_kind` | `character varying(64)` | Yes | Projection kind. |
+| `provider_revision` | `text` | Yes | Provider revision. |
+| `source_record_date` | `date` | Yes | Source record date. |
+| `supersedes_observation_id` | `bigint` | Yes | FK → [`collection_observations`](#table-collection_observations) (`id`); Django deletion: `PROTECT`. Model field: `supersedes_observation`. |
+| `source_record_at` | `timestamp with time zone` | Yes | Source record at. |
 
 **Named indexes:**
 
@@ -6252,6 +7316,28 @@ the typed rows to stored-page evidence. Enrichment reads this scalar and checks
 the distinct database count without loading the compatibility Post-ID array.
 Older reports retain bounded, exact page-receipt reconciliation.
 
+
+**Additional named indexes in the candidate schema at boundary `0114`:**
+
+- `collection_observations_legacy_archive_id_87137d1d`: `CREATE INDEX collection_observations_legacy_archive_id_87137d1d ON public.collection_observations USING btree (legacy_archive_id)`.
+- `collection_observations_post_id_d32e2403`: `CREATE INDEX collection_observations_post_id_d32e2403 ON public.collection_observations USING btree (post_id)`.
+- `collection_observations_post_id_d32e2403_like`: `CREATE INDEX collection_observations_post_id_d32e2403_like ON public.collection_observations USING btree (post_id text_pattern_ops)`.
+- `collection_observations_product_id_4a42cde8`: `CREATE INDEX collection_observations_product_id_4a42cde8 ON public.collection_observations USING btree (product_id)`.
+- `collection_observations_scope_run_id_542c1ea1`: `CREATE INDEX collection_observations_scope_run_id_542c1ea1 ON public.collection_observations USING btree (scope_run_id)`.
+- `collection_observations_supersedes_observation_id_af13ca31`: `CREATE INDEX collection_observations_supersedes_observation_id_af13ca31 ON public.collection_observations USING btree (supersedes_observation_id)`.
+- `metric_observations_mapping_id_9e09bcc6`: `CREATE INDEX metric_observations_mapping_id_9e09bcc6 ON public.collection_observations USING btree (mapping_id)`.
+- `metric_observations_run_id_16f0ee4f`: `CREATE INDEX metric_observations_run_id_16f0ee4f ON public.collection_observations USING btree (run_id)`.
+
+**Additional named constraints in the candidate schema at boundary `0114`:**
+
+- `collection_observati_legacy_archive_id_87137d1d_fk_collectio`: `FOREIGN KEY (legacy_archive_id) REFERENCES collection_evidence_archives(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_observati_supersedes_observati_af13ca31_fk_collectio`: `FOREIGN KEY (supersedes_observation_id) REFERENCES collection_observations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_observations_post_id_d32e2403_fk_posts_tweet_id`: `FOREIGN KEY (post_id) REFERENCES posts(tweet_id) DEFERRABLE INITIALLY DEFERRED`.
+- `metric_observations_mapping_id_9e09bcc6_fk_source_su`: `FOREIGN KEY (mapping_id) REFERENCES source_subject_mappings(id) DEFERRABLE INITIALLY DEFERRED`.
+- `metric_observations_pkey`: `PRIMARY KEY (id)`.
+- `metric_observations_product_id_9f64a685_fk_products_id`: `FOREIGN KEY (product_id) REFERENCES products(id) DEFERRABLE INITIALLY DEFERRED`.
+- `metric_observations_run_id_16f0ee4f_fk_metric_co`: `FOREIGN KEY (run_id) REFERENCES collection_runs(id) DEFERRABLE INITIALLY DEFERRED`.
+- `metric_observations_scope_run_id_e571155a_fk_hf_model_`: `FOREIGN KEY (scope_run_id) REFERENCES collection_scope_runs(id) DEFERRABLE INITIALLY DEFERRED`.
 [Back to table inventory](#table-inventory)
 
 <a id="table-metric_types"></a>
@@ -6293,18 +7379,26 @@ Model: [MetricValue](../../core/models.py#L8148).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `observation_id` | `bigint` | No | FK → [`collection_observations`](#table-collection_observations) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `observation`. |
-| `source_metric_id` | `bigint` | No | FK → [`metrics`](#table-metrics) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_metric`. |
-| `integer_value` | `numeric(30, 0)` | Yes | Stored value. |
+| `integer_value` | `numeric(30,0)` | Yes | Stored value. |
 | `float_value` | `double precision` | Yes | Stored value. |
-| `temporal_status` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). |
-| `source_timezone` | `varchar(64)` | No | Django default: `'unknown'` (not an assumed SQL default). |
+| `temporal_status` | `character varying(16)` | No | Django default: `'unknown'` (not an assumed SQL default). |
+| `source_timezone` | `character varying(64)` | No | Django default: `'unknown'` (not an assumed SQL default). |
 | `as_of_at` | `timestamp with time zone` | Yes | Stored value. |
 | `as_of_date` | `date` | Yes | Stored value. |
 | `window_start_at` | `timestamp with time zone` | Yes | Inclusive measurement-window start. NULL means unknown, never infinity. |
 | `window_end_at` | `timestamp with time zone` | Yes | Exclusive measurement-window end. NULL means unknown, never infinity. |
-| `window_range` | `tstzrange` | Yes | Database-generated stored finite `[start,end)` interval. Entire range is SQL NULL if either endpoint is unknown; the separately known endpoint remains stored. |
 | `period_label_date` | `date` | Yes | Stored value. |
+| `observation_id` | `bigint` | No | FK → [`collection_observations`](#table-collection_observations) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `observation`. |
+| `source_metric_id` | `bigint` | No | FK → [`metrics`](#table-metrics) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_metric`. |
+| `window_range` | `tstzrange` | Yes | Database-generated stored finite `[start,end)` interval. Entire range is SQL NULL if either endpoint is unknown; the separately known endpoint remains stored. |
+| `as_of_basis` | `character varying(128)` | Yes | As of basis. |
+| `as_of_unknown_reason` | `character varying(128)` | Yes | As of unknown reason. |
+| `provenance_precision` | `character varying(32)` | Yes | Provenance precision. |
+| `reported_time_policy` | `character varying(64)` | Yes | Reported time policy. |
+| `window_end_basis` | `character varying(128)` | Yes | Window end basis. |
+| `window_end_unknown_reason` | `character varying(128)` | Yes | Window end unknown reason. |
+| `window_start_basis` | `character varying(128)` | Yes | Window start basis. |
+| `window_start_unknown_reason` | `character varying(128)` | Yes | Window start unknown reason. |
 
 **Named indexes:**
 
@@ -6351,6 +7445,17 @@ FROM metric_values v JOIN metrics m ON m.id = v.source_metric_id
 WHERE m.measurement_kind = 'flow' AND window_range IS NULL;
 ```
 
+
+**Additional named indexes in the candidate schema at boundary `0114`:**
+
+- `metric_values_observation_id_6c2d643f`: `CREATE INDEX metric_values_observation_id_6c2d643f ON public.metric_values USING btree (observation_id)`.
+- `metric_values_source_metric_id_08070755`: `CREATE INDEX metric_values_source_metric_id_08070755 ON public.metric_values USING btree (source_metric_id)`.
+
+**Additional named constraints in the candidate schema at boundary `0114`:**
+
+- `metric_values_observation_id_6c2d643f_fk_metric_observations_id`: `FOREIGN KEY (observation_id) REFERENCES collection_observations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `metric_values_pkey`: `PRIMARY KEY (id)`.
+- `metric_values_source_metric_id_08070755_fk_source_metrics_id`: `FOREIGN KEY (source_metric_id) REFERENCES metrics(id) DEFERRABLE INITIALLY DEFERRED`.
 [Back to table inventory](#table-inventory)
 
 <a id="table-metrics"></a>

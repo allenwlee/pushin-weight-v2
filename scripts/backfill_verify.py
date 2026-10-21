@@ -194,7 +194,7 @@ def verify_window(job_id, *, cfg):
             raise ValueError("collection_not_successful")
         scopes = list(job.last_success.scopes.all())
         if (
-            len(scopes) != len(job.definition["scope"]["units"])
+            len(scopes) != len(job.scope["units"])
             or not scopes
             or any(
                 not s.enumeration_complete or s.outcome != "complete" for s in scopes
@@ -212,7 +212,7 @@ def verify_window(job_id, *, cfg):
             raise ValueError("collection_membership_count_mismatch")
         after, checked, failures, samples = "", 0, Counter(), {}
         digest = hashlib.sha256()
-        bounds = job.definition["scope"]
+        bounds = job.scope
         while True:
             ids = list(
                 observations.filter(post_id__gt=after)

@@ -54,7 +54,7 @@ def register_github_job(
     require(
         github_role in {"inventory", "release_watch", "full"}, "unsupported GitHub role"
     )
-    source = register_github_source()
+    register_github_source()
     publishers = []
     for key in publisher_ids:
         account = Account.objects.get(pk=key, data_source_id="github")
@@ -76,36 +76,25 @@ def register_github_job(
             }
         )
     require(publishers, "at least one reviewed publisher required")
+    require(len(publishers) == 1, "register one GitHub account per collection job")
+    from core.collection_publisher_jobs import publisher_job_spec
+
     return register_job(
-        job_key=job_key,
-        source=source,
-        purpose="catalog",
-        operation="github_catalog",
-        mode=mode,
-        definition={
-            "version": 1,
-            "scope": {
-                "publishers": publishers,
-                "github_role": github_role,
-                **(
-                    {"numeric_contract_id": str(numeric_contract_id)}
-                    if numeric_contract_id
-                    else {}
-                ),
-            },
-            "budgets": budgets,
-            "schedule": schedule
-            or (
-                {"kind": "daily_utc", "driver": "shared", "hour": 10}
-                if mode == "recurring"
-                else {"kind": "manual", "driver": "manual"}
-            ),
-        },
+        **publisher_job_spec(
+            job_key=job_key,
+            account=account,
+            budgets=budgets,
+            mode=mode,
+            schedule=schedule,
+            options={"github_role": github_role},
+            numeric_contract_id=numeric_contract_id,
+        )
     )
 
 
 def _envelope(result, *, payload=None, reused_from=None):
     return {
+        "collection_request_id": result.collection_request_id,
         "url": result.url,
         "status": result.status,
         "etag": result.etag,
@@ -190,7 +179,7 @@ def _record(
 
 def _queue_numeric(claim, run, observations):
     """Queue the exact captured payloads inside their fenced evidence transaction."""
-    contract_id = run.job.definition["scope"].get("numeric_contract_id")
+    contract_id = run.job.scope.get("numeric_contract_id")
     if not contract_id:
         return
     from core.models import MetricCollectionContract
@@ -214,6 +203,14 @@ def _scope(claim, kind, key):
     ).first()
 
 
+def _prepare_capture(claim, client, kind, key, ownership, scoped=None):
+    scoped = scoped or checkpoint_scope(
+        claim, scope_kind=kind, scope_key=key, ownership=ownership
+    )
+    client.collection_scope = scoped
+    return scoped
+
+
 def _checked_response(claim, result, *, kind, key, ownership, scope):
     if result.status in {200, 304}:
         return
@@ -228,6 +225,47 @@ def _checked_response(claim, result, *, kind, key, ownership, scope):
         outcome=f"http_{result.status}",
     )
     raise CollectionStop(f"http_{result.status}", result.retry_at)
+
+
+def _cached_inventory_page(previous, cursor):
+    """Read the previous actual response through its typed receipt/input links."""
+    from core.collection_capture import read_document
+
+    receipt = previous.requests.filter(
+        cursor_before=cursor, transport_outcome="received",
+        http_status__in=[200, 304], error_code__isnull=True,
+    ).select_related("archive").order_by("-attempt__ordinal", "-ordinal").first()
+    if receipt is None:
+        return None
+    body_request = receipt if receipt.archive_id else None
+    resource = previous.observations.filter(
+        inputs__input_request=receipt,
+    ).order_by("pk").first()
+    observed_at = resource.observed_at if resource else receipt.received_at
+    # A 304 has no response body. Follow earlier resource results to the actual
+    # public body rather than copying it into the new transport receipt.
+    seen = set()
+    while body_request is None and resource and resource.pk not in seen:
+        seen.add(resource.pk)
+        body_edge = resource.inputs.filter(
+            input_request__archive__isnull=False,
+            input_request__endpoint_url=receipt.endpoint_url,
+        ).select_related("input_request__archive").first()
+        if body_edge:
+            body_request = body_edge.input_request
+            break
+        earlier = resource.inputs.filter(input_role="cached_response").select_related("input_observation").first()
+        resource = earlier.input_observation if earlier else None
+    if body_request is None:
+        return None
+    payload = read_document(body_request.archive)
+    require(isinstance(payload, list), "cached repository listing required")
+    return {
+        "url": receipt.endpoint_url, "payload": payload,
+        "next_url": body_request.cursor_after,
+        "etag": receipt.response_etag or receipt.etag,
+        "observed_at": observed_at.isoformat(),
+    }
 
 
 def _publisher_inventory(claim, client, pin, items):
@@ -245,6 +283,7 @@ def _publisher_inventory(claim, client, pin, items):
     key = pin["native_id"]
     profile = _scope(claim, "publisher", key)
     if profile is None or not profile.enumeration_complete:
+        profile = _prepare_capture(claim, client, "publisher", key, pin, profile)
         result = client.owner(pin["login"])
         _checked_response(
             claim, result, kind="publisher", key=key, ownership=pin, scope=profile
@@ -291,22 +330,17 @@ def _publisher_inventory(claim, client, pin, items):
             enumeration_complete=True,
         ).first()
     while scoped is None or not scoped.enumeration_complete:
-        if items[0] >= job.definition["budgets"]["items"]:
+        if items[0] >= job.budgets["items"]:
             raise CollectionStop("item_cap")
         cursor = scoped.cursor if scoped else None
-        cached = None
-        if previous:
-            cached = (
-                next((e for e in previous.envelopes if e.get("url") == cursor), None)
-                if cursor
-                else (previous.envelopes[0] if previous.envelopes else None)
-            )
+        cached = _cached_inventory_page(previous, cursor) if previous else None
+        scoped = _prepare_capture(claim, client, "publisher_repos", key, pin, scoped)
         result = client.repositories(
             pin["login"],
             pin["account_kind"],
             next_url=cursor,
             etag=cached.get("etag") if cached else None,
-            per_page=min(100, job.definition["budgets"]["items"] - items[0]),
+            per_page=min(100, job.budgets["items"] - items[0]),
         )
         _checked_response(
             claim, result, kind="publisher_repos", key=key, ownership=pin, scope=scoped
@@ -329,7 +363,7 @@ def _publisher_inventory(claim, client, pin, items):
             rows, next_url = result.payload, result.next_url
         require(isinstance(rows, list), "repository listing required")
         require(
-            len(rows) <= job.definition["budgets"]["items"] - items[0],
+            len(rows) <= job.budgets["items"] - items[0],
             "listing exceeds remaining item budget",
         )
         for row in rows:
@@ -364,6 +398,36 @@ def _publisher_inventory(claim, client, pin, items):
                     else result.observed_at,
                     reused_from=reused,
                 )
+                if reused:
+                    from core.models import (
+                        CollectionObservationInput,
+                        CollectionRequest,
+                    )
+
+                    prior = CollectionObservation.objects.get(
+                        scope_run_id=reused["scope_id"],
+                        source_identifier=str(row["id"]),
+                        observation_kind="repository",
+                        observed_at=observation.observed_at,
+                        payload_sha256=digest(row),
+                    )
+                    require(prior.listing == row, "cached repository payload changed")
+                    CollectionObservationInput.objects.get_or_create(
+                        observation=observation,
+                        input_observation=prior,
+                        input_role="cached_response",
+                        defaults={"input_sha256": prior.payload_sha256},
+                    )
+                    validation = CollectionRequest.objects.get(
+                        pk=result.collection_request_id,
+                        scope_run=scope,
+                        http_status=304,
+                    )
+                    CollectionObservationInput.objects.get_or_create(
+                        observation=observation,
+                        input_request=validation,
+                        input_role="cache_validation",
+                    )
                 captured.append(observation)
             # A 304 carries old counters. Fresh detail below provides today's
             # numbers; the reused listing never becomes a new numeric snapshot.
@@ -392,6 +456,14 @@ def _repository_access(claim, client, repository):
     repo = repository.listing
     key = str(repo["id"])
     ownership = {"repository_id": key, "owner_id": str(repo["owner"]["id"])}
+    _prepare_capture(
+        claim,
+        client,
+        "repository_access",
+        key,
+        ownership,
+        _scope(claim, "repository_access", key),
+    )
     result = client.repository(repo["full_name"])
     if result.status == 404:
         checkpoint_scope(
@@ -447,6 +519,7 @@ def _repository_access(claim, client, repository):
                 "status": result.status,
                 "observed_at": result.observed_at.isoformat(),
                 "public": public,
+                "collection_request_id": result.collection_request_id,
             }
         ],
         write=write_access,
@@ -470,6 +543,9 @@ def _release_assets(claim, client, repository, releases, items, limit):
         while scoped is None or not scoped.enumeration_complete:
             if items[0] >= limit:
                 raise CollectionStop("item_cap")
+            scoped = _prepare_capture(
+                claim, client, "release_assets", key, ownership, scoped
+            )
             result = client.release_assets(
                 repo["full_name"],
                 release_id,
@@ -551,6 +627,9 @@ def _events(claim, client, repository, kind, items, limit):
     while scoped is None or not scoped.enumeration_complete:
         if items[0] >= limit:
             raise CollectionStop("item_cap")
+        scoped = _prepare_capture(
+            claim, client, "repository_events", key, ownership, scoped
+        )
         result = client.events(
             repo["full_name"],
             kind,
@@ -581,6 +660,10 @@ def _events(claim, client, repository, kind, items, limit):
                 "release public-status flag required",
             )
             rows = [row for row in rows if not row["draft"] and row.get("published_at")]
+            if result.collection_request_id:
+                from core.collection_capture import capture_public_selection
+
+                capture_public_selection(result.collection_request_id, rows)
             # Credentials used for rate limits must not retain unpublished data.
             result = replace(result, payload=rows)
         coordinates = []
@@ -648,6 +731,9 @@ def _pinned_metadata(claim, client, repository, commits, *, head=None):
     key = str(repo["id"]) + ":" + revision
     scoped = _scope(claim, "repository_tree", key)
     if scoped is None or not scoped.enumeration_complete:
+        scoped = _prepare_capture(
+            claim, client, "repository_tree", key, ownership, scoped
+        )
         result = client.tree(repo["full_name"], tree_revision)
         _checked_response(
             claim,
@@ -695,6 +781,9 @@ def _pinned_metadata(claim, client, repository, commits, *, head=None):
         file_scope = _scope(claim, "repository_file", key)
         if file_scope and file_scope.enumeration_complete:
             continue
+        file_scope = _prepare_capture(
+            claim, client, "repository_file", key, ownership, file_scope
+        )
         result = client.file(repo["full_name"], filename, revision)
         _checked_response(
             claim,
@@ -750,25 +839,27 @@ def execute_github_catalog(job_id, *, client=None, key=None):
         client = GitHubMetadataClient(
             Budget(
                 own_client,
-                max_requests=job.definition["budgets"]["requests"],
-                max_bytes=job.definition["budgets"]["bytes"],
-                max_seconds=job.definition["budgets"]["seconds"],
+                max_requests=job.budgets["requests"],
+                max_bytes=job.budgets["bytes"],
+                max_seconds=job.budgets["seconds"],
             ),
             key=key,
         )
     budget = client.budget
-    budget.remaining = min(budget.remaining, job.definition["budgets"]["requests"])
-    budget.max_bytes = min(budget.max_bytes, job.definition["budgets"]["bytes"])
-    budget.deadline = min(
-        budget.deadline, budget.clock() + job.definition["budgets"]["seconds"]
-    )
+    from core.collection_capture import RequestCapture
+
+    previous_capture = client.capture
+    client.capture = RequestCapture(claim)
+    budget.remaining = min(budget.remaining, job.budgets["requests"])
+    budget.max_bytes = min(budget.max_bytes, job.budgets["bytes"])
+    budget.deadline = min(budget.deadline, budget.clock() + job.budgets["seconds"])
     requests_before = budget.remaining
     reason, retry_at = None, None
     items = [0]
     try:
         from core.source_metric_projection import drain_pending_projections
 
-        scope = job.definition["scope"]
+        scope = job.scope
         role = scope.get("github_role", "full")
         require(
             role in {"inventory", "release_watch", "full"}, "unsupported GitHub role"
@@ -806,7 +897,7 @@ def execute_github_catalog(job_id, *, client=None, key=None):
                     repository,
                     "releases",
                     items,
-                    job.definition["budgets"]["items"],
+                    job.budgets["items"],
                 )
                 if scope.get(
                     "include_release_assets", bool(scope.get("numeric_contract_id"))
@@ -817,7 +908,7 @@ def execute_github_catalog(job_id, *, client=None, key=None):
                         repository,
                         releases,
                         items,
-                        job.definition["budgets"]["items"],
+                        job.budgets["items"],
                     )
                 if role == "release_watch":
                     continue
@@ -827,7 +918,7 @@ def execute_github_catalog(job_id, *, client=None, key=None):
                     repository,
                     "tags",
                     items,
-                    job.definition["budgets"]["items"],
+                    job.budgets["items"],
                 )
                 commits = _events(
                     claim,
@@ -835,7 +926,7 @@ def execute_github_catalog(job_id, *, client=None, key=None):
                     repository,
                     "commits",
                     items,
-                    job.definition["budgets"]["items"],
+                    job.budgets["items"],
                 )
                 _pinned_metadata(claim, client, repository, commits)
     except SourceError as exc:
@@ -843,10 +934,11 @@ def execute_github_catalog(job_id, *, client=None, key=None):
     except (ValueError, KeyError, TypeError, Account.DoesNotExist):
         reason = "invalid_or_unqualified_source_data"
     finally:
+        client.capture = previous_capture
         if own_client:
             own_client.close()
     projection = None
-    if job.definition["scope"].get("numeric_contract_id"):
+    if job.scope.get("numeric_contract_id"):
         from core.source_metric_projection import drain_pending_projections
 
         try:

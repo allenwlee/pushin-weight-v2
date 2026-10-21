@@ -487,12 +487,12 @@ def catalog_report(run, *, requests=0, stop_reason=None):
         "run_id": str(run.pk),
         "complete": enumeration_complete
         and enrichment_complete
-        and not run.job.definition["scope"]["gaps"]
+        and not run.job.scope["gaps"]
         and not gaps
         and not conflicts,
         "enumeration_complete": enumeration_complete,
         "enrichment_complete": enrichment_complete,
-        "scope_gaps": run.job.definition["scope"]["gaps"],
+        "scope_gaps": run.job.scope["gaps"],
         "attribution_gaps": gaps,
         "conflicts": conflicts,
         "group_outcomes": group_outcomes,
@@ -527,7 +527,7 @@ def resolve_catalog_run(run_id):
 
 def catalog_scope(run):
     """Read the frozen instructions owned by this run's job."""
-    return run.job.definition["scope"]
+    return run.job.scope
 
 
 def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
@@ -574,7 +574,7 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
         )
         if run_id is not None and not run.scopes.exists():
             with fenced_run(claim):
-                for entry in run.job.definition["scope"]["namespaces"]:
+                for entry in run.job.scope["namespaces"]:
                     CollectionScopeRun.objects.create(
                         run=run,
                         scope_key=entry["namespace"],
@@ -616,7 +616,7 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                 _walk_namespace(
                     ns,
                     hf,
-                    run.job.definition["scope"]["rules"],
+                    run.job.scope["rules"],
                     visited,
                     max_models,
                     claim,
@@ -657,5 +657,8 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
             try:
                 with fenced_run(claim):
                     run.save()
+                    from core.collection_state import complete_attempt
+
+                    complete_attempt(claim, run, status=run.status, request_count=hf.requests)
             finally:
                 hf.on_attempt = None

@@ -38,6 +38,13 @@ relations:
     - languages
     - locales
     - measurement_units
+    - event_dossiers
+    - event_dossier_sources
+    - event_dossier_claims
+    - event_dossier_reviews
+    - event_dossier_review_claims
+    - model_release_details
+    - personnel_change_details
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - data_sources
     - taxonomy_versions
@@ -55,6 +62,15 @@ relations:
     - collection_runs
     - collection_observations
     - collection_scope_runs
+    - collection_campaigns
+    - collection_job_targets
+    - collection_attempts
+    - collection_requests
+    - collection_evidence_archives
+    - collection_observation_inputs
+    - collection_resource_snapshots
+    - collection_metric_gaps
+    - collection_corrections
     - metric_values
     - people_names
     - people_name_evidence
@@ -216,6 +232,13 @@ relations:
     - languages
     - locales
     - measurement_units
+    - event_dossiers
+    - event_dossier_sources
+    - event_dossier_claims
+    - event_dossier_reviews
+    - event_dossier_review_claims
+    - model_release_details
+    - personnel_change_details
     - provider_batches
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - data_sources
@@ -234,6 +257,15 @@ relations:
     - collection_runs
     - collection_observations
     - collection_scope_runs
+    - collection_campaigns
+    - collection_job_targets
+    - collection_attempts
+    - collection_requests
+    - collection_evidence_archives
+    - collection_observation_inputs
+    - collection_resource_snapshots
+    - collection_metric_gaps
+    - collection_corrections
     - metric_values
     - editorial_assessments
     - editorial_budgets
@@ -331,9 +363,14 @@ relations:
     - editorial_pictures
     - trend_narrative_versions
   sequences:
+    - event_dossier_sources_id_seq
+    - event_dossier_review_claims_id_seq
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - source_metrics_id_seq
     - metric_observations_id_seq
+    - collection_job_targets_id_seq
+    - collection_observation_inputs_id_seq
+    - collection_metric_gaps_id_seq
     - metric_values_id_seq
     - editorial_assessments_id_seq
     - editorial_calls_id_seq
@@ -417,10 +454,15 @@ relations:
     - twitter_list_memberships_id_seq
     - untracked_brand_promotion_evidence_id_seq
   optional_source_sequences:
+    - event_dossier_sources_id_seq
+    - event_dossier_review_claims_id_seq
     - original_content_sources_id_seq
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - source_metrics_id_seq
     - metric_observations_id_seq
+    - collection_job_targets_id_seq
+    - collection_observation_inputs_id_seq
+    - collection_metric_gaps_id_seq
     - metric_values_id_seq
     - editorial_assessments_id_seq
     - editorial_calls_id_seq

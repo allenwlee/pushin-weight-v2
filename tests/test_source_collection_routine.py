@@ -148,9 +148,8 @@ def test_role_takeover_is_explicit_unique_and_rollback_preserves_registry(settin
     with pytest.raises(ValueError, match="another job"):
         take_collection_authority(other.pk)
     job.source.refresh_from_db()
-    assert job.source.metadata["collection_role_authorities"]["inventory:lab"] == str(
-        job.pk
-    )
+    assert CollectionJob.objects.get(pk=job.pk).authority_enabled
+    assert job.source.metadata["collection_role_authorities"]["inventory:lab"] == str(job.pk)
     assert CollectionJob.objects.get(pk=other.pk).state == "paused"
 
 

@@ -623,14 +623,90 @@ def _register_matches(
                 },
             },
         }
+        from core.measurement_taxonomy import resolve_subject_id
+        from core.models import CollectionJob, MeasurementSubject
+
+        key = "crosswalk:" + digest(definition)
+        existing = CollectionJob.objects.filter(job_key=key).first()
+        if existing and existing.instruction_version == 1:
+            # Existing instructions retain their identity through expansion.
+            jobs.append(
+                register_job(
+                    job_key=key,
+                    source=DataSource.objects.get(pk=source),
+                    purpose="catalog",
+                    operation="match_crosswalk",
+                    mode="historical",
+                    definition=definition,
+                )
+            )
+            continue
+        targets = []
+        for brand in preview["brands"]:
+            subject, _ = MeasurementSubject.objects.get_or_create(
+                id=resolve_subject_id("brand", brand),
+                defaults={"subject_kind": "brand", "brand_id": brand},
+            )
+            targets.append(
+                {
+                    "target_key": "brand:" + brand,
+                    "subject_id": subject.pk,
+                    "target_kind": "brand",
+                    "target_role": "selected",
+                    "resolution_state": "resolved",
+                }
+            )
+        for choice in selected:
+            subject, _ = MeasurementSubject.objects.get_or_create(
+                id=resolve_subject_id("product", choice["product_key"]),
+                defaults={
+                    "subject_kind": "product",
+                    "product_id": choice["product_key"],
+                },
+            )
+            require(
+                len(choice["reasons"]) == 1,
+                "matching reason requires a typed disposition",
+            )
+            targets.append(
+                {
+                    "target_key": choice["candidate_id"],
+                    "subject_id": subject.pk,
+                    "target_kind": "match_candidate",
+                    "target_role": choice["decision"],
+                    "resolution_state": "resolved",
+                    "native_identifier": choice["identifier"],
+                    "identifier_scope": choice["identifier_scope"],
+                    "source_row_index": choice.get("publication_row_index"),
+                    "evidence_observation_id": choice["evidence"]["observation_id"],
+                    "selection_basis": choice["reasons"][0],
+                    "selection_sha256": choice["input_sha256"],
+                    "review_confirmed": choice["candidate_id"] in reviewed,
+                }
+            )
+        options = {
+            name: definition["scope"][name]
+            for name in ("ruleset", "preview_sha256", "cutoff")
+        }
+        options.update(reviewed_by=reviewed_by, review_basis=review_basis)
         jobs.append(
             register_job(
-                job_key="crosswalk:" + digest(definition),
+                job_key=key,
                 source=DataSource.objects.get(pk=source),
                 purpose="catalog",
                 operation="match_crosswalk",
                 mode="historical",
-                definition=definition,
+                definition={"version": 2, "options": options},
+                targets=targets,
+                settings={
+                    "owner_kind": "source",
+                    "schedule_kind": "manual",
+                    "schedule_driver": "manual",
+                    **{
+                        "max_" + name: value
+                        for name, value in definition["budgets"].items()
+                    },
+                },
             )
         )
     return jobs
@@ -759,9 +835,9 @@ def execute_matches(job_id):
 
     job = CollectionJob.objects.get(pk=job_id)
     validate_job(job)
+    scope = job.scope
     require(
-        job.operation == "match_crosswalk"
-        and job.definition["scope"]["ruleset"] == RULESET,
+        job.operation == "match_crosswalk" and scope["ruleset"] == RULESET,
         "matching instruction required",
     )
     if job.state == "completed":
@@ -774,14 +850,13 @@ def execute_matches(job_id):
     if job.state == "paused":
         set_job_state(job.pk, "ready")
     claim = claim_job(job.pk)
-    scope = job.definition["scope"]
     completed = set(
         CollectionScopeRun.objects.filter(
             run_id=claim.run_id, enumeration_complete=True
         ).values_list("scope_key", flat=True)
     )
     pending = [c for c in scope["matches"] if c["candidate_id"] not in completed]
-    deadline = monotonic() + job.definition["budgets"]["seconds"]
+    deadline = monotonic() + job.budgets["seconds"]
     try:
         for choice in pending[:50]:
             if monotonic() >= deadline:

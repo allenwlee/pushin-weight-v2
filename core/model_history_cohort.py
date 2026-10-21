@@ -353,7 +353,7 @@ def cohort_report(jobs):
     brands = {}
     cohort_hashes = set()
     for job in jobs:
-        scope = job.definition["scope"]
+        scope = job.scope
         cohort_hashes.add(scope["cohort_hash"])
         brands.setdefault(scope["brand_id"], {**scope, "jobs": {}})["jobs"][
             job.source_id
@@ -394,7 +394,7 @@ def history_windows(start_at, cutoff, source, *, size=365):
 
 def validate_model_pins(job):
     """Frozen ownership and identifiers cannot silently follow a later edit."""
-    models = job.definition["scope"].get("models", [])
+    models = job.scope.get("models", [])
     require(
         isinstance(models, list) and len(models) <= 100,
         "bounded frozen model list required",
@@ -408,7 +408,7 @@ def validate_model_pins(job):
     for row in models:
         product = products[row["product_key"]]
         require(
-            product.brand_id == job.definition["scope"]["brand_id"]
+            product.brand_id == job.scope["brand_id"]
             and (
                 product.type in MODEL_TYPES
                 or isinstance(row.get("qualification"), dict)

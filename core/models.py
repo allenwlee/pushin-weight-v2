@@ -3174,6 +3174,26 @@ class CollectionScopeRun(models.Model):
     )
     scope_kind = models.CharField(max_length=32, default="namespace")
     scope_key = models.CharField(max_length=256)
+    job_target = models.ForeignKey("CollectionJobTarget", null=True, on_delete=models.PROTECT, related_name="scopes")
+    parent_scope = models.ForeignKey("self", null=True, on_delete=models.PROTECT, related_name="child_scopes")
+    prerequisite_scope = models.ForeignKey("self", null=True, on_delete=models.PROTECT, related_name="dependent_scopes")
+    phase = models.CharField(max_length=32, null=True)
+    resource_observation = models.ForeignKey("CollectionObservation", null=True, on_delete=models.PROTECT, related_name="resource_scopes")
+    resource_path = models.TextField(null=True)
+    admission_outcome = models.CharField(max_length=32, null=True)
+    confidence_pct = models.PositiveSmallIntegerField(null=True)
+    reviewed_by = models.TextField(null=True)
+    reviewed_at = models.DateTimeField(null=True)
+    requested_start_at = models.DateTimeField(null=True)
+    requested_end_at = models.DateTimeField(null=True)
+    requested_start_date = models.DateField(null=True)
+    requested_end_date = models.DateField(null=True)
+    requested_revision = models.TextField(null=True)
+    execution_state = models.CharField(max_length=16, default="pending", db_default="pending")
+    coverage_state = models.CharField(max_length=16, default="pending", db_default="pending")
+    error_code = models.CharField(max_length=64, null=True)
+    retry_at = models.DateTimeField(null=True)
+    legacy_archive = models.ForeignKey("CollectionEvidenceArchive", null=True, on_delete=models.PROTECT, related_name="legacy_scopes")
     ownership = models.JSONField()
     cursor = models.TextField(null=True, blank=True)
     cursor_history = models.JSONField(default=list)
@@ -3265,6 +3285,7 @@ class BrandHashtag(models.Model):
 class SearchQuery(models.Model):
     id = models.BigAutoField(primary_key=True)
     query_id = models.TextField(unique=True)
+    query_text = models.TextField(null=True)
     brand = models.ForeignKey(
         Brand,
         on_delete=models.SET_NULL,
@@ -7603,6 +7624,9 @@ class DataSource(models.Model):
     website_url = models.URLField(max_length=2048,default="")
     identifier_normalizer = models.CharField(max_length=32,default="exact-v1")
     adapter_key = models.CharField(max_length=64,null=True)
+    dispatch_max_requests = models.PositiveIntegerField(default=100, db_default=100)
+    dispatch_max_bytes = models.PositiveBigIntegerField(default=8 * 1024 * 1024, db_default=8 * 1024 * 1024)
+    dispatch_max_seconds = models.PositiveIntegerField(default=300, db_default=300)
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -7611,6 +7635,14 @@ class DataSource(models.Model):
         constraints = [
             models.CheckConstraint(condition=models.Q(source_type__in=["benchmark","model_adoption","social"]),name="ck_source_type"),
             models.CheckConstraint(condition=models.Q(enabled=False)|(models.Q(adapter_key__isnull=False)&~models.Q(adapter_key="")),name="ck_source_enabled_adapter"),
+            models.CheckConstraint(
+                condition=models.Q(
+                    dispatch_max_requests__gte=1, dispatch_max_requests__lte=10000,
+                    dispatch_max_bytes__gte=1, dispatch_max_bytes__lte=33554432,
+                    dispatch_max_seconds__gte=1, dispatch_max_seconds__lte=3600,
+                ),
+                name="ck_source_dispatch_limits",
+            ),
         ]
 
 
@@ -7993,14 +8025,84 @@ class CollectionJob(models.Model):
     contract = models.ForeignKey(MetricCollectionContract, null=True, on_delete=models.PROTECT)
     definition = models.JSONField()
     definition_sha256 = models.CharField(max_length=64)
+    instruction_version = models.PositiveSmallIntegerField(default=1, db_default=1)
+    owner_kind = models.CharField(max_length=24, default="legacy_unresolved", db_default="legacy_unresolved")
+    owner_account = models.ForeignKey(Account, null=True, on_delete=models.PROTECT, related_name="collection_jobs")
+    campaign = models.ForeignKey("CollectionCampaign", null=True, on_delete=models.PROTECT, related_name="jobs")
+    campaign_role = models.CharField(max_length=24, null=True)
+    campaign_phase = models.CharField(max_length=24, null=True)
+    origin_job = models.ForeignKey("self", null=True, on_delete=models.PROTECT, related_name="derived_jobs")
+    numeric_contract = models.ForeignKey(MetricCollectionContract, null=True, on_delete=models.PROTECT, related_name="numeric_output_jobs")
+    schedule_kind = models.CharField(max_length=24, null=True)
+    schedule_driver = models.CharField(max_length=32, null=True)
+    interval_seconds = models.PositiveIntegerField(null=True)
+    daily_utc_hour = models.PositiveSmallIntegerField(null=True)
+    max_requests = models.PositiveIntegerField(null=True)
+    max_bytes = models.PositiveBigIntegerField(null=True)
+    max_seconds = models.PositiveIntegerField(null=True)
+    max_items = models.PositiveIntegerField(null=True)
+    relational_sha256 = models.CharField(max_length=64, null=True)
+    instructions_sealed_at = models.DateTimeField(null=True)
+    routine_role = models.CharField(max_length=64, null=True)
+    authority_enabled = models.BooleanField(default=False, db_default=False)
+    legacy_archive = models.ForeignKey("CollectionEvidenceArchive", null=True, on_delete=models.PROTECT, related_name="legacy_jobs")
     state = models.CharField(max_length=16, default="paused")
     next_due_at = models.DateTimeField(null=True)
     next_retry_at = models.DateTimeField(null=True)
     active_run = models.ForeignKey("CollectionRun", null=True, on_delete=models.SET_NULL, related_name="active_jobs")
     last_attempt = models.ForeignKey("CollectionRun", null=True, on_delete=models.SET_NULL, related_name="attempt_jobs")
+    last_attempt_attempt = models.ForeignKey("CollectionAttempt", null=True, on_delete=models.SET_NULL, related_name="last_attempt_jobs")
     last_success = models.ForeignKey("CollectionRun", null=True, on_delete=models.SET_NULL, related_name="successful_jobs")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def budgets(self):
+        if self.instruction_version == 1:
+            return self.definition["budgets"]
+        return {key: getattr(self, "max_" + key) for key in ("requests", "bytes", "seconds", "items")}
+
+    @property
+    def schedule(self):
+        if self.instruction_version == 1:
+            return self.definition["schedule"]
+        result = {"kind": self.schedule_kind, "driver": self.schedule_driver}
+        if self.schedule_kind == "interval":
+            result["seconds"] = self.interval_seconds
+        elif self.schedule_kind == "daily_utc":
+            result["hour"] = self.daily_utc_hour
+        return result
+
+    @property
+    def scope(self):
+        if "_runtime_scope" in self.__dict__:
+            return self.__dict__["_runtime_scope"]
+        if self.instruction_version == 1:
+            return self.definition["scope"]
+        from core.collection_instructions import scope_for_job
+
+        return scope_for_job(self)
+
+    @property
+    def campaign_settings(self):
+        if self.campaign_id is None:
+            return self.definition.get("campaign", {}) if self.instruction_version == 1 else {}
+        return {
+            "kind": "backfiller-data-source-v1", "key": self.campaign.campaign_key,
+            "cohort_hash": self.campaign.cohort_hash, "role": self.campaign_role,
+            "phase": self.campaign_phase, "contract_partition": str(self.contract_id) if self.contract_id else None,
+            "max_invocations": self.campaign.max_attempts, "max_requests": self.campaign.max_requests,
+        }
+
+    @property
+    def instructions(self):
+        """Compatibility input/report shape derived from the actual typed owners."""
+        if self.instruction_version == 1:
+            return self.definition
+        result = {"version": 1, "scope": self.scope, "budgets": self.budgets, "schedule": self.schedule}
+        if self.campaign_id:
+            result["campaign"] = self.campaign_settings
+        return result
 
     class Meta:
         db_table = "collection_jobs"
@@ -8012,6 +8114,8 @@ class CollectionJob(models.Model):
             models.CheckConstraint(condition=models.Q(state="ready") | models.Q(next_due_at__isnull=True, next_retry_at__isnull=True), name="ck_collection_job_idle_dates"),
             models.CheckConstraint(condition=models.Q(definition_sha256__regex=r"^[0-9a-f]{64}$"), name="ck_collection_job_hash"),
             models.CheckConstraint(condition=~models.Q(job_key=""), name="ck_collection_job_key"),
+            models.UniqueConstraint(fields=["source", "contract"], condition=models.Q(authority_enabled=True, purpose="metric"), name="uq_collection_metric_authority"),
+            models.UniqueConstraint(fields=["source", "routine_role", "owner_account"], condition=models.Q(authority_enabled=True, purpose="catalog"), nulls_distinct=False, name="uq_collection_role_authority"),
         ]
 
 
@@ -8019,6 +8123,11 @@ class CollectionRun(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     batch_id = models.UUIDField(default=uuid.uuid4)
     job = models.ForeignKey(CollectionJob, on_delete=models.PROTECT, related_name="runs")
+    execution_state = models.CharField(max_length=16, default="pending", db_default="pending")
+    coverage_state = models.CharField(max_length=16, default="pending", db_default="pending")
+    continuation_of = models.ForeignKey("self", null=True, on_delete=models.PROTECT, related_name="continuations")
+    scheduled_slot_at = models.DateTimeField(null=True)
+    legacy_archive = models.ForeignKey("CollectionEvidenceArchive", null=True, on_delete=models.PROTECT, related_name="legacy_runs")
     lease_token = models.UUIDField(null=True)
     invocations = models.JSONField(default=list, db_default=[])
     report = models.JSONField(default=dict, db_default={})
@@ -8062,7 +8171,7 @@ class CollectionRun(models.Model):
 
     @property
     def scope(self):
-        return self.job.definition["scope"]
+        return self.job.scope
 
     class Meta:
         db_table = "collection_runs"
@@ -8095,6 +8204,24 @@ class CollectionRun(models.Model):
 
 
 class CollectionObservation(models.Model):
+    input_set_sha256 = models.CharField(max_length=64, null=True)
+    observation_kind = models.CharField(max_length=32, null=True)
+    projection_kind = models.CharField(max_length=64, null=True)
+    provider_revision = models.TextField(null=True)
+    config_key = models.CharField(max_length=128, null=True)
+    category_key = models.CharField(max_length=128, null=True)
+    coordinate_key = models.TextField(null=True)
+    period_status = models.CharField(max_length=16, null=True)
+    source_record_date = models.DateField(null=True)
+    source_record_at = models.DateTimeField(null=True)
+    original_retrieved_at = models.DateTimeField(null=True)
+    archive_snapshot_date = models.DateField(null=True)
+    payload_sha256 = models.CharField(max_length=64, null=True)
+    definition_sha256 = models.CharField(max_length=64, null=True)
+    mapping_sha256 = models.CharField(max_length=64, null=True)
+    historical_visibility_proven = models.BooleanField(null=True)
+    supersedes_observation = models.ForeignKey("self", null=True, on_delete=models.PROTECT, related_name="superseding_observations")
+    legacy_archive = models.ForeignKey("CollectionEvidenceArchive", null=True, on_delete=models.PROTECT, related_name="legacy_observations")
     run = models.ForeignKey(
         CollectionRun, on_delete=models.PROTECT, related_name="observations"
     )
@@ -8233,6 +8360,14 @@ class MetricValue(models.Model):
     )
     window_range = measurement_window("window_start_at", "window_end_at")
     period_label_date = models.DateField(null=True)
+    as_of_basis = models.CharField(max_length=128, null=True)
+    window_start_basis = models.CharField(max_length=128, null=True)
+    window_end_basis = models.CharField(max_length=128, null=True)
+    as_of_unknown_reason = models.CharField(max_length=128, null=True)
+    window_start_unknown_reason = models.CharField(max_length=128, null=True)
+    window_end_unknown_reason = models.CharField(max_length=128, null=True)
+    reported_time_policy = models.CharField(max_length=64, null=True)
+    provenance_precision = models.CharField(max_length=32, null=True)
 
     class Meta:
         db_table = "metric_values"
@@ -8306,6 +8441,305 @@ class MetricValue(models.Model):
                     "period_label_date",
                 )
             ],
+        ]
+
+
+class CollectionCampaign(models.Model):
+    """One immutable request/attempt ceiling shared by account jobs."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    campaign_key = models.CharField(max_length=128, unique=True)
+    cohort_hash = models.CharField(max_length=64)
+    policy_version = models.CharField(max_length=64)
+    max_attempts = models.PositiveIntegerField()
+    max_requests = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "collection_campaigns"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(condition=models.Q(max_attempts__gt=0, max_requests__gt=0), name="ck_campaign_positive_limits"),
+            models.CheckConstraint(condition=models.Q(cohort_hash__regex=r"^[0-9a-f]{64}$"), name="ck_campaign_cohort_hash"),
+        ]
+
+
+class CollectionJobTarget(models.Model):
+    """One frozen selected identity, or an explicitly unresolved selection."""
+
+    job = models.ForeignKey(CollectionJob, on_delete=models.PROTECT, related_name="targets")
+    target_key = models.CharField(max_length=256)
+    ordinal = models.PositiveIntegerField()
+    subject = models.ForeignKey(MeasurementSubject, null=True, on_delete=models.PROTECT)
+    mapping = models.ForeignKey(SourceSubjectMapping, null=True, on_delete=models.PROTECT)
+    native_identifier = models.TextField(null=True)
+    target_kind = models.CharField(max_length=32)
+    target_role = models.CharField(max_length=32)
+    resolution_state = models.CharField(max_length=16)
+    gap_reason = models.CharField(max_length=64, default="")
+    evidence_observation = models.ForeignKey(CollectionObservation, null=True, on_delete=models.PROTECT)
+    parent_target = models.ForeignKey("self", null=True, on_delete=models.PROTECT, related_name="child_targets")
+    search_query = models.ForeignKey(SearchQuery, null=True, on_delete=models.PROTECT)
+    requested_start_at = models.DateTimeField(null=True)
+    requested_end_at = models.DateTimeField(null=True)
+    membership_source = models.CharField(max_length=64, null=True)
+    membership_run_reference = models.TextField(null=True)
+    last_reconciled_at = models.DateTimeField(null=True)
+    selection_basis = models.CharField(max_length=64, null=True)
+    selection_sha256 = models.CharField(max_length=64, null=True)
+    identifier_scope = models.CharField(max_length=32, null=True)
+    source_row_index = models.PositiveIntegerField(null=True)
+    review_confirmed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "collection_job_targets"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["job", "target_key"], name="uq_collection_target_key"),
+            models.CheckConstraint(condition=models.Q(requested_start_at__isnull=True) | models.Q(requested_end_at__isnull=True) | models.Q(requested_end_at__gt=models.F("requested_start_at")), name="ck_collection_target_bounds"),
+            models.UniqueConstraint(fields=["job", "ordinal"], name="uq_collection_target_ordinal"),
+            models.CheckConstraint(condition=(models.Q(resolution_state="resolved", subject__isnull=False, search_query__isnull=True, gap_reason="") | models.Q(resolution_state="resolved", subject__isnull=True, search_query__isnull=False, target_kind="query", gap_reason="") | (models.Q(resolution_state="unresolved", subject__isnull=True, search_query__isnull=True, mapping__isnull=True) & ~models.Q(gap_reason=""))), name="ck_collection_target_resolution"),
+        ]
+
+
+class CollectionAttempt(models.Model):
+    """One execution/reservation of a logical collection, including a resumption."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    run = models.ForeignKey(CollectionRun, on_delete=models.PROTECT, related_name="attempts")
+    attempt_key = models.CharField(max_length=64, unique=True)
+    ordinal = models.PositiveIntegerField()
+    lease_token = models.UUIDField(null=True)
+    lease_expires_at = models.DateTimeField(null=True)
+    started_at = models.DateTimeField(null=True)
+    finished_at = models.DateTimeField(null=True)
+    outcome = models.CharField(max_length=24, default="pending")
+    stop_reason = models.CharField(max_length=64, null=True)
+    credential_purpose = models.CharField(max_length=32, null=True)
+    reserved_requests = models.PositiveIntegerField(null=True)
+    reserved_bytes = models.PositiveBigIntegerField(null=True)
+    effective_seconds = models.PositiveIntegerField(null=True)
+    effective_items = models.PositiveIntegerField(null=True)
+    actual_requests = models.PositiveIntegerField(default=0)
+    actual_response_bytes = models.PositiveBigIntegerField(default=0)
+    actual_items = models.PositiveIntegerField(default=0)
+    unknown_sent_requests = models.PositiveIntegerField(default=0)
+    accounting_complete = models.BooleanField(default=False)
+    imported_at = models.DateTimeField(null=True)
+
+    class Meta:
+        db_table = "collection_attempts"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["run", "ordinal"], name="uq_collection_attempt_ordinal"),
+            models.UniqueConstraint(fields=["run"], condition=models.Q(outcome="running"), name="uq_collection_live_attempt"),
+            models.CheckConstraint(condition=models.Q(ordinal__gt=0), name="ck_collection_attempt_ordinal"),
+            models.CheckConstraint(condition=models.Q(started_at__isnull=True) | models.Q(finished_at__isnull=True) | models.Q(finished_at__gte=models.F("started_at")), name="ck_collection_attempt_clocks"),
+        ]
+
+
+class CollectionEvidenceArchive(models.Model):
+    """One immutable captured document; clocks and identity stay on its owners."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    content_sha256 = models.CharField(max_length=64)
+    encoding = models.CharField(max_length=32)
+    media_type = models.CharField(max_length=128)
+    byte_count = models.PositiveBigIntegerField()
+    body = models.BinaryField()
+    capture_kind = models.CharField(max_length=32)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "collection_evidence_archives"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["content_sha256", "encoding"], name="uq_collection_archive_content"),
+            models.CheckConstraint(condition=models.Q(content_sha256__regex=r"^[0-9a-f]{64}$"), name="ck_collection_archive_hash"),
+        ]
+
+
+HTTP_METHODS = ("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+HTTP_METHOD_CHOICES = tuple((method, method) for method in HTTP_METHODS)
+
+
+class CollectionRequest(models.Model):
+    """One transport attempt, kept even if it returns no body."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    attempt = models.ForeignKey(CollectionAttempt, on_delete=models.PROTECT, related_name="requests")
+    scope_run = models.ForeignKey(CollectionScopeRun, on_delete=models.PROTECT, related_name="requests")
+    ordinal = models.PositiveIntegerField()
+    receipt_kind = models.CharField(max_length=24, default="physical")
+    http_method = models.CharField(max_length=8, choices=HTTP_METHOD_CHOICES, null=True)
+    endpoint_url = models.TextField(null=True)
+    requested_start_at = models.DateTimeField(null=True)
+    requested_end_at = models.DateTimeField(null=True)
+    requested_start_date = models.DateField(null=True)
+    requested_end_date = models.DateField(null=True)
+    request_revision = models.TextField(null=True)
+    request_group = models.CharField(max_length=64, null=True)
+    request_config = models.CharField(max_length=128, null=True)
+    request_category = models.CharField(max_length=128, null=True)
+    cursor_before = models.TextField(null=True)
+    cursor_after = models.TextField(null=True)
+    started_at = models.DateTimeField(null=True)
+    received_at = models.DateTimeField(null=True)
+    transport_outcome = models.CharField(max_length=32, default="pending")
+    http_status = models.PositiveSmallIntegerField(null=True)
+    error_code = models.CharField(max_length=64, null=True)
+    retry_after_at = models.DateTimeField(null=True)
+    response_bytes = models.PositiveBigIntegerField(null=True)
+    etag = models.TextField(null=True)
+    response_etag = models.TextField(null=True)
+    archive = models.ForeignKey(CollectionEvidenceArchive, null=True, on_delete=models.PROTECT, related_name="requests")
+    accounting_complete = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "collection_requests"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["attempt", "ordinal"], name="uq_collection_request_ordinal"),
+            models.CheckConstraint(condition=models.Q(ordinal__gt=0), name="ck_collection_request_ordinal"),
+            models.CheckConstraint(condition=models.Q(http_status__isnull=True) | models.Q(http_status__gte=100, http_status__lte=599), name="ck_collection_request_status"),
+            models.CheckConstraint(condition=models.Q(receipt_kind__in=["physical", "legacy_receipt"]), name="ck_collection_request_kind"),
+            models.CheckConstraint(condition=models.Q(http_method__isnull=True) | models.Q(http_method__in=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]), name="ck_collection_request_http_method"),
+        ]
+
+
+class CollectionObservationInput(models.Model):
+    """One captured reply or preceding resource result used by an observation."""
+
+    observation = models.ForeignKey(CollectionObservation, on_delete=models.PROTECT, related_name="inputs")
+    input_request = models.ForeignKey(CollectionRequest, null=True, on_delete=models.PROTECT)
+    input_observation = models.ForeignKey(CollectionObservation, null=True, on_delete=models.PROTECT, related_name="derived_inputs")
+    input_role = models.CharField(max_length=32)
+    row_locator = models.TextField(null=True)
+    input_sha256 = models.CharField(max_length=64, null=True)
+
+    class Meta:
+        db_table = "collection_observation_inputs"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(condition=models.Q(input_request__isnull=False, input_observation__isnull=True) | models.Q(input_request__isnull=True, input_observation__isnull=False), name="ck_collection_input_one_owner"),
+            models.CheckConstraint(condition=~models.Q(observation=models.F("input_observation")), name="ck_collection_input_not_self"),
+            models.UniqueConstraint(fields=["observation", "input_request", "input_role"], condition=models.Q(input_request__isnull=False), name="uq_collection_input_request"),
+            models.UniqueConstraint(fields=["observation", "input_observation", "input_role"], condition=models.Q(input_observation__isnull=False), name="uq_collection_input_observation"),
+        ]
+
+
+class CollectionResourceSnapshot(models.Model):
+    """Historical nonnumeric facts for one repository/account/asset result."""
+
+    observation = models.OneToOneField(CollectionObservation, primary_key=True, on_delete=models.PROTECT, related_name="resource_snapshot")
+    resource_kind = models.CharField(max_length=32)
+    native_identifier = models.TextField()
+    native_stable_id = models.TextField(null=True)
+    display_name = models.TextField(null=True)
+    publisher_account = models.ForeignKey(Account, null=True, on_delete=models.PROTECT)
+    provider_created_at = models.DateTimeField(null=True)
+    provider_created_date = models.DateField(null=True)
+    provider_created_precision = models.CharField(max_length=16, default="unknown")
+    provider_created_unknown_reason = models.CharField(max_length=64, null=True)
+    provider_modified_at = models.DateTimeField(null=True)
+    provider_modified_date = models.DateField(null=True)
+    provider_modified_precision = models.CharField(max_length=16, default="unknown")
+    provider_modified_unknown_reason = models.CharField(max_length=64, null=True)
+    authored_at = models.DateTimeField(null=True)
+    committed_at = models.DateTimeField(null=True)
+    revision = models.TextField(null=True)
+    tree_revision = models.TextField(null=True)
+    content_hash = models.TextField(null=True)
+    hash_algorithm = models.CharField(max_length=16, null=True)
+    is_private = models.BooleanField(null=True)
+    gated_status = models.CharField(max_length=32, null=True)
+    is_disabled = models.BooleanField(null=True)
+    pipeline_tag = models.CharField(max_length=128, null=True)
+    library_name = models.CharField(max_length=128, null=True)
+    file_change_kind = models.CharField(max_length=32, null=True)
+    file_comparison_basis = models.CharField(max_length=64, null=True)
+    prior_snapshot = models.ForeignKey("self", null=True, on_delete=models.PROTECT)
+
+    class Meta:
+        db_table = "collection_resource_snapshots"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(condition=models.Q(provider_created_precision="unknown", provider_created_at__isnull=True, provider_created_date__isnull=True) | models.Q(provider_created_precision="instant", provider_created_at__isnull=False, provider_created_date__isnull=True) | models.Q(provider_created_precision="date", provider_created_at__isnull=True, provider_created_date__isnull=False), name="ck_resource_created_precision"),
+            models.CheckConstraint(condition=models.Q(provider_modified_precision="unknown", provider_modified_at__isnull=True, provider_modified_date__isnull=True) | models.Q(provider_modified_precision="instant", provider_modified_at__isnull=False, provider_modified_date__isnull=True) | models.Q(provider_modified_precision="date", provider_modified_at__isnull=True, provider_modified_date__isnull=False), name="ck_resource_modified_precision"),
+        ]
+
+
+class CollectionMetricGap(models.Model):
+    """One selected missing counter, distinguished from a real numeric zero."""
+
+    observation = models.ForeignKey(CollectionObservation, on_delete=models.PROTECT, related_name="metric_gaps")
+    source_metric = models.ForeignKey(SourceMetric, on_delete=models.PROTECT)
+    reason_code = models.CharField(max_length=64)
+    recoverable = models.BooleanField()
+    first_confirmed_at = models.DateTimeField(null=True)
+    last_confirmed_at = models.DateTimeField(null=True)
+    evidence_request = models.ForeignKey(CollectionRequest, null=True, on_delete=models.PROTECT)
+
+    class Meta:
+        db_table = "collection_metric_gaps"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["observation", "source_metric"], name="uq_collection_metric_gap"),
+            models.CheckConstraint(condition=~models.Q(reason_code=""), name="ck_collection_gap_reason"),
+        ]
+
+
+class CollectionCorrection(models.Model):
+    """One immutable, readable before/after attribution or timing correction."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    observation = models.ForeignKey(CollectionObservation, on_delete=models.PROTECT, related_name="corrections")
+    metric_value = models.ForeignKey(MetricValue, null=True, on_delete=models.PROTECT, related_name="corrections")
+    predecessor = models.ForeignKey("self", null=True, on_delete=models.PROTECT)
+    correction_kind = models.CharField(max_length=24)
+    policy_version = models.CharField(max_length=64)
+    actor_identifier = models.TextField()
+    reason_code = models.CharField(max_length=64)
+    recorded_at = models.DateTimeField(null=True)
+    recorded_at_precision = models.CharField(max_length=16, default="unknown")
+    imported_at = models.DateTimeField(null=True)
+    before_product = models.ForeignKey(Product, null=True, on_delete=models.PROTECT, related_name="corrections_before")
+    after_product = models.ForeignKey(Product, null=True, on_delete=models.PROTECT, related_name="corrections_after")
+    before_mapping = models.ForeignKey(SourceSubjectMapping, null=True, on_delete=models.PROTECT, related_name="corrections_before")
+    after_mapping = models.ForeignKey(SourceSubjectMapping, null=True, on_delete=models.PROTECT, related_name="corrections_after")
+    before_temporal_status = models.CharField(max_length=16, null=True)
+    after_temporal_status = models.CharField(max_length=16, null=True)
+    before_source_timezone = models.CharField(max_length=64, null=True)
+    after_source_timezone = models.CharField(max_length=64, null=True)
+    before_as_of_at = models.DateTimeField(null=True)
+    after_as_of_at = models.DateTimeField(null=True)
+    before_as_of_date = models.DateField(null=True)
+    after_as_of_date = models.DateField(null=True)
+    before_window_start_at = models.DateTimeField(null=True)
+    after_window_start_at = models.DateTimeField(null=True)
+    before_window_end_at = models.DateTimeField(null=True)
+    after_window_end_at = models.DateTimeField(null=True)
+    before_period_label_date = models.DateField(null=True)
+    after_period_label_date = models.DateField(null=True)
+    before_as_of_basis = models.CharField(max_length=128, null=True)
+    after_as_of_basis = models.CharField(max_length=128, null=True)
+    before_window_start_basis = models.CharField(max_length=128, null=True)
+    after_window_start_basis = models.CharField(max_length=128, null=True)
+    before_window_end_basis = models.CharField(max_length=128, null=True)
+    after_window_end_basis = models.CharField(max_length=128, null=True)
+    before_as_of_unknown_reason = models.CharField(max_length=128, null=True)
+    after_as_of_unknown_reason = models.CharField(max_length=128, null=True)
+    before_window_start_unknown_reason = models.CharField(max_length=128, null=True)
+    after_window_start_unknown_reason = models.CharField(max_length=128, null=True)
+    before_window_end_unknown_reason = models.CharField(max_length=128, null=True)
+    after_window_end_unknown_reason = models.CharField(max_length=128, null=True)
+    before_reported_time_policy = models.CharField(max_length=64, null=True)
+    after_reported_time_policy = models.CharField(max_length=64, null=True)
+    before_provenance_precision = models.CharField(max_length=32, null=True)
+    after_provenance_precision = models.CharField(max_length=32, null=True)
+
+    class Meta:
+        db_table = "collection_corrections"
+        indexes: ClassVar[list] = [models.Index(fields=["observation", "recorded_at"], name="idx_collection_correction_time")]
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["predecessor"], condition=models.Q(predecessor__isnull=False), name="uq_collection_correction_child"),
+            models.UniqueConstraint(fields=["metric_value"], condition=models.Q(correction_kind="timing", predecessor__isnull=True), name="uq_collection_timing_root"),
+            models.UniqueConstraint(fields=["observation"], condition=models.Q(correction_kind="attribution", predecessor__isnull=True), name="uq_collection_attribution_root"),
+            models.CheckConstraint(condition=models.Q(correction_kind="timing", metric_value__isnull=False) | models.Q(correction_kind="attribution", metric_value__isnull=True), name="ck_collection_correction_kind"),
+            models.CheckConstraint(condition=models.Q(recorded_at_precision="unknown", recorded_at__isnull=True) | models.Q(recorded_at_precision="instant", recorded_at__isnull=False), name="ck_collection_correction_clock"),
         ]
 
 

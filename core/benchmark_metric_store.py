@@ -557,6 +557,9 @@ def prepare_rows(contract, source, payload, *, adapter=None):
                             **numeric_value(definition, point["value"]),
                             **value_times(definition, point),
                         )
+                        from core.collection_resources import metric_time_provenance
+
+                        value.update(metric_time_provenance(definition, point, basis))
                     except (ValueError, TypeError, KeyError, OverflowError) as exc:
                         if not statistics:
                             raise
@@ -684,6 +687,18 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
             else:
                 pending_values.append(MetricValue(observation=observation, **value))
     MetricValue.objects.bulk_create(pending_values, batch_size=1000)
+    from core.collection_resources import attach_numeric_evidence
+
+    attach_numeric_evidence(
+        run,
+        observations,
+        prepared,
+        reused_ids=reused,
+        supplemented_ids={v.observation_id for v in pending_values} & set(reused),
+    )
+    from core.collection_capture import attach_metric_requests
+
+    attach_metric_requests(run, observations)
     return observations, {
         "reused_observation_ids": reused,
         "written_values": len(pending_values),
@@ -704,6 +719,7 @@ def persist_source(
     batch_id=None,
     isolated_review=False,
     claim=None,
+    transport_budget=None,
 ):
     """Manual/import entry point; deterministic keys make replay a no-op."""
     require(source in contract.source_configuration, "source is outside contract")
@@ -777,6 +793,11 @@ def persist_source(
                 "requests": None,
                 "request_budget_owner": "caller",
             }
+            if transport_budget is not None:
+                limits.update(
+                    requests=transport_budget.remaining,
+                    bytes=transport_budget.max_bytes,
+                )
             job = register_direct_job(
                 contract_id=contract.pk,
                 source_id=source,
@@ -830,7 +851,19 @@ def persist_source(
         try:
             if fetch is not None:
                 require(payload is None, "supply a payload or fetch, not both")
-                payload = fetch()
+                if transport_budget is None:
+                    payload = fetch()
+                else:
+                    from core.collection_capture import capture_budget
+
+                    with capture_budget(
+                        claim,
+                        transport_budget,
+                        scope_kind="metric_fetch",
+                        scope_key="source",
+                        ownership={"contract_id": str(contract.pk)},
+                    ):
+                        payload = fetch()
             safe_payload(payload)
             safe_payload(request_params or {})
             safe_payload(source_metadata or {})
@@ -933,4 +966,10 @@ def persist_source(
             )
             run.completed_at = timezone.now()
             result = save_result()
+            if claim.direct_driver:
+                from core.collection_state import complete_attempt
+
+                complete_attempt(
+                    claim, run, status=run.status, request_count=run.request_count
+                )
         return result

@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from core.benchmark_metric_store import safe_payload
 from core.measurement_taxonomy import digest, require
-from core.models import CollectionJob, CollectionRun
+from core.models import CollectionAttempt, CollectionJob, CollectionRun
 
 OPERATIONS = {
     "match_crosswalk": ("catalog", {"github", "openrouter", "arena", "opencode"}),
@@ -34,6 +34,33 @@ def validate_definition(
     *, source_id, purpose, operation, mode, contract_id, definition
 ):
     safe_payload(definition)
+    if isinstance(definition, dict) and definition.get("version") == 2:
+        from core.collection_instructions import validate_options
+
+        validate_options(definition, operation)
+        require(operation in OPERATIONS, "unsupported operation")
+        expected, sources = OPERATIONS[operation]
+        require(
+            expected == purpose and (sources is None or source_id in sources),
+            "operation/source mismatch",
+        )
+        require(
+            (purpose == "metric") == (contract_id is not None),
+            "purpose/contract mismatch",
+        )
+        require(mode in {"manual", "historical", "recurring"}, "unsupported mode")
+        if operation == "match_crosswalk":
+            require(mode == "historical", "matching jobs are finite manual operations")
+        return digest(
+            {
+                "source": source_id,
+                "purpose": purpose,
+                "operation": operation,
+                "mode": mode,
+                "contract": str(contract_id) if contract_id else None,
+                "definition": definition,
+            }
+        )
     require(
         isinstance(definition, dict) and definition.get("version") == 1,
         "instruction version required",
@@ -104,7 +131,11 @@ def validate_definition(
     )
 
 
-def validate_job(job):
+def validate_job(job, *, deep=True):
+    if job.instruction_version == 2:
+        from core.collection_instructions import validate_sealed_job
+
+        validate_sealed_job(job, deep=deep)
     if job.operation in {"archived_run", "legacy_direct"}:
         require(
             job.state == "completed"
@@ -147,11 +178,27 @@ def validate_job(job):
                 ).exists(),
                 "job/run pointer mismatch",
             )
+    if job.last_attempt_attempt_id:
+        require(
+            CollectionAttempt.objects.filter(
+                pk=job.last_attempt_attempt_id, run__job=job
+            ).exists(),
+            "job/attempt pointer mismatch",
+        )
 
 
 @transaction.atomic
 def register_job(
-    *, job_key, source, purpose, operation, mode, definition, contract=None
+    *,
+    job_key,
+    source,
+    purpose,
+    operation,
+    mode,
+    definition,
+    contract=None,
+    settings=None,
+    targets=(),
 ):
     require(
         isinstance(job_key, str) and re.fullmatch(r"[A-Za-z0-9._:/-]{1,128}", job_key),
@@ -166,6 +213,29 @@ def register_job(
         contract_id=contract.pk if contract else None,
         definition=definition,
     )
+    if definition.get("version") == 2:
+        from core.collection_instructions import register_relational_job
+
+        return register_relational_job(
+            job_key=job_key,
+            source=source,
+            purpose=purpose,
+            operation=operation,
+            mode=mode,
+            definition=definition,
+            contract=contract,
+            identity=identity,
+            settings=settings,
+            targets=targets,
+        )
+    require(
+        settings is None and not targets, "typed settings require instruction version 2"
+    )
+    from core.data_source_backfill import campaign_fields
+
+    campaign = campaign_fields(
+        definition, contract_id=contract.pk if contract else None
+    )
     obj, _ = CollectionJob.objects.get_or_create(
         job_key=job_key,
         defaults={
@@ -176,11 +246,16 @@ def register_job(
             "definition": definition,
             "definition_sha256": identity,
             "contract": contract,
+            **campaign,
         },
     )
     require(
         obj.definition_sha256 == identity,
         "immutable job identity changed; register a new job",
+    )
+    require(
+        all(getattr(obj, field) == value for field, value in campaign.items()),
+        "immutable campaign identity changed",
     )
     validate_job(obj)
     return obj
@@ -214,11 +289,21 @@ def set_job_state(job_id, state, *, now=None):
         job.next_due_at = job.next_retry_at = None
         if job.active_run_id:
             run = CollectionRun.objects.select_for_update().get(pk=job.active_run_id)
-            run.status = "interrupted" if job.purpose == "catalog" else "aborted"
-            run.completed_at = None if job.purpose == "catalog" else now
+            resumable = state == "paused" and (
+                job.purpose == "catalog" or job.instruction_version == 2
+            )
+            run.status = "interrupted" if resumable else "aborted"
+            run.completed_at = None if resumable else now
+            run.execution_state = "interrupted" if resumable else "aborted"
+            run.coverage_state = "partial"
             run.lease_expires_at = now
             run.error_code = "job_" + state
             run.save()
+            run.attempts.filter(outcome="running").update(
+                outcome="interrupted",
+                stop_reason="job_" + state,
+                lease_expires_at=now,
+            )
         job.active_run = None
     job.state = state
     job.save()

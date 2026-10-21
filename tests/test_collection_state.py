@@ -19,6 +19,9 @@ pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 def test_checkpoint_rolls_back_evidence_and_cursor():
     obj = ready()
     claim = claim_job(obj.pk)
+    obj.refresh_from_db()
+    assert obj.last_attempt_id == claim.run_id
+    assert obj.last_attempt_attempt_id == claim.attempt_id
     scope = checkpoint_scope(claim, scope_key="publisher", ownership={}, cursor="page2")
 
     def bad_write(run, scoped):

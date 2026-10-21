@@ -340,13 +340,13 @@ def test_cutover_preserves_all_evidence_and_physical_compatibility_copies():
         ingestion_key="c" * 64,
         completed_at=timezone.now(),
     )
-    linked_job = register_direct_job(
-        source_id="hf",
-        purpose="catalog",
-        scope={"already": "linked"},
-        driver="execute_catalog",
-        limits={"fixture": True},
-    )
+    from tests.collection_bridge_fixture import bridge_runtime
+
+    with bridge_runtime(old, job_owned=False):
+        linked_job = register_direct_job(
+            source_id="hf", purpose="catalog", scope={"already": "linked"},
+            driver="execute_catalog", limits={"fixture": True},
+        )
     OldRun.objects.create(
         job_id=linked_job.pk,
         source_id="hf",
@@ -377,7 +377,7 @@ def test_cutover_preserves_all_evidence_and_physical_compatibility_copies():
     for name, rows in evidence.items():
         assert list(old.get_model("core", name).objects.order_by("pk").values()) == rows
     assert (
-        CollectionRun.objects.get(pk=numeric.pk).job.contract_id == numeric.contract_id
+        OldRun.objects.get(pk=numeric.pk).job.contract_id == numeric.contract_id
     )
     with connection.cursor() as cursor:
         cursor.execute(

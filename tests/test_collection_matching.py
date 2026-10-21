@@ -204,6 +204,14 @@ def test_reviewed_apply_is_idempotent_and_durable_without_metric_writes():
         CollectionScopeRun.objects.get(scope_kind="product_match").outcome == "admitted"
     )
     job = CollectionJob.objects.get(operation="match_crosswalk")
+    assert job.instruction_version == 2
+    assert job.definition["version"] == 2
+    assert "matches" not in job.definition["options"]
+    target = job.targets.get(target_kind="match_candidate")
+    assert target.subject.product_id == product.product_key
+    assert target.evidence_observation_id
+    assert target.review_confirmed is True
+    assert job.last_success.scopes.get().job_target_id == target.pk
     assert job.last_success.request_count == 0
     again = apply_matches(resume_job_id=job.pk)
     assert again["status"] == "success"

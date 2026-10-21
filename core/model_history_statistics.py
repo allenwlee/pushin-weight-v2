@@ -182,7 +182,7 @@ def history_statistics_contract(job):
     """Resolve an existing pin; legacy catalog-only instructions stay catalog-only."""
     from core.models import MetricCollectionContract
 
-    scope = job.definition["scope"]
+    scope = job.scope
     contract_id = scope.get("numeric_contract_id")
     require(
         contract_id or not scope.get("numeric_projection_policy"),

@@ -29,7 +29,7 @@ def import_selected_history(claim, manifest):
     """Admit a hashed sparse archive and checkpoint its provenance atomically."""
     manifest = copy.deepcopy(manifest)
     with fenced_run(claim) as (job, run):
-        scope = job.definition["scope"]
+        scope = job.scope
         validate_model_pins(job)
         require(
             job.operation == "model_history" and job.source_id == manifest["source"],
@@ -153,7 +153,7 @@ def acquire_hf_archives(claim, job, budget):
         select_snapshot,
     )
 
-    scope = job.definition["scope"]
+    scope = job.scope
     archive = scope.get("hf_archive")
     if not archive:
         return {
@@ -177,7 +177,7 @@ def acquire_hf_archives(claim, job, budget):
     revisions = archive.get("revisions", [])
     require(
         isinstance(revisions, list)
-        and len(revisions) <= job.definition["budgets"]["items"],
+        and len(revisions) <= job.budgets["items"],
         "archive revision cap",
     )
     selected = []

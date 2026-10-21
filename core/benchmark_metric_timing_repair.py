@@ -15,6 +15,12 @@ from core.benchmark_metric_timing import (
     native_origin,
     reported_times,
 )
+from core.collection_corrections import (
+    TIME_BASIS_FIELDS,
+    correction_head,
+    record_timing_correction,
+)
+from core.collection_resources import metric_time_provenance
 from core.measurement_taxonomy import require
 from core.models import CollectionObservation, MetricValue, SourceMetric
 
@@ -170,6 +176,7 @@ def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False
                 or {}
             )
             for value in selected:
+                previous_basis_fields = {name: getattr(value, name) for name in TIME_BASIS_FIELDS}
                 previous = serial_fields(
                     {field: getattr(value, field) for field in FIELDS}
                 )
@@ -206,6 +213,10 @@ def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False
                     del metadata[REPAIR_KEY][str(value.pk)]
                     if not metadata[REPAIR_KEY]:
                         del metadata[REPAIR_KEY]
+                    recorded = correction_head(observation, metric_value=value, kind="timing")
+                    target_basis_fields = {
+                        name: getattr(recorded, "before_" + name) for name in TIME_BASIS_FIELDS
+                    } if recorded else metric_time_provenance(value.source_metric, point, marker.get("before_basis"))
                 else:
                     if marker:
                         if marker_conflict:
@@ -247,21 +258,28 @@ def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False
                     metadata.setdefault(
                         "reported_time", {"policy": POLICY, "metrics": {}}
                     )["metrics"][metric] = basis
+                    target_basis_fields = metric_time_provenance(value.source_metric, point, basis)
                 # The regular validator enforces ranges and precision on rollback too.
                 validated = value_times(value.source_metric, point)
+                if apply:
+                    record_timing_correction(
+                        value, before={**previous, **previous_basis_fields},
+                        after={**target, **target_basis_fields}, policy=POLICY,
+                        reason="reported_time_rollback" if rollback else "reported_time_repair",
+                    )
                 if target != previous:
                     result["changed_values"] += 1
-                    if apply:
-                        for field, instant in validated.items():
-                            setattr(value, field, instant)
-                        changed_values.append(value)
+                if apply and (target != previous or previous_basis_fields != target_basis_fields):
+                    for field, instant in {**validated, **target_basis_fields}.items():
+                        setattr(value, field, instant)
+                    changed_values.append(value)
             if metadata != observation.source_metadata:
                 result["metadata_updates"] += 1
                 if apply:
                     observation.source_metadata = metadata
                     changed_observations.append(observation)
         if apply:
-            _update_locked_batch(MetricValue, changed_values, FIELDS)
+            _update_locked_batch(MetricValue, changed_values, (*FIELDS, *TIME_BASIS_FIELDS))
             _update_locked_batch(
                 CollectionObservation, changed_observations, ["source_metadata"]
             )

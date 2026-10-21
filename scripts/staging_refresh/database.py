@@ -380,6 +380,9 @@ def _source_exact_row_counts(
 def _catalog_counts(cursor: Any) -> dict[str, int]:
     counts = {}
     instruction_purpose = _run_purpose_expression(cursor)
+    cursor.execute("SELECT to_regclass('public.collection_attempts')")
+    # Referenced evidence can remain after its execution intent is cancelled.
+    runtime = " AND r.status IN ('pending','running','partial','interrupted')" if cursor.fetchone()[0] else ""
     for table in (
         "collection_observations",
         "collection_scope_runs",
@@ -390,7 +393,7 @@ def _catalog_counts(cursor: Any) -> dict[str, int]:
                 query = f"SELECT count(*) FROM collection_runs r WHERE {instruction_purpose} = %s"
             else:
                 query = f"SELECT count(*) FROM {table} t JOIN collection_runs r ON r.id = t.run_id WHERE {instruction_purpose} = %s"
-            cursor.execute(query, [purpose])
+            cursor.execute(query + runtime, [purpose])
             counts[f"{table}:{purpose}"] = int(cursor.fetchone()[0])
     cursor.execute("SELECT to_regclass('public.collection_jobs')")
     if cursor.fetchone()[0] is None:
@@ -538,6 +541,12 @@ def purge_collection_runtime(cursor: Any) -> dict[str, int]:
         return {}
     cleared = _catalog_counts(cursor)
     instruction_purpose = _run_purpose_expression(cursor)
+    cursor.execute("SELECT to_regclass('public.collection_attempts')")
+    if cursor.fetchone()[0]:
+        from .collection_storage import purge_relational_collection_runtime
+
+        purge_relational_collection_runtime(cursor, instruction_purpose)
+        return cleared
     cursor.execute("SELECT to_regclass('public.collection_jobs')")
     if cursor.fetchone()[0] is not None:
         cursor.execute(

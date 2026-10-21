@@ -69,6 +69,7 @@ def _github_history(claim, job, pins, budget, items):
     from core.github_catalog import (
         _events,
         _pinned_metadata,
+        _prepare_capture,
         _queue_numeric,
         _record,
         _release_assets,
@@ -78,6 +79,9 @@ def _github_history(claim, job, pins, budget, items):
     client = GitHubMetadataClient(
         budget, key=os.environ.get("PUSHINWEIGHT_GITHUB_API_TOKEN")
     )
+    from core.collection_capture import RequestCapture
+
+    client.capture = RequestCapture(claim)
     for pin in pins:
         mapping = SourceSubjectMapping.objects.select_related("publisher_account").get(
             pk=pin["mapping_id"]
@@ -99,6 +103,7 @@ def _github_history(claim, job, pins, budget, items):
             "current_full_name"
         ) or mapping.identity_snapshot.get("observed_full_name")
         require(full_name, "reviewed GitHub full-name alias required")
+        _prepare_capture(claim, client, "repository_history", identifier, ownership, old)
         # A checkpoint preserves evidence, not today's access eligibility.
         result = client.repository(full_name)
         if result.status != 200:
@@ -150,10 +155,10 @@ def _github_history(claim, job, pins, budget, items):
             repository,
             "releases",
             items,
-            job.definition["budgets"]["items"],
+            job.budgets["items"],
         )
         if (
-            job.definition["scope"].get("numeric_projection_policy")
+            job.scope.get("numeric_projection_policy")
             == SOURCE_STATISTICS_POLICY
         ):
             _release_assets(
@@ -162,10 +167,10 @@ def _github_history(claim, job, pins, budget, items):
                 repository,
                 releases,
                 items,
-                job.definition["budgets"]["items"],
+                job.budgets["items"],
             )
         _events(
-            claim, client, repository, "tags", items, job.definition["budgets"]["items"]
+            claim, client, repository, "tags", items, job.budgets["items"]
         )
         commits = _events(
             claim,
@@ -173,9 +178,9 @@ def _github_history(claim, job, pins, budget, items):
             repository,
             "commits",
             items,
-            job.definition["budgets"]["items"],
+            job.budgets["items"],
         )
-        cutoff = aware_instant(job.definition["scope"]["cutoff"])
+        cutoff = aware_instant(job.scope["cutoff"])
         head = _latest_before_cutoff(
             commits.observations.all(),
             lambda o: o.source_metadata.get("clocks", {}).get("committer_at"),
@@ -194,6 +199,7 @@ def _github_history(claim, job, pins, budget, items):
 
 
 def _hf_history(claim, job, pins, budget, items):
+    from core.collection_capture import RequestCapture
     from core.hf_metadata_client import HFMetadataClient
 
     budget.check()
@@ -207,6 +213,7 @@ def _hf_history(claim, job, pins, budget, items):
         clock=budget.clock,
         sleep=budget.sleep,
     )
+    client.capture = RequestCapture(claim)
     try:
         for pin in pins:
             identifier = pin["native_identifier"]
@@ -215,7 +222,7 @@ def _hf_history(claim, job, pins, budget, items):
             require(
                 BrandCompany.objects.filter(
                     company_id=org.company_id,
-                    brand_id=job.definition["scope"]["brand_id"],
+                    brand_id=job.scope["brand_id"],
                 ).exists(),
                 "HF publisher ownership changed",
             )
@@ -229,7 +236,8 @@ def _hf_history(claim, job, pins, budget, items):
                 .scopes.filter(scope_kind="hf_history_head", scope_key=identifier)
                 .first()
             )
-            if head is None:
+            if head is None or not head.enumeration_complete:
+                client.collection_scope = checkpoint_scope(claim, scope_kind="hf_history_head", scope_key=identifier, ownership=ownership)
                 result = client.model_group(identifier, "detail")
                 if result.outcome != "ok":
                     raise SourceError(result.outcome)
@@ -262,12 +270,12 @@ def _hf_history(claim, job, pins, budget, items):
                     )
                     observation.observed_at = observed_at
                     observation.save(update_fields=["observed_at", "updated_at"])
-                    if job.definition["scope"].get("numeric_contract_id"):
+                    if job.scope.get("numeric_contract_id"):
                         from core.models import MetricCollectionContract
                         from core.source_metric_projection import enqueue_projection
 
                         contract = MetricCollectionContract.objects.get(
-                            pk=job.definition["scope"]["numeric_contract_id"]
+                            pk=job.scope["numeric_contract_id"]
                         )
                         if contract.source_configuration["hf"].get(
                             "eligibility_policy"
@@ -312,7 +320,7 @@ def _hf_history(claim, job, pins, budget, items):
                     dated_head = _latest_before_cutoff(
                         commits,
                         lambda o: o.source_metadata.get("source_record_date"),
-                        aware_instant(job.definition["scope"]["cutoff"]),
+                        aware_instant(job.scope["cutoff"]),
                     )
                     if dated_head is None:
                         checkpoint_scope(
@@ -333,8 +341,9 @@ def _hf_history(claim, job, pins, budget, items):
                     .first()
                 )
                 while scoped is None or not scoped.enumeration_complete:
-                    if items[0] >= job.definition["budgets"]["items"]:
+                    if items[0] >= job.budgets["items"]:
                         raise SourceError("item_cap")
+                    client.collection_scope = scoped or checkpoint_scope(claim, scope_kind="hf_repository_history", scope_key=key, ownership=ownership)
                     result = client.history_page(
                         identifier, revision, kind, scoped.cursor if scoped else None
                     )
@@ -342,7 +351,7 @@ def _hf_history(claim, job, pins, budget, items):
                         raise SourceError(result.outcome)
                     require(
                         len(result.payload)
-                        <= job.definition["budgets"]["items"] - items[0],
+                        <= job.budgets["items"] - items[0],
                         "HF history item budget exceeded",
                     )
                     history = [

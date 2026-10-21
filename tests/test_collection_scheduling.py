@@ -106,6 +106,9 @@ def test_metric_due_command_writes_values_to_claimed_run_once(settings, monkeypa
     assert run.request_count == 1
     assert run.report["schedule_slot"] == NOW.replace(hour=10).isoformat()
     assert len(seen) == 1
+    request = run.attempts.get().requests.get()
+    assert request.archive_id and request.http_status == 200
+    assert run.observations.get().inputs.get().input_request_id == request.pk
     # The legacy command sees shared ownership and cannot fetch the same slot again.
     call_command(
         "collect_benchmark_due",

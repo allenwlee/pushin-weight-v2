@@ -1,8 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-16 JST, repository candidate based on `4e60a2f1`, through migration `0090_remove_run_instruction_columns`.
-This describes the implementation verified on isolated PostgreSQL, not a claim
-that this migration boundary or the full historical campaign has been activated in production.
+Last verified: 2026-10-21 09:52 JST, repository candidate based on `aa5faf3f`, through migration `0114_collection_latest_attempt_pointer` on isolated PostgreSQL 18.6. Staging is verified through `0097_event_dossier_integrity`; this reference does not claim that the later candidate migrations are deployed there.
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
@@ -16,6 +14,9 @@ flowchart TD
     DS[data_sources] --> J[collection_jobs]
     C[metric_collection_contracts] --> J
     J --> R[collection_runs]
+    J --> A[collection_attempts]
+    R --> A
+    A --> Q[collection_requests]
     R --> S[collection_scope_runs]
     R --> O[collection_observations]
     S --> O
@@ -43,10 +44,9 @@ change an old campaign. A database trigger prevents instruction changes, includi
 
 Every run requires a job. Source, purpose, contract and frozen scope belong to that job; run records retain attempt status, lease, clocks, counters, evidence and results. Python instance properties read instructions through the job, and database queries follow `job__` relations. Runs contain no physical copies of these four instructions. The database lifecycle trigger reads the immutable job, and compatibility views derive their instruction aliases through that same relationship. Old jobless runs receive inactive archival jobs preserving their recorded instructions without inventing budgets or finish times. Explicit direct drivers register completed, non-dispatchable receipt jobs and use a genuine bounded lease for each invocation.
 
-`claim_job` locks the job, validates its immutable definition and issues a run
-and rotating lease token. Provider requests happen outside database transactions.
+`claim_job` locks the job, validates its immutable definition, claims or resumes a logical run, creates a separately identified `CollectionAttempt`, and issues a rotating lease token. Provider requests happen outside database transactions.
 `checkpoint_scope` persists evidence and continuation together under that fence.
-`finish_run` atomically updates the attempt result and job pointers. A paused,
+`finish_run` atomically updates the attempt result and job pointers. `collection_jobs.last_attempt_id` remains a compatibility pointer to a logical run; `last_attempt_attempt_id` points to the actual latest `CollectionAttempt`. A database trigger keeps both pointers aligned for legacy run-pointer writers and rejects pointers to another job. A paused,
 cancelled, expired or replaced claim cannot write a late response. Catalog partial
 runs retain a logical run across invocations; numeric and content attempts finish
 individually. Success completes a finite historical job. An expired process has

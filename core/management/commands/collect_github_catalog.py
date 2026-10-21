@@ -30,7 +30,7 @@ class Command(BaseCommand):
                             "job_id": str(job.pk),
                             "state": job.state,
                             "definition_sha256": job.definition_sha256,
-                            "budgets": job.definition["budgets"],
+                            "budgets": job.budgets,
                             "writes": 0,
                         }
                     )

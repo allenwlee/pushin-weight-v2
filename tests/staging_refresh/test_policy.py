@@ -383,6 +383,13 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "languages",
         "locales",
         "measurement_units",
+        "event_dossiers",
+        "event_dossier_sources",
+        "event_dossier_claims",
+        "event_dossier_reviews",
+        "event_dossier_review_claims",
+        "model_release_details",
+        "personnel_change_details",
         "provider_batches",
         "data_sources",
         "taxonomy_versions",
@@ -426,6 +433,15 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "staff_provider_requests",
         "product_label_keys",
         "collection_scope_runs",
+        "collection_campaigns",
+        "collection_job_targets",
+        "collection_attempts",
+        "collection_requests",
+        "collection_evidence_archives",
+        "collection_observation_inputs",
+        "collection_resource_snapshots",
+        "collection_metric_gaps",
+        "collection_corrections",
         "product_label_labels",
         "audience_topic_concepts",
         "audience_topic_labels",
@@ -644,6 +660,9 @@ def test_benchmark_evidence_is_copied_with_optional_pre_migration_sources():
     sequences = {
         "source_metrics_id_seq",
         "metric_observations_id_seq",
+        "collection_job_targets_id_seq",
+        "collection_observation_inputs_id_seq",
+        "collection_metric_gaps_id_seq",
         "metric_values_id_seq",
     }
     assert sequences <= policy.relations.sequences
@@ -669,3 +688,20 @@ def test_shared_catalogues_are_preserved_and_pre_foundation_sources_remain_suppo
         source=old,
         target=_inspection(policy, source=False),
     )
+
+
+def test_dossier_history_is_copied_and_pre_dossier_sources_remain_supported():
+    policy = load_policy(POLICY_PATH)
+    tables = frozenset({
+        "event_dossiers", "event_dossier_sources", "event_dossier_claims",
+        "event_dossier_reviews", "event_dossier_review_claims",
+        "model_release_details", "personnel_change_details",
+    })
+    sequences = frozenset({
+        "event_dossier_sources_id_seq", "event_dossier_review_claims_id_seq",
+    })
+    assert tables <= policy.relations.copied_tables
+    assert tables <= policy.relations.optional_source_tables
+    assert tables.isdisjoint(policy.scrub.truncate_tables)
+    assert sequences <= policy.relations.sequences
+    assert sequences <= policy.relations.optional_source_sequences

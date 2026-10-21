@@ -16,10 +16,12 @@ from core.models import (
     Role,
     SourceSubjectMapping,
 )
+from tests.collection_fixtures import with_database_models
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 
+@with_database_models
 def identities():
     DataSource.objects.create(id="github", name="GitHub", source_type="model_adoption")
     brand = Brand.objects.create(nickname="fixture-brand")
@@ -44,6 +46,7 @@ def identities():
     return brand, account, subject, repo
 
 
+@with_database_models
 def admit(subject, repo, **kwargs):
     return review_github_mapping(
         subject=subject,

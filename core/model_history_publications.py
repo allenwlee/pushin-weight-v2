@@ -67,7 +67,7 @@ def _window_key(
 
 
 def _arena_publication_mode(job):
-    scope = job.definition["scope"]
+    scope = job.scope
     if "arena_publication_mode" not in scope:
         return None
     mode = scope["arena_publication_mode"]
@@ -86,7 +86,7 @@ def _arena_publication_mode(job):
 
 def _publication_window(parent, budget, start, end, *, key, config):
     """A shared instruction serializes acquisition; DB evidence survives temp-file loss."""
-    scope = parent.definition["scope"]
+    scope = parent.scope
     acquisition_mode = _arena_publication_mode(parent)
     contract = history_statistics_contract(parent)
     statistics = bool(
@@ -139,7 +139,7 @@ def _publication_window(parent, budget, start, end, *, key, config):
             "models": [],
         },
         "schedule": {"kind": "manual", "driver": "manual"},
-        "budgets": parent.definition["budgets"],
+        "budgets": parent.budgets,
     }
     if statistics:
         definition["scope"]["window_policy"] = "source-statistics-exact-window-v1"
@@ -148,9 +148,9 @@ def _publication_window(parent, budget, start, end, *, key, config):
         definition["scope"]["arena_publication_mode"] = acquisition_mode
     if scope.get("publication_window_policy") == "rolling-completed-days-v1":
         definition["scope"]["acquisition_generation"] = scope["acquisition_generation"]
-    if parent.definition.get("campaign"):
+    if parent.campaign_settings:
         definition["campaign"] = {
-            **parent.definition["campaign"],
+            **parent.campaign_settings,
             "role": "history",
             "phase": "acquire",
         }
@@ -169,33 +169,40 @@ def _publication_window(parent, budget, start, end, *, key, config):
                 definition=definition,
             )
         require(
-            shared.definition["scope"] == definition["scope"],
+            shared.scope == definition["scope"],
             "shared publication identity changed",
         )
     if shared.state == "paused":
         set_job_state(shared.pk, "ready")
     claim = claim_job(shared.pk)
     parent_remaining = budget.remaining
-    budget.remaining = min(budget.remaining, shared.definition["budgets"]["requests"])
+    budget.remaining = min(budget.remaining, shared.budgets["requests"])
     before = budget.remaining
     try:
-        payload = (
-            openrouter(budget, start, end, key=key)
-            if parent.source_id == "openrouter"
-            else arena(
-                budget,
-                start,
-                end,
-                history=acquisition_mode != "latest-artifact-v1",
-                config=config,
-                carry_in_days=0 if statistics else 30,
+        from core.collection_capture import capture_budget
+
+        with capture_budget(
+            claim, budget, scope_kind="publication_window", scope_key=cache_key,
+            ownership={"source": parent.source_id, "cohort_hash": scope["cohort_hash"]},
+            requested_start_date=native_date(start), requested_end_date=native_date(end),
+        ):
+            payload = (
+                openrouter(budget, start, end, key=key)
+                if parent.source_id == "openrouter"
+                else arena(
+                    budget,
+                    start,
+                    end,
+                    history=acquisition_mode != "latest-artifact-v1",
+                    config=config,
+                    carry_in_days=0 if statistics else 30,
+                )
             )
-        )
         require(
             budget.total_bytes_read <= budget.max_bytes, "global byte budget exceeded"
         )
         require(
-            len(payload["rows"]) <= shared.definition["budgets"]["items"],
+            len(payload["rows"]) <= shared.budgets["items"],
             "publication row budget exceeded",
         )
 
@@ -273,7 +280,7 @@ def _admit_publication(claim, job, publication, start, end):
         == SOURCE_STATISTICS_POLICY
     ):
         return _queue_publication(claim, job, publication, contract, start, end)
-    contract_id = job.definition["scope"].get("numeric_contract_id")
+    contract_id = job.scope.get("numeric_contract_id")
     if not contract_id:
         return
     identifiers = set(
@@ -334,7 +341,7 @@ def _queue_publication(claim, job, publication, contract, start, end):
     settings = contract.source_configuration[source]
     births = {
         pin["native_identifier"]: model["creation"]["at"][:10]
-        for model in job.definition["scope"].get("models", [])
+        for model in job.scope.get("models", [])
         for pin in model.get("provider_pins", [])
         if pin["source"] == source
     }
@@ -354,7 +361,7 @@ def _queue_publication(claim, job, publication, contract, start, end):
     ]
     # Explicit native-only scopes may select identifiers separately, never infer
     # rankings identities from catalog IDs/canonical_slug.
-    native_ids = set(job.definition["scope"].get("native_publication_identifiers", []))
+    native_ids = set(job.scope.get("native_publication_identifiers", []))
     rows += [
         row
         for row in publication.listing["rows"]
@@ -454,7 +461,7 @@ def _queue_publication(claim, job, publication, contract, start, end):
 
 
 def _publication_evidence(claim, job, model, pins, budget, *, key):
-    scope = job.definition["scope"]
+    scope = job.scope
     acquisition_mode = _arena_publication_mode(job)
     config = scope.get("arena_config")
     if job.source_id == "arena" and config not in {
@@ -472,7 +479,7 @@ def _publication_evidence(claim, job, model, pins, budget, *, key):
         or model["creation"]["at"]
     )
     size = (
-        min(365, max(1, job.definition["budgets"]["items"] // 51))
+        min(365, max(1, job.budgets["items"] // 51))
         if job.source_id == "openrouter"
         else 330
     )
@@ -572,7 +579,7 @@ def _reuse_openrouter_days(job, model, identifiers, start, end):
     A saved latest observation is a selection rule, not a claim that the provider
     cannot publish another revision. Routine rolling windows still recheck HTTP.
     """
-    if job.definition["scope"].get("publication_window_policy"):
+    if job.scope.get("publication_window_policy"):
         return [], [(start, end)]
     contract = history_statistics_contract(job)
     definition = next(
@@ -596,7 +603,7 @@ def _reuse_openrouter_days(job, model, identifiers, start, end):
         .order_by("-observation__observed_at", "-pk")
     )
     selected = {}
-    for value in values[: job.definition["budgets"]["items"]].iterator(chunk_size=100):
+    for value in values[: job.budgets["items"]].iterator(chunk_size=100):
         observation = value.observation
         metadata = observation.source_metadata
         revision = metadata.get("immutable_revision") or metadata.get(

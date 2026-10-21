@@ -101,13 +101,13 @@ def _existing_evidence(job, model, pins):
                 except ValueError:
                     instant = None
             if instant is not None:
-                if instant >= aware_instant(job.definition["scope"]["cutoff"]):
+                if instant >= aware_instant(job.scope["cutoff"]):
                     continue
                 precision = "instant"
             elif len(str(native_time)) == 10:
                 if (
                     str(native_time)
-                    >= aware_instant(job.definition["scope"]["cutoff"])
+                    >= aware_instant(job.scope["cutoff"])
                     .astimezone(UTC)
                     .date()
                     .isoformat()
@@ -139,7 +139,7 @@ def execute_model_history(job_id, *, budget=None, key=None):
     job = CollectionJob.objects.get(pk=job_id)
     require(job.operation == "model_history", "model history job required")
     require(
-        job.definition["scope"].get("role") != "publication_window",
+        job.scope.get("role") != "publication_window",
         "shared windows execute through their parent campaign",
     )
     validate_model_pins(job)
@@ -151,14 +151,14 @@ def execute_model_history(job_id, *, budget=None, key=None):
         import httpx
 
         owned_client = httpx.Client(trust_env=False)
-        limits = job.definition["budgets"]
+        limits = job.budgets
         budget = Budget(
             owned_client,
             max_requests=limits["requests"],
             max_seconds=limits["seconds"],
             max_bytes=limits["bytes"],
         )
-    limits = job.definition["budgets"]
+    limits = job.budgets
     budget.cumulative = True
     budget.remaining = min(budget.remaining, limits["requests"])
     budget.max_bytes = min(budget.max_bytes, budget.total_bytes_read + limits["bytes"])
@@ -186,7 +186,7 @@ def execute_model_history(job_id, *, budget=None, key=None):
 
 def _runtime_publication_window(claim, job):
     """Freeze each rolling invocation's window in DB without changing the cohort."""
-    policy = job.definition["scope"].get("publication_window_policy")
+    policy = job.scope.get("publication_window_policy")
     if not policy:
         return job
     require(
@@ -194,7 +194,7 @@ def _runtime_publication_window(claim, job):
         and policy == "rolling-completed-days-v1",
         "unsupported moving publication policy",
     )
-    days = job.definition["scope"].get("publication_recheck_days", 7)
+    days = job.scope.get("publication_recheck_days", 7)
     require(
         type(days) is int and 1 <= days <= 90, "bounded publication recheck required"
     )
@@ -202,34 +202,44 @@ def _runtime_publication_window(claim, job):
     old = run.scopes.filter(
         scope_kind="publication_runtime", scope_key="window"
     ).first()
-    if old:
-        window = old.envelopes[0]
+    if old and old.requested_start_at and old.requested_end_at:
+        start_at, cutoff = old.requested_start_at, old.requested_end_at
+    elif old and job.instruction_version == 1:
+        # Expansion adapter for preexisting frozen windows. No new execution
+        # uses this representation once the typed bounds have been populated.
+        start_at = aware_instant(old.envelopes[0]["publication_start_at"])
+        cutoff = aware_instant(old.envelopes[0]["cutoff"])
     else:
+        require(old is None, "saved publication window lacks typed bounds")
         cutoff = (
             timezone.now()
             .astimezone(UTC)
             .replace(hour=0, minute=0, second=0, microsecond=0)
         )
-        window = {
-            "cutoff": cutoff.isoformat(),
-            "publication_start_at": (cutoff - timedelta(days=days)).isoformat(),
-            "acquisition_generation": str(claim.run_id),
-        }
+        start_at = cutoff - timedelta(days=days)
+    window = {
+        "cutoff": cutoff.isoformat(),
+        "publication_start_at": start_at.isoformat(),
+        "acquisition_generation": str(claim.run_id),
+    }
+    if old is None or old.requested_start_at is None or old.requested_end_at is None:
         checkpoint_scope(
             claim,
             scope_kind="publication_runtime",
             scope_key="window",
             ownership={
                 "policy": policy,
-                "cohort_hash": job.definition["scope"]["cohort_hash"],
+                "cohort_hash": job.scope["cohort_hash"],
             },
             enumeration_complete=True,
             outcome="observed",
             envelopes=[window],
+            requested_start_at=start_at,
+            requested_end_at=cutoff,
         )
     runtime = copy(job)
     runtime.definition = deepcopy(job.definition)
-    runtime.definition["scope"].update(window)
+    runtime._runtime_scope = {**job.scope, **window}
     return runtime
 
 
@@ -242,7 +252,7 @@ def _execute_models(claim, job, budget, *, key, before):
     archive_outcome = None
     if job.source_id == "hf":
         archive_outcome = acquire_hf_archives(claim, job, budget)
-    scope = job.definition["scope"]
+    scope = job.scope
     if (
         job.source_id in {"openrouter", "arena"}
         and not scope.get("models")
@@ -273,10 +283,10 @@ def _execute_models(claim, job, budget, *, key, before):
             envelopes=[cell],
         )
         coverage.append(cell)
-    for model in job.definition["scope"].get("models", []):
+    for model in job.scope.get("models", []):
         pin = {
             "product_key": model["product_key"],
-            "cohort_hash": job.definition["scope"]["cohort_hash"],
+            "cohort_hash": job.scope["cohort_hash"],
             "provider_pins": model.get("provider_pins", []),
         }
         old = (
@@ -310,7 +320,7 @@ def _execute_models(claim, job, budget, *, key, before):
                 }
             ]
         windows, gaps = history_windows(
-            model["creation"]["at"], job.definition["scope"]["cutoff"], job.source_id
+            model["creation"]["at"], job.scope["cutoff"], job.source_id
         )
         pending_native = False
         inaccessible_reason = None
@@ -359,7 +369,7 @@ def _execute_models(claim, job, budget, *, key, before):
             "source": job.source_id,
             "outcome": outcome,
             "requested_start_at": model["creation"]["at"],
-            "requested_cutoff": job.definition["scope"]["cutoff"],
+            "requested_cutoff": job.scope["cutoff"],
             "acquisition_windows": [list(window) for window in windows],
             "gaps": gaps,
             "evidence": evidence,

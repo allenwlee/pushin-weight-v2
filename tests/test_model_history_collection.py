@@ -156,6 +156,11 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download(
     second = execute_model_history(job.pk, budget=budget(8))
     assert second.pk == first.pk and second.status == "success"
     assert second.request_count == len(seen) == (5 if pagination == "legacy" else 4)
+    assert second.attempts.count() == 2
+    assert sum(a.requests.count() for a in second.attempts.all()) == len(seen)
+    assert all(o.inputs.exists() for o in second.observations.all())
+    commit = second.observations.filter(dimensions__kind="hf_commits").order_by("pk").first()
+    assert commit.source_record_at == datetime(2026, 9, 3, tzinfo=UTC)
     assert list(
         second.observations.filter(pk__in=[row["id"] for row in prior])
         .order_by("pk")
@@ -333,6 +338,8 @@ def test_github_history_uses_reviewed_native_repo_and_pinned_tree():
         and run.observations.filter(dimensions__kind="releases").count() == 2
     )
     assert all("c" * 40 in url for url in seen if "/git/trees/" in url)
+    assert run.attempts.get().requests.count() == len(seen)
+    assert all(o.inputs.exists() for o in run.observations.all())
     assert MetricValue.objects.count() == 0
 
 

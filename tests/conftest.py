@@ -193,19 +193,7 @@ def collection_instruction_bridge(isolated_migration_database, monkeypatch):
     target = [("core", "0089_job_owned_run_instructions")]
     executor.migrate(target)
     historical = executor.loader.project_state(target).apps
-    value_model = historical.get_model("core", "MetricValue")
+    from tests.collection_bridge_fixture import bridge_runtime
 
-    class HistoricalValues:
-        """The preceding writer inserts with its pre-range model definition."""
-
-        objects = value_model.objects
-
-        def __new__(cls, *, observation, source_metric, **values):
-            return value_model(
-                observation_id=observation.pk,
-                source_metric_id=source_metric.pk,
-                **values,
-            )
-
-    monkeypatch.setattr("core.benchmark_metric_store.MetricValue", HistoricalValues)
-    return historical
+    with bridge_runtime(historical):
+        yield historical
