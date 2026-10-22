@@ -18,7 +18,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import ROUND_UP, Decimal
 
 from django.db import connection, connections, transaction
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
@@ -56,8 +56,9 @@ from monitor.backfill_enrichment import (
 )
 from monitor.cycle import plan_calls_for_cycle
 from scripts.backfill_targeted import advance_targeted
-from scripts.backfill_verify import verify_window
+from scripts.backfill_verify import verify_collection_window, verify_window
 from x_monitor.deepinfra import DEEPINFRA_ON_DEMAND_KEY_ENV, resolve_api_key
+from x_monitor.provider_telemetry import normalize_usage
 
 
 def emit(event, value):
@@ -195,7 +196,7 @@ def manifest(
 
 def safety_failure(exc):
     """Quality deferral cannot override identity, immutable input or deadline guards."""
-    if getattr(exc, "permanent", False):
+    if getattr(exc, "collection_phase", False) or getattr(exc, "permanent", False):
         return True
     code = str(exc)
     return any(
@@ -330,7 +331,125 @@ def assert_no_provider_failure(job):
         raise RuntimeError("provider_failure_or_unknown_outcome")
 
 
+def _window_job(window, frozen):
+    if frozen.get("instruction_format") != "x-backfill-campaign/v2":
+        raise ValueError("current_policy_campaign_manifest_required")
+    job = CollectionJob.objects.filter(job_key=f"{frozen['campaign']}/{window['index']}").first()
+    if job is None:
+        raise ValueError("window_job_missing")
+    identity = hashlib.sha256(json.dumps(frozen, sort_keys=True).encode()).hexdigest()
+    if job.scope.get("provenance", {}).get("manifest_sha256") != identity:
+        raise ValueError("immutable_campaign_manifest_changed")
+    return job
+
+
+def _collection_model_usage(job):
+    """Known inline-gate usage; missing outcomes remain explicit, never zero-cost."""
+    usage = {"requests_started": 0, "responses_recorded": 0, "known_input_tokens": 0,
+             "known_output_tokens": 0, "responses_missing_usage": 0}
+    cost = Decimal(0)
+    for starts, responses in job.runs.values_list("report__model_requests", "report__model_responses").iterator():
+        usage["requests_started"] += starts or 0
+        for response in responses or []:
+            usage["responses_recorded"] += 1
+            reported = normalize_usage(response.get("usage"))
+            for field in ("input_tokens", "output_tokens"):
+                usage["known_" + field] += reported[field] or 0
+            amount = Decimal(str(reported["cost_usd"])) if reported["cost_usd"] is not None else None
+            if amount is not None and amount.is_finite():
+                cost += amount
+            if any(reported[field] is None for field in ("input_tokens", "output_tokens", "cost_usd")) or (amount is not None and not amount.is_finite()):
+                usage["responses_missing_usage"] += 1
+    usage["known_cost_usd"] = str(cost)
+    usage["outcomes_unrecorded"] = max(0, usage["requests_started"] - usage["responses_recorded"])
+    return usage
+
+
+def _phase_receipt(job, phase, result, *, frozen, window, started_at,
+                   runtime_revision=None, enrichment_concurrency=None):
+    calls = OriginalContentCall.objects.filter(provider_batch__source_collection_job=job)
+    receipt = {
+        **result, "schema_version": 1, "phase": phase,
+        "window": window, "source_collection_job": str(job.pk),
+        "manifest_sha256": hashlib.sha256(json.dumps(frozen, sort_keys=True).encode()).hexdigest(),
+        "recipe_sha256": frozen.get("month_instruction", {}).get("recipe_sha256"),
+        "runtime_revision": runtime_revision or os.environ.get("RENDER_GIT_COMMIT"),
+        "effective_enrichment_concurrency": enrichment_concurrency,
+        "started_at": started_at, "completed_at": timezone.now().isoformat(),
+        "phase_usage_scope": "job_cumulative",
+        "phase_usage": {
+            "collection_gate": _collection_model_usage(job),
+            "post_enrichment": calls.aggregate(requests_sent=Count("sent_at"),
+                responses=Count("completed_at"), reserved_usd=Sum("reserved_usd"),
+                requests_ambiguous=Count("pk", filter=Q(state="ambiguous")),
+                requests_without_reported_cost=Count("pk", filter=Q(
+                    sent_at__isnull=False, actual_usd__isnull=True)),
+                provider_reported_usd=Sum("actual_usd"), input_tokens=Sum("input_tokens"),
+                output_tokens=Sum("output_tokens")),
+        },
+    }
+    receipt["phase_usage"]["twitterapi_requests"] = job.runs.aggregate(n=Sum("request_count"))["n"] or 0
+    save_campaign_report(job, receipt, phase=phase)
+    return receipt
+
+
+def collect_window(window, *, frozen, cfg, runtime_revision=None, collection_options=None):
+    """Collect and verify source storage; never start ordinary enrichment."""
+    from monitor.backfill_prefetch import PrefetchOptions
+
+    PrefetchOptions.parse(collection_options)
+    started_at = timezone.now().isoformat()
+    try:
+        job, result = _collect_window(window, frozen=frozen, cfg=cfg, collection_options=collection_options)
+    except Exception as exc:
+        exc.collection_phase = True
+        # A receipt complements durable checkpoints; it never decides completion.
+        job = CollectionJob.objects.filter(job_key=f"{frozen.get('campaign')}/{window.get('index')}").first()
+        if job is not None:
+            _phase_receipt(job, "collection", {"status": "failed", "error_code": str(exc)[:200]},
+                frozen=frozen, window=window, started_at=started_at, runtime_revision=runtime_revision)
+        raise
+    return _phase_receipt(job, "collection", result, frozen=frozen, window=window,
+        started_at=started_at, runtime_revision=runtime_revision)
+
+
+def enrich_window(window, *, frozen, cfg, evaluate_at_end=False, runtime_revision=None,
+                  enrichment_concurrency=None):
+    """Resume saved members only; this path cannot register or recollect a job."""
+    ceiling = frozen["direct_concurrency"]
+    selected = min(8, ceiling) if enrichment_concurrency is None else enrichment_concurrency
+    if isinstance(selected, bool) or not isinstance(selected, int) or not 1 <= selected <= min(32, ceiling):
+        raise ValueError("enrichment_concurrency_invalid")
+    job = _window_job(window, frozen)
+    started_at = timezone.now().isoformat()
+    try:
+        collection = verify_collection_window(job.pk, cfg=cfg)
+        if collection["status"] != "verified":
+            raise ValueError("collection_not_verified")
+        result = _enrich_window(job, window, frozen=frozen, cfg=cfg,
+            evaluate_at_end=evaluate_at_end, enrichment_concurrency=selected)
+    except Exception as exc:
+        _phase_receipt(job, "enrichment", {"status": "failed", "error_code": str(exc)[:200]},
+            frozen=frozen, window=window, started_at=started_at, runtime_revision=runtime_revision,
+            enrichment_concurrency=selected)
+        raise
+    return _phase_receipt(job, "enrichment", result, frozen=frozen, window=window,
+        started_at=started_at, runtime_revision=runtime_revision, enrichment_concurrency=selected)
+
+
 def execute_window(window, *, frozen, cfg, evaluate_at_end=False):
+    """Retain legacy interleaving, deferrals and the saved concurrency preference."""
+    resolve_api_key(DEEPINFRA_ON_DEMAND_KEY_ENV)
+    job, issues = _collect_window(window, frozen=frozen, cfg=cfg,
+                                 legacy_evaluate_at_end=evaluate_at_end)
+    result = _enrich_window(job, window, frozen=frozen, cfg=cfg, evaluate_at_end=evaluate_at_end,
+                            enrichment_concurrency=frozen["direct_concurrency"], initial_issues=issues)
+    if evaluate_at_end:
+        save_campaign_report(job, result)
+    return result
+
+
+def _collect_window(window, *, frozen, cfg, collection_options=None, legacy_evaluate_at_end=None):
     resolve_api_key(DEEPINFRA_ON_DEMAND_KEY_ENV)
     identity = hashlib.sha256(json.dumps(frozen, sort_keys=True).encode()).hexdigest()
     if frozen.get("instruction_format") != "x-backfill-campaign/v2":
@@ -372,9 +491,11 @@ def execute_window(window, *, frozen, cfg, evaluate_at_end=False):
             job.refresh_from_db()
             continue
         try:
-            report = execute_job(job.pk)
+            report = execute_job(job.pk, **(
+                {"collection_options": collection_options} if collection_options is not None else {}
+            ))
         except Exception as exc:
-            if not evaluate_at_end or safety_failure(exc):
+            if not legacy_evaluate_at_end or safety_failure(exc):
                 raise
             job.refresh_from_db()
             if not job.last_attempt_id or job.last_attempt.status == "running":
@@ -384,6 +505,8 @@ def execute_window(window, *, frozen, cfg, evaluate_at_end=False):
                 "job_id": str(job.pk), "scope_errors": report.get("scope_errors", []),
             })
         job.refresh_from_db()
+        if legacy_evaluate_at_end is None and (report.get("scope_errors") or report.get("global_failure")):
+            raise RuntimeError("collection_scope_errors")
         if report.get("state") == "waiting_for_live_writer":
             emit("WAITING_FOR_LIVE_WRITER", {"job_id": str(job.pk)})
             # A first invocation has no last_attempt yet. Intentional yielding
@@ -401,6 +524,8 @@ def execute_window(window, *, frozen, cfg, evaluate_at_end=False):
         )
         if job.state == "completed" or report.get("collection_drained"):
             if report.get("rare_gate_pending"):
+                if legacy_evaluate_at_end is None:
+                    raise RuntimeError("collection_rare_gate_pending")
                 issues.append({"phase": "collection", "error_code": "rare_gate_pending"})
             break
         if job.last_attempt.scopes.filter(outcome="blocked").exists():
@@ -413,6 +538,18 @@ def execute_window(window, *, frozen, cfg, evaluate_at_end=False):
             raise RuntimeError("collection_no_progress_15_minutes")
         else:
             _wait(2)
+    if legacy_evaluate_at_end is not None:
+        return job, issues
+    result = verify_collection_window(job.pk, cfg=cfg)
+    if result["status"] != "verified":
+        raise ValueError("collection_not_verified")
+    return job, result
+
+
+def _enrich_window(job, window, *, frozen, cfg, evaluate_at_end, enrichment_concurrency, initial_issues=()):
+    resolve_api_key(DEEPINFRA_ON_DEMAND_KEY_ENV)
+    deadline = datetime.fromisoformat(frozen["deadline"])
+    issues = list(initial_issues)
     prepare_current_contract(job, cfg)
     first = job.provider_batches.order_by("created_at").first()
     if (
@@ -450,7 +587,7 @@ def execute_window(window, *, frozen, cfg, evaluate_at_end=False):
                 api_key=resolve_api_key(DEEPINFRA_ON_DEMAND_KEY_ENV),
                 policy=policy,
                 transport="direct",
-                direct_concurrency=frozen["direct_concurrency"],
+                direct_concurrency=enrichment_concurrency,
                 defer_failures=evaluate_at_end,
             )
         except Exception as exc:
@@ -525,7 +662,7 @@ def execute_window(window, *, frozen, cfg, evaluate_at_end=False):
                 job.pk,
                 cfg=cfg,
                 api_key=resolve_api_key(DEEPINFRA_ON_DEMAND_KEY_ENV),
-                direct_concurrency=frozen["direct_concurrency"],
+                direct_concurrency=enrichment_concurrency,
                 defer_failures=evaluate_at_end,
             )
         except Exception as exc:
@@ -559,7 +696,6 @@ def execute_window(window, *, frozen, cfg, evaluate_at_end=False):
             "issues": issues,
             "deferred_post_count": len(deferred_enrichment_work(job, max_attempts=3)),
         }
-        save_campaign_report(job, result)
         emit("WINDOW_ATTEMPTED", result)
         return result
     verified = verify_window(job.pk, cfg=cfg)
@@ -587,17 +723,20 @@ def execute_window(window, *, frozen, cfg, evaluate_at_end=False):
     return verified
 
 
-def save_campaign_report(job, result):
+def save_campaign_report(job, result, *, phase=None):
     """Append execution evidence to the existing run; collection facts stay intact."""
     if not job.last_attempt_id:
         return
     with transaction.atomic():
         run = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
-        history = run.report.get("backfill_campaign", {}).get("history", [])
+        previous = run.report.get("backfill_campaign", {})
+        history = previous.get("history", [])
         value = json.loads(json.dumps(result, default=str))
         run.report = run.report | {
             "backfill_campaign": {
-                "mode": "evaluate_at_end",
+                **previous,
+                **({phase: value} if phase is not None else {}),
+                "mode": previous.get("mode", "evaluate_at_end"),
                 "latest": value,
                 "history": [
                     *history[-19:],

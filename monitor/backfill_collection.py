@@ -330,15 +330,45 @@ class DurableBudget(BackfillBudget):
             }
             run.save(update_fields=["selected_count", "report", "updated_at"])
 
+    def record_captured_response(self, request, response):
+        """Idempotently account an archive, including a capture/commit crash gap.
+
+        The physical request keeps its original run on legacy continuation.
+        The current claim fences reconciliation; counters and the accounted-ID
+        marker commit together on that original run.
+        """
+        from core.models import CollectionRun
+        with fenced_run(self.claim):
+            original = CollectionRun.objects.select_for_update().get(
+                pk=request.scope_run.run_id, job_id=self.claim.job_id,
+            )
+            accounted = list(original.report.get("prefetch_accounted_requests", []))
+            identifier = str(request.pk)
+            if identifier in accounted:
+                return
+            original.selected_count += response["raw_results"]
+            original.report = {
+                **original.report,
+                "response_bytes": original.report.get("response_bytes", 0) + response.get("response_bytes", 0),
+                "prefetch_accounted_requests": [*accounted, identifier],
+            }
+            original.save(update_fields=["selected_count", "report", "updated_at"])
+        if original.pk == self.claim.run_id:
+            BackfillBudget.record_api_response(self, response)
+
 
 class PageWriteFailed(RuntimeError):
     pass
 
 
 class PageCheckpoint:
-    def __init__(self, claim, scoped, budget):
+    def __init__(self, claim, scoped, budget, capture=None):
         self.claim, self.scoped, self.budget = claim, scoped, budget
+        self.capture = capture
         self.written = False
+
+    def _response(self):
+        return self.capture.response if self.capture is not None else self.budget.snapshot()["api_responses"][-1]
 
     def _checkpoint(self, progress, *, write=None, post_ids=None, extra=None):
         blocked = progress.get("reason") in BLOCKED_REASONS
@@ -352,13 +382,27 @@ class PageCheckpoint:
                 "post_ids": post_ids if post_ids is not None else [], "pages_received": progress["pages_received"],
                 "collection_drained": drained,
                 "reason": progress.get("reason"),
-                "raw_count": self.budget.snapshot()["api_responses"][-1]["raw_results"],
+                "raw_count": self._response()["raw_results"],
                 "received_post_ids": list(progress.get("received_post_ids", [])),
                 "distinct_received_count": len({pid for pid in progress.get("received_post_ids", []) if pid}),
                 "exclusions": sorted(progress.get("exclusions", []), key=lambda value: value["appearance"]),
                 "relevancy_degraded": list(progress.get("relevancy_degraded", [])),
+                **({"prefetch_request_id": str(self.capture.request.pk),
+                    "prefetch_request_run_id": str(self.capture.request.scope_run.run_id),
+                    "prefetch_replayed": self.capture.replayed} if self.capture is not None else {}),
                 **(extra or {}),
             })
+        page_write = write
+        if received and self.capture is not None and self.capture.request.scope_run.run_id != self.claim.run_id:
+            def replay_write(run, scope):
+                # This run selects archived items without another HTTP start.
+                # Selection and successful storage must commit together, retaining
+                # the shared success_count <= selected_count database constraint.
+                run.selected_count += self._response()["raw_results"]
+                run.save(update_fields=["selected_count", "updated_at"])
+                if page_write is not None:
+                    return page_write(run, scope)
+            write = replay_write
         self.scoped = checkpoint_scope(
             self.claim, scope_key=self.scoped.scope_key, scope_kind="x_query",
             ownership=self.scoped.ownership,
@@ -367,7 +411,7 @@ class PageCheckpoint:
             outcome="blocked" if blocked else ("complete" if drained else "pending"),
             enumeration_complete=drained, envelopes=envelopes, write=write,
             raw_count=self.scoped.raw_count + (
-                self.budget.snapshot()["api_responses"][-1]["raw_results"] if received else 0
+                self._response()["raw_results"] if received else 0
             ),
         )
         self.written = True
@@ -454,7 +498,7 @@ class PageCheckpoint:
                 query_id=f"historical-rare:{query_hash}", defaults={"keywords": {"query": owner["query"]}},
             )
             daily, _ = RareTypeSearchDailyBudget.objects.get_or_create(lane=lane, usage_date=now.date())
-            raw_count = self.budget.snapshot()["api_responses"][-1]["raw_results"]
+            raw_count = self._response()["raw_results"]
             lower = datetime.fromtimestamp(owner["since_epoch"], UTC)
             upper = datetime.fromtimestamp(owner["until_epoch"], UTC)
             rare = RareTypeSearchRun.objects.create(
@@ -594,10 +638,17 @@ def _report(job, run_id):
     return report
 
 
-def execute_job(job_id, *, read_only=False, retry_blocked=False):
+def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_options=None):
+    from monitor.backfill_prefetch import Prefetcher, PrefetchOptions
     from monitor.cycle import CycleRunner
 
+    options = PrefetchOptions.parse(collection_options)
+
     job = CollectionJob.objects.get(pk=job_id)
+    from core.models import CollectionRequest
+    use_prefetch = collection_options is not None or CollectionRequest.objects.filter(
+        attempt__run__job=job, request_category="x_backfill_prefetch",
+    ).exists()
     current_policy = job.scope.get("adapter") == POLICY_ADAPTER_VERSION
     raw_cfg = load_config(Path("config.yaml"))
     cfg = bounded_backfill_config(raw_cfg, enrichment_limit=1, collection_policy=current_policy)
@@ -629,6 +680,8 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False):
     scope_errors = []
     global_failure = None
     retry_at = None
+    prefetch = None
+    pages = None
     try:
         if not CollectionScopeRun.objects.filter(run_id=claim.run_id).exists():
             import_scope_checkpoints(
@@ -638,15 +691,24 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False):
         if retry_blocked:
             with fenced_run(claim):
                 CollectionScopeRun.objects.filter(run_id=claim.run_id, outcome="blocked").update(outcome="pending")
-        for _ in range(job.budgets["requests"]):
-            requests = job.runs.aggregate(total=Sum("request_count"))["total"] or 0
-            if scope["prior_api_requests"] + requests >= scope["maximum_api_requests"]:
-                break
-            scoped = CollectionScopeRun.objects.filter(
-                run_id=claim.run_id, scope_kind="x_query", enumeration_complete=False,
-            ).exclude(outcome="blocked").exclude(scope_key__in=deferred_scopes).order_by("id").first()
-            if scoped is None or not budget.can_start(38):
-                break
+        def serial_scopes():
+            for _ in range(job.budgets["requests"]):
+                requests = job.runs.aggregate(total=Sum("request_count"))["total"] or 0
+                if scope["prior_api_requests"] + requests >= scope["maximum_api_requests"]:
+                    return
+                scoped = CollectionScopeRun.objects.filter(
+                    run_id=claim.run_id, scope_kind="x_query", enumeration_complete=False,
+                ).exclude(outcome="blocked").exclude(scope_key__in=deferred_scopes).order_by("id").first()
+                if scoped is None or not budget.can_start(38):
+                    return
+                yield scoped, None
+
+        if use_prefetch:
+            prefetch = Prefetcher(claim, job, budget, options)
+            pages = prefetch.pages(deferred_scopes)
+        else:
+            pages = serial_scopes()
+        for scoped, capture in pages:
             with harvest_writer_lock(execution_mode="backfill", entrypoint="management.backfill.job") as lease:
                 if not lease.acquired:
                     break
@@ -656,13 +718,14 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False):
                 settings.X_MONITOR_CYCLE_LIMIT_PER_CALL = 20
                 settings.X_MONITOR_CYCLE_MAX_PAGES_PER_CALL = 1
                 settings.X_MONITOR_CYCLE_BRAND_FILTER = ",".join(scope["brands"]) or None
-                page = PageCheckpoint(claim, scoped, budget)
+                page = PageCheckpoint(claim, scoped, budget, capture=capture)
                 context = BackfillContext(
                     budget=budget, cursor=scoped.cursor, seen_cursors=scoped.cursor_history,
                     enrichment_limit=0, query_override=owner["query"], page_writer=page.persist,
                     match_scheduled_policy=current_policy,
                     author_contexts=scope.get("author_scope", {}).get("contexts") if current_policy else None,
                     rare_page_writer=page.persist_rare if current_policy else None,
+                    captured_pages=capture.pages() if capture is not None else None,
                 )
                 try:
                     stats = CycleRunner(cfg=cfg, cycle_kind="backfill", dry_run=False,
@@ -708,6 +771,14 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False):
         raise
     except Exception as exc:  # noqa: BLE001 - retain a terminal failure receipt before exit
         error = exc
+        if isinstance(exc, BackfillProviderSafetyError):
+            global_failure = {"response_status_code": exc.response_status_code,
+                              "permanent": exc.permanent, "retry_after_seconds": exc.retry_after_seconds}
+            if exc.retry_after_seconds is not None:
+                retry_at = datetime.now(UTC) + timedelta(seconds=exc.retry_after_seconds)
+    finally:
+        if pages is not None:
+            pages.close()
     try:
         report = _report(job, claim.run_id)
     except ValueError as exc:
@@ -715,6 +786,8 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False):
         report = {"collection_drained": False, "reconciliation_error": str(exc)}
     report.update({"usage": budget.snapshot(), "revision": os.environ.get("RENDER_GIT_COMMIT"),
                    "scope_errors": scope_errors})
+    if prefetch is not None:
+        report["prefetch"] = prefetch.metrics
     if global_failure is not None:
         report["global_failure"] = global_failure
     pending = report.get("rare_gate_pending", 0)

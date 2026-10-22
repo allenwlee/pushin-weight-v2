@@ -3058,11 +3058,12 @@ class CycleRunner:
         items: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
         try:
-            for page in api.run_search_pages(
+            pages = context.captured_pages if context.captured_pages is not None else api.run_search_pages(
                 call.query_string, max_results=max_results, max_pages=max_pages,
                 max_per_page=max_per_page, since_time=window[0], until_time=window[1],
                 cursor=context.cursor,
-            ):
+            )
+            for page in pages:
                 self._api_calls += 1
                 receipt["pages_received"] += 1
                 offset = len(receipt["received_post_ids"])
@@ -3110,7 +3111,7 @@ class CycleRunner:
                     receipt["cursor"] = None
                     return items, "ok"
                 next_cursor = page.next_cursor
-                if not page.items or not next_cursor or next_cursor == receipt["cursor"] or next_cursor in receipt["seen_cursors"]:
+                if not next_cursor or next_cursor == receipt["cursor"] or next_cursor in receipt["seen_cursors"]:
                     receipt["reason"] = "nonprogressing_cursor"
                     break
                 receipt["cursor"] = next_cursor
