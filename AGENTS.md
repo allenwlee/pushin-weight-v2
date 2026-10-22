@@ -270,3 +270,21 @@ Topic files live under `~/.claude/projects/-Users-allenwlee/memory/` and are loa
 - `feedback_no_oversell.md` — test must exercise the differentiator; do not claim stacks-can-match wins
 - `feedback_artifact_arbiter.md` — for AI demos, artifact is final arbiter; skip pre-validation gates
 - `feedback_regression_net_in_every_plan.md` — every plan that modifies existing behavior must include a regression-net unit
+
+<!-- BEGIN SHARED LOCAL TEST DATABASE -->
+## Reuse the permanent local test database
+
+Whenever PushinWeight needs local PostgreSQL for tests, use the existing shared
+instance at `/Users/fuchitalee/.local/share/pushinweight/test-db/` on fuchitalee.
+Read the canonical [operating note](/Users/fuchitalee/infra/docs/reference/pushinweight-shared-test-database.md).
+From this worktree, use `~/.local/bin/pushinweight-test-db pytest <test arguments>`
+or `~/.local/bin/pushinweight-test-db run <command>`; the wrapper supplies the
+connection and holds the exclusive-use lock. Do not create, clone, or restore
+another full test database in a worktree, cache, or temporary directory.
+If busy, wait or coordinate with the owner. Migrations, resets, and data-changing
+tests require exclusive use. Never run tests against production. The database is
+persistent infrastructure; do not delete it at task completion. A fresh production
+restore or replacement requires a separate explicit request. Tests that create
+additional databases must be adapted before running against this shared instance. The
+pytest wrapper also refuses pending migrations so test setup cannot silently change the shared schema.
+<!-- END SHARED LOCAL TEST DATABASE -->
