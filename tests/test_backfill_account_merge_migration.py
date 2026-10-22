@@ -1,5 +1,7 @@
 """Populated account-first and provider-first paths meet without losing evidence."""
 
+import hashlib
+import json
 from datetime import timedelta
 from decimal import Decimal
 
@@ -9,7 +11,6 @@ from django.db.migrations.executor import MigrationExecutor
 from django.utils import timezone
 
 from tests.test_account_extensions_migration import historical_account
-from tests.test_backfill_collection import ready_job
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 BASE = ("core", "0082_collection_catalog_mappings")
@@ -45,7 +46,17 @@ def test_populated_branches_merge_preserving_identity_and_paid_evidence(first):
         request_hash="b" * 64, reserved_at=timezone.now(), reserved_usd=Decimal("0.3"),
     )
     authored_before = old.get_model("core", "OriginalContentCall").objects.values().get(pk=authored_call.pk)
-    job = ready_job()
+    # This proof stops at 0086. Today's registration helper reads later source
+    # and job columns, so seed the relationship with this migration's models.
+    definition = {"fixture": "account-provider-merge"}
+    job = old.get_model("core", "CollectionJob").objects.create(
+        job_key="merge-evidence", source_id="x", purpose="content",
+        operation="x_backfill", mode="historical", state="ready",
+        definition=definition,
+        definition_sha256=hashlib.sha256(
+            json.dumps(definition, sort_keys=True).encode()
+        ).hexdigest(),
+    )
 
     def create_group(apps):
         group = apps.get_model("core", "ProviderBatch").objects.create(
