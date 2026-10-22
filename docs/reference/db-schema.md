@@ -1,8 +1,8 @@
 # Database schema reference
 
-Repository inventory updated 2026-10-22, candidate through migration `0131_rg2_remove_legacy_locale_columns`. Production cutover `16aeb1a0` is verified through `0130_rg2_person_name_locale_required`: all five locale owners are populated, all six mapping audits pass, and the application reads/writes the new owners. Fourteen nullable physical legacy columns remain in production for the still-running older backfill. The separate0131 candidate deletes them after that dependency is resolved; production deletion is not yet verified.
+Repository inventory and production catalog verified 2026-10-22 through migration `0131_rg2_remove_legacy_locale_columns`, revision `67d97278`. The application uses the five locale owners and the shared PersonName locale reference. All fourteen replaced physical columns and six temporary compatibility triggers are absent. The historical content view reads its preserved wording from the new snapshot-label rows.
 
-Repository scope: **182 core application tables**, **2338 physical table columns** after0131, nine compatibility views and one native materialized view with five columns. Production through0130 has2352 physical columns, including the14 transitional columns listed in the plan's RG2 manifest. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys.
+Repository and verified production scope: **182 core application tables**, **2338 physical table columns**, nine compatibility views and one native materialized view with five columns. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
