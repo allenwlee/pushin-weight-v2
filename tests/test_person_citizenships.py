@@ -47,7 +47,7 @@ def test_evidenced_dual_citizenship_and_ambiguous_nationality_remain_distinct(
         {"country_code": "US", "is_primary": False},
     ]
     assert person_intelligence(person.pk)["person"]["nationality"] == (
-        "Holds Japanese and US citizenship"
+        "possibly Japanese"
     )
 
     with pytest.raises(IntegrityError), transaction.atomic():

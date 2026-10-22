@@ -349,7 +349,9 @@ def person_intelligence(person_id) -> dict[str, Any]:
         Prefetch("brand_affiliations", queryset=affiliations),
         Prefetch(
             "texts",
-            queryset=PersonText.objects.filter(kind="reported_nationality")
+            queryset=PersonText.objects.filter(
+                kind="reported_nationality", origin="unknown"
+            )
             .order_by("-observed_at", "-id"),
             to_attr="reported_nationality_texts",
         ),
