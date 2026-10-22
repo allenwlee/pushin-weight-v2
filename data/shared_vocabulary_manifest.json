@@ -17,6 +17,56 @@
     "shared_time_zones.csv": {
       "rows": 597,
       "sha256": "6ddebeca31b1b623f32ba8e82ba166848a9c8ef75a4c9b58bb3e27668e3b49b8"
+    },
+    "shared_currencies.csv": {
+      "rows": 307,
+      "sha256": "c706539384f9ec7269944daec94c1dfefd0afcdb281e567b4e14e7b915398519",
+      "sources": [
+        {
+          "url": "https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml",
+          "sha256": "33139b438657d1cee116ba737807ea71d19d6de4b90f799a09c56f0cc6a1b0ff",
+          "codes": 178,
+          "published": {
+            "Pblshd": "2026-09-17"
+          }
+        },
+        {
+          "url": "https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-three.xml",
+          "sha256": "98fde2423cdb916dd59dcf5fe96222edad8fa198d865c1c83dbc464b9cc52387",
+          "codes": 137,
+          "published": {
+            "Pblshd": "2026-01-01"
+          }
+        }
+      ]
+    },
+    "shared_job_functions.csv": {
+      "rows": 9,
+      "sha256": "c6c51e2244265976d368254893181f7fff3a0d382dedc6b252eaabe2ae564e61"
+    },
+    "shared_seniority_levels.csv": {
+      "rows": 7,
+      "sha256": "8a3099dbc610408faf11ece45c1ea6ec7c9ade4d4053c20c3b77015fc7048efe"
+    },
+    "shared_employment_types.csv": {
+      "rows": 7,
+      "sha256": "81a632c1812788fe4d7f5bf950616248ec99c126e1744ff9a2c6626488ff9bc5"
+    },
+    "shared_workplace_types.csv": {
+      "rows": 3,
+      "sha256": "848fe658a94f41e62389198b674fcb56946f09bce9021bf5084514d61b832ebf"
+    },
+    "shared_organization_ai_relationship_types.csv": {
+      "rows": 1,
+      "sha256": "422c655ebe33e076e6d369d0e6e5e0cf2f940007fb69f2ba2b2cdd9b19224d1f"
+    },
+    "shared_role_ai_relationship_types.csv": {
+      "rows": 0,
+      "sha256": "b57b236c9bcd2a61fcd627b69ae2d7a6eb5bc13f2dc25311348ee08df43bc0c4"
+    },
+    "shared_salary_periods.csv": {
+      "rows": 5,
+      "sha256": "fe5cd9a9557065396c934632b457f409ad4a55011a07aca5d9dbd8da1e6417b8"
     }
   },
   "sources": {
