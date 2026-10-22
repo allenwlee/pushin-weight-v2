@@ -8292,7 +8292,7 @@ class DataSource(models.Model):
         db_table = 'data_sources'
         indexes = [models.Index(fields=["source_type"],name="idx_source_type")]
         constraints = [
-            models.CheckConstraint(condition=models.Q(source_type__in=["benchmark","model_adoption","social"]),name="ck_source_type"),
+            models.CheckConstraint(condition=models.Q(source_type__in=["benchmark","model_adoption","social","career_site"]),name="ck_source_type"),
             models.CheckConstraint(condition=models.Q(enabled=False)|(models.Q(adapter_key__isnull=False)&~models.Q(adapter_key="")),name="ck_source_enabled_adapter"),
             models.CheckConstraint(
                 condition=models.Q(
