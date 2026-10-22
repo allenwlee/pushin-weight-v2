@@ -25,6 +25,7 @@ from core.models import (
     EventDossierReview,
     EventDossierReviewClaim,
     EventDossierSource,
+    EventKind,
     ModelReleaseDetail,
     PersonBrandAffiliation,
     PersonnelChangeDetail,
@@ -118,11 +119,19 @@ def _insert(row):
 @transaction.atomic
 def create_dossier(*, event_kind: str, identity_key: str) -> EventDossier:
     now = timezone.now()
+    try:
+        kind = EventKind.objects.get(code=event_kind)
+    except EventKind.DoesNotExist as error:
+        raise ValueError("Unknown event kind") from error
     row, created = EventDossier.objects.get_or_create(
         identity_key=identity_key,
-        defaults={"event_kind": event_kind, "first_seen_at": now, "last_seen_at": now},
+        defaults={
+            "event_kind_reference": kind,
+            "first_seen_at": now,
+            "last_seen_at": now,
+        },
     )
-    if row.event_kind != event_kind:
+    if row.event_kind_reference_id != kind.pk:
         raise ValueError("Dossier identity already belongs to another event kind")
     if created:
         _validate(row)
@@ -239,7 +248,7 @@ def complete_review(
         raise ValueError("A claim may occur only once in a review")
     if (significance_score is None) != (not ranking_method):
         raise ValueError("A ranking score requires its ranking method")
-    if event.event_kind == "model_release":
+    if event.event_kind_reference.code == "model_release":
         if (
             not isinstance(model_release, ModelReleaseInput)
             or personnel_change is not None

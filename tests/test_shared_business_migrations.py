@@ -8,6 +8,7 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 BASE = ("core", "0135_rg4_business_catalogues_expand")
 NAME_CUTOVER = ("core", "0136_rg4_person_name_kind_cutover")
 BUSINESS_CUTOVER = ("core", "0137_rg4_affiliation_opportunity_references")
+EVENT_KIND_CUTOVER = ("core", "0138_rg4_event_kind_reference")
 
 
 def _temporarily_lift_old_kind_check(table, constraint):
@@ -223,3 +224,58 @@ def test_affiliation_and_opportunity_cutover_refuses_unknowns_and_bridges_writer
     )
     assert affiliations.objects.get(pk=new_affiliation.pk).affiliation_type == "advisor"
     assert opportunities.objects.get(pk=new_opportunity.pk).opportunity_type == "discount"
+
+
+@pytest.mark.parametrize("migration_rehearsal_schema", [BUSINESS_CUTOVER], indirect=True)
+def test_dossier_kind_cutover_preserves_atomic_identity_and_both_writer_generations(
+    migration_rehearsal_schema,
+):
+    old = MigrationExecutor(connection).loader.project_state([BUSINESS_CUTOVER]).apps
+    old_dossiers = old.get_model("core", "EventDossier")
+    original = old_dossiers.objects.create(
+        event_kind="model_release", identity_key="a" * 64
+    )
+    before = old_dossiers.objects.get(pk=original.pk)
+    restore_check = _temporarily_lift_old_kind_check(
+        "event_dossiers", "ck_ed_kind"
+    )
+    unsupported = old_dossiers.objects.create(
+        event_kind="unmapped_kind", identity_key="b" * 64
+    )
+    with pytest.raises(RuntimeError, match="Unmapped dossier event kinds"):
+        MigrationExecutor(connection).migrate([EVENT_KIND_CUTOVER])
+    assert EVENT_KIND_CUTOVER not in MigrationExecutor(connection).loader.applied_migrations
+    assert old_dossiers.objects.get(pk=unsupported.pk).event_kind == "unmapped_kind"
+    unsupported.delete()
+    with connection.cursor() as cursor:
+        cursor.execute(restore_check)
+
+    MigrationExecutor(connection).migrate([EVENT_KIND_CUTOVER])
+    current = MigrationExecutor(connection).loader.project_state([EVENT_KIND_CUTOVER]).apps
+    dossiers = current.get_model("core", "EventDossier")
+    mapped = dossiers.objects.get(pk=original.pk)
+    assert mapped.event_kind_reference.code == "model_release"
+    assert mapped.identity_key == before.identity_key
+    assert mapped.first_seen_at == before.first_seen_at
+    assert mapped.last_seen_at == before.last_seen_at
+
+    legacy = old_dossiers.objects.create(
+        event_kind="personnel_change", identity_key="c" * 64
+    )
+    assert dossiers.objects.get(pk=legacy.pk).event_kind_reference.code == "personnel_change"
+    current_kind = current.get_model("core", "EventKind").objects.get(
+        code="model_release"
+    )
+    created = dossiers.objects.create(
+        event_kind_reference_id=current_kind.pk, identity_key="d" * 64
+    )
+    assert old_dossiers.objects.get(pk=created.pk).event_kind == "model_release"
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        old_dossiers.objects.filter(pk=original.pk).update(event_kind="personnel_change")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        dossiers.objects.filter(pk=original.pk).update(
+            event_kind_reference_id=current.get_model("core", "EventKind")
+            .objects.get(code="personnel_change").pk
+        )
+    assert dossiers.objects.get(pk=original.pk).event_kind_reference.code == "model_release"

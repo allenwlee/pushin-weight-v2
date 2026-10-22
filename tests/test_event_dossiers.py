@@ -30,6 +30,15 @@ def dossier(key="model:small", kind="model_release"):
     return create_dossier(event_kind=kind, identity_key=identity_key("test", key))
 
 
+def test_event_kind_uses_shared_identity_without_changing_dossier_replay():
+    event = dossier("model:kind-reference")
+    assert event.event_kind_reference.code == "model_release"
+    assert dossier("model:kind-reference").pk == event.pk
+    assert models.EventDossier.objects.count() == 1
+    with pytest.raises(ValueError, match="another event kind"):
+        dossier("model:kind-reference", kind="personnel_change")
+
+
 def post(key="announcement", text="Introducing our new model"):
     return models.Post.objects.create(tweet_id=key, text=text)
 

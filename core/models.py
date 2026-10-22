@@ -9789,7 +9789,12 @@ MetricObservation = CollectionObservation
 # Event Dossier research foundation. Collection and measurement storage stay shared.
 class EventDossier(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    event_kind = models.CharField(max_length=32)
+    event_kind_reference = models.ForeignKey(
+        EventKind,
+        db_column="event_kind_id",
+        on_delete=models.PROTECT,
+        related_name="dossiers",
+    )
     identity_key = models.CharField(max_length=64, unique=True)
     first_seen_at = models.DateTimeField(default=timezone.now)
     last_seen_at = models.DateTimeField(default=timezone.now)
@@ -9814,12 +9819,6 @@ class EventDossier(models.Model):
         db_table = "event_dossiers"
         indexes = [models.Index(fields=["next_review_at"], name="idx_ed_review_due")]
         constraints = [
-            models.CheckConstraint(
-                condition=models.Q(
-                    event_kind__in=["model_release", "personnel_change"]
-                ),
-                name="ck_ed_kind",
-            ),
             models.CheckConstraint(
                 condition=models.Q(identity_key__regex=r"^[0-9a-f]{64}$"),
                 name="ck_ed_identity",
