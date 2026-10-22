@@ -12,6 +12,7 @@ EVENT_KIND_CUTOVER = ("core", "0138_rg4_event_kind_reference")
 RELEASE_CUTOVER = ("core", "0139_rg4_release_meaning_references")
 PERSONNEL_CUTOVER = ("core", "0140_rg4_personnel_change_kind_reference")
 CLAIM_CUTOVER = ("core", "0141_rg4_dossier_claim_kind_reference")
+CLAIM_SCOPE_CUTOVER = ("core", "0142_rg4_scoped_claim_references")
 
 
 def _temporarily_lift_old_kind_check(table, constraint):
@@ -575,3 +576,86 @@ def test_claim_kind_cutover_preserves_hashes_and_both_writer_generations(
         source_excerpt="Repository appeared", source_hash="f" * 64,
     )
     assert claims.objects.get(pk=new.pk).claim_kind == "availability"
+
+
+@pytest.mark.parametrize("migration_rehearsal_schema", [CLAIM_CUTOVER], indirect=True)
+def test_scoped_claim_cutover_keeps_timezone_and_source_evidence(
+    migration_rehearsal_schema,
+):
+    old = MigrationExecutor(connection).loader.project_state([CLAIM_CUTOVER]).apps
+    old.get_model("core", "TimeZone").objects.get_or_create(code="Asia/Tokyo")
+    dossier = old.get_model("core", "EventDossier").objects.create(
+        event_kind_reference_id=old.get_model("core", "EventKind")
+        .objects.get(code="model_release").pk,
+        identity_key="a" * 64,
+    )
+    post = old.get_model("core", "Post").objects.create(
+        tweet_id="scoped-claim-source", text="Available in Japan"
+    )
+    source = old.get_model("core", "EventDossierSource").objects.create(
+        event_dossier=dossier, post=post
+    )
+    kinds = old.get_model("core", "EventClaimKind")
+    claims = old.get_model("core", "EventDossierClaim")
+
+    def create_old(zone, marker):
+        return claims.objects.create(
+            event_dossier_source=source,
+            claim_kind_reference_id=kinds.objects.get(code="availability").pk,
+            event_timezone=zone, scope_key="JP", claim_hash=marker * 64,
+            extraction_version="source-v1", assertion_text="Available in Japan",
+            source_excerpt="Available in Japan", source_hash="f" * 64,
+        )
+
+    original = create_old("Asia/Tokyo", "b")
+    unsupported = create_old("Unknown/Unregistered", "c")
+    with pytest.raises(RuntimeError, match="Unmapped dossier claim timezone"):
+        MigrationExecutor(connection).migrate([CLAIM_SCOPE_CUTOVER])
+    assert claims.objects.get(pk=original.pk).event_timezone == "Asia/Tokyo"
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT tgenabled FROM pg_trigger WHERE tgrelid="
+            "'event_dossier_claims'::regclass AND tgname='ed_frozen'"
+        )
+        assert cursor.fetchone() == ("O",)
+        cursor.execute("ALTER TABLE event_dossier_claims DISABLE TRIGGER ed_frozen")
+        cursor.execute(
+            "DELETE FROM event_dossier_claims WHERE id=%s", [unsupported.pk]
+        )
+        cursor.execute("ALTER TABLE event_dossier_claims ENABLE TRIGGER ed_frozen")
+
+    MigrationExecutor(connection).migrate([CLAIM_SCOPE_CUTOVER])
+    current = MigrationExecutor(connection).loader.project_state(
+        [CLAIM_SCOPE_CUTOVER]
+    ).apps
+    mapped = current.get_model("core", "EventDossierClaim").objects.get(
+        pk=original.pk
+    )
+    assert mapped.event_timezone_reference_id == "Asia/Tokyo"
+    assert mapped.claim_hash == original.claim_hash
+    assert mapped.source_excerpt == original.source_excerpt
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT tgenabled FROM pg_trigger WHERE tgrelid="
+            "'event_dossier_claims'::regclass AND tgname='ed_frozen'"
+        )
+        assert cursor.fetchone() == ("O",)
+    legacy = create_old("Asia/Tokyo", "d")
+    assert current.get_model("core", "EventDossierClaim").objects.get(
+        pk=legacy.pk
+    ).event_timezone_reference_id == "Asia/Tokyo"
+    new = current.get_model("core", "EventDossierClaim").objects.create(
+        event_dossier_source_id=source.pk,
+        claim_kind_reference_id=kinds.objects.get(code="availability").pk,
+        event_timezone_reference_id="Asia/Tokyo",
+        release_access_channel_reference_id=current.get_model(
+            "core", "ReleaseAccessChannel"
+        ).objects.get(code="api").pk,
+        scope_key="JP", claim_hash="e" * 64,
+        extraction_version="source-v1", assertion_text="API available in Japan",
+        source_excerpt="Available in Japan", source_hash="f" * 64,
+    )
+    assert claims.objects.get(pk=new.pk).event_timezone == "Asia/Tokyo"
+    assert current.get_model("core", "EventDossierClaim").objects.get(
+        pk=new.pk
+    ).release_access_channel_reference.code == "api"

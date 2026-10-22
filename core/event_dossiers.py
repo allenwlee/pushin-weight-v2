@@ -32,9 +32,11 @@ from core.models import (
     PersonnelChangeDetail,
     PersonnelChangeType,
     Post,
+    ReleaseAccessChannel,
     ReleaseAvailabilityState,
     ReleaseDisclosureState,
     ReleaseMaturity,
+    TimeZone,
 )
 
 
@@ -178,6 +180,7 @@ def add_claim(
     extraction_version: str,
     source_locator: str | None = None,
     event_timezone: str | None = None,
+    access_channel: str | None = None,
     effective_precision: str = "unknown",
     effective_at: datetime | None = None,
     effective_date: date | None = None,
@@ -196,6 +199,19 @@ def add_claim(
             ZoneInfo(event_timezone)
         except (ValueError, ZoneInfoNotFoundError) as error:
             raise ValueError("Unknown event timezone") from error
+        timezone_reference = TimeZone.objects.filter(pk=event_timezone).first()
+        if timezone_reference is None:
+            raise ValueError("Unregistered event timezone")
+    else:
+        timezone_reference = None
+    if access_channel is not None:
+        channel_reference = ReleaseAccessChannel.objects.filter(
+            code=access_channel
+        ).first()
+        if channel_reference is None:
+            raise ValueError("Unknown release access channel")
+    else:
+        channel_reference = None
     for value in (effective_at, not_before, not_after):
         if value is not None:
             _aware(value)
@@ -217,6 +233,8 @@ def add_claim(
         "not_after": not_after,
         "source_hash": hashlib.sha256(source_excerpt.encode()).hexdigest(),
     }
+    if access_channel is not None:
+        values["access_channel"] = access_channel
     claim_hash = _digest(["event-dossier-claim-v1", values])
     # Serialize claims for this dossier as well as its source attachments/reviews.
     event = EventDossier.objects.select_for_update().get(pk=source.event_dossier_id)
@@ -226,8 +244,13 @@ def add_claim(
     if existing:
         return existing
     values.pop("claim_kind")
+    values.pop("event_timezone")
+    values.pop("access_channel", None)
     return _insert(EventDossierClaim(
-        claim_hash=claim_hash, claim_kind_reference=kind, **values
+        claim_hash=claim_hash, claim_kind_reference=kind,
+        event_timezone_reference=timezone_reference,
+        release_access_channel_reference=channel_reference,
+        **values,
     ))
 
 
@@ -411,6 +434,15 @@ def _claim_columns(row):
     result = _columns(row)
     result.pop("claim_kind_id")
     result["claim_kind"] = row.claim_kind_reference.code
+    result.pop("event_timezone_id")
+    result["event_timezone"] = (
+        row.event_timezone_reference.code if row.event_timezone_reference_id else None
+    )
+    result.pop("access_channel_id")
+    result["access_channel"] = (
+        row.release_access_channel_reference.code
+        if row.release_access_channel_reference_id else None
+    )
     return result
 
 
@@ -436,7 +468,8 @@ def read_dossier(dossier_id, *, review_id=None) -> dict:
         }
     saved = event.reviews.get(pk=selected_id)
     decisions = saved.claim_decisions.select_related(
-        "claim__event_dossier_source"
+        "claim__event_dossier_source", "claim__claim_kind_reference",
+        "claim__event_timezone_reference", "claim__release_access_channel_reference",
     ).order_by("claim_id")
     claims, sources = [], {}
     for decision in decisions:

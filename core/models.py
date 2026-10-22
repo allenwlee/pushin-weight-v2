@@ -9920,7 +9920,22 @@ class EventDossierClaim(models.Model):
         on_delete=models.PROTECT,
         related_name="dossier_claims",
     )
-    event_timezone = models.CharField(max_length=64, null=True, blank=True)
+    event_timezone_reference = models.ForeignKey(
+        TimeZone,
+        db_column="event_timezone_id",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="dossier_claims",
+    )
+    release_access_channel_reference = models.ForeignKey(
+        ReleaseAccessChannel,
+        db_column="access_channel_id",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="dossier_claims",
+    )
     not_before = models.DateTimeField(null=True, blank=True)
     not_after = models.DateTimeField(null=True, blank=True)
     scope_key = models.TextField()

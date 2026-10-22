@@ -229,6 +229,34 @@ def test_claim_replay_and_separate_milestones():
     assert models.EventDossierClaim.objects.count() == 2
 
 
+def test_availability_claim_keeps_independent_channel_and_timezone():
+    models.TimeZone.objects.get_or_create(code="Asia/Tokyo")
+    event = dossier("model:scoped-availability")
+    source = attach_source(event.pk, post_id=post("scoped-availability").pk)
+    values = {
+        "claim_kind": "availability",
+        "scope_key": "JP",
+        "assertion_text": "API available in Japan",
+        "source_excerpt": "Available in Japan",
+        "extraction_version": "test-v1",
+        "event_timezone": "Asia/Tokyo",
+        "access_channel": "api",
+    }
+    api = add_claim(source.pk, **values)
+    weights = add_claim(source.pk, **{**values, "access_channel": "weights"})
+    assert api.pk != weights.pk
+    assert api.event_timezone_reference.code == "Asia/Tokyo"
+    assert api.release_access_channel_reference.code == "api"
+    assert weights.release_access_channel_reference.code == "weights"
+    review(event, api)
+    shown = read_dossier(event.pk)["claims"]
+    assert shown[0]["claim_kind"] == "availability"
+    assert shown[0]["event_timezone"] == "Asia/Tokyo"
+    assert shown[0]["access_channel"] == "api"
+    assert "event_timezone_id" not in shown[0]
+    assert "access_channel_id" not in shown[0]
+
+
 def test_post_backed_observation_canonicalizes_to_post_membership():
     from tests.test_benchmark_download_db_models import measurement
 
