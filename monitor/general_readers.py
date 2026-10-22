@@ -25,6 +25,7 @@ from core.intelligence_readers import (
     event_lifecycle,
     opportunity_lifecycle,
 )
+from core.job_vocabulary import classification_prefetches, classification_text
 from core.models import (
     Event,
     EventEvidence,
@@ -299,6 +300,9 @@ def jobs_people_facts(post_ids, section, *, as_of, locale="en"):
                 listing__source_key__isnull=True,
             )
             .select_related("listing")
+            .prefetch_related(*classification_prefetches(
+                prefix="listing__", dimensions=("employment_type", "workplace_type"),
+            ))
             .order_by("listing_id", "id")
         )
         for source in evidence:
@@ -318,8 +322,8 @@ def jobs_people_facts(post_ids, section, *, as_of, locale="en"):
                 "url": safe_external_url(row.application_url or row.canonical_url),
                 "description": row.description_text or "",
                 "location": row.locations_raw or "",
-                "workplace": row.workplace_type,
-                "employment": row.employment_type,
+                "workplace": classification_text(row, "workplace_type"),
+                "employment": classification_text(row, "employment_type"),
                 "salary": row.salary_text,
                 "contact": row.application_contact,
                 "application_kind": row.application_route_kind,

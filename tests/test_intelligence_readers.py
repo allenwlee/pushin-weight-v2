@@ -238,9 +238,10 @@ def test_job_reader_keeps_one_post_as_evidence_for_several_roles(
         )
         listings.append(listing)
 
-    with django_assert_num_queries(2):
+    # One listing query, one evidence query, six bounded typed-owner prefetches.
+    with django_assert_num_queries(8):
         first = job_listing_document(listings[0].pk)
-    with django_assert_num_queries(2):
+    with django_assert_num_queries(8):
         second = job_listing_document(listings[1].pk)
 
     _assert_contract_root("job_listing_document", first)

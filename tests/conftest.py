@@ -45,6 +45,46 @@ def ensure_shared_locale_rows_for_database_tests(request):
         Locale.objects.get_or_create(code=code, defaults={"language_id": language})
 
 
+@pytest.fixture(autouse=True)
+def ensure_shared_job_catalogues_for_database_tests(request):
+    from django.test import SimpleTestCase
+
+    django_test_class = (
+        request.cls is not None and issubclass(request.cls, SimpleTestCase)
+        and bool(request.cls.databases)
+    )
+    if (request.node.get_closest_marker("django_db") is None and not django_test_class
+            and not any(name in request.fixturenames for name in ("db", "transactional_db"))):
+        return
+    request.getfixturevalue("db")
+    from core.job_vocabulary import NORMALIZER_ID, register_job_normalizer
+    from core.models import Currency, DefinitionVersion, EmploymentType
+    from core.shared_vocabulary import seed_shared_vocabulary
+
+    if not Currency.objects.filter(pk="USD").exists() or not EmploymentType.objects.filter(code="full_time").exists():
+        seed_shared_vocabulary(catalogues=(
+            "currencies", "salary_periods", "job_functions", "seniority_levels",
+            "employment_types", "workplace_types", "organization_ai_relationship_types",
+            "role_ai_relationship_types",
+        ))
+    if not DefinitionVersion.objects.filter(pk=NORMALIZER_ID).exists():
+        register_job_normalizer()
+
+
+@pytest.fixture
+def company_country_catalogue(db):
+    """Restore real geography identities needed by company-writing fixtures."""
+    import importlib
+
+    from core.models import Country
+
+    seed = importlib.import_module("core.migrations.0026_account_geography_taxonomy")._load_seed()
+    Country.objects.bulk_create(
+        [Country(code=row["code"], m49_code=row["m49_code"]) for row in seed["countries"]],
+        ignore_conflicts=True,
+    )
+
+
 @pytest.fixture
 def migration_rehearsal_schema(transactional_db, request):
     """Rehearse in a temporary schema in the same exclusively owned test database.

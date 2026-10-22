@@ -19,6 +19,7 @@ from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
+from core.job_vocabulary import compensation_references, write_job_classifications
 from core.models import (
     Brand,
     BrandAccount,
@@ -883,10 +884,6 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
             "description_text": _text(record.get("description_text")),
             "department": _text(record.get("department")),
             "team": _text(record.get("team")),
-            "job_function": _text(record.get("job_function")),
-            "seniority": _text(record.get("seniority")),
-            "employment_type": _text(record.get("employment_type")),
-            "workplace_type": _text(record.get("workplace_type")),
             "locations_raw": _text(record.get("locations_raw")),
             "locations": locations,
             "remote_applicant_restrictions": _text(
@@ -895,8 +892,7 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
             "salary_text": _text(record.get("salary_text")),
             "salary_min": _number(record.get("salary_min")),
             "salary_max": _number(record.get("salary_max")),
-            "salary_currency": _text(record.get("salary_currency"), maximum=3),
-            "salary_period": _text(record.get("salary_period"), maximum=32),
+            **compensation_references(record),
             "posted_at": _source_datetime(
                 record.get("posted_at"), field="posted_at"
             ),
@@ -934,10 +930,6 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
             else [],
             "eligibility": _text(record.get("eligibility")),
             "source_language": _text(record.get("source_language"), maximum=32),
-            "organization_ai_relationship": _text(
-                record.get("organization_ai_relationship")
-            ),
-            "role_ai_relationship": _text(record.get("role_ai_relationship")),
             "content_hash": _hash(record),
             "extraction_version": version,
             "extraction_confidence": _confidence(record.get("confidence")),
@@ -975,7 +967,7 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
                     value
                 ):
                     setattr(listing, field, value)
-                    updates.append(field)
+                    updates.append(field[:-3] if field.endswith("_reference_id") else field)
             if listing.status == "unknown" and status != "unknown":
                 listing.status = status
                 updates.append("status")
@@ -1036,6 +1028,7 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
                 "extraction_identity": version,
             },
         )
+        write_job_classifications(listing, record, evidence=_row)
         evidence += int(evidence_created)
     return written, evidence, candidates
 

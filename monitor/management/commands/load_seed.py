@@ -286,7 +286,7 @@ class Command(BaseCommand):
                     else:
                         company, _ = Company.objects.update_or_create(
                             nickname=company_nickname,
-                            defaults={"hq_country": comp_hq},
+                            defaults={"hq_country_reference_id": comp_hq},
                         )
                         set_company_label(company, "und", comp_display)
                     stats["companies"] += 1

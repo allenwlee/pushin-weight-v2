@@ -30,7 +30,7 @@ from x_monitor.attribution import detect_brand_mentions
 from x_monitor.config import load_config
 from x_monitor.specs_from_policy import normalize_policy_token
 
-pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
+pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True), pytest.mark.usefixtures("company_country_catalogue")]
 
 
 HEADER = (

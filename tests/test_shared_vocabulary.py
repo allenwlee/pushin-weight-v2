@@ -47,7 +47,7 @@ def test_repeated_seeding_is_idempotent_and_does_not_rewrite_references():
 def test_locale_language_parent_is_enforced_for_bulk_and_sql_writes():
     from core.models import Language, Locale
 
-    Language.objects.bulk_create([Language(code="en"), Language(code="ja")])
+    Language.objects.bulk_create([Language(code="en"), Language(code="ja")], ignore_conflicts=True)
     with pytest.raises(IntegrityError), transaction.atomic():
         Locale.objects.bulk_create([Locale(code="en-US", language_id="ja")])
     with (
@@ -64,8 +64,8 @@ def test_locale_language_parent_is_enforced_for_bulk_and_sql_writes():
 def test_language_deletion_is_protected_and_codes_are_unique():
     from core.models import Language, Locale
 
-    language = Language.objects.create(code="ja")
-    Locale.objects.create(code="ja", language=language)
+    language, _ = Language.objects.get_or_create(code="ja")
+    Locale.objects.get_or_create(code="ja", defaults={"language": language})
     with pytest.raises(ProtectedError):
         language.delete()
     with pytest.raises(IntegrityError), transaction.atomic():
@@ -91,6 +91,7 @@ def test_seed_rejects_tampered_input_before_any_catalogue_write(tmp_path, monkey
     import core.shared_vocabulary as vocabulary
     from core.models import Language, TimeZone
 
+    before = {model: set(model.objects.values_list("pk", flat=True)) for model in (Language, TimeZone)}
     for name in [
         "shared_vocabulary_manifest.json",
         *[entry[1] for entry in vocabulary.CATALOGUES.values()],
@@ -100,8 +101,7 @@ def test_seed_rejects_tampered_input_before_any_catalogue_write(tmp_path, monkey
     (tmp_path / "shared_time_zones.csv").write_text("code\nUTC\n")
     with pytest.raises(CommandError, match="Seed hash mismatch"):
         call_command("seed_shared_vocabulary", verbosity=0)
-    assert not Language.objects.exists()
-    assert not TimeZone.objects.exists()
+    assert before == {model: set(model.objects.values_list("pk", flat=True)) for model in before}
 
 
 def test_resolution_context_must_be_explicit_and_supported():
@@ -114,20 +114,17 @@ def test_resolution_context_must_be_explicit_and_supported():
 def test_case_alias_collision_aborts_seed_atomically():
     from core.models import Language, Locale, TimeZone
 
-    Language.objects.create(code="zh")
-    Locale.objects.create(code="zh-hans", language_id="zh")
+    Language.objects.get_or_create(code="en")
+    Locale.objects.create(code="en-us", language_id="en")
+    before = {model: set(model.objects.values_list("pk", flat=True)) for model in (Language, Locale, TimeZone)}
     with pytest.raises(CommandError, match="Canonical seed identity conflict"):
         call_command("seed_shared_vocabulary", verbosity=0)
-    assert not TimeZone.objects.exists()
-    assert list(Language.objects.values_list("code", flat=True)) == ["zh"]
-    assert list(Locale.objects.values_list("code", flat=True)) == ["zh-hans"]
+    assert before == {model: set(model.objects.values_list("pk", flat=True)) for model in before}
 
 
 def test_dry_run_does_not_write():
     from core.models import Language, Locale, MeasurementUnit, TimeZone
 
+    before = {model: set(model.objects.values_list("pk", flat=True)) for model in (Language, Locale, MeasurementUnit, TimeZone)}
     call_command("seed_shared_vocabulary", dry_run=True, verbosity=0)
-    assert not any(
-        model.objects.exists()
-        for model in [Language, Locale, MeasurementUnit, TimeZone]
-    )
+    assert before == {model: set(model.objects.values_list("pk", flat=True)) for model in before}

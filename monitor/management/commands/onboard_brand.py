@@ -627,7 +627,7 @@ class Command(BaseCommand):
                         nickname=row.company_nickname
                     )
                     company_defaults = {
-                        "hq_country": row.company_hq_country or None,
+                        "hq_country_reference_id": row.company_hq_country or None,
                     }
                     if company_created:
                         _update(company, company_defaults)

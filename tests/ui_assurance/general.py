@@ -16,6 +16,8 @@ def product_identity():
         ROOT / "core/models.py",
         ROOT / "core/classification_contract.py",
         ROOT / "core/intelligence_readers.py",
+        ROOT / "core/job_vocabulary.py",
+        ROOT / "core/job_vocabulary_v1.py",
         ROOT / "monitor/post_artifacts.py",
         ROOT / "monitor/views.py",
         ROOT / "monitor/templates/monitor/home.html",

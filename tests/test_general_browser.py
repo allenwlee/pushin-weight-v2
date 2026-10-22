@@ -80,6 +80,46 @@ class GeneralBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_job_cards_keep_source_and_classifications_after_column_cutover(self):
+        from core.job_vocabulary import write_job_classifications
+        from core.models import Post
+        from tests.test_general_jobs_people import job
+
+        post = Post.objects.get(pk="6102")
+        listing = job(post, "Preserved research position")
+        source = listing.evidence.get()
+        write_job_classifications(
+            listing, {"employment_type": ["Full-time", "Contract"], "workplace_type": "Remote"},
+            evidence=source,
+        )
+        with sync_playwright() as pw:
+            browser = self.browser(pw)
+            try:
+                page = browser.new_page()
+                errors = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                for width in (1440, 390):
+                    page.set_viewport_size({"width": width, "height": 900})
+                    for locale in ("en", "zh_hans", "ja"):
+                        response = page.goto(f"{self.live_server_url}/general/?lang={locale}")
+                        self.assertEqual(response.status, 200)
+                        card = page.locator('#jobs [data-post-id="6102"]')
+                        expect(card).to_be_visible()
+                        self.assertGreater(card.bounding_box()["width"], 100)
+                        payload = page.request.get(
+                            f"{self.live_server_url}/general/feed/?section=jobs&lang={locale}"
+                        )
+                        self.assertEqual(payload.status, 200)
+                        item = next(item for item in payload.json()["items"] if item["id"] == post.pk)
+                        fact = next(fact for fact in item["facts"] if fact["id"] == listing.pk)
+                        self.assertEqual(fact["title"], "Preserved research position")
+                        self.assertEqual(fact["employment"], "Full-time · Contract")
+                        self.assertEqual(fact["workplace"], "Remote")
+                        self.assertEqual(fact["url"], "https://example.org/apply")
+                self.assertEqual(errors, [])
+            finally:
+                browser.close()
+
     def test_closed_weights_notice_preserves_the_independent_open_selection(self):
         with sync_playwright() as pw:
             browser = self.browser(pw)

@@ -8,6 +8,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from django.db import transaction
 from django.utils import timezone
 
+from core.job_vocabulary import write_job_classifications
 from core.models import Brand, JobListing, JobListingEvidence, JobSourceSyncRun
 
 from .registry import get_source
@@ -87,10 +88,6 @@ def _source_owned_fields(job: SourceJob, *, source, brand, observed_at):
         "description_text": job.description_text,
         "department": job.department,
         "team": job.team,
-        "job_function": job.job_function,
-        "seniority": job.seniority,
-        "employment_type": job.employment_type,
-        "workplace_type": job.workplace_type,
         "locations_raw": " · ".join(job.locations) or None,
         "locations": list(job.locations),
         "posted_at": job.posted_at,
@@ -224,6 +221,14 @@ def _persist_snapshot(
                     "raw_evidence",
                 ]
             )
+        write_job_classifications(
+            listing,
+            {name: getattr(job, name) for name in (
+                "job_function", "seniority", "employment_type", "workplace_type",
+            )},
+            evidence=evidence,
+            replace=True,
+        )
 
     if not no_close:
         missing = JobListing.objects.filter(source_key=source.key).exclude(

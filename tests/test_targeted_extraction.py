@@ -385,11 +385,16 @@ def test_job_extraction_keeps_source_timestamps_and_requirements():
                         "title": "Research Engineer",
                         "application_url": application_url,
                         "application_route_kind": "direct_url",
+                        "linked_urls": [application_url],
                         "posted_at": "2026-09-10T01:00:00Z",
                         "updated_source_at": "2026-09-10T11:00:00+09:00",
                         "expires_at": "2026-10-01T00:00:00Z",
                         "education_requirements": "Bachelor's degree or equivalent",
                         "experience_requirements": "Three years of Python",
+                        "employment_type": ["Full time", "Contract"],
+                        "workplace_type": "Some travel, location to be agreed",
+                        "salary_currency": "source currency not established",
+                        "salary_period": "yearly",
                     }
                 ]
             }
@@ -404,6 +409,22 @@ def test_job_extraction_keeps_source_timestamps_and_requirements():
     assert listing.expires_at.isoformat() == "2026-10-01T00:00:00+00:00"
     assert listing.education_requirements == "Bachelor's degree or equivalent"
     assert listing.experience_requirements == "Three years of Python"
+    source = listing.evidence.get()
+    assert source.source_post_id == post.pk
+    assert source.linked_urls == [application_url]
+    assert listing.application_url == application_url
+    assert source.raw_evidence["record"] == listing.raw_payload
+    assert listing.raw_payload["salary_currency"] == "source currency not established"
+    assert listing.salary_currency_reference_id is None
+    assert listing.salary_period_reference.code == "year"
+    assert set(listing.employment_assignments.values_list("category__code", flat=True)) == {
+        "full_time", "contract",
+    }
+    assert set(listing.employment_assignments.values_list("evidence_id", flat=True)) == {source.pk}
+    workplace = listing.workplace_assignments.get()
+    assert workplace.category_id is None
+    assert workplace.reported_value == "Some travel, location to be agreed"
+    assert workplace.evidence_id == source.pk
 
 
 def test_job_fallback_identity_normalizes_case_whitespace_and_location_order():

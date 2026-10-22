@@ -7,7 +7,7 @@ from django.test import override_settings
 
 from core.models import Account, BrandAccount
 
-pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
+pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db, pytest.mark.usefixtures("company_country_catalogue")]
 
 
 @override_settings(KNOWN_MODELS=frozenset({"minimax"}))

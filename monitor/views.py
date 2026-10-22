@@ -5050,6 +5050,8 @@ def _direct_jobs_queryset(
     created_at_start: datetime | None = None,
     created_at_end: datetime | None = None,
 ) -> QuerySet:
+    from core.job_vocabulary import classification_prefetches
+
     registered_sources = Q(pk__isnull=True)
     for source in JOB_SOURCES.values():
         registered_sources |= Q(source_key=source.key, brand_id=source.brand_nickname)
@@ -5058,6 +5060,7 @@ def _direct_jobs_queryset(
             source_key__isnull=False, status="open", brand__isnull=False
         )
         .filter(registered_sources)
+        .prefetch_related(*classification_prefetches(dimensions=("job_function", "employment_type")))
         .annotate(
             _feed_created_at=Coalesce("posted_at", "updated_source_at", "first_seen_at")
         )
@@ -5077,6 +5080,10 @@ def _serialize_direct_job(
     *,
     now: datetime | None = None,
 ) -> dict[str, Any]:
+    from core.job_vocabulary import classification_text
+
+    job_function = classification_text(job, "job_function")
+    employment_type = classification_text(job, "employment_type")
     created_at = job._feed_created_at
     created_at_iso = created_at.isoformat() if created_at else None
     brand = _brand_projection_fields(job.brand, locale)
@@ -5123,8 +5130,8 @@ def _serialize_direct_job(
         for value in (
             location_text,
             job.department,
-            job.job_function,
-            job.employment_type,
+            job_function,
+            employment_type,
         )
         if value
     )
@@ -5184,8 +5191,8 @@ def _serialize_direct_job(
         "location_text": location_text,
         "job_meta_text": job_meta_text,
         "department": job.department,
-        "job_function": job.job_function,
-        "employment_type": job.employment_type,
+        "job_function": job_function,
+        "employment_type": employment_type,
         "job_listing_label": label,
         **display_fields,
     }

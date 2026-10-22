@@ -152,6 +152,71 @@ class MeasurementUnit(models.Model):
         ]
 
 
+class Currency(models.Model):
+    """Registered ISO 4217 identity, including historical currency codes."""
+
+    code = models.CharField(max_length=3, primary_key=True)
+
+    class Meta:
+        db_table = "currencies"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(
+                condition=models.Q(code__regex=r"^[A-Z]{3}$"), name="ck_currency_code"
+            ),
+        ]
+
+
+class JobVocabularyCode(models.Model):
+    """A canonical business classification owned by its typed catalogue."""
+
+    id = models.BigAutoField(primary_key=True)
+    code = models.CharField(max_length=128, unique=True)
+
+    class Meta:
+        abstract = True
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(
+                condition=models.Q(code__regex=r"^[a-z][a-z0-9_]*$"),
+                name="ck_%(class)s_code",
+            ),
+        ]
+
+
+class SalaryPeriod(JobVocabularyCode):
+    class Meta(JobVocabularyCode.Meta):
+        db_table = "salary_periods"
+
+
+class JobFunction(JobVocabularyCode):
+    class Meta(JobVocabularyCode.Meta):
+        db_table = "job_functions"
+
+
+class SeniorityLevel(JobVocabularyCode):
+    class Meta(JobVocabularyCode.Meta):
+        db_table = "seniority_levels"
+
+
+class EmploymentType(JobVocabularyCode):
+    class Meta(JobVocabularyCode.Meta):
+        db_table = "employment_types"
+
+
+class WorkplaceType(JobVocabularyCode):
+    class Meta(JobVocabularyCode.Meta):
+        db_table = "workplace_types"
+
+
+class OrganizationAIRelationshipType(JobVocabularyCode):
+    class Meta(JobVocabularyCode.Meta):
+        db_table = "organization_ai_relationship_types"
+
+
+class RoleAIRelationshipType(JobVocabularyCode):
+    class Meta(JobVocabularyCode.Meta):
+        db_table = "role_ai_relationship_types"
+
+
 class ServiceProvider(models.Model):
     """Actual request-service identity, distinct from an original data source."""
 
@@ -783,7 +848,10 @@ class Company(models.Model):
         primary_key=True,
         db_collation="case_insensitive",
     )
-    hq_country = models.TextField(blank=True, null=True)
+    hq_country_reference = models.ForeignKey(
+        "Country", on_delete=models.PROTECT, db_column="hq_country_id",
+        related_name="headquartered_companies", blank=True, null=True,
+    )
     accent_color = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -6402,10 +6470,6 @@ class JobListing(models.Model):
     description_text = models.TextField(blank=True, null=True)
     department = models.TextField(blank=True, null=True)
     team = models.TextField(blank=True, null=True)
-    job_function = models.TextField(blank=True, null=True)
-    seniority = models.TextField(blank=True, null=True)
-    employment_type = models.TextField(blank=True, null=True)
-    workplace_type = models.TextField(blank=True, null=True)
     locations_raw = models.TextField(blank=True, null=True)
     locations = models.JSONField(default=list)
     remote_applicant_restrictions = models.TextField(blank=True, null=True)
@@ -6416,8 +6480,14 @@ class JobListing(models.Model):
     salary_max = models.DecimalField(
         max_digits=18, decimal_places=2, blank=True, null=True
     )
-    salary_currency = models.CharField(max_length=3, blank=True, null=True)
-    salary_period = models.CharField(max_length=32, blank=True, null=True)
+    salary_currency_reference = models.ForeignKey(
+        Currency, on_delete=models.PROTECT, db_column="salary_currency_id",
+        related_name="job_listings", blank=True, null=True,
+    )
+    salary_period_reference = models.ForeignKey(
+        SalaryPeriod, on_delete=models.PROTECT, db_column="salary_period_id",
+        related_name="job_listings", blank=True, null=True,
+    )
     posted_at = models.DateTimeField(blank=True, null=True)
     updated_source_at = models.DateTimeField(blank=True, null=True)
     first_seen_at = models.DateTimeField()
@@ -6441,8 +6511,6 @@ class JobListing(models.Model):
     benefits = models.JSONField(default=list)
     eligibility = models.TextField(blank=True, null=True)
     source_language = models.CharField(max_length=32, blank=True, null=True)
-    organization_ai_relationship = models.TextField(blank=True, null=True)
-    role_ai_relationship = models.TextField(blank=True, null=True)
     listing_identity = models.CharField(max_length=64, unique=True)
     content_hash = models.CharField(max_length=64, blank=True, null=True)
     extraction_version = models.TextField(blank=True, null=True)
@@ -6715,7 +6783,105 @@ class JobListingEvidence(models.Model):
                 fields=["listing", "evidence_hash"],
                 name="uq_job_evidence_hash",
             ),
+            # Target for the assignment tables' database-level same-job FKs.
+            models.UniqueConstraint(
+                fields=["id", "listing"], name="uq_job_evidence_owner",
+            ),
         ]
+
+
+class JobAssignmentResolution(models.TextChoices):
+    RESOLVED = "resolved", "Resolved"
+    UNRESOLVED = "unresolved", "Unresolved"
+
+
+class JobClassificationAssignment(models.Model):
+    """A current, source-supported assignment in one typed job dimension."""
+
+    id = models.BigAutoField(primary_key=True)
+    evidence = models.ForeignKey(
+        JobListingEvidence, on_delete=models.RESTRICT, null=True, blank=True,
+        related_name="+", db_constraint=False,
+    )
+    reported_value = models.TextField(null=True, blank=True)
+    source_value_sha256 = models.CharField(max_length=64)
+    normalizer_version = models.ForeignKey(
+        DefinitionVersion, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="+",
+    )
+    resolution_state = models.CharField(
+        max_length=16, choices=JobAssignmentResolution.choices,
+    )
+
+    class Meta:
+        abstract = True
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                fields=["job_listing", "evidence", "source_value_sha256", "normalizer_version"],
+                name="uq_%(class)s_source", nulls_distinct=False,
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(resolution_state="resolved", category__isnull=False)
+                    | (models.Q(resolution_state="unresolved", category__isnull=True,
+                                reported_value__isnull=False)
+                       & ~models.Q(reported_value__regex=r"^[[:space:]]*$"))
+                ),
+                name="ck_%(class)s_resolution",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(source_value_sha256__regex=r"^[0-9a-f]{64}$"),
+                name="ck_%(class)s_hash",
+            ),
+        ]
+
+
+class JobFunctionAssignment(JobClassificationAssignment):
+    job_listing = models.ForeignKey(JobListing, on_delete=models.CASCADE, related_name="function_assignments")
+    category = models.ForeignKey(JobFunction, on_delete=models.PROTECT, null=True, blank=True)
+
+    class Meta(JobClassificationAssignment.Meta):
+        db_table = "job_function_assignments"
+
+
+class JobSeniorityAssignment(JobClassificationAssignment):
+    job_listing = models.ForeignKey(JobListing, on_delete=models.CASCADE, related_name="seniority_assignments")
+    category = models.ForeignKey(SeniorityLevel, on_delete=models.PROTECT, null=True, blank=True)
+
+    class Meta(JobClassificationAssignment.Meta):
+        db_table = "job_seniority_assignments"
+
+
+class JobEmploymentTypeAssignment(JobClassificationAssignment):
+    job_listing = models.ForeignKey(JobListing, on_delete=models.CASCADE, related_name="employment_assignments")
+    category = models.ForeignKey(EmploymentType, on_delete=models.PROTECT, null=True, blank=True)
+
+    class Meta(JobClassificationAssignment.Meta):
+        db_table = "job_employment_type_assignments"
+
+
+class JobWorkplaceTypeAssignment(JobClassificationAssignment):
+    job_listing = models.ForeignKey(JobListing, on_delete=models.CASCADE, related_name="workplace_assignments")
+    category = models.ForeignKey(WorkplaceType, on_delete=models.PROTECT, null=True, blank=True)
+
+    class Meta(JobClassificationAssignment.Meta):
+        db_table = "job_workplace_type_assignments"
+
+
+class JobOrganizationAIRelationshipAssignment(JobClassificationAssignment):
+    job_listing = models.ForeignKey(JobListing, on_delete=models.CASCADE, related_name="organization_ai_assignments")
+    category = models.ForeignKey(OrganizationAIRelationshipType, on_delete=models.PROTECT, null=True, blank=True)
+
+    class Meta(JobClassificationAssignment.Meta):
+        db_table = "job_organization_ai_relationship_assignments"
+
+
+class JobRoleAIRelationshipAssignment(JobClassificationAssignment):
+    job_listing = models.ForeignKey(JobListing, on_delete=models.CASCADE, related_name="role_ai_assignments")
+    category = models.ForeignKey(RoleAIRelationshipType, on_delete=models.PROTECT, null=True, blank=True)
+
+    class Meta(JobClassificationAssignment.Meta):
+        db_table = "job_role_ai_relationship_assignments"
 
 
 class DiscoveryRunBase(models.Model):

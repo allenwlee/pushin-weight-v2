@@ -7,6 +7,11 @@ from typing import Any
 
 from django.db.models import Prefetch
 
+from core.job_vocabulary import (
+    classification_prefetches,
+    classification_text,
+    reported_compensation,
+)
 from core.models import (
     Event,
     EventEvidence,
@@ -387,8 +392,9 @@ def person_intelligence(person_id) -> dict[str, Any]:
 
 def job_listing_document(listing_id: int) -> dict[str, Any]:
     listing = (
-        JobListing.objects.select_related("brand", "brand_discovery_candidate")
+        JobListing.objects.select_related("brand", "brand_discovery_candidate", "salary_period_reference")
         .prefetch_related(
+            *classification_prefetches(),
             Prefetch(
                 "evidence",
                 queryset=JobListingEvidence.objects.order_by("observed_at", "id"),
@@ -421,9 +427,9 @@ def job_listing_document(listing_id: int) -> dict[str, Any]:
         "organization": {
             "department": listing.department,
             "team": listing.team,
-            "job_function": listing.job_function,
-            "seniority": listing.seniority,
-            "employment_type": listing.employment_type,
+            "job_function": classification_text(listing, "job_function"),
+            "seniority": classification_text(listing, "seniority"),
+            "employment_type": classification_text(listing, "employment_type"),
         },
         "source": {
             "name": listing.source_name,
@@ -439,7 +445,7 @@ def job_listing_document(listing_id: int) -> dict[str, Any]:
         "location": {
             "raw": listing.locations_raw,
             "values": listing.locations,
-            "workplace_type": listing.workplace_type,
+            "workplace_type": classification_text(listing, "workplace_type"),
             "remote_applicant_restrictions": listing.remote_applicant_restrictions,
         },
         "compensation": {
@@ -450,8 +456,10 @@ def job_listing_document(listing_id: int) -> dict[str, Any]:
             "maximum": str(listing.salary_max)
             if listing.salary_max is not None
             else None,
-            "currency": listing.salary_currency,
-            "period": listing.salary_period,
+            "currency": listing.salary_currency_reference_id or reported_compensation(listing, "salary_currency"),
+            "period": reported_compensation(listing, "salary_period") or (
+                listing.salary_period_reference.code if listing.salary_period_reference_id else None
+            ),
         },
         "status": listing.status,
         "posted_at": _iso(listing.posted_at),
@@ -470,8 +478,8 @@ def job_listing_document(listing_id: int) -> dict[str, Any]:
         "benefits": listing.benefits,
         "eligibility": listing.eligibility,
         "source_language": listing.source_language,
-        "organization_ai_relationship": listing.organization_ai_relationship,
-        "role_ai_relationship": listing.role_ai_relationship,
+        "organization_ai_relationship": classification_text(listing, "organization_ai_relationship"),
+        "role_ai_relationship": classification_text(listing, "role_ai_relationship"),
         "extraction": {
             "version": listing.extraction_version,
             "confidence": listing.extraction_confidence,

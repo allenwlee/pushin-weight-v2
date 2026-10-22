@@ -17,7 +17,20 @@ from django.conf import settings
 from django.db import transaction
 from django.db.models.functions import Lower
 
-from core.models import Language, Locale, MeasurementUnit, TimeZone
+from core.models import (
+    Currency,
+    EmploymentType,
+    JobFunction,
+    Language,
+    Locale,
+    MeasurementUnit,
+    OrganizationAIRelationshipType,
+    RoleAIRelationshipType,
+    SalaryPeriod,
+    SeniorityLevel,
+    TimeZone,
+    WorkplaceType,
+)
 
 SEED_DIRECTORY = Path(settings.BASE_DIR) / "data"
 CATALOGUES = {
@@ -25,12 +38,25 @@ CATALOGUES = {
     "languages": (Language, "shared_languages.csv", ("code",)),
     "locales": (Locale, "shared_locales.csv", ("code", "language_code")),
     "measurement_units": (MeasurementUnit, "shared_measurement_units.csv", ("code",)),
+    "currencies": (Currency, "shared_currencies.csv", ("code",)),
+    "salary_periods": (SalaryPeriod, "shared_salary_periods.csv", ("code",)),
+    "job_functions": (JobFunction, "shared_job_functions.csv", ("code",)),
+    "seniority_levels": (SeniorityLevel, "shared_seniority_levels.csv", ("code",)),
+    "employment_types": (EmploymentType, "shared_employment_types.csv", ("code",)),
+    "workplace_types": (WorkplaceType, "shared_workplace_types.csv", ("code",)),
+    "organization_ai_relationship_types": (OrganizationAIRelationshipType, "shared_organization_ai_relationship_types.csv", ("code",)),
+    "role_ai_relationship_types": (RoleAIRelationshipType, "shared_role_ai_relationship_types.csv", ("code",)),
 }
 CODE_GRAMMARS = {
     "time_zones": r"[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)*",
     "languages": r"[a-z]{2,8}",
     "locales": r"[a-z]{2,8}(-[A-Za-z0-9]{1,8})*",
     "measurement_units": r"[a-z][a-z0-9_]*",
+    "currencies": r"[A-Z]{3}",
+    **{name: r"[a-z][a-z0-9_]*" for name in (
+        "salary_periods", "job_functions", "seniority_levels", "employment_types",
+        "workplace_types", "organization_ai_relationship_types", "role_ai_relationship_types",
+    )},
 }
 
 
@@ -117,8 +143,8 @@ def seed_shared_vocabulary(
             expected = {row["code"] for row in rows[name]}
             actual = set(
                 model.objects.using(database)
-                .filter(pk__in=expected)
-                .values_list("pk", flat=True)
+                .filter(code__in=expected)
+                .values_list("code", flat=True)
             )
             if actual != expected:
                 raise ValueError(f"Canonical seed identity conflict: {name}")

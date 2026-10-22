@@ -371,7 +371,7 @@ def port_companies(
         nickname = row["nickname"]
 
         defaults = {
-            "hq_country": row.get("hq_country"),
+            "hq_country_reference_id": row.get("hq_country") or None,
             "accent_color": row.get("accent_color"),
             "description": row.get("description"),
         }

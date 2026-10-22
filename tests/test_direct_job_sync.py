@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import timedelta
 
 import pytest
@@ -64,6 +65,46 @@ def test_direct_sync_is_idempotent_updates_and_reopens():
     assert reopened.reopened_count == 1
     assert listing.status == "open"
     assert listing.closed_at is None
+
+
+def test_direct_sync_keeps_listing_and_source_when_classifications_change():
+    Brand.objects.create(nickname="qwen", display_name="Qwen")
+    initial = _snapshot("one")
+    first_job = replace(
+        initial.jobs[0],
+        employment_type="Full-time/Contract",
+        workplace_type="unusual source wording",
+        raw_payload={"employment": "Full-time/Contract", "source_id": "one"},
+    )
+    sync_snapshot(replace(initial, jobs=(first_job,)))
+    listing = JobListing.objects.get()
+    identity, first_seen, evidence_id = (
+        listing.listing_identity, listing.first_seen_at, listing.evidence.get().pk
+    )
+    assert set(listing.employment_assignments.values_list("category__code", flat=True)) == {
+        "full_time", "contract"
+    }
+    unknown = listing.workplace_assignments.get()
+    assert unknown.category_id is None
+    assert unknown.reported_value == "unusual source wording"
+    assert unknown.resolution_state == "unresolved"
+    assert unknown.evidence_id == evidence_id
+    assignment_ids = set(listing.employment_assignments.values_list("pk", flat=True))
+    sync_snapshot(replace(initial, jobs=(first_job,)))
+    assert set(listing.employment_assignments.values_list("pk", flat=True)) == assignment_ids
+
+    second_job = replace(first_job, employment_type="part-time")
+    sync_snapshot(replace(initial, jobs=(second_job,)))
+    listing.refresh_from_db()
+    assert JobListing.objects.count() == 1
+    assert listing.listing_identity == identity
+    assert listing.first_seen_at == first_seen
+    assert listing.evidence.get().pk == evidence_id
+    assert listing.evidence.get().raw_evidence == first_job.raw_payload
+    assert listing.workplace_assignments.get().pk == unknown.pk
+    assert list(listing.employment_assignments.values_list("category__code", flat=True)) == [
+        "part_time"
+    ]
 
 
 def test_incomplete_snapshot_never_advances_missing_counter():
