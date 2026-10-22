@@ -42,6 +42,7 @@ from core.models import (
     ProfileMovementCandidate,
     RareTypeCategoryAssignment,
     RareTypeSearchHit,
+    ReleaseMaturity,
     SearchQuery,
     TargetedExtractionAttempt,
     TargetedExtractionState,
@@ -1626,7 +1627,9 @@ def _persist_model_releases(
                 "brand_discovery_candidate": candidate,
                 "observed_model_name": model_name,
                 "version": version_value,
-                "release_channel": channel,
+                "release_maturity_reference": ReleaseMaturity.objects.get(
+                    code=channel
+                ),
                 "release_value": release_value,
                 "release_precision": release_precision,
                 "first_seen_at": post.fetched_at,

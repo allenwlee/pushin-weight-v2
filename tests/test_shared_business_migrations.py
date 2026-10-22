@@ -9,6 +9,7 @@ BASE = ("core", "0135_rg4_business_catalogues_expand")
 NAME_CUTOVER = ("core", "0136_rg4_person_name_kind_cutover")
 BUSINESS_CUTOVER = ("core", "0137_rg4_affiliation_opportunity_references")
 EVENT_KIND_CUTOVER = ("core", "0138_rg4_event_kind_reference")
+RELEASE_CUTOVER = ("core", "0139_rg4_release_meaning_references")
 
 
 def _temporarily_lift_old_kind_check(table, constraint):
@@ -279,3 +280,135 @@ def test_dossier_kind_cutover_preserves_atomic_identity_and_both_writer_generati
             .objects.get(code="personnel_change").pk
         )
     assert dossiers.objects.get(pk=original.pk).event_kind_reference.code == "model_release"
+
+
+@pytest.mark.parametrize("migration_rehearsal_schema", [EVENT_KIND_CUTOVER], indirect=True)
+def test_release_meanings_map_populated_rows_and_keep_both_writer_generations(
+    migration_rehearsal_schema,
+):
+    from django.utils import timezone
+
+    old = MigrationExecutor(connection).loader.project_state([EVENT_KIND_CUTOVER]).apps
+    brand = old.get_model("core", "Brand").objects.create(nickname="rg4-release-test")
+    releases = old.get_model("core", "ModelRelease")
+    details = old.get_model("core", "ModelReleaseDetail")
+    dossiers = old.get_model("core", "EventDossier")
+    reviews = old.get_model("core", "EventDossierReview")
+    now = timezone.now()
+
+    def make_release(*, channel, identity):
+        return releases.objects.create(
+            brand=brand, observed_model_name="Source model", version="v1",
+            release_channel=channel, release_identity=identity,
+            first_seen_at=now, last_seen_at=now, extraction_version="source-v1",
+        )
+
+    def make_detail(*, dossier_identity, input_hash, detail_model, values):
+        # The dossier integrity trigger validates the selected review, source
+        # claim and typed detail together when their transaction commits.
+        with transaction.atomic():
+            dossier = dossiers.objects.create(
+                event_kind_reference_id=old.get_model("core", "EventKind")
+                .objects.get(code="model_release").pk,
+                identity_key=dossier_identity,
+            )
+            post = old.get_model("core", "Post").objects.create(
+                tweet_id="source-" + input_hash, text="Release claim"
+            )
+            source = old.get_model("core", "EventDossierSource").objects.create(
+                event_dossier=dossier, post=post, linked_at=now
+            )
+            claim = old.get_model("core", "EventDossierClaim").objects.create(
+                event_dossier_source=source, claim_kind="announcement",
+                scope_key="source", claim_hash=input_hash,
+                extraction_version="source-v1", recorded_at=now,
+                assertion_text="Announced", source_excerpt="Release claim",
+                source_hash="f" * 64,
+            )
+            review = reviews.objects.create(
+                event_dossier=dossier, revision=1, reviewed_at=now,
+                evidence_cutoff_at=now, method_version="source-v1", actor="reviewer",
+                reason="Source review", input_hash=input_hash,
+                display_title="Source title", review_state="provisional",
+            )
+            old.get_model("core", "EventDossierReviewClaim").objects.create(
+                review=review, claim=claim, disposition="accepted", reason="Direct source"
+            )
+            detail = detail_model.objects.create(
+                review_id=review.pk, observed_name="Source model",
+                native_identifier="source/model", **values
+            )
+            dossier.current_review_id = review.pk
+            dossier.save(update_fields=["current_review"])
+        return detail
+
+    release = make_release(channel="preview", identity="a" * 64)
+    detail = make_detail(
+        dossier_identity="b" * 64, input_hash="c" * 64,
+        detail_model=details,
+        values={
+            "release_channel": "beta", "availability_state": "available",
+            "disclosure_state": "announced",
+        },
+    )
+    before_release = releases.objects.get(pk=release.pk)
+    before_detail = details.objects.get(pk=detail.pk)
+    unknown = make_release(channel="unmapped_kind", identity="d" * 64)
+    with pytest.raises(RuntimeError, match="Unmapped model_releases.release_channel"):
+        MigrationExecutor(connection).migrate([RELEASE_CUTOVER])
+    assert releases.objects.get(pk=unknown.pk).release_channel == "unmapped_kind"
+    assert RELEASE_CUTOVER not in MigrationExecutor(connection).loader.applied_migrations
+    unknown.delete()
+
+    MigrationExecutor(connection).migrate([RELEASE_CUTOVER])
+    current = MigrationExecutor(connection).loader.project_state([RELEASE_CUTOVER]).apps
+    mapped_release = current.get_model("core", "ModelRelease").objects.get(pk=release.pk)
+    mapped_detail = current.get_model("core", "ModelReleaseDetail").objects.get(pk=detail.pk)
+    assert mapped_release.release_maturity_reference.code == "preview"
+    assert mapped_detail.release_maturity_reference.code == "beta"
+    assert mapped_detail.release_availability_reference.code == "available"
+    assert mapped_detail.release_disclosure_reference.code == "announced"
+    assert releases.objects.get(pk=release.pk).release_identity == before_release.release_identity
+    assert details.objects.get(pk=detail.pk).native_identifier == before_detail.native_identifier
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT tgenabled FROM pg_trigger WHERE tgrelid="
+            "'model_release_details'::regclass AND tgname='ed_frozen'"
+        )
+        assert cursor.fetchone() == ("O",)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        details.objects.filter(pk=detail.pk).update(disclosure_state="unannounced")
+
+    legacy = make_release(channel="stable", identity="e" * 64)
+    assert current.get_model("core", "ModelRelease").objects.get(
+        pk=legacy.pk
+    ).release_maturity_reference.code == "stable"
+    new = current.get_model("core", "ModelRelease").objects.create(
+        brand_id=brand.pk, observed_model_name="New writer", version="v2",
+        release_maturity_reference_id=current.get_model("core", "ReleaseMaturity")
+        .objects.get(code="stable").pk,
+        release_identity="f" * 64, first_seen_at=now, last_seen_at=now,
+        extraction_version="source-v1",
+    )
+    assert releases.objects.get(pk=new.pk).release_channel == "stable"
+
+    new_detail = make_detail(
+        dossier_identity="1" * 64, input_hash="2" * 64,
+        detail_model=current.get_model("core", "ModelReleaseDetail"),
+        values={
+            "release_maturity_reference_id": current.get_model(
+                "core", "ReleaseMaturity"
+            ).objects.get(code="stable").pk,
+            "release_availability_reference_id": current.get_model(
+                "core", "ReleaseAvailabilityState"
+            ).objects.get(code="public_test").pk,
+            "release_disclosure_reference_id": current.get_model(
+                "core", "ReleaseDisclosureState"
+            ).objects.get(code="unannounced").pk,
+        },
+    )
+    old_detail = details.objects.get(pk=new_detail.pk)
+    assert (old_detail.release_channel, old_detail.availability_state,
+            old_detail.disclosure_state) == (
+        "stable", "public_test", "unannounced"
+    )

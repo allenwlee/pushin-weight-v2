@@ -18,6 +18,7 @@ from core.models import (
     Product,
     ProductVerificationProposal,
     RareTypeCategoryAssignment,
+    ReleaseMaturity,
 )
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
@@ -53,7 +54,7 @@ def test_release_reader_counts_canonical_record_evidence_and_posts_separately():
         brand=brand,
         observed_model_name="M3",
         version="3.0",
-        release_channel="stable",
+        release_maturity_reference=ReleaseMaturity.objects.get(code="stable"),
         release_value="2026-09-24",
         release_precision="day",
         release_identity="release-reader-m3",

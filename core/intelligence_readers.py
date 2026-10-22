@@ -58,7 +58,7 @@ def model_release_document(release_id: int) -> dict[str, Any]:
         },
         "observed_model_name": release.observed_model_name,
         "version": release.version,
-        "channel": release.release_channel,
+        "channel": release.release_maturity_reference.code,
         "release_date": _effective_date(
             release.release_value, release.release_precision
         ),

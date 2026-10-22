@@ -76,6 +76,7 @@ def test_two_source_posts_share_release_and_keep_two_evidence_rows():
             eligible_rare_types={"model_releases"},
         )
         assert result.failed_roles == ()
+    assert ModelRelease.objects.get().release_maturity_reference.code == "preview"
     assert ModelRelease.objects.count() == 1
     assert ModelReleaseEvidence.objects.count() == 2
     assert RareTypeCategoryAssignment.objects.count() == 4

@@ -127,6 +127,12 @@ def test_shadow_history_unresolved_then_confirmed_and_exact_retry():
         ),
     }
     third = review(event, official, **values)
+    assert third.model_release.release_maturity_reference.code == "unknown"
+    assert third.model_release.release_availability_reference.code == "available"
+    assert third.model_release.release_disclosure_reference.code == "announced"
+    assert read_dossier(event.pk)["model_release"]["release_channel"] == "unknown"
+    assert read_dossier(event.pk)["model_release"]["availability_state"] == "available"
+    assert read_dossier(event.pk)["model_release"]["disclosure_state"] == "announced"
     assert review(event, official, **values).pk == third.pk
     assert (
         read_dossier(event.pk, review_id=first.pk)["review"]["review_state"]

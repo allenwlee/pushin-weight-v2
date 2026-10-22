@@ -7440,7 +7440,12 @@ class ModelRelease(models.Model):
     )
     observed_model_name = models.TextField()
     version = models.TextField(blank=True, default="")
-    release_channel = models.CharField(max_length=16, choices=CHANNELS, default="other")
+    release_maturity_reference = models.ForeignKey(
+        ReleaseMaturity,
+        db_column="release_maturity_id",
+        on_delete=models.PROTECT,
+        related_name="extracted_releases",
+    )
     release_value = models.CharField(max_length=64, blank=True, null=True)
     release_precision = models.CharField(
         max_length=16,
@@ -10108,9 +10113,24 @@ class ModelReleaseDetail(models.Model):
     native_identifier = models.TextField()
     version_label = models.TextField(null=True, blank=True)
     variant = models.TextField(null=True, blank=True)
-    release_channel = models.CharField(max_length=16, default="unknown")
-    availability_state = models.CharField(max_length=16, default="unknown")
-    disclosure_state = models.CharField(max_length=16, default="unknown")
+    release_maturity_reference = models.ForeignKey(
+        ReleaseMaturity,
+        db_column="release_maturity_id",
+        on_delete=models.PROTECT,
+        related_name="reviewed_releases",
+    )
+    release_availability_reference = models.ForeignKey(
+        ReleaseAvailabilityState,
+        db_column="availability_state_id",
+        on_delete=models.PROTECT,
+        related_name="reviewed_releases",
+    )
+    release_disclosure_reference = models.ForeignKey(
+        ReleaseDisclosureState,
+        db_column="disclosure_state_id",
+        on_delete=models.PROTECT,
+        related_name="reviewed_releases",
+    )
     release_issuer_company = models.ForeignKey(
         Company,
         null=True,
@@ -10125,30 +10145,6 @@ class ModelReleaseDetail(models.Model):
             models.CheckConstraint(
                 condition=~models.Q(observed_name="") & ~models.Q(native_identifier=""),
                 name="ck_ed_release_identity",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(
-                    release_channel__in=["stable", "preview", "beta", "unknown"]
-                ),
-                name="ck_ed_release_channel",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(
-                    availability_state__in=[
-                        "unknown",
-                        "announced",
-                        "public_test",
-                        "available",
-                        "withdrawn",
-                    ]
-                ),
-                name="ck_ed_release_availability",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(
-                    disclosure_state__in=["unknown", "unannounced", "announced"]
-                ),
-                name="ck_ed_release_disclosure",
             ),
         ]
 

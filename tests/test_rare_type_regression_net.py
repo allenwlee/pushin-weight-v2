@@ -26,6 +26,7 @@ from core.models import (
     RareTypeSearchDailyBudget,
     RareTypeSearchHit,
     RareTypeSearchRun,
+    ReleaseMaturity,
 )
 from monitor.cycle import CycleRunner, plan_calls_for_cycle
 from monitor.harvest_summary import (
@@ -511,7 +512,7 @@ def test_lane_telemetry_separates_records_evidence_tokens_and_latency(
         brand=brand,
         observed_model_name="Model T",
         version="1",
-        release_channel="stable",
+        release_maturity_reference=ReleaseMaturity.objects.get(code="stable"),
         release_value="2026-09-24",
         release_precision="day",
         release_identity="telemetry-model-t",
