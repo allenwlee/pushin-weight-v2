@@ -208,6 +208,7 @@ def temporal_facts(post_ids, section, *, as_of):
         records = (
             Opportunity.objects.filter(source_post_id__in=post_ids)
             .exclude(review_status="rejected")
+            .select_related("opportunity_type_reference")
             .order_by("id")
         )
     for row in records:
@@ -231,7 +232,7 @@ def temporal_facts(post_ids, section, *, as_of):
             "brand_id": row.brand_id,
             "title": row.title
             if is_event
-            else row.benefit_text or row.opportunity_type.replace("_", " "),
+            else row.benefit_text or row.opportunity_type_reference.code.replace("_", " "),
             "organization": row.organizer_name if is_event else row.sponsor_name,
             "start": start,
             "end": end,
@@ -342,6 +343,7 @@ def jobs_people_facts(post_ids, section, *, as_of, locale="en"):
             .select_related(
                 "affiliation__person__primary_name",
                 "affiliation__person__english_name",
+                "affiliation__affiliation_type_reference",
             )
             .prefetch_related(
                 Prefetch(
@@ -368,7 +370,7 @@ def jobs_people_facts(post_ids, section, *, as_of, locale="en"):
                 "name": name,
                 "title": row.title_raw or row.title_normalized or "",
                 "organization": row.observed_organization_name,
-                "relationship": row.affiliation_type,
+                "relationship": row.affiliation_type_reference.code,
                 "state": row.status,
                 "confirmed": confirmed or bool(previous and previous["confirmed"]),
                 "start": {

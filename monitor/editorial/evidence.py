@@ -176,7 +176,7 @@ def _collect_packet(cutoff, cfg):
             status="current",
             superseded_by__isnull=True,
         )
-        .select_related("person")
+        .select_related("person", "affiliation_type_reference")
         .prefetch_related(
             Prefetch(
                 "person__name_selections",
@@ -191,9 +191,9 @@ def _collect_packet(cutoff, cfg):
             "name": selected_name_for(r.person, "und") or "Unreviewed person",
             "brand": r.brand_id,
             "affiliation_id": r.pk,
-            "role": r.title_normalized or r.title_raw or r.affiliation_type,
+            "role": r.title_normalized or r.title_raw or r.affiliation_type_reference.code,
             "team": r.team or "",
-            "kind": r.affiliation_type,
+            "kind": r.affiliation_type_reference.code,
         }
         for r in roles
     ]

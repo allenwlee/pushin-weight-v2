@@ -21,6 +21,7 @@ from django.utils import timezone
 
 from core.job_vocabulary import compensation_references, write_job_classifications
 from core.models import (
+    AffiliationType,
     Brand,
     BrandAccount,
     BrandDiscoveryCandidate,
@@ -32,6 +33,7 @@ from core.models import (
     ModelRelease,
     ModelReleaseEvidence,
     Opportunity,
+    OpportunityType,
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
     PersonnelDiscoveryRun,
@@ -1126,7 +1128,9 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
                 "person": person,
                 "brand": brand,
                 "brand_discovery_candidate": candidate,
-                "affiliation_type": affiliation_type,
+                "affiliation_type_reference": AffiliationType.objects.get(
+                    code=affiliation_type
+                ),
                 "observed_organization_name": _text(
                     record.get("organization_name"), required=True
                 ),
@@ -1490,7 +1494,9 @@ def _persist_opportunities(post: Post, records: list[Mapping[str, Any]], version
                 ),
                 "sponsor_name": _text(record.get("organization_name"), required=True),
                 "sponsor_handle": _text(record.get("organization_handle"), maximum=64),
-                "opportunity_type": opportunity_type,
+                "opportunity_type_reference": OpportunityType.objects.get(
+                    code=opportunity_type
+                ),
                 "action_type": _text(record.get("action_type"), required=True),
                 "action_url": _source_bound_url(
                     record.get("action_url"),

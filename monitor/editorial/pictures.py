@@ -91,7 +91,7 @@ def candidate_roles(event, packet):
             superseded_by__isnull=True,
             person__merged_into__isnull=True,
         )
-        .select_related("person")
+        .select_related("person", "affiliation_type_reference")
         .prefetch_related(
             Prefetch(
                 "person__name_selections",
@@ -102,7 +102,7 @@ def candidate_roles(event, packet):
             candidate_group=Case(
                 When(person_id__in=subjects, then=Value(0)),
                 When(person_id__in=author_people, then=Value(1)),
-                When(affiliation_type="founder", then=Value(2)),
+                When(affiliation_type_reference__code="founder", then=Value(2)),
                 default=Value(3),
             )
         )
@@ -126,7 +126,7 @@ def candidate_roles(event, packet):
         if not subjects and pid in author_people:
             return (1, 0)
         if event.subject_kind == "company_direction" and (
-            role.affiliation_type == "founder"
+            role.affiliation_type_reference.code == "founder"
             or any(
                 x in text
                 for x in ("ceo", "chief executive", "首席执行官", "最高経営責任者")
@@ -141,7 +141,7 @@ def candidate_roles(event, packet):
             x in text for x in ("research", "研究")
         ):
             return (2, 0)
-        if role.affiliation_type == "founder":
+        if role.affiliation_type_reference.code == "founder":
             return (3, 0)
         return (9, 0)
 
@@ -230,7 +230,7 @@ def select_picture(
                     person_name=selected_name_for(role.person, "und")
                     or "Unreviewed person",
                     affiliation_id=role.pk,
-                    role=role.title_raw or role.affiliation_type,
+                    role=role.title_raw or role.affiliation_type_reference.code,
                     source_url=photo.source_url,
                     source_kind="verified_person",
                     fallback=priority[0] == 3

@@ -6,6 +6,7 @@ from django.utils.dateparse import parse_datetime
 
 from core.models import (
     Account,
+    AffiliationType,
     Person,
     PersonAccount,
     PersonBrandAffiliation,
@@ -159,11 +160,19 @@ def _ingest_resolved(record, *, source_key, fingerprint, observed, eligibility):
         moved = matching_moved_claim(
             person, lambda pk, claim=role: digest([str(pk), claim])
         )
+        # The source spelling remains in the published claim fingerprint.
+        type_code = role["affiliation_type"]
         affiliation, _ = PersonBrandAffiliation.objects.get_or_create(
             claim_identity=moved.claim_identity
             if moved
             else digest([str(person.pk), role]),
-            defaults={"person": person, **role},
+            defaults={
+                "person": person,
+                **{key: value for key, value in role.items() if key != "affiliation_type"},
+                "affiliation_type_reference": AffiliationType.objects.get(
+                    code=type_code
+                ),
+            },
         )
         require_claim_owner(affiliation, person)
         PersonBrandAffiliationEvidence.objects.get_or_create(

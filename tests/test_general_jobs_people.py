@@ -3,6 +3,7 @@ import json
 import pytest
 
 from core.models import (
+    AffiliationType,
     JobListing,
     JobListingEvidence,
     PersonBrandAffiliation,
@@ -58,12 +59,13 @@ def affiliation(
         date_of_birth_precision="year",
         sex="female",
     )
+    type_code = overrides.pop("affiliation_type", "employment")
     claim = PersonBrandAffiliation.objects.create(
         **(
             {
                 "person": person,
                 "brand_id": "qwen",
-                "affiliation_type": "employment",
+                "affiliation_type_reference": AffiliationType.objects.get(code=type_code),
                 "observed_organization_name": "Qwen",
                 "title_raw": "Researcher",
                 "status": "current",

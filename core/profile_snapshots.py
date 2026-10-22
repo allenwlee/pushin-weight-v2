@@ -25,6 +25,7 @@ from django.db.models import F
 from core.models import (
     Account,
     AccountProfileSnapshot,
+    AffiliationType,
     Brand,
     BrandAccount,
     Person,
@@ -854,7 +855,9 @@ def persist_affiliation_candidates(
                 defaults={
                     "person": person,
                     "brand_id": signal.brand_id,
-                    "affiliation_type": signal.affiliation_type,
+                    "affiliation_type_reference": AffiliationType.objects.get(
+                        code=signal.affiliation_type
+                    ),
                     "observed_organization_name": signal.observed_organization_name,
                     "observed_organization_handle": signal.observed_organization_handle,
                     "status": signal.status,

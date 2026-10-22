@@ -1,7 +1,7 @@
 import pytest
 from django.db import IntegrityError, transaction
 
-from core.models import PersonBrandAffiliation, StaffCollectionWork
+from core.models import AffiliationType, PersonBrandAffiliation, StaffCollectionWork
 from core.staff_assets.dossier import dossier_records
 from core.staff_assets.intake import ingest_record
 from core.staff_assets.population import staff_population
@@ -18,7 +18,7 @@ def role(
     return PersonBrandAffiliation.objects.create(
         person=person,
         brand_id="deepseek",
-        affiliation_type=affiliation_type,
+        affiliation_type_reference=AffiliationType.objects.get(code=affiliation_type),
         observed_organization_name="DeepSeek",
         status=status,
         title_raw=title,

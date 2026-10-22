@@ -47,3 +47,50 @@ def test_same_spelling_has_distinct_business_owners():
     assert affiliation._meta.db_table != opportunity._meta.db_table
     with pytest.raises(IntegrityError), transaction.atomic():
         models.AffiliationType.objects.create(code=affiliation.code)
+
+
+@pytest.mark.parametrize("domain", ["affiliation", "opportunity"])
+def test_extracted_business_kind_uses_catalogue_without_changing_retry_identity(domain):
+    from core.intelligence_readers import opportunity_document, person_intelligence
+    from core.targeted_extraction import _persist_opportunities, _persist_personnel
+    from tests.test_targeted_extraction import _post
+
+    post = _post("business-kind-" + domain)
+    record = {"brand_id": "anthropic", "organization_name": "Anthropic"}
+    if domain == "affiliation":
+        record.update(
+            person_name="Anna Wang", person_handle="a_nnawang",
+            affiliation_type="employment", status="current",
+        )
+        persist, owner = _persist_personnel, models.PersonBrandAffiliation
+        field, code = "affiliation_type_reference", "employment"
+        identity = "claim_identity"
+    else:
+        record.update(
+            opportunity_type="contest", action_type="submit", benefit_type="prize",
+        )
+        persist, owner = _persist_opportunities, models.Opportunity
+        field, code = "opportunity_type_reference", "contest"
+        identity = "opportunity_identity"
+
+    persist(post, [record], "business-reference-test")
+    row = owner.objects.get()
+    assert getattr(row, field).code == code
+    saved_identity = getattr(row, identity)
+    persist(post, [record], "business-reference-test")
+    assert owner.objects.count() == 1
+    row.refresh_from_db()
+    assert getattr(row, identity) == saved_identity
+    if domain == "affiliation":
+        assert person_intelligence(row.person_id)["affiliations"][0]["affiliation_type"] == code
+        assert row.evidence.get().extracted_claim_data == record
+    else:
+        assert opportunity_document(row.pk, as_of=post.fetched_at)["opportunity_type"] == code
+        assert row.raw_payload == record
+
+    # Bulk writes cannot bypass the shared identity. Force deferred FKs inside
+    # the savepoint so a violation cannot escape into test teardown.
+    with pytest.raises(IntegrityError), transaction.atomic():
+        owner.objects.filter(pk=row.pk).update(**{field + "_id": -1})
+        with connection.cursor() as cursor:
+            cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")

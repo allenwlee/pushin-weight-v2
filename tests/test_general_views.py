@@ -3,7 +3,13 @@ from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from core.models import Event, Opportunity, PostSynthesisDemand, TimeZone
+from core.models import (
+    Event,
+    Opportunity,
+    OpportunityType,
+    PostSynthesisDemand,
+    TimeZone,
+)
 from tests.general_helpers import NOW, classified_post, saved_commentary
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
@@ -59,7 +65,8 @@ def test_general_is_anonymous_server_rendered_and_feed_matches_its_projection(
     )
     Opportunity.objects.create(
         **shared, source_post=posts["opportunities"], sponsor_name="Qwen",
-        opportunity_type="free_credits", action_type="apply", benefit_type="credits",
+        opportunity_type_reference=OpportunityType.objects.get(code="free_credits"),
+        action_type="apply", benefit_type="credits",
         benefit_text="Timezone credits", opportunity_identity="general-timezone-offer",
     )
     monkeypatch.setattr("monitor.general_views.timezone.now", lambda: NOW)

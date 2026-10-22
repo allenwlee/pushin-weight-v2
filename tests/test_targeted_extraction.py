@@ -9,6 +9,7 @@ from django.db.models.deletion import ProtectedError
 from core.models import (
     Account,
     AccountProfileSnapshot,
+    AffiliationType,
     Brand,
     BrandDiscoveryCandidate,
     Event,
@@ -120,7 +121,7 @@ def test_ambiguous_profile_candidate_routes_to_profile_extractor_without_images(
     candidate = PersonBrandAffiliation.objects.create(
         person=person,
         brand_id="anthropic",
-        affiliation_type="other",
+        affiliation_type_reference=AffiliationType.objects.get(code="other"),
         observed_organization_name="Anthropic",
         status="unknown",
         claim_identity="b" * 64,

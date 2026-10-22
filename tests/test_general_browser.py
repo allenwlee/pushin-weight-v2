@@ -13,7 +13,7 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.test import override_settings
 from playwright.sync_api import expect, sync_playwright
 
-from core.models import Event, Opportunity, TimeZone
+from core.models import Event, Opportunity, OpportunityType, TimeZone
 from tests.general_helpers import NOW, classified_post, saved_commentary
 from tests.ui_assurance.general import load_general_declaration, write_general_evidence
 
@@ -51,7 +51,8 @@ class GeneralBrowserTests(StaticLiveServerTestCase):
         )
         Opportunity.objects.create(
             brand_id="qwen", source_post_id="6101", sponsor_name="Qwen",
-            opportunity_type="free_credits", action_type="apply", benefit_type="credits",
+            opportunity_type_reference=OpportunityType.objects.get(code="free_credits"),
+            action_type="apply", benefit_type="credits",
             raw_payload={"source_timezone": "CST"},
             first_seen_at=NOW, last_seen_at=NOW, opportunity_identity="browser-zone-offer",
         )

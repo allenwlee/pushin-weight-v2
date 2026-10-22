@@ -6,7 +6,7 @@ import pytest
 from django.utils import timezone
 from PIL import Image
 
-from core.models import Brand, PersonBrandAffiliation, PersonMedia
+from core.models import AffiliationType, Brand, PersonBrandAffiliation, PersonMedia
 from core.staff_assets.media import store_image
 from monitor.editorial.config import EditorialConfig, Route
 from monitor.editorial.contracts import Event
@@ -100,7 +100,7 @@ def person_photo(
     role = PersonBrandAffiliation.objects.create(
         person=person,
         brand=brand,
-        affiliation_type=kind,
+        affiliation_type_reference=AffiliationType.objects.get(code=kind),
         observed_organization_name="DeepSeek",
         status=status,
         review_status=review,

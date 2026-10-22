@@ -12,6 +12,7 @@ from django.utils import timezone
 from core.models import (
     Account,
     AccountProfileSnapshot,
+    AffiliationType,
     Brand,
     BrandDiscoveryCandidate,
     Event,
@@ -19,6 +20,7 @@ from core.models import (
     JobListing,
     JobListingEvidence,
     Opportunity,
+    OpportunityType,
     Person,
     PersonAccount,
     PersonBrandAffiliation,
@@ -136,7 +138,7 @@ def test_profile_and_affiliation_evidence_keep_observation_separate_from_dates()
     affiliation = PersonBrandAffiliation.objects.create(
         person=person,
         brand=brand,
-        affiliation_type="employment",
+        affiliation_type_reference=AffiliationType.objects.get(code="employment"),
         observed_organization_name="Anthropic",
         status="current",
         claim_identity="b" * 64,
@@ -229,7 +231,7 @@ def test_events_opportunities_and_discovery_runs_keep_distinct_identities():
         related_event=event,
         source_post=post,
         sponsor_name="Events",
-        opportunity_type="contest",
+        opportunity_type_reference=OpportunityType.objects.get(code="contest"),
         action_type="submit",
         benefit_type="prize",
         close_value="2026-09-30",
@@ -289,7 +291,7 @@ def test_events_opportunities_and_discovery_runs_keep_distinct_identities():
             brand=brand,
             source_post=post,
             sponsor_name="Events",
-            opportunity_type="contest",
+            opportunity_type_reference=OpportunityType.objects.get(code="contest"),
             action_type="submit",
             benefit_type="prize",
             first_seen_at=now,
@@ -381,7 +383,7 @@ def test_comparable_affiliation_dates_cannot_run_backwards():
         lambda: PersonBrandAffiliation.objects.create(
             person=person,
             brand=brand,
-            affiliation_type="employment",
+            affiliation_type_reference=AffiliationType.objects.get(code="employment"),
             observed_organization_name="Dates",
             start_date="2026-09",
             start_date_precision="month",
@@ -403,7 +405,7 @@ def test_affiliation_requires_exactly_one_known_or_candidate_organization():
     )
     common = {
         "person": person,
-        "affiliation_type": "employment",
+        "affiliation_type_reference": AffiliationType.objects.get(code="employment"),
         "observed_organization_name": "Organization",
     }
 

@@ -7,7 +7,7 @@ from django.db import connection
 from django.db.models.deletion import ProtectedError
 
 from core.intelligence_readers import event_document, opportunity_document
-from core.models import Brand, Event, Opportunity, TimeZone
+from core.models import Brand, Event, Opportunity, OpportunityType, TimeZone
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
@@ -39,7 +39,7 @@ def make_records(*, event_zone="Asia/Tokyo", opportunity_zone="UTC", index=0):
         related_event=event,
         source_url="https://example.test/opportunity",
         sponsor_name="Fixture",
-        opportunity_type="contest",
+        opportunity_type_reference=OpportunityType.objects.get(code="contest"),
         action_type="submit",
         benefit_type="prize",
         close_value="2026-10-25",
@@ -84,7 +84,7 @@ def test_canonical_references_and_unmatched_reported_values_coexist():
         TimeZone.objects.get(pk="Asia/Tokyo").delete()
 
 
-def test_replaced_columns_are_out_of_orm_state_but_remain_for_old_instances():
+def test_replaced_timezone_columns_are_physically_removed():
     assert "source_timezone" not in {field.name for field in Event._meta.fields}
     assert "source_timezone" not in {field.name for field in Opportunity._meta.fields}
     with connection.cursor() as cursor:
@@ -97,4 +97,4 @@ def test_replaced_columns_are_out_of_orm_state_but_remain_for_old_instances():
               AND column_name='source_timezone'
             """
         )
-        assert len(cursor.fetchall()) == 3
+        assert cursor.fetchall() == []

@@ -4,7 +4,7 @@ import pytest
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from core.models import Event, EventEvidence, Opportunity
+from core.models import Event, EventEvidence, Opportunity, OpportunityType
 from monitor.general_readers import general_feed, temporal_facts
 from tests.general_helpers import NOW, classified_post
 
@@ -41,7 +41,8 @@ def test_timezone_evidence_reads_remain_batched_as_more_facts_are_displayed(sect
         else:
             Opportunity.objects.create(
                 brand_id="qwen", source_post=post, sponsor_name="Qwen",
-                opportunity_type="free_credits", action_type="apply", benefit_type="credits",
+                opportunity_type_reference=OpportunityType.objects.get(code="free_credits"),
+                action_type="apply", benefit_type="credits",
                 first_seen_at=NOW, last_seen_at=NOW, opportunity_identity=post.pk,
                 raw_payload={"source_timezone": "GMT+8"},
             )
@@ -158,7 +159,7 @@ def test_free_stuff_uses_its_own_opening_closing_and_excludes_closed_offers():
             brand_id="qwen",
             source_post=post,
             sponsor_name="Qwen",
-            opportunity_type="free_credits",
+            opportunity_type_reference=OpportunityType.objects.get(code="free_credits"),
             action_type="apply",
             benefit_type="credits",
             benefit_text="100 credits",

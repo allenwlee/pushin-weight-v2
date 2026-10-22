@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from django.db.models import Prefetch
+from django.db.models import F, Prefetch
 
 from core.job_vocabulary import (
     classification_prefetches,
@@ -198,9 +198,9 @@ def rare_type_post_document(post_id: str) -> dict[str, Any]:
                 .order_by("id")
                 .values(
                     "id",
-                    "opportunity_type",
                     "brand_id",
                     "brand_discovery_candidate_id",
+                    opportunity_type=F("opportunity_type_reference__code"),
                 )
             ),
             "job_listings": list(
@@ -216,8 +216,8 @@ def rare_type_post_document(post_id: str) -> dict[str, Any]:
                     "person_id",
                     "brand_id",
                     "brand_discovery_candidate_id",
-                    "affiliation_type",
                     "status",
+                    affiliation_type=F("affiliation_type_reference__code"),
                 )
             ),
         },
@@ -300,7 +300,7 @@ def _affiliation(row: PersonBrandAffiliation) -> dict[str, Any]:
         ),
         "organization_name": row.observed_organization_name,
         "organization_handle": row.observed_organization_handle,
-        "affiliation_type": row.affiliation_type,
+        "affiliation_type": row.affiliation_type_reference.code,
         "active": is_active_claim(row),
         "superseded_by": row.superseded_by_id,
         "status": row.status,
@@ -331,7 +331,9 @@ def person_intelligence(person_id) -> dict[str, Any]:
         "source_profile_snapshot"
     ).order_by("observed_at", "id")
     affiliations = (
-        PersonBrandAffiliation.objects.select_related("brand_discovery_candidate")
+        PersonBrandAffiliation.objects.select_related(
+            "brand_discovery_candidate", "affiliation_type_reference"
+        )
         .prefetch_related(Prefetch("evidence", queryset=evidence))
         .order_by("brand_id", "id")
     )
@@ -603,7 +605,7 @@ def opportunity_document(opportunity_id: int, *, as_of: datetime) -> dict[str, A
         "id": row.pk,
         "brand_id": row.brand_id,
         "related_event_id": row.related_event_id,
-        "opportunity_type": row.opportunity_type,
+        "opportunity_type": row.opportunity_type_reference.code,
         "action_type": row.action_type,
         "action_url": row.action_url,
         "sponsor": {

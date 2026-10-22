@@ -35,7 +35,7 @@ def staff_population(*, list_id):
     people = (
         active_claims(
             PersonBrandAffiliation.objects.filter(
-                affiliation_type__in=["employment", "founder"],
+                affiliation_type_reference__code__in=["employment", "founder"],
                 person__merged_into__isnull=True,
                 status="current",
             )

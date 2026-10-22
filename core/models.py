@@ -6064,7 +6064,12 @@ class PersonBrandAffiliation(models.Model):
         blank=True,
         null=True,
     )
-    affiliation_type = models.CharField(max_length=32, choices=AFFILIATION_TYPES)
+    affiliation_type_reference = models.ForeignKey(
+        AffiliationType,
+        db_column="affiliation_type_id",
+        on_delete=models.PROTECT,
+        related_name="affiliations",
+    )
     observed_organization_name = models.TextField()
     observed_organization_handle = models.CharField(
         max_length=64, blank=True, null=True
@@ -6122,11 +6127,11 @@ class PersonBrandAffiliation(models.Model):
         ordering = ["person_id", "brand_id", "id"]
         indexes = [
             models.Index(
-                fields=["brand", "affiliation_type", "status"],
+                fields=["brand", "affiliation_type_reference", "status"],
                 name="idx_pba_brand_type_status",
             ),
             models.Index(
-                fields=["person", "affiliation_type"],
+                fields=["person", "affiliation_type_reference"],
                 name="idx_pba_person_type",
             ),
         ]
@@ -6143,24 +6148,6 @@ class PersonBrandAffiliation(models.Model):
                     )
                 ),
                 name="ck_pba_one_organization",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(
-                    affiliation_type__in=[
-                        "employment",
-                        "founder",
-                        "advisor",
-                        "board_member",
-                        "contractor",
-                        "ambassador",
-                        "creator_partner",
-                        "affiliate",
-                        "investor",
-                        "community",
-                        "other",
-                    ]
-                ),
-                name="ck_pba_affiliation_type",
             ),
             models.CheckConstraint(
                 condition=models.Q(
@@ -7322,9 +7309,11 @@ class Opportunity(models.Model):
     source_url = models.URLField(max_length=2048, blank=True, null=True)
     sponsor_name = models.TextField()
     sponsor_handle = models.CharField(max_length=64, blank=True, null=True)
-    opportunity_type = models.CharField(
-        max_length=32,
-        choices=OPPORTUNITY_TYPES,
+    opportunity_type_reference = models.ForeignKey(
+        OpportunityType,
+        db_column="opportunity_type_id",
+        on_delete=models.PROTECT,
+        related_name="opportunities",
     )
     action_type = models.TextField()
     action_url = models.URLField(max_length=2048, blank=True, null=True)
@@ -7382,23 +7371,6 @@ class Opportunity(models.Model):
                     | models.Q(brand__isnull=True, brand_discovery_candidate__isnull=False)
                 ),
                 name="ck_opportunities_one_organization",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(
-                    opportunity_type__in=[
-                        "giveaway",
-                        "discount",
-                        "free_credits",
-                        "beta_access",
-                        "grant",
-                        "bounty",
-                        "contest",
-                        "referral",
-                        "collaboration",
-                        "other",
-                    ]
-                ),
-                name="ck_opportunities_type",
             ),
             models.CheckConstraint(
                 condition=models.Q(

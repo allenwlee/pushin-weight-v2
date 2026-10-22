@@ -312,7 +312,7 @@ def test_personnel_move_uses_existing_roles_without_changing_them():
     roles = [
         models.PersonBrandAffiliation.objects.create(
             person=person,
-            affiliation_type="employment",
+            affiliation_type_reference=models.AffiliationType.objects.get(code="employment"),
             observed_organization_name=name,
             brand=models.Brand.objects.create(
                 nickname=f"employer-{index}", display_name=name

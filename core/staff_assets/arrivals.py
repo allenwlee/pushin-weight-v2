@@ -29,7 +29,7 @@ def register_person(person_id):
     roles = list(
         active_claims(
             person.brand_affiliations.filter(
-                affiliation_type__in=["employment", "founder"]
+                affiliation_type_reference__code__in=["employment", "founder"]
             )
         )
         .order_by("pk")
@@ -225,7 +225,7 @@ def account_arrival(sender, instance, raw=False, **kwargs):
     post_save, sender=PersonBrandAffiliation, dispatch_uid="staff_affiliation_arrival"
 )
 def person_arrival(sender, instance, raw=False, **kwargs):
-    if not raw and instance.affiliation_type in {"employment", "founder"}:
+    if not raw and instance.affiliation_type_reference.code in {"employment", "founder"}:
         transaction.on_commit(lambda: register_person(instance.person_id), robust=True)
 
 

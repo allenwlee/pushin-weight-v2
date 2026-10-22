@@ -13,6 +13,7 @@ from django.utils import timezone
 from core.models import (
     Account,
     AccountProfileSnapshot,
+    AffiliationType,
     Brand,
     BrandAccount,
     PersonBrandAffiliation,
@@ -89,7 +90,7 @@ def test_profile_evidence_stays_off_another_persons_claim():
     affiliation = PersonBrandAffiliation.objects.create(
         person=other,
         brand_id="deepseek",
-        affiliation_type="employment",
+        affiliation_type_reference=AffiliationType.objects.get(code="employment"),
         observed_organization_name="DeepSeek",
         status="current",
         claim_identity=claim_identity,
