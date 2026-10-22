@@ -3,12 +3,13 @@
 import re
 from collections import Counter
 from datetime import datetime, timedelta
+from itertools import chain
 
 from django.db import OperationalError, connection, transaction
 from django.db.models import Case, F, IntegerField, Q, Value, When, Window
 from django.db.models.functions import RowNumber, TruncMonth
 
-from core.models import Brand, Company, Post
+from core.models import Brand, Company, CompanyLabel, Post
 from monitor.packet_maker import PacketProfile, make_packet
 
 from .evidence import packet_bytes, post_evidence
@@ -316,12 +317,14 @@ def _collect_story_packet(event, packet, cfg):
     if packet_bytes(anchors) > cfg.max_story_bytes:
         raise ValueError("selected sources exceed story evidence cap")
     brand_names = set(event.brand_keys)
-    for model in (Brand, Company):
-        for row in model.objects.values_list(
-            "nickname", "display_name", "display_name_en"
-        ):
-            for value in row:
-                brand_names.update(t.casefold() for t in TOKEN.findall(value or ""))
+    name_rows = chain(
+        Brand.objects.values_list("nickname", "display_name", "display_name_en"),
+        Company.objects.values_list("nickname"),
+        CompanyLabel.objects.filter(locale_id__in=("und", "en")).values_list("label"),
+    )
+    for row in name_rows:
+        for value in row:
+            brand_names.update(t.casefold() for t in TOKEN.findall(value or ""))
     counts = names(anchors, brand_names)
     terms = sorted(counts, key=lambda t: (-counts[t], -len(t), t))[:8]
     anchor_words = set().union(*(words(p) for p in anchors))

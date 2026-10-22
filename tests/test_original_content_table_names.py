@@ -194,7 +194,13 @@ def test_populated_forward_and_reverse_preserve_rows_keys_indexes_and_sequences(
         migrate(AFTER)
 
 
-def test_old_and_new_orms_write_same_rows_with_defaults_conflicts_locks_and_protection():
+@pytest.mark.parametrize("migration_rehearsal_schema", [AFTER], indirect=True)
+def test_old_and_new_orms_write_same_rows_with_defaults_conflicts_locks_and_protection(
+    migration_rehearsal_schema,
+):
+    # This proves the 0079 bridge, before 0131 deliberately retires old writers.
+    renamed = MigrationExecutor(connection).loader.project_state([AFTER]).apps
+    current = lambda name: renamed.get_model("core", name)
     old_apps = MigrationExecutor(connection).loader.project_state([BEFORE]).apps
     graph = seed(old_apps)
     # Every old-name model inserts through a view; current readers see its real IDs.
@@ -206,7 +212,7 @@ def test_old_and_new_orms_write_same_rows_with_defaults_conflicts_locks_and_prot
         ("OriginalContentSelection", "selection"),
         ("ContentPicture", "picture"),
     ):
-        assert getattr(models, name).objects.filter(pk=getattr(graph, attr).pk).exists()
+        assert current(name).objects.filter(pk=getattr(graph, attr).pk).exists()
     old_run = old_apps.get_model("core", "OriginalContentRun")
     old_call = old_apps.get_model("core", "OriginalContentCall")
     old_text = old_apps.get_model("core", "OriginalContentText")
@@ -220,7 +226,7 @@ def test_old_and_new_orms_write_same_rows_with_defaults_conflicts_locks_and_prot
         source_cycle_id="another-run", defaults=defaults
     )
     assert created and run.pk
-    run2, created = models.OriginalContentRun.objects.get_or_create(
+    run2, created = current("OriginalContentRun").objects.get_or_create(
         source_cycle_id="another-run", defaults=defaults
     )
     assert not created and run2.pk == run.pk
@@ -229,7 +235,7 @@ def test_old_and_new_orms_write_same_rows_with_defaults_conflicts_locks_and_prot
     )
     assert (
         inserted[0].pk
-        and models.OriginalContentRun.objects.filter(pk=inserted[0].pk).exists()
+        and current("OriginalContentRun").objects.filter(pk=inserted[0].pk).exists()
     )
     old_call.objects.bulk_create(
         [
@@ -248,12 +254,12 @@ def test_old_and_new_orms_write_same_rows_with_defaults_conflicts_locks_and_prot
         update_fields=["reserved_usd"],
         unique_fields=["request_identity"],
     )
-    assert models.OriginalContentCall.objects.get(
+    assert current("OriginalContentCall").objects.get(
         pk=graph.call.pk
     ).reserved_usd == Decimal("0.250000")
     with transaction.atomic():
         old_text.objects.select_for_update(of=("self",)).get(pk=graph.text.pk)
-        models.OriginalContentText.objects.filter(pk=graph.text.pk).update(
+        current("OriginalContentText").objects.filter(pk=graph.text.pk).update(
             body="New process write"
         )
     saved, created = old_text.objects.update_or_create(
@@ -261,7 +267,7 @@ def test_old_and_new_orms_write_same_rows_with_defaults_conflicts_locks_and_prot
     )
     assert not created and saved.body == "New process write"
     assert (
-        models.OriginalContentText.objects.get(pk=graph.text.pk).secondary
+        current("OriginalContentText").objects.get(pk=graph.text.pk).secondary
         == "Updated byline"
     )
     with pytest.raises(IntegrityError), transaction.atomic():
@@ -276,9 +282,9 @@ def test_old_and_new_orms_write_same_rows_with_defaults_conflicts_locks_and_prot
     with pytest.raises(ProtectedError):
         old_run.objects.get(pk=graph.run.pk).delete()
     old_run.objects.get(pk=inserted[0].pk).delete()
-    assert not models.OriginalContentRun.objects.filter(pk=inserted[0].pk).exists()
+    assert not current("OriginalContentRun").objects.filter(pk=inserted[0].pk).exists()
     assert (
-        models.OriginalContentSource.objects.get(pk=graph.source.pk).url_snapshot
+        current("OriginalContentSource").objects.get(pk=graph.source.pk).url_snapshot
         == graph.source.url_snapshot
     )
 

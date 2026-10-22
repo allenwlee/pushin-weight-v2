@@ -9,6 +9,7 @@ from collections import defaultdict
 
 from django.db import transaction
 
+from core.company_labels import company_label_for
 from core.models import (
     Account,
     Brand,
@@ -86,7 +87,11 @@ def prepare_taxonomy(spec):
         obj = model.objects.get(
             **({"product_key": key} if kind == "product" else {"pk": key})
         )
-        label = obj.display_name or str(obj.pk)
+        label = (
+            company_label_for(obj)
+            if kind == "company"
+            else obj.display_name or str(obj.pk)
+        )
         if kind == "product":
             qualification = row.get("model_kind_qualification")
             if qualification is not None:

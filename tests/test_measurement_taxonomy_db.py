@@ -97,6 +97,26 @@ def test_cycles_rejected_atomically():
     assert not TaxonomyVersion.objects.exists()
 
 
+def test_company_snapshot_uses_owned_default_label_and_keeps_its_saved_meaning():
+    from core.company_labels import set_company_label
+    from core.measurement_taxonomy import configure_taxonomy, subject_id
+    from tests.company_factory import company_with_label
+
+    company = company_with_label("company", "Original company name")
+    set_company_label(company, "en", "English company name")
+    version = configure_taxonomy(
+        {
+            "reviewed_by": "fixture",
+            "subjects": [{"kind": "company", "key": company.pk}],
+        }
+    )
+    identity = str(subject_id("company", company.pk))
+    assert version.snapshot["subjects"][identity]["label"] == "Original company name"
+    set_company_label(company, "und", "Changed company name")
+    version.refresh_from_db()
+    assert version.snapshot["subjects"][identity]["label"] == "Original company name"
+
+
 def test_subject_constraint_rejects_mismatched_target():
     from core.models import MeasurementSubject
 

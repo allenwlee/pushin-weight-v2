@@ -211,6 +211,30 @@ def test_distinctive_seeds_never_include_url_fragments():
     )
 
 
+@pytest.mark.django_db
+@pytest.mark.requires_postgres
+def test_story_recall_excludes_company_identity_and_owned_default_english_labels():
+    from core.company_labels import set_company_label
+    from core.models import Company
+    from tests.company_factory import company_with_label
+
+    company = company_with_label("Paperco", "PaperForge")
+    set_company_label(company, "en", "PaperEnglish")
+    Company.objects.create(nickname="Unlabelledco")
+    now = timezone.now()
+    anchor = stored(
+        "1", "Paperco, PaperForge, PaperEnglish and Unlabelledco announce ProjectAtlas.", now, 0
+    )
+    result = story_packet(
+        selected(now, [anchor.pk]),
+        {"posts": [post_evidence(anchor)], "context": [], "cutoff": now.isoformat()},
+        EditorialConfig(),
+    )
+    terms = result["story_context"]["history_terms"]
+    assert "projectatlas" in terms
+    assert set(terms).isdisjoint({"paperco", "paperforge", "paperenglish", "unlabelledco"})
+
+
 def test_phrase_seeds_keep_names_and_versions_without_sentence_fillers():
     from monitor.editorial.context import names
 
