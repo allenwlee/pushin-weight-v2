@@ -1,5 +1,6 @@
 """PostgreSQL regression net for deterministic profile history."""
 
+
 from __future__ import annotations
 
 import json
@@ -29,6 +30,7 @@ from core.profile_snapshots import (
     record_profile_snapshot,
 )
 from monitor.cycle import CycleRunner
+from tests.person_factory import person_with_name
 from x_monitor.apify import _normalize_tweet
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
@@ -54,12 +56,11 @@ def _observation(description: str):
 def test_profile_evidence_stays_off_another_persons_claim():
     import hashlib
 
-    from core.models import Person
     from core.profile_snapshots import PROFILE_RULE_VERSION, AffiliationSignal
 
     now = timezone.now()
     account = Account.objects.create(author_id="foreign-claim", handle="researcher")
-    other = Person.objects.create(display_name="Other person")
+    other = person_with_name("Other person")
     Brand.objects.get_or_create(
         nickname="deepseek", defaults={"display_name": "DeepSeek"}
     )

@@ -168,6 +168,7 @@ def account_report(*, list_id, page=1, section="all"):
     query = (
         states.filter(filters.get(section, FOUND_ACCOUNTS))
         .select_related("account", "registered_company", "registered_brand")
+        .prefetch_related("registered_company__labels")
         .defer("evidence")
         .prefetch_related(
             Prefetch("list_intents", queryset=intents, to_attr="admin_list_intents")

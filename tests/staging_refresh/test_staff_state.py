@@ -1,3 +1,4 @@
+
 from pathlib import Path
 from uuid import uuid4
 
@@ -6,7 +7,6 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 from core.models import (
-    Person,
     PersonIdentityCorrection,
     PersonMedia,
     PersonTextTranslation,
@@ -19,6 +19,7 @@ from core.person_names import record_name, review_name, select_names
 from core.person_text import record_text
 from scripts.staging_refresh.database import scrub_candidate_data
 from scripts.staging_refresh.policy import load_policy
+from tests.person_factory import person_with_name
 
 
 @pytest.mark.requires_postgres
@@ -27,7 +28,7 @@ def test_scrub_keeps_selected_names_and_prose_without_replaying_staff_work():
     policy = load_policy(
         Path(__file__).resolve().parents[2] / "config/staging_refresh.yaml"
     )
-    person = Person.objects.create(display_name="Yuchen Zhao")
+    person = person_with_name("Yuchen Zhao")
     name = record_name(
         person,
         full_name="Yuchen Zhao",

@@ -1,5 +1,6 @@
 """Provider-free tests for classification-gated rare-signal extraction."""
 
+
 from __future__ import annotations
 
 import pytest
@@ -29,6 +30,7 @@ from core.targeted_extraction import (
     build_targeted_extraction_calls,
     run_targeted_extractions,
 )
+from tests.person_factory import person_with_name
 from x_monitor.config import TargetedExtractionConfig
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
@@ -114,7 +116,7 @@ def test_ambiguous_profile_candidate_routes_to_profile_extractor_without_images(
         present_fields=["description", "profile_image_url"],
         profile_data={"description": "Researcher @Anthropic"},
     )
-    person = Person.objects.create(display_name="Anna Wang")
+    person = person_with_name("Anna Wang")
     candidate = PersonBrandAffiliation.objects.create(
         person=person,
         brand_id="anthropic",
@@ -531,7 +533,7 @@ def test_personnel_replay_refuses_evidence_on_someone_elses_claim():
     with transaction.atomic():
         _persist_personnel(post, [payload], "test")
     affiliation = PersonBrandAffiliation.objects.get()
-    other = Person.objects.create(display_name="Separated person")
+    other = person_with_name("Separated person")
     PersonBrandAffiliation.objects.filter(pk=affiliation.pk).update(person=other)
     before = affiliation.evidence.count()
     with pytest.raises(IdentityConflict, match="another person"), transaction.atomic():

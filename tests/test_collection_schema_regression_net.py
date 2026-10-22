@@ -62,6 +62,22 @@ def test_reference_inventory_and_columns_match_all_concrete_application_tables()
     assert set(headings) == expected and len(headings) == len(expected)
     inventory = re.findall(r"^\| \[([^]]+)\]\(#table-[^)]+\) \|", doc, re.MULTILINE)
     assert set(inventory) == expected and len(inventory) == len(expected)
+    transitional_columns = {}
+    if MigrationExecutor(connection).loader.graph.leaf_nodes("core") == [
+        ("core", "0130_rg2_person_name_locale_required")
+    ]:
+        # Explicit, temporary model/database separation during the rolling cutover.
+        transitional_columns = {
+            "accounts": {"bio_en", "bio_zh_cn"},
+            "companies": {"display_name", "display_name_en", "display_name_zh_cn"},
+            "people": {"display_name", "display_name_en", "display_name_zh_cn", "display_name_ja"},
+            "people_names": {"language"},
+            "original_content": {"brand_name_en_snapshot", "brand_name_zh_cn_snapshot"},
+            "trend_narrative_subjects": {"name_en_snapshot", "name_zh_cn_snapshot"},
+        }
+        assert sum(map(len, transitional_columns.values())) == 14
+        for columns in transitional_columns.values():
+            assert all(f"`{column}`" in doc for column in columns)
     for model in models:
         section = doc.split(f"### `{model._meta.db_table}` —", 1)[1].split(
             "[Back to table inventory]", 1
@@ -75,10 +91,10 @@ def test_reference_inventory_and_columns_match_all_concrete_application_tables()
                     cursor, model._meta.db_table
                 )
             }
-        assert physical_columns == orm_columns, model._meta.db_table
-        assert set(columns) == physical_columns and len(columns) == len(
-            physical_columns
+        assert physical_columns == orm_columns | transitional_columns.get(
+            model._meta.db_table, set()
         ), model._meta.db_table
+        assert set(columns) == orm_columns and len(columns) == len(orm_columns), model._meta.db_table
 
 
 @pytest.mark.usefixtures("isolated_migration_database")

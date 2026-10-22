@@ -7,6 +7,7 @@ import pytest
 
 from core.models import (
     BrandTrendNarrative,
+    OriginalContentSubjectLabel,
     TrendNarrativeProviderCall,
     TrendNarrativeRun,
 )
@@ -120,11 +121,9 @@ def _run(*, index: int, snapshot: dict[str, object]) -> TrendNarrativeRun:
         )
     for brand_index in range(6):
         brand_key = f"brand-{brand_index}"
-        BrandTrendNarrative.objects.create(
+        content = BrandTrendNarrative.objects.create(
             run=run,
             brand_key_snapshot=brand_key,
-            brand_name_en_snapshot=f"Brand {brand_index}",
-            brand_name_zh_cn_snapshot=f"品牌 {brand_index}",
             status=BrandTrendNarrative.Status.APPROVED,
             headline_en="Headline",
             headline_zh_cn="标题",
@@ -132,6 +131,17 @@ def _run(*, index: int, snapshot: dict[str, object]) -> TrendNarrativeRun:
             secondary_zh_cn="补充",
             attempted_at=run.facts_as_of,
             verified_at=run.facts_as_of,
+        )
+        OriginalContentSubjectLabel.objects.bulk_create(
+            [
+                OriginalContentSubjectLabel(
+                    content=content, locale_id=locale, label_snapshot=label
+                )
+                for locale, label in (
+                    ("en", f"Brand {brand_index}"),
+                    ("zh-Hans", f"品牌 {brand_index}"),
+                )
+            ]
         )
     return run
 

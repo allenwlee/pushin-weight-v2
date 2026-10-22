@@ -718,7 +718,6 @@ class Brand(models.Model):
     def __str__(self) -> str:
         return self.nickname
 
-
 class MaterializationState(models.Model):
     """Current publication of one versioned, rebuildable derived dataset."""
 
@@ -784,13 +783,10 @@ class Company(models.Model):
         primary_key=True,
         db_collation="case_insensitive",
     )
-    display_name = models.TextField(blank=True, null=True)
     hq_country = models.TextField(blank=True, null=True)
     accent_color = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    display_name_en = models.TextField(blank=True, null=True)
-    display_name_zh_cn = models.TextField(blank=True, null=True)
 
     class Meta:
         db_table = "companies"
@@ -798,6 +794,35 @@ class Company(models.Model):
 
     def __str__(self) -> str:
         return self.nickname
+
+    @property
+    def label(self) -> str:
+        from core.company_labels import company_label_for
+
+        return company_label_for(self, "und")
+
+
+class CompanyLabel(models.Model):
+    """One current company display label for a registered locale."""
+
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, related_name="labels"
+    )
+    locale = models.ForeignKey(
+        Locale, on_delete=models.PROTECT, related_name="company_labels"
+    )
+    label = models.TextField()
+
+    class Meta:
+        db_table = "company_labels"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "locale"], name="uq_company_label_locale"
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(label=""), name="ck_company_label_nonempty"
+            ),
+        ]
 
 
 # ============================================================================
@@ -1413,8 +1438,6 @@ class Account(models.Model):
     last_seen_at = models.DateTimeField(auto_now=True)
     source_query_ids = models.TextField(blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
-    bio_en = models.TextField(blank=True, null=True)
-    bio_zh_cn = models.TextField(blank=True, null=True)
     # Migration 039 — inline author metadata from tweet payloads
     followers_count = models.IntegerField(blank=True, null=True)
     following_count = models.IntegerField(blank=True, null=True)
@@ -4743,8 +4766,6 @@ class OriginalContent(models.Model):
         to_field="nickname",
     )
     brand_key_snapshot = models.CharField(max_length=64)
-    brand_name_en_snapshot = models.TextField()
-    brand_name_zh_cn_snapshot = models.TextField()
     workflow_key = models.CharField(max_length=80, null=True, blank=True)
     output_key = models.CharField(max_length=200, null=True, blank=True)
     subject_key = models.CharField(max_length=200, blank=True, default="")
@@ -4989,8 +5010,6 @@ class TrendNarrativeSubject(models.Model):
     )
     observed_name = models.TextField(blank=True, default="")
     canonical_key_snapshot = models.TextField(blank=True, default="")
-    name_en_snapshot = models.TextField(blank=True, default="")
-    name_zh_cn_snapshot = models.TextField(blank=True, default="")
     candidate_id = models.CharField(max_length=192, blank=True, default="")
     evidence_ids = models.JSONField(blank=True, default=list)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -5026,16 +5045,12 @@ class TrendNarrativeSubject(models.Model):
                         product__isnull=True,
                         observed_name="",
                         canonical_key_snapshot__gt="",
-                        name_en_snapshot__gt="",
-                        name_zh_cn_snapshot__gt="",
                     )
                     | models.Q(
                         identity_type="product",
                         brand__isnull=True,
                         observed_name="",
                         canonical_key_snapshot__gt="",
-                        name_en_snapshot__gt="",
-                        name_zh_cn_snapshot__gt="",
                     )
                     | models.Q(
                         identity_type="unresolved",
@@ -5043,8 +5058,6 @@ class TrendNarrativeSubject(models.Model):
                         product__isnull=True,
                         observed_name__gt="",
                         canonical_key_snapshot="",
-                        name_en_snapshot__gt="",
-                        name_zh_cn_snapshot__gt="",
                     )
                 ),
                 name="ck_tns_identity_shape",
@@ -5072,6 +5085,60 @@ class TrendNarrativeSubject(models.Model):
                     | models.Q(position=1)
                 ),
                 name="ck_tns_evidence_pos",
+            ),
+        ]
+
+
+class TrendNarrativeSubjectLabel(models.Model):
+    """One immutable localized name snapshot for a measured subject."""
+
+    subject = models.ForeignKey(
+        TrendNarrativeSubject,
+        on_delete=models.CASCADE,
+        related_name="localized_labels",
+    )
+    locale = models.ForeignKey(
+        Locale, on_delete=models.PROTECT, related_name="trend_subject_labels"
+    )
+    label_snapshot = models.TextField()
+
+    class Meta:
+        db_table = "trend_narrative_subject_labels"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["subject", "locale"], name="uq_tns_label_locale"
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(label_snapshot=""),
+                name="ck_tns_label_nonempty",
+            ),
+        ]
+
+
+class OriginalContentSubjectLabel(models.Model):
+    """One immutable localized primary-subject snapshot for saved content."""
+
+    content = models.ForeignKey(
+        OriginalContent,
+        on_delete=models.CASCADE,
+        related_name="localized_subject_labels",
+    )
+    locale = models.ForeignKey(
+        Locale,
+        on_delete=models.PROTECT,
+        related_name="original_content_subject_labels",
+    )
+    label_snapshot = models.TextField()
+
+    class Meta:
+        db_table = "original_content_subject_labels"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["content", "locale"], name="uq_ocs_label_locale"
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(label_snapshot=""),
+                name="ck_ocs_label_nonempty",
             ),
         ]
 
@@ -5155,10 +5222,6 @@ def _precision_value_condition(
 
 class Person(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    display_name = models.TextField()
-    display_name_en = models.TextField(blank=True, null=True)
-    display_name_zh_cn = models.TextField(blank=True, null=True)
-    display_name_ja = models.TextField(blank=True, null=True)
     date_of_birth = models.CharField(max_length=10, blank=True, null=True)
     date_of_birth_precision = models.CharField(
         max_length=16,
@@ -5192,7 +5255,7 @@ class Person(models.Model):
 
     class Meta:
         db_table = "people"
-        ordering = ["display_name", "id"]
+        ordering = ["id"]
         constraints = [
             models.CheckConstraint(
                 condition=~models.Q(merged_into=models.F("pk")),
@@ -5241,7 +5304,12 @@ class PersonName(models.Model):
     full_name = models.TextField()
     given_name = models.TextField(blank=True, null=True)
     family_name = models.TextField(blank=True, null=True)
-    language = models.CharField(max_length=35, default="und")
+    locale = models.ForeignKey(
+        Locale,
+        db_column="locale_id",
+        on_delete=models.PROTECT,
+        related_name="person_names",
+    )
     name_type = models.CharField(max_length=32, default="professional")
     name_order = models.CharField(max_length=24, default="unknown")
     origin = models.CharField(max_length=24, default="source")
@@ -5284,6 +5352,29 @@ class PersonName(models.Model):
             models.CheckConstraint(
                 condition=~models.Q(derived_from=models.F("pk")),
                 name="ck_person_name_not_self",
+            ),
+        ]
+
+
+class PersonNameSelection(models.Model):
+    """The selected spelling for a person's requested display locale."""
+
+    person = models.ForeignKey(
+        Person, on_delete=models.CASCADE, related_name="name_selections"
+    )
+    display_locale = models.ForeignKey(
+        Locale, on_delete=models.PROTECT, related_name="person_name_selections"
+    )
+    name = models.ForeignKey(
+        PersonName, on_delete=models.PROTECT, related_name="display_selections"
+    )
+
+    class Meta:
+        db_table = "person_name_selections"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["person", "display_locale"],
+                name="uq_person_name_selection_locale",
             ),
         ]
 
@@ -5683,6 +5774,81 @@ class AccountProfileSnapshot(models.Model):
             models.UniqueConstraint(
                 fields=["account", "profile_hash", "first_observed_at"],
                 name="uq_profile_snap_identity",
+            ),
+        ]
+
+
+class AccountProfileTextTranslation(models.Model):
+    """A translated profile text tied to its account, source role and version."""
+
+    class SourceTextRole(models.TextChoices):
+        DESCRIPTION = "description", "Description"
+        PROFILE_BIO_TEXT = "profile_bio_text", "Profile biography"
+        LEGACY_UNKNOWN = "legacy_unknown", "Legacy role unknown"
+
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.CASCADE,
+        related_name="profile_text_translations",
+        db_column="account_key",
+    )
+    profile_snapshot = models.ForeignKey(
+        AccountProfileSnapshot,
+        on_delete=models.PROTECT,
+        related_name="text_translations",
+        null=True,
+        blank=True,
+    )
+    source_text_role = models.CharField(max_length=24, choices=SourceTextRole.choices)
+    source_text_sha256 = models.CharField(max_length=64, null=True, blank=True)
+    locale = models.ForeignKey(
+        Locale,
+        on_delete=models.PROTECT,
+        related_name="account_profile_translations",
+    )
+    text = models.TextField()
+    definition_version = models.ForeignKey(
+        DefinitionVersion,
+        on_delete=models.PROTECT,
+        related_name="account_profile_translations",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "account_profile_text_translations"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "account",
+                    "profile_snapshot",
+                    "source_text_role",
+                    "source_text_sha256",
+                    "locale",
+                    "definition_version",
+                ],
+                nulls_distinct=False,
+                name="uq_account_profile_text_translation",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    source_text_role__in=[
+                        "description",
+                        "profile_bio_text",
+                        "legacy_unknown",
+                    ]
+                ),
+                name="ck_account_profile_translation_role",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(source_text_sha256__isnull=True)
+                | models.Q(source_text_sha256__regex=r"^[0-9a-f]{64}$"),
+                name="ck_account_profile_translation_source_hash",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(text=""),
+                name="ck_account_profile_translation_nonempty",
             ),
         ]
 

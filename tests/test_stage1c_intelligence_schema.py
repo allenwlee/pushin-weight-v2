@@ -1,5 +1,6 @@
 """PostgreSQL regression net for the additive Stage 1C intelligence schema."""
 
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -28,6 +29,7 @@ from core.models import (
     TargetedExtractionAttempt,
     TargetedExtractionState,
 )
+from tests.person_factory import person_with_name
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
@@ -38,8 +40,8 @@ def _assert_integrity_error(create):
 
 
 def test_people_schema_preserves_reduced_precision_and_sex_column():
-    year_only = Person.objects.create(
-        display_name="Year Only",
+    year_only = person_with_name(
+        "Year Only",
         date_of_birth="1987",
         date_of_birth_precision="year",
         sex="female",
@@ -47,7 +49,7 @@ def test_people_schema_preserves_reduced_precision_and_sex_column():
         ethnicity="Korean",
         primary_language="ko",
     )
-    unknown = Person.objects.create(display_name="Unknown")
+    unknown = person_with_name("Unknown")
 
     assert year_only.date_of_birth == "1987"
     assert year_only.sex == "female"
@@ -55,8 +57,8 @@ def test_people_schema_preserves_reduced_precision_and_sex_column():
     assert unknown.date_of_birth_precision == "unknown"
     assert Person._meta.get_field("sex").column == "sex"
     _assert_integrity_error(
-        lambda: Person.objects.create(
-            display_name="Bad precision",
+        lambda: person_with_name(
+            "Bad precision",
             date_of_birth="1987",
             date_of_birth_precision="day",
         )
@@ -67,8 +69,8 @@ def test_person_account_confirmed_and_primary_uniqueness_is_database_enforced():
     now = timezone.now()
     account = Account.objects.create(author_id="person-account-one", handle="one")
     second = Account.objects.create(author_id="person-account-two", handle="two")
-    person = Person.objects.create(display_name="One")
-    other_person = Person.objects.create(display_name="Two")
+    person = person_with_name("One")
+    other_person = person_with_name("Two")
     PersonAccount.objects.create(
         person=person,
         account=account,
@@ -130,7 +132,7 @@ def test_profile_and_affiliation_evidence_keep_observation_separate_from_dates()
         profile_data={"description": "Researcher"},
     )
     brand = Brand.objects.create(nickname="anthropic", display_name="Anthropic")
-    person = Person.objects.create(display_name="Anna Wang")
+    person = person_with_name("Anna Wang")
     affiliation = PersonBrandAffiliation.objects.create(
         person=person,
         brand=brand,
@@ -373,7 +375,7 @@ def test_job_organization_ownership_and_choice_values_are_database_enforced():
 
 def test_comparable_affiliation_dates_cannot_run_backwards():
     brand = Brand.objects.create(nickname="date-brand", display_name="Dates")
-    person = Person.objects.create(display_name="Date Person")
+    person = person_with_name("Date Person")
 
     _assert_integrity_error(
         lambda: PersonBrandAffiliation.objects.create(
@@ -391,7 +393,7 @@ def test_comparable_affiliation_dates_cannot_run_backwards():
 
 
 def test_affiliation_requires_exactly_one_known_or_candidate_organization():
-    person = Person.objects.create(display_name="Organization Person")
+    person = person_with_name("Organization Person")
     brand = Brand.objects.create(nickname="known-org", display_name="Known Org")
     candidate = BrandDiscoveryCandidate.objects.create(
         observed_name="Candidate Org",

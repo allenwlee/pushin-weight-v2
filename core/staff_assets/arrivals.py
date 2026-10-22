@@ -14,7 +14,7 @@ from core.models import (
 )
 from core.person_affiliations import active_claims
 from core.person_identity import account_person, canonical_person
-from core.person_names import record_name
+from core.person_names import record_name, selected_name_for
 from core.staff_assets.intake import ingest_record
 from core.staff_assets.media import record_media
 from core.staff_assets.population import is_official, staff_population
@@ -101,7 +101,8 @@ def register_person(person_id):
             .order_by("id")
             .first()
         )
-        if evidence:
+        default_name = selected_name_for(person, "und")
+        if evidence and default_name:
             reference = evidence.source_url or (
                 f"https://x.com/i/status/{evidence.source_post_id}"
                 if evidence.source_post_id
@@ -109,7 +110,7 @@ def register_person(person_id):
             )
             record_name(
                 person,
-                full_name=person.display_name,
+                full_name=default_name,
                 language="und",
                 source_kind="employment_extraction",
                 source_reference=reference,

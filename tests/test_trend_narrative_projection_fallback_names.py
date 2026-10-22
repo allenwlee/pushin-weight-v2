@@ -49,6 +49,7 @@ def test_existing_outcome_with_nullable_snapshots_uses_its_live_brand_name() -> 
         brand_name_zh_cn_snapshot=None,
         verified_at=None,
         attempted_at=None,
+        _prefetched_objects_cache={"localized_subject_labels": []},
     )
 
     item = _per_brand_item(

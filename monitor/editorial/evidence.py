@@ -6,7 +6,7 @@ from hashlib import sha256
 from urllib.parse import urlsplit
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import F, Window
+from django.db.models import F, Prefetch, Window
 from django.db.models.functions import RowNumber, TruncHour
 
 from core.models import (
@@ -14,9 +14,11 @@ from core.models import (
     EditorialEdition,
     EditorialHero,
     PersonBrandAffiliation,
+    PersonNameSelection,
     Post,
     TrendNarrativeRun,
 )
+from core.person_names import selected_name_for
 from monitor.packet_maker import PacketProfile, encode, make_packet, packet_bytes
 from monitor.trend_narrative_packet import project_dossier, project_evidence
 
@@ -175,12 +177,18 @@ def _collect_packet(cutoff, cfg):
             superseded_by__isnull=True,
         )
         .select_related("person")
+        .prefetch_related(
+            Prefetch(
+                "person__name_selections",
+                queryset=PersonNameSelection.objects.select_related("name"),
+            )
+        )
         .order_by("person_id", "brand_id")[:200]
     )
     people = [
         {
             "id": str(r.person_id),
-            "name": r.person.display_name,
+            "name": selected_name_for(r.person, "und") or "Unreviewed person",
             "brand": r.brand_id,
             "affiliation_id": r.pk,
             "role": r.title_normalized or r.title_raw or r.affiliation_type,

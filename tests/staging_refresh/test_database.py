@@ -1844,28 +1844,46 @@ def test_database_scrub_removes_private_and_transient_state_but_keeps_history() 
         generated_at=now,
         published_at=now,
     )
-    transient_subject = TrendNarrativeSubject.objects.create(
-        trend_narrative=transient,
-        position=1,
-        support_type="evidence_only",
-        entity_type="organization",
-        identity_type="unresolved",
-        observed_name="Transient subject",
-        name_en_snapshot="Transient subject",
-        name_zh_cn_snapshot="临时主体",
-        evidence_ids=["post:transient"],
-    )
-    published_subject = TrendNarrativeSubject.objects.create(
-        trend_narrative=published,
-        position=1,
-        support_type="evidence_only",
-        entity_type="organization",
-        identity_type="unresolved",
-        observed_name="Published subject",
-        name_en_snapshot="Published subject",
-        name_zh_cn_snapshot="已发布主体",
-        evidence_ids=["post:published"],
-    )
+    from core.models import TrendNarrativeSubjectLabel
+
+    with transaction.atomic():
+        transient_subject = TrendNarrativeSubject.objects.create(
+            trend_narrative=transient,
+            position=1,
+            support_type="evidence_only",
+            entity_type="organization",
+            identity_type="unresolved",
+            observed_name="Transient subject",
+            evidence_ids=["post:transient"],
+        )
+        TrendNarrativeSubjectLabel.objects.bulk_create(
+            [
+                TrendNarrativeSubjectLabel(
+                    subject=transient_subject,
+                    locale_id=locale,
+                    label_snapshot=label,
+                )
+                for locale, label in (("en", "Transient subject"), ("zh-Hans", "临时主体"))
+            ]
+        )
+    with transaction.atomic():
+        published_subject = TrendNarrativeSubject.objects.create(
+            trend_narrative=published,
+            position=1,
+            support_type="evidence_only",
+            entity_type="organization",
+            identity_type="unresolved",
+            observed_name="Published subject",
+            evidence_ids=["post:published"],
+        )
+        TrendNarrativeSubjectLabel.objects.bulk_create(
+            [
+                TrendNarrativeSubjectLabel(
+                    subject=published_subject, locale_id=locale, label_snapshot=label
+                )
+                for locale, label in (("en", "Published subject"), ("zh-Hans", "已发布主体"))
+            ]
+        )
     account = Account.objects.create(author_id="staging-state-author", handle="state")
     post = Post.objects.create(
         tweet_id="staging-state-post",
@@ -1920,13 +1938,21 @@ def test_database_scrub_removes_private_and_transient_state_but_keeps_history() 
         status=TrendNarrativeRun.Status.ACTIVE,
         activated_at=now,
     )
-    BrandTrendNarrative.objects.create(
+    original_content = BrandTrendNarrative.objects.create(
         run=per_brand_run,
         brand_key_snapshot="fixture-brand",
-        brand_name_en_snapshot="Fixture",
-        brand_name_zh_cn_snapshot="测试",
         status=BrandTrendNarrative.Status.UNAVAILABLE,
         attempted_at=now,
+    )
+    from core.models import OriginalContentSubjectLabel
+
+    OriginalContentSubjectLabel.objects.bulk_create(
+        [
+            OriginalContentSubjectLabel(
+                content=original_content, locale_id=locale, label_snapshot=label
+            )
+            for locale, label in (("en", "Fixture"), ("zh-Hans", "测试"))
+        ]
     )
     TrendNarrativeProviderCall.objects.create(
         run=per_brand_run,
@@ -1956,6 +1982,14 @@ def test_database_scrub_removes_private_and_transient_state_but_keeps_history() 
     assert TrendNarrative.objects.filter(pk=published.pk, status="published").exists()
     assert not TrendNarrativeSubject.objects.filter(pk=transient_subject.pk).exists()
     assert TrendNarrativeSubject.objects.filter(pk=published_subject.pk).exists()
+    assert not TrendNarrativeSubjectLabel.objects.filter(
+        subject=transient_subject
+    ).exists()
+    assert set(
+        TrendNarrativeSubjectLabel.objects.filter(subject=published_subject).values_list(
+            "locale_id", "label_snapshot"
+        )
+    ) == {("en", "Published subject"), ("zh-Hans", "已发布主体")}
     assert get_user_model().objects.count() == 0
     for model in (
         BrandTrendNarrative,

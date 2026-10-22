@@ -6200,7 +6200,7 @@ def _product_review_context(
         "proposals": proposals,
         "proposal": proposal,
         "brands": Brand.objects.filter(is_sentinel=False).order_by("nickname"),
-        "companies": Company.objects.order_by("nickname"),
+        "companies": Company.objects.prefetch_related("labels").order_by("nickname"),
         "product_types": Product.TYPES,
     }
 

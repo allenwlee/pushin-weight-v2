@@ -41,9 +41,11 @@ import django
 
 django.setup()
 
+from core.company_labels import set_company_label
 from core.models import (  # noqa: E402
     Account,
     AccountPostAppearance,
+    AccountProfileTextTranslation,
     AppliedConfigSnapshot,
     Brand,
     BrandAccount,
@@ -369,18 +371,21 @@ def port_companies(
         nickname = row["nickname"]
 
         defaults = {
-            "display_name": row.get("display_name"),
             "hq_country": row.get("hq_country"),
             "accent_color": row.get("accent_color"),
             "description": row.get("description"),
-            "display_name_en": row.get("display_name_en"),
-            "display_name_zh_cn": row.get("display_name_zh_cn"),
         }
 
         if not dry_run:
-            Company.objects.update_or_create(
+            company, _ = Company.objects.update_or_create(
                 nickname=nickname, defaults=defaults
             )
+            for locale, label in (
+                ("und", row.get("display_name")),
+                ("en", row.get("display_name_en")),
+                ("zh-Hans", row.get("display_name_zh_cn")),
+            ):
+                set_company_label(company, locale, label)
         _inc(report, "companies", "inserted")
         id_map[sqlite_id] = nickname
 
@@ -426,6 +431,8 @@ def port_accounts(
         for col in cols:
             if col in ("id", "author_id"):
                 continue
+            if col in ("bio_en", "bio_zh_cn"):
+                continue
             val = vals[col]
             if val is None:
                 if col == "verified":
@@ -442,9 +449,24 @@ def port_accounts(
                 defaults[col] = val
 
         if not dry_run:
-            Account.objects.update_or_create(
+            account, _ = Account.objects.update_or_create(
                 author_id=author_id, defaults=defaults
             )
+            for locale, translated_text in (
+                ("en", vals.get("bio_en")),
+                ("zh-Hans", vals.get("bio_zh_cn")),
+            ):
+                if not translated_text:
+                    continue
+                AccountProfileTextTranslation.objects.update_or_create(
+                    account=account,
+                    profile_snapshot=None,
+                    source_text_role="legacy_unknown",
+                    source_text_sha256=None,
+                    locale_id=locale,
+                    definition_version=None,
+                    defaults={"text": translated_text},
+                )
         _inc(report, "accounts", "inserted")
 
     print(f"  accounts: {len(rows)} rows", file=sys.stderr)

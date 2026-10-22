@@ -89,12 +89,15 @@ GRANT SELECT ON
   post_subject_attributions, metric_types, metrics,
   metric_collection_contracts, source_subject_mappings, collection_jobs, collection_runs,
   collection_observations, collection_scope_runs, metric_values,
-  people_names, people_name_evidence, people_texts, people_text_translations,
+  people_names, people_name_evidence, person_name_selections,
+  people_texts, people_text_translations,
   account_based_in_mappings, account_post_appearances,
-  account_profile_snapshots, accounts, audience_topic_concepts,
+  account_profile_snapshots, account_profile_text_translations, accounts,
+  audience_topic_concepts,
   audience_topic_labels, audience_topic_schemes, brand_discovery_candidates,
   brand_hashtags, brand_keywords,
   brand_search_terms, brands, brands_accounts, brands_companies, companies,
+  company_labels,
   companies_accounts, countries, country_codes_region, country_labels,
   discourse_keys, discourse_labels, django_content_type, django_migrations,
   django_site, event_evidence, events, geopolitical_mode_keys,
@@ -117,7 +120,8 @@ GRANT SELECT ON
   rare_type_category_assignments,
   region_labels, regions, role_labels, roles, search_queries, sentiment_keys,
   sentiment_labels, targeted_extraction_attempts, targeted_extraction_states,
-  trend_narrative_subjects, trend_narratives, unsanctioned_flag_keys,
+  trend_narrative_subject_labels, trend_narrative_subjects,
+  trend_narratives, unsanctioned_flag_keys,
   untracked_brand_promotion_evidence, untracked_brand_promotion_keys,
   untracked_brand_promotion_labels
 TO staging_refresh_reader;
@@ -140,7 +144,8 @@ GRANT MAINTAIN ON
   _applied_config_snapshot, account_emailaddress, account_emailconfirmation,
   auth_group, auth_group_permissions, auth_permission, auth_user,
   auth_user_groups, auth_user_user_permissions, original_content,
-  original_content_texts, original_content_sources, brand_discovery_candidate_token_evidence,
+  original_content_texts, original_content_sources,
+  original_content_subject_labels, brand_discovery_candidate_token_evidence,
   brand_discovery_candidate_tokens, call_state, django_session,
   harvest_backlog_windows, job_source_states, job_source_sync_runs,
   post_enrichment_states,
@@ -181,6 +186,9 @@ FROM pg_sequences
 WHERE schemaname = 'public'
   AND sequencename IN (
     'event_dossier_sources_id_seq', 'event_dossier_review_claims_id_seq',
+    'account_profile_text_translations_id_seq', 'company_labels_id_seq',
+    'person_name_selections_id_seq', 'original_content_subject_labels_id_seq',
+    'trend_narrative_subject_labels_id_seq',
     'collection_job_targets_id_seq', 'collection_observation_inputs_id_seq',
     'collection_metric_gaps_id_seq'
   )

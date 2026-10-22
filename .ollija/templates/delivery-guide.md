@@ -25,7 +25,6 @@ ${placement}
 - Workflow: `${workflow}`
 - Delivery target: `${delivery_target}`
 - Owner selection recorded: `${delivery_selected_by_user}`
-- Delivery route: `${delivery_route}`
 
 ${delivery_actions}
 

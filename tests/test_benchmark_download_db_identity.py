@@ -3,16 +3,18 @@ import copy
 import pytest
 
 from core.measurement_taxonomy import configure_taxonomy, subject_id
-from core.models import Brand, BrandCompany, Company, Product
+from core.models import Brand, BrandCompany, Product
+from tests.company_factory import company_with_label
 from tests.publisher_fixtures import hf_publisher
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
 def setup_spec():
+    from django.db import connection
+
     from core.benchmark_metric_identity import register_definitions
     from core.models import TimeZone
-    from django.db import connection
 
     # Historical migration rehearsals may run this shared fixture before the
     # timezone catalogue exists. Seed it only when that schema is present.
@@ -39,7 +41,7 @@ def setup_spec():
         source.metadata["use_policy"] = policy
         source.save(update_fields=["metadata"])
     brand = Brand.objects.create(nickname="lab", display_name="Lab")
-    company = Company.objects.create(nickname="lab", display_name="Lab")
+    company = company_with_label("lab", "Lab")
     BrandCompany.objects.create(brand=brand, company=company)
     org = hf_publisher(namespace="lab", company=company, confirmed=True)
     product = Product.objects.create(

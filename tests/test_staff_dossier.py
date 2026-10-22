@@ -1,3 +1,4 @@
+
 import io
 import uuid
 from pathlib import Path
@@ -7,7 +8,6 @@ from django.core.management import call_command
 from django.utils import timezone
 
 from core.models import (
-    Person,
     PersonMedia,
     PersonName,
     StaffCollectionWork,
@@ -19,6 +19,7 @@ from core.staff_assets.intake import ingest_record
 from core.staff_assets.manifest import from_deepseek_dossier
 from core.staff_assets.queue import enqueue
 from core.staff_assets.worker import run_once
+from tests.person_factory import person_with_name
 from tests.test_staff_library import record
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
@@ -132,7 +133,7 @@ def test_later_account_observation_preserves_dossier():
 
 
 def test_review_command_previews_then_selects_and_retains_history():
-    person = Person.objects.create(display_name="Test")
+    person = person_with_name("Test")
     name = record_name(
         person,
         full_name="Test",
@@ -265,7 +266,7 @@ def test_export_preserves_uncertainty_after_interrupted_provider_request(
 
 
 def test_requeue_retries_unavailable_media_without_stored_bytes():
-    person = Person.objects.create(display_name="Test")
+    person = person_with_name("Test")
     work = enqueue(person.pk, {"version": "requeue-media"})
     StaffCollectionWork.objects.filter(pk=work.pk).update(state="needs_evidence")
     missing = PersonMedia.objects.create(
@@ -293,7 +294,7 @@ def test_requeue_retries_unavailable_media_without_stored_bytes():
 
 
 def test_requeue_preserves_work_and_operator_reason():
-    person = Person.objects.create(display_name="Test")
+    person = person_with_name("Test")
     work = enqueue(person.pk, {})
     StaffCollectionWork.objects.filter(pk=work.pk).update(state="needs_evidence")
     call_command(

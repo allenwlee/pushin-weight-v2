@@ -1,10 +1,12 @@
+
 import pytest
 from django.db import IntegrityError, transaction
 
-from core.models import Person, StaffCollectionWork, StaffIntake, StaffProviderRequest
+from core.models import StaffCollectionWork, StaffIntake, StaffProviderRequest
 from core.person_names import record_name, review_name, select_names
 from core.staff_assets.intake import ingest_record
 from core.staff_assets.queue import claim, reserve_request
+from tests.person_factory import person_with_name
 from tests.test_person_identity import link
 from tests.test_staff_library import record
 
@@ -45,8 +47,8 @@ def test_merge_preserves_sources_and_redirects_existing_id():
 
     intake, _ = ingest_record(record())
     source = intake.person
-    original = source.names.get(language="zh-Hans")
-    target = Person.objects.create(display_name="Survivor")
+    original = source.names.get(locale_id="zh-Hans")
+    target = person_with_name("Survivor")
     result = correct("merge", source, target)
     original.refresh_from_db()
     intake.refresh_from_db()
@@ -60,7 +62,7 @@ def test_merge_preserves_sources_and_redirects_existing_id():
 
 def test_new_observation_after_merge_does_not_duplicate_the_moved_job():
     intake, _ = ingest_record(record())
-    target = Person.objects.create(display_name="Survivor")
+    target = person_with_name("Survivor")
     correct("merge", intake.person, target)
     updated, _ = ingest_record(record(observed_at="2026-10-02T00:00:00Z"))
     assert updated.person_id == target.pk
@@ -79,8 +81,8 @@ def test_profile_write_finishes_before_a_concurrent_merge(monkeypatch):
 
     record()  # known brand
     account = Account.objects.create(author_id="concurrent-correction", handle="worker")
-    source = Person.objects.create(display_name="Source")
-    target = Person.objects.create(display_name="Target")
+    source = person_with_name("Source")
+    target = person_with_name("Target")
     link(source, account, "confirmed")
     resolved, merged = Event(), Event()
     original = snapshots.account_person
@@ -117,20 +119,20 @@ def test_profile_write_finishes_before_a_concurrent_merge(monkeypatch):
 
 
 def test_duplicate_name_retains_both_evidence_observations():
-    source = Person.objects.create(display_name="First")
-    target = Person.objects.create(display_name="Second")
+    source = person_with_name("First")
+    target = person_with_name("Second")
     named(source, source="https://example.com/one")
     named(target, source="https://example.com/two")
     correct("merge", source, target)
     assert target.names.filter(full_name="测试人").count() == 1
     assert target.names.get(full_name="测试人").evidence.count() == 2
-    assert source.names.get().evidence.count() == 1
+    assert source.names.get(locale_id="zh-Hans").evidence.count() == 1
 
 
 def test_reimport_after_split_does_not_attach_evidence_to_the_other_person():
     intake, _ = ingest_record(record())
     source = intake.person
-    target = Person.objects.create(display_name="Separated person")
+    target = person_with_name("Separated person")
     affiliation = source.brand_affiliations.get()
     evidence_before = affiliation.evidence.count()
     names_before = source.names.count()
@@ -157,8 +159,8 @@ def test_reimport_after_split_does_not_attach_evidence_to_the_other_person():
 def test_split_moves_only_selected_claim_and_copies_name_with_audit():
     intake, _ = ingest_record(record())
     source = intake.person
-    target = Person.objects.create(display_name="Separated person")
-    original = source.names.get(language="zh-Hans")
+    target = person_with_name("Separated person")
+    original = source.names.get(locale_id="zh-Hans")
     affiliation = source.brand_affiliations.get()
     correct(
         "split",
@@ -180,13 +182,14 @@ def test_split_moves_only_selected_claim_and_copies_name_with_audit():
 
 
 def test_correction_rejects_foreign_rows_without_partial_updates():
-    source = Person.objects.create(display_name="Source")
-    target = Person.objects.create(display_name="Target")
-    other = Person.objects.create(display_name="Other")
+    source = person_with_name("Source")
+    target = person_with_name("Target")
+    other = person_with_name("Other")
     foreign_name = named(other)
+    names_before = target.names.count()
     with pytest.raises(ValueError, match="belong"):
         correct("split", source, target, selection={"names": [foreign_name.pk]})
-    assert not target.names.exists()
+    assert target.names.count() == names_before
     source.refresh_from_db()
     assert source.merged_into_id is None
 
@@ -194,20 +197,21 @@ def test_correction_rejects_foreign_rows_without_partial_updates():
 def test_correction_refuses_running_work_and_keeps_all_rows():
     intake, _ = ingest_record(record())
     source = intake.person
-    target = Person.objects.create(display_name="Target")
+    target = person_with_name("Target")
     work = claim()
     assert work.person_id == source.pk
+    names_before = target.names.count()
     with pytest.raises(ValueError, match="running"):
         correct("merge", source, target)
-    assert not target.names.exists()
+    assert target.names.count() == names_before
     assert source.brand_affiliations.count() == 1
 
 
 def test_merge_keeps_paid_request_cache_and_budget_history():
     import uuid
 
-    source = Person.objects.create(display_name="Source")
-    target = Person.objects.create(display_name="Target")
+    source = person_with_name("Source")
+    target = person_with_name("Target")
     parameters = {"engine": "baidu", "q": "测试人 DeepSeek"}
     from core.person_names import digest
 
@@ -239,8 +243,8 @@ def test_merge_keeps_paid_request_cache_and_budget_history():
 def test_confirm_account_records_review_and_refuses_another_confirmed_person():
     from core.models import Account
 
-    source = Person.objects.create(display_name="Source")
-    target = Person.objects.create(display_name="Target")
+    source = person_with_name("Source")
+    target = person_with_name("Target")
     account = Account.objects.create(author_id="reviewed-account", handle="researcher")
     link(source, account, "confirmed")
     with pytest.raises(ValueError, match="confirmed"):
@@ -251,8 +255,8 @@ def test_confirm_account_records_review_and_refuses_another_confirmed_person():
 def test_correction_journal_cannot_be_rewritten_with_sql():
     from core.models import PersonIdentityCorrection
 
-    source = Person.objects.create(display_name="Source")
-    target = Person.objects.create(display_name="Target")
+    source = person_with_name("Source")
+    target = person_with_name("Target")
     audit = correct("merge", source, target)
     with pytest.raises(IntegrityError), transaction.atomic():
         PersonIdentityCorrection.objects.filter(pk=audit.pk).update(reason="erased")
@@ -270,8 +274,8 @@ def test_preview_command_is_read_only_then_apply_is_repeatable():
 
     from core.models import PersonIdentityCorrection
 
-    source = Person.objects.create(display_name="Source")
-    target = Person.objects.create(display_name="Target")
+    source = person_with_name("Source")
+    target = person_with_name("Target")
     output = io.StringIO()
     args = [
         "merge",
@@ -304,8 +308,8 @@ def test_merge_transfers_account_media_text_and_derived_name_without_changing_by
 
     intake, _ = ingest_record(record())
     source = intake.person
-    target = Person.objects.create(display_name="Target")
-    original = source.names.get(language="zh-Hans")
+    target = person_with_name("Target")
+    original = source.names.get(locale_id="zh-Hans")
     derived = record_name(
         source,
         full_name="Ceshi Ren",

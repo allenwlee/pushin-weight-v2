@@ -13,6 +13,97 @@ from pathlib import Path
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def ensure_shared_locale_rows_for_database_tests(request):
+    """Restore the small shared locale catalogue after transactional flushes."""
+    from django.test import SimpleTestCase
+
+    django_test_class = (
+        request.cls is not None
+        and issubclass(request.cls, SimpleTestCase)
+        and bool(request.cls.databases)
+    )
+    database_fixture = any(
+        name in request.fixturenames for name in ("db", "transactional_db")
+    )
+    if (
+        request.node.get_closest_marker("django_db") is None
+        and not django_test_class
+        and not database_fixture
+    ):
+        return
+    request.getfixturevalue("db")
+    from core.models import Language, Locale
+
+    locale_codes = ("und", "en", "en-Latn", "zh-Hans", "ja")
+    if Locale.objects.filter(pk__in=locale_codes).count() == len(locale_codes):
+        return
+    for code in locale_codes:
+        language = code.split("-", 1)[0]
+        Language.objects.get_or_create(code=language)
+        Locale.objects.get_or_create(code=code, defaults={"language_id": language})
+
+
+@pytest.fixture
+def migration_rehearsal_schema(transactional_db, request):
+    """Rehearse in a temporary schema in the same exclusively owned test database.
+
+    Never include public in search_path: an absent recorder/table must not fall
+    through to shared tables. Each migration retains its normal transaction
+    policy, including concurrent indexes. Restore extension locations and drop
+    only these temporary schemas on completion or failure.
+    """
+    import uuid
+
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+
+    assert connection.vendor == "postgresql"
+    assert connection.settings_dict["NAME"].startswith("test_")
+    namespace = "migration_rehearsal_" + uuid.uuid4().hex
+    extensions = namespace + "_extensions"
+    quote = connection.ops.quote_name
+    moved_extensions = []
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW search_path")
+        original_path = cursor.fetchone()[0]
+        cursor.execute("SELECT app,name FROM public.django_migrations ORDER BY app,name")
+        original_history = cursor.fetchall()
+        cursor.execute(f"CREATE SCHEMA {quote(namespace)}")
+        cursor.execute(f"CREATE SCHEMA {quote(extensions)}")
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT extname FROM pg_extension WHERE extrelocatable "
+                "AND extnamespace='public'::regnamespace"
+            )
+            for (extension,) in cursor.fetchall():
+                cursor.execute(
+                    f"ALTER EXTENSION {quote(extension)} SET SCHEMA {quote(extensions)}"
+                )
+                moved_extensions.append(extension)
+            cursor.execute(
+                f"SET search_path TO {quote(namespace)}, {quote(extensions)}"
+            )
+            cursor.execute("SELECT to_regclass('django_migrations')")
+            assert cursor.fetchone()[0] is None
+        executor = MigrationExecutor(connection)
+        assert not executor.loader.applied_migrations
+        baseline = getattr(request, "param", ("core", "0128_require_correction_actor"))
+        executor.migrate([baseline])
+        yield
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT set_config('search_path', %s, false)", [original_path])
+            for extension in moved_extensions:
+                cursor.execute(f"ALTER EXTENSION {quote(extension)} SET SCHEMA public")
+            cursor.execute(f"DROP SCHEMA {quote(namespace)} CASCADE")
+            cursor.execute(f"DROP SCHEMA {quote(extensions)} CASCADE")
+            cursor.execute("SELECT app,name FROM public.django_migrations ORDER BY app,name")
+            assert cursor.fetchall() == original_history
+
+
 PYTEST_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {

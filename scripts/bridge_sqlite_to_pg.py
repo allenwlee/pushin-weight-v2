@@ -446,7 +446,7 @@ def tail_from_sqlite(
         acct_cols = [
             "author_id", "handle", "display_name", "bio", "bio_fetched_at",
             "verified", "bio_contains_brand", "first_seen_at", "last_seen_at",
-            "source_query_ids", "notes", "bio_en", "bio_zh_cn",
+            "source_query_ids", "notes",
             "followers_count", "following_count", "favourites_count",
             "statuses_count", "media_count", "fast_followers_count",
             "is_blue_verified", "verified_type", "profile_picture",

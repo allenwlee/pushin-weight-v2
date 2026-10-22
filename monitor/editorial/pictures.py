@@ -1,6 +1,6 @@
 """Choose a subject, then a verified usable image, independently of layout."""
 
-from django.db.models import Case, Value, When
+from django.db.models import Case, Prefetch, Value, When
 from django.utils import timezone
 
 from core.models import (
@@ -10,7 +10,9 @@ from core.models import (
     PersonAccount,
     PersonBrandAffiliation,
     PersonMedia,
+    PersonNameSelection,
 )
+from core.person_names import selected_name_for
 from core.staff_assets.media import fetch_public, media_storage, store_image
 from monitor.original_content import mirror_storage
 
@@ -90,6 +92,12 @@ def candidate_roles(event, packet):
             person__merged_into__isnull=True,
         )
         .select_related("person")
+        .prefetch_related(
+            Prefetch(
+                "person__name_selections",
+                queryset=PersonNameSelection.objects.select_related("name"),
+            )
+        )
         .annotate(
             candidate_group=Case(
                 When(person_id__in=subjects, then=Value(0)),
@@ -206,6 +214,7 @@ def select_picture(
                 media__isnull=False,
             )
             .select_related("media", "person")
+            .prefetch_related("person__name_selections__name")
             .order_by("-media__width", "-media__height", "-observed_at", "id")
         )
         by_person = {}
@@ -218,7 +227,8 @@ def select_picture(
                 source = photo.media
                 provenance.update(
                     person_id=str(role.person_id),
-                    person_name=role.person.display_name,
+                    person_name=selected_name_for(role.person, "und")
+                    or "Unreviewed person",
                     affiliation_id=role.pk,
                     role=role.title_raw or role.affiliation_type,
                     source_url=photo.source_url,

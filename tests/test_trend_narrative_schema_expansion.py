@@ -6,7 +6,6 @@ import importlib
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from django.apps import apps
 from django.db import IntegrityError, connection, transaction
 
 import core.models as core_models
@@ -17,7 +16,7 @@ NOW = datetime(2026, 8, 12, 12, 0, tzinfo=UTC)
 
 
 def test_per_brand_migration_reverse_guards_refuse_durable_runtime_data():
-    run = core_models.TrendNarrativeRun.objects.create(
+    run = core_models.OriginalContentRun.objects.create(
         source_cycle_id="reverse-guard",
         window_days=1,
         facts_as_of=NOW,
@@ -27,13 +26,30 @@ def test_per_brand_migration_reverse_guards_refuse_durable_runtime_data():
     guard_migration = importlib.import_module(
         "core.migrations.0019_guard_per_brand_narrative_reverse"
     )
-    with pytest.raises(RuntimeError, match="cannot reverse per-brand"):
-        guard_migration.refuse_destructive_per_brand_reverse(apps, None)
 
-    core_models.TrendNarrativeRun.objects.filter(pk=run.pk).delete()
+    current_owners = {
+        "TrendNarrativeRun": core_models.OriginalContentRun,
+        "TrendNarrativeProviderCall": core_models.OriginalContentCall,
+        "BrandTrendNarrative": core_models.OriginalContent,
+        "TrendNarrativeVisibleRun": core_models.OriginalContentSelection,
+        "TrendNarrativeWorkSlot": core_models.TrendNarrativeWorkSlot,
+    }
+
+    class CurrentOwnerRegistry:
+        @staticmethod
+        def get_model(app_label, model_name):
+            assert app_label == "core"
+            return current_owners[model_name]
+
+    with pytest.raises(RuntimeError, match="cannot reverse per-brand"):
+        guard_migration.refuse_destructive_per_brand_reverse(CurrentOwnerRegistry, None)
+
+    core_models.OriginalContentRun.objects.filter(pk=run.pk).delete()
     core_models.TrendNarrativeWorkSlot.objects.create(window_days=1)
     with pytest.raises(RuntimeError, match="cannot reverse per-brand"):
-        guard_migration.refuse_destructive_per_brand_reverse(apps, None)
+        guard_migration.refuse_destructive_per_brand_reverse(
+            CurrentOwnerRegistry, None
+        )
 
 
 def _restore_current_core_schema() -> None:
@@ -186,17 +202,26 @@ def test_subject_identity_and_support_unions_are_database_enforced():
         facts_as_of=NOW,
     )
 
-    valid = subject_model.objects.create(
-        trend_narrative=narrative,
-        position=0,
-        support_type=subject_model.SupportType.MEASURED_CANDIDATE,
-        entity_type=subject_model.EntityType.BRAND,
-        identity_type=subject_model.IdentityType.BRAND,
-        canonical_key_snapshot="minimax",
-        name_en_snapshot="MiniMax",
-        name_zh_cn_snapshot="MiniMax",
-        candidate_id="minimax:full_window",
-    )
+    from core.models import TrendNarrativeSubjectLabel
+
+    with transaction.atomic():
+        valid = subject_model.objects.create(
+            trend_narrative=narrative,
+            position=0,
+            support_type=subject_model.SupportType.MEASURED_CANDIDATE,
+            entity_type=subject_model.EntityType.BRAND,
+            identity_type=subject_model.IdentityType.BRAND,
+            canonical_key_snapshot="minimax",
+            candidate_id="minimax:full_window",
+        )
+        TrendNarrativeSubjectLabel.objects.bulk_create(
+            [
+                TrendNarrativeSubjectLabel(
+                    subject=valid, locale_id=locale, label_snapshot="MiniMax"
+                )
+                for locale in ("en", "zh-Hans")
+            ]
+        )
     assert valid.pk
 
     with transaction.atomic(), pytest.raises(IntegrityError):
@@ -208,8 +233,6 @@ def test_subject_identity_and_support_unions_are_database_enforced():
             identity_type=subject_model.IdentityType.UNRESOLVED,
             observed_name="OffListModel",
             canonical_key_snapshot="synthetic-key-is-forbidden",
-            name_en_snapshot="OffListModel",
-            name_zh_cn_snapshot="OffListModel",
             candidate_id="off-list:fake-series",
             evidence_ids=[],
         )
@@ -228,8 +251,6 @@ def test_subject_identity_and_support_unions_are_database_enforced():
             entity_type=subject_model.EntityType.MODEL,
             identity_type=subject_model.IdentityType.UNRESOLVED,
             observed_name="OffListModel",
-            name_en_snapshot="OffListModel",
-            name_zh_cn_snapshot="OffListModel",
             evidence_ids=["e_one", "e_two"],
         )
 
@@ -249,11 +270,20 @@ def test_subject_position_is_unique_and_bounded():
         "entity_type": subject_model.EntityType.BRAND,
         "identity_type": subject_model.IdentityType.BRAND,
         "canonical_key_snapshot": "minimax",
-        "name_en_snapshot": "MiniMax",
-        "name_zh_cn_snapshot": "MiniMax",
         "candidate_id": "minimax:full_window",
     }
-    subject_model.objects.create(position=0, **values)
+    with transaction.atomic():
+        subject = subject_model.objects.create(position=0, **values)
+        from core.models import TrendNarrativeSubjectLabel
+
+        TrendNarrativeSubjectLabel.objects.bulk_create(
+            [
+                TrendNarrativeSubjectLabel(
+                    subject=subject, locale_id=locale, label_snapshot="MiniMax"
+                )
+                for locale in ("en", "zh-Hans")
+            ]
+        )
     with transaction.atomic(), pytest.raises(IntegrityError):
         subject_model.objects.create(position=0, **values)
     with transaction.atomic(), pytest.raises(IntegrityError):
@@ -273,20 +303,20 @@ def test_u2_normalized_persistence_tables_constraints_and_indexes_exist():
             SELECT relname
             FROM pg_class
             WHERE relname IN (
-                'trend_narrative_runs',
-                'trend_narrative_provider_calls',
-                'brand_trend_narratives',
-                'trend_narrative_visible_runs'
+                'original_content_runs',
+                'original_content_calls',
+                'original_content',
+                'original_content_selections'
             )
               AND relkind = 'r'
             ORDER BY relname
             """
         )
         assert [row[0] for row in cursor.fetchall()] == [
-            "brand_trend_narratives",
-            "trend_narrative_provider_calls",
-            "trend_narrative_runs",
-            "trend_narrative_visible_runs",
+            "original_content",
+            "original_content_calls",
+            "original_content_runs",
+            "original_content_selections",
         ]
         cursor.execute(
             """
@@ -294,7 +324,7 @@ def test_u2_normalized_persistence_tables_constraints_and_indexes_exist():
             FROM pg_constraint
             WHERE conname IN (
                 'uq_tnr_source_window', 'uq_tnpc_run_stage_batch',
-                'uq_tnpc_request_identity', 'uq_btn_run_brand',
+                'uq_tnpc_request_identity', 'uq_oc_run_output',
                 'ck_tnpc_sent_shape', 'ck_btn_held_last_good',
                 'ck_btn_critic_decision', 'ck_btn_narrative_kind',
                 'ck_btn_confidence'
@@ -308,7 +338,7 @@ def test_u2_normalized_persistence_tables_constraints_and_indexes_exist():
             "ck_btn_held_last_good",
             "ck_btn_narrative_kind",
             "ck_tnpc_sent_shape",
-            "uq_btn_run_brand",
+            "uq_oc_run_output",
             "uq_tnpc_request_identity",
             "uq_tnpc_run_stage_batch",
             "uq_tnr_source_window",
@@ -336,8 +366,10 @@ def test_u2_normalized_persistence_tables_constraints_and_indexes_exist():
     assert {"critic_decision", "narrative_kind", "confidence"} <= brand_fields
 
 
-@pytest.mark.usefixtures("isolated_migration_database")
-def test_u2_migration_round_trip_preserves_legacy_narrative_rows():
+@pytest.mark.parametrize(
+    "migration_rehearsal_schema", [("core", "0065_measurement_taxonomy")], indirect=True
+)
+def test_u2_migration_round_trip_preserves_legacy_narrative_rows(migration_rehearsal_schema):
     from django.db.migrations.executor import MigrationExecutor
 
     legacy = core_models.TrendNarrative.objects.create(
@@ -381,29 +413,40 @@ def test_product_subject_snapshot_survives_future_product_catalog_deletion():
         status=core_models.TrendNarrative.Status.CHECKED,
         facts_as_of=NOW,
     )
-    subject = core_models.TrendNarrativeSubject.objects.create(
-        trend_narrative=narrative,
-        position=0,
-        support_type="measured_candidate",
-        entity_type="model",
-        identity_type="product",
-        product=product,
-        canonical_key_snapshot="vendor/FutureModel",
-        name_en_snapshot="FutureModel",
-        name_zh_cn_snapshot="FutureModel",
-        candidate_id="vendor/FutureModel:full_window",
-    )
+    from core.models import TrendNarrativeSubjectLabel
+
+    with transaction.atomic():
+        subject = core_models.TrendNarrativeSubject.objects.create(
+            trend_narrative=narrative,
+            position=0,
+            support_type="measured_candidate",
+            entity_type="model",
+            identity_type="product",
+            product=product,
+            canonical_key_snapshot="vendor/FutureModel",
+            candidate_id="vendor/FutureModel:full_window",
+        )
+        TrendNarrativeSubjectLabel.objects.bulk_create(
+            [
+                TrendNarrativeSubjectLabel(
+                    subject=subject, locale_id=locale, label_snapshot="FutureModel"
+                )
+                for locale in ("en", "zh-Hans")
+            ]
+        )
 
     product.delete()
     subject.refresh_from_db()
 
     assert subject.product_id is None
     assert subject.canonical_key_snapshot == "vendor/FutureModel"
-    assert subject.name_en_snapshot == "FutureModel"
+    assert subject.localized_labels.get(locale_id="en").label_snapshot == "FutureModel"
 
 
-@pytest.mark.usefixtures("isolated_migration_database")
-def test_upgrade_from_0013_backfills_canonical_fields_and_subjects():
+@pytest.mark.parametrize(
+    "migration_rehearsal_schema", [("core", "0065_measurement_taxonomy")], indirect=True
+)
+def test_upgrade_from_0013_backfills_canonical_fields_and_subjects(migration_rehearsal_schema):
     from django.db.migrations.executor import MigrationExecutor
 
     executor = MigrationExecutor(connection)
@@ -477,8 +520,10 @@ def test_upgrade_from_0013_backfills_canonical_fields_and_subjects():
         _restore_current_core_schema()
 
 
-@pytest.mark.usefixtures("isolated_migration_database")
-def test_reverse_refuses_expansion_only_data_before_any_destructive_step():
+@pytest.mark.parametrize(
+    "migration_rehearsal_schema", [("core", "0065_measurement_taxonomy")], indirect=True
+)
+def test_reverse_refuses_expansion_only_data_before_any_destructive_step(migration_rehearsal_schema):
     from django.db.migrations.executor import MigrationExecutor
 
     narrative = core_models.TrendNarrative.objects.create(

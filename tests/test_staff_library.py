@@ -1,3 +1,4 @@
+
 import io
 import json
 import socket
@@ -39,6 +40,7 @@ from core.staff_assets.media import (
 from core.staff_assets.population import staff_population
 from core.staff_assets.queue import claim, enqueue, finish
 from core.staff_assets.worker import run_once
+from tests.person_factory import person_with_name
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
@@ -114,7 +116,8 @@ def test_accountless_repeat_import_preserves_original_and_role_location(staff_st
         StaffCollectionWork.objects.count(),
     )
     import_manifest(manifest, apply=True)
-    assert counts == (1, 1, 1, 1)
+    # One unlocalized identity label and one source-backed Chinese spelling.
+    assert counts == (1, 2, 1, 1)
     assert counts == (
         Person.objects.count(),
         PersonName.objects.count(),
@@ -198,7 +201,7 @@ def test_manual_role_writer_queues_only_after_commit():
 def test_media_dedup_keeps_attributions_and_avatar_is_not_a_portrait(staff_storage):
     root = staff_storage
     (root / "portrait.png").write_bytes(png_bytes())
-    person = Person.objects.create(display_name="Image subject")
+    person = person_with_name("Image subject")
     for source in ("https://example.com/a", "https://example.com/b"):
         record_media(
             person,
@@ -250,7 +253,7 @@ def test_store_image_restores_missing_bytes(staff_storage):
 
 def test_reimport_restores_missing_bytes(staff_storage):
     (staff_storage / "portrait.png").write_bytes(png_bytes())
-    person = Person.objects.create(display_name="Subject")
+    person = person_with_name("Subject")
     entry = {
         "path": "portrait.png",
         "source_url": "https://example.com/bio",
@@ -269,7 +272,7 @@ def test_reimport_restores_missing_bytes(staff_storage):
 
 
 def test_lease_contention_expiry_and_stale_results():
-    person = Person.objects.create(display_name="Leased")
+    person = person_with_name("Leased")
     enqueue(person.pk, {"version": 1})
     work = claim()
     assert claim() is None
@@ -306,7 +309,7 @@ class Provider:
 
 
 def test_paid_journal_dedup_budget_and_no_implicit_china_route(staff_storage):
-    person = Person.objects.create(display_name="Staff")
+    person = person_with_name("Staff")
     provider = Provider()
     run_id = uuid.uuid4()
     enqueue(person.pk, {"baidu_eligible": True, "baidu_query": "测试人 DeepSeek"})
@@ -347,7 +350,7 @@ def test_paid_journal_dedup_budget_and_no_implicit_china_route(staff_storage):
         )["error"]
         == "budget_exhausted"
     )
-    other = Person.objects.create(display_name="中文名字")
+    other = person_with_name("中文名字")
     enqueue(other.pk, {"baidu_query": "中文名字"})
     run_once(
         run_id=run_id,
@@ -374,7 +377,7 @@ def _unfetched_media(person, url):
 
 
 def test_transient_download_stays_unfetched_and_retries_until_three_attempts():
-    person = Person.objects.create(display_name="Retry")
+    person = person_with_name("Retry")
     enqueue(person.pk, {"version": "download"})
     row = _unfetched_media(person, "https://example.com/photo.png")
 
@@ -399,7 +402,7 @@ def test_transient_download_stays_unfetched_and_retries_until_three_attempts():
 
 
 def test_unsupported_image_and_decompression_bomb_stay_unavailable():
-    person = Person.objects.create(display_name="Bad image")
+    person = person_with_name("Bad image")
     enqueue(person.pk, {"version": "bad-image"})
     unsupported = _unfetched_media(person, "https://example.com/not-image")
     bomb = _unfetched_media(person, "https://example.com/bomb")
@@ -421,7 +424,7 @@ def test_unsupported_image_and_decompression_bomb_stay_unavailable():
 
 
 def test_interrupted_paid_request_is_not_automatically_retried():
-    person = Person.objects.create(display_name="Staff")
+    person = person_with_name("Staff")
     provider = Provider(fail=True)
     enqueue(person.pk, {"baidu_eligible": True, "baidu_query": "Staff DeepSeek"})
     options = {
@@ -442,7 +445,7 @@ def test_interrupted_paid_request_is_not_automatically_retried():
 
 
 def test_original_prose_and_translation_versions_survive_failure():
-    person = Person.objects.create(display_name="Writer")
+    person = person_with_name("Writer")
     first = record_text(
         person,
         kind="biography",

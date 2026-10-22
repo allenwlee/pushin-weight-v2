@@ -1,3 +1,4 @@
+
 import io
 import json
 
@@ -5,10 +6,11 @@ import pytest
 from django.utils import timezone
 from PIL import Image
 
-from core.models import Brand, Person, PersonBrandAffiliation, PersonMedia
+from core.models import Brand, PersonBrandAffiliation, PersonMedia
 from core.staff_assets.media import store_image
 from monitor.editorial.config import EditorialConfig, Route
 from monitor.editorial.contracts import Event
+from tests.person_factory import person_with_name
 
 
 def senior_approval():
@@ -94,7 +96,7 @@ def person_photo(
     photo=True,
 ):
     brand, _ = Brand.objects.get_or_create(nickname="deepseek")
-    person = Person.objects.create(display_name=name)
+    person = person_with_name(name)
     role = PersonBrandAffiliation.objects.create(
         person=person,
         brand=brand,

@@ -7,6 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import Account, Person, PersonAccount, StaffIntake
+from core.person_names import record_legacy_display_name
 
 
 class IdentityConflict(ValueError):
@@ -97,15 +98,15 @@ def account_person(account, *, create=False, observed_at=None, display_name=None
                 "Account identity was rejected; reviewed correction required"
             )
         if person is None and create:
-            person, _ = Person.objects.get_or_create(
-                pk=ids[0],
-                defaults={
-                    "display_name": display_name
+            person, created = Person.objects.get_or_create(pk=ids[0])
+            if created:
+                record_legacy_display_name(
+                    person,
+                    display_name
                     or account.display_name
                     or account.handle
-                    or str(account.pk)
-                },
-            )
+                    or str(account.pk),
+                )
     if person and create:
         observed = observed_at or timezone.now()
         link, _ = PersonAccount.objects.get_or_create(
@@ -142,9 +143,9 @@ def subject_person(*, handle, display_name, source_key, account=None, observed_a
         if handle
         else uuid.uuid5(uuid.NAMESPACE_URL, "pushinweight:person:" + source_key)
     )
-    person = Person.objects.get_or_create(
-        pk=identity, defaults={"display_name": display_name}
-    )[0]
+    person, created = Person.objects.get_or_create(pk=identity)
+    if created:
+        record_legacy_display_name(person, display_name)
     return canonical_person(person.pk)
 
 
@@ -211,10 +212,11 @@ def manifest_person(record, *, create=False):
         return account_person(account, create=create), account
     if not create:
         return None, None
-    person, _ = Person.objects.get_or_create(
+    person, created = Person.objects.get_or_create(
         pk=uuid.uuid5(
             uuid.NAMESPACE_URL, "staff-library:source:" + record["source_key"]
         ),
-        defaults={"display_name": record["display_name"]},
     )
+    if created:
+        record_legacy_display_name(person, record["display_name"])
     return canonical_person(person.pk), None

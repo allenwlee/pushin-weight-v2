@@ -35,7 +35,11 @@ def export_inputs(brand_ids, start_date, end_date):
             )
         )
         company_ids = {company for _, company in links}
-        companies = list(Company.objects.filter(pk__in=company_ids).order_by("pk"))
+        companies = list(
+            Company.objects.filter(pk__in=company_ids)
+            .prefetch_related("labels")
+            .order_by("pk")
+        )
         products = (
             Product.objects.filter(
                 brand_id__in=brand_ids, type="llm-model", hf_type="model"
@@ -69,7 +73,7 @@ def export_inputs(brand_ids, start_date, end_date):
                 for b in brands
             ],
             "companies": [
-                {"id": c.pk, "label": c.display_name or c.pk} for c in companies
+                {"id": c.pk, "label": c.label or c.pk} for c in companies
             ],
             "products": [
                 {

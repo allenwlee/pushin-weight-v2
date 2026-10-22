@@ -13,10 +13,12 @@ from playwright.sync_api import sync_playwright
 from core.models import (
     Account,
     Brand,
+    BrandDiscoveryCandidate,
     OfficialCompanyAccountState,
     OfficialCompanyListIntent,
     ProductVerificationProposal,
 )
+from tests.company_factory import company_with_label
 from tests.test_product_review import _proposal
 
 pytestmark = pytest.mark.requires_postgres
@@ -24,6 +26,68 @@ pytestmark = pytest.mark.requires_postgres
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class AdminBrowserTests(StaticLiveServerTestCase):
+    def test_product_review_company_option_renders_current_name_in_browser(self):
+        from django.urls import reverse
+
+        company = company_with_label("rg2-company-browser", "RG2 Example Company")
+        Brand.objects.create(nickname="rg2-brand-browser")
+        now = timezone.now()
+        candidate = BrandDiscoveryCandidate.objects.create(
+            observed_name="RG2 Example Publisher",
+            candidate_identity="rg2-company-browser-candidate",
+            first_observed_at=now,
+            last_observed_at=now,
+        )
+        proposal = _proposal("z", candidate=candidate)
+        page_errors = []
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = self._context(browser).new_page()
+                page.on("pageerror", lambda error: page_errors.append(str(error)))
+                response = page.goto(
+                    self.live_server_url
+                    + reverse("product_review_detail", args=[proposal.pk])
+                )
+                self.assertEqual(response.status, 200)
+                option = page.locator(
+                    f'select[name="company_id"] option[value="{company.pk}"]'
+                )
+                self.assertEqual(option.inner_text(), "RG2 Example Company")
+                selector = page.locator('select[name="company_id"]')
+                self.assertTrue(selector.is_visible())
+                self.assertEqual(option.count(), 1)
+                self.assertEqual(page_errors, [])
+            finally:
+                browser.close()
+
+    def test_registered_company_label_renders_on_admin_page(self):
+        from core.official_company_candidates import CANDIDATE_POLICY
+
+        company = company_with_label("rg2-admin-company", "RG2 Admin Company")
+        account = Account.objects.create(author_id="rg2-admin-company-account")
+        OfficialCompanyAccountState.objects.create(
+            account=account,
+            registered_company=company,
+            status="registered",
+            evidence_hash="b" * 64,
+            candidate_priority=1,
+            candidate_policy_version=CANDIDATE_POLICY,
+            model="test-model",
+            decision={"organization_name": "RG2 Admin Company"},
+        )
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = self._context(browser).new_page()
+                response = page.goto(self.live_server_url + "/admin?locale=en")
+                self.assertEqual(response.status, 200)
+                row = page.locator('[data-admin-account="rg2-admin-company-account"]')
+                self.assertTrue(row.is_visible())
+                self.assertIn("RG2 Admin Company", row.inner_text())
+            finally:
+                browser.close()
+
     def test_frozen_run_has_separate_membership_scoped_tabs(self):
         from datetime import timedelta
 

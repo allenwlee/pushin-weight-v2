@@ -5,12 +5,12 @@ import pytest
 from core.models import (
     JobListing,
     JobListingEvidence,
-    Person,
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
 )
 from monitor.general_readers import general_feed
 from tests.general_helpers import NOW, classified_post
+from tests.person_factory import person_with_name
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
@@ -52,8 +52,8 @@ def affiliation(
     evidence_review="confirmed",
     **overrides,
 ):
-    person = person or Person.objects.create(
-        display_name="Alex Kim",
+    person = person or person_with_name(
+        "Alex Kim",
         date_of_birth="1990",
         date_of_birth_precision="year",
         sex="female",

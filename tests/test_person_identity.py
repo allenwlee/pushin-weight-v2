@@ -10,6 +10,7 @@ from core.profile_snapshots import (
     person_id_for_account,
 )
 from core.staff_assets.intake import ingest_record
+from tests.person_factory import person_with_name
 from tests.test_staff_library import record
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
@@ -42,7 +43,7 @@ def profile(account):
 
 def test_new_biography_does_not_use_a_pending_account_match():
     account = Account.objects.create(author_id="pending-match", handle="researcher")
-    wrong = Person.objects.create(display_name="A different person")
+    wrong = person_with_name("A different person")
     link(wrong, account)
     payload = record(account_key=str(account.pk))
     intake, _ = ingest_record(payload)
@@ -50,12 +51,14 @@ def test_new_biography_does_not_use_a_pending_account_match():
     assert intake.eligibility == "needs_review"
     assert intake.payload == payload
     assert not wrong.brand_affiliations.exists()
-    assert not wrong.names.exists()
+    legacy_name = wrong.names.get(locale_id="und")
+    assert legacy_name.review_status == "pending"
+    assert legacy_name.origin == "legacy"
 
 
 def test_profile_observation_does_not_follow_a_guessed_person_link():
     account = Account.objects.create(author_id="self-observation", handle="researcher")
-    wrong = Person.objects.create(display_name="A different person")
+    wrong = person_with_name("A different person")
     link(wrong, account)
     profile(account)
     assert not wrong.brand_affiliations.exists()
@@ -65,7 +68,7 @@ def test_profile_observation_does_not_follow_a_guessed_person_link():
 
 def test_confirmed_account_identity_is_shared_by_profile_and_import():
     account = Account.objects.create(author_id="confirmed-match", handle="researcher")
-    person = Person.objects.create(display_name="The researcher")
+    person = person_with_name("The researcher")
     link(person, account, "confirmed")
     profile(account)
     intake, _ = ingest_record(record(account_key=str(account.pk)))
@@ -76,7 +79,7 @@ def test_confirmed_account_identity_is_shared_by_profile_and_import():
 
 def test_held_intake_can_replay_after_account_confirmation():
     account = Account.objects.create(author_id="held-match", handle="researcher")
-    person = Person.objects.create(display_name="The researcher")
+    person = person_with_name("The researcher")
     candidate = link(person, account)
     payload = record(account_key=str(account.pk))
     held, _ = ingest_record(payload)
@@ -87,7 +90,7 @@ def test_held_intake_can_replay_after_account_confirmation():
     assert applied.pk == held.pk
     assert applied.person_id == person.pk
     assert StaffIntake.objects.count() == 1
-    assert person.names.filter(language="zh-Hans").exists()
+    assert person.names.filter(locale_id="zh-Hans").exists()
 
 
 def test_register_account_attaches_to_its_provisional_person():
@@ -152,7 +155,7 @@ def test_site_first_then_account_discovery_retains_the_conflict_for_review():
 def test_multiple_pending_accounts_do_not_pick_the_first_person():
     account = Account.objects.create(author_id="many-pending", handle="researcher")
     for name in ("One", "Two"):
-        link(Person.objects.create(display_name=name), account)
+        link(person_with_name(name), account)
     intake, _ = ingest_record(record(account_key=str(account.pk)))
     assert intake.person_id is None and intake.eligibility == "needs_review"
     assert not Person.objects.filter(brand_affiliations__isnull=False).exists()

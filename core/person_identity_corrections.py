@@ -105,22 +105,27 @@ def _copy_names(source, target, names, *, kind, reviewer, reason):
         parent = copy(row.derived_from) if row.derived_from_id else None
         representation = {
             "full_name": row.full_name,
-            "language": row.language,
+            "language": row.locale_id,
             "name_type": row.name_type,
             "origin": row.origin,
             "derived_from_id": parent.pk if parent else None,
         }
+        defaults = {
+            "full_name": row.full_name,
+            "locale_id": row.locale_id,
+            "name_type": row.name_type,
+            "origin": row.origin,
+            "derived_from": parent,
+            "given_name": row.given_name,
+            "family_name": row.family_name,
+            "name_order": row.name_order,
+            "review_status": row.review_status,
+            "review_history": row.review_history,
+        }
         new, created = PersonName.objects.get_or_create(
             person=target,
             fingerprint=digest(representation),
-            defaults={
-                **representation,
-                "given_name": row.given_name,
-                "family_name": row.family_name,
-                "name_order": row.name_order,
-                "review_status": row.review_status,
-                "review_history": row.review_history,
-            },
+            defaults=defaults,
         )
         if not created and any(
             getattr(new, key) not in (None, getattr(row, key))

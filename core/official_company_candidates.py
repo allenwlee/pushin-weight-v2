@@ -95,8 +95,6 @@ class CandidateSignals:
                     "bio",
                     "description",
                     "profile_bio_text",
-                    "bio_en",
-                    "bio_zh_cn",
                 )
             )
         )
@@ -174,11 +172,17 @@ class CandidateSignals:
 
 def candidate_priorities(accounts):
     """Bulk reads all available history once per bounded account batch; no calls."""
-    from core.models import AccountProfileSnapshot, Post
+    from core.models import AccountProfileSnapshot, AccountProfileTextTranslation, Post
 
     signals = {account.pk: CandidateSignals(account) for account in accounts}
     # Gold is independently admitted; do not read its post history to qualify it.
     inspect_ids = [pk for pk, signal in signals.items() if signal.priority() != 1]
+    for row in AccountProfileTextTranslation.objects.filter(
+        account_id__in=inspect_ids,
+        locale_id__in=("en", "zh-Hans"),
+    ).values_list("account_id", "text").iterator(chunk_size=500):
+        signal = signals[row[0]]
+        signal.add_bio(row[1])
     for row in (
         Post.objects.filter(author_id__in=inspect_ids)
         .values("author_id", "text", "author_profile_bio", "author_description")

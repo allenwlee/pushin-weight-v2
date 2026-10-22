@@ -19,6 +19,7 @@ from core.models import (
     PersonAccount,
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
+    PersonNameSelection,
     Post,
     PostBrandClassificationState,
     PostBrandProduct,
@@ -329,7 +330,13 @@ def person_intelligence(person_id) -> dict[str, Any]:
         .prefetch_related(Prefetch("evidence", queryset=evidence))
         .order_by("brand_id", "id")
     )
+    from core.person_names import selected_name_for
+
     person = Person.objects.select_related("primary_name", "english_name").prefetch_related(
+        Prefetch(
+            "name_selections",
+            queryset=PersonNameSelection.objects.select_related("name"),
+        ),
         Prefetch("brand_affiliations", queryset=affiliations),
         Prefetch(
             "account_links",
@@ -345,11 +352,11 @@ def person_intelligence(person_id) -> dict[str, Any]:
     return {
         "person": {
             "id": str(person.pk),
-            "display_name": person.primary_name.full_name if person.primary_name_id else person.display_name,
+            "display_name": selected_name_for(person, "und") or "Unreviewed person",
             "display_names": {
-                "en": person.english_name.full_name if person.english_name_id else person.display_name_en,
-                "zh-cn": person.display_name_zh_cn,
-                "ja": person.display_name_ja,
+                "en": selected_name_for(person, "en"),
+                "zh-cn": selected_name_for(person, "zh-Hans"),
+                "ja": selected_name_for(person, "ja"),
             },
             "date_of_birth": _effective_date(
                 person.date_of_birth, person.date_of_birth_precision

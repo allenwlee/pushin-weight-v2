@@ -793,6 +793,7 @@ def register_account(state_id, *, cfg):
     from django.utils import timezone
     from django.utils.text import slugify
 
+    from core.company_labels import set_company_label
     from core.models import (
         Account,
         Brand,
@@ -801,6 +802,7 @@ def register_account(state_id, *, cfg):
         BrandDiscoveryCandidate,
         Company,
         CompanyAccount,
+        CompanyLabel,
         OfficialCompanyAccountState,
         OfficialCompanyListIntent,
         Role,
@@ -881,9 +883,12 @@ def register_account(state_id, *, cfg):
                 raise IdentityConflict("existing_brand_identity_collision")
             if (
                 company is None
-                and Company.objects.filter(
-                    Q(nickname=slug) | Q(display_name__iexact=name)
-                ).exists()
+                and (
+                    Company.objects.filter(nickname=slug).exists()
+                    or CompanyLabel.objects.filter(
+                        locale_id="und", label__iexact=name
+                    ).exists()
+                )
             ):
                 raise IdentityConflict("existing_company_identity_collision")
             if (
@@ -898,7 +903,8 @@ def register_account(state_id, *, cfg):
             if brand is None:
                 brand = Brand.objects.create(nickname=slug, display_name=name)
             if company is None:
-                company = Company.objects.create(nickname=slug, display_name=name)
+                company = Company.objects.create(nickname=slug)
+                set_company_label(company, "und", name)
             BrandAccount.objects.get_or_create(
                 brand=brand, account=account, defaults={"role": role}
             )

@@ -3,7 +3,7 @@
 from uuid import uuid4
 
 import pytest
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 
@@ -12,6 +12,7 @@ from core.models import (
     OriginalContentRun,
     OriginalContentSelection,
     OriginalContentSource,
+    OriginalContentSubjectLabel,
     OriginalContentText,
     Post,
 )
@@ -39,8 +40,6 @@ def saved_text(locale="en"):
         status="prepared",
         attempted_at=now,
         brand_key_snapshot="",
-        brand_name_en_snapshot="",
-        brand_name_zh_cn_snapshot="",
     )
     return OriginalContentText.objects.create(
         narrative=content,
@@ -106,6 +105,30 @@ def test_featured_selection_has_text_and_no_window():
             facts_as_of=timezone.now(),
             activated_at=timezone.now(),
         )
+
+
+def test_snapshot_cannot_change_or_disappear_while_its_content_exists():
+    text = saved_text()
+    content = text.narrative
+    label = OriginalContentSubjectLabel.objects.create(
+        content=content, locale_id="en", label_snapshot="Writing-time name"
+    )
+    with pytest.raises(IntegrityError, match="immutable"), transaction.atomic():
+        OriginalContentSubjectLabel.objects.filter(pk=label.pk).update(
+            label_snapshot="Later name"
+        )
+    with pytest.raises(IntegrityError, match="immutable"), transaction.atomic():
+        label.delete()
+        with connection.cursor() as cursor:
+            cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    assert content.localized_subject_labels.get().label_snapshot == "Writing-time name"
+
+    text.delete()
+    with transaction.atomic():
+        content.delete()
+        with connection.cursor() as cursor:
+            cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    assert not OriginalContentSubjectLabel.objects.exists()
 
 
 def test_source_requires_url_and_honest_hash_basis():

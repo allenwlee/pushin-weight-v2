@@ -78,6 +78,7 @@ relations:
     - collection_corrections
     - metric_values
     - people_names
+    - person_name_selections
     - people_name_evidence
     - people_texts
     - people_text_translations
@@ -85,6 +86,7 @@ relations:
     - account_post_appearances
     - account_profile_snapshots
     - accounts
+    - account_profile_text_translations
     - audience_topic_concepts
     - audience_topic_labels
     - audience_topic_schemes
@@ -96,6 +98,7 @@ relations:
     - brands_accounts
     - brands_companies
     - companies
+    - company_labels
     - companies_accounts
     - countries
     - country_codes_region
@@ -158,6 +161,7 @@ relations:
     - targeted_extraction_attempts
     - targeted_extraction_states
     - trend_narrative_subjects
+    - trend_narrative_subject_labels
     - trend_narratives
     - unsanctioned_flag_keys
     - untracked_brand_promotion_evidence
@@ -190,6 +194,7 @@ relations:
     - staff_media_objects
     - staff_provider_requests
     - _applied_config_snapshot
+    - original_content_subject_labels
     - account_emailaddress
     - account_emailconfirmation
     - auth_group
@@ -297,6 +302,7 @@ relations:
     - people_identity_corrections
     - people_media
     - people_names
+    - person_name_selections
     - people_name_evidence
     - people_texts
     - people_text_translations
@@ -305,12 +311,16 @@ relations:
     - staff_media_objects
     - staff_provider_requests
     - account_profile_snapshots
+    - account_profile_text_translations
     - audience_topic_concepts
     - audience_topic_labels
     - audience_topic_schemes
     - brand_discovery_candidates
     - original_content_texts
     - original_content_sources
+    - original_content_subject_labels
+    - company_labels
+    - trend_narrative_subject_labels
     - event_evidence
     - events
     - geopolitical_mode_keys
@@ -394,6 +404,7 @@ relations:
     - people_media_id_seq
     - people_names_id_seq
     - people_name_evidence_id_seq
+    - person_name_selections_id_seq
     - people_texts_id_seq
     - people_text_translations_id_seq
     - staff_collection_work_id_seq
@@ -403,6 +414,9 @@ relations:
     - account_emailaddress_id_seq
     - account_emailconfirmation_id_seq
     - account_profile_snapshots_id_seq
+    - account_profile_text_translations_id_seq
+    - company_labels_id_seq
+    - original_content_subject_labels_id_seq
     - auth_group_id_seq
     - auth_group_permissions_id_seq
     - auth_permission_id_seq
@@ -458,6 +472,7 @@ relations:
     - targeted_extraction_attempts_id_seq
     - targeted_extraction_states_id_seq
     - trend_narrative_subjects_id_seq
+    - trend_narrative_subject_labels_id_seq
     - trend_narrative_provider_calls_id_seq
     - trend_narrative_demands_id_seq
     - trend_narrative_runs_id_seq
@@ -483,6 +498,11 @@ relations:
     - official_company_attempts_id_seq
     - official_company_list_intents_id_seq
     - people_identity_corrections_id_seq
+    - person_name_selections_id_seq
+    - account_profile_text_translations_id_seq
+    - company_labels_id_seq
+    - original_content_subject_labels_id_seq
+    - trend_narrative_subject_labels_id_seq
     - people_media_id_seq
     - people_names_id_seq
     - people_name_evidence_id_seq
@@ -558,6 +578,7 @@ scrub:
     - staff_media_objects
     - staff_provider_requests
     - _applied_config_snapshot
+    - original_content_subject_labels
     - account_emailaddress
     - account_emailconfirmation
     - auth_group
@@ -629,6 +650,7 @@ validation:
     - people_brand_affiliations
     - people_brand_affiliation_evidence
     - people_names
+    - person_name_selections
     - people_name_evidence
     - people_texts
     - people_text_translations
@@ -637,6 +659,8 @@ validation:
     - brands
     - brands_companies
     - companies
+    - company_labels
+    - trend_narrative_subject_labels
     - model_release_evidence
     - model_releases
     - posts
@@ -684,8 +708,6 @@ validation:
       - external_identifier
       - author_id
       - handle
-      - bio_en
-      - bio_zh_cn
     brands:
       - nickname
       - display_name_en
@@ -716,19 +738,33 @@ validation:
       - trend_narrative_id
       - position
       - support_type
+    account_profile_text_translations:
+      - account_key
+      - locale_id
+      - text
+    company_labels:
+      - company_id
+      - locale_id
+      - label
+    person_name_selections:
+      - person_id
+      - display_locale_id
+      - name_id
+    trend_narrative_subject_labels:
+      - subject_id
+      - locale_id
+      - label_snapshot
   translation_columns:
     posts:
       - text_en
       - text_zh_cn
-    accounts:
-      - bio_en
-      - bio_zh_cn
+    account_profile_text_translations:
+      - text
     brands:
       - display_name_en
       - display_name_zh_cn
-    companies:
-      - display_name_en
-      - display_name_zh_cn
+    company_labels:
+      - label
   classification_tables:
     - posts_brands
     - posts_brands_classification_states

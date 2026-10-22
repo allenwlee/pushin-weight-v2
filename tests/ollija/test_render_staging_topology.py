@@ -224,7 +224,12 @@ def test_every_stateful_runtime_binds_only_to_staging_database_and_broker() -> N
 
     database = blueprint["databases"][0]
     broker = _service(blueprint, STAGING_BROKER)
-    assert database["ipAllowList"] == []
+    assert database["ipAllowList"] == [
+        {
+            "source": "0.0.0.0/0",
+            "description": "owner-requested staging database access",
+        }
+    ]
     assert broker["ipAllowList"] == []
     assert broker["maxmemoryPolicy"] == "noeviction"
 

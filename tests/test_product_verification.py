@@ -12,7 +12,6 @@ from core.models import (
     BrandAccount,
     BrandCompany,
     BrandDiscoveryCandidate,
-    Company,
     ModelRelease,
     Post,
     PostBrandProduct,
@@ -31,6 +30,7 @@ from core.product_verification import (
     hf_org_socials,
     source_repo_evidence,
 )
+from tests.company_factory import company_with_label
 from tests.publisher_fixtures import hf_publisher
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
@@ -38,7 +38,7 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 
 def _publisher():
     brand = Brand.objects.create(nickname="minimax", display_name="MiniMax")
-    company = Company.objects.create(nickname="minimax-company", display_name="MiniMax")
+    company = company_with_label("minimax-company", "MiniMax")
     BrandCompany.objects.create(brand=brand, company=company)
     org = hf_publisher(namespace="MiniMaxAI", company=company, confirmed=True)
     role, _ = Role.objects.get_or_create(key="official")

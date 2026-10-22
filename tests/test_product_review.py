@@ -14,7 +14,6 @@ from core.models import (
     Brand,
     BrandCompany,
     BrandDiscoveryCandidate,
-    Company,
     ModelRelease,
     Post,
     PostBrandProduct,
@@ -22,6 +21,7 @@ from core.models import (
     ProductVerificationProposal,
 )
 from core.product_verification import decide_product_proposal
+from tests.company_factory import company_with_label
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
@@ -201,7 +201,7 @@ def test_two_posts_for_same_release_reuse_x_only_product_then_attach_hf_repo():
 
 
 def test_candidate_can_create_untracked_brand_and_company_without_harvest_membership():
-    company = Company.objects.create(nickname="new_company", display_name="New Company")
+    company = company_with_label("new_company", "New Company")
     now = timezone.now()
     candidate = BrandDiscoveryCandidate.objects.create(
         observed_name="New Publisher",

@@ -21,6 +21,7 @@ from core.event_dossiers import (
     identity_key,
     read_dossier,
 )
+from tests.person_factory import person_with_name
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
@@ -307,7 +308,7 @@ def test_raw_incomplete_review_cannot_commit():
 
 
 def test_personnel_move_uses_existing_roles_without_changing_them():
-    person = models.Person.objects.create(display_name="Researcher")
+    person = person_with_name("Researcher")
     roles = [
         models.PersonBrandAffiliation.objects.create(
             person=person,

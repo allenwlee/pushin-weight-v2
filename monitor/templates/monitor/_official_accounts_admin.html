@@ -23,7 +23,7 @@
         <tr data-admin-account="{{ row.state.account.author_id }}">
           <td>{% if row.x_url %}<a href="{{ row.x_url }}" target="_blank" rel="noopener noreferrer">@{{ row.state.account.handle|default:row.state.account.author_id }}</a>{% else %}{{ row.state.account.handle|default:row.state.account.author_id }}{% endif %}<br><small class="muted">{{ row.state.account.author_id }}</small></td>
           <td>{{ row.state.decision.organization_name|default:'—' }}
-            {% if row.state.registered_company %}<p>{{ row.state.registered_company.display_name }}</p>{% endif %}
+            {% if row.state.registered_company %}<p>{{ row.state.registered_company.label }}</p>{% endif %}
             {% if row.state.registered_brand %}<p>{{ admin_copy.brand|default:copy.brand }}: {{ row.state.registered_brand.display_name|default:row.state.registered_brand_id }}</p>{% endif %}
             {% if row.state.decision.model_types %}<p class="muted">{{ admin_copy.models }}: {{ row.state.decision.model_types|join:', ' }}</p>{% endif %}
           </td>

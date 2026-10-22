@@ -13,6 +13,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
 
+from core.company_labels import set_company_label
 from core.models import (
     Account,
     Brand,
@@ -626,10 +627,6 @@ class Command(BaseCommand):
                         nickname=row.company_nickname
                     )
                     company_defaults = {
-                        "display_name": row.company_display_name
-                        or row.company_nickname,
-                        "display_name_en": row.company_display_name_en or None,
-                        "display_name_zh_cn": row.company_display_name_zh_cn or None,
                         "hq_country": row.company_hq_country or None,
                     }
                     if company_created:
@@ -641,6 +638,12 @@ class Command(BaseCommand):
                             if not _update(company, company_defaults)
                             else "companies"
                         ] += 1
+                    for locale, label in (
+                        ("und", row.company_display_name or row.company_nickname),
+                        ("en", row.company_display_name_en),
+                        ("zh-Hans", row.company_display_name_zh_cn),
+                    ):
+                        set_company_label(company, locale, label or None)
                     _, link_created = BrandCompany.objects.get_or_create(
                         brand=brand, company=company
                     )

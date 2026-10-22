@@ -6,11 +6,11 @@ from core.models import (
     Account,
     Brand,
     BrandAccount,
-    Company,
     CompanyAccount,
     Post,
     Role,
 )
+from tests.company_factory import company_with_label
 
 pytestmark = pytest.mark.django_db
 
@@ -35,7 +35,7 @@ def test_accounts_are_provider_scoped_and_generic_links_use_uuid():
     assert x.author_id == "123" and hf.author_id is None
     assert Account.x.get(handle="deepseek").pk == x.pk
     brand = Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
-    company = Company.objects.create(nickname="deepseek", display_name="DeepSeek")
+    company = company_with_label("deepseek", "DeepSeek")
     BrandAccount.objects.create(brand=brand, account=hf, role=role)
     CompanyAccount.objects.create(company=company, account=hf, role=role)
     assert brand.accounts.get().account_id == hf.pk

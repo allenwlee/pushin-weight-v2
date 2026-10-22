@@ -18,6 +18,7 @@ from core.models import (
     Brand,
     BrandTrendNarrative,
     TrendNarrative,
+    TrendNarrativeSubject,
     TrendNarrativeVisibleRun,
 )
 from monitor.trend_narrative_coverage import selected_coverage
@@ -82,7 +83,10 @@ def project_trend_narrative(
                 queryset=BrandTrendNarrative.objects.select_related(
                     "brand", "last_good__brand"
                 ).prefetch_related(
-                    "localized_texts__sources", "last_good__localized_texts__sources"
+                    "localized_texts__sources",
+                    "last_good__localized_texts__sources",
+                    "localized_subject_labels",
+                    "last_good__localized_subject_labels",
                 ).defer(
                     "propositions",
                     "events",
@@ -171,7 +175,14 @@ def _project_legacy_trend_narrative(
             status=TrendNarrative.Status.PUBLISHED,
         )
         .select_related("primary_brand")
-        .prefetch_related("subjects")
+        .prefetch_related(
+            Prefetch(
+                "subjects",
+                queryset=TrendNarrativeSubject.objects.prefetch_related(
+                    "localized_labels"
+                ),
+            )
+        )
         .first()
     )
     no_story = (
@@ -491,13 +502,21 @@ def _per_brand_item(
         if resolved_brand is not None
         else brand_key
     )
+    outcome_labels = {}
+    if served is not None:
+        rows = getattr(served, "_prefetched_objects_cache", {}).get(
+            "localized_subject_labels"
+        )
+        if rows is None:
+            rows = served.localized_subject_labels.all()
+        outcome_labels = {row.locale_id: row.label_snapshot for row in rows}
     name_en = (
-        (outcome.brand_name_en_snapshot if outcome is not None else None)
+        outcome_labels.get("en")
         or (resolved_brand.display_name_en if resolved_brand is not None else None)
         or fallback_name
     )
     name_zh = (
-        (outcome.brand_name_zh_cn_snapshot if outcome is not None else None)
+        outcome_labels.get("zh-Hans")
         or (resolved_brand.display_name_zh_cn if resolved_brand is not None else None)
         or name_en
     )
@@ -967,8 +986,8 @@ def _subject_projection(
             "entity_type": subject.entity_type,
             "identity_type": subject.identity_type,
             "key": (subject.canonical_key_snapshot or subject.observed_name),
-            "display_name": (
-                subject.name_zh_cn_snapshot if is_zh else subject.name_en_snapshot
+            "display_name": _localized_subject_label(
+                subject, "zh-Hans" if is_zh else "en"
             ),
             "url": (
                 reverse("brand_home", args=[subject.canonical_key_snapshot])
@@ -978,6 +997,14 @@ def _subject_projection(
         }
         for subject in subjects
     ]
+
+
+def _localized_subject_label(subject: TrendNarrativeSubject, locale: str) -> str:
+    rows = getattr(subject, "_prefetched_objects_cache", {}).get("localized_labels")
+    if rows is None:
+        rows = subject.localized_labels.all()
+    labels = {row.locale_id: row.label_snapshot for row in rows}
+    return labels.get(locale) or labels.get("en") or ""
 
 
 def _body_parts(body: str, primary_name: str) -> tuple[str, str]:

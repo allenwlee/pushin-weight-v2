@@ -14,10 +14,12 @@ from django.utils import timezone
 from core.models import (
     Brand,
     BrandTrendNarrative,
+    OriginalContentSubjectLabel,
     TrendNarrative,
     TrendNarrativeProviderCall,
     TrendNarrativeRun,
     TrendNarrativeSubject,
+    TrendNarrativeSubjectLabel,
     TrendNarrativeWorkSlot,
 )
 from monitor.trend_narrative_lifecycle import (
@@ -176,16 +178,24 @@ def test_status_reports_schema_two_subjects_without_private_evidence():
             }
         ],
     )
-    TrendNarrativeSubject.objects.create(
+    private_subject = TrendNarrativeSubject.objects.create(
         trend_narrative=row,
         position=1,
         support_type="evidence_only",
         entity_type="model",
         identity_type="unresolved",
         observed_name="PrivateObservedName",
-        name_en_snapshot="PrivateObservedName",
-        name_zh_cn_snapshot="PrivateObservedName",
         evidence_ids=["private-evidence-one", "private-evidence-two"],
+    )
+    TrendNarrativeSubjectLabel.objects.bulk_create(
+        [
+            TrendNarrativeSubjectLabel(
+                subject=private_subject,
+                locale_id=locale,
+                label_snapshot="PrivateObservedName",
+            )
+            for locale in ("en", "zh-Hans")
+        ]
     )
     stdout = StringIO()
 
@@ -248,8 +258,6 @@ def test_status_reports_safe_per_brand_run_transport_and_backlog_diagnostics():
         run=run,
         brand=alpha,
         brand_key_snapshot="alpha",
-        brand_name_en_snapshot="Alpha",
-        brand_name_zh_cn_snapshot="阿尔法",
         status=BrandTrendNarrative.Status.APPROVED,
         headline_en="Alpha headline",
         headline_zh_cn="阿尔法标题",
@@ -261,16 +269,30 @@ def test_status_reports_safe_per_brand_run_transport_and_backlog_diagnostics():
         selected_evidence_packet={"private_evidence": "never expose"},
         final_critic_payload={"private_response": "never expose"},
     )
-    BrandTrendNarrative.objects.create(
+    OriginalContentSubjectLabel.objects.bulk_create(
+        [
+            OriginalContentSubjectLabel(
+                content=approved, locale_id=locale, label_snapshot=label
+            )
+            for locale, label in (("en", "Alpha"), ("zh-Hans", "阿尔法"))
+        ]
+    )
+    held = BrandTrendNarrative.objects.create(
         run=run,
         brand=bravo,
         brand_key_snapshot="bravo",
-        brand_name_en_snapshot="Bravo",
-        brand_name_zh_cn_snapshot="布拉沃",
         status=BrandTrendNarrative.Status.HELD,
         attempted_at=now - timedelta(minutes=5),
         error_code="critic_rejected",
         last_good=approved,
+    )
+    OriginalContentSubjectLabel.objects.bulk_create(
+        [
+            OriginalContentSubjectLabel(
+                content=held, locale_id=locale, label_snapshot=label
+            )
+            for locale, label in (("en", "Bravo"), ("zh-Hans", "布拉沃"))
+        ]
     )
     TrendNarrativeProviderCall.objects.create(
         run=run,

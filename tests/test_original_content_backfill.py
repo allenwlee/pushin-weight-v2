@@ -138,8 +138,6 @@ def test_headline_opaque_alias_recovers_actual_post_key_from_saved_identity(proj
         run=run,
         brand_key_snapshot="minimax",
         status="approved",
-        brand_name_en_snapshot="MiniMax",
-        brand_name_zh_cn_snapshot="MiniMax",
         headline_en="Saved title",
         secondary_en="Saved explanation",
         headline_zh_cn="保存标题",
@@ -149,6 +147,12 @@ def test_headline_opaque_alias_recovers_actual_post_key_from_saved_identity(proj
         selected_evidence_packet=[projected_source],
         cited_evidence_ids=[alias],
     )
+    from core.models import OriginalContentSubjectLabel
+
+    for locale in ("en", "zh-Hans"):
+        OriginalContentSubjectLabel.objects.create(
+            content=parent, locale_id=locale, label_snapshot="MiniMax"
+        )
     assert backfill_original_content(apply=False)["ready"]
     assert backfill_original_content(apply=True)["ready"]
     assert parent.localized_texts.count() == 2

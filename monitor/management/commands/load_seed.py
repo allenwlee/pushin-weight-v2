@@ -24,6 +24,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
+from core.company_labels import set_company_label
 from core.models import Account, Brand, BrandAccount, BrandCompany, Company, Role
 
 # ---------------------------------------------------------------------------
@@ -283,13 +284,11 @@ class Command(BaseCommand):
                             f"display_name={comp_display})"
                         )
                     else:
-                        Company.objects.update_or_create(
+                        company, _ = Company.objects.update_or_create(
                             nickname=company_nickname,
-                            defaults={
-                                "display_name": comp_display,
-                                "hq_country": comp_hq,
-                            },
+                            defaults={"hq_country": comp_hq},
                         )
+                        set_company_label(company, "und", comp_display)
                     stats["companies"] += 1
                     seen_companies.add(company_nickname)
 

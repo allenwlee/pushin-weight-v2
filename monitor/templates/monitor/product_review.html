@@ -125,7 +125,7 @@
               <label>Company (optional)
                 <select name="company_id">
                   <option value="">—</option>
-                  {% for company in companies %}<option value="{{ company.pk }}">{{ company.display_name|default:company.pk }}</option>{% endfor %}
+                  {% for company in companies %}<option value="{{ company.pk }}">{{ company.label|default:company.pk }}</option>{% endfor %}
                 </select>
               </label>
             {% endif %}

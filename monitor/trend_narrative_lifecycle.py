@@ -15,11 +15,13 @@ from core.models import (
     Brand,
     BrandTrendNarrative,
     BrandTrendNarrativeText,
+    OriginalContentSubjectLabel,
     Product,
     TrendNarrative,
     TrendNarrativeProviderCall,
     TrendNarrativeRun,
     TrendNarrativeSubject,
+    TrendNarrativeSubjectLabel,
     TrendNarrativeVisibleRun,
 )
 from monitor.trend_narrative_candidates import project_provider_packet
@@ -295,8 +297,6 @@ def prepare_brand_trend_narrative(
             run=run,
             brand=Brand.objects.filter(pk=brand_key).first(),
             brand_key_snapshot=brand_key,
-            brand_name_en_snapshot=brand_name_en,
-            brand_name_zh_cn_snapshot=brand_name_zh_cn,
             workflow_key="brand-window",
             output_key=brand_key,
             subject_key=brand_key,
@@ -322,6 +322,18 @@ def prepare_brand_trend_narrative(
             error_code=error_code[:64],
             last_good=last_good,
         )
+        OriginalContentSubjectLabel.objects.bulk_create(
+            [
+                OriginalContentSubjectLabel(
+                    content=outcome, locale_id=locale, label_snapshot=label
+                )
+                for locale, label in (
+                    ("en", brand_name_en),
+                    ("zh-Hans", brand_name_zh_cn),
+                )
+                if label
+            ]
+        )
         localized = {
             "en": (headline_en, secondary_en),
             "zh-cn": (headline_zh_cn, secondary_zh_cn),
@@ -340,7 +352,7 @@ def prepare_brand_trend_narrative(
             ]
         )
         if status == BrandTrendNarrative.Status.APPROVED:
-            from monitor.original_content import mirror_storage, citation_values
+            from monitor.original_content import citation_values, mirror_storage
 
             if mirror_storage():
                 from core.models import OriginalContentSource
@@ -1291,13 +1303,22 @@ def _write_subjects(
                 product=product,
                 observed_name=str(subject.get("observed_name") or ""),
                 canonical_key_snapshot=canonical_key,
-                name_en_snapshot=str(subject.get("name_en_snapshot") or ""),
-                name_zh_cn_snapshot=str(subject.get("name_zh_cn_snapshot") or ""),
                 candidate_id=str(subject.get("candidate_id") or ""),
                 evidence_ids=list(subject.get("evidence_ids") or []),
             )
         )
-    TrendNarrativeSubject.objects.bulk_create(records)
+    created = TrendNarrativeSubject.objects.bulk_create(records)
+    labels = []
+    for subject, record in zip(subjects, created, strict=True):
+        for locale, key in (("en", "name_en_snapshot"), ("zh-Hans", "name_zh_cn_snapshot")):
+            label = str(subject.get(key) or "")
+            if label:
+                labels.append(
+                    TrendNarrativeSubjectLabel(
+                        subject=record, locale_id=locale, label_snapshot=label
+                    )
+                )
+    TrendNarrativeSubjectLabel.objects.bulk_create(labels)
 
 
 def _resolve_evidence_subject_identities(

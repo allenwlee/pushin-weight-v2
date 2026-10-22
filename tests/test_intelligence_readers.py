@@ -1,5 +1,6 @@
 """Stable read-shape tests for future recruiter and agent consumers."""
 
+
 from __future__ import annotations
 
 import json
@@ -24,12 +25,12 @@ from core.models import (
     JobListing,
     JobListingEvidence,
     Opportunity,
-    Person,
     PersonAccount,
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
     Post,
 )
+from tests.person_factory import person_with_name
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 NOW = datetime(2026, 9, 10, 8, 0, tzinfo=UTC)
@@ -94,8 +95,8 @@ def test_person_reader_separates_employment_and_keeps_profile_provenance(
         present_fields=["description"],
         profile_data={"description": "Researcher @Anthropic"},
     )
-    person = Person.objects.create(
-        display_name="Anna Wang",
+    person = person_with_name(
+        "Anna Wang",
         date_of_birth="1987",
         date_of_birth_precision="year",
         sex="female",
@@ -137,7 +138,7 @@ def test_person_reader_separates_employment_and_keeps_profile_provenance(
         claim_identity="d" * 64,
     )
 
-    with django_assert_num_queries(4):
+    with django_assert_num_queries(5):
         document = person_intelligence(person.pk)
 
     _assert_contract_root("person_intelligence", document)
@@ -166,7 +167,7 @@ def test_person_reader_separates_employment_and_keeps_profile_provenance(
 
 
 def test_person_reader_exposes_pending_organization_review():
-    person = Person.objects.create(display_name="Lee Jiyin")
+    person = person_with_name("Lee Jiyin")
     candidate = BrandDiscoveryCandidate.objects.create(
         observed_name="New AI Co",
         candidate_handles=["new_ai_co"],

@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from core.models import Person
 from core.person_affiliations import is_active_claim
+from core.person_names import selected_name_for
 from core.staff_assets.media import media_storage
 
 
@@ -39,6 +40,7 @@ def dossier_records(*, brand_id):
         .distinct()
         .select_related("primary_name", "english_name")
         .prefetch_related(
+            "name_selections__name",
             "names__evidence",
             "media__media",
             "brand_affiliations__evidence",
@@ -78,7 +80,7 @@ def dossier_records(*, brand_id):
             names.append(
                 {
                     "value": name.full_name,
-                    "language": name.language,
+                    "language": name.locale_id,
                     "origin": name.origin,
                     "status": name.review_status,
                     "given": name.given_name,
@@ -229,12 +231,11 @@ def dossier_records(*, brand_id):
         result.append(
             {
                 "id": str(person.pk),
-                "name": person.english_name.full_name
-                if person.english_name_id
-                else person.display_name,
-                "primary": person.primary_name.full_name
-                if person.primary_name_id
-                else person.display_name,
+                "name": selected_name_for(person, "en")
+                or selected_name_for(person, "und")
+                or "Unreviewed person",
+                "primary": selected_name_for(person, "und")
+                or "Unreviewed person",
                 "scope": scope,
                 "eligibility": "Current staff claim"
                 if scope == "current"

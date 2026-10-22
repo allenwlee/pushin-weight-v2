@@ -478,7 +478,7 @@ def _why_first_browser_snapshot(
     }
 
 
-@override_settings(STORAGES=V22_BROWSER_TEST_STORAGES)
+@override_settings(STORAGES=V22_BROWSER_TEST_STORAGES, SECURE_SSL_REDIRECT=False)
 class PublicTrackedBrandsBrowserTests(StaticLiveServerTestCase):
     """Real configuration and collected company rows through anonymous controls."""
 
@@ -554,7 +554,7 @@ class PublicTrackedBrandsBrowserTests(StaticLiveServerTestCase):
         self.assertTrue(PostBrand.objects.filter(brand_id=self.companies[0]).exists())
 
 
-@override_settings(STORAGES=V22_BROWSER_TEST_STORAGES)
+@override_settings(STORAGES=V22_BROWSER_TEST_STORAGES, SECURE_SSL_REDIRECT=False)
 class HomeV22BrowserTests(StaticLiveServerTestCase):
     """Root-route, real-PostgreSQL browser proof for the visible shell."""
 
@@ -3971,7 +3971,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
         self.assertEqual(len(reports), len(VIEWPORTS) * len(LOCALES), f"missing browser reports; artifacts={artifacts}")
 
 
-@override_settings(STORAGES=V22_BROWSER_TEST_STORAGES)
+@override_settings(STORAGES=V22_BROWSER_TEST_STORAGES, SECURE_SSL_REDIRECT=False)
 class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
     """Anonymous, real-ORM proof for metadata received after feed hydration."""
 

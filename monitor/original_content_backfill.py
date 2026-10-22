@@ -221,8 +221,6 @@ def import_edition(edition, run=None, *, legacy=True, producer=None):
         status="prepared",
         attempted_at=edition.assessment.cutoff,
         brand_key_snapshot="",
-        brand_name_en_snapshot="",
-        brand_name_zh_cn_snapshot="",
         selection=edition.selection,
         provenance={
             "legacy_edition_id": str(edition.pk),

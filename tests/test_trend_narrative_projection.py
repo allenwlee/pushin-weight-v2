@@ -602,16 +602,24 @@ def test_schema_one_projection_uses_both_legacy_subject_snapshots():
 
 def test_projection_exposes_two_safe_subjects_without_claim_or_evidence_data():
     row = _publish()
-    TrendNarrativeSubject.objects.create(
+    subject = TrendNarrativeSubject.objects.create(
         trend_narrative=row,
         position=1,
         support_type="evidence_only",
         entity_type="model",
         identity_type="unresolved",
         observed_name="OffListModel",
-        name_en_snapshot="OffListModel",
-        name_zh_cn_snapshot="OffListModel",
         evidence_ids=["private_evidence_id"],
+    )
+    from core.models import TrendNarrativeSubjectLabel
+
+    TrendNarrativeSubjectLabel.objects.bulk_create(
+        [
+            TrendNarrativeSubjectLabel(
+                subject=subject, locale_id=locale, label_snapshot="OffListModel"
+            )
+            for locale in ("en", "zh-Hans")
+        ]
     )
 
     payload = project_trend_narrative(
@@ -1095,8 +1103,8 @@ def test_u5_query_count_is_bounded_for_twenty_brands(django_assert_num_queries):
         _per_brand_outcome(run, brand)
     assert activate_trend_narrative_run(run.pk, now=NOW + timedelta(seconds=1))
 
-    # Locale text and citations each use one batched prefetch, independent of brands.
-    with django_assert_num_queries(4):
+    # Locale text, subject labels and citations use batched prefetches, independent of brands.
+    with django_assert_num_queries(5):
         payload = project_trend_narrative(
             1,
             locale="en",

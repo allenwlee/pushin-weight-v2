@@ -1,8 +1,8 @@
 # Database schema reference
 
-Last verified: 2026-10-21T21:26:13+09:00, homepage product source `86f4c4f7`, schema through `0128_require_correction_actor`. Table inventory, columns and affected constraints are checked against isolated PostgreSQL18.6 migrated through this boundary; this is not a fresh production constraint audit.
+Repository inventory updated 2026-10-22, candidate based on `a0d02d3c`, through migration `0130_rg2_person_name_locale_required`. The cutover release applies `0129`–`0130` first, retaining fourteen physical legacy columns while current ORM callers use their replacements; the separately delivered `0131` deletes them. RG2 migrations `0129`–`0131` are not yet production-verified. Production was last verified through `0128_require_correction_actor`: 177 application tables and 2327 columns, nine compatibility views and one native materialized view; its RG1 retired columns are absent and `collection_corrections.actor_id` is `NOT NULL`.
 
-Scope: **177 core application tables**, **2327 physical table columns**, nine compatibility views and one native materialized view with five columns. Repository and isolated migration boundary: `0128_require_correction_actor`. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys.
+Repository scope: **182 core application tables**, **2352 physical table columns** (2338 current ORM columns plus14 transitional columns), nine compatibility views and one native materialized view with five columns. Repository migration boundary: `0130_rg2_person_name_locale_required`; production boundary remains `0128_require_correction_actor` until the RG2 cutover is deployed and verified. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -16,14 +16,30 @@ this **application-table** count. `DiscoveryRunBase` is an abstract model, not
 another table; its columns are included under both discovery-run tables.
 The retired SQLite database and Graphviz image are not current schema sources.
 
+## Temporary columns during the RG2 cutover
+
+The detailed table sections describe the2338 current ORM columns. These14
+additional nullable physical columns remain only for the previous application
+image during the rolling cutover. New callers use the locale-owned replacements.
+The separate0131 release deletes all14 after consumer and preservation checks.
+
+| Table | Transitional physical columns |
+| --- | --- |
+| accounts | `bio_en`, `bio_zh_cn` |
+| companies | `display_name`, `display_name_en`, `display_name_zh_cn` |
+| people | `display_name`, `display_name_en`, `display_name_zh_cn`, `display_name_ja` |
+| people_names | `language` |
+| original_content | `brand_name_en_snapshot`, `brand_name_zh_cn_snapshot` |
+| trend_narrative_subjects | `name_en_snapshot`, `name_zh_cn_snapshot` |
+
 ## Find information by subject
 
 | Subject | Tables | Start here when you need… |
 | --- | ---: | --- |
 | [Shared catalogues and performer identities](#shared-catalogues) | 9 | Canonical timezone, language-tag and unit values; internal performers; immutable definition, provider, model and workflow-stage identities. |
-| [People and job history](#people) | 13 | A person, their optional X identity, roles, employment dates, and evidence. |
-| [Companies, brands, and organization discovery](#organizations) | 11 | Company/brand identity, ownership, associated accounts, and unresolved organizations. |
-| [Accounts, profiles, and lists](#accounts) | 7 | Shared source accounts, X detail profiles, observed history, list membership and post appearances. |
+| [People and job history](#people) | 14 | A person, their optional X identity, roles, employment dates, and evidence. |
+| [Companies, brands, and organization discovery](#organizations) | 12 | Company/brand identity, ownership, associated accounts, and unresolved organizations. |
+| [Accounts, profiles, and lists](#accounts) | 8 | Shared source accounts, X detail profiles, observed history, list membership and post appearances. |
 | [Countries and regions](#geography) | 6 | Country/region names and interpretation of account geography. |
 | [Posts and classification](#posts) | 13 | Source posts, brand attribution, classification, and supporting judgments. |
 | [Homepage counts](#homepage-counts) | 1 + native view | Historical count summaries and their publication validity. |
@@ -33,7 +49,7 @@ The retired SQLite database and Graphviz image are not current schema sources.
 | [Events and opportunities](#events) | 3 | Attendable occurrences and action-for-benefit offers. |
 | [Event dossiers and evidence](#event-dossiers) | 7 | Source-backed event identity, claims, review history and typed projections. |
 | [Post translation and commentary](#translation) | 9 | Literal post translations, generated commentary, retries, and budgets. |
-| [Authored content and trend publication](#headlines) | 11 | Prepared headline text, publication pointers, provider batches, work requests, and provider costs. |
+| [Authored content and trend publication](#headlines) | 13 | Prepared headline text, publication pointers, provider batches, work requests, and provider costs. |
 | [Compatible editorial input storage and pictures](#editorial) | 7 | Story identities, accepted editions, quarter-hour decisions, spend and optional assets. |
 | [Collection, extraction, and processing records](#processing) | 25 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
 | [Measurement subjects, metrics and observations](#measurements) | 12 | Sourced measurements and their collection state. |
@@ -123,8 +139,7 @@ of a confirmed identity. Do not count evidence rows as distinct people/jobs.
 Several observations can support one record, and different claims can still
 need reconciliation.
 
-People select primary and English names from `people_names`; the four legacy
-name fields remain for compatibility. `people_name_evidence` stores the sources.
+People select localized names from `people_names` through `person_name_selections`; the former fixed-language person name columns have been removed. `people_name_evidence` stores the sources.
 Original professional prose and EN/JA translations live in `people_texts` and
 `people_text_translations`. Media bytes and person/source attribution have their
 own tables. Affiliation title/location originals and supporting evidence remain
@@ -135,8 +150,8 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 177 core application tables appears once in this inventory and once in
-the detailed sections. Subject table counts above sum to 177. The native view is
+Each of the 182 core application tables appears once in this inventory and once in
+the detailed sections. Subject table counts above sum to 182. The native view is
 listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 
 | Table | Subject | What one row represents |
@@ -145,6 +160,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [account_based_in_mappings](#table-account_based_in_mappings) | [Countries and regions](#geography) | One reviewed mapping from an X “based in” string to a country or region. |
 | [account_post_appearances](#table-account_post_appearances) | [Accounts, profiles, and lists](#accounts) | One account’s appearance in one collected post, with collection context. |
 | [account_profile_snapshots](#table-account_profile_snapshots) | [Accounts, profiles, and lists](#accounts) | One consecutive observation period during which an account’s saved profile hash is unchanged. |
+| [account_profile_text_translations](#table-account_profile_text_translations) | [Accounts, profiles, and lists](#accounts) | One localized translation of profile text, tied to account and source-text role. |
 | [accounts](#table-accounts) | [Accounts, profiles, and lists](#accounts) | One source account with a UUID identity, source/native key and current saved profile. |
 | [actors](#table-actors) | [Shared catalogues and performer identities](#shared-catalogues) | One stable internal human, agent or system performer identity. |
 | [audience_topic_concepts](#table-audience_topic_concepts) | [Classification vocabularies and translated labels](#vocabularies) | One stable topic identity within an audience-topic scheme. |
@@ -175,6 +191,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [collection_scope_runs](#table-collection_scope_runs) | [Measurement subjects, metrics and observations](#measurements) | One source scope’s pagination and ownership progress within a collection run. |
 | [companies](#table-companies) | [Companies, brands, and organization discovery](#organizations) | One company identity, including its recorded headquarters country. |
 | [companies_accounts](#table-companies_accounts) | [Companies, brands, and organization discovery](#organizations) | One account’s role and ownership-review state for a company. |
+| [company_labels](#table-company_labels) | [Companies, brands, and organization discovery](#organizations) | One current company label for a registered locale. |
 | [content_pictures](#table-content_pictures) | [Compatible editorial input storage and pictures](#editorial) | One optional source/derivative assignment for a content revision. |
 | [countries](#table-countries) | [Countries and regions](#geography) | One country/territory code and optional display-parent relationship. |
 | [country_codes_region](#table-country_codes_region) | [Countries and regions](#geography) | One country’s assigned region and the source of that assignment. |
@@ -234,6 +251,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [original_content_runs](#table-original_content_runs) | [Authored content and trend publication](#headlines) | One common evidence cutoff for an all-brand headline run and time window. |
 | [original_content_selections](#table-original_content_selections) | [Authored content and trend publication](#headlines) | One currently visible run for a supported time window. |
 | [original_content_sources](#table-original_content_sources) | [Authored content and trend publication](#headlines) | One distinct cited post supporting one saved locale/version, with immutable ordered URL/author/hash snapshots. |
+| [original_content_subject_labels](#table-original_content_subject_labels) | [Authored content and trend publication](#headlines) | One immutable localized subject-label snapshot for saved content. |
 | [original_content_texts](#table-original_content_texts) | [Authored content and trend publication](#headlines) | One locale’s headline and byline for a brand narrative. |
 | [people](#table-people) | [People and job history](#people) | One person, whether or not they have an X account. |
 | [people_accounts](#table-people_accounts) | [People and job history](#people) | One proposed or reviewed link between a person and an X account. |
@@ -245,6 +263,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [people_names](#table-people_names) | [People and job history](#people) | One sourced spelling of a person’s full name, with optional evidenced components. |
 | [people_text_translations](#table-people_text_translations) | [People and job history](#people) | One cached translation of a specific original prose version and provider configuration. |
 | [people_texts](#table-people_texts) | [People and job history](#people) | One immutable version of original biography, role, location or job-description prose. |
+| [person_name_selections](#table-person_name_selections) | [People and job history](#people) | One selected person-name spelling for a display locale. |
 | [personnel_change_details](#table-personnel_change_details) | [Event dossiers and evidence](#event-dossiers) | One typed personnel-change projection owned by a dossier review. |
 | [personnel_discovery_runs](#table-personnel_discovery_runs) | [People and job history](#people) | One personnel-search query/window run, including coverage, cost, and extraction counts. |
 | [post_enrichment_states](#table-post_enrichment_states) | [Post translation and commentary](#translation) | One post’s replayable translation/classification progress and diagnostics. |
@@ -307,6 +326,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [taxonomy_versions](#table-taxonomy_versions) | [Classification vocabularies and translated labels](#vocabularies) | One versioned taxonomy identity and its manifest. |
 | [time_zones](#table-time_zones) | [Shared catalogues](#shared-catalogues) | One accepted IANA timezone or Link identifier. |
 | [trend_narrative_demands](#table-trend_narrative_demands) | [Authored content and trend publication](#headlines) | One coalesced brand/window headline request and its scheduling state. |
+| [trend_narrative_subject_labels](#table-trend_narrative_subject_labels) | [Authored content and trend publication](#headlines) | One immutable localized name snapshot for a reported subject. |
 | [trend_narrative_subjects](#table-trend_narrative_subjects) | [Authored content and trend publication](#headlines) | One reported subject attached to a headline publication. |
 | [trend_narrative_work_slots](#table-trend_narrative_work_slots) | [Authored content and trend publication](#headlines) | One window’s active work claim and optional newer queued cutoff. |
 | [trend_narratives](#table-trend_narratives) | [Authored content and trend publication](#headlines) | One durable attempt/version of a shared time-window headline. |
@@ -615,12 +635,11 @@ not employment. The current [person reader](../../core/intelligence_readers.py)
 returns all affiliations, but its `employment_history` subset includes only
 `affiliation_type='employment'`.
 
-Current person identity has 16 columns, including `sex` and two selected name
+Current person identity has 12 columns, including `sex` and two selected name
 links. Full names and optional given/family components belong to `people_names`.
 Primary selects a sourced professional/original representation; English selects
 an established English representation. Both must belong to this person and be
-confirmed. The reader falls back to legacy full-name fields when no selection
-exists; a fallback does not establish source verification. Its version-2 read
+confirmed. Readers use the explicit locale selection and fall back to the `und` selection when appropriate; an unreviewed legacy selection does not establish source verification. Its version-2 read
 contract exposes `sex`. See [the extraction path](../../core/targeted_extraction.py)
 and [profile observations](../../core/profile_snapshots.py) for identity creation.
 
@@ -632,17 +651,13 @@ and [profile observations](../../core/profile_snapshots.py) for identity creatio
 
 One person, whether or not they have an X account.
 
-Model: [Person](../../core/models.py#L5018).
+Model: [Person](../../core/models.py#L5223).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `uuid` | No | PK component. Django default: `uuid4` (not an assumed SQL default). |
-| `display_name` | `text` | No | Legacy full display name and fallback; not unique. |
-| `display_name_en` | `text` | Yes | English or romanized full name. |
-| `display_name_zh_cn` | `text` | Yes | Simplified Chinese full name. |
-| `display_name_ja` | `text` | Yes | Japanese full name. |
 | `date_of_birth` | `varchar(10)` | Yes | Source-supported date at the paired precision; not necessarily a full date. |
 | `date_of_birth_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `day`, `month`, `year`, `unknown`. |
 | `sex` | `text` | Yes | Source-supported sex value. |
@@ -921,7 +936,7 @@ None declared beyond field/FK/constraint indexes.
 
 One sourced spelling of a person’s full name, with optional evidenced components.
 
-Model: [PersonName](../../core/models.py#L5099).
+Model: [PersonName](../../core/models.py#L5300).
 
 **Primary key:** `id`.
 
@@ -932,7 +947,7 @@ Model: [PersonName](../../core/models.py#L5099).
 | `full_name` | `text` | No | Stored value. |
 | `given_name` | `text` | Yes | Stored value. |
 | `family_name` | `text` | Yes | Stored value. |
-| `language` | `varchar(35)` | No | Django default: `'und'` (not an assumed SQL default). |
+| `locale_id` | `varchar(35)` | No | FK → [`locales`](#table-locales) (`code`). Django deletion: `PROTECT`; registered language/script tag for this spelling. Model field: `locale`. |
 | `name_type` | `varchar(32)` | No | Django default: `'professional'` (not an assumed SQL default). |
 | `name_order` | `varchar(24)` | No | Django default: `'unknown'` (not an assumed SQL default). |
 | `origin` | `varchar(24)` | No | Django default: `'source'` (not an assumed SQL default). |
@@ -958,6 +973,25 @@ None declared beyond field/FK/constraint indexes.
 Original names stay authoritative. Language/script and origin are independent of the selected display locale. Generated or converted origins remain unchanged after corroboration. Names never identify or merge people. PostgreSQL triggers reject cross-person derivations and edits that would erase an original representation.
 
 Migration 0060 installs `g1_person_name_guard` on this table and `g1_person_name_selection` on `people`. These PostgreSQL triggers enforce same-person derivation/selection, confirmed selections, immutable original representations, and clearing selections before rejecting a name.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-person_name_selections"></a>
+
+### `person_name_selections` — PersonNameSelection
+
+One selected name spelling for one person and display locale.
+
+Model: [PersonNameSelection](../../core/models.py#L5359).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK; database-generated identity. |
+| `person_id` | `uuid` | No | FK → [`people`](#table-people) (`id`); CASCADE. |
+| `display_locale_id` | `varchar(35)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
+| `name_id` | `bigint` | No | FK → [`people_names`](#table-people_names) (`id`); PROTECT. |
+
+**Named constraints:** `uq_person_name_selection_locale` (one selected name per person and display locale). A database trigger verifies the selected name belongs to that person.
 
 [Back to table inventory](#table-inventory)
 
@@ -1213,20 +1247,17 @@ and the [lookup guide](lookup-tables.md).
 
 One company identity, including its recorded headquarters country.
 
-Model: [Company](../../core/models.py#L621).
+Model: [Company](../../core/models.py#L780).
 
 **Primary key:** `nickname`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `nickname` | `varchar(64)` | No | PK. Collation: `case_insensitive`. PK component. |
-| `display_name` | `text` | Yes | Stored value. |
 | `hq_country` | `text` | Yes | Stored value. |
 | `accent_color` | `text` | Yes | Stored value. |
 | `description` | `text` | Yes | Stored value. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
-| `display_name_en` | `text` | Yes | Stored value. |
-| `display_name_zh_cn` | `text` | Yes | Stored value. |
 
 **Named indexes:**
 
@@ -1237,6 +1268,25 @@ None declared beyond field/FK/constraint indexes.
 None declared beyond primary keys, field uniqueness and foreign keys.
 
 None beyond the column-level keys, uniqueness, nullability, and type checks described above.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-company_labels"></a>
+
+### `company_labels` — CompanyLabel
+
+One current company label for one registered locale.
+
+Model: [CompanyLabel](../../core/models.py#L805).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK; database-generated identity. |
+| `company_id` | `varchar(64)` | No | FK → [`companies`](#table-companies) (`nickname`); CASCADE. |
+| `locale_id` | `varchar(35)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
+| `label` | `text` | No | Current display label; cannot be empty. |
+
+**Named constraints:** `uq_company_label_locale` (one label per company and locale); `ck_company_label_nonempty`.
 
 [Back to table inventory](#table-inventory)
 
@@ -1253,12 +1303,12 @@ Model: [Brand](../../core/models.py#L541).
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `nickname` | `varchar(64)` | No | PK. Collation: `case_insensitive`. PK component. |
-| `display_name` | `text` | Yes | Stored value. |
+| `display_name` | `text` | Yes | Brand display label. |
 | `accent_color` | `text` | Yes | Stored value. |
 | `is_sentinel` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
-| `display_name_en` | `text` | Yes | Stored value. |
-| `display_name_zh_cn` | `text` | Yes | Stored value. |
+| `display_name_en` | `text` | Yes | English brand display label. |
+| `display_name_zh_cn` | `text` | Yes | Simplified Chinese brand display label. |
 
 **Named indexes:**
 
@@ -1598,7 +1648,7 @@ and [collection behavior](twitterapi-io-calls.md).
 
 One source account with a UUID identity, source/native key and current saved profile.
 
-Model: [Account](../../core/models.py#L1216).
+Model: [Account](../../core/models.py#L1379).
 
 **Primary key:** `account_key`.
 
@@ -1614,7 +1664,7 @@ Model: [Account](../../core/models.py#L1216).
 | `provider_metadata` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
 | `author_id` | `text` | Yes | Legacy X native-ID alias, unique when supplied; NULL on non-X accounts. Shared identity is account_key. |
 | `handle` | `text` | Yes | Collation: `C`. Provider username/alias; native identifier remains the source identity. Source-qualified normalized_handle enforces case-insensitive uniqueness when present. |
-| `display_name` | `text` | Yes | Stored value. |
+| `display_name` | `text` | Yes | Current source account display name. |
 | `bio` | `text` | Yes | Saved biography text. |
 | `bio_fetched_at` | `timestamp with time zone` | Yes | Stored value. |
 | `verified` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
@@ -1623,8 +1673,6 @@ Model: [Account](../../core/models.py#L1216).
 | `last_seen_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
 | `source_query_ids` | `text` | Yes | Stored value. |
 | `notes` | `text` | Yes | Stored value. |
-| `bio_en` | `text` | Yes | English biography text. |
-| `bio_zh_cn` | `text` | Yes | Simplified Chinese biography text. |
 | `followers_count` | `integer` | Yes | Stored value. |
 | `following_count` | `integer` | Yes | Stored value. |
 | `profile_picture` | `text` | Yes | Saved profile-image URL; the image need not depict the account holder. |
@@ -1745,7 +1793,7 @@ Model: [XAccountDetail](../../core/models.py#L1123).
 
 One consecutive observation period during which an account’s saved profile hash is unchanged.
 
-Model: [AccountProfileSnapshot](../../core/models.py#L5483).
+Model: [AccountProfileSnapshot](../../core/models.py#L5712).
 
 **Primary key:** `id`.
 
@@ -1762,7 +1810,7 @@ Model: [AccountProfileSnapshot](../../core/models.py#L5483).
 | `first_source_post_id` | `text` | Yes | FK → [`posts`](#table-posts) (`tweet_id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `first_source_post`. |
 | `first_source_run` | `text` | Yes | Stored value. |
 | `handle` | `varchar(64)` | Yes | Stored value. |
-| `display_name` | `text` | Yes | Stored value. |
+| `display_name` | `text` | Yes | Source account display name observed during this profile period. |
 | `description` | `text` | Yes | Stored value. |
 | `profile_bio_text` | `text` | Yes | Stored value. |
 | `location` | `text` | Yes | Stored value. |
@@ -1791,6 +1839,30 @@ Model: [AccountProfileSnapshot](../../core/models.py#L5483).
 - `ck_profile_snap_window`: `CONSTRAINT "ck_profile_snap_window" CHECK ("last_observed_at" >= ("first_observed_at"))`.
 - `ck_profile_snap_count`: `CONSTRAINT "ck_profile_snap_count" CHECK ("observation_count" >= 1)`.
 - `uq_profile_snap_identity`: `CONSTRAINT "uq_profile_snap_identity" UNIQUE ("account_key", "profile_hash", "first_observed_at")`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-account_profile_text_translations"></a>
+
+### `account_profile_text_translations` — AccountProfileTextTranslation
+
+One localized account-profile text value, retaining its account, source role, locale and optional source snapshot/version.
+
+Model: [AccountProfileTextTranslation](../../core/models.py#L5781).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK; database-generated identity. |
+| `account_key` | `uuid` | No | FK → [`accounts`](#table-accounts) (`account_key`); CASCADE. |
+| `profile_snapshot_id` | `bigint` | Yes | FK → [`account_profile_snapshots`](#table-account_profile_snapshots) (`id`); PROTECT. |
+| `source_text_role` | `varchar(24)` | No | Choices: `description`, `profile_bio_text`, `legacy_unknown`. |
+| `source_text_sha256` | `varchar(64)` | Yes | Source text digest when known. |
+| `locale_id` | `varchar(35)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
+| `text` | `text` | No | Nonempty localized text. |
+| `definition_version_id` | `bigint` | Yes | FK → [`definition_versions`](#table-definition_versions) (`id`); PROTECT. |
+| `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+
+**Named constraints:** one row per account/source role/source hash/locale/version; role, hash and nonempty-text checks. A database trigger ensures a linked snapshot belongs to the same account.
 
 [Back to table inventory](#table-inventory)
 
@@ -3492,7 +3564,7 @@ Model: [Product](../../core/models.py#L3059).
 | `brand_id` | `varchar(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
 | `publisher_account_key` | `uuid` | Yes | FK → [`accounts`](#table-accounts) (`account_key`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `publisher_account`. Publisher trust is reviewed through companies_accounts. |
 | `hf_type` | `text` | No | Django default: `'model'` (not an assumed SQL default). |
-| `display_name` | `text` | Yes | Stored value. |
+| `display_name` | `text` | Yes | Product display name. |
 | `author` | `text` | Yes | Stored value. |
 | `sha` | `text` | Yes | Stored value. |
 | `private` | `boolean` | Yes | Stored value. |
@@ -5147,7 +5219,7 @@ Model: [TrendNarrative](../../core/models.py#L3765).
 
 One reported subject attached to a headline publication.
 
-Model: [TrendNarrativeSubject](../../core/models.py#L4799).
+Model: [TrendNarrativeSubject](../../core/models.py#L4958).
 
 **Primary key:** `id`.
 
@@ -5163,8 +5235,6 @@ Model: [TrendNarrativeSubject](../../core/models.py#L4799).
 | `product_id` | `bigint` | Yes | FK → [`products`](#table-products) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `product`. |
 | `observed_name` | `text` | No | Django default: `''` (not an assumed SQL default). |
 | `canonical_key_snapshot` | `text` | No | Django default: `''` (not an assumed SQL default). |
-| `name_en_snapshot` | `text` | No | Django default: `''` (not an assumed SQL default). |
-| `name_zh_cn_snapshot` | `text` | No | Django default: `''` (not an assumed SQL default). |
 | `candidate_id` | `varchar(192)` | No | Django default: `''` (not an assumed SQL default). |
 | `evidence_ids` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
@@ -5178,9 +5248,28 @@ None declared beyond field/FK/constraint indexes.
 - `uq_tns_narrative_position`: `CONSTRAINT "uq_tns_narrative_position" UNIQUE ("trend_narrative_id", "position")`.
 - `ck_tns_position`: `CONSTRAINT "ck_tns_position" CHECK ("position" IN (0, 1))`.
 - `ck_tns_entity_type`: `CONSTRAINT "ck_tns_entity_type" CHECK ("entity_type" IN ('company', 'brand', 'product', 'model', 'organization'))`.
-- `ck_tns_identity_shape`: `CONSTRAINT "ck_tns_identity_shape" CHECK ((("canonical_key_snapshot" > '' AND "identity_type" = 'brand' AND "name_en_snapshot" > '' AND "name_zh_cn_snapshot" > '' AND "observed_name" = '' AND "product_id" IS NULL) OR ("brand_id" IS NULL AND "canonical_key_snapshot" > '' AND "identity_type" = 'product' AND "name_en_snapshot" > '' AND "name_zh_cn_snapshot" > '' AND "observed_name" = '') OR ("brand_id" IS NULL AND "canonical_key_snapshot" = '' AND "identity_type" = 'unresolved' AND "name_en_snapshot" > '' AND "name_zh_cn_snapshot" > '' AND "observed_name" > '' AND "product_id" IS NULL)))`.
+- `ck_tns_identity_shape`: enforces a canonical key and matching brand/product ownership for resolved identities; unresolved identities retain an observed name and no product. Localized labels now live in `trend_narrative_subject_labels`.
 - `ck_tns_support_shape`: `CONSTRAINT "ck_tns_support_shape" CHECK ((("candidate_id" > '' AND "evidence_ids" = '[]'::jsonb AND "support_type" = 'measured_candidate') OR ("candidate_id" = '' AND "support_type" = 'evidence_only' AND NOT ("evidence_ids" = '[]'::jsonb))))`.
 - `ck_tns_evidence_pos`: `CONSTRAINT "ck_tns_evidence_pos" CHECK (("support_type" = 'measured_candidate' OR "position" = 1))`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-trend_narrative_subject_labels"></a>
+
+### `trend_narrative_subject_labels` — TrendNarrativeSubjectLabel
+
+One immutable localized name snapshot for a reported subject.
+
+Model: [TrendNarrativeSubjectLabel](../../core/models.py#L5092).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK; database-generated identity. |
+| `subject_id` | `bigint` | No | FK → [`trend_narrative_subjects`](#table-trend_narrative_subjects) (`id`); PROTECT. |
+| `locale_id` | `varchar(35)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
+| `label_snapshot` | `text` | No | Immutable localized label snapshot; cannot be empty. |
+
+**Named constraints:** `uq_tns_label_locale` (one label per subject and locale); `ck_tns_label_nonempty`. A deferred database trigger requires English and Simplified Chinese labels for each subject.
 
 [Back to table inventory](#table-inventory)
 
@@ -5248,7 +5337,7 @@ Model: [OriginalContentRun](../../core/models.py#L4080).
 
 One authored output version or held headline outcome, grouped by its producing workflow.
 
-Model: [OriginalContent](../../core/models.py#L4566).
+Model: [OriginalContent](../../core/models.py#L4727).
 
 **Primary key:** `id`.
 
@@ -5258,8 +5347,6 @@ Model: [OriginalContent](../../core/models.py#L4566).
 | `run_id` | `bigint` | No | FK → [`original_content_runs`](#table-original_content_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `run`. |
 | `brand_id` | `varchar(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
 | `brand_key_snapshot` | `varchar(64)` | No | Stored value. |
-| `brand_name_en_snapshot` | `text` | No | Stored value. |
-| `brand_name_zh_cn_snapshot` | `text` | No | Stored value. |
 | `workflow_key` | `varchar(80)` | Yes | Stored value. |
 | `output_key` | `varchar(200)` | Yes | Stored value. |
 | `subject_key` | `varchar(200)` | No | Django default: `''` (not an assumed SQL default). |
@@ -5317,6 +5404,25 @@ Model: [OriginalContent](../../core/models.py#L4566).
 [Back to table inventory](#table-inventory)
 
 <a id="table-brand_trend_narrative_texts"></a>
+<a id="table-original_content_subject_labels"></a>
+
+### `original_content_subject_labels` — OriginalContentSubjectLabel
+
+One immutable localized subject-label snapshot for saved authored content.
+
+Model: [OriginalContentSubjectLabel](../../core/models.py#L5118).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK; database-generated identity. |
+| `content_id` | `bigint` | No | FK → [`original_content`](#table-original_content) (`id`); PROTECT. |
+| `locale_id` | `varchar(35)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
+| `label_snapshot` | `text` | No | Immutable localized label snapshot; cannot be empty. |
+
+**Named constraints:** `uq_ocs_label_locale` (one label per content row and locale); `ck_ocs_label_nonempty`.
+
+[Back to table inventory](#table-inventory)
+
 <a id="table-original_content_texts"></a>
 
 ### `original_content_texts` — OriginalContentText

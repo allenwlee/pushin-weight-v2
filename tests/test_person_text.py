@@ -141,19 +141,17 @@ def test_title_requires_its_own_person_affiliation():
         )
 
 
-def test_name_selection_mirrors_legacy_columns_and_demotion_clears_them():
-    from core.person_names import review_name
+def test_name_selection_uses_locale_owner_rows_and_demotion_clears_them():
+    from core.person_names import review_name, selected_name_for
 
     intake, _ = ingest_record(record())
     person = intake.person
-    person.refresh_from_db()
-    assert person.display_name == person.display_name_zh_cn == "测试人"
-    review_name(person.primary_name, "rejected", "Allen", "Wrong identity")
-    person.refresh_from_db()
-    assert (
-        person.display_name == "Unreviewed person" and person.display_name_zh_cn is None
-    )
-    assert person.names.get().full_name == "测试人"
+    assert selected_name_for(person, "und") == "测试人"
+    selected = person.name_selections.get(display_locale_id="und").name
+    review_name(selected, "rejected", "Allen", "Wrong identity")
+    assert selected_name_for(person, "und") is None
+    assert not person.name_selections.exists()
+    assert person.names.get(locale_id="zh-Hans").full_name == "测试人"
 
 
 def test_database_checks_both_sides_of_affiliation_text_ownership():

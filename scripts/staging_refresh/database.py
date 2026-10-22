@@ -581,6 +581,25 @@ def scrub_candidate_data(cursor: Any, policy: RefreshPolicy) -> ScrubReport:
             sql.SQL(", ").join(targets)
         )
     )
+    # These label rows are immutable snapshots, so row-wise DELETE is forbidden.
+    # Preserve labels for published narratives across the staging-only scrub, then
+    # truncate and restore those rows before removing transient subjects.
+    cursor.execute(
+        "CREATE TEMP TABLE retained_trend_subject_labels ON COMMIT DROP AS "
+        "SELECT l.id, l.subject_id, l.locale_id, l.label_snapshot "
+        "FROM trend_narrative_subject_labels l "
+        "JOIN trend_narrative_subjects s ON s.id = l.subject_id "
+        "JOIN trend_narratives n ON n.id = s.trend_narrative_id "
+        "WHERE n.status = ANY(%s)",
+        [list(policy.scrub.retained_narrative_statuses)],
+    )
+    cursor.execute("TRUNCATE TABLE trend_narrative_subject_labels")
+    cursor.execute(
+        "INSERT INTO trend_narrative_subject_labels "
+        "(id, subject_id, locale_id, label_snapshot) "
+        "SELECT id, subject_id, locale_id, label_snapshot "
+        "FROM retained_trend_subject_labels"
+    )
     cursor.execute(
         "DELETE FROM trend_narrative_subjects "
         "WHERE trend_narrative_id IN ("

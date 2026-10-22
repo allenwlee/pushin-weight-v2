@@ -31,6 +31,7 @@ from core.models import (
     JobListingEvidence,
     Opportunity,
     PersonBrandAffiliationEvidence,
+    PersonNameSelection,
     Post,
     PostBrandClassificationState,
     PostBrandSignal,
@@ -324,6 +325,8 @@ def jobs_people_facts(post_ids, section, *, as_of, locale="en"):
                 "application_kind": row.application_route_kind,
             }
     else:
+        from core.person_names import selected_name_for
+
         evidence = (
             PersonBrandAffiliationEvidence.objects.filter(
                 source_post_id__in=post_ids,
@@ -336,20 +339,19 @@ def jobs_people_facts(post_ids, section, *, as_of, locale="en"):
                 "affiliation__person__primary_name",
                 "affiliation__person__english_name",
             )
+            .prefetch_related(
+                Prefetch(
+                    "affiliation__person__name_selections",
+                    queryset=PersonNameSelection.objects.select_related("name"),
+                )
+            )
             .order_by("affiliation_id", "id")
         )
         for source in evidence:
             row, person = source.affiliation, source.affiliation.person
-            localized = {
-                "en": person.display_name_en,
-                "zh-cn": person.display_name_zh_cn,
-                "ja": person.display_name_ja,
-            }
-            name = localized.get(locale) or (
-                person.primary_name.full_name
-                if person.primary_name_id
-                else person.display_name
-            )
+            name = selected_name_for(person, locale) or selected_name_for(
+                person, "und"
+            ) or "Unreviewed person"
             confirmed = (
                 row.review_status == "confirmed" and source.review_status == "confirmed"
             )

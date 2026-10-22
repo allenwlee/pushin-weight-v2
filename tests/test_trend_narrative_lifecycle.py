@@ -1560,8 +1560,18 @@ def test_u2_retention_keeps_visible_and_last_good_proof_runs():
     )
     assert activate_trend_narrative_run(current.pk, now=NOW + timedelta(minutes=2))
     disposable = _run(
-        cycle="u2-prune-disposable", facts_as_of=NOW - timedelta(minutes=1), brands=[]
+        cycle="u2-prune-disposable", facts_as_of=NOW - timedelta(minutes=1), brands=[brand.nickname]
     )
+    disposable_content = prepare_brand_trend_narrative(
+        run=disposable,
+        brand_key=brand.nickname,
+        brand_name_en=brand.display_name_en,
+        brand_name_zh_cn=brand.display_name_zh_cn,
+        status=BrandTrendNarrative.Status.HELD,
+        attempted_at=NOW - timedelta(days=100),
+        error_code="fixture_failure",
+    )
+    assert disposable_content.localized_subject_labels.count() == 2
     TrendNarrativeRun.objects.filter(pk=disposable.pk).update(
         status=TrendNarrativeRun.Status.SUPERSEDED,
         activated_at=NOW - timedelta(days=100),
@@ -1575,7 +1585,7 @@ def test_u2_retention_keeps_visible_and_last_good_proof_runs():
         prune_per_brand_trend_narrative_history(
             now=NOW, keep_days=30, keep_per_window=1
         )
-        == 1
+        == 4
     )
     assert TrendNarrativeRun.objects.filter(pk=current.pk).exists()
     assert TrendNarrativeRun.objects.filter(pk=original.pk).exists()
