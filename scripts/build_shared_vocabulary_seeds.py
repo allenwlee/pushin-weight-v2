@@ -108,11 +108,13 @@ def build() -> None:
         for n in tree.body
         if isinstance(n, ast.FunctionDef) and n.name == "definition_rows"
     )
-    definitions_loop = next(n for n in definitions.body if isinstance(n, ast.For))
-    units = {row[4] for row in ast.literal_eval(definitions_loop.iter)} | {
-        "day",
-        "second",
-    }
+    units = {"day", "second"}
+    for loop in definitions.body:
+        if not isinstance(loop, ast.For) or not isinstance(loop.target, ast.Tuple):
+            continue
+        names = [part.id for part in loop.target.elts if isinstance(part, ast.Name)]
+        if "unit" in names:
+            units.update(row[names.index("unit")] for row in ast.literal_eval(loop.iter))
     datasets = {
         "shared_time_zones.csv": (["code"], [(zone,) for zone in sorted(zones)]),
         "shared_languages.csv": (
@@ -122,13 +124,31 @@ def build() -> None:
         "shared_locales.csv": (["code", "language_code"], sorted(locales)),
         "shared_measurement_units.csv": (["code"], [(unit,) for unit in sorted(units)]),
     }
-    manifest = {
+    manifest_path = DATA / "shared_vocabulary_manifest.json"
+    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+    if manifest.get("schema_version", 1) != 1:
+        raise ValueError("Unsupported existing seed manifest version")
+    retained_seeds = {
+        name: entry for name, entry in manifest.get("seeds", {}).items()
+        if name not in datasets
+    }
+    # This builder owns only F0. Later business catalogues have independent
+    # reviewed sources; verify and retain their bytes and provenance unchanged.
+    for name, entry in retained_seeds.items():
+        if Path(name).name != name or not name.endswith(".csv"):
+            raise ValueError("Invalid retained seed filename")
+        raw = (DATA / name).read_bytes()
+        if sha256(raw) != entry["sha256"]:
+            raise ValueError(f"Retained seed hash mismatch: {name}")
+        if len(list(csv.DictReader(io.StringIO(raw.decode())))) != entry["rows"]:
+            raise ValueError(f"Retained seed row count mismatch: {name}")
+    manifest.update({
         "schema_version": 1,
         "tzdata_release": "2026e",
         "language_registry_date": "2026-09-17",
         "sources": sources,
-        "seeds": {},
-    }
+        "seeds": retained_seeds,
+    })
     for name, (header, rows) in datasets.items():
         stream = io.StringIO(newline="")
         writer = csv.writer(stream, lineterminator="\n")
@@ -137,7 +157,7 @@ def build() -> None:
         raw = stream.getvalue().encode()
         (DATA / name).write_bytes(raw)
         manifest["seeds"][name] = {"sha256": sha256(raw), "rows": len(rows)}
-    (DATA / "shared_vocabulary_manifest.json").write_text(
+    manifest_path.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n"
     )
     print(

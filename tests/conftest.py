@@ -46,7 +46,7 @@ def ensure_shared_locale_rows_for_database_tests(request):
 
 
 @pytest.fixture(autouse=True)
-def ensure_shared_job_catalogues_for_database_tests(request):
+def ensure_shared_business_catalogues_for_database_tests(request):
     from django.test import SimpleTestCase
 
     django_test_class = (
@@ -58,7 +58,7 @@ def ensure_shared_job_catalogues_for_database_tests(request):
         return
     request.getfixturevalue("db")
     from core.job_vocabulary import NORMALIZER_ID, register_job_normalizer
-    from core.models import Currency, DefinitionVersion, EmploymentType
+    from core.models import Currency, DefinitionVersion, EmploymentType, PersonNameType
     from core.shared_vocabulary import seed_shared_vocabulary
 
     if not Currency.objects.filter(pk="USD").exists() or not EmploymentType.objects.filter(code="full_time").exists():
@@ -69,6 +69,12 @@ def ensure_shared_job_catalogues_for_database_tests(request):
         ))
     if not DefinitionVersion.objects.filter(pk=NORMALIZER_ID).exists():
         register_job_normalizer()
+    if not PersonNameType.objects.filter(code="professional").exists():
+        seed_shared_vocabulary(catalogues=(
+            "person_name_types", "affiliation_types", "opportunity_types", "event_kinds",
+            "event_claim_kinds", "release_maturities", "release_access_channels",
+            "release_availability_states", "release_disclosure_states", "personnel_change_types",
+        ))
 
 
 @pytest.fixture

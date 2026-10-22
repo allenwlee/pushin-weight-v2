@@ -14,6 +14,7 @@ from core.models import (
     PersonName,
     PersonNameEvidence,
     PersonNameSelection,
+    PersonNameType,
 )
 
 
@@ -62,13 +63,17 @@ def record_name(
         locale = Locale.objects.get(code=language)
     except Locale.DoesNotExist as exc:
         raise ValueError(f"Unregistered PersonName locale: {language}") from exc
+    try:
+        kind = PersonNameType.objects.get(code=name_type)
+    except PersonNameType.DoesNotExist as exc:
+        raise ValueError(f"Unregistered person name kind: {name_type}") from exc
     row, _ = PersonName.objects.get_or_create(
         person=person,
         fingerprint=digest(representation),
         defaults={
             "full_name": full_name,
             "locale": locale,
-            "name_type": name_type,
+            "name_type_reference": kind,
             "origin": origin,
             "derived_from": derived_from,
             "given_name": given_name,

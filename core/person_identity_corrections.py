@@ -44,6 +44,8 @@ def _selection(source, kind, selection):
     chosen = {}
     for key, model in TRANSFER_MODELS.items():
         rows = model.objects.filter(person=source)
+        if model is PersonName:
+            rows = rows.select_related("name_type_reference")
         ids = (
             list(rows.values_list("pk", flat=True))
             if kind == "merge"
@@ -106,14 +108,14 @@ def _copy_names(source, target, names, *, kind, reviewer, reason):
         representation = {
             "full_name": row.full_name,
             "language": row.locale_id,
-            "name_type": row.name_type,
+            "name_type": row.name_type_reference.code,
             "origin": row.origin,
             "derived_from_id": parent.pk if parent else None,
         }
         defaults = {
             "full_name": row.full_name,
             "locale_id": row.locale_id,
-            "name_type": row.name_type,
+            "name_type_reference_id": row.name_type_reference_id,
             "origin": row.origin,
             "derived_from": parent,
             "given_name": row.given_name,

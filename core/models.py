@@ -166,7 +166,7 @@ class Currency(models.Model):
         ]
 
 
-class JobVocabularyCode(models.Model):
+class BusinessVocabularyCode(models.Model):
     """A canonical business classification owned by its typed catalogue."""
 
     id = models.BigAutoField(primary_key=True)
@@ -182,39 +182,89 @@ class JobVocabularyCode(models.Model):
         ]
 
 
-class SalaryPeriod(JobVocabularyCode):
-    class Meta(JobVocabularyCode.Meta):
+class SalaryPeriod(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
         db_table = "salary_periods"
 
 
-class JobFunction(JobVocabularyCode):
-    class Meta(JobVocabularyCode.Meta):
+class JobFunction(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
         db_table = "job_functions"
 
 
-class SeniorityLevel(JobVocabularyCode):
-    class Meta(JobVocabularyCode.Meta):
+class SeniorityLevel(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
         db_table = "seniority_levels"
 
 
-class EmploymentType(JobVocabularyCode):
-    class Meta(JobVocabularyCode.Meta):
+class EmploymentType(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
         db_table = "employment_types"
 
 
-class WorkplaceType(JobVocabularyCode):
-    class Meta(JobVocabularyCode.Meta):
+class WorkplaceType(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
         db_table = "workplace_types"
 
 
-class OrganizationAIRelationshipType(JobVocabularyCode):
-    class Meta(JobVocabularyCode.Meta):
+class OrganizationAIRelationshipType(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
         db_table = "organization_ai_relationship_types"
 
 
-class RoleAIRelationshipType(JobVocabularyCode):
-    class Meta(JobVocabularyCode.Meta):
+class RoleAIRelationshipType(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
         db_table = "role_ai_relationship_types"
+
+
+class PersonNameType(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "person_name_types"
+
+
+class AffiliationType(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "affiliation_types"
+
+
+class OpportunityType(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "opportunity_types"
+
+
+class EventKind(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "event_kinds"
+
+
+class EventClaimKind(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "event_claim_kinds"
+
+
+class ReleaseMaturity(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "release_maturities"
+
+
+class ReleaseAccessChannel(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "release_access_channels"
+
+
+class ReleaseAvailabilityState(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "release_availability_states"
+
+
+class ReleaseDisclosureState(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "release_disclosure_states"
+
+
+class PersonnelChangeType(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "personnel_change_types"
 
 
 class ServiceProvider(models.Model):
@@ -5378,7 +5428,10 @@ class PersonName(models.Model):
         on_delete=models.PROTECT,
         related_name="person_names",
     )
-    name_type = models.CharField(max_length=32, default="professional")
+    name_type_reference = models.ForeignKey(
+        PersonNameType, on_delete=models.PROTECT, db_column="name_type_id",
+        related_name="names",
+    )
     name_order = models.CharField(max_length=24, default="unknown")
     origin = models.CharField(max_length=24, default="source")
     derived_from = models.ForeignKey(

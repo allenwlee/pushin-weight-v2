@@ -18,13 +18,23 @@ from django.db import transaction
 from django.db.models.functions import Lower
 
 from core.models import (
+    AffiliationType,
     Currency,
     EmploymentType,
+    EventClaimKind,
+    EventKind,
     JobFunction,
     Language,
     Locale,
     MeasurementUnit,
+    OpportunityType,
     OrganizationAIRelationshipType,
+    PersonNameType,
+    PersonnelChangeType,
+    ReleaseAccessChannel,
+    ReleaseAvailabilityState,
+    ReleaseDisclosureState,
+    ReleaseMaturity,
     RoleAIRelationshipType,
     SalaryPeriod,
     SeniorityLevel,
@@ -46,6 +56,16 @@ CATALOGUES = {
     "workplace_types": (WorkplaceType, "shared_workplace_types.csv", ("code",)),
     "organization_ai_relationship_types": (OrganizationAIRelationshipType, "shared_organization_ai_relationship_types.csv", ("code",)),
     "role_ai_relationship_types": (RoleAIRelationshipType, "shared_role_ai_relationship_types.csv", ("code",)),
+    "person_name_types": (PersonNameType, "shared_person_name_types.csv", ("code",)),
+    "affiliation_types": (AffiliationType, "shared_affiliation_types.csv", ("code",)),
+    "opportunity_types": (OpportunityType, "shared_opportunity_types.csv", ("code",)),
+    "event_kinds": (EventKind, "shared_event_kinds.csv", ("code",)),
+    "event_claim_kinds": (EventClaimKind, "shared_event_claim_kinds.csv", ("code",)),
+    "release_maturities": (ReleaseMaturity, "shared_release_maturities.csv", ("code",)),
+    "release_access_channels": (ReleaseAccessChannel, "shared_release_access_channels.csv", ("code",)),
+    "release_availability_states": (ReleaseAvailabilityState, "shared_release_availability_states.csv", ("code",)),
+    "release_disclosure_states": (ReleaseDisclosureState, "shared_release_disclosure_states.csv", ("code",)),
+    "personnel_change_types": (PersonnelChangeType, "shared_personnel_change_types.csv", ("code",)),
 }
 CODE_GRAMMARS = {
     "time_zones": r"[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)*",
@@ -56,6 +76,9 @@ CODE_GRAMMARS = {
     **{name: r"[a-z][a-z0-9_]*" for name in (
         "salary_periods", "job_functions", "seniority_levels", "employment_types",
         "workplace_types", "organization_ai_relationship_types", "role_ai_relationship_types",
+        "person_name_types", "affiliation_types", "opportunity_types", "event_kinds",
+        "event_claim_kinds", "release_maturities", "release_access_channels",
+        "release_availability_states", "release_disclosure_states", "personnel_change_types",
     )},
 }
 

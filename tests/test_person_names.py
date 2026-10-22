@@ -33,6 +33,7 @@ def test_homonyms_do_not_merge_and_components_require_evidence():
         name(a, given_name="元")
     assert name(a).pk == first.pk
     assert first.evidence.count() == 1
+    assert first.name_type_reference.code == "professional"
 
 
 def test_selection_requires_review_and_preserves_derived_origin():
@@ -106,6 +107,7 @@ def test_database_rejects_cross_person_selection_and_derivation():
             person=b,
             full_name="Li Yuan",
             locale_id="en",
+            name_type_reference=original.name_type_reference,
             fingerprint="x" * 64,
             derived_from=original,
         )

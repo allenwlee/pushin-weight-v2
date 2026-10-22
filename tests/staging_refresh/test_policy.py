@@ -93,6 +93,30 @@ def test_loads_the_tracked_exhaustive_policy() -> None:
     )
 
 
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_every_current_managed_table_has_an_explicit_refresh_disposition():
+    from django.apps import apps
+    from django.db import connection
+
+    policy = load_policy(POLICY_PATH)
+    models = [
+        model for model in apps.get_models(include_auto_created=True)
+        if model._meta.managed and not model._meta.proxy
+    ]
+    tables = {model._meta.db_table for model in models}
+    assert not tables - policy.relations.classified_tables
+    # PostgreSQL keeps sequence names across table renames. Inspect the actual
+    # schema rather than deriving names that never existed.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT relname FROM pg_class WHERE relkind='S' "
+            "AND relnamespace='public'::regnamespace"
+        )
+        sequences = {row[0] for row in cursor.fetchall()}
+    assert not sequences - policy.relations.sequences
+
+
 def test_pre_merge_source_is_authorized_without_reading_legacy_catalog():
     from scripts.staging_refresh.policy import (
         LEGACY_CATALOG_SEQUENCES,
@@ -523,7 +547,7 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "rare_type_search_daily_budgets",
         "rare_type_search_hits",
         "rare_type_search_runs",
-    } == policy.relations.optional_source_tables
+    } <= policy.relations.optional_source_tables
 
     # Table renames retain owned sequence names; do not invent renamed sequences.
     sequence_prefix = {

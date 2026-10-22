@@ -67,6 +67,56 @@
     "shared_salary_periods.csv": {
       "rows": 5,
       "sha256": "fe5cd9a9557065396c934632b457f409ad4a55011a07aca5d9dbd8da1e6417b8"
+    },
+    "shared_person_name_types.csv": {
+      "rows": 2,
+      "sha256": "67b6dfa660d4a181df03c27a5357fea28dbbb9e8dddfeaeef1fbe17b88a10ca5",
+      "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
+    },
+    "shared_affiliation_types.csv": {
+      "rows": 11,
+      "sha256": "4c93d438146fc3b798b00d0a2466a5b2fc5b11586681ed5ebc16d7d2fcd3b6b7",
+      "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
+    },
+    "shared_opportunity_types.csv": {
+      "rows": 10,
+      "sha256": "193cefea43ce329a48296ed0daec2134f14ace82b0d0bbc01d25fc75ba6092bd",
+      "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
+    },
+    "shared_event_kinds.csv": {
+      "rows": 2,
+      "sha256": "5ff4abcf78474c518321644530d50d03991f5554be990f805d2f439d8e98e2c7",
+      "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
+    },
+    "shared_event_claim_kinds.csv": {
+      "rows": 2,
+      "sha256": "ddec3b56c35087a57d139df55b395aba491085bc6afc45482eeb7faa18787f7f",
+      "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
+    },
+    "shared_release_maturities.csv": {
+      "rows": 5,
+      "sha256": "3f89da84e2350feafa607bcbe7261061c1d7efe3b0c1c8d2f387d6f4da883bed",
+      "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
+    },
+    "shared_release_access_channels.csv": {
+      "rows": 2,
+      "sha256": "cc3f578a3d5f2e46cc76b3d690fcddf0a5cda4fa877b1ee0baa272da7a667efa",
+      "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
+    },
+    "shared_release_availability_states.csv": {
+      "rows": 5,
+      "sha256": "76f6b2d8fd70ebd0df9e01d6897edec6ab739fac7f792f29cb0effd53903e545",
+      "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
+    },
+    "shared_release_disclosure_states.csv": {
+      "rows": 3,
+      "sha256": "73568693d84d8e2b6d4aa5c418518074e274a36f24b87faa29c66a1714b294bf",
+      "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
+    },
+    "shared_personnel_change_types.csv": {
+      "rows": 5,
+      "sha256": "688c71b8ce527744dd52153fefa8cbd6f539224434845c22ebdd9f896753a955",
+      "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
     }
   },
   "sources": {
