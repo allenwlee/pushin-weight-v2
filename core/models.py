@@ -10164,7 +10164,12 @@ class PersonnelChangeDetail(models.Model):
         related_name="change_reviews",
     )
     observed_person_name = models.TextField()
-    change_kind = models.CharField(max_length=16)
+    change_type_reference = models.ForeignKey(
+        PersonnelChangeType,
+        db_column="change_kind_id",
+        on_delete=models.PROTECT,
+        related_name="reviewed_changes",
+    )
     from_affiliation = models.ForeignKey(
         PersonBrandAffiliation,
         null=True,
@@ -10189,12 +10194,6 @@ class PersonnelChangeDetail(models.Model):
         constraints = [
             models.CheckConstraint(
                 condition=~models.Q(observed_person_name=""), name="ck_ed_person_name"
-            ),
-            models.CheckConstraint(
-                condition=models.Q(
-                    change_kind__in=["join", "leave", "promotion", "move", "other"]
-                ),
-                name="ck_ed_person_change",
             ),
             models.CheckConstraint(
                 condition=models.Q(person__isnull=False)

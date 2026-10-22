@@ -355,6 +355,9 @@ def test_personnel_move_uses_existing_roles_without_changing_them():
             to_organization_name="New employer",
         ),
     )
+    assert saved.personnel_change.change_type_reference.code == "move"
+    assert read_dossier(event.pk)["personnel_change"]["change_kind"] == "move"
+    assert "change_kind_id" not in read_dossier(event.pk)["personnel_change"]
     assert read_dossier(event.pk)["personnel_change"]["person_id"] == str(person.pk)
     assert saved.revision == 1
     assert not models.PersonBrandAffiliation.objects.filter(
@@ -457,11 +460,23 @@ def test_raw_review_with_foreign_claim_or_wrong_detail_cannot_commit():
             )
             if wrong_kind:
                 models.PersonnelChangeDetail.objects.create(
-                    review=saved, observed_person_name="A", change_kind="move"
+                    review=saved, observed_person_name="A",
+                    change_type_reference=models.PersonnelChangeType.objects.get(
+                        code="move"
+                    ),
                 )
             else:
                 models.ModelReleaseDetail.objects.create(
-                    review=saved, observed_name="A", native_identifier="test/a"
+                    review=saved, observed_name="A", native_identifier="test/a",
+                    release_maturity_reference=models.ReleaseMaturity.objects.get(
+                        code="unknown"
+                    ),
+                    release_availability_reference=models.ReleaseAvailabilityState.objects.get(
+                        code="unknown"
+                    ),
+                    release_disclosure_reference=models.ReleaseDisclosureState.objects.get(
+                        code="unknown"
+                    ),
                 )
             models.EventDossier.objects.filter(pk=event.pk).update(current_review=saved)
     assert models.EventDossierReview.objects.count() == 0

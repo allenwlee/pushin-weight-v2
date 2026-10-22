@@ -10,6 +10,7 @@ NAME_CUTOVER = ("core", "0136_rg4_person_name_kind_cutover")
 BUSINESS_CUTOVER = ("core", "0137_rg4_affiliation_opportunity_references")
 EVENT_KIND_CUTOVER = ("core", "0138_rg4_event_kind_reference")
 RELEASE_CUTOVER = ("core", "0139_rg4_release_meaning_references")
+PERSONNEL_CUTOVER = ("core", "0140_rg4_personnel_change_kind_reference")
 
 
 def _temporarily_lift_old_kind_check(table, constraint):
@@ -412,3 +413,86 @@ def test_release_meanings_map_populated_rows_and_keep_both_writer_generations(
             old_detail.disclosure_state) == (
         "stable", "public_test", "unannounced"
     )
+
+
+@pytest.mark.parametrize("migration_rehearsal_schema", [RELEASE_CUTOVER], indirect=True)
+def test_personnel_kind_cutover_keeps_completed_reviews_and_writer_compatibility(
+    migration_rehearsal_schema,
+):
+    from django.utils import timezone
+
+    old = MigrationExecutor(connection).loader.project_state([RELEASE_CUTOVER]).apps
+    details = old.get_model("core", "PersonnelChangeDetail")
+    now = timezone.now()
+
+    def completed_detail(*, key, detail_model, values):
+        with transaction.atomic():
+            dossier = old.get_model("core", "EventDossier").objects.create(
+                event_kind_reference_id=old.get_model("core", "EventKind")
+                .objects.get(code="personnel_change").pk,
+                identity_key=key * 64,
+            )
+            post = old.get_model("core", "Post").objects.create(
+                tweet_id="personnel-source-" + key, text="Personnel claim"
+            )
+            source = old.get_model("core", "EventDossierSource").objects.create(
+                event_dossier=dossier, post=post, linked_at=now
+            )
+            claim = old.get_model("core", "EventDossierClaim").objects.create(
+                event_dossier_source=source, claim_kind="announcement",
+                scope_key="source", claim_hash=key * 64,
+                extraction_version="source-v1", recorded_at=now,
+                assertion_text="Joined", source_excerpt="Personnel claim",
+                source_hash="f" * 64,
+            )
+            review = old.get_model("core", "EventDossierReview").objects.create(
+                event_dossier=dossier, revision=1, reviewed_at=now,
+                evidence_cutoff_at=now, method_version="source-v1", actor="reviewer",
+                reason="Source review", input_hash=key * 64,
+                display_title="Personnel update", review_state="provisional",
+            )
+            old.get_model("core", "EventDossierReviewClaim").objects.create(
+                review=review, claim=claim, disposition="accepted", reason="Direct source"
+            )
+            detail = detail_model.objects.create(
+                review_id=review.pk, observed_person_name="Source person", **values
+            )
+            dossier.current_review_id = review.pk
+            dossier.save(update_fields=["current_review"])
+        return detail
+
+    original = completed_detail(
+        key="a", detail_model=details, values={"change_kind": "move"}
+    )
+    before = details.objects.get(pk=original.pk)
+    MigrationExecutor(connection).migrate([PERSONNEL_CUTOVER])
+    current = MigrationExecutor(connection).loader.project_state([PERSONNEL_CUTOVER]).apps
+    mapped = current.get_model("core", "PersonnelChangeDetail").objects.get(
+        pk=original.pk
+    )
+    assert mapped.change_type_reference.code == "move"
+    assert details.objects.get(pk=original.pk).observed_person_name == before.observed_person_name
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT tgenabled FROM pg_trigger WHERE tgrelid="
+            "'personnel_change_details'::regclass AND tgname='ed_frozen'"
+        )
+        assert cursor.fetchone() == ("O",)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        details.objects.filter(pk=original.pk).update(change_kind="join")
+
+    legacy = completed_detail(
+        key="b", detail_model=details, values={"change_kind": "leave"}
+    )
+    assert current.get_model("core", "PersonnelChangeDetail").objects.get(
+        pk=legacy.pk
+    ).change_type_reference.code == "leave"
+    new = completed_detail(
+        key="c", detail_model=current.get_model("core", "PersonnelChangeDetail"),
+        values={
+            "change_type_reference_id": current.get_model(
+                "core", "PersonnelChangeType"
+            ).objects.get(code="promotion").pk,
+        },
+    )
+    assert details.objects.get(pk=new.pk).change_kind == "promotion"

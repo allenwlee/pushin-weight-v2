@@ -29,6 +29,7 @@ from core.models import (
     ModelReleaseDetail,
     PersonBrandAffiliation,
     PersonnelChangeDetail,
+    PersonnelChangeType,
     Post,
     ReleaseAvailabilityState,
     ReleaseDisclosureState,
@@ -348,6 +349,9 @@ def complete_review(
         _insert(ModelReleaseDetail(review=saved, **detail))
     else:
         detail = asdict(personnel_change)
+        detail["change_type_reference"] = PersonnelChangeType.objects.get(
+            code=detail.pop("change_kind")
+        )
         roles = PersonBrandAffiliation.objects.filter(
             pk__in=[detail["from_affiliation_id"], detail["to_affiliation_id"]]
         )
@@ -381,6 +385,15 @@ def _release_columns(row):
     ):
         result.pop(column)
         result[name] = getattr(row, reference).code
+    return result
+
+
+def _personnel_columns(row):
+    if row is None:
+        return None
+    result = _columns(row)
+    result.pop("change_kind_id")
+    result["change_kind"] = row.change_type_reference.code
     return result
 
 
@@ -425,5 +438,5 @@ def read_dossier(dossier_id, *, review_id=None) -> dict:
         "claims": claims,
         "sources": [sources[key] for key in sorted(sources)],
         "model_release": _release_columns(getattr(saved, "model_release", None)),
-        "personnel_change": _columns(getattr(saved, "personnel_change", None)),
+        "personnel_change": _personnel_columns(getattr(saved, "personnel_change", None)),
     }
