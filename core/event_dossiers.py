@@ -365,10 +365,13 @@ def read_dossier(dossier_id, *, review_id=None) -> dict:
     claims. No release timestamp, normalized measurement or projection is inferred.
     """
     event = EventDossier.objects.get(pk=dossier_id)
+    dossier = _columns(event)
+    dossier.pop("event_kind_id")
+    dossier["event_kind"] = event.event_kind_reference.code
     selected_id = review_id if review_id is not None else event.current_review_id
     if selected_id is None:
         return {
-            "dossier": _columns(event),
+            "dossier": dossier,
             "review": None,
             "claims": [],
             "sources": [],
@@ -391,7 +394,7 @@ def read_dossier(dossier_id, *, review_id=None) -> dict:
         )
         sources[source.pk] = _columns(source)
     return {
-        "dossier": _columns(event),
+        "dossier": dossier,
         "review": _columns(saved),
         "claims": claims,
         "sources": [sources[key] for key in sorted(sources)],

@@ -33,6 +33,8 @@ def dossier(key="model:small", kind="model_release"):
 def test_event_kind_uses_shared_identity_without_changing_dossier_replay():
     event = dossier("model:kind-reference")
     assert event.event_kind_reference.code == "model_release"
+    assert read_dossier(event.pk)["dossier"]["event_kind"] == "model_release"
+    assert "event_kind_id" not in read_dossier(event.pk)["dossier"]
     assert dossier("model:kind-reference").pk == event.pk
     assert models.EventDossier.objects.count() == 1
     with pytest.raises(ValueError, match="another event kind"):
