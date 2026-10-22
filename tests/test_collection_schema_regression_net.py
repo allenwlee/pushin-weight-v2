@@ -62,19 +62,6 @@ def test_reference_inventory_and_columns_match_all_concrete_application_tables()
     assert set(headings) == expected and len(headings) == len(expected)
     inventory = re.findall(r"^\| \[([^]]+)\]\(#table-[^)]+\) \|", doc, re.MULTILINE)
     assert set(inventory) == expected and len(inventory) == len(expected)
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT name FROM django_migrations WHERE app='core'")
-        migrations = {row[0] for row in cursor.fetchall()}
-    # Candidate0133 deliberately retains exactly nine physical bridge columns.
-    # The deletion candidate removes this allowance through its applied ledger.
-    temporary = {}
-    if ("0133_rg3_cutover_job_and_hq_fields" in migrations
-            and "0134_rg3_remove_legacy_job_and_hq_columns" not in migrations):
-        temporary = {
-            "companies": {"hq_country"},
-            "job_listings": {"job_function", "seniority", "employment_type", "workplace_type",
-                             "organization_ai_relationship", "role_ai_relationship", "salary_currency", "salary_period"},
-        }
     for model in models:
         section = doc.split(f"### `{model._meta.db_table}` —", 1)[1].split(
             "[Back to table inventory]", 1
@@ -88,8 +75,10 @@ def test_reference_inventory_and_columns_match_all_concrete_application_tables()
                     cursor, model._meta.db_table
                 )
             }
-        assert physical_columns == orm_columns | temporary.get(model._meta.db_table, set()), model._meta.db_table
-        assert set(columns) == orm_columns and len(columns) == len(orm_columns), model._meta.db_table
+        assert physical_columns == orm_columns, model._meta.db_table
+        assert set(columns) == orm_columns and len(columns) == len(orm_columns), (
+            model._meta.db_table
+        )
 
 
 @pytest.mark.usefixtures("isolated_migration_database")

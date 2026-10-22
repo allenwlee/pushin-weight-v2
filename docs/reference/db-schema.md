@@ -1,8 +1,8 @@
 # Database schema reference
 
-Repository and local candidate scope checked 2026-10-22 through `0133_rg3_cutover_job_and_hq_fields`. Production remains verified through RG2 migration0131 at `67d97278` until the RG3 release receipt is recorded.
+Repository candidate scope includes `0134_rg3_remove_legacy_job_and_hq_columns`. Deployment and physical-verification results remain recorded separately in the global schema plan.
 
-Repository scope: **196 core application tables**, **2396 current ORM columns**, nine compatibility views and one native materialized view with five columns. The cutover candidate deliberately retains nine additional physical columns solely for old-image compatibility: `companies.hq_country` and `job_listings.job_function`, `seniority`, `employment_type`, `workplace_type`, `organization_ai_relationship`, `role_ai_relationship`, `salary_currency`, `salary_period`. Current application readers/writers use replacement owners. A separate deletion migration removes those nine columns and their temporary bridges after affected old processes drain. The materialized view remains a separate unmanaged ORM mapping.
+Repository scope: **196 core application tables**, **2396 current ORM columns**, nine compatibility views and one native materialized view with five columns. Migration0134 removes the nine RG3 compatibility columns and their temporary bridges after affected old processes drain: `companies.hq_country` and `job_listings.job_function`, `seniority`, `employment_type`, `workplace_type`, `organization_ai_relationship`, `role_ai_relationship`, `salary_currency`, `salary_period`. It verifies retained meanings/source evidence and fingerprints all listing, source, assignment and company values outside those nine fields before and after deletion. Catalogue and assignment guards remain. The materialized view remains a separate unmanaged ORM mapping.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
