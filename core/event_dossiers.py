@@ -20,6 +20,7 @@ from django.utils import timezone
 
 from core.models import (
     CollectionObservation,
+    EventClaimKind,
     EventDossier,
     EventDossierClaim,
     EventDossierReview,
@@ -186,6 +187,10 @@ def add_claim(
     not_after: datetime | None = None,
 ) -> EventDossierClaim:
     source = EventDossierSource.objects.get(pk=source_id)
+    try:
+        kind = EventClaimKind.objects.get(code=claim_kind)
+    except EventClaimKind.DoesNotExist as error:
+        raise ValueError("Unknown dossier claim kind") from error
     if event_timezone:
         try:
             ZoneInfo(event_timezone)
@@ -218,7 +223,12 @@ def add_claim(
     if event.merged_into_id:
         raise ValueError("Add claims to the canonical dossier")
     existing = EventDossierClaim.objects.filter(claim_hash=claim_hash).first()
-    return existing or _insert(EventDossierClaim(claim_hash=claim_hash, **values))
+    if existing:
+        return existing
+    values.pop("claim_kind")
+    return _insert(EventDossierClaim(
+        claim_hash=claim_hash, claim_kind_reference=kind, **values
+    ))
 
 
 @transaction.atomic
@@ -397,6 +407,13 @@ def _personnel_columns(row):
     return result
 
 
+def _claim_columns(row):
+    result = _columns(row)
+    result.pop("claim_kind_id")
+    result["claim_kind"] = row.claim_kind_reference.code
+    return result
+
+
 def read_dossier(dossier_id, *, review_id=None) -> dict:
     """Read the selected or named completed review with its frozen used claims.
 
@@ -426,7 +443,7 @@ def read_dossier(dossier_id, *, review_id=None) -> dict:
         source = decision.claim.event_dossier_source
         claims.append(
             {
-                **_columns(decision.claim),
+                **_claim_columns(decision.claim),
                 "disposition": decision.disposition,
                 "disposition_reason": decision.reason,
             }

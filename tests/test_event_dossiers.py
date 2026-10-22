@@ -217,11 +217,15 @@ def test_claim_replay_and_separate_milestones():
         "extraction_version": "test-v1",
     }
     first = add_claim(source.pk, **values)
+    assert first.claim_kind_reference.code == "announcement"
     assert add_claim(source.pk, **values).pk == first.pk
-    add_claim(
+    repository = add_claim(
         source.pk,
         **{**values, "claim_kind": "repository_created", "scope_key": "repository"},
     )
+    assert repository.claim_kind_reference.code == "repository_created"
+    with pytest.raises(ValueError, match="Unknown dossier claim kind"):
+        add_claim(source.pk, **{**values, "claim_kind": "unregistered"})
     assert models.EventDossierClaim.objects.count() == 2
 
 

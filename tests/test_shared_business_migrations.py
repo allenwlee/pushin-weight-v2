@@ -11,6 +11,7 @@ BUSINESS_CUTOVER = ("core", "0137_rg4_affiliation_opportunity_references")
 EVENT_KIND_CUTOVER = ("core", "0138_rg4_event_kind_reference")
 RELEASE_CUTOVER = ("core", "0139_rg4_release_meaning_references")
 PERSONNEL_CUTOVER = ("core", "0140_rg4_personnel_change_kind_reference")
+CLAIM_CUTOVER = ("core", "0141_rg4_dossier_claim_kind_reference")
 
 
 def _temporarily_lift_old_kind_check(table, constraint):
@@ -496,3 +497,81 @@ def test_personnel_kind_cutover_keeps_completed_reviews_and_writer_compatibility
         },
     )
     assert details.objects.get(pk=new.pk).change_kind == "promotion"
+
+
+@pytest.mark.parametrize("migration_rehearsal_schema", [PERSONNEL_CUTOVER], indirect=True)
+def test_claim_kind_cutover_preserves_hashes_and_both_writer_generations(
+    migration_rehearsal_schema,
+):
+    old = MigrationExecutor(connection).loader.project_state([PERSONNEL_CUTOVER]).apps
+    dossier = old.get_model("core", "EventDossier").objects.create(
+        event_kind_reference_id=old.get_model("core", "EventKind")
+        .objects.get(code="model_release").pk,
+        identity_key="a" * 64,
+    )
+    post = old.get_model("core", "Post").objects.create(
+        tweet_id="claim-cutover-source", text="Repository appeared"
+    )
+    source = old.get_model("core", "EventDossierSource").objects.create(
+        event_dossier=dossier, post=post
+    )
+    claims = old.get_model("core", "EventDossierClaim")
+
+    def create_old(kind, marker):
+        return claims.objects.create(
+            event_dossier_source=source, claim_kind=kind,
+            scope_key="repository", claim_hash=marker * 64,
+            extraction_version="source-v1", assertion_text="Repository appeared",
+            source_excerpt="Repository appeared", source_hash="f" * 64,
+        )
+
+    original = create_old("repository_created", "b")
+    unsupported = create_old("unregistered_kind", "c")
+    with pytest.raises(RuntimeError, match="Unmapped dossier claim kind"):
+        MigrationExecutor(connection).migrate([CLAIM_CUTOVER])
+    assert claims.objects.get(pk=original.pk).claim_hash == "b" * 64
+    assert CLAIM_CUTOVER not in MigrationExecutor(connection).loader.applied_migrations
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT tgenabled FROM pg_trigger WHERE tgrelid="
+            "'event_dossier_claims'::regclass AND tgname='ed_frozen'"
+        )
+        assert cursor.fetchone() == ("O",)
+        # Remove only the intentionally invalid rehearsal row. A real unknown
+        # claim must be resolved by a reviewed catalogue amendment, not deleted.
+        cursor.execute("ALTER TABLE event_dossier_claims DISABLE TRIGGER ed_frozen")
+        cursor.execute(
+            "DELETE FROM event_dossier_claims WHERE id=%s", [unsupported.pk]
+        )
+        cursor.execute("ALTER TABLE event_dossier_claims ENABLE TRIGGER ed_frozen")
+
+    MigrationExecutor(connection).migrate([CLAIM_CUTOVER])
+    current = MigrationExecutor(connection).loader.project_state([CLAIM_CUTOVER]).apps
+    mapped = current.get_model("core", "EventDossierClaim").objects.get(
+        pk=original.pk
+    )
+    assert mapped.claim_kind_reference.code == "repository_created"
+    assert mapped.claim_hash == original.claim_hash
+    assert mapped.source_excerpt == original.source_excerpt
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT tgenabled FROM pg_trigger WHERE tgrelid="
+            "'event_dossier_claims'::regclass AND tgname='ed_frozen'"
+        )
+        assert cursor.fetchone() == ("O",)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        claims.objects.filter(pk=original.pk).update(claim_kind="announcement")
+
+    legacy = create_old("announcement", "d")
+    assert current.get_model("core", "EventDossierClaim").objects.get(
+        pk=legacy.pk
+    ).claim_kind_reference.code == "announcement"
+    new = current.get_model("core", "EventDossierClaim").objects.create(
+        event_dossier_source_id=source.pk,
+        claim_kind_reference_id=current.get_model("core", "EventClaimKind")
+        .objects.get(code="availability").pk,
+        scope_key="api", claim_hash="e" * 64,
+        extraction_version="source-v1", assertion_text="API available",
+        source_excerpt="Repository appeared", source_hash="f" * 64,
+    )
+    assert claims.objects.get(pk=new.pk).claim_kind == "availability"

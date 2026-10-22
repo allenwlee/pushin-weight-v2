@@ -9914,7 +9914,12 @@ class EventDossierClaim(models.Model):
     event_dossier_source = models.ForeignKey(
         EventDossierSource, on_delete=models.PROTECT, related_name="claims"
     )
-    claim_kind = models.CharField(max_length=64)
+    claim_kind_reference = models.ForeignKey(
+        EventClaimKind,
+        db_column="claim_kind_id",
+        on_delete=models.PROTECT,
+        related_name="dossier_claims",
+    )
     event_timezone = models.CharField(max_length=64, null=True, blank=True)
     not_before = models.DateTimeField(null=True, blank=True)
     not_after = models.DateTimeField(null=True, blank=True)
@@ -9962,8 +9967,7 @@ class EventDossierClaim(models.Model):
                 name="ck_ed_claim_hashes",
             ),
             models.CheckConstraint(
-                condition=~models.Q(claim_kind="")
-                & ~models.Q(scope_key="")
+                condition=~models.Q(scope_key="")
                 & ~models.Q(extraction_version="")
                 & ~models.Q(assertion_text="")
                 & ~models.Q(source_excerpt=""),
