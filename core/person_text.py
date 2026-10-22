@@ -39,7 +39,10 @@ def record_text(
     review_status="pending",
     review_note="",
 ):
-    if kind not in {"biography", "role", "job_description", "location", "title"}:
+    if kind not in {
+        "biography", "role", "job_description", "location", "title",
+        "reported_nationality",
+    }:
         raise ValueError("Names belong in PersonName, not the prose translation path")
     if not text or not source_reference:
         raise ValueError("Original text and source are required")

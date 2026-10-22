@@ -24,7 +24,9 @@ from core.models import (
     PersonAccount,
     PersonBrandAffiliation,
     PersonBrandAffiliationEvidence,
+    PersonCitizenship,
     PersonNameSelection,
+    PersonText,
     Post,
     PostBrandClassificationState,
     PostBrandProduct,
@@ -346,6 +348,17 @@ def person_intelligence(person_id) -> dict[str, Any]:
         ),
         Prefetch("brand_affiliations", queryset=affiliations),
         Prefetch(
+            "texts",
+            queryset=PersonText.objects.filter(kind="reported_nationality")
+            .order_by("-observed_at", "-id"),
+            to_attr="reported_nationality_texts",
+        ),
+        Prefetch(
+            "citizenships",
+            queryset=PersonCitizenship.objects.select_related("country")
+            .order_by("-is_primary", "country_id"),
+        ),
+        Prefetch(
             "account_links",
             queryset=PersonAccount.objects.select_related("account").order_by(
                 "account_id"
@@ -369,7 +382,14 @@ def person_intelligence(person_id) -> dict[str, Any]:
                 person.date_of_birth, person.date_of_birth_precision
             ),
             "sex": person.sex,
-            "nationality": person.nationality,
+            "nationality": (
+                person.reported_nationality_texts[0].text
+                if person.reported_nationality_texts else None
+            ),
+            "citizenships": [
+                {"country_code": row.country_id, "is_primary": row.is_primary}
+                for row in person.citizenships.all()
+            ],
             "ethnicity": person.ethnicity,
             "primary_language": person.primary_language,
             "accounts": [

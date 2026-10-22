@@ -38,6 +38,7 @@
           "date_of_birth": {"value": "1987", "precision": "year"},
           "sex": null,
           "nationality": null,
+          "citizenships": [],
           "ethnicity": null,
           "primary_language": "en",
           "accounts": []

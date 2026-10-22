@@ -13,6 +13,8 @@ RELEASE_CUTOVER = ("core", "0139_rg4_release_meaning_references")
 PERSONNEL_CUTOVER = ("core", "0140_rg4_personnel_change_kind_reference")
 CLAIM_CUTOVER = ("core", "0141_rg4_dossier_claim_kind_reference")
 CLAIM_SCOPE_CUTOVER = ("core", "0142_rg4_scoped_claim_references")
+CITIZENSHIP_CUTOVER = ("core", "0143_rg4_person_citizenship_evidence")
+NATIONALITY_BRIDGE = ("core", "0144_rg4_nationality_old_writer_bridge")
 
 
 def _temporarily_lift_old_kind_check(table, constraint):
@@ -659,3 +661,50 @@ def test_scoped_claim_cutover_keeps_timezone_and_source_evidence(
     assert current.get_model("core", "EventDossierClaim").objects.get(
         pk=new.pk
     ).release_access_channel_reference.code == "api"
+
+
+@pytest.mark.parametrize("migration_rehearsal_schema", [CLAIM_SCOPE_CUTOVER], indirect=True)
+def test_citizenship_cutover_preserves_ambiguous_nationality_as_source_text(
+    migration_rehearsal_schema,
+):
+    old = MigrationExecutor(connection).loader.project_state([CLAIM_SCOPE_CUTOVER]).apps
+    person = old.get_model("core", "Person").objects.create(
+        nationality="Japanese and American?"
+    )
+    absent = old.get_model("core", "Person").objects.create()
+    MigrationExecutor(connection).migrate([CITIZENSHIP_CUTOVER])
+    current = MigrationExecutor(connection).loader.project_state(
+        [CITIZENSHIP_CUTOVER]
+    ).apps
+    retained = current.get_model("core", "PersonText").objects.get(
+        person_id=person.pk,
+        kind="reported_nationality",
+        source_reference="legacy:people.nationality",
+    )
+    assert retained.text == "Japanese and American?"
+    assert retained.origin == "unknown"
+    assert retained.language == "und"
+    assert current.get_model("core", "PersonCitizenship").objects.count() == 0
+    assert current.get_model("core", "PersonText").objects.filter(
+        person_id=absent.pk, kind="reported_nationality"
+    ).count() == 0
+    assert old.get_model("core", "Person").objects.get(
+        pk=person.pk
+    ).nationality == "Japanese and American?"
+
+    MigrationExecutor(connection).migrate([NATIONALITY_BRIDGE])
+    old_writer = old.get_model("core", "Person").objects.create(
+        nationality="Reported Korean"
+    )
+    retained_rows = current.get_model("core", "PersonText").objects.filter(
+        person_id=old_writer.pk, kind="reported_nationality"
+    )
+    assert list(retained_rows.values_list("text", flat=True)) == ["Reported Korean"]
+    old_writer.nationality = "Reported Japanese"
+    old_writer.save(update_fields=["nationality"])
+    assert set(retained_rows.values_list("text", flat=True)) == {
+        "Reported Korean", "Reported Japanese"
+    }
+    with pytest.raises(IntegrityError), transaction.atomic():
+        old_writer.nationality = None
+        old_writer.save(update_fields=["nationality"])

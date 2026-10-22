@@ -5361,7 +5361,6 @@ class Person(models.Model):
         blank=True,
         null=True,
     )
-    nationality = models.TextField(blank=True, null=True)
     ethnicity = models.TextField(blank=True, null=True)
     primary_language = models.TextField(blank=True, null=True)
     merged_into = models.ForeignKey(
@@ -5763,6 +5762,51 @@ class PersonTextTranslation(models.Model):
             )
         ]
 
+
+class PersonCitizenship(models.Model):
+    """One explicitly evidenced Country citizenship; never inferred from wording."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    person = models.ForeignKey(
+        Person, on_delete=models.CASCADE, related_name="citizenships"
+    )
+    country = models.ForeignKey(
+        Country, db_column="country_code", on_delete=models.PROTECT,
+        related_name="person_citizenships",
+    )
+    is_primary = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "person_citizenships"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["person", "country"], name="uq_person_citizenship_country"
+            ),
+            models.UniqueConstraint(
+                fields=["person"], condition=models.Q(is_primary=True),
+                name="uq_person_primary_citizenship",
+            ),
+        ]
+
+
+class PersonCitizenshipEvidence(models.Model):
+    """An existing versioned PersonText item supporting a citizenship."""
+
+    citizenship = models.ForeignKey(
+        PersonCitizenship, on_delete=models.CASCADE, related_name="evidence"
+    )
+    person_text = models.ForeignKey(
+        PersonText, on_delete=models.PROTECT, related_name="citizenship_evidence"
+    )
+
+    class Meta:
+        db_table = "person_citizenship_evidence"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["citizenship", "person_text"],
+                name="uq_person_citizenship_evidence",
+            )
+        ]
 
 class PersonAccount(models.Model):
     pk = models.CompositePrimaryKey("person", "account")

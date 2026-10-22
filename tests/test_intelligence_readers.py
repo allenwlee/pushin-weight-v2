@@ -140,7 +140,7 @@ def test_person_reader_separates_employment_and_keeps_profile_provenance(
         claim_identity="d" * 64,
     )
 
-    with django_assert_num_queries(5):
+    with django_assert_num_queries(7):
         document = person_intelligence(person.pk)
 
     _assert_contract_root("person_intelligence", document)
@@ -150,6 +150,8 @@ def test_person_reader_separates_employment_and_keeps_profile_provenance(
         "precision": "year",
     }
     assert document["person"]["sex"] == "female"
+    assert document["person"]["nationality"] == "American"
+    assert document["person"]["citizenships"] == []
     assert len(document["affiliations"]) == 2
     assert [row["affiliation_type"] for row in document["employment_history"]] == [
         "employment"
