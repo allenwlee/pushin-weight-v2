@@ -51,10 +51,8 @@ section for each item. A table mentioned in a footnote or one catch-all summary
 row does not count as a documented table.
 
 For the [database schema reference](db-schema.md), the checked repository scope
-is 182 concrete application tables and 2,338 columns declared by `core/models.py`
-through migration `0130_rg2_person_name_locale_required`, plus14 explicitly
-documented transitional physical columns (2,352 total). The separately delivered
-0131 deletion returns physical columns to2,338.
+is 182 concrete application tables and 2,338 physical table columns declared by
+`core/models.py` through migration `0131_rg2_remove_legacy_locale_columns`.
 Production remains separately verified through `0128_require_correction_actor`
 at 177 tables and 2,327 columns. The alphabetical inventory complements the
 subject navigation; keep repository and production boundaries distinct, and

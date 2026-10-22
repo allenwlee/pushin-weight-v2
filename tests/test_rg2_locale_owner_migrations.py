@@ -16,6 +16,7 @@ pytestmark = [
 
 BASE = ("core", "0128_require_correction_actor")
 EXPAND = ("core", "0130_rg2_person_name_locale_required")
+REMOVE = ("core", "0131_rg2_remove_legacy_locale_columns")
 
 
 @pytest.mark.usefixtures("migration_rehearsal_schema")
@@ -217,5 +218,27 @@ def test_rg2_company_and_person_values_move_to_locale_owners():
             cursor.execute("SELECT display_name FROM people WHERE id=%s", [new_person.pk])
             assert cursor.fetchone() == (None,)
 
+        MigrationExecutor(connection).migrate([REMOVE])
+        for model_name, fields in retired_fields.items():
+            table = migrated.get_model("core", model_name)._meta.db_table
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema=current_schema() AND table_name=%s",
+                    [table],
+                )
+                assert fields.isdisjoint({row[0] for row in cursor.fetchall()})
+        assert labels.objects.get(company_id=new_company.pk, locale_id="und").label == "New company"
+        assert Selection.objects.get(person_id=new_person.pk, display_locale_id="und").name.full_name == "New person"
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT brand_name_en_snapshot,brand_name_zh_cn_snapshot "
+                "FROM brand_trend_narratives WHERE id=%s", [content.pk]
+            )
+            assert cursor.fetchone() == ("Frozen English company label", "冻结的中文公司标签")
+            cursor.execute("SELECT pg_get_functiondef('g1_check_person_name()'::regprocedure)")
+            definition = cursor.fetchone()[0]
+            assert "NEW.locale_id" in definition
+            assert "NEW.language" not in definition
     finally:
         MigrationExecutor(connection).migrate(final)

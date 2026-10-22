@@ -1,8 +1,8 @@
 # Database schema reference
 
-Repository inventory updated 2026-10-22, candidate based on `a0d02d3c`, through migration `0130_rg2_person_name_locale_required`. The cutover release applies `0129`–`0130` first, retaining fourteen physical legacy columns while current ORM callers use their replacements; the separately delivered `0131` deletes them. RG2 migrations `0129`–`0131` are not yet production-verified. Production was last verified through `0128_require_correction_actor`: 177 application tables and 2327 columns, nine compatibility views and one native materialized view; its RG1 retired columns are absent and `collection_corrections.actor_id` is `NOT NULL`.
+Repository inventory updated 2026-10-22, candidate through migration `0131_rg2_remove_legacy_locale_columns`. Production cutover `16aeb1a0` is verified through `0130_rg2_person_name_locale_required`: all five locale owners are populated, all six mapping audits pass, and the application reads/writes the new owners. Fourteen nullable physical legacy columns remain in production for the still-running older backfill. The separate0131 candidate deletes them after that dependency is resolved; production deletion is not yet verified.
 
-Repository scope: **182 core application tables**, **2352 physical table columns** (2338 current ORM columns plus14 transitional columns), nine compatibility views and one native materialized view with five columns. Repository migration boundary: `0130_rg2_person_name_locale_required`; production boundary remains `0128_require_correction_actor` until the RG2 cutover is deployed and verified. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys.
+Repository scope: **182 core application tables**, **2338 physical table columns** after0131, nine compatibility views and one native materialized view with five columns. Production through0130 has2352 physical columns, including the14 transitional columns listed in the plan's RG2 manifest. The materialized view is a separate unmanaged ORM mapping, with no SQL primary or foreign keys.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -15,22 +15,6 @@ authentication, session, content-type, and migration-ledger tables are outside
 this **application-table** count. `DiscoveryRunBase` is an abstract model, not
 another table; its columns are included under both discovery-run tables.
 The retired SQLite database and Graphviz image are not current schema sources.
-
-## Temporary columns during the RG2 cutover
-
-The detailed table sections describe the2338 current ORM columns. These14
-additional nullable physical columns remain only for the previous application
-image during the rolling cutover. New callers use the locale-owned replacements.
-The separate0131 release deletes all14 after consumer and preservation checks.
-
-| Table | Transitional physical columns |
-| --- | --- |
-| accounts | `bio_en`, `bio_zh_cn` |
-| companies | `display_name`, `display_name_en`, `display_name_zh_cn` |
-| people | `display_name`, `display_name_en`, `display_name_zh_cn`, `display_name_ja` |
-| people_names | `language` |
-| original_content | `brand_name_en_snapshot`, `brand_name_zh_cn_snapshot` |
-| trend_narrative_subjects | `name_en_snapshot`, `name_zh_cn_snapshot` |
 
 ## Find information by subject
 
