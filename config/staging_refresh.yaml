@@ -105,6 +105,8 @@ relations:
     - person_name_selections
     - people_name_evidence
     - people_texts
+    - person_citizenships
+    - person_citizenship_evidence
     - people_text_translations
     - account_based_in_mappings
     - account_post_appearances
@@ -353,6 +355,8 @@ relations:
     - person_name_selections
     - people_name_evidence
     - people_texts
+    - person_citizenships
+    - person_citizenship_evidence
     - people_text_translations
     - staff_collection_work
     - staff_intakes
@@ -477,6 +481,7 @@ relations:
     - people_name_evidence_id_seq
     - person_name_selections_id_seq
     - people_texts_id_seq
+    - person_citizenship_evidence_id_seq
     - people_text_translations_id_seq
     - staff_collection_work_id_seq
     - staff_intakes_id_seq
@@ -601,6 +606,7 @@ relations:
     - people_names_id_seq
     - people_name_evidence_id_seq
     - people_texts_id_seq
+    - person_citizenship_evidence_id_seq
     - people_text_translations_id_seq
     - staff_collection_work_id_seq
     - staff_intakes_id_seq
@@ -747,6 +753,8 @@ validation:
     - person_name_selections
     - people_name_evidence
     - people_texts
+    - person_citizenships
+    - person_citizenship_evidence
     - people_text_translations
     - accounts
     - brand_discovery_candidates
