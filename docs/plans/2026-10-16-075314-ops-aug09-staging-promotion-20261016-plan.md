@@ -7,8 +7,11 @@ ollija:
   change_id: ops-aug09-staging-promotion-20261016-2026-10-16-075314
   branch: ops/aug09-staging-promotion-20261016
   workflow: plan
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  delivery_target: production
+  delivery_selected_by_user: true
+  delivery_route: staged
+  staging_transport: commit
+  delivery_route_selected_by_user: true
 ---
 # Collect historical X posts before measured enrichment - Plan
 
@@ -20,9 +23,23 @@ The first July window took 70m47s: 38m16s collecting, including waiting for norm
 
 The staging tests proved 20 simultaneous HTTP requests, identical saved data and live-harvester priority. With controlled eight-second responses, the same workload took 434 seconds serially and 141 seconds in parallel. An earlier low-latency fixture was slower in parallel (490 versus 477 seconds), so neither result establishes production throughput. Collection concurrency stays opt-in, defaulting to one; HTTP pooling and setup caches remain unapplied. Keep five-minute searches, all eight routes and complete pagination: widening windows could lose posts. Collection-first ordering works independently of those optimizations. Normal harvesting always has priority.
 
-The owner selected LFG implementation and isolated testing, then deliberately stopped July again for G2 schema deletion. July must remain stopped under that latest instruction. This change adds an opt-in collection mode with up to 20 simultaneous HTTP fetches, followed by the existing serial ingestion path. It uses a temporary fixture database on the existing Render staging PostgreSQL server. The current delivery endpoint is reviewed code, hosted regression evidence and an open pull request; production promotion and replacement of July (U6) remain a later activation step. No new tables, services, schedules or persistent disks are needed.
+The owner authorized activation on October 23 with “go”, after accepting that the shared-schema failures in issue #70 can be handled separately. Resume the saved July campaign using the tested collection-first runner, up to 20 simultaneous HTTP requests and serial protected ingestion, then measured enrichment. U6 is now selected. Deliver a hash-verified bundle of committed backfiller modules inside one isolated Render job on the current compatible production image, reusing hosted staging evidence for the same sources. This process-scoped activation does not merge PR69 or redeploy the web service or scheduled harvester. No new tables, services, schedules or persistent disks are needed.
 
 ## Goal Capsule
+
+**Rare-handoff staging accepted — October23,16:37JST:** `job-dbdghprncjis73a4ghi0` succeeded:156 passed in1410.43s,97 required PostgreSQL cases executed,0 skips/errors. The three new handoff cases changed from red to green, and unknown model outcomes still stop. Existing20-way fetch/storage/live-priority, cursor/archive replay, request limits/provider failures, leases, month phase ordering and guards passed. Fourteen source hashes verified on851abb1f/0134; owned fixture database dropped, shared staging schema unchanged,0 provider calls/production writes. Ruff/whitespace/source review pass; all five peer files remain byte-identical. Receipt `~/.local/share/render-operations/2026-10-23-july-rare-handoff/staging-acceptance.json`. Commit only collection adapter, new regression module and this existing plan; then preflight and process-scoped July restart under the recorded exception. The one immediate latest20 live-health read before activation was2complete/2pending/16unhealthy; existing post-fetch problems remain outside this wait-state correction, not a passed enrichment-health gate. Shared issue70 suites remain separately unpassed.
+
+**Focused source review — October23:** `_drain_historical_rare` has one caller, `execute_job`; its previous silent writer-lock return is the missing signal. The correction carries the existing `waiting_for_live_writer` state into the durable report and makes that attempted handoff partial regardless of a concurrently updated hit Post link. The existing campaign wait branch precedes the fatal pending-gate check, retains the hard deadline, and retries saved scopes; exceptions/reconciliation failures still override waiting and fail. No change to query/cursor/budget/unknown-response admission, paid providers, ordinary enrichment, schema or live runner. New public `collect_window` regression exercises actual PostgreSQL lock contention, canonical ingestion, collection verification and phase receipt; no helper-only success claim. Source audit, Ruff and whitespace checks pass. Staging acceptance remains pending until all156 cases and owned-database cleanup finish.
+
+**Rare-handoff red reproduction — October23,16:11JST:** Owned staging fixture job `job-dbdgf3o473hc73e6dcd0` reproduced all three failure timings against155619a8: pending ingestion and deadline cases stop at `collection_rare_gate_pending`; independently published Post still fails the verifier because membership is absent. Unknown model outcome negative control passed. 3 expected failures/1 pass,4 required PostgreSQL cases executed,0 skips/errors; owned database dropped and shared staging schema unchanged. Local wrapper correctly refused this worktree because the shared test DB now includes0134–0136; no local schema altered. Green job `job-dbdghprncjis73a4ghi0` is running156 focused/surrounding tests. New code propagates the existing waiting-for-live-writer state and retains partial completion until membership reconciliation; no controller/harvester/schema edits.
+
+**Rare-ingestion handoff fix — 2026-10-23T16:03:29+09:00: IN PROGRESS.** Owner requests “fix the bug”. Preserve the authorized process-scoped staging-then-production route and original July recipe, budgets, deadline, on-demand keys and 20-way transport. Touch only rare-drain deferral reporting, its real collection/campaign regression tests and this plan. No schema, shared service, scheduled harvester or peer-file changes. Reproduce a live writer arriving after rare decisions; report explicit waiting, keep the run partial even if another writer saves the Post before reporting, reconcile memberships without duplicate API/model calls, and retain actual error/deadline stops. Use the permanent local test wrapper if compatible; then an owned hosted staging fixture database under the existing exception. Commit only owned files, build a hash-verified job-local bundle, preflight current production compatibility, resume the saved July job and verify the stalled window plus continued collection. Existing issue70 failures are still unpassed and outside this fix.
+
+**Current status — 2026-10-23T15:51:31+09:00: July STOPPED.** Native job `job-dbd81hon74is73ammo20` failed at08:31:30JST with `collection_rare_gate_pending`.15/124windows verified; July4 18:00–24:00JST search itself drained576/576scopes (16thwindow). Since restart7739search requests returned,2566new campaignPosts/4928distinct campaignmemberships;0missing stored memberships/out-of-month records,0ordinary-enrichment calls. Four rare candidates already had successful one-attempt model decisions at08:31:00–03, but no Post link when the saved report was produced. The runner treated that incomplete ingestion as fatal at08:31:09. Allfour Posts were persisted at08:31:32, about23seconds later, and still lack membership in the stopped collection job. Code path can yield the rare-ingestion writer to live harvesting; that is the leading handoff explanation, not a provider failure. Repair must retain strict completion while waiting/retrying/reconciling this saved work; no new X lookup is needed for these four. No source change, acceptance relaxation, paid request or restart occurred during this status check. Native process terminal and allcampaignactive pointers absent in snapshot; G2 should no longer count this job as running. Prior activation proof remains valid historical evidence, not current status. Details `/Users/fuchitalee/.local/share/render-operations/2026-10-23-july-collectfirst-activation/status-20261023-1545.json` and rare-stop diagnosis/timing receipts.
+
+**Activation verified; July continues — 2026-10-23T06:55:24+09:00:** Native job `job-dbd81hon74is73ammo20` is running on Render against production `pushinweight_shadow`. Seven prior windows reused. First new July2 18:00–24:00JST window completed/verified at06:52:35JST:576/576scopes,922Xrequests,387distinct memberships/302newPosts,0missing/empty-text/wrong-source/out-of-window records. Took19m30s including live-priority waits. All93collection-gate model calls returned with usage; known provider-reported costUSD0.008354706,0ordinary-enrichment calls. Eighth of124windows complete; July3 00:00–06:00JST already has an active CollectionRun and new requests. The06:45scheduled harvest acquired priority during collection, inserted49Posts in295.72s, and July resumed automatically. Preserve baseline missing-commentary/language defects; this does not claim enrichment health. Base851abb1f/0134 +155619a8 nine-file job-local bundle, collection20/starts10 per second/enrichment8, original recipe/budgets/deadline/keys/checkpoints retained. No main merge/shared-service deployment/schema change. G2 coordination: [active-job issue note](https://github.com/allenwlee/pushin-weight-v2/issues/70#issuecomment-6351943283); direct acknowledgment unavailable. Evidence/observers: `/Users/fuchitalee/.local/share/render-operations/2026-10-23-july-collectfirst-activation`. Month collection and later enrichment remain running, not complete.
+
+**Current activation — October23:** U6 is verified under the owner “go” and October23 Delivery Exception. The exact native job remains active; first new window completed and next collection window began. Do not interpret older stop/build-only checkpoints as current instructions.
 
 **Third bounded CI repair — October 22, 19:06 JST:** The additional benchmark workflow triggered by the historical fixture path stopped at two preexisting lint errors: split/unsorted model imports and an unguarded `exec` in its saved-reader fixture. Consolidate the import and require the existing canonical fixture SHA-256 values before loading any of the three saved readers; retain the intentional test-only loader with the same documented lint exception as the existing bridge helper. Only `tests/test_benchmark_download_persistence.py` and `tests/test_collection_deploy_window.py` join this repair scope. The complete workflow's focused lint now passes, and all three actual saved-reader hashes and Python syntax were checked. No assertion removed, network/database operation, production reader change or schema change. This is the third and final bounded CI repair round; subsequent unrelated schema failures are to be reported with evidence for their owner, not expanded into the backfill change.
 
@@ -47,7 +64,7 @@ The owner selected LFG implementation and isolated testing, then deliberately st
 - **Current request:** October22 LFG implementation of collection first, bounded parallel fetching and measured later enrichment, tested independently of G2's local database replacement and production harvesting.
 - **Goal:** retrieve every remaining frozen July scope before waiting for ordinary post enrichment, without weakening harvester priority, collection scope, durable progress or spending controls.
 - **Output:** implemented opt-in path, PostgreSQL regression and performance evidence from hosted fixture testing, reviewed pull request and updated authoritative handoff. No paid provider probe or production activation in this build/test run; the separately owner-authorized July stop is recorded below.
-- **Execution endpoint:** U1–U5 and U7 through hosted verification and reviewed pull request. U6 documents the later activation procedure and is excluded from this isolated build/test endpoint. Full-month completion and later enrichment remain operational follow-through.
+- **Execution endpoint:** U1–U5 and U7 are verified and reviewed. Owner selected U6 onOctober23: activate one July process, prove checkpoint reuse/new persisted progress/live-harvest priority and transition to the next collection window. Full-month completion and later enrichment continue on Render and remain separate operational outcomes.
 - **Navigation:** the Product Contract, Planning Contract, U1–U7, Verification Contract and Definition of Done below govern this change. Older per-window ordering remains the legacy default; collection-first and parallel fetching are explicit execution options.
 - **Runtime boundary:** old24d81169 native job `job-dbcm1bgm7kps73c6c98g` is canceled and must not restart after0131. The bounded serial restart targets deployed `67d97278f9761cf7a1d99a584f812f5ff542df00`, original recipe and checkpoints. Never launch a duplicate controller. G2 communication is permitted only for restart/schema coordination. Protect unrelated dirty files and other sessions.
 
@@ -305,14 +322,14 @@ flowchart TD
 
 **Verification:** PostgreSQL cases without required skips; fixed recorded workload, two serial and two parallel measurements, observed concurrency and equal storage/checkpoints/accounting. Fixture timing is not a production ETA. If a correctness gate fails, fix it before claiming the20-worker path complete.
 
-### U6. Later activation: replace only the owned July process
+### U6. Activate only the owned July process
 
-**Goal:** put phase separation into actual use without duplicate collectors or harvester disruption. **Current scope:** deferred activation; do not execute during this isolated build/test LFG. **Requirements:** R1–R9. **Dependencies:** U1–U3 and U5; U7 and its U5 cases for a parallel candidate. U4 is optional and cannot delay phase-separation activation. **Decisions:** KTD1–KTD7.
+**Goal:** put phase separation into actual use without duplicate collectors or harvester disruption. **Current scope:** selected by owner “go” on October23, superseding the original isolated build/test boundary. **Requirements:** R1–R9. **Dependencies:** U1–U3 and U5; U7 and its U5 cases for a parallel candidate. U4 is optional and cannot delay phase-separation activation. **Decisions:** KTD1–KTD7.
 
 **Files:** current plan, existing authoritative handoff/index, documented operator launch/observation receipts; source changes limited to earlier units. Preserve current native process until replacement candidate is staged and production-ready.
 
 **Approach:**
-1. Follow the existing staged exact-commit route and preserve dirty peer work. Verify staging occupancy, candidate image/source/runtime hashes and the production DB schema before promotion. Record natural live-harvest health before intervention.
+1. Reuse the hosted staging evidence on851abb1f plus exact committed runtime source hashes. Apply the October23 process-scoped transport exception: nine feature modules in one native-job filesystem, unchanged production base/models/migrations. Verify base image, all28runtime hashes, production DB schema and natural live-harvest baseline before any paid start; preserve dirty peer work and shared services.
 2. Re-read current native-job identity and active phase. Prefer an enrichment cancellation-safe boundary: pause only its owned enrichment control, wait for `safe_to_cancel`, then cancel the exact July native job. A collection-state pause alone is insufficient because the old controller readies it. If stopping during collection is necessary, preserve pre/post request counts, last committed page and any interruption uncertainty; never assume cancellation is instantaneous or lossless.
 3. Require native terminal status and release/expiry of its existing controller/run/provider leases before resuming. Use existing fenced recovery, never delete attempts or force-release another owner's lock. Reconcile any sent/unknown model outcomes before another model start. An interrupted uncommitted X page may resume from its saved cursor within the original cumulative cap; do not erase the earlier charged start. Validate this procedure in U5 before production.
 4. Launch exactly one tested replacement with the original recipe, explicit `--phase all`, effective enrichment concurrency eight and new runtime attestation. This produces a month-wide collection pass before enrichment. Capture the native-job receipt and update the handoff immediately; never recreate a job because a client-side API response was merely delayed.
@@ -334,7 +351,7 @@ pytest tests/test_backfill_credentials.py tests/test_apify.py tests/test_twitter
 pytest tests/ollija
 ```
 
-- Freeze the current acceptance set to AE1–AE5 and U1–U5/U7 scenarios before implementation. U6 activation is deferred. Tests must demonstrate new ordering, actual PostgreSQL contention,20-worker transport and resumed paid-call behavior. Mock-only passes do not prove those boundaries. Reuse still-valid receipts; repeat only affected gates after a change.
+- Freeze the current acceptance set to AE1–AE5 and U1–U5/U7 scenarios before implementation. U6 activation was selected onOctober23 after those tests passed. Tests must demonstrate new ordering, actual PostgreSQL contention,20-worker transport and resumed paid-call behavior. Mock-only passes do not prove those boundaries. Reuse still-valid receipts; repeat only affected gates after a change.
 - Record candidate SHA, test DB identity, pass/failure/skip counts and the protected production invariants. Existing dirty accounting changes are not silently included in the candidate or claimed as verified; source/test dependencies must be explicitly reconciled before the hosted candidate runs.
 - Use no real provider calls for local/staging verification. `benchmark_page` is **not** read-only: it invokes persistence. Exercise such helpers only with the owned isolated staging fixture database; never use them as a production read-only probe.
 - Performance measurement is bounded to one fixed representative fixture with two before/after repetitions; stop after those results and decide whether the scoped optimization is supported. No recurring benchmark, unbounded retry or independent paid performance campaign.
@@ -344,7 +361,7 @@ pytest tests/ollija
 
 - U1–U3 work through the public command and month driver, with legacy defaults preserved and all 124 saved July windows reproducible without identity changes.
 - Collection-first ordering, saved-cohort enrichment, phase receipts, unknown-outcome handling and harvester protection pass U5 using the exact candidate source on the hosted fixture database.
-- U7 demonstrates bounded parallel fetching and durable replay through shared storage. Reviewed changes and hosted proof reach a pull request with CI decided. U6 is not performed; July and scheduled harvesting continue unchanged.
+- U7 demonstrates bounded parallel fetching and durable replay through shared storage. Reviewed changes and hosted proof reached PR69 with CI decided. Under the October23 exception, U6 now activates only the July native process; scheduled harvesting continues unchanged.
 - U4 is explicitly resolved: adopted with measured evidence and its gates, or left unapplied with the bounded measurement result and reason. It cannot delay activation of proven phase separation.
 - No new tables, changed scheduler, key fallback, weakened live priority, larger budget, extended deadline, lost paid history or hidden recollection. Historical incompleteness caveats remain intact.
 - Full-month acquisition is declared complete only after all 124 windows/71,424 frozen scopes and their admitted posts reconcile. Enrichment completion requires the full verifier and the owner's retained residual policy; pending enrichment is never mislabeled complete. These operational milestones remain separate from deployment completion.
@@ -387,10 +404,24 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Delivery target: `production`
+- Owner selection recorded: `true`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Inspect staging service/database occupancy. Do not interrupt another release.
+5. Use the project's deployment interface to deploy the exact candidate commit to staging without moving its branch. Account for automatic deployment races.
+6. Verify the staging service reports that candidate SHA.
+7. Run the applicable, unwaived staging checks. Diagnose a failure before retrying.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/ops/aug09-staging-promotion-20261016` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/ops/aug09-staging-promotion-20261016` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -638,6 +669,18 @@ official-API run is selected by these notes. The owner's latest request governs;
 historical execution paragraphs below do not restart the cleared acquisition goal.
 
 ## Delivery Exceptions
+
+### October 23 rare-ingestion correction
+
+The owner requests “fix the bug” after the premature stop. The same process-scoped delivery exception applies to this focused successor of155619a8. Reverify changed sources through local regression and isolated hosted staging, then activate the committed correction in a replacement July job; preserve recipe, service images and all existing guardrails. No broad Git merge or service deployment is introduced.
+
+### October 23 owner-authorized July activation
+
+Owner asks whether July can proceed without fixing the residual shared-schema checks, receives a conditional yes with runtime/schema/checkpoint checks, and says “go”. This supersedes the July stop and U6 exclusion for this one campaign. Resume original July1–August1JST recipe, all124windows/71424five-minute scopes/eight routes/21brands; preserve recipe bytes, cumulative budgets, November4 deadline, paid history and stored checkpoints. Run `--phase all --collection-concurrency 20 --collection-starts-per-second 10 --enrichment-concurrency 8 --evaluate-at-end` so the month is collected before ordinary enrichment. Unknown model outcomes are preserved and never automatically resent.
+
+Use process-scoped deployment: current production build851abb1f/0134 plus only the nine committed runtime files from155619a8 that implement this feature; verify old and new hashes, retain truthful base-image and feature revisions separately, and never overwrite models/migrations or peer dirty files. The owner-selected staging-first principle remains satisfied by existing hosted exact-source concurrency/storage/priority evidence on851abb1f, with a final bundle/runtime preflight before paid starts. The full CI770pass evidence is additional; unrelated issue70 checks remain failed, explicitly accepted for this operational activation, never reported passed. This transport choice avoids broad application deployment: no main/staging branch move, PR merge, Blueprint, service redeploy or automatic worktree removal. Generated Git-release steps that would expand into those actions do not apply to this bounded native-job activation.
+
+Preflight must confirm production host/database/role, required physicalschema and0134, no later G2 cutover, source hashes, on-demand keys, no active prior July job/controller/lease, every saved job/definition identity and live-harvester baseline. Send G2 restart/schema coordination when transport is available; otherwise publish the exact job/source/schema contract prominently in the authoritative shared index without claiming acknowledgment. Recheck before launch; no simultaneous schema release is inferred safe. Launch once with durable receipt; observe resumed durable progress, collection passing between windows without ordinary enrichment and a natural harvest cycle. Full month completion remains later operational work; no fabricated ETA or completeness claim.
 
 ### October 22 isolated build/test and G2 database replacement
 

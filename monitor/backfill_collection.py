@@ -558,7 +558,9 @@ def _drain_historical_rare(claim, job, cfg, budget):
     runner = CycleRunner(cfg=cfg, cycle_kind="backfill", _backfill_context=context)
     with harvest_writer_lock(execution_mode="backfill", entrypoint="management.backfill.rare") as lease:
         if not lease.acquired:
-            return
+            # Preserve the reason for incomplete ingestion so the campaign can
+            # wait for live harvesting, rather than treating it as a failed gate.
+            return "waiting_for_live_writer"
         with fenced_run(claim) as (_, run):
             # Bound each ingestion slice while allowing an entire historical
             # inbox to progress; this never visits the global pending queue.
@@ -679,6 +681,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
     deferred_scopes = set()
     scope_errors = []
     global_failure = None
+    deferred_state = None
     retry_at = None
     prefetch = None
     pages = None
@@ -765,7 +768,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
         if current_policy and not CollectionScopeRun.objects.filter(
             run_id=claim.run_id, enumeration_complete=False,
         ).exists():
-            _drain_historical_rare(claim, job, cfg, budget)
+            deferred_state = _drain_historical_rare(claim, job, cfg, budget)
     except StaleClaim:
         # The owner paused or replaced this worker. It cannot publish a finish.
         raise
@@ -790,8 +793,14 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
         report["prefetch"] = prefetch.metrics
     if global_failure is not None:
         report["global_failure"] = global_failure
+    if deferred_state and error is None:
+        report["state"] = deferred_state
     pending = report.get("rare_gate_pending", 0)
-    status = "failed" if error else ("success" if report["collection_drained"] and not pending else "partial")
+    # Another writer may have published the rare Posts since we yielded. Even
+    # with zero pending hits, our memberships/checkpoints still need a retry.
+    status = "failed" if error else (
+        "success" if report["collection_drained"] and not pending and not deferred_state else "partial"
+    )
     finish_run(claim, status=status, report=report, retry_at=retry_at,
                error_code=type(error).__name__ if error else None)
     if error:
