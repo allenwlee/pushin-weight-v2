@@ -1,5 +1,7 @@
 # GeoNames mapping audit: X based-in and job locations
 
+Follow-up research: [Chinese administrative geography sources](../research/2026-10-23-170517-chinese-administrative-geography-sources.md) records official names/codes, statistical-area distinctions, Amap limitations and coordinate systems for future matching under Option C.
+
 ## Scope and evidence
 
 - Read-only production snapshot, 2026-10-23 Japan time. Source tables: `x_account_details`, `account_based_in_mappings`, `regions`, `job_listings`. No X API calls or production writes.
