@@ -98,6 +98,31 @@ class SearchPage:
     raw_post_ids: tuple[str | None, ...] = ()
 
 
+def search_page_from_response(
+    data, *, page_number=1, max_results=20, received_at=None, received_monotonic=None,
+) -> SearchPage:
+    """Normalize live or archived search evidence with identical continuation rules."""
+    received_at = received_at or datetime.now(timezone.utc)
+    received_monotonic = time.monotonic() if received_monotonic is None else received_monotonic
+    tweets = _search_results(data)
+    items = []
+    for raw in tweets[:max_results]:
+        item = _normalize_tweet(raw)
+        item.update(_api_received_at=received_at.isoformat(),
+                    _api_received_monotonic=received_monotonic, _api_page_number=page_number)
+        items.append(item)
+    cursor = data.get("next_cursor") or None
+    clipped = len(tweets) > len(items)
+    return SearchPage(
+        items=items, page_number=page_number,
+        has_more=(bool(data.get("has_next_page")) and bool(cursor)) or clipped,
+        next_cursor=cursor, received_at=received_at, received_monotonic=received_monotonic,
+        clipped=clipped, continuation_invalid=bool(data.get("has_next_page")) and not bool(cursor),
+        raw_post_ids=tuple(str(raw.get("id") or raw.get("tweet_id") or "") or None
+                           if isinstance(raw, dict) else None for raw in tweets),
+    )
+
+
 @dataclass(frozen=True)
 class ListMembersSnapshot:
     """A validated list-members walk; incomplete snapshots are never applied."""
@@ -120,6 +145,7 @@ class TwitterApiClient:
     base_url: str = TWITTERAPI_BASE
     timeout_s: int = 60
     max_retries: int = 2
+    max_response_bytes: int | None = None
     before_request: Callable[[float], None] | None = None
     after_response: Callable[[dict[str, Any]], None] | None = None
     # Per-instance request log. Each entry is one logical HTTP exchange
@@ -161,12 +187,11 @@ class TwitterApiClient:
             if self.before_request is not None:
                 self.before_request(timeout_s or self.timeout_s)
             try:
-                r = requests.get(
-                    url,
-                    params=params,
-                    headers=self._headers(),
-                    timeout=timeout_s or self.timeout_s,
-                )
+                if self.max_response_bytes is None:
+                    r = requests.get(url, params=params, headers=self._headers(),
+                                     timeout=timeout_s or self.timeout_s)
+                else:
+                    r = self._get_bounded(url, params, timeout_s or self.timeout_s)
             except requests.RequestException as e:
                 last_exc = e
                 if attempt < self.max_retries:
@@ -231,6 +256,44 @@ class TwitterApiClient:
         if last_exc:
             raise last_exc
         raise RuntimeError("TwitterAPI.io call failed without a recorded exception")
+
+    def _get_bounded(self, url, params, timeout):
+        """Opt-in transport with a total deadline, including slow headers/body."""
+        import asyncio
+
+        import httpx
+
+        if type(self.max_response_bytes) is not int or self.max_response_bytes <= 0:
+            raise ValueError("positive response byte allowance required")
+
+        async def receive():
+            transport = httpx.AsyncHTTPTransport(retries=0)
+            async with httpx.AsyncClient(transport=transport, timeout=timeout,  # noqa: SIM117 - client owns response lifetime
+                                         trust_env=False, follow_redirects=False) as client:
+                async with client.stream("GET", url, params=params, headers=self._headers()) as received:
+                    body = bytearray()
+                    async for chunk in received.aiter_bytes(chunk_size=8192):
+                        if len(body) + len(chunk) > self.max_response_bytes:
+                            raise ValueError("search response byte allowance exhausted")
+                        body.extend(chunk)
+                    # Feed the shared status mapping, JSON decoding and callbacks.
+                    response = requests.Response()
+                    response.status_code = received.status_code
+                    response.headers.update(received.headers)
+                    response.url = str(received.url)
+                    response._content = bytes(body)
+                    response._content_consumed = True
+                    return response
+
+        async def bounded():
+            return await asyncio.wait_for(receive(), timeout=timeout)
+
+        try:
+            return asyncio.run(bounded())
+        except (TimeoutError, httpx.TimeoutException) as exc:
+            raise requests.Timeout("bounded search response deadline exhausted") from exc
+        except httpx.RequestError as exc:
+            raise requests.ConnectionError("bounded search transport failed") from exc
 
     def _record_request(
         self,
@@ -342,40 +405,14 @@ class TwitterApiClient:
             if cursor:
                 params["cursor"] = cursor
             data = self._get(SEARCH_PATH, params)
-            received_at = datetime.now(timezone.utc)
-            received_monotonic = time.monotonic()
-            tweets = _search_results(data)
-            remaining = max_results - n_returned
-            page_items: list[dict[str, Any]] = []
-            for raw in tweets[:remaining]:
-                item = _normalize_tweet(raw)
-                item["_api_received_at"] = received_at.isoformat()
-                item["_api_received_monotonic"] = received_monotonic
-                item["_api_page_number"] = page_number
-                page_items.append(item)
-            n_returned += len(page_items)
-
-            next_cursor = data.get("next_cursor") or None
-            continuation = bool(data.get("has_next_page")) and bool(next_cursor)
-            clipped = len(tweets) > len(page_items)
-            yield SearchPage(
-                items=page_items,
-                page_number=page_number,
-                has_more=continuation or clipped,
-                next_cursor=next_cursor,
-                received_at=received_at,
-                received_monotonic=received_monotonic,
-                clipped=clipped,
-                continuation_invalid=bool(data.get("has_next_page")) and not bool(next_cursor),
-                raw_post_ids=tuple(
-                    str(raw.get("id") or raw.get("tweet_id") or "") or None
-                    if isinstance(raw, dict) else None for raw in tweets
-                ),
+            page = search_page_from_response(
+                data, page_number=page_number, max_results=max_results - n_returned,
             )
-
-            if n_returned >= max_results or not continuation:
+            n_returned += len(page.items)
+            yield page
+            if n_returned >= max_results or not page.has_more or page.clipped:
                 return
-            cursor = next_cursor
+            cursor = page.next_cursor
 
     def _walk_search(
         self,

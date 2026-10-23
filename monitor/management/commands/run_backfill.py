@@ -8,6 +8,13 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 
 from scripts.backfill_campaign import manifest, run
+from scripts.backfill_month import (
+    check_deadline,
+    execution_options,
+    run_phases,
+    selected_runtime,
+    validate_recipe,
+)
 from x_monitor.config import load_config
 
 
@@ -51,6 +58,39 @@ class Command(BaseCommand):
             "--runtime-revision",
             help="Full tested commit SHA to run a saved --manifest; its original instructions stay unchanged.",
         )
+        parser.add_argument(
+            "--month-recipe",
+            type=Path,
+            help="Original compact month recipe; requires an explicit --phase.",
+        )
+        parser.add_argument(
+            "--phase",
+            choices=["collect", "enrich", "all"],
+            help="Collect the entire range before any ordinary enrichment.",
+        )
+        parser.add_argument(
+            "--enrichment-concurrency",
+            type=int,
+            default=None,
+            help="Model calls in flight, 1 through the saved ceiling (default8).",
+        )
+        parser.add_argument(
+            "--collection-concurrency",
+            type=int,
+            default=None,
+            help="Concurrent HTTP fetches, 1–20 (default1).",
+        )
+        parser.add_argument(
+            "--collection-starts-per-second",
+            type=float,
+            default=None,
+            help="Physical search request start rate (default10).",
+        )
+        parser.add_argument(
+            "--runtime-attestation",
+            type=Path,
+            help="Month runtime JSON: runtime_revision and source_sha256; paired with --runtime-revision.",
+        )
         mode = parser.add_mutually_exclusive_group()
         mode.add_argument(
             "--execute",
@@ -64,15 +104,47 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        cfg = load_config(Path("config.yaml"))
         try:
+            phase = options["phase"]
+            preferences = {
+                "enrichment_concurrency": options["enrichment_concurrency"],
+                "collection_concurrency": 1
+                if options["collection_concurrency"] is None
+                else options["collection_concurrency"],
+                "collection_starts_per_second": 10
+                if options["collection_starts_per_second"] is None
+                else options["collection_starts_per_second"],
+            }
+            if phase is None and (
+                options["month_recipe"]
+                or any(options[k] is not None for k in preferences)
+            ):
+                raise CommandError(
+                    "--month-recipe and execution preferences require --phase"
+                )
+            if phase is not None:
+                execution_options(
+                    {"direct_concurrency": 32}, phase=phase, **preferences
+                )
+            if options["manifest"] and options["month_recipe"]:
+                raise CommandError("select --manifest or --month-recipe")
+            if options["runtime_attestation"] and (
+                not options["month_recipe"] or not options["runtime_revision"]
+            ):
+                raise CommandError(
+                    "--runtime-attestation requires --month-recipe and --runtime-revision"
+                )
             revision = options["runtime_revision"]
             if revision is not None:
-                if not options["manifest"]:
-                    raise CommandError("--runtime-revision requires --manifest")
+                if not (options["manifest"] or options["month_recipe"]):
+                    raise CommandError(
+                        "--runtime-revision requires --manifest or --month-recipe"
+                    )
                 if not re.fullmatch(r"[0-9a-f]{40}", revision):
-                    raise CommandError("--runtime-revision requires a full 40-character commit SHA")
-            if options["manifest"]:
+                    raise CommandError(
+                        "--runtime-revision requires a full 40-character commit SHA"
+                    )
+            if options["manifest"] or options["month_recipe"]:
                 if any(
                     options[key]
                     for key in [
@@ -84,10 +156,19 @@ class Command(BaseCommand):
                     ]
                 ):
                     raise CommandError(
-                        "--manifest owns all saved instructions; omit new scope options"
+                        "--manifest or --month-recipe owns all saved instructions; omit new scope options"
                     )
-                frozen = json.loads(options["manifest"].read_text())
-            else:
+                frozen = json.loads(
+                    (options["manifest"] or options["month_recipe"]).read_text()
+                )
+                if options["month_recipe"]:
+                    validate_recipe(frozen)
+                    if revision is not None and options["runtime_attestation"] is None:
+                        raise CommandError(
+                            "month --runtime-revision requires --runtime-attestation"
+                        )
+            cfg = load_config(Path("config.yaml"))
+            if not (options["manifest"] or options["month_recipe"]):
                 config = {}
                 if options["windows"]:
                     if options["since"] or options["until"]:
@@ -121,12 +202,25 @@ class Command(BaseCommand):
                     if options["model_concurrency"] is None
                     else options["model_concurrency"],
                 )
+            runtime = None
+            if options["runtime_attestation"]:
+                runtime = json.loads(options["runtime_attestation"].read_text())
+                if selected_runtime(frozen, runtime)["runtime_revision"] != revision:
+                    raise CommandError("month runtime attestation revision mismatch")
+            if phase is not None:
+                execution_options(frozen, phase=phase, **preferences)
+                check_deadline((frozen.get("spec") or frozen)["deadline"])
             self.result = frozen
             if options["execute"]:
                 execution = {"evaluate_at_end": options["evaluate_at_end"]}
                 if revision is not None:
                     execution["runtime_revision"] = revision
-                run(frozen, cfg, **execution)
+                if phase is None:
+                    run(frozen, cfg, **execution)
+                else:
+                    if runtime is not None:
+                        execution["runtime_attestation"] = runtime
+                    run_phases(frozen, cfg, phase=phase, **preferences, **execution)
             else:
                 self.stdout.write(json.dumps(frozen, sort_keys=True))
         except (OSError, ValueError, KeyError, TypeError) as exc:

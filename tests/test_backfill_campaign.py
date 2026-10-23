@@ -173,3 +173,184 @@ def test_missing_timezone_reference_stops_campaign_before_any_paid_work(
         with pytest.raises(RuntimeError, match="backfill_storage_schema_incompatible"):
             campaign.run(frozen, cfg, runtime_revision="b" * 40)
         transaction.set_rollback(True)
+
+
+@pytest.mark.parametrize("evaluate_at_end", [False, True])
+def test_legacy_window_composes_phases_with_saved_concurrency(monkeypatch, evaluate_at_end):
+    from scripts import backfill_campaign as campaign
+
+    calls = []
+    monkeypatch.setattr(campaign, "_collect_window", lambda *a, **kw: calls.append(("collect", kw)) or ("job", ["retained"]))
+    monkeypatch.setattr(campaign, "_enrich_window", lambda *a, **kw: calls.append(("enrich", kw)) or {"status": "verified"})
+    monkeypatch.setattr(campaign, "resolve_api_key", lambda *a: "test")
+    saved = []
+    monkeypatch.setattr(campaign, "save_campaign_report", lambda job, result: saved.append((job, result)))
+    result = campaign.execute_window({}, frozen={"direct_concurrency": 32}, cfg=None, evaluate_at_end=evaluate_at_end)
+    assert result["status"] == "verified"
+    assert saved == ([("job", result)] if evaluate_at_end else [])
+    assert [phase for phase, _ in calls] == ["collect", "enrich"]
+    assert calls[0][1]["legacy_evaluate_at_end"] is evaluate_at_end
+    assert calls[1][1]["enrichment_concurrency"] == 32
+    assert calls[1][1]["initial_issues"] == ["retained"]
+
+
+@pytest.mark.parametrize("selected", [0, True, 33, 9])
+def test_new_phase_rejects_enrichment_above_saved_ceiling_before_lookup(monkeypatch, selected):
+    from scripts import backfill_campaign as campaign
+
+    with pytest.raises(ValueError, match="enrichment_concurrency"):
+        campaign.enrich_window({}, frozen={"direct_concurrency": 8}, cfg=None, enrichment_concurrency=selected)
+
+
+def test_enrichment_requires_existing_job_and_never_registers(monkeypatch):
+    from types import SimpleNamespace
+
+    from scripts import backfill_campaign as campaign
+
+    monkeypatch.setattr(campaign, "CollectionJob", SimpleNamespace(objects=SimpleNamespace(filter=lambda **kw: SimpleNamespace(first=lambda: None))))
+    monkeypatch.setattr(campaign, "resolve_api_key", lambda *a: "test")
+    monkeypatch.setattr(campaign, "register_job", lambda **kw: pytest.fail("enrichment registered a collection job"))
+    frozen = {"instruction_format": "x-backfill-campaign/v2", "campaign": "test", "direct_concurrency": 32}
+    with pytest.raises(ValueError, match="window_job_missing"):
+        campaign.enrich_window({"index": 1}, frozen=frozen, cfg=None)
+
+
+def test_collection_unknown_failure_stops_aggregate_sequence(monkeypatch):
+    from types import SimpleNamespace
+
+    from scripts import backfill_campaign as campaign
+
+    visited = []
+    def fail(window, **kwargs):
+        visited.append(window)
+        raise RuntimeError("unexpected_page_failure")
+    monkeypatch.setattr(campaign, "_collect_window", fail)
+    monkeypatch.setattr(campaign, "CollectionJob", SimpleNamespace(objects=SimpleNamespace(filter=lambda **kw: SimpleNamespace(first=lambda: None))))
+    with pytest.raises(RuntimeError, match="unexpected_page_failure"):
+        run_sequence([{"index": 1}, {"index": 2}],
+            lambda w: campaign.collect_window(w, frozen={"campaign": "test"}, cfg=None),
+            evaluate_at_end=True)
+    assert visited == [{"index": 1}]
+
+
+@pytest.mark.parametrize("selected,expected", [(None, 8), (4, 4)])
+def test_enrichment_phase_threads_effective_concurrency_to_both_shared_callers(monkeypatch, selected, expected):
+    from types import SimpleNamespace
+
+    from scripts import backfill_campaign as campaign
+
+    job = SimpleNamespace(pk="existing", provider_batches=SimpleNamespace(order_by=lambda *a: SimpleNamespace(first=lambda: None)))
+    monkeypatch.setattr(campaign, "_window_job", lambda *a: job)
+    monkeypatch.setattr(campaign, "verify_collection_window", lambda *a, **kw: {"status": "verified"})
+    monkeypatch.setattr(campaign, "verify_window", lambda *a, **kw: {"status": "verified"})
+    monkeypatch.setattr(campaign, "prepare_current_contract", lambda *a: None)
+    monkeypatch.setattr(campaign, "policy_snapshot", lambda **kw: {})
+    monkeypatch.setattr(campaign, "resolve_api_key", lambda *a: "test")
+    monkeypatch.setattr(campaign, "assert_no_provider_failure", lambda *a: None)
+    monkeypatch.setattr(campaign, "_phase_receipt", lambda job, phase, result, **kw: result)
+    monkeypatch.setattr(campaign, "OriginalContentCall", SimpleNamespace(objects=SimpleNamespace(filter=lambda **kw: SimpleNamespace(aggregate=lambda **kw: {}))))
+    seen = []
+    def advance(*args, **kw):
+        seen.append(kw["direct_concurrency"])
+        return {"status": "completed"}
+    monkeypatch.setattr(campaign, "execute_enrichment", advance)
+    monkeypatch.setattr(campaign, "advance_targeted", advance)
+    monkeypatch.setattr(campaign, "execute_job", lambda *a, **kw: pytest.fail("enrichment recollected"))
+    frozen = {"direct_concurrency": 32, "deadline": "2099-01-01T00:00:00+00:00"}
+    window = {"max_usd": "1", "maximum_model_requests": 100}
+    assert campaign.enrich_window(window, frozen=frozen, cfg=None, enrichment_concurrency=selected)["status"] == "verified"
+    assert seen == [expected, expected]
+
+
+@pytest.mark.parametrize("options", [{"unknown": 1}, {"concurrency": 21}, {"concurrency": True}, {"starts_per_second": float("nan")}, {"starts_per_second": 0}])
+def test_collection_options_rejected_before_registration(monkeypatch, options):
+    from scripts import backfill_campaign as campaign
+
+    monkeypatch.setattr(campaign, "_collect_window", lambda *a, **kw: pytest.fail("invalid preferences reached collection"))
+    with pytest.raises(ValueError, match="collection"):
+        campaign.collect_window({}, frozen={}, cfg=None, collection_options=options)
+
+
+def test_failed_enrichment_receipt_preserves_collection_success(monkeypatch):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    from scripts import backfill_campaign as campaign
+
+    collection = {"status": "verified", "checked_posts": 4}
+    run = SimpleNamespace(report={"unrelated": {"keep": True}, "backfill_campaign": {"collection": collection}}, save=lambda **kw: None)
+    monkeypatch.setattr(campaign.transaction, "atomic", nullcontext)
+    monkeypatch.setattr(campaign, "CollectionRun", SimpleNamespace(objects=SimpleNamespace(select_for_update=lambda: SimpleNamespace(get=lambda **kw: run))))
+    campaign.save_campaign_report(SimpleNamespace(last_attempt_id="run"), {"status": "failed"}, phase="enrichment")
+    assert run.report["unrelated"] == {"keep": True}
+    assert run.report["backfill_campaign"]["collection"] == collection
+    assert run.report["backfill_campaign"]["enrichment"]["status"] == "failed"
+
+
+def test_phase_receipt_accounts_inline_models_separately_from_later_enrichment(monkeypatch):
+    from types import SimpleNamespace
+
+    from scripts import backfill_campaign as campaign
+
+    reports = [(2, [{"status": "returned", "usage": {"input_tokens": 100, "output_tokens": 20, "cost_usd": ".01"}}]),
+               (1, [{"status": "failed", "usage": None}])]
+    runs = SimpleNamespace(aggregate=lambda **kw: {"n": 7},
+                           values_list=lambda *args: SimpleNamespace(iterator=lambda: iter(reports)))
+    job = SimpleNamespace(pk="existing", runs=runs)
+    later = {"requests_sent": 3, "responses": 2, "input_tokens": 200, "output_tokens": 30,
+             "reserved_usd": ".03", "provider_reported_usd": ".02"}
+    monkeypatch.setattr(campaign, "OriginalContentCall", SimpleNamespace(objects=SimpleNamespace(
+        filter=lambda **kw: SimpleNamespace(aggregate=lambda **kw: later))))
+    monkeypatch.setattr(campaign, "save_campaign_report", lambda *a, **kw: None)
+    legacy_usage = {"reserved_usd": ".03", "input_tokens": 200}
+    value = campaign._phase_receipt(job, "collection", {"status": "verified", "usage": legacy_usage}, frozen={}, window={}, started_at="start")
+    assert value["usage"] == legacy_usage
+    usage = value["phase_usage"]
+    assert usage["twitterapi_requests"] == 7
+    assert usage["post_enrichment"] == later
+    assert usage["collection_gate"] == {
+        "requests_started": 3, "responses_recorded": 2, "outcomes_unrecorded": 1,
+        "known_input_tokens": 100, "known_output_tokens": 20, "known_cost_usd": "0.01",
+        "responses_missing_usage": 1,
+    }
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
+def test_phase_receipt_keeps_unknown_enrichment_cost_visible(monkeypatch):
+    from decimal import Decimal
+
+    from django.utils import timezone
+
+    from scripts import backfill_campaign as campaign
+    from tests.test_provider_batches import batch, call_values
+
+    group = batch.__wrapped__()
+    now = timezone.now()
+    rows = []
+    for index, state in enumerate(("completed", "completed", "ambiguous", "reserved")):
+        values = call_values(group) | {
+            "request_identity": f"receipt-{index}", "batch_key": f"receipt-{index}",
+            "state": state, "reserved_usd": Decimal(".03"),
+        }
+        if state != "reserved":
+            values["sent_at"] = now
+        if state == "completed":
+            values.update(completed_at=now, response_hash="d" * 64)
+        if index == 0:
+            values.update(actual_usd=Decimal(".01"), input_tokens=100, output_tokens=20)
+        rows.append(campaign.OriginalContentCall.objects.create(**values))
+    calls = campaign.OriginalContentCall.objects.filter(pk__in=[row.pk for row in rows]).order_by("pk")
+    before = list(calls.values())
+    monkeypatch.setattr(campaign, "save_campaign_report", lambda *a, **kw: None)
+
+    result = campaign._phase_receipt(group.source_collection_job, "enrichment", {},
+                                    frozen={}, window={}, started_at=now.isoformat())
+    usage = result["phase_usage"]["post_enrichment"]
+    assert usage["requests_sent"] == 3 and usage["responses"] == 2
+    assert usage["requests_ambiguous"] == 1
+    assert usage["requests_without_reported_cost"] == 2
+    assert usage["provider_reported_usd"] == Decimal(".01")
+    assert usage["reserved_usd"] == Decimal(".12")
+    assert usage["input_tokens"] == 100 and usage["output_tokens"] == 20
+    assert list(calls.values()) == before
