@@ -108,7 +108,16 @@ def manifest(
     deadline=None,
     expected_revision=None,
     direct_concurrency=32,
+    response_storage="archive",
 ):
+    if response_storage not in {"archive", "staging"}:
+        raise ValueError("unsupported_response_storage")
+    if response_storage == "staging":
+        from django.conf import settings
+
+        from monitor.backfill_staging import validate_staging
+        staging_host = settings.DATABASES["default"].get("HOST")
+        validate_staging({"staging_host": staging_host})
     validate_concurrency(direct_concurrency)
     deadline = deadline or timezone.now() + timedelta(hours=72)
     planned = plan_calls_for_cycle(cfg, scheduled_exclusions=True)
@@ -166,6 +175,8 @@ def manifest(
             maximum_models=window["maximum_model_requests"],
         )
         definition["scope"]["deadline"] = deadline.isoformat()
+        if response_storage == "staging":
+            definition["scope"].update(response_storage="staging", staging_host=staging_host)
         for extra_index, (call, query) in enumerate(supplemental_queries):
             definition["scope"]["units"].append({
                 "scope_key": f"{call}:supplement:{extra_index}", "scope_kind": "x_query",

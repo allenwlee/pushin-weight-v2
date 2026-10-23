@@ -87,6 +87,10 @@ class Command(BaseCommand):
             help="Physical search request start rate (default10).",
         )
         parser.add_argument(
+            "--response-storage", choices=["archive", "staging"], default=None,
+            help="New instructions only: staging saves Posts and receipts without full response archives.",
+        )
+        parser.add_argument(
             "--runtime-attestation",
             type=Path,
             help="Month runtime JSON: runtime_revision and source_sha256; paired with --runtime-revision.",
@@ -106,6 +110,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         try:
             phase = options["phase"]
+            if options["response_storage"] is not None:
+                if options["manifest"] or options["month_recipe"]:
+                    raise CommandError("saved instructions own response storage")
+                if options["response_storage"] == "staging" and phase != "collect":
+                    raise CommandError("staging acquisition requires --phase collect; promote before enrichment")
             preferences = {
                 "enrichment_concurrency": options["enrichment_concurrency"],
                 "collection_concurrency": 1
@@ -201,6 +210,7 @@ class Command(BaseCommand):
                     direct_concurrency=32
                     if options["model_concurrency"] is None
                     else options["model_concurrency"],
+                    response_storage=options["response_storage"] or "archive",
                 )
             runtime = None
             if options["runtime_attestation"]:

@@ -59,11 +59,13 @@ class CapturedPage:
     request: CollectionRequest
     response: dict
     replayed: bool
+    body: dict | None = None
 
     def pages(self):
         # Lazy parsing lets CycleRunner retain its existing invalid-page handling.
         yield search_page_from_response(
-            read_document(self.request.archive), received_at=self.request.received_at,
+            self.body if self.body is not None else read_document(self.request.archive),
+            received_at=self.request.received_at,
         )
 
 

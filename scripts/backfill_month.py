@@ -152,6 +152,11 @@ def execution_options(
         if instructions.get("format") == "x-month-recipe/v1"
         else instructions
     )
+    if phase != "collect" and any(
+        window.get("collection_definition", {}).get("scope", {}).get("response_storage") == "staging"
+        for window in frozen.get("windows", [])
+    ):
+        raise ValueError("staging acquisition requires collect phase; promote before enrichment")
     ceiling = frozen["direct_concurrency"]
     if (
         isinstance(ceiling, bool)
@@ -194,6 +199,9 @@ def execution_options(
 def selected_runtime(recipe, runtime=None):
     """Attest reviewed code without modifying frozen recipe hashes or job keys."""
     spec = copy.deepcopy(recipe["spec"])
+    staging = any(w["collection_definition"]["scope"].get("response_storage") == "staging"
+                  for w in recipe["template"]["windows"])
+    required = RUNTIME_MODULES | ({"monitor/backfill_staging.py", "monitor/backfill_collection.py", "monitor/run_lock.py"} if staging else set())
     if runtime is not None:
         if set(runtime) != {"runtime_revision", "source_sha256"}:
             raise ValueError("month_runtime_override_fields_invalid")
@@ -203,7 +211,7 @@ def selected_runtime(recipe, runtime=None):
             raise ValueError("month_runtime_override_revision_invalid")
         sources = runtime["source_sha256"]
         if not isinstance(sources, dict) or not (
-            set(spec["source_sha256"]) | RUNTIME_MODULES
+            set(spec["source_sha256"]) | required
         ) <= set(sources):
             raise ValueError("month_runtime_override_sources_invalid")
         for path, signature in sources.items():
@@ -216,6 +224,8 @@ def selected_runtime(recipe, runtime=None):
             ):
                 raise ValueError("month_runtime_override_sources_invalid")
         spec.update(copy.deepcopy(runtime))
+    if staging and not required <= set(spec["source_sha256"]):
+        raise ValueError("staging runtime attestation missing")
     return spec
 
 

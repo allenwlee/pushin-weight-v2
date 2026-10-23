@@ -52,7 +52,7 @@ def test_campaign_retries_rare_writer_handoff_without_repaying(
     rare_campaign, pipeline, live_writer, monkeypatch, mode,
 ):
     cfg, frozen, window = rare_campaign
-    model_calls, waits, releases = [], [], []
+    model_calls, waits, releases, partial_runs = [], [], [], []
     real_report = collection._report
     clock = [timezone.now()]
     monkeypatch.setattr(campaign.timezone, "now", lambda: clock[0])
@@ -97,6 +97,7 @@ def test_campaign_retries_rare_writer_handoff_without_repaying(
             assert waits == [15], "handoff should resume on its first retry"
             job = CollectionJob.objects.get(job_key="rare-handoff/1")
             attempt = job.last_attempt
+            partial_runs.append(attempt.pk)
             assert job.state != "completed" and job.active_run_id is None
             assert attempt.status == "partial"
             assert attempt.report["collection_drained"]
@@ -118,7 +119,13 @@ def test_campaign_retries_rare_writer_handoff_without_repaying(
             assert result["status"] == "verified"
             job = CollectionJob.objects.get(job_key="rare-handoff/1")
             assert job.state == "completed"
-            assert list(job.runs.order_by("started_at").values_list("status", flat=True)) == ["partial", "success"]
+            # The fixture freezes timezone.now globally, so both runs have the
+            # same timestamp. Verify the observed handoff identities instead of
+            # relying on PostgreSQL's arbitrary order for equal timestamps.
+            assert len(partial_runs) == 1 and partial_runs[0] != job.last_success_id
+            assert dict(job.runs.values_list("pk", "status")) == {
+                partial_runs[0]: "partial", job.last_success_id: "success",
+            }
             assert CollectionObservation.objects.filter(run__job=job, post_id="rare-handoff").count() == 1
             assert job.last_success.report["recovered_post_ids"] == ["rare-handoff"]
             assert "state" not in job.last_success.report

@@ -104,6 +104,11 @@ def validate_scope(job, cfg):
             "on-demand credential purpose required")
     actual_db = {key.lower(): settings.DATABASES["default"].get(key) for key in ("NAME", "USER")}
     require(scope.get("database") == actual_db, "backfill database identity changed")
+    storage = scope.get("response_storage", "archive")
+    require(storage in {"archive", "staging"}, "unsupported response storage")
+    if storage == "staging":
+        from monitor.backfill_staging import validate_staging
+        validate_staging(scope)
     require(scope.get("config_digest") == config_digest(cfg, version=version), "backfill configuration changed")
     units = scope.get("units")
     require(isinstance(units, list) and bool(units), "frozen units required")
@@ -648,7 +653,8 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
 
     job = CollectionJob.objects.get(pk=job_id)
     from core.models import CollectionRequest
-    use_prefetch = collection_options is not None or CollectionRequest.objects.filter(
+    direct_staging = job.scope.get("response_storage") == "staging"
+    use_prefetch = direct_staging or collection_options is not None or CollectionRequest.objects.filter(
         attempt__run__job=job, request_category="x_backfill_prefetch",
     ).exists()
     current_policy = job.scope.get("adapter") == POLICY_ADAPTER_VERSION
@@ -707,7 +713,11 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
                 yield scoped, None
 
         if use_prefetch:
-            prefetch = Prefetcher(claim, job, budget, options)
+            if direct_staging:
+                from monitor.backfill_staging import StagingPrefetcher
+                prefetch = StagingPrefetcher(claim, job, budget, options)
+            else:
+                prefetch = Prefetcher(claim, job, budget, options)
             pages = prefetch.pages(deferred_scopes)
         else:
             pages = serial_scopes()
