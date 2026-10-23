@@ -18,7 +18,7 @@ from django.db.models import Sum
 from core.collection_capture import begin_request, finish_request
 from core.collection_state import fenced_run
 from core.measurement_taxonomy import require
-from core.models import CollectionAttempt, CollectionRequest, CollectionScopeRun
+from core.models import Brand, CollectionAttempt, CollectionRequest, CollectionScopeRun
 from monitor.backfill_prefetch import (
     CapturedPage,
     Prefetcher,
@@ -42,6 +42,14 @@ def validate_staging(scope):
             "direct ingestion requires staging environment")
     require(scope.get("staging_host") == settings.DATABASES["default"].get("HOST")
             and bool(scope.get("staging_host")), "staging database host changed")
+    # The frozen Call A author roles can name brands outside the keyword set.
+    # Check their foreign keys before HTTP admission, not after a paid response.
+    needed = set(scope.get("brands", []))
+    for context in scope.get("author_scope", {}).get("contexts", {}).values():
+        needed.update(context.get("official_brands", []))
+        needed.update(context.get("staff_brands", []))
+    missing = needed - set(Brand.objects.filter(pk__in=needed).values_list("pk", flat=True))
+    require(not missing, "staging brand references missing: " + ",".join(sorted(missing)))
 
 
 class StagingPrefetcher(Prefetcher):

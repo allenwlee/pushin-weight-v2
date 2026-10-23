@@ -70,10 +70,7 @@ def rows(query):
     return json.loads(encoded(list(query.values(*[f.attname for f in fields(query.model)]))))
 
 
-@transaction.atomic
-def export_posts(job_id, *, after="", limit=100):
-    """Keyset-paginated, stable read of one completed staging collection job."""
-    require(type(limit) is int and 1 <= limit <= 100, "export limit must be 1–100")
+def _completed_source(job_id):
     with connection.cursor() as cursor:
         cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         cursor.execute("SET LOCAL statement_timeout='20s'")
@@ -84,6 +81,33 @@ def export_posts(job_id, *, after="", limit=100):
             "completed direct-staging collection required")
     identity = database_identity()
     require(job.scope["database"] == {k: identity[k] for k in ("name", "user")}, "staging identity mismatch")
+    return job, {"database": identity, "job_id": str(job.pk), "run_id": str(job.last_success_id),
+        "definition_sha256": job.definition_sha256, "since_epoch": job.scope["since_epoch"],
+        "until_epoch": job.scope["until_epoch"], "historical_keyword_recall": "incomplete"}
+
+
+def membership(query):
+    """Count and hash ordered distinct Post IDs without retaining a full cohort."""
+    count, sha = 0, hashlib.sha256()
+    for identifier in query.exclude(post_id=None).order_by("post_id").values_list("post_id", flat=True).distinct().iterator(chunk_size=100):
+        count += 1
+        sha.update(encoded(identifier) + b"\n")
+    return {"count": count, "sha256": sha.hexdigest()}
+
+
+@transaction.atomic
+def inspect_source(job_id, *, after=""):
+    job, source = _completed_source(job_id)
+    query = CollectionObservation.objects.filter(run__job=job, source_subject_kind="post")
+    return {"source": source, "schema": schema_signature(), "members": membership(query),
+            "prefix": membership(query.filter(post_id__lte=after))}
+
+
+@transaction.atomic
+def export_posts(job_id, *, after="", limit=100):
+    """Keyset-paginated, stable read of one completed staging collection job."""
+    require(type(limit) is int and 1 <= limit <= 100, "export limit must be 1–100")
+    job, source = _completed_source(job_id)
     ids = list(CollectionObservation.objects.filter(run__job=job, source_subject_kind="post",
         post_id__gt=after).order_by("post_id").values_list("post_id", flat=True).distinct()[:limit])
     if not ids:
@@ -95,11 +119,8 @@ def export_posts(job_id, *, after="", limit=100):
     # requires a source profile; discovery/review work remains on its own ledger.
     profiles = AccountProfileSnapshot.objects.filter(account_id__in=accounts).order_by(
         "account_id", "-last_observed_at", "-pk").distinct("account_id")
-    package = {"format": FORMAT, "schema": schema_signature(), "source": {
-        "database": identity, "job_id": str(job.pk), "run_id": str(job.last_success_id),
-        "definition_sha256": job.definition_sha256, "since_epoch": job.scope["since_epoch"],
-        "until_epoch": job.scope["until_epoch"], "historical_keyword_recall": "incomplete",
-    }, "after": after, "next_after": ids[-1], "ids": ids, "rows": {
+    package = {"format": FORMAT, "schema": schema_signature(), "source": source,
+        "after": after, "next_after": ids[-1], "ids": ids, "rows": {
         "Account": rows(Account.objects.filter(pk__in=accounts).order_by("pk")),
         "XAccountDetail": rows(XAccountDetail.objects.filter(account_id__in=accounts).order_by("pk")),
         "Post": rows(posts), "PostBrand": rows(PostBrand.objects.filter(post_id__in=ids).order_by("pk")),
@@ -301,6 +322,16 @@ def reconcile_quotes(package, *, target, execute=False):
     require(database_identity() == target, "promotion target database mismatch")
     validate_package(package)
     job = CollectionJob.objects.select_related("last_success").get(job_key="staging-posts/" + package["sha256"])
+    return reconcile_saved_quotes(job.pk, target=target, execute=execute)
+
+
+def reconcile_saved_quotes(job_id, *, target, execute=False):
+    """Use the committed transfer receipt after its temporary package is gone."""
+    require(database_identity() == target, "promotion target database mismatch")
+    job = CollectionJob.objects.select_related("last_success").get(pk=job_id)
+    require(job.scope.get("adapter") == "x-staging-promotion/v1"
+            and job.scope.get("database") == {k: target[k] for k in ("name", "user")},
+            "saved promotion identity mismatch")
     require(job.state == "completed" and job.last_success_id, "completed promotion required")
     receipt = job.last_success.report["promotion"]
     links = receipt["pending_quotes"]

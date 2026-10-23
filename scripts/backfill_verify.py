@@ -81,8 +81,9 @@ def verify_posts(ids, *, cfg, since_epoch=None, until_epoch=None, collection_onl
         brands = {row.brand_id for row in post.brands.all()}
         if not brands:
             reasons.append("brand_attribution_missing")
-        evidence_brands = {row.brand_id for row in post.brands.all()
-                           if not collection_only or not row.brand.is_sentinel}
+        # Sentinel attribution records the absence of a matched brand; it is
+        # never a claim that the Post mentioned that sentinel's name.
+        evidence_brands = {row.brand_id for row in post.brands.all() if not row.brand.is_sentinel}
         if not evidence_brands <= {row.brand_id for row in post.mentions.all()}:
             reasons.append("brand_mention_missing")
         if collection_only:
