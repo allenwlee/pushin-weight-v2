@@ -116,18 +116,20 @@ def reconcile_owners(apps, schema_editor):
         while True:
             with transaction.atomic(using=conn.alias), conn.cursor() as cursor:
                 cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
-                after = f"AND owner.{pk} > %s" if last_key is not None else ""
-                cursor.execute(f"""WITH selected AS (
-                    SELECT owner.{pk}, {expression} AS target FROM {table} owner
-                    WHERE ({predicate}) AND owner.{field} IS DISTINCT FROM ({expression})
+                after = f"WHERE owner.{pk} > %s" if last_key is not None else ""
+                cursor.execute(f"""
+                    SELECT owner.{pk},owner.{field},
+                        CASE WHEN ({predicate}) THEN ({expression}) ELSE owner.{field} END
+                    FROM {table} owner
                     {after} ORDER BY owner.{pk} LIMIT 100 FOR UPDATE
-                ), changed AS (UPDATE {table} owner SET {field}=selected.target FROM selected WHERE owner.{pk}=selected.{pk}
-                RETURNING owner.{pk}) SELECT {pk} FROM changed ORDER BY {pk} DESC LIMIT 1""",
-                [last_key] if last_key is not None else [])
-                last = cursor.fetchone()
-                if last is None:
+                """, [last_key] if last_key is not None else [])
+                rows = cursor.fetchall()
+                if not rows:
                     break
-                last_key = last[0]
+                keys = [row[0] for row in rows if row[1] != row[2]]
+                if keys:
+                    cursor.execute(f"UPDATE {table} owner SET {field}=({expression}) WHERE owner.{pk}=ANY(%s)", [keys])
+                last_key = rows[-1][0]
     # Preserve unsupported typed claims before their reference columns disappear.
     # Existing source archives own this historical evidence; no new storage owner.
     with conn.cursor() as cursor:

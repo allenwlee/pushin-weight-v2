@@ -12,6 +12,8 @@ TARGET = ("core", "0148_rg4_geolocation_owners")
 
 @pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0150_rg4_geolocation_mapping")], indirect=True)
 def test_source_copy_resumes_committed_small_batches_without_skipping_unresolved_rows(migration_rehearsal_schema):
+    import psycopg
+
     baseline = ("core", "0150_rg4_geolocation_mapping")
     target = ("core", "0151_rg4_reported_location_bridges")
     old = MigrationExecutor(connection).loader.project_state([baseline]).apps
@@ -19,15 +21,27 @@ def test_source_copy_resumes_committed_small_batches_without_skipping_unresolved
     Post = old.get_model("core", "Post")
     Post.objects.bulk_create([
         Post(tweet_id=f"source-batch-{index:04d}", author_location=("India", "Springfield", "")[index % 3],
-             author_geolocation_id=india if index % 3 else None)
+             author_geolocation_id=(india if index % 3 == 0 else None) if index < 150
+                 else (india if index % 3 else None))
         for index in range(205)
     ])
     writes = 0
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW search_path")
+        rehearsal_path = cursor.fetchone()[0]
 
     def fail_second_copy(execute, sql, params, many, context):
         nonlocal writes
         if 'UPDATE "posts" owner SET "reported_author_location"' in sql:
             writes += 1
+            if writes == 1:
+                # Selection and update remain one transaction: an independent
+                # old-source writer cannot change a selected row between them.
+                with psycopg.connect(**connection.get_connection_params(), autocommit=True) as other:
+                    other.execute("SELECT set_config('search_path',%s,false)", [rehearsal_path])
+                    other.execute("SET lock_timeout='100ms'")
+                    with pytest.raises(psycopg.errors.LockNotAvailable):
+                        other.execute("UPDATE posts SET author_location='Congo' WHERE tweet_id='source-batch-0000'")
             if writes == 2:
                 raise RuntimeError("simulated interruption between committed source batches")
         return execute(sql, params, many, context)
