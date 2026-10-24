@@ -1208,6 +1208,169 @@ _COUNTRY_DISPLAY_PARENT_RELATIONSHIPS = (
 )
 
 
+class Geolocation(models.Model):
+    """One shared place; provider identifiers are metadata, never domain keys."""
+
+    class Kind(models.IntegerChoices):
+        WORLD = 1, "World"
+        CONTINENT = 2, "Continent"
+        REGION = 3, "Geographic region"
+        COUNTRY_AREA = 4, "Country or area"
+        ADMINISTRATIVE = 5, "Administrative subdivision"
+        POPULATED_PLACE = 6, "Populated place"
+        POINT = 7, "Other geographic feature"
+
+    geonames_id = models.PositiveBigIntegerField(unique=True, null=True, blank=True)
+    place_kind = models.PositiveSmallIntegerField(choices=Kind.choices)
+    iso2_country_code = models.CharField(max_length=2, null=True, blank=True)
+    country = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="country_places",
+    )
+    administrative_parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="administrative_children",
+    )
+    geographical_parent = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="geographical_children",
+    )
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    time_zone = models.ForeignKey(TimeZone, null=True, blank=True, on_delete=models.PROTECT)
+    source_archive = models.ForeignKey(
+        "CollectionEvidenceArchive", on_delete=models.PROTECT, related_name="geolocations",
+    )
+    refreshed_at = models.DateTimeField(default=timezone.now)
+    current_policy = models.ForeignKey(
+        "GeolocationPolicy", null=True, blank=True, on_delete=models.PROTECT, related_name="current_for",
+    )
+
+    class Meta:
+        db_table = "geolocations"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(condition=models.Q(place_kind__in=range(1, 8)), name="ck_geolocation_kind"),
+            models.CheckConstraint(
+                condition=models.Q(geonames_id__isnull=True) | models.Q(geonames_id__gt=0),
+                name="ck_geolocation_external_id",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(iso2_country_code__isnull=True)
+                | models.Q(iso2_country_code__regex=r"^[A-Z]{2}$", place_kind=4),
+                name="ck_geolocation_iso_metadata",
+            ),
+            # Partial uniqueness intentionally cannot serve as a PostgreSQL FK target.
+            models.UniqueConstraint(
+                fields=["iso2_country_code"], condition=models.Q(iso2_country_code__isnull=False),
+                name="uq_geolocation_iso_metadata",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(latitude__isnull=True, longitude__isnull=True)
+                | models.Q(latitude__isnull=False, longitude__isnull=False,
+                           latitude__range=(-90, 90), longitude__range=(-180, 180)),
+                name="ck_geolocation_coordinates",
+            ),
+            *[models.CheckConstraint(
+                condition=models.Q(**{field + "__isnull": True}) | ~models.Q(**{field: models.F("pk")}),
+                name="ck_geolocation_" + name,
+            ) for field, name in (
+                ("country", "country_self"), ("administrative_parent", "admin_self"),
+                ("geographical_parent", "geo_self"),
+            )],
+        ]
+
+
+class GeolocationAlternateName(models.Model):
+    """One attested spelling in one locale, including a preferred place label."""
+
+    geolocation = models.ForeignKey(Geolocation, on_delete=models.PROTECT, related_name="alternate_names")
+    locale = models.ForeignKey(Locale, on_delete=models.PROTECT)
+    name = models.TextField()
+    geonames_alternate_name_id = models.PositiveBigIntegerField(unique=True, null=True, blank=True)
+    is_preferred = models.BooleanField(default=False)
+    is_short = models.BooleanField(default=False)
+    is_historical = models.BooleanField(default=False)
+    source_archive = models.ForeignKey("CollectionEvidenceArchive", on_delete=models.PROTECT)
+
+    class Meta:
+        db_table = "geolocation_alternate_names"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["geolocation", "locale", "name"], name="uq_geolocation_name_locale"),
+            models.CheckConstraint(condition=~models.Q(name__regex=r"^\s*$"), name="ck_geolocation_name_wording"),
+            models.CheckConstraint(
+                condition=models.Q(geonames_alternate_name_id__isnull=True)
+                | models.Q(geonames_alternate_name_id__gt=0), name="ck_geolocation_name_external_id",
+            ),
+        ]
+
+
+class GeolocationPolicy(models.Model):
+    """One immutable local decision; provider refresh cannot replace it."""
+
+    class DisputeState(models.IntegerChoices):
+        UNSPECIFIED = 0, "Not assessed"
+        DISPUTED = 1, "Disputed"
+        NOT_DISPUTED = 2, "Not disputed"
+
+    class Attribution(models.IntegerChoices):
+        PROVIDER = 0, "Use provider attribution"
+        OVERRIDE = 1, "Use explicit local country or area"
+        WITHHOLD = 2, "Withhold country attribution"
+
+    class DisplayRelationship(models.IntegerChoices):
+        NONE = 0, "No display parent"
+        SPECIAL_ADMINISTRATIVE_REGION = 1, "Special administrative region"
+        OWNER_DISPLAY_CONTEXT = 2, "Owner-selected display context"
+        US_INSULAR_AREA = 3, "US insular area"
+        FRENCH_OVERSEAS = 4, "French overseas arrangement"
+        BRITISH_OVERSEAS_TERRITORY = 5, "British Overseas Territory"
+        CROWN_DEPENDENCY = 6, "Crown Dependency"
+        KINGDOM_CONSTITUENT_COUNTRY = 7, "Kingdom constituent country"
+        NETHERLANDS_PUBLIC_BODY = 8, "Netherlands public body"
+
+    class FlagMode(models.IntegerChoices):
+        PLACE = 0, "Place flag"
+        DISPLAY_PARENT = 1, "Display parent flag"
+        HIDDEN = 2, "No flag"
+
+    class LabelMode(models.IntegerChoices):
+        NAME = 0, "Localized name"
+        CODE_AND_NAME = 1, "Area code and localized name"
+
+    geolocation = models.ForeignKey(Geolocation, on_delete=models.PROTECT, related_name="policies")
+    supersedes = models.OneToOneField("self", null=True, blank=True, on_delete=models.PROTECT, related_name="successor")
+    actor = models.ForeignKey(Actor, on_delete=models.PROTECT)
+    decided_at = models.DateTimeField()
+    source_archive = models.ForeignKey("CollectionEvidenceArchive", on_delete=models.PROTECT)
+    dispute_state = models.PositiveSmallIntegerField(choices=DisputeState.choices, default=0)
+    country_attribution = models.PositiveSmallIntegerField(choices=Attribution.choices, default=0)
+    country = models.ForeignKey(Geolocation, null=True, blank=True, on_delete=models.PROTECT, related_name="attribution_policies")
+    display_relationship = models.PositiveSmallIntegerField(choices=DisplayRelationship.choices, default=0)
+    display_parent = models.ForeignKey(Geolocation, null=True, blank=True, on_delete=models.PROTECT, related_name="display_policies")
+    flag_mode = models.PositiveSmallIntegerField(choices=FlagMode.choices, default=0)
+    label_mode = models.PositiveSmallIntegerField(choices=LabelMode.choices, default=0)
+
+    class Meta:
+        db_table = "geolocation_policies"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["geolocation"], condition=models.Q(supersedes__isnull=True), name="uq_geolocation_policy_root"),
+            models.CheckConstraint(condition=models.Q(dispute_state__in=[0, 1, 2]), name="ck_geolocation_dispute_state"),
+            models.CheckConstraint(condition=models.Q(country_attribution__in=[0, 1, 2]), name="ck_geolocation_attribution"),
+            models.CheckConstraint(condition=models.Q(display_relationship__in=range(9)), name="ck_geolocation_display_relation"),
+            models.CheckConstraint(condition=models.Q(flag_mode__in=[0, 1, 2]), name="ck_geolocation_flag_mode"),
+            models.CheckConstraint(condition=models.Q(label_mode__in=[0, 1]), name="ck_geolocation_label_mode"),
+            models.CheckConstraint(
+                condition=models.Q(country_attribution=1, country__isnull=False)
+                | models.Q(country_attribution__in=[0, 2], country__isnull=True),
+                name="ck_geolocation_policy_country",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(display_relationship=0, display_parent__isnull=True)
+                | models.Q(display_relationship__gt=0, display_parent__isnull=False),
+                name="ck_geolocation_policy_parent",
+            ),
+            models.CheckConstraint(condition=~models.Q(flag_mode=1) | models.Q(display_parent__isnull=False), name="ck_geolocation_parent_flag"),
+            models.CheckConstraint(condition=models.Q(display_parent__isnull=True) | ~models.Q(display_parent=models.F("geolocation")), name="ck_geolocation_policy_self"),
+        ]
+
+
 class Region(models.Model):
     key = models.CharField(max_length=64, primary_key=True)
     m49_code = models.CharField(max_length=3, unique=True, blank=True, null=True)

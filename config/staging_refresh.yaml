@@ -47,6 +47,9 @@ relations:
     - job_workplace_type_assignments
     - job_organization_ai_relationship_assignments
     - job_role_ai_relationship_assignments
+    - geolocations
+    - geolocation_alternate_names
+    - geolocation_policies
     - person_name_types
     - affiliation_types
     - opportunity_types
@@ -279,6 +282,9 @@ relations:
     - job_workplace_type_assignments
     - job_organization_ai_relationship_assignments
     - job_role_ai_relationship_assignments
+    - geolocations
+    - geolocation_alternate_names
+    - geolocation_policies
     - person_name_types
     - affiliation_types
     - opportunity_types
@@ -451,6 +457,9 @@ relations:
     - job_workplace_type_assignments_id_seq
     - job_organization_ai_relationship_assignments_id_seq
     - job_role_ai_relationship_assignments_id_seq
+    - geolocations_id_seq
+    - geolocation_alternate_names_id_seq
+    - geolocation_policies_id_seq
     - person_name_types_id_seq
     - affiliation_types_id_seq
     - opportunity_types_id_seq
@@ -571,6 +580,9 @@ relations:
     - job_workplace_type_assignments_id_seq
     - job_organization_ai_relationship_assignments_id_seq
     - job_role_ai_relationship_assignments_id_seq
+    - geolocations_id_seq
+    - geolocation_alternate_names_id_seq
+    - geolocation_policies_id_seq
     - person_name_types_id_seq
     - affiliation_types_id_seq
     - opportunity_types_id_seq
@@ -729,6 +741,9 @@ scrub:
 
 validation:
   exact_count_tables:
+    - geolocations
+    - geolocation_alternate_names
+    - geolocation_policies
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - taxonomy_versions
     - product_groups
