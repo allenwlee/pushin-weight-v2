@@ -162,30 +162,35 @@ def _ingest_resolved(record, *, source_key, fingerprint, observed, eligibility):
         )
         # The source spelling remains in the published claim fingerprint.
         type_code = role["affiliation_type"]
-        affiliation, _ = PersonBrandAffiliation.objects.get_or_create(
+        affiliation, affiliation_created = PersonBrandAffiliation.objects.get_or_create(
             claim_identity=moved.claim_identity
             if moved
             else digest([str(person.pk), role]),
             defaults={
                 "person": person,
-                **{key: value for key, value in role.items() if key != "affiliation_type"},
+                **{key: value for key, value in role.items() if key not in {"affiliation_type", "location"}},
                 "affiliation_type_reference": AffiliationType.objects.get(
                     code=type_code
                 ),
             },
         )
+        from core.geolocation_evidence import write_source_evidence
+
+        if affiliation_created and "location" in role:
+            write_source_evidence(affiliation, reported_location=role["location"])
         require_claim_owner(affiliation, person)
-        PersonBrandAffiliationEvidence.objects.get_or_create(
+        source_row, source_created = PersonBrandAffiliationEvidence.objects.get_or_create(
             affiliation=affiliation,
             evidence_hash=digest([source_url, evidence_text, source_data]),
             defaults={
                 "source_url": source_url,
                 "evidence_text": evidence_text,
                 "observed_at": observed,
-                "extracted_claim_data": source_data,
                 "extraction_method": "staff-manifest-v1",
             },
         )
+        if source_created:
+            write_source_evidence(source_row, extracted_claim_data=source_data)
         originals = {}
         for title in title_texts:
             entry = dict(title)

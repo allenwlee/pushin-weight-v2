@@ -8,6 +8,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from django.db import transaction
 from django.utils import timezone
 
+from core.geolocation_evidence import write_source_evidence
 from core.job_locations import write_job_locations
 from core.job_vocabulary import write_job_classifications
 from core.models import Brand, JobListing, JobListingEvidence, JobSourceSyncRun
@@ -89,8 +90,6 @@ def _source_owned_fields(job: SourceJob, *, source, brand, observed_at):
         "description_text": job.description_text,
         "department": job.department,
         "team": job.team,
-        "locations_raw": " · ".join(job.locations) or None,
-        "locations": list(job.locations),
         "posted_at": job.posted_at,
         "updated_source_at": job.updated_at,
         "last_seen_at": observed_at,
@@ -101,7 +100,6 @@ def _source_owned_fields(job: SourceJob, *, source, brand, observed_at):
         "content_hash": _content_hash(job, allowed_hosts=source.allowed_hosts),
         "extraction_version": "official-site-v1",
         "extraction_confidence": 1.0,
-        "raw_payload": job.raw_payload,
         "source_language": "zh-CN",
     }
 
@@ -183,6 +181,7 @@ def _persist_snapshot(
                 counts["updated_count"] += 1
             else:
                 counts["unchanged_count"] += 1
+        write_source_evidence(listing, raw_payload=job.raw_payload)
         evidence_hash = _digest(["official-site", source.key, job.source_listing_id])
         evidence, created = JobListingEvidence.objects.get_or_create(
             listing=listing,
@@ -200,7 +199,6 @@ def _persist_snapshot(
                 "extraction_method": "structured_text",
                 "extraction_identity": "official-site-v1",
                 "confidence": 1.0,
-                "raw_evidence": job.raw_payload,
             },
         )
         if not created:
@@ -212,16 +210,15 @@ def _persist_snapshot(
                 if value
             ]
             evidence.observed_at = snapshot.observed_at
-            evidence.raw_evidence = job.raw_payload
             evidence.save(
                 update_fields=[
                     "source_url",
                     "evidence_text",
                     "linked_urls",
                     "observed_at",
-                    "raw_evidence",
                 ]
             )
+        write_source_evidence(evidence, raw_evidence=job.raw_payload)
         write_job_classifications(
             listing,
             {name: getattr(job, name) for name in (
@@ -231,7 +228,7 @@ def _persist_snapshot(
             replace=True,
         )
         write_job_locations(
-            listing, list(job.locations), reported_value=fields["locations_raw"],
+            listing, list(job.locations), reported_value=" · ".join(job.locations) or None,
             evidence=evidence, observed_at=snapshot.observed_at,
         )
 

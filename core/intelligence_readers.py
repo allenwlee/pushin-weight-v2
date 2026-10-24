@@ -7,10 +7,11 @@ from typing import Any
 
 from django.db.models import F, Prefetch
 
+from core.job_locations import canonical_job_locations, location_prefetch
+from core.geolocations import geolocation_label
 from core.job_vocabulary import (
     classification_prefetches,
     classification_text,
-    reported_compensation,
 )
 from core.models import (
     Event,
@@ -315,7 +316,8 @@ def _affiliation(row: PersonBrandAffiliation) -> dict[str, Any]:
         "job_function": row.job_function,
         "seniority": row.seniority,
         "employment_type": row.employment_type,
-        "location": row.location,
+        "location": ({"id": row.geolocation_id, "label": geolocation_label(row.geolocation)}
+                     if row.geolocation_id else None),
         "workplace_type": row.workplace_type,
         "description": row.description,
         "start_date": _effective_date(row.start_date, row.start_date_precision),
@@ -418,6 +420,7 @@ def job_listing_document(listing_id: int) -> dict[str, Any]:
     listing = (
         JobListing.objects.select_related("brand", "brand_discovery_candidate", "salary_period_reference")
         .prefetch_related(
+            location_prefetch(),
             *classification_prefetches(),
             Prefetch(
                 "evidence",
@@ -467,8 +470,7 @@ def job_listing_document(listing_id: int) -> dict[str, Any]:
             "resolution_status": listing.application_resolution_status,
         },
         "location": {
-            "raw": listing.locations_raw,
-            "values": listing.locations,
+            "values": canonical_job_locations(listing),
             "workplace_type": classification_text(listing, "workplace_type"),
             "remote_applicant_restrictions": listing.remote_applicant_restrictions,
         },
@@ -480,8 +482,8 @@ def job_listing_document(listing_id: int) -> dict[str, Any]:
             "maximum": str(listing.salary_max)
             if listing.salary_max is not None
             else None,
-            "currency": listing.salary_currency_reference_id or reported_compensation(listing, "salary_currency"),
-            "period": reported_compensation(listing, "salary_period") or (
+            "currency": listing.salary_currency_reference_id,
+            "period": (
                 listing.salary_period_reference.code if listing.salary_period_reference_id else None
             ),
         },

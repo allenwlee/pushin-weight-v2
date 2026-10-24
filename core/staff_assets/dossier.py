@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 from django.template.loader import render_to_string
 from django.utils import timezone
 
+from core.geolocations import geolocation_label
 from core.models import Person
 from core.person_affiliations import is_active_claim
 from core.person_names import selected_name_for
@@ -187,7 +188,7 @@ def dossier_records(*, brand_id):
                     "title": role.title_raw or "Title unknown",
                     "status": role.status,
                     "review": role.review_status,
-                    "location": role.location or "Unknown",
+                    "location": geolocation_label(role.geolocation) if role.geolocation_id else "Unknown",
                     "workplace": role.workplace_type or "Unknown",
                     "start": role.start_date or "Unknown",
                     "end": role.end_date or "Unknown",

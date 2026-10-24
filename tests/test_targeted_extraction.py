@@ -102,21 +102,26 @@ def test_negative_post_makes_zero_targeted_calls():
 
 def test_ambiguous_profile_candidate_routes_to_profile_extractor_without_images():
     post = _post("profile-candidate", text="A normal unrelated post")
-    snapshot = AccountProfileSnapshot.objects.create(
-        account=post.author,
-        profile_hash="a" * 64,
-        first_observed_at=post.fetched_at,
-        last_observed_at=post.fetched_at,
-        first_source_kind="post",
-        first_source_post=post,
-        handle="a_nnawang",
-        display_name="Anna Wang",
-        description="Researcher @Anthropic",
-        profile_image_url="https://example.com/profile.jpg",
-        affiliate_badge_image_url="https://example.com/badge.jpg",
-        present_fields=["description", "profile_image_url"],
-        profile_data={"description": "Researcher @Anthropic"},
-    )
+    from django.db import transaction
+
+    with transaction.atomic():
+        snapshot = AccountProfileSnapshot.objects.create(
+            account=post.author,
+            profile_hash="a" * 64,
+            first_observed_at=post.fetched_at,
+            last_observed_at=post.fetched_at,
+            first_source_kind="post",
+            first_source_post=post,
+            handle="a_nnawang",
+            display_name="Anna Wang",
+            description="Researcher @Anthropic",
+            profile_image_url="https://example.com/profile.jpg",
+            affiliate_badge_image_url="https://example.com/badge.jpg",
+            present_fields=["description", "profile_image_url"],
+        )
+        from core.geolocation_evidence import write_source_evidence
+
+        write_source_evidence(snapshot, profile_data={"description": "Researcher @Anthropic"})
     person = person_with_name("Anna Wang")
     candidate = PersonBrandAffiliation.objects.create(
         person=person,
@@ -126,15 +131,16 @@ def test_ambiguous_profile_candidate_routes_to_profile_extractor_without_images(
         status="unknown",
         claim_identity="b" * 64,
     )
-    PersonBrandAffiliationEvidence.objects.create(
-        affiliation=candidate,
-        source_profile_snapshot=snapshot,
-        evidence_text="Researcher @Anthropic",
-        observed_at=post.fetched_at,
-        extracted_claim_data={"candidate_role": "unknown"},
-        extraction_method="profile-affiliation-rules-v1",
-        evidence_hash="c" * 64,
-    )
+    with transaction.atomic():
+        evidence = PersonBrandAffiliationEvidence.objects.create(
+            affiliation=candidate,
+            source_profile_snapshot=snapshot,
+            evidence_text="Researcher @Anthropic",
+            observed_at=post.fetched_at,
+            extraction_method="profile-affiliation-rules-v1",
+            evidence_hash="c" * 64,
+        )
+        write_source_evidence(evidence, extracted_claim_data={"candidate_role": "unknown"})
     requests = []
 
     def provider(system, user, model, max_tokens):
@@ -362,7 +368,9 @@ def test_later_job_evidence_converges_on_listing_and_advances_last_seen():
     assert listing.posted_at.isoformat() == "2026-09-10T01:00:00+00:00"
     assert listing.education_requirements == "Doctorate or equivalent experience"
     assert listing.experience_requirements == "Published machine-learning research"
-    assert listing.locations == ["San Francisco"]
+    from core.collection_capture import read_document
+
+    assert read_document(listing.geolocation_source_archive)["locations"] == ["San Francisco"]
     assert listing.evidence.count() == 2
 
 
@@ -414,8 +422,10 @@ def test_job_extraction_keeps_source_timestamps_and_requirements():
     assert source.source_post_id == post.pk
     assert source.linked_urls == [application_url]
     assert listing.application_url == application_url
-    assert source.raw_evidence["record"] == listing.raw_payload
-    assert listing.raw_payload["salary_currency"] == "source currency not established"
+    from core.geolocation_evidence import source_evidence
+
+    assert source_evidence(source).raw_evidence["record"] == source_evidence(listing).raw_payload
+    assert source_evidence(listing).raw_payload["salary_currency"] == "source currency not established"
     assert listing.salary_currency_reference_id is None
     assert listing.salary_period_reference.code == "year"
     assert set(listing.employment_assignments.values_list("category__code", flat=True)) == {

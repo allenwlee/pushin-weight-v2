@@ -252,6 +252,7 @@ def evidence_for_account(account):
     """Read bounded representative inputs over all history, never a date window."""
     from django.db.models import Q
 
+    from core.geolocation_evidence import source_evidence
     from core.models import AccountProfileSnapshot, Post
 
     fields = (
@@ -288,7 +289,7 @@ def evidence_for_account(account):
     profiles = [
         {
             "id": str(p.pk),
-            "profile": p.raw_profile_payload or p.profile_data,
+            "profile": source_evidence(p).raw_profile_payload or source_evidence(p).profile_data,
             "observed_at": p.last_observed_at.isoformat(),
         }
         for p in AccountProfileSnapshot.objects.filter(account=account).order_by(

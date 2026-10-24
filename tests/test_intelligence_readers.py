@@ -80,23 +80,28 @@ def test_person_reader_separates_employment_and_keeps_profile_provenance(
         author=account,
         text="I worked elsewhere and now at Anthropic.",
     )
-    snapshot = AccountProfileSnapshot.objects.create(
-        account=account,
-        profile_hash="a" * 64,
-        first_observed_at=NOW,
-        last_observed_at=NOW,
-        first_source_kind="post",
-        first_source_post=post,
-        handle="a_nnawang",
-        display_name="Anna Wang",
-        description="Researcher @Anthropic",
-        affiliate_target_username="AnthropicAI",
-        affiliate_label_description="Anthropic",
-        affiliate_label_type="BusinessLabel",
-        affiliate_display_type="Badge",
-        present_fields=["description"],
-        profile_data={"description": "Researcher @Anthropic"},
-    )
+    from django.db import transaction
+
+    with transaction.atomic():
+        snapshot = AccountProfileSnapshot.objects.create(
+            account=account,
+            profile_hash="a" * 64,
+            first_observed_at=NOW,
+            last_observed_at=NOW,
+            first_source_kind="post",
+            first_source_post=post,
+            handle="a_nnawang",
+            display_name="Anna Wang",
+            description="Researcher @Anthropic",
+            affiliate_target_username="AnthropicAI",
+            affiliate_label_description="Anthropic",
+            affiliate_label_type="BusinessLabel",
+            affiliate_display_type="Badge",
+            present_fields=["description"],
+        )
+        from core.geolocation_evidence import write_source_evidence
+
+        write_source_evidence(snapshot, profile_data={"description": "Researcher @Anthropic"})
     person = person_with_name(
         "Anna Wang",
         date_of_birth="1987",
@@ -242,10 +247,10 @@ def test_job_reader_keeps_one_post_as_evidence_for_several_roles(
         )
         listings.append(listing)
 
-    # One listing query, one evidence query, six bounded typed-owner prefetches.
-    with django_assert_num_queries(8):
+    # Listing, evidence, six classifications, and canonical location occurrences.
+    with django_assert_num_queries(9):
         first = job_listing_document(listings[0].pk)
-    with django_assert_num_queries(8):
+    with django_assert_num_queries(9):
         second = job_listing_document(listings[1].pk)
 
     _assert_contract_root("job_listing_document", first)

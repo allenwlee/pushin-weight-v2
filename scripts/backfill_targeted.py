@@ -46,6 +46,8 @@ OPERATION = "post_targeted_extraction"
 
 def requirements(post, cfg):
     """Read exact shared prompt identities; use the harvester's role mapping."""
+    from core.geolocation_evidence import AffiliationClaimEvidence
+
     if not cfg.targeted_extraction.enabled:
         return {}
     types = set(post.signals.values_list("post_type_id", flat=True))
@@ -65,8 +67,10 @@ def requirements(post, cfg):
         if t in TYPE_TO_ROLE and (t != "releases_updates" or "model_releases" in rare)
     }
     if (
-        PersonBrandAffiliationEvidence.objects.filter(
-            source_profile_snapshot__first_source_post=post,
+        AffiliationClaimEvidence.objects.filter(
+            pk__in=PersonBrandAffiliationEvidence.objects.filter(
+                source_profile_snapshot__first_source_post=post,
+            ).values("pk"),
             extracted_claim_data__candidate_role="unknown",
         ).exists()
         or ProfileMovementCandidate.objects.filter(

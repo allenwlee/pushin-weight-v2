@@ -5050,6 +5050,7 @@ def _direct_jobs_queryset(
     created_at_start: datetime | None = None,
     created_at_end: datetime | None = None,
 ) -> QuerySet:
+    from core.job_locations import location_prefetch
     from core.job_vocabulary import classification_prefetches
 
     registered_sources = Q(pk__isnull=True)
@@ -5060,7 +5061,7 @@ def _direct_jobs_queryset(
             source_key__isnull=False, status="open", brand__isnull=False
         )
         .filter(registered_sources)
-        .prefetch_related(*classification_prefetches(dimensions=("job_function", "employment_type")))
+        .prefetch_related(location_prefetch(), *classification_prefetches(dimensions=("job_function", "employment_type")))
         .annotate(
             _feed_created_at=Coalesce("posted_at", "updated_source_at", "first_seen_at")
         )
@@ -5124,7 +5125,9 @@ def _serialize_direct_job(
     signal_inspections = _feed_signal_inspections(
         classifications, [brand], locale, unsanctioned=False
     )
-    location_text = " · ".join(job.locations or [])
+    from core.job_locations import canonical_job_locations
+
+    location_text = " · ".join(place["label"] for place in canonical_job_locations(job, locale=locale) if place["label"])
     job_meta_text = " · ".join(
         value
         for value in (

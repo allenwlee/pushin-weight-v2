@@ -65,18 +65,23 @@ def test_profile_evidence_stays_off_another_persons_claim():
     Brand.objects.get_or_create(
         nickname="deepseek", defaults={"display_name": "DeepSeek"}
     )
-    snapshot = AccountProfileSnapshot.objects.create(
-        account=account,
-        profile_hash="f" * 64,
-        first_observed_at=now,
-        last_observed_at=now,
-        first_source_kind="post",
-        handle="researcher",
-        display_name="Researcher",
-        description="Researcher at DeepSeek",
-        present_fields=["description"],
-        profile_data={"description": "Researcher at DeepSeek"},
-    )
+    from django.db import transaction
+
+    with transaction.atomic():
+        snapshot = AccountProfileSnapshot.objects.create(
+            account=account,
+            profile_hash="f" * 64,
+            first_observed_at=now,
+            last_observed_at=now,
+            first_source_kind="post",
+            handle="researcher",
+            display_name="Researcher",
+            description="Researcher at DeepSeek",
+            present_fields=["description"],
+        )
+        from core.geolocation_evidence import write_source_evidence
+
+        write_source_evidence(snapshot, profile_data={"description": "Researcher at DeepSeek"})
     payload = {
         "account_id": account.author_id,
         "brand_id": "deepseek",

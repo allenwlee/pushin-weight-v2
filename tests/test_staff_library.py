@@ -127,7 +127,9 @@ def test_accountless_repeat_import_preserves_original_and_role_location(staff_st
     person = Person.objects.get()
     assert person.primary_name.full_name == "测试人"
     assert not person.account_links.exists()
-    assert person.brand_affiliations.get().location == "北京"
+    from core.geolocation_evidence import source_evidence
+
+    assert source_evidence(person.brand_affiliations.get()).reported_location == "北京"
 
 
 def test_contributor_is_accounted_for_without_person_or_work():

@@ -75,6 +75,15 @@ class JobSourceEvidence(SourceProjection):
         db_table = "job_listings"
 
 
+class AffiliationClaimEvidence(SourceProjection):
+    id = models.BigIntegerField(primary_key=True)
+    extracted_claim_data = models.JSONField()
+
+    class Meta:
+        managed = False
+        db_table = "people_brand_affiliation_evidence"
+
+
 class JobExtractionEvidence(SourceProjection):
     id = models.BigIntegerField(primary_key=True)
     raw_evidence = models.JSONField(null=True)
@@ -99,6 +108,7 @@ PROJECTIONS = {
     "posts": PostLocationEvidence,
     "account_profile_snapshots": ProfileLocationEvidence,
     "people_brand_affiliations": AffiliationLocationEvidence,
+    "people_brand_affiliation_evidence": AffiliationClaimEvidence,
     "job_listings": JobSourceEvidence,
     "job_listing_evidence": JobExtractionEvidence,
     "job_listing_locations": JobLocationSourceEvidence,

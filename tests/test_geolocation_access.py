@@ -2,10 +2,11 @@
 
 import secrets
 import uuid
+from unittest.mock import patch
 
 import psycopg
 import pytest
-from django.db import connection, transaction
+from django.db import ProgrammingError, connection, connections, transaction
 from psycopg import sql
 
 from core.geolocation_access import apply_serving_grants
@@ -25,7 +26,7 @@ def serving_login():
     try:
         with transaction.atomic():
             report = apply_serving_grants(connection, role)
-        parameters = {key: value for key, value in connection.get_connection_params().items() if key in {"dbname", "host", "port", "sslmode"}}
+        parameters = {key: value for key, value in connection.get_connection_params().items() if key not in {"user", "password"}}
         with psycopg.connect(**parameters, user=role, password=password, autocommit=True) as serving:
             yield serving, role, owner, report
     finally:
@@ -36,7 +37,11 @@ def serving_login():
 
 def test_serving_login_reads_canonical_columns_but_cannot_reach_source_or_owner(serving_login):
     serving, role, owner, report = serving_login
-    Post.objects.create(tweet_id="serving-geography", author_location="Springfield")
+    from core.geolocation_evidence import write_source_evidence
+
+    with transaction.atomic():
+        post = Post.objects.create(tweet_id="serving-geography")
+        write_source_evidence(post, reported_author_location="Springfield")
     assert report["role"] == role and report["relations_checked"] > 0
     with serving.cursor() as cursor:
         cursor.execute("SELECT current_user,session_user")
@@ -66,3 +71,32 @@ def test_reconciliation_refuses_to_repurpose_owner():
         owner = cursor.fetchone()[0]
     with pytest.raises(ValueError, match="separate dedicated"), transaction.atomic():
         apply_serving_grants(connection, owner)
+
+
+def test_job_orm_document_uses_local_places_without_source_access(serving_login):
+    from django.utils import timezone
+
+    from core.collection_capture import archive_document
+    from core.geolocation_evidence import source_evidence
+    from core.intelligence_readers import job_listing_document
+    from core.job_locations import write_job_locations
+    from core.models import Brand, Geolocation, GeolocationAlternateName, JobListing
+
+    archive = archive_document(b"India test source")
+    place = Geolocation.objects.create(geonames_id=1269750, place_kind=4, source_archive=archive)
+    GeolocationAlternateName.objects.create(
+        geolocation=place, locale_id="en", name="India", is_preferred=True, source_archive=archive,
+    )
+    brand = Brand.objects.create(nickname="serving-job", display_name="Serving job")
+    listing = JobListing.objects.create(
+        brand=brand, hiring_organization="Serving job", title="Researcher",
+        first_seen_at=timezone.now(), last_seen_at=timezone.now(), listing_identity="serving-job",
+    )
+    write_job_locations(listing, ["India", "Springfield"])
+    serving, _role, _owner, _report = serving_login
+    with patch.object(connections["default"], "connection", serving):
+        document = job_listing_document(listing.pk)
+        assert document["location"]["values"] == [{"id": place.pk, "label": "India"}]
+        assert "Springfield" not in str(document)
+        with pytest.raises(ProgrammingError, match="permission denied"):
+            source_evidence(listing)

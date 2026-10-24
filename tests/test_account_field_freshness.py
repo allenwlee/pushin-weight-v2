@@ -205,12 +205,16 @@ def test_duplicate_handle_does_not_block_related_post_write():
 
 
 def test_post_affiliate_label_refresh_preserves_about_only_country():
+    from core.geolocation_evidence import source_evidence, write_source_evidence
+    from core.models import Country
+
+    Country.objects.get_or_create(code="US", defaults={"m49_code": "840"})
     account = Account.objects.create(
         author_id="42",
         country_code="US",
-        account_based_in="United States",
         affiliate_label_description="Old",
     )
+    write_source_evidence(account.x_details, reported_based_in="United States")
 
     _upsert_account(
         {
@@ -230,7 +234,7 @@ def test_post_affiliate_label_refresh_preserves_about_only_country():
     account.refresh_from_db()
     assert account.affiliate_label_description == "New"
     assert account.country_code == "US"
-    assert account.account_based_in == "United States"
+    assert source_evidence(account.x_details).reported_based_in == "United States"
 
 
 def test_post_refreshes_shared_live_about_fields_and_preserves_about_only_fields():

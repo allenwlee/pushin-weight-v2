@@ -2147,6 +2147,7 @@ def _upsert_account(raw: dict[str, Any]) -> Account | None:
     return outcome.account
 
 
+@transaction.atomic
 def _upsert_post(
     raw: dict[str, Any], account: Account | None = None
 ) -> tuple[Post | None, bool]:
@@ -2302,7 +2303,6 @@ def _upsert_post(
         ("author_is_automated", raw.get("author_is_automated")),
         ("author_automated_by", raw.get("author_automated_by")),
         ("author_description", raw.get("author_description")),
-        ("author_location", raw.get("author_location")),
         ("author_media_count", raw.get("author_media_count")),
         ("author_statuses_count", raw.get("author_statuses_count")),
         ("author_favourites_count", raw.get("author_favourites_count")),
@@ -2339,6 +2339,11 @@ def _upsert_post(
     post, created = Post.objects.update_or_create(
         tweet_id=tweet_id, defaults=defaults
     )
+    if raw.get("author_location") is not None:
+        from core.geolocation_evidence import write_source_evidence
+
+        write_source_evidence(post, reported_author_location=raw["author_location"])
+        post.refresh_from_db(fields=["author_geolocation"])
     return post, created
 
 

@@ -19,7 +19,8 @@ def places():
 
 def test_changed_reported_source_clears_obsolete_reference_in_bulk_and_orm():
     selected = places()
-    post = Post.objects.create(tweet_id="geo-evidence", author_location="India")
+    post = Post.objects.create(tweet_id="geo-evidence")
+    write_source_evidence(post, reported_author_location="India")
     post.refresh_from_db()
     assert post.author_geolocation_id == selected[1269750].pk
     assert source_evidence(post).reported_author_location == "India"
@@ -27,23 +28,28 @@ def test_changed_reported_source_clears_obsolete_reference_in_bulk_and_orm():
         write_source_evidence(post, reported_author_location="Springfield")
     post.refresh_from_db()
     assert post.author_geolocation_id is None
-    assert post.author_location == "Springfield"  # Preceding image remains compatible until final drop.
-    Post.objects.filter(pk=post.pk).update(author_location="Korea")
+    assert not hasattr(post, "author_location")
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT author_location FROM posts WHERE tweet_id=%s", [post.pk])
+        assert cursor.fetchone()[0] == "Springfield"  # Preceding deployed image remains compatible until drop.
+        cursor.execute("UPDATE posts SET author_location='Korea' WHERE tweet_id=%s", [post.pk])
     post.refresh_from_db()
     assert post.author_geolocation_id == selected[1835841].pk
     assert source_evidence(post).reported_author_location == "Korea"
     with transaction.atomic():
         write_source_evidence(post, reported_author_location=None)
     post.refresh_from_db()
-    assert post.author_geolocation_id is None and post.author_location is None
+    assert post.author_geolocation_id is None and source_evidence(post).reported_author_location is None
     with pytest.raises(IntegrityError), transaction.atomic(), connection.cursor() as cursor:
         cursor.execute("UPDATE posts SET author_location='India',reported_author_location='Korea' WHERE tweet_id=%s", [post.pk])
 
 
 def test_based_in_defaults_are_distinct_from_profile_location_and_clear_when_changed():
     selected = places()
-    account = Account.x.create(author_id="818181", location="India")
-    detail = XAccountDetail.objects.create(account=account, account_based_in="Korea")
+    account = Account.x.create(author_id="818181")
+    write_source_evidence(account, reported_profile_location="India")
+    detail = XAccountDetail.objects.create(account=account)
+    write_source_evidence(detail, reported_based_in="Korea")
     account.refresh_from_db()
     assert account.profile_location_id == selected[1269750].pk
     assert account.based_in_location_id == selected[1835841].pk
@@ -81,3 +87,36 @@ def test_source_projection_cannot_insert_or_replace_parent_identity():
         PostLocationEvidence(tweet_id=post.pk, reported_author_location="India").save()
     with pytest.raises(ValueError, match="explicit source fields"):
         write_source_evidence(post, tweet_id="different-owner")
+
+
+def test_harvest_profile_call_chain_preserves_fingerprint_and_clears_ambiguous_location():
+    from django.utils import timezone
+
+    from core.profile_snapshots import profile_observation_from_payload, record_profile_snapshot
+    from monitor.cycle import _upsert_account, _upsert_post
+
+    selected = places()
+    raw = {
+        "id": "location-pipeline", "author_id": "636363", "author_handle": "geo_person",
+        "author_location": "India", "_author_present_fields": ["author_location"],
+    }
+    account = _upsert_account(raw)
+    post, _ = _upsert_post(raw, account=account)
+    observation = profile_observation_from_payload(raw)
+    snapshot, created, _ = record_profile_snapshot(
+        account=account, observation=observation, observed_at=timezone.now(), source_kind="post", source_post=post,
+    )
+    account.refresh_from_db()
+    assert created and snapshot.profile_hash == observation.profile_hash
+    assert snapshot.geolocation_id == account.profile_location_id == post.author_geolocation_id == selected[1269750].pk
+    assert source_evidence(snapshot).profile_data == observation.profile_data
+    changed = {**raw, "author_location": "Springfield"}
+    _upsert_account(changed)
+    _upsert_post(changed, account=account)
+    account.refresh_from_db()
+    post.refresh_from_db()
+    snapshot.refresh_from_db()
+    assert account.profile_location_id is None and post.author_geolocation_id is None
+    assert snapshot.geolocation_id == selected[1269750].pk
+    assert snapshot.profile_hash == observation.profile_hash
+    assert source_evidence(account).reported_profile_location == "Springfield"

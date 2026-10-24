@@ -172,6 +172,9 @@ class CandidateSignals:
 
 def candidate_priorities(accounts):
     """Bulk reads all available history once per bounded account batch; no calls."""
+    from django.db.models import OuterRef, Subquery
+
+    from core.geolocation_evidence import ProfileLocationEvidence
     from core.models import AccountProfileSnapshot, AccountProfileTextTranslation, Post
 
     signals = {account.pk: CandidateSignals(account) for account in accounts}
@@ -192,17 +195,21 @@ def candidate_priorities(accounts):
         signals[row["author_id"]].add_post(row)
     for row in (
         AccountProfileSnapshot.objects.filter(account_id__in=inspect_ids)
+        .annotate(
+            source_profile_payload=Subquery(ProfileLocationEvidence.objects.filter(pk=OuterRef("pk")).values("raw_profile_payload")[:1]),
+            source_profile_data=Subquery(ProfileLocationEvidence.objects.filter(pk=OuterRef("pk")).values("profile_data")[:1]),
+        )
         .values(
             "account_id",
             "description",
             "profile_bio_text",
-            "raw_profile_payload",
-            "profile_data",
+            "source_profile_payload",
+            "source_profile_data",
         )
         .order_by()
         .iterator(chunk_size=500)
     ):
         signal = signals[row["account_id"]]
         signal.add_bio(row["description"] or row["profile_bio_text"])
-        signal.add_profile(row["raw_profile_payload"] or row["profile_data"])
+        signal.add_profile(row["source_profile_payload"] or row["source_profile_data"])
     return {pk: signal.priority() for pk, signal in signals.items()}

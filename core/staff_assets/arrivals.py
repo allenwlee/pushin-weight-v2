@@ -4,6 +4,8 @@ from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+from core.geolocation_evidence import source_evidence
+from core.geolocations import geolocation_label
 from core.models import (
     Account,
     BrandAccount,
@@ -34,7 +36,7 @@ def register_person(person_id):
         )
         .order_by("pk")
         .values(
-            "id", "claim_identity", "review_status", "title_raw", "location", "status"
+            "id", "claim_identity", "review_status", "title_raw", "geolocation_id", "status"
         )
     )
     intakes = list(person.staff_intakes.order_by("id"))
@@ -69,7 +71,7 @@ def register_person(person_id):
                 "handle": account.handle,
                 "display_name": account.display_name,
                 "bio": account.profile_bio_text or account.bio,
-                "location": account.location,
+                "location": geolocation_label(account.profile_location) if account.profile_location_id else None,
                 "image": account.profile_picture,
             }
         )
@@ -147,15 +149,12 @@ def register_account(account_id, *, eligibility="db_staff"):
         if account.handle
         else f"https://x.com/i/user/{account.author_id}"
     )
-    snapshots = list(
-        account.profile_snapshots.order_by("id").values(
-            "profile_hash",
-            "display_name",
-            "description",
-            "profile_image_url",
-            "profile_data",
-        )
-    )
+    snapshots = [
+        {**{key: getattr(row, key) for key in (
+            "profile_hash", "display_name", "description", "profile_image_url",
+        )}, "profile_data": source_evidence(row).profile_data}
+        for row in account.profile_snapshots.order_by("id")
+    ]
     record = {
         "source_key": "x-account:" + account.author_id,
         "account_key": str(account.pk),
@@ -163,7 +162,7 @@ def register_account(account_id, *, eligibility="db_staff"):
         "eligibility": eligibility,
         "profile": {
             "bio": account.profile_bio_text or account.bio,
-            "location": account.location,
+            "location": source_evidence(account).reported_profile_location,
             "links": [source],
             "history": snapshots,
             "image": account.profile_picture,

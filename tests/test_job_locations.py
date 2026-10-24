@@ -5,6 +5,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from core.collection_capture import archive_document, read_document
+from core.geolocation_evidence import source_evidence, write_source_evidence
 from core.geolocation_resolution import resolve_geolocation, source_geonames_id
 from core.job_locations import canonical_job_locations, write_job_locations
 from core.models import (
@@ -62,7 +63,7 @@ def test_multiple_source_occurrences_preserve_structure_and_deduplicate_serving(
     rows = write_job_locations(listing, values, observed_at=listing.last_seen_at)
     assert [row.geolocation_id for row in rows] == [india.pk, india.pk, None, None, india.pk]
     assert read_document(rows[1].source_archive)["locations"] == values
-    assert rows[1].reported_value is None  # No lossy Python-dict string.
+    assert source_evidence(rows[1]).reported_value is None  # No lossy Python-dict string.
     assert canonical_job_locations(listing) == [{"id": india.pk, "label": "India"}]
     assert [row.pk for row in write_job_locations(listing, values, observed_at=listing.last_seen_at)] == [row.pk for row in rows]
     assert JobListingLocation.objects.count() == 5
@@ -74,7 +75,7 @@ def test_changed_source_invalidates_prior_resolution_and_preserves_history(listi
     rows = write_job_locations(listing, ["Springfield"], observed_at=later)
     old.refresh_from_db()
     assert old.superseded_at is not None and old.geolocation_id == india.pk
-    assert rows[0].geolocation_id is None and rows[0].reported_value == "Springfield"
+    assert rows[0].geolocation_id is None and source_evidence(rows[0]).reported_value == "Springfield"
     assert canonical_job_locations(listing) == []
     assert read_document(old.source_archive)["locations"] == ["India"]
     write_job_locations(listing, [], observed_at=later + timedelta(seconds=1))
@@ -92,11 +93,11 @@ def test_mutable_evidence_does_not_mutate_location_source(listing, india):
     evidence = JobListingEvidence.objects.create(
         listing=listing, source_url="https://example.test/job", source_relationship="official",
         extraction_method="structured_text", extraction_identity="test", evidence_hash="fixture",
-        observed_at=listing.last_seen_at, raw_evidence={"location": "India"},
+        observed_at=listing.last_seen_at,
     )
+    write_source_evidence(evidence, raw_evidence={"location": "India"})
     row = write_job_locations(listing, ["India"], evidence=evidence, observed_at=listing.last_seen_at)[0]
-    evidence.raw_evidence = {"location": "unresolved"}
-    evidence.save(update_fields=["raw_evidence"])
+    write_source_evidence(evidence, raw_evidence={"location": "unresolved"})
     assert read_document(row.source_archive)["locations"] == ["India"]
     other = JobListing.objects.create(
         brand=listing.brand, hiring_organization="Other", title="Role", listing_identity="other-job",
@@ -107,7 +108,7 @@ def test_mutable_evidence_does_not_mutate_location_source(listing, india):
             listing=other, source_archive=row.source_archive, evidence=evidence, ordinal=0,
         )
     with pytest.raises(IntegrityError), transaction.atomic():
-        JobListingLocation.objects.filter(pk=row.pk).update(reported_value="changed")
+        write_source_evidence(row, reported_value="changed")
 
 
 def test_structured_city_claim_is_not_silently_coarsened(listing, india):
@@ -120,7 +121,8 @@ def test_legacy_source_change_invalidates_current_location_selection(listing, in
     from django.db import connection
 
     original = write_job_locations(listing, ["India"], observed_at=listing.last_seen_at)[0]
-    JobListing.objects.filter(pk=listing.pk).update(locations=["Springfield"])
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE job_listings SET locations=%s::jsonb WHERE id=%s", ['["Springfield"]', listing.pk])
     listing.refresh_from_db()
     original.refresh_from_db()
     assert listing.geolocation_source_archive_id is None

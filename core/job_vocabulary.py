@@ -180,13 +180,16 @@ def classification_text(listing, dimension):
 
 
 def reported_compensation(listing, key):
-    """An unresolved currency/period remains discoverable in captured sources."""
-    if isinstance(listing.raw_payload, dict):
-        value = listing.raw_payload.get(key)
+    """Authorized source inspection only; ordinary readers use references."""
+    from core.geolocation_evidence import source_evidence
+
+    payload = source_evidence(listing).raw_payload
+    if isinstance(payload, dict):
+        value = payload.get(key)
         if isinstance(value, str) and value:
             return value
     for source in listing.evidence.all():
-        payload = source.raw_evidence
+        payload = source_evidence(source).raw_evidence
         if not isinstance(payload, dict):
             continue
         record = payload.get("record", payload)

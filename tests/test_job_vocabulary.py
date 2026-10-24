@@ -125,19 +125,20 @@ def test_currency_registry_and_single_hq_are_real_references():
 
 
 def test_unresolved_compensation_keeps_captured_source_and_identity():
+    from core.geolocation_evidence import source_evidence, write_source_evidence
+
     source_record = {
         "salary_currency": "dollars (unspecified)",
         "salary_period": "per release",
     }
     owner = listing("unresolved-compensation")
-    owner.raw_payload = source_record
+    write_source_evidence(owner, raw_payload=source_record)
     owner.content_hash = "a" * 64
     for field, value in compensation_references(source_record).items():
         setattr(owner, field, value)
     owner.save()
     source = evidence(owner)
-    source.raw_evidence = {"record": source_record}
-    source.save(update_fields=["raw_evidence"])
+    write_source_evidence(source, raw_evidence={"record": source_record})
     write_job_classifications(
         owner, {"employment_type": ["Full-time", "Contract"]}, evidence=source
     )
@@ -148,10 +149,10 @@ def test_unresolved_compensation_keeps_captured_source_and_identity():
     assert owner.salary_period_reference_id is None
     assert owner.listing_identity == "unresolved-compensation"
     assert owner.content_hash == "a" * 64
-    assert owner.raw_payload == source_record
-    assert source.raw_evidence == {"record": source_record}
-    assert document["compensation"]["currency"] == "dollars (unspecified)"
-    assert document["compensation"]["period"] == "per release"
+    assert source_evidence(owner).raw_payload == source_record
+    assert source_evidence(source).raw_evidence == {"record": source_record}
+    assert document["compensation"]["currency"] is None
+    assert document["compensation"]["period"] is None
     assert document["organization"]["employment_type"] == "Full-time · Contract"
 
 

@@ -26,6 +26,7 @@ from core.intelligence_readers import (
     opportunity_lifecycle,
 )
 from core.job_vocabulary import classification_prefetches, classification_text
+from core.job_locations import canonical_job_locations, location_prefetch
 from core.models import (
     Event,
     EventEvidence,
@@ -301,7 +302,7 @@ def jobs_people_facts(post_ids, section, *, as_of, locale="en"):
                 listing__source_key__isnull=True,
             )
             .select_related("listing")
-            .prefetch_related(*classification_prefetches(
+            .prefetch_related(location_prefetch(prefix="listing__"), *classification_prefetches(
                 prefix="listing__", dimensions=("employment_type", "workplace_type"),
             ))
             .order_by("listing_id", "id")
@@ -322,7 +323,7 @@ def jobs_people_facts(post_ids, section, *, as_of, locale="en"):
                 "state": "closed" if closed else row.status,
                 "url": safe_external_url(row.application_url or row.canonical_url),
                 "description": row.description_text or "",
-                "location": row.locations_raw or "",
+                "location": " · ".join(place["label"] for place in canonical_job_locations(row, locale=locale) if place["label"]),
                 "workplace": classification_text(row, "workplace_type"),
                 "employment": classification_text(row, "employment_type"),
                 "salary": row.salary_text,

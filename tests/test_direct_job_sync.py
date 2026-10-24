@@ -100,7 +100,9 @@ def test_direct_sync_keeps_listing_and_source_when_classifications_change():
     assert listing.listing_identity == identity
     assert listing.first_seen_at == first_seen
     assert listing.evidence.get().pk == evidence_id
-    assert listing.evidence.get().raw_evidence == first_job.raw_payload
+    from core.geolocation_evidence import source_evidence
+
+    assert source_evidence(listing.evidence.get()).raw_evidence == first_job.raw_payload
     assert listing.workplace_assignments.get().pk == unknown.pk
     assert list(listing.employment_assignments.values_list("category__code", flat=True)) == [
         "part_time"

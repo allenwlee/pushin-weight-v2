@@ -101,7 +101,7 @@ _SNAPSHOT_TYPED_FIELDS = frozenset(
         *(target for target, _source in _ACCOUNT_FIELD_MAP),
         "affiliate_target_username",
     }
-)
+) - {"location"}
 
 _COMMUNITY_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\bambassador\b", re.IGNORECASE), "ambassador"),
@@ -316,11 +316,14 @@ def profile_observation_from_payload(raw: Mapping[str, Any]) -> ProfileObservati
 
 
 def profile_observation_from_post(post: Post) -> ProfileObservation:
+    from core.geolocation_evidence import source_evidence
+
+    source_location = source_evidence(post).reported_author_location
     data: dict[str, Any] = {}
     present: set[str] = set()
     raw_profile: dict[str, Any] = {}
     for target, source in _POST_FIELD_MAP:
-        value = getattr(post, source)
+        value = source_location if source == "author_location" else getattr(post, source)
         if value is None:
             continue
         if source == "author_profile_bio":
@@ -355,10 +358,13 @@ def profile_observation_from_post(post: Post) -> ProfileObservation:
 
 
 def profile_observation_from_account(account: Account) -> ProfileObservation:
+    from core.geolocation_evidence import source_evidence
+
+    source_location = source_evidence(account).reported_profile_location
     data: dict[str, Any] = {}
     present: set[str] = set()
     for target, source in _ACCOUNT_FIELD_MAP:
-        value = getattr(account, source)
+        value = source_location if source == "location" else getattr(account, source)
         if value is None:
             continue
         data[target] = _json_safe(value)
@@ -438,10 +444,16 @@ def record_profile_snapshot(
             first_source_post=source_post,
             first_source_run=(source_run or None),
             present_fields=list(observation.present_fields),
-            profile_data=observation.profile_data,
-            raw_profile_payload=observation.raw_profile_payload,
             **defaults,
         )
+        from core.geolocation_evidence import write_source_evidence
+
+        write_source_evidence(
+            snapshot, profile_data=observation.profile_data,
+            raw_profile_payload=observation.raw_profile_payload,
+            reported_location=observation.profile_data.get("location"),
+        )
+        snapshot.refresh_from_db(fields=["geolocation"])
         return snapshot, True, latest is not None
 
 
@@ -888,19 +900,22 @@ def persist_affiliation_candidates(
         evidence_hash = hashlib.sha256(
             json.dumps(evidence_payload, sort_keys=True).encode("utf-8")
         ).hexdigest()
-        PersonBrandAffiliationEvidence.objects.get_or_create(
+        evidence_row, evidence_created = PersonBrandAffiliationEvidence.objects.get_or_create(
             affiliation=affiliation,
             evidence_hash=evidence_hash,
             defaults={
                 "source_profile_snapshot": snapshot,
                 "evidence_text": signal.evidence_text,
                 "observed_at": observed_at,
-                "extracted_claim_data": evidence_payload,
                 "extraction_method": PROFILE_RULE_VERSION,
                 "confidence": signal.confidence,
                 "review_status": "pending",
             },
         )
+        if evidence_created:
+            from core.geolocation_evidence import write_source_evidence
+
+            write_source_evidence(evidence_row, extracted_claim_data=evidence_payload)
     return counts
 
 

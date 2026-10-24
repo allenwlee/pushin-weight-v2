@@ -19,6 +19,8 @@ from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
+from core.geolocation_evidence import AffiliationClaimEvidence, write_source_evidence
+from core.job_locations import write_job_locations
 from core.job_vocabulary import compensation_references, write_job_classifications
 from core.models import (
     AffiliationType,
@@ -818,6 +820,7 @@ def _source_relationship(post: Post, brand: Brand | None) -> str:
     return role if role in {"official", "staff"} else "third_party"
 
 
+@transaction.atomic
 def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
     written = evidence = candidates = 0
     source_urls = _source_urls(post)
@@ -887,8 +890,6 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
             "description_text": _text(record.get("description_text")),
             "department": _text(record.get("department")),
             "team": _text(record.get("team")),
-            "locations_raw": _text(record.get("locations_raw")),
-            "locations": locations,
             "remote_applicant_restrictions": _text(
                 record.get("remote_applicant_restrictions")
             ),
@@ -936,13 +937,14 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
             "content_hash": _hash(record),
             "extraction_version": version,
             "extraction_confidence": _confidence(record.get("confidence")),
-            "raw_payload": dict(record),
         }
         listing, created = JobListing.objects.get_or_create(
             listing_identity=listing_identity,
             defaults=listing_values,
         )
         written += int(created)
+        if created:
+            write_source_evidence(listing, raw_payload=dict(record))
         if not created:
             updates: list[str] = []
             if now < listing.first_seen_at:
@@ -963,7 +965,6 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
                     "content_hash",
                     "extraction_version",
                     "extraction_confidence",
-                    "raw_payload",
                 }:
                     continue
                 if _missing_job_value(getattr(listing, field)) and not _missing_job_value(
@@ -1020,20 +1021,15 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
                 "extraction_method": "structured_text",
                 "image_derived_fields": image_derived_fields,
                 "confidence": _confidence(record.get("confidence")),
-                "raw_evidence": {
-                    "record": dict(record),
-                    "capabilities": {
-                        "ocr": False,
-                        "vision": False,
-                        "redirect_resolution": False,
-                    },
-                },
                 "extraction_identity": version,
             },
         )
+        if evidence_created:
+            write_source_evidence(_row, raw_evidence={
+                "record": dict(record),
+                "capabilities": {"ocr": False, "vision": False, "redirect_resolution": False},
+            })
         write_job_classifications(listing, record, evidence=_row)
-        from core.job_locations import write_job_locations
-
         write_job_locations(
             listing, locations, reported_value=_text(record.get("locations_raw")),
             evidence=_row, observed_at=now,
@@ -1042,6 +1038,7 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
     return written, evidence, candidates
 
 
+@transaction.atomic
 def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: str):
     written = evidence = candidates = 0
     brand_context = _brand_evidence_context(post)
@@ -1173,7 +1170,6 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
                 "source_post": post,
                 "evidence_text": (post.text or "")[:5000],
                 "observed_at": post.fetched_at,
-                "extracted_claim_data": dict(record),
                 "extraction_method": "structured_text",
                 "extraction_model": None,
                 "extraction_prompt_version": version,
@@ -1181,6 +1177,8 @@ def _persist_personnel(post: Post, records: list[Mapping[str, Any]], version: st
                 "review_status": "pending",
             },
         )
+        if evidence_created:
+            write_source_evidence(_row, extracted_claim_data=dict(record))
         evidence += int(evidence_created)
     return written, evidence, candidates
 
@@ -1860,8 +1858,10 @@ def run_targeted_extractions(
             or "model_releases" in (eligible_rare_types or set())
         )
     ]
-    has_ambiguous_profile = PersonBrandAffiliationEvidence.objects.filter(
-        source_profile_snapshot__first_source_post=post,
+    has_ambiguous_profile = AffiliationClaimEvidence.objects.filter(
+        pk__in=PersonBrandAffiliationEvidence.objects.filter(
+            source_profile_snapshot__first_source_post=post,
+        ).values("pk"),
         extracted_claim_data__candidate_role="unknown",
     ).exists()
     has_profile_movement = ProfileMovementCandidate.objects.filter(

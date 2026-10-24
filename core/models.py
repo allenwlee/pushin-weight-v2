@@ -1596,7 +1596,6 @@ class XAccountDetail(models.Model):
     affiliate_label_user_label_type = models.CharField(
         max_length=128, blank=True, null=True
     )
-    account_based_in = models.TextField(blank=True, null=True)
     location_accurate = models.BooleanField(blank=True, null=True)
     learn_more_url = models.URLField(max_length=2048, blank=True, null=True)
     affiliate_username = models.CharField(max_length=64, blank=True, null=True)
@@ -1731,7 +1730,6 @@ class Account(models.Model):
     followers_count = models.IntegerField(blank=True, null=True)
     following_count = models.IntegerField(blank=True, null=True)
     profile_picture = models.TextField(blank=True, null=True)
-    location = models.TextField(blank=True, null=True)
     profile_location = models.ForeignKey(
         Geolocation, on_delete=models.PROTECT,
         related_name="profile_accounts", blank=True, null=True,
@@ -1988,8 +1986,23 @@ class Account(models.Model):
                     continue
                 accepted[field_name] = validated
 
+            from core.geolocation_evidence import source_evidence, write_source_evidence
+
+            source_writes = []
             update_fields: set[str] = set()
             for field_name, value in accepted.items():
+                if field_name in {"location", "account_based_in"}:
+                    if field_name == "location":
+                        owner, column = account, "reported_profile_location"
+                    else:
+                        owner, _ = XAccountDetail.objects.get_or_create(account=account)
+                        column = "reported_based_in"
+                    if getattr(source_evidence(owner), column) == value:
+                        unchanged.append(field_name)
+                    else:
+                        source_writes.append((owner, column, value))
+                        applied.append(field_name)
+                    continue
                 storage_attribute = _ACCOUNT_STORAGE_ATTRIBUTES.get(
                     field_name, field_name
                 )
@@ -2012,6 +2025,8 @@ class Account(models.Model):
                 applied.append("followers_fetched_at")
                 update_fields.add("followers_fetched_at")
 
+            if source_writes:
+                update_fields.add("last_seen_at")
             if update_fields:
                 try:
                     with transaction.atomic():
@@ -2042,6 +2057,11 @@ class Account(models.Model):
                         account.save(
                             update_fields=[*sorted(update_fields), "last_seen_at"]
                         )
+
+            for owner, column, value in source_writes:
+                write_source_evidence(owner, **{column: value})
+            if source_writes:
+                account.refresh_from_db(fields=["profile_location", "based_in_location"])
 
         return AccountObservationOutcome(
             account=account,
@@ -2211,7 +2231,6 @@ class Post(models.Model):
     author_is_automated = models.BooleanField(blank=True, null=True)
     author_automated_by = models.TextField(blank=True, null=True)
     author_description = models.TextField(blank=True, null=True)
-    author_location = models.TextField(blank=True, null=True)
     author_geolocation = models.ForeignKey(
         Geolocation, on_delete=models.PROTECT,
         related_name="author_posts", blank=True, null=True,
@@ -6092,7 +6111,6 @@ class AccountProfileSnapshot(models.Model):
     display_name = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     profile_bio_text = models.TextField(blank=True, null=True)
-    location = models.TextField(blank=True, null=True)
     geolocation = models.ForeignKey(
         Geolocation, on_delete=models.PROTECT,
         related_name="profile_snapshots", blank=True, null=True,
@@ -6108,8 +6126,6 @@ class AccountProfileSnapshot(models.Model):
     affiliate_label_type = models.CharField(max_length=128, blank=True, null=True)
     affiliate_display_type = models.CharField(max_length=128, blank=True, null=True)
     present_fields = models.JSONField(default=list)
-    profile_data = models.JSONField(default=dict)
-    raw_profile_payload = models.JSONField(blank=True, null=True)
     recorded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -6337,7 +6353,6 @@ class PersonBrandAffiliation(models.Model):
         choices=DATE_PRECISION_CHOICES,
         default="unknown",
     )
-    location = models.TextField(blank=True, null=True)
     geolocation = models.ForeignKey(
         Geolocation, on_delete=models.PROTECT,
         related_name="person_affiliations", blank=True, null=True,
@@ -6457,7 +6472,6 @@ class PersonBrandAffiliationEvidence(models.Model):
     source_url = models.URLField(max_length=2048, blank=True, null=True)
     evidence_text = models.TextField(blank=True, default="")
     observed_at = models.DateTimeField()
-    extracted_claim_data = models.JSONField(default=dict)
     extraction_method = models.CharField(max_length=64)
     extraction_model = models.TextField(blank=True, null=True)
     extraction_prompt_version = models.TextField(blank=True, null=True)
@@ -6753,8 +6767,6 @@ class JobListing(models.Model):
     description_text = models.TextField(blank=True, null=True)
     department = models.TextField(blank=True, null=True)
     team = models.TextField(blank=True, null=True)
-    locations_raw = models.TextField(blank=True, null=True)
-    locations = models.JSONField(default=list)
     geolocation_source_archive = models.ForeignKey(
         "CollectionEvidenceArchive", on_delete=models.PROTECT,
         related_name="current_job_location_sources", blank=True, null=True,
@@ -6802,7 +6814,6 @@ class JobListing(models.Model):
     content_hash = models.CharField(max_length=64, blank=True, null=True)
     extraction_version = models.TextField(blank=True, null=True)
     extraction_confidence = models.FloatField(blank=True, null=True)
-    raw_payload = models.JSONField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -6921,7 +6932,6 @@ class JobListingLocation(models.Model):
     observed_at = models.DateTimeField(blank=True, null=True)
     recorded_at = models.DateTimeField(default=timezone.now)
     superseded_at = models.DateTimeField(blank=True, null=True)
-    reported_value = models.TextField(blank=True, null=True)
 
     class Meta:
         db_table = "job_listing_locations"
@@ -7063,7 +7073,6 @@ class JobListingEvidence(models.Model):
     extraction_method = models.CharField(max_length=32, choices=EXTRACTION_METHODS)
     image_derived_fields = models.JSONField(default=list)
     confidence = models.FloatField(blank=True, null=True)
-    raw_evidence = models.JSONField(blank=True, null=True)
     extraction_identity = models.CharField(max_length=64)
     evidence_hash = models.CharField(max_length=64)
     created_at = models.DateTimeField(auto_now_add=True)

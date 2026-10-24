@@ -1,6 +1,7 @@
 """Preserve job location occurrences and serve only resolved shared places."""
 
-from django.db import transaction
+from django.db import connections, transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 
 from core.collection_capture import archive_legacy, read_document
@@ -48,23 +49,44 @@ def write_job_locations(listing, locations, *, reported_value=None, evidence=Non
             # A source identity may be replayed, but an obsolete observation
             # cannot become current again under that same identity.
             raise ValueError("Cannot reactivate a superseded job location observation")
-        rows.append(JobListingLocation.objects.create(
-            listing=owner, evidence=evidence, source_archive=captured, ordinal=ordinal,
-            observed_at=observed_at, recorded_at=now,
-            geolocation_id=resolve_geolocation(value),
-            reported_value=value if isinstance(value, str) else None,
-        ))
+        # Insert the immutable source wording with its occurrence. It is not a
+        # field on the canonical ORM model and cannot be changed after insert.
+        alias = owner._state.db or "default"
+        with connections[alias].cursor() as cursor:
+            cursor.execute(
+                """INSERT INTO job_listing_locations
+                (listing_id, evidence_id, source_archive_id, ordinal, observed_at,
+                 recorded_at, geolocation_id, reported_value)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                [owner.pk, evidence.pk if evidence else None, captured.pk, ordinal,
+                 observed_at, now, resolve_geolocation(value),
+                 value if isinstance(value, str) else None],
+            )
+            row_id = cursor.fetchone()[0]
+        rows.append(JobListingLocation.objects.using(alias).get(pk=row_id))
+    getattr(listing, "_prefetched_objects_cache", {}).pop("location_occurrences", None)
     return rows
+
+
+def location_prefetch(*, prefix=""):
+    return Prefetch(
+        prefix + "location_occurrences",
+        queryset=JobListingLocation.objects.filter(
+            superseded_at__isnull=True, geolocation__isnull=False,
+        ).select_related("geolocation").prefetch_related("geolocation__alternate_names"),
+    )
 
 
 def canonical_job_locations(listing, *, locale="en"):
     """Deduplicate resolved places; never fall back to a source string."""
-    rows = listing.location_occurrences.filter(
-        superseded_at__isnull=True, geolocation__isnull=False,
-    ).select_related("geolocation").prefetch_related("geolocation__alternate_names")
+    rows = getattr(listing, "_prefetched_objects_cache", {}).get("location_occurrences")
+    if rows is None:
+        rows = location_prefetch().queryset.filter(listing=listing)
     seen = set()
     result = []
     for row in rows:
+        if row.superseded_at is not None or row.geolocation_id is None:
+            continue
         if row.geolocation_id not in seen:
             seen.add(row.geolocation_id)
             result.append({"id": row.geolocation_id, "label": geolocation_label(row.geolocation, locale)})

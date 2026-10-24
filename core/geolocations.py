@@ -239,8 +239,13 @@ def import_geonames_documents(documents, *, country_metadata=None, selected_ids=
 
 def geolocation_label(location, locale="en"):
     """Use an attested canonical name; absence stays unknown, never source text."""
-    locale = {"zh-cn": "zh-Hans", "zh_CN": "zh-Hans"}.get(locale, locale)
-    labels = list(location.alternate_names.filter(is_historical=False).order_by("-is_preferred", "name", "pk"))
+    locale = {"zh-cn": "zh-Hans", "zh-hans": "zh-Hans"}.get(locale.replace("_", "-").lower(), locale)
+    # Respect a caller's bulk prefetch; filtering the related manager here
+    # would issue another query for every displayed place and language.
+    labels = sorted(
+        (row for row in location.alternate_names.all() if not row.is_historical),
+        key=lambda row: (not row.is_preferred, row.name, row.pk),
+    )
     for candidate in dict.fromkeys((locale, "en", "und")):
         match = next((row for row in labels if row.locale_id == candidate), None)
         if match is not None:
