@@ -13,7 +13,7 @@ class CoreConfig(AppConfig):
 
         post_migrate.connect(_register_account_sources, sender=self, dispatch_uid="core.account_sources")
 
-        from core import geolocation_checks  # noqa: F401
+        from core import geolocation_checks, geolocation_evidence  # noqa: F401
         from core.staff_assets import arrivals  # noqa: F401
 
         if connection.vendor == "sqlite":
