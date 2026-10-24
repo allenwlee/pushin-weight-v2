@@ -63,7 +63,7 @@ def test_staging_exporter_can_lock_publication_state_without_reading_or_writing(
             cursor.execute(f"DROP ROLE {role}")
 
 
-def test_bulk_history_writes_invalidate_once_but_metrics_and_empty_writes_do_not():
+def test_history_writes_invalidate_but_metrics_and_empty_writes_do_not():
     from datetime import timedelta
 
     MaterializationState.objects.get_or_create(pk="home.brand_time_counts.v1")
@@ -94,7 +94,9 @@ def test_bulk_history_writes_invalidate_once_but_metrics_and_empty_writes_do_not
     Post.objects.filter(pk__in=[post.pk for post in posts]).update(
         created_at=timezone.now()
     )
-    assert generation() == before + 2
+    # Post date corrections invalidate per changed row; relationship bulk
+    # writes still invalidate once. The generation is a publication version.
+    assert generation() == before + 1 + len(posts)
 
 
 def test_actual_attribution_writer_invalidates_backfill_without_provider_calls():

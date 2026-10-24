@@ -10,6 +10,53 @@ BASE = ("core", "0147_rg4_restore_selected_scalar_fields")
 TARGET = ("core", "0148_rg4_geolocation_owners")
 
 
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0158_rg4_scope_geography_write_triggers")], indirect=True)
+def test_post_source_updates_skip_transition_capture_but_date_changes_still_invalidate(migration_rehearsal_schema):
+    from datetime import timedelta
+
+    from django.db import transaction
+    from django.utils import timezone
+
+    baseline = ("core", "0158_rg4_scope_geography_write_triggers")
+    old = MigrationExecutor(connection).loader.project_state([baseline]).apps
+    State = old.get_model("core", "MaterializationState")
+    Post = old.get_model("core", "Post")
+    earliest = timezone.now() - timedelta(days=10)
+    State.objects.update_or_create(pk="home.brand_time_counts.v1", defaults={"source_generation":10,"dirty_since":None})
+    Post.objects.bulk_create([
+        Post(tweet_id=f"home-source-{index}", created_at=earliest + timedelta(days=index))
+        for index in range(3)
+    ])
+    # Recreate the already-deployed old trigger; fresh historical installs also
+    # receive the performance repair before their geography copies begin.
+    with connection.cursor() as cursor:
+        cursor.execute("""DROP TRIGGER home_counts_update ON posts;
+            CREATE TRIGGER home_counts_update AFTER UPDATE ON posts
+            REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows
+            FOR EACH STATEMENT EXECUTE FUNCTION home_counts_invalidate()""")
+    MigrationExecutor(connection).migrate([("core", "0159_rg4_skip_unrelated_post_transition_rows")])
+    with connection.cursor() as cursor:
+        cursor.execute("""SELECT tgoldtable,tgnewtable,(tgtype::int & 1)
+            FROM pg_trigger WHERE tgrelid='posts'::regclass AND tgname='home_counts_update'""")
+        assert cursor.fetchone() == (None, None, 1)
+        cursor.execute("UPDATE posts SET reported_author_location='Springfield',like_count=7")
+    state = State.objects.get(pk="home.brand_time_counts.v1")
+    assert state.source_generation == 10 and state.dirty_since is None
+    Post.objects.update(created_at=earliest + timedelta(days=20))
+    state.refresh_from_db()
+    assert state.source_generation == 13 and state.dirty_since == earliest
+    with transaction.atomic():
+        Post.objects.update(created_at=earliest - timedelta(days=1))
+        transaction.set_rollback(True)
+    state.refresh_from_db()
+    assert state.source_generation == 13 and state.dirty_since == earliest
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE posts SET created_at=NULL WHERE tweet_id='home-source-0'")
+        cursor.execute("UPDATE posts SET tweet_id='home-source-renamed' WHERE tweet_id='home-source-1'")
+    state.refresh_from_db()
+    assert state.source_generation == 15 and state.dirty_since == earliest
+
+
 @pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0150_rg4_geolocation_mapping")], indirect=True)
 def test_source_copy_resumes_committed_small_batches_without_skipping_unresolved_rows(migration_rehearsal_schema):
     import psycopg

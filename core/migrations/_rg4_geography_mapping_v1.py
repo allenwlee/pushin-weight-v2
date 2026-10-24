@@ -7,13 +7,14 @@ from pathlib import Path
 from django.db import connections, transaction
 from django.utils import timezone
 
+from ._rg4_geography_write_performance_v1 import identity_triggers
 from ._rg4_geonames_v1 import (
     archive_document,
     import_geonames_documents,
     load_pinned_geonames,
     normalized_place_wording,
 )
-from ._rg4_geography_write_performance_v1 import identity_triggers
+from ._rg4_home_count_write_v1 import install as home_count_update_trigger
 
 INPUT_HASHES = {
     "manifest.json": "b00d8e6df23e644e97bca0a5d0145661c74fdd58eed1f12b159b793c946bd0e3",
@@ -149,6 +150,7 @@ def forward(apps, schema_editor):
     with transaction.atomic(using=schema_editor.connection.alias):
         schema_editor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
         identity_triggers(schema_editor)
+        home_count_update_trigger(apps, schema_editor)
     inputs, local_ids, country_ids, region_ids = prepare(apps, schema_editor.connection)
     def model(name):
         return apps.get_model("core", name)
