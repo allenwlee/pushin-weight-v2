@@ -4,7 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from django.db import transaction
+from django.db import connections, transaction
 from django.utils import timezone
 
 from ._rg4_geonames_v1 import (
@@ -108,6 +108,15 @@ def preserve_labels_and_policies(apps, country_ids, region_ids):
 
 def map_rows(model, field, sources, interpret, *, batch_size=1000, prepare_batch=None):
     """Keyset batches, current-row locks and no changes to source/hash fields."""
+    # A just-added nullable indexed column has no statistics. PostgreSQL can
+    # estimate IS NULL at 0.5% while it actually matches the whole table, then
+    # repeatedly scan/sort that table instead of advancing through its PK.
+    connection = connections[model.objects.db]
+    quote = connection.ops.quote_name
+    with connection.cursor() as statistics:
+        statistics.execute(
+            f"ANALYZE {quote(model._meta.db_table)} ({quote(model._meta.get_field(field).column)})"
+        )
     cursor = None
     while True:
         with transaction.atomic(using=model.objects.db):
