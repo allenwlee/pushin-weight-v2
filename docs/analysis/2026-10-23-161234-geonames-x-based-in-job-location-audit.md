@@ -7,6 +7,7 @@ Follow-up research: [Chinese administrative geography sources](../research/2026-
 - Read-only production snapshot, 2026-10-23 Japan time. Source tables: `x_account_details`, `account_based_in_mappings`, `regions`, `job_listings`. No X API calls or production writes.
 - Country ID crosswalk: [GeoNames countryInfo.txt](https://download.geonames.org/export/dump/countryInfo.txt), retrieved 2026-10-23; SHA-256 `c55f638cfaafb4fe45a9aa15120a0f1f78e8a34a8e1847d7b9320cf740fbc9ab`.
 - GeoNames IDs below are candidates obtained by joining the existing reviewed provider mapping through ISO-2 code. This proves code coverage, not that the wording denotes the whole country, or a political position.
+- Owner decisions on October 24 resolve bare `Korea` to South Korea (1835841) and bare `Congo` to Democratic Republic of the Congo (203312), preserving source wording. Explicit North Korea and Republic of the Congo remain distinct. The counts and existing-target column below remain the October 23 snapshot.
 - Job categories are first-pass conversion decisions from the exact text and source key. Most city/district IDs have not yet been individually verified against GeoNames.
 
 ## Results
@@ -63,7 +64,7 @@ Follow-up research: [Chinese administrative geography sources](../research/2026-
 | China | 23 | ISO-2 CN | 1814991 | Country-code crosswalk candidate |
 | Colombia | 275 | ISO-2 CO | 3686110 | Country-code crosswalk candidate |
 | Comoros | 1 | ISO-2 KM | 921929 | Country-code crosswalk candidate |
-| Congo | 13 | Unresolved | — | Ambiguous; FK stays null |
+| Congo | 13 | Unresolved | 203312 | Owner default: Democratic Republic of the Congo |
 | Costa Rica | 36 | ISO-2 CR | 3624060 | Country-code crosswalk candidate |
 | Côte d'Ivoire | 10 | ISO-2 CI | 2287781 | Country-code crosswalk candidate |
 | Croatia | 62 | ISO-2 HR | 3202326 | Country-code crosswalk candidate |
@@ -117,7 +118,7 @@ Follow-up research: [Chinese administrative geography sources](../research/2026-
 | Jordan | 25 | ISO-2 JO | 248816 | Country-code crosswalk candidate |
 | Kazakhstan | 43 | ISO-2 KZ | 1522867 | Country-code crosswalk candidate |
 | Kenya | 201 | ISO-2 KE | 192950 | Country-code crosswalk candidate |
-| Korea | 640 | Unresolved | — | Ambiguous; FK stays null |
+| Korea | 640 | Unresolved | 1835841 | Owner default: South Korea |
 | Kuwait | 31 | ISO-2 KW | 285570 | Country-code crosswalk candidate |
 | Kyrgyzstan | 7 | ISO-2 KG | 1527747 | Country-code crosswalk candidate |
 | Lao People's Democratic Republic | 3 | ISO-2 LA | 1655842 | Country-code crosswalk candidate |

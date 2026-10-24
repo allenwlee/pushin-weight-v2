@@ -21,7 +21,7 @@ class SourceProjection(models.Model):
 
 class AccountLocationEvidence(SourceProjection):
     account_key = models.UUIDField(primary_key=True)
-    reported_profile_location = models.TextField(db_column="location", null=True)
+    reported_profile_location = models.TextField(null=True)
 
     class Meta:
         managed = False
@@ -30,7 +30,7 @@ class AccountLocationEvidence(SourceProjection):
 
 class AccountBasedInEvidence(SourceProjection):
     account_key = models.UUIDField(primary_key=True)
-    reported_based_in = models.TextField(db_column="account_based_in", null=True)
+    reported_based_in = models.TextField(null=True)
 
     class Meta:
         managed = False
@@ -39,7 +39,7 @@ class AccountBasedInEvidence(SourceProjection):
 
 class PostLocationEvidence(SourceProjection):
     tweet_id = models.TextField(primary_key=True)
-    reported_author_location = models.TextField(db_column="author_location", null=True)
+    reported_author_location = models.TextField(null=True)
 
     class Meta:
         managed = False
@@ -48,7 +48,7 @@ class PostLocationEvidence(SourceProjection):
 
 class ProfileLocationEvidence(SourceProjection):
     id = models.BigIntegerField(primary_key=True)
-    reported_location = models.TextField(db_column="location", null=True)
+    reported_location = models.TextField(null=True)
     profile_data = models.JSONField()
     raw_profile_payload = models.JSONField(null=True)
 
@@ -59,7 +59,7 @@ class ProfileLocationEvidence(SourceProjection):
 
 class AffiliationLocationEvidence(SourceProjection):
     id = models.BigIntegerField(primary_key=True)
-    reported_location = models.TextField(db_column="location", null=True)
+    reported_location = models.TextField(null=True)
 
     class Meta:
         managed = False

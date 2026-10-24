@@ -6755,6 +6755,10 @@ class JobListing(models.Model):
     team = models.TextField(blank=True, null=True)
     locations_raw = models.TextField(blank=True, null=True)
     locations = models.JSONField(default=list)
+    geolocation_source_archive = models.ForeignKey(
+        "CollectionEvidenceArchive", on_delete=models.PROTECT,
+        related_name="current_job_location_sources", blank=True, null=True,
+    )
     remote_applicant_restrictions = models.TextField(blank=True, null=True)
     salary_text = models.TextField(blank=True, null=True)
     salary_min = models.DecimalField(

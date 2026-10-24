@@ -79,7 +79,9 @@ def test_changed_source_invalidates_prior_resolution_and_preserves_history(listi
     assert read_document(old.source_archive)["locations"] == ["India"]
     write_job_locations(listing, [], observed_at=later + timedelta(seconds=1))
     assert not listing.location_occurrences.filter(superseded_at__isnull=True).exists()
-    assert write_job_locations(listing, ["India"], observed_at=listing.last_seen_at) == []
+    listing.refresh_from_db()
+    assert read_document(listing.geolocation_source_archive)["locations"] == []
+    assert write_job_locations(listing, ["India"], observed_at=later) == []
     with pytest.raises(IntegrityError), transaction.atomic():
         JobListingLocation.objects.filter(pk=old.pk).update(superseded_at=None)
     with pytest.raises(IntegrityError), transaction.atomic():
@@ -112,6 +114,23 @@ def test_structured_city_claim_is_not_silently_coarsened(listing, india):
     rows = write_job_locations(listing, [{"country": "India", "city": "unverified", "admin_area": None}])
     assert rows[0].geolocation_id is None
     assert canonical_job_locations(listing) == []
+
+
+def test_legacy_source_change_invalidates_current_location_selection(listing, india):
+    from django.db import connection
+
+    original = write_job_locations(listing, ["India"], observed_at=listing.last_seen_at)[0]
+    JobListing.objects.filter(pk=listing.pk).update(locations=["Springfield"])
+    listing.refresh_from_db()
+    original.refresh_from_db()
+    assert listing.geolocation_source_archive_id is None
+    assert original.superseded_at is not None
+    assert canonical_job_locations(listing) == []
+    current = write_job_locations(listing, ["Springfield"], observed_at=listing.last_seen_at)[0]
+    assert current.geolocation_id is None
+    with pytest.raises(IntegrityError), transaction.atomic(), connection.cursor() as cursor:
+        JobListing.objects.filter(pk=listing.pk).update(geolocation_source_archive=original.source_archive)
+        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
 
 
 def test_official_source_call_chain_writes_ids_and_keeps_changed_location_evidence(india):
