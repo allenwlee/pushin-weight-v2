@@ -7,18 +7,14 @@ import pytest
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 
-from core.models import Account, AccountBasedInMapping, Country, Region, XAccountDetail
+from core.models import Account, AccountBasedInMapping, Geolocation, XAccountDetail
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
 @pytest.fixture(autouse=True)
-def geography_targets():
-    """Transaction tests flush migration seeds; declare this module's inputs."""
-    Country.objects.get_or_create(code="US", defaults={"m49_code": "840"})
-    Country.objects.get_or_create(code="HK", defaults={"m49_code": "344"})
-    Region.objects.get_or_create(key="europe")
-    Region.objects.get_or_create(key="eastern-europe-non-eu")
+def geography_targets(company_country_catalogue):
+    return company_country_catalogue
 
 
 def test_account_model_exposes_typed_user_about_fields():
@@ -31,7 +27,6 @@ def test_account_model_exposes_typed_user_about_fields():
         "affiliate_label_url_type",
         "affiliate_label_user_label_display_type",
         "affiliate_label_user_label_type",
-        "account_based_in",
         "location_accurate",
         "learn_more_url",
         "affiliate_username",
@@ -52,8 +47,8 @@ def test_account_model_exposes_typed_user_about_fields():
         "identity_profile_label_url_type",
         "identity_profile_label_user_label_display_type",
         "identity_profile_label_user_label_type",
-        "country",
-        "based_in_region",
+        "based_in_location",
+        "profile_location",
         "account_based_in_fetched_at",
     }
     fields = {field.name for model in (Account, XAccountDetail) for field in model._meta.get_fields()}
@@ -61,107 +56,43 @@ def test_account_model_exposes_typed_user_about_fields():
     assert not any("raw" in field for field in expected)
 
 
-def test_geography_targets_transition_atomically():
+def test_geography_targets_transition_atomically(geography_targets):
+    from core.geolocation_evidence import source_evidence
+    from core.geolocation_resolution import resolve_geolocation
     account = Account.objects.create(author_id="42")
-    observed_at = datetime(2026, 8, 30, tzinfo=UTC)
-
-    country_outcome = Account.apply_observation(
-        author_id="42",
-        observed_author_id="42",
-        source="user_about",
-        observed_at=observed_at,
-        candidates={"country_code": "US", "based_in_region_key": None},
-        present_fields={"country_code", "based_in_region_key"},
-    )
-    account.refresh_from_db()
-    assert account.country_code == "US"
-    assert account.based_in_region_key is None
-    assert set(country_outcome.applied_fields) == {"country_code"}
-
-    region_outcome = Account.apply_observation(
-        author_id="42",
-        observed_author_id="42",
-        source="user_about",
-        observed_at=observed_at,
-        candidates={"country_code": None, "based_in_region_key": "europe"},
-        present_fields={"country_code", "based_in_region_key"},
-    )
-    account.refresh_from_db()
-    assert account.country_code is None
-    assert account.based_in_region_key == "europe"
-    assert set(region_outcome.applied_fields) == {
-        "country_code",
-        "based_in_region_key",
-    }
-
-    unresolved_outcome = Account.apply_observation(
-        author_id="42",
-        observed_author_id="42",
-        source="user_about",
-        observed_at=observed_at,
-        candidates={"country_code": None, "based_in_region_key": None},
-        present_fields={"country_code", "based_in_region_key"},
-    )
-    account.refresh_from_db()
-    assert account.country_code is None
-    assert account.based_in_region_key is None
-    assert set(unresolved_outcome.applied_fields) == {"based_in_region_key"}
+    for wording in ("United States", "Europe", "Springfield", None):
+        outcome = Account.apply_observation(
+            author_id="42", observed_author_id="42", source="user_about",
+            observed_at=datetime(2026, 8, 30, tzinfo=UTC),
+            candidates={"account_based_in": wording}, present_fields={"account_based_in"},
+        )
+        account.refresh_from_db()
+        assert account.based_in_location_id == resolve_geolocation(wording, context="based_in")
+        assert source_evidence(account.x_details).reported_based_in == wording
+        assert outcome.rejected_fields == {}
 
 
-def test_incomplete_geography_target_is_rejected_without_clearing_existing_value():
-    account = Account.objects.create(author_id="42", country_code="US")
-
+def test_retired_country_code_input_cannot_bypass_canonical_identity(geography_targets):
+    account = Account.objects.create(author_id="42", based_in_location_id=geography_targets["US"])
     outcome = Account.apply_observation(
-        author_id="42",
-        observed_author_id="42",
-        source="user_about",
+        author_id="42", observed_author_id="42", source="user_about",
         observed_at=datetime(2026, 8, 30, tzinfo=UTC),
-        candidates={"based_in_region_key": "europe"},
-        present_fields={"based_in_region_key"},
+        candidates={"country_code": "CN"}, present_fields={"country_code"},
     )
-
     account.refresh_from_db()
-    assert account.country_code == "US"
-    assert account.based_in_region_key is None
-    assert outcome.rejected_fields == {
-        "based_in_region_key": "incomplete_geography_target"
-    }
+    assert account.based_in_location_id == geography_targets["US"]
+    assert "country_code" in outcome.rejected_fields
 
 
-@pytest.mark.parametrize(
-    "targets",
-    [
-        {},
-        {"country_id": "US", "region_id": "europe"},
-    ],
-)
-def test_exact_provider_mapping_requires_one_database_target(targets):
-    with pytest.raises(IntegrityError), transaction.atomic():
-        AccountBasedInMapping.objects.create(
-            value=f"invalid-target-{len(targets)}",
-            review_note="constraint proof",
-            **targets,
-        )
+def test_exact_provider_mapping_can_remain_unresolved():
+    mapping = AccountBasedInMapping.objects.create(value="Springfield", review_note="Unresolved")
+    assert mapping.geolocation_id is None
 
 
-def test_display_parent_relationship_type_is_database_constrained():
-    with pytest.raises(IntegrityError), transaction.atomic():
-        Country.objects.filter(pk="HK").update(
-            display_parent_relationship_type="invented_relationship"
-        )
-
-
-def test_normalized_geography_references_are_protected():
-    Account.objects.create(author_id="country-protect", country_code="US")
-    Account.objects.create(
-        author_id="region-protect",
-        based_in_region_key="eastern-europe-non-eu",
-    )
-
+def test_normalized_geography_references_are_protected(geography_targets):
+    Account.objects.create(author_id="country-protect", based_in_location_id=geography_targets["US"])
     with pytest.raises(ProtectedError):
-        Country.objects.get(pk="US").delete()
-    with pytest.raises(ProtectedError):
-        Region.objects.get(pk="eastern-europe-non-eu").delete()
+        Geolocation.objects.get(pk=geography_targets["US"]).delete()
 
 
 def test_live_user_about_fields_use_typed_deduplicated_destinations():

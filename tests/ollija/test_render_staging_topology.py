@@ -75,8 +75,13 @@ def test_staging_web_remains_owner_only_and_serves_without_provider_access() -> 
     )
     assert "X_MONITOR_HEADLINE_ENQUEUE_ENABLED" not in environment
     assert "X_MONITOR_HEADLINE_PROVIDER_CALLS_ENABLED" not in environment
-    assert environment["STAGING_DATA_REFRESH_ENABLED"]["value"] == "True"
-    assert environment["STAGING_REFRESH_SOURCE_DATABASE_URL"] == {
+    assert "STAGING_DATA_REFRESH_ENABLED" not in environment
+    assert "STAGING_REFRESH_SOURCE_DATABASE_URL" not in environment
+    assert environment["DATABASE_URL"] == {"key": "DATABASE_URL", "sync": False}
+    assert environment["PW_DATABASE_ACCESS_MODE"]["value"] == "serving"
+    refresh_environment = _environment_by_key(_service(_blueprint(), "pushinweight-staging-jobs"))
+    assert refresh_environment["STAGING_DATA_REFRESH_ENABLED"]["value"] == "True"
+    assert refresh_environment["STAGING_REFRESH_SOURCE_DATABASE_URL"] == {
         "key": "STAGING_REFRESH_SOURCE_DATABASE_URL",
         "sync": False,
     }
@@ -191,6 +196,9 @@ def test_every_stateful_runtime_binds_only_to_staging_database_and_broker() -> N
         "pushinweight-staging-harvest",
     ):
         environment = _environment_by_key(_service(blueprint, service_name))
+        if service_name == "pushinweight-staging-web":
+            assert environment["DATABASE_URL"] == {"key": "DATABASE_URL", "sync": False}
+            continue
         assert environment["DATABASE_URL"] == {
             "key": "DATABASE_URL",
             "fromDatabase": {

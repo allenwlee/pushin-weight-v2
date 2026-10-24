@@ -204,14 +204,12 @@ def test_duplicate_handle_does_not_block_related_post_write():
     assert account.display_name == "Accepted Name"
 
 
-def test_post_affiliate_label_refresh_preserves_about_only_country():
+def test_post_affiliate_label_refresh_preserves_about_only_country(company_country_catalogue):
     from core.geolocation_evidence import source_evidence, write_source_evidence
-    from core.models import Country
 
-    Country.objects.get_or_create(code="US", defaults={"m49_code": "840"})
     account = Account.objects.create(
         author_id="42",
-        country_code="US",
+        based_in_location_id=company_country_catalogue["US"],
         affiliate_label_description="Old",
     )
     write_source_evidence(account.x_details, reported_based_in="United States")
@@ -233,7 +231,7 @@ def test_post_affiliate_label_refresh_preserves_about_only_country():
 
     account.refresh_from_db()
     assert account.affiliate_label_description == "New"
-    assert account.country_code == "US"
+    assert account.based_in_location_id == company_country_catalogue["US"]
     assert source_evidence(account.x_details).reported_based_in == "United States"
 
 

@@ -6,14 +6,14 @@ from django.db.migrations.executor import MigrationExecutor
 
 from core.benchmark_metric_identity import register_definitions
 from core.collection_corrections import correct_attribution
-from core.models import Actor, Country, CountryLabel, Region, RegionLabel, TimeZone
+from core.models import Actor, TimeZone
 from tests.test_source_metric_projection import configured, evidence, project
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
 
-@pytest.mark.usefixtures("isolated_migration_database")
-def test_rg1_removal_drops_only_replaced_columns_and_switches_label_keys():
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0126_remove_countrylabel_ck_country_label_locale_and_more")], indirect=True)
+def test_rg1_removal_drops_only_replaced_columns_and_switches_label_keys(migration_rehearsal_schema):
     cutover = ("core", "0126_remove_countrylabel_ck_country_label_locale_and_more")
     removal = ("core", "0127_remove_legacy_identity_columns")
     actor_requirement = ("core", "0128_require_correction_actor")
@@ -30,6 +30,9 @@ def test_rg1_removal_drops_only_replaced_columns_and_switches_label_keys():
         reason="incorrect_product",
     )
 
+    old = MigrationExecutor(connection).loader.project_state([cutover]).apps
+    Country, Region, CountryLabel, RegionLabel = (old.get_model("core", name) for name in
+                                                ("Country", "Region", "CountryLabel", "RegionLabel"))
     country = Country.objects.create(code="XZ", m49_code="999")
     region = Region.objects.create(
         key="rg1-retirement-test", source="fixture", level="region"
@@ -130,8 +133,8 @@ def test_rg1_removal_drops_only_replaced_columns_and_switches_label_keys():
         assert cursor.fetchone()[0] == "NO"
 
 
-@pytest.mark.usefixtures("isolated_migration_database")
-def test_actor_requirement_migration_refuses_null_rows():
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0126_remove_countrylabel_ck_country_label_locale_and_more")], indirect=True)
+def test_actor_requirement_migration_refuses_null_rows(migration_rehearsal_schema):
     cutover = ("core", "0126_remove_countrylabel_ck_country_label_locale_and_more")
     removal = ("core", "0127_remove_legacy_identity_columns")
     actor_requirement = ("core", "0128_require_correction_actor")
@@ -177,8 +180,8 @@ def test_actor_requirement_migration_refuses_null_rows():
         assert cursor.fetchone()[0] == "YES"
 
 
-@pytest.mark.usefixtures("isolated_migration_database")
-def test_rg1_removal_blocks_when_a_legacy_value_disagrees_with_its_reference():
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0126_remove_countrylabel_ck_country_label_locale_and_more")], indirect=True)
+def test_rg1_removal_blocks_when_a_legacy_value_disagrees_with_its_reference(migration_rehearsal_schema):
     cutover = ("core", "0126_remove_countrylabel_ck_country_label_locale_and_more")
     removal = ("core", "0127_remove_legacy_identity_columns")
     MigrationExecutor(connection).migrate([cutover])

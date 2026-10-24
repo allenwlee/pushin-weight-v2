@@ -39,9 +39,25 @@ unchanged SHA to `main` after staging passes. The workflow confirms the
 configured Render services and health route for that candidate. A green build
 alone is not sufficient evidence of the intended deployment identity.
 
+### Database credentials and migrations
+
+Web services use the dedicated `pushinweight_web_serving` database login and
+`PW_DATABASE_ACCESS_MODE=serving`. Their `DATABASE_URL` is a Render-managed
+`sync: false` value. They have no owner connection or production snapshot
+credential. Ordinary ORM models expose canonical local geolocation IDs; source
+projections are available only to ingestion/resolution processes with appropriate
+column privileges. A web build verifies its restricted identity and waits for the
+candidate migration graph to finish; it does not run DDL.
+
+Existing owner processes continue to run `scripts/render_migrate.py` under both
+existing locks. `PW_SERVING_DATABASE_ROLE=pushinweight_web_serving` makes the owner
+reconcile canonical column grants after successful migrations. Bootstrap the
+separate login before enabling that setting. Inspect direct variables and linked
+environment groups; never leave an owner URL in the web service as a fallback.
+
 ### Staging snapshot refresh
 
-The staging web service contains the guarded, operator-invoked production
+The existing staging jobs service supplies the build and configuration for the guarded, operator-invoked production
 snapshot mechanism. It is not a deploy hook or scheduled job. Its source role,
 single staging-only secret, preflight, refresh, database receipt, rollback, and
 prune procedures are defined in
@@ -53,7 +69,8 @@ Production must remain refresh-inert: `render.yaml` declares neither
 
 | Resource | Staging-owned role |
 |---|---|
-| `pushinweight-staging-web` | Owner-only UI and refresh authority; never harvests |
+| `pushinweight-staging-web` | Owner-only UI with a restricted database login; never harvests |
+| `pushinweight-staging-jobs` | Manual-only careers cron and base for explicitly invoked refresh jobs |
 | `pushinweight-staging-harvest` | Dormant cron; manual Trigger Run only |
 | `pushinweight-staging-headlines` | Queue-only `trend-narratives` worker, concurrency one |
 | `pushinweight-staging-synthesis` | Database-queue worker for demand-triggered trilingual post synthesis |

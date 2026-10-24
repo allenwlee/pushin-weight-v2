@@ -25,6 +25,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.company_labels import set_company_label
+from core.geolocation_resolution import resolve_geolocation
 from core.models import Account, Brand, BrandAccount, BrandCompany, Company, Role
 
 # ---------------------------------------------------------------------------
@@ -286,7 +287,7 @@ class Command(BaseCommand):
                     else:
                         company, _ = Company.objects.update_or_create(
                             nickname=company_nickname,
-                            defaults={"hq_country_reference_id": comp_hq},
+                            defaults={"hq_geolocation_id": resolve_geolocation(comp_hq, context="country")},
                         )
                         set_company_label(company, "und", comp_display)
                     stats["companies"] += 1

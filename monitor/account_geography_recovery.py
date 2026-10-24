@@ -101,8 +101,7 @@ def digest_relation(relation_sql: sql.Composable) -> tuple[int, str]:
 
 
 def digest_account_queryset(queryset) -> tuple[int, str]:
-    rows = queryset.order_by("author_id").values_list(*_MODEL_GEOGRAPHY_FIELDS)
-    return digest_rows(rows.iterator(chunk_size=1_000))
+    raise CommandError("Legacy geography receipt cannot describe the shared geolocation schema")
 
 
 def _build_geography_receipt(

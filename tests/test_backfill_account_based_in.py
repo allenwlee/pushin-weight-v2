@@ -39,14 +39,10 @@ def _success(author_id: str, country: str = "US") -> FetchOutcome:
             author_id=author_id,
             candidates={
                 "account_based_in": "United States",
-                "country_code": country,
-                "based_in_region_key": None,
                 "account_based_in_fetched_at": observed_at,
             },
             present_fields={
                 "account_based_in",
-                "country_code",
-                "based_in_region_key",
                 "account_based_in_fetched_at",
             },
         ),
@@ -164,13 +160,16 @@ def test_diversity_stratified_selection_balances_age_size_and_location_proxy():
             for location in locations:
                 for _ in range(2):
                     index += 1
-                    Account.objects.create(
+                    account = Account.objects.create(
                         author_id=str(index),
                         handle=f"user{index}",
                         created_at=age,
                         followers_count=followers_count,
-                        location=location,
                     )
+                    from core.geolocation_evidence import write_source_evidence
+                    from django.db import transaction
+                    with transaction.atomic():
+                        write_source_evidence(account, reported_profile_location=location)
 
     selections = _select_accounts(
         limit=100,
@@ -227,7 +226,7 @@ def test_apply_does_not_fall_back_to_scheduled_or_legacy_key(tmp_path, monkeypat
 
 
 @override_settings(OLLIJA_STAGING_MODE=True)
-def test_apply_writes_only_matching_selected_accounts(tmp_path, monkeypatch):
+def test_apply_writes_only_matching_selected_accounts(tmp_path, monkeypatch, company_country_catalogue):
     monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "on-demand-secret")
     monkeypatch.setenv(TWITTERAPI_IO_SCHEDULED_API_KEY_ENV, "scheduled-secret")
     monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "legacy-secret")
@@ -258,7 +257,7 @@ def test_apply_writes_only_matching_selected_accounts(tmp_path, monkeypatch):
             stdout=StringIO(),
         )
 
-    assert Account.objects.filter(country_id="US").count() == 2
+    assert Account.objects.filter(based_in_location_id=company_country_catalogue["US"]).count() == 2
     assert fetch.await_args.kwargs["api_key"] == "on-demand-secret"
     report = json_path.read_text()
     assert "on-demand-secret" not in report
@@ -369,7 +368,7 @@ def test_schema_drift_reaches_report_without_response_values_or_account_identity
 
 
 @override_settings(OLLIJA_STAGING_MODE=True)
-def test_live_user_about_shape_reaches_typed_account_fields(tmp_path, monkeypatch):
+def test_live_user_about_shape_reaches_typed_account_fields(tmp_path, monkeypatch, company_country_catalogue):
     import json
     from unittest.mock import MagicMock
 
@@ -452,7 +451,7 @@ def test_live_user_about_shape_reaches_typed_account_fields(tmp_path, monkeypatc
     assert account.verification_info_is_identity_verified is True
     assert account.verification_info_reason_verified_since_msec == 1_784_691_635_000
     assert account.verification_info_reason_override_verified_year == 2012
-    assert account.country_code == "US"
+    assert account.based_in_location_id == company_country_catalogue["US"]
     assert account.account_based_in_fetched_at is not None
     assert '"accepted": 1' in report
     assert '"schema_diagnostics": []' in report

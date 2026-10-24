@@ -359,8 +359,8 @@ def person_intelligence(person_id) -> dict[str, Any]:
         ),
         Prefetch(
             "citizenships",
-            queryset=PersonCitizenship.objects.select_related("country")
-            .order_by("-is_primary", "country_id"),
+            queryset=PersonCitizenship.objects.select_related("geolocation")
+            .order_by("-is_primary", "geolocation_id"),
         ),
         Prefetch(
             "account_links",
@@ -391,7 +391,7 @@ def person_intelligence(person_id) -> dict[str, Any]:
                 if person.reported_nationality_texts else None
             ),
             "citizenships": [
-                {"country_code": row.country_id, "is_primary": row.is_primary}
+                {"geolocation_id": row.geolocation_id, "is_primary": row.is_primary}
                 for row in person.citizenships.all()
             ],
             "ethnicity": person.ethnicity,

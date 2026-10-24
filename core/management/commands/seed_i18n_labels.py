@@ -7,9 +7,7 @@ Usage:
 
 from __future__ import annotations
 
-import json
 
-from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from core.classification_contract import (
@@ -35,13 +33,10 @@ from core.models import (
     AudienceTopicConcept,
     AudienceTopicLabel,
     AudienceTopicScheme,
-    Country,
-    CountryLabel,
     DiscourseKey,
     DiscourseLabel,
     GeopoliticalModeKey,
     GeopoliticalModeLabel,
-    Locale,
     NationalismKey,
     NationalismLabel,
     NationalStanceKey,
@@ -50,8 +45,6 @@ from core.models import (
     PostTypeLabel,
     ProductLabelKey,
     ProductLabelLabel,
-    Region,
-    RegionLabel,
     Role,
     RoleLabel,
     SentimentKey,
@@ -59,8 +52,7 @@ from core.models import (
     UntrackedBrandPromotionKey,
     UntrackedBrandPromotionLabel,
 )
-from core.shared_vocabulary import resolve_locale, seed_shared_vocabulary
-from monitor.account_geography import COUNTRY_NAMES, REGION_NAMES
+from core.shared_vocabulary import seed_shared_vocabulary
 
 # ---------------------------------------------------------------------------
 # Canonical taxonomy values (mirrors x_monitor/attribution.py constants)
@@ -290,21 +282,8 @@ class Command(BaseCommand):
                         }
                     )
 
-        catalog = json.loads(
-            (settings.BASE_DIR / "monitor/data/account_geography_ja.json").read_text()
-        )
-        if (set(catalog["countries"]) != set(COUNTRY_NAMES)
-                or set(catalog["regions"]) != set(REGION_NAMES)
-                or not all(catalog["countries"].values())
-                or not all(catalog["regions"].values())):
-            raise CommandError("Japanese geography labels do not cover the frozen taxonomy")
-        for family, model, labels in (
-            ("country", CountryLabel, catalog["countries"]),
-            ("region", RegionLabel, catalog["regions"]),
-        ):
-            for key, label in labels.items():
-                seeds.append({"family": family, "label_model": model,
-                              "key": key, "lang": "ja", "label": label})
+        # Geographic names belong to the source-backed shared geolocation
+        # importer. This command must not recreate retired country/region rows.
 
         return seeds
 
@@ -318,27 +297,6 @@ class Command(BaseCommand):
         label_inserted = 0
 
         for seed in seeds:
-            if seed["family"] in {"country", "region"}:
-                family = seed["family"]
-                key_field = "code" if family == "country" else "key"
-                key_model = Country if family == "country" else Region
-                if not key_model.objects.filter(**{key_field: seed["key"]}).exists():
-                    continue
-                locale = resolve_locale(seed["lang"], context="app_edition")
-                if locale is None or not Locale.objects.filter(pk=locale.pk).exists():
-                    raise CommandError(
-                        f"Missing shared locale for geography label {seed['lang']!r}"
-                    )
-                _, created = seed["label_model"].objects.get_or_create(
-                    **{
-                        family + "_id": seed["key"],
-                        "locale_reference_id": locale.pk,
-                    },
-                    defaults={"label": seed["label"]},
-                )
-                if created:
-                    label_inserted += 1
-                continue
             if seed["family"] == "audience_topic":
                 scheme, scheme_created = AudienceTopicScheme.objects.get_or_create(
                     key=_AUDIENCE_TOPIC_SCHEME_KEY,

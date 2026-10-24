@@ -218,8 +218,6 @@ def _upsert_account_from_row(row: dict[str, Any], dry_run: bool) -> Any:
     if profile_picture:
         defaults["profile_picture"] = profile_picture
     location = row.get("location") or row.get("author_location") or ""
-    if location:
-        defaults["location"] = location
     description = row.get("description") or row.get("author_description") or ""
     if description:
         defaults["description"] = description
@@ -234,9 +232,16 @@ def _upsert_account_from_row(row: dict[str, Any], dry_run: bool) -> Any:
     if dry_run:
         return None
 
-    acc, _created = _Account.objects.update_or_create(
-        author_id=author_id, defaults=defaults
-    )
+    from django.db import transaction
+
+    from core.geolocation_evidence import write_source_evidence
+
+    with transaction.atomic():
+        acc, _created = _Account.objects.update_or_create(
+            author_id=author_id, defaults=defaults
+        )
+        if location:
+            write_source_evidence(acc, reported_profile_location=location)
     return acc
 
 

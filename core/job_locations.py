@@ -45,10 +45,12 @@ def write_job_locations(listing, locations, *, reported_value=None, evidence=Non
         existing = JobListingLocation.objects.filter(
             listing=owner, source_archive=captured, ordinal=ordinal, observed_at=observed_at,
         ).first()
-        if existing is not None:
+        if observed_at is not None and existing is not None:
             # A source identity may be replayed, but an obsolete observation
             # cannot become current again under that same identity.
             raise ValueError("Cannot reactivate a superseded job location observation")
+        # Unknown source time uses the actual recording time as its occurrence
+        # identity. A later A → B → A is new evidence, not reactivation of A.
         # Insert the immutable source wording with its occurrence. It is not a
         # field on the canonical ORM model and cannot be changed after insert.
         alias = owner._state.db or "default"

@@ -41,7 +41,11 @@ import django
 
 django.setup()
 
+from django.db import transaction
+
 from core.company_labels import set_company_label
+from core.geolocation_evidence import write_source_evidence
+from core.geolocation_resolution import resolve_geolocation
 from core.models import (  # noqa: E402
     Account,
     AccountPostAppearance,
@@ -371,7 +375,7 @@ def port_companies(
         nickname = row["nickname"]
 
         defaults = {
-            "hq_country_reference_id": row.get("hq_country") or None,
+            "hq_geolocation_id": resolve_geolocation(row.get("hq_country"), context="country"),
             "accent_color": row.get("accent_color"),
             "description": row.get("description"),
         }
@@ -429,7 +433,7 @@ def port_accounts(
 
         defaults: dict[str, Any] = {}
         for col in cols:
-            if col in ("id", "author_id"):
+            if col in ("id", "author_id", "location"):
                 continue
             if col in ("bio_en", "bio_zh_cn"):
                 continue
@@ -449,9 +453,11 @@ def port_accounts(
                 defaults[col] = val
 
         if not dry_run:
-            account, _ = Account.objects.update_or_create(
-                author_id=author_id, defaults=defaults
-            )
+            with transaction.atomic():
+                account, _ = Account.objects.update_or_create(
+                    author_id=author_id, defaults=defaults
+                )
+                write_source_evidence(account, reported_profile_location=vals["location"])
             for locale, translated_text in (
                 ("en", vals.get("bio_en")),
                 ("zh-Hans", vals.get("bio_zh_cn")),

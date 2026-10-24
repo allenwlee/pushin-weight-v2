@@ -22,11 +22,12 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 from django.db.migrations.recorder import MigrationRecorder
-from django.db.models import Q
+from django.db.models import OuterRef, Q, Subquery
 from django.utils import timezone
 from psycopg import sql
 
 from core.models import Account
+from core.geolocation_evidence import AccountLocationEvidence
 from monitor.twitterapi.user_about import (
     ACCOUNT_QUARANTINE_REASONS,
     FetchSelection,
@@ -187,12 +188,14 @@ def _balanced_targets(labels: tuple[str, ...], limit: int) -> dict[str, int]:
 
 def _select_stratified_accounts(*, queryset, limit: int, seed: str):
     rows = list(
-        queryset.values_list(
+        queryset.annotate(reported_profile_location=Subquery(
+            AccountLocationEvidence.objects.filter(pk=OuterRef("pk")).values("reported_profile_location")[:1]
+        )).values_list(
             "author_id",
             "handle",
             "created_at",
             "followers_count",
-            "location",
+            "reported_profile_location",
         )
     )
     candidates = []
@@ -246,11 +249,13 @@ def _selection_distribution(
     selections: list[FetchSelection],
 ) -> dict[str, dict[str, int]]:
     author_ids = [selection.author_id for selection in selections]
-    rows = Account.x.filter(author_id__in=author_ids).values_list(
+    rows = Account.x.filter(author_id__in=author_ids).annotate(reported_profile_location=Subquery(
+        AccountLocationEvidence.objects.filter(pk=OuterRef("pk")).values("reported_profile_location")[:1]
+    )).values_list(
         "author_id",
         "created_at",
         "followers_count",
-        "location",
+        "reported_profile_location",
     )
     age: Counter[str] = Counter()
     size: Counter[str] = Counter()
@@ -715,8 +720,8 @@ class Command(BaseCommand):
                         unchanged += 1
                     rejected_fields.update(outcome.rejected_fields)
                     leaf_coverage.update(observation.present_fields)
-                    code = observation.candidates.get("country_code")
-                    country_yield["mapped" if code else "unmapped"] += 1
+                    place = outcome.account.based_in_location if outcome.account and outcome.account.based_in_location_id else None
+                    country_yield["mapped" if place and place.place_kind == 4 else "unmapped"] += 1
                     if not observation.candidates.get("account_based_in"):
                         success_empty += 1
                     if "location_accurate" in observation.present_fields:

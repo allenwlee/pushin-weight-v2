@@ -4,12 +4,13 @@ Run with an owner connection during deployment. This module never creates or
 prints credentials, grants owner membership, or adds a second web connection.
 """
 
+from django.apps import apps
 from psycopg import sql
 
 # Both names are denied during the rolling-image bridge. Old entries disappear
 # from the physical inventory after final deletion; they must never be granted.
 SOURCE_COLUMNS = {
-    "accounts": {"location", "reported_profile_location"},
+    "accounts": {"location", "reported_profile_location", "country_code", "based_in_region_key"},
     "x_account_details": {"account_based_in", "reported_based_in"},
     "posts": {"author_location", "reported_author_location"},
     "account_profile_snapshots": {"location", "reported_location", "profile_data", "raw_profile_payload"},
@@ -22,6 +23,9 @@ SOURCE_COLUMNS = {
     "collection_runs": {"raw_payload", "request_params", "source_metadata", "report"},
     "collection_scope_runs": {"ownership", "envelopes"},
     "collection_observations": {"source_metadata"},
+    "companies": {"hq_country_id"},
+    "person_citizenships": {"country_code"},
+    "account_based_in_mappings": {"country_code", "region_key"},
 }
 CATALOGUES = frozenset({"geolocations", "geolocation_alternate_names", "geolocation_policies", "django_migrations"})
 SERVING_VIEWS = frozenset({
@@ -31,12 +35,46 @@ SERVING_VIEWS = frozenset({
 })
 
 
+def verify_serving_access(connection, *, schema="public"):
+    """Read-only proof that this connection cannot read location source evidence."""
+    with connection.cursor() as cursor:
+        cursor.execute("""SELECT r.oid,current_user,session_user,r.rolsuper,r.rolcreaterole,
+            r.rolcreatedb,r.rolbypassrls,r.rolconfig
+            FROM pg_roles r WHERE r.rolname=current_user""")
+        role_id, role, login, *attributes = cursor.fetchone()
+        if role != login or any(attributes):
+            raise ValueError("Web database connection must use its restricted login directly")
+        cursor.execute("SELECT 1 FROM pg_auth_members WHERE member=%s LIMIT 1", [role_id])
+        if cursor.fetchone():
+            raise ValueError("Web database login can assume another role")
+        cursor.execute("SELECT 1 FROM pg_class WHERE relowner=%s LIMIT 1", [role_id])
+        if cursor.fetchone():
+            raise ValueError("Web database login owns database objects")
+        cursor.execute("SELECT has_schema_privilege(current_user,%s,'CREATE')", [schema])
+        if cursor.fetchone()[0]:
+            raise ValueError("Web database login has schema creation privileges")
+        for table, columns in SOURCE_COLUMNS.items():
+            cursor.execute("""SELECT a.attname FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
+                JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=%s AND c.relname=%s
+                AND NOT a.attisdropped AND a.attnum>0 AND a.attname=ANY(%s)
+                AND has_column_privilege(current_user,c.oid,a.attname,'SELECT')""", [schema, table, list(columns)])
+            if cursor.fetchone():
+                raise ValueError("Web database login can read source evidence: " + table)
+    return role
+
+
 def apply_serving_grants(connection, role, *, schema="public"):
     """Reconcile grants on one dedicated role; refuse privileged/mixed roles."""
     if connection.get_autocommit():
         raise ValueError("Serving grant reconciliation requires one transaction")
     identifier = sql.Identifier(role)
     namespace = sql.Identifier(schema)
+    canonical_columns = {
+        model._meta.db_table: {field.column for field in model._meta.local_concrete_fields}
+        for model in apps.get_models(include_auto_created=True)
+        if model._meta.managed and not model._meta.proxy
+    }
+    canonical_columns["django_migrations"] = {"id", "app", "name", "applied"}
     with connection.cursor() as cursor:
         cursor.execute("SELECT current_user,current_database()")
         owner, database = cursor.fetchone()
@@ -85,8 +123,12 @@ def apply_serving_grants(connection, role, *, schema="public"):
                     raise ValueError("Serving view exposes source evidence: " + table)
                 cursor.execute(sql.SQL("GRANT SELECT ON {} TO {}").format(relation, identifier))
                 continue
-            safe = [column for column in columns if column not in SOURCE_COLUMNS.get(table, ())]
+            safe = [column for column in columns if column in canonical_columns.get(table, ())
+                    and column not in SOURCE_COLUMNS.get(table, ())]
             if not safe:
+                cursor.execute("SELECT has_table_privilege(%s,%s,'SELECT')", [role, f'{schema}.{table}'])
+                if cursor.fetchone()[0]:
+                    raise ValueError("Noncanonical table remains readable through shared grants: " + table)
                 continue
             selected = sql.SQL(",").join(map(sql.Identifier, safe))
             for operation in (("SELECT",) if table in CATALOGUES else ("SELECT", "INSERT", "UPDATE")):

@@ -11,7 +11,7 @@
             aria-label="{{ flag.label }}" aria-expanded="false">
       <svg class="account-country-flag" viewBox="0 0 16 9" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false"><use href="{% static 'country-flags.svg' %}#{{ flag.symbol_id }}"></use></svg>
     </button>
-    {% if geography.kind == 'taiwan' and geography.text %}<span class="account-geography-connector" aria-hidden="true"></span>{% endif %}
+    {% if geography.kind == 'labelled_parent' and geography.text %}<span class="account-geography-connector" aria-hidden="true"></span>{% endif %}
   {% endfor %}
   {% if geography.text %}<button type="button" class="account-geography-text pw-inspection-trigger" data-pw-inspection="{{ geography.label }}" aria-label="{{ geography.label }}" aria-expanded="false">{{ geography.text }}</button>{% endif %}
 </span>

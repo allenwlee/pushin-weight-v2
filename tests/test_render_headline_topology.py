@@ -54,12 +54,13 @@ def test_headline_blueprint_is_queue_isolated_with_owner_override_activation():
         assert environment["X_MONITOR_HEADLINE_CONTROL_REVISION"] == (
             "v24-integrated-ja-demand-20260911"
         )
-        database = next(
-            entry["fromDatabase"]["name"]
-            for entry in services[service_name]["envVars"]
-            if entry.get("key") == "DATABASE_URL"
-        )
-        assert database == "pushinweight-db-shadow"
+        database = next(entry for entry in services[service_name]["envVars"]
+                        if entry.get("key") == "DATABASE_URL")
+        if service_name == "pushinweight-web":
+            assert database == {"key": "DATABASE_URL", "sync": False}
+            assert environment["PW_DATABASE_ACCESS_MODE"] == "serving"
+        else:
+            assert database["fromDatabase"]["name"] == "pushinweight-db-shadow"
 
 
 def test_synthesis_worker_is_database_only_and_provider_scoped():

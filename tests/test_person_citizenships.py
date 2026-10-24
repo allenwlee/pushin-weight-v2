@@ -1,4 +1,4 @@
-"""Citizenship needs explicit Country identity and same-person source evidence."""
+"""Citizenship needs explicit shared country/area identity and same-person source evidence."""
 
 import pytest
 from django.db import IntegrityError, transaction
@@ -25,7 +25,7 @@ def test_evidenced_dual_citizenship_and_ambiguous_nationality_remain_distinct(
     )
     with pytest.raises(ValueError, match="source evidence"):
         record_citizenship(
-            person.pk, country_code="GB", person_text_id=legacy_text.pk
+            person.pk, geolocation_id=company_country_catalogue["GB"], person_text_id=legacy_text.pk
         )
     source = record_text(
         person, kind="reported_nationality", language="en",
@@ -33,18 +33,18 @@ def test_evidenced_dual_citizenship_and_ambiguous_nationality_remain_distinct(
         source_reference="https://example.test/verified-bio",
     )
     japan = record_citizenship(
-        person.pk, country_code="JP", person_text_id=source.pk
+        person.pk, geolocation_id=company_country_catalogue["JP"], person_text_id=source.pk
     )
     usa = record_citizenship(
-        person.pk, country_code="US", person_text_id=source.pk
+        person.pk, geolocation_id=company_country_catalogue["US"], person_text_id=source.pk
     )
     assert japan.is_primary and not usa.is_primary
     assert record_citizenship(
-        person.pk, country_code="US", person_text_id=source.pk
+        person.pk, geolocation_id=company_country_catalogue["US"], person_text_id=source.pk
     ).pk == usa.pk
     assert person_intelligence(person.pk)["person"]["citizenships"] == [
-        {"country_code": "JP", "is_primary": True},
-        {"country_code": "US", "is_primary": False},
+        {"geolocation_id": company_country_catalogue["JP"], "is_primary": True},
+        {"geolocation_id": company_country_catalogue["US"], "is_primary": False},
     ]
     assert person_intelligence(person.pk)["person"]["nationality"] == (
         "possibly Japanese"
@@ -52,7 +52,7 @@ def test_evidenced_dual_citizenship_and_ambiguous_nationality_remain_distinct(
 
     with pytest.raises(IntegrityError), transaction.atomic():
         PersonCitizenship.objects.create(
-            person=person, country_id="GB", is_primary=True
+            person=person, geolocation_id=company_country_catalogue["GB"], is_primary=True
         )
     other = person_with_name("Other person")
     other_source = record_text(
@@ -71,7 +71,7 @@ def test_evidenced_dual_citizenship_and_ambiguous_nationality_remain_distinct(
         PersonText.objects.filter(pk=source.pk).update(origin="unknown")
     with pytest.raises(IntegrityError), transaction.atomic():
         unsupported = PersonCitizenship.objects.create(
-            person=person, country_id="GB"
+            person=person, geolocation_id=company_country_catalogue["GB"]
         )
         PersonCitizenshipEvidence.objects.create(
             citizenship=unsupported, person_text=legacy_text
@@ -82,5 +82,5 @@ def test_citizenship_cannot_exist_without_evidence(company_country_catalogue):
     person = person_with_name("Unsupported")
     with pytest.raises(IntegrityError), transaction.atomic():
         PersonCitizenship.objects.create(
-            person=person, country_id="JP", is_primary=True
+            person=person, geolocation_id=company_country_catalogue["JP"], is_primary=True
         )

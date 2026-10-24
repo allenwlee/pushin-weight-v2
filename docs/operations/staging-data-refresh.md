@@ -10,8 +10,8 @@ operational data, validates it, and only then swaps database names under a
 shared cluster lock. The prior staging database remains disabled as the
 receipt-named recovery point.
 
-The command is intentionally usable only on `pushinweight-staging-web`
-(`srv-d9vb8t49v7es738lf2ng`). Production has neither the enable flag nor the
+The command is intentionally usable only in an explicitly invoked one-off job based on `pushinweight-staging-jobs`
+(`crn-dain9moae00c73f7d73g`). Production has neither the enable flag nor the
 source secret. Do not copy either setting to another service.
 
 ## One-time source reader
@@ -394,7 +394,7 @@ role; afterward, prove the application login retains `CREATE` and
 `staging_refresh_reader` does not.
 
 Build the external TLS URL locally without printing it, then set only
-`STAGING_REFRESH_SOURCE_DATABASE_URL` on `pushinweight-staging-web` through the
+`STAGING_REFRESH_SOURCE_DATABASE_URL` on `pushinweight-staging-jobs` through the
 Render Dashboard's Environment page. Its shape is:
 
 ```text
@@ -463,20 +463,22 @@ also a refusal, never permission to proceed.
 
 ## Preflight and refresh
 
-SSH to the staging web service and first prove the service, connection, role,
-TLS, PostgreSQL 18, relation policy, free-space, and lock guards:
-
-```bash
-render ssh srv-d9vb8t49v7es738lf2ng
-./bin/refresh-staging-data preflight
-```
+Create a Render one-off job from `pushinweight-staging-jobs`
+(`crn-dain9moae00c73f7d73g`) with `startCommand` set to
+`./bin/refresh-staging-data preflight`. This checks service identity, connections,
+roles, TLS, PostgreSQL 18, relation policy, free space, and existing lock guards.
+Use the [Render one-off job API](https://render.com/docs/one-off-jobs); the job
+inherits that service's latest successful build and environment. Keep the normal
+`sync_job_sources` command and manual-only schedule unchanged. The jobs service
+owns the staging broker connection required by the existing quiescence checks;
+web services have neither refresh authority nor source credentials.
 
 A successful preflight emits one secret-free JSON line with
 `"status":"authorized"`. Any rejection is a stop condition. In particular,
 do not work around an unclassified relation, source privilege, target identity,
 tool-version, space, or shared-lock failure.
 
-Run the refresh with the exact policy-derived confirmation:
+For an explicitly authorized refresh, create a separate one-off job on the same base service with this exact command and policy-derived confirmation:
 
 ```bash
 ./bin/refresh-staging-data refresh \

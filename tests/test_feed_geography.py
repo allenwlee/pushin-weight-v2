@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 
 import pytest
+
+from tests.geolocation_factory import wire_place
 
 from monitor.views import (
     _compact_language_display,
@@ -55,33 +55,14 @@ def test_undetected_language_awaiting_enrichment_has_pending_hover(locale, expec
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db
-def test_japanese_geography_seed_covers_every_existing_country_and_region():
-    from django.core.management import call_command
+def test_shared_place_names_cover_requested_feed_locales():
+    from core.geolocations import geolocation_label
+    from tests.geolocation_factory import feed_places
 
-    from core.models import Country, CountryLabel, Region, RegionLabel
-
-    catalog = json.loads(
-        (Path(__file__).resolve().parents[1] / "monitor/data/account_geography_ja.json").read_text()
-    )
-    # Django test flushes remove data-migration rows; seed this test's prerequisites.
-    taxonomy = json.loads(
-        (Path(__file__).resolve().parents[1] / "monitor/data/account_geography.json").read_text()
-    )
-    Country.objects.bulk_create(
-        [Country(code=row["code"], m49_code=row["m49_code"]) for row in taxonomy["countries"]],
-        ignore_conflicts=True,
-    )
-    Region.objects.bulk_create(
-        [Region(key=row["key"], m49_code=row["m49_code"], source=row["source"], level=row["level"])
-         for row in taxonomy["regions"]],
-        ignore_conflicts=True,
-    )
-    call_command("seed_i18n_labels", verbosity=0)
-    call_command("seed_i18n_labels", verbosity=0)
-    assert dict(CountryLabel.objects.filter(locale_reference_id="ja").values_list("country_id", "label")) == catalog["countries"]
-    assert dict(RegionLabel.objects.filter(locale_reference_id="ja").values_list("region_id", "label")) == catalog["regions"]
-    assert set(Country.objects.values_list("code", flat=True)) == set(catalog["countries"])
-    assert set(Region.objects.values_list("key", flat=True)) == set(catalog["regions"])
+    places = feed_places()
+    for place in places.values():
+        assert place.alternate_names.count() == 3
+        assert all(geolocation_label(place, locale) for locale in ("en", "ja", "zh_hans"))
 
 
 @pytest.mark.parametrize(("child_code", "parent_code"), GUIDING_COUNTRIES.items())
@@ -89,18 +70,9 @@ def test_every_guiding_country_precedes_its_child_signal(
     child_code: str,
     parent_code: str,
 ) -> None:
-    source = {
-        "country_code": child_code,
-        "country_labels": {"en": f"Child {child_code}", "zh_cn": f"子项{child_code}"},
-        "parent_country_code": parent_code,
-        "parent_country_labels": {
-            "en": f"Parent {parent_code}",
-            "zh_cn": f"父项{parent_code}",
-        },
-        "relationship_type": "reviewed_relationship",
-        "fallback_region_labels": {"en": "Fallback", "zh_cn": "后备区域"},
-        "direct_region_labels": {},
-    }
+    parent = wire_place(identifier=200, code=parent_code, labels={"en": f"Parent {parent_code}", "zh-Hans": f"父项{parent_code}"})
+    source = wire_place(code=child_code, labels={"en": f"Child {child_code}", "zh-Hans": f"子项{child_code}"},
+                        parent=parent, parent_only=child_code == "TW")
 
     geography = _feed_geography_wire(source, "en")
 
@@ -109,7 +81,7 @@ def test_every_guiding_country_precedes_its_child_signal(
         [] if child_code == "TW" else [child_code]
     )
     if child_code == "TW":
-        assert geography["kind"] == "taiwan"
+        assert geography["kind"] == "labelled_parent"
         assert geography["text"] == "TW · Child TW"
         assert all(flag["symbol_id"] != "flag-tw" for flag in geography["flags"])
     else:
@@ -133,14 +105,12 @@ def test_direct_region_uses_the_requested_seeded_locale(
     expected_accessible: str,
 ) -> None:
     geography = _feed_geography_wire(
-        {
-            "country_code": None,
-            "direct_region_labels": {"en": "Europe", "zh_cn": "欧洲", "ja": "ヨーロッパ"},
-        },
+        wire_place(kind=3, labels={"en": "Europe", "zh-Hans": "欧洲", "ja": "ヨーロッパ"}),
         locale,
     )
 
     assert geography == {
+        "geolocation_id": 100,
         "kind": "region",
         "label": expected_label,
         "accessible_label": expected_accessible,
@@ -150,24 +120,13 @@ def test_direct_region_uses_the_requested_seeded_locale(
     }
 
 
-def test_country_without_approved_symbol_falls_back_to_its_region() -> None:
+def test_country_without_approved_symbol_keeps_its_canonical_name():
     geography = _feed_geography_wire(
-        {
-            "country_code": "AX",
-            "country_labels": {"en": "Åland Islands", "zh_cn": "奥兰群岛"},
-            "parent_country_code": None,
-            "fallback_region_labels": {
-                "en": "Northern Europe",
-                "zh_cn": "北欧",
-            },
-        },
-        "en",
+        wire_place(code="AX", labels={"en": "Åland Islands", "zh-Hans": "奥兰群岛"}), "en",
     )
-
-    assert geography is not None
     assert geography["kind"] == "region"
     assert geography["flags"] == []
-    assert geography["text"] == "N Europe"
+    assert geography["text"] == "Åland Islands"
 
 
 @pytest.mark.parametrize(

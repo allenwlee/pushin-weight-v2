@@ -32,7 +32,6 @@ python manage.py compilemessages
 
 python manage.py collectstatic --no-input --clear
 
-# Acquire the migration advisory lock on the same connection that Django uses.
-# Every environment, including a fresh isolated staging database, migrates
-# during its build.
+# Owner processes acquire the migration lock and migrate. Restricted web builds
+# only verify privileges and wait for that schema; they have no owner credential.
 DJANGO_SETTINGS_MODULE=project.settings python scripts/render_migrate.py

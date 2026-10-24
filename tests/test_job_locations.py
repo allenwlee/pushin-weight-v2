@@ -117,6 +117,19 @@ def test_structured_city_claim_is_not_silently_coarsened(listing, india):
     assert canonical_job_locations(listing) == []
 
 
+def test_unknown_source_time_keeps_repeated_wording_as_distinct_observations(listing, india):
+    first = write_job_locations(listing, ["India"])[0]
+    second = write_job_locations(listing, ["Springfield"])[0]
+    latest = write_job_locations(listing, ["India"])[0]
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert first.source_archive_id == latest.source_archive_id
+    assert first.pk != latest.pk and first.recorded_at < latest.recorded_at
+    assert first.observed_at is latest.observed_at is None
+    assert first.superseded_at and second.superseded_at and latest.superseded_at is None
+    assert write_job_locations(listing, ["India"])[0].pk == latest.pk
+
+
 def test_legacy_source_change_invalidates_current_location_selection(listing, india):
     from django.db import connection
 

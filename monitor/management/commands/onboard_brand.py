@@ -626,8 +626,10 @@ class Command(BaseCommand):
                     company, company_created = Company.objects.get_or_create(
                         nickname=row.company_nickname
                     )
+                    from core.geolocation_resolution import resolve_geolocation
+
                     company_defaults = {
-                        "hq_country_reference_id": row.company_hq_country or None,
+                        "hq_geolocation_id": resolve_geolocation(row.company_hq_country, context="country"),
                     }
                     if company_created:
                         _update(company, company_defaults)

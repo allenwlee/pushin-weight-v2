@@ -3,7 +3,7 @@
 from django.db import transaction
 
 from core.models import (
-    Country,
+    Geolocation,
     Person,
     PersonCitizenship,
     PersonCitizenshipEvidence,
@@ -13,18 +13,18 @@ from core.models import (
 
 @transaction.atomic
 def record_citizenship(
-    person_id, *, country_code: str, person_text_id: int,
+    person_id, *, geolocation_id: int, person_text_id: int,
     is_primary: bool | None = None,
 ) -> PersonCitizenship:
     person = Person.objects.select_for_update().get(pk=person_id)
     if person.merged_into_id is not None:
         raise ValueError("Record citizenship on the canonical person")
-    country = Country.objects.get(pk=country_code)
+    place = Geolocation.objects.get(pk=geolocation_id, place_kind=Geolocation.Kind.COUNTRY_AREA)
     source = PersonText.objects.get(pk=person_text_id)
     if source.person_id != person.pk or source.origin != "source":
         raise ValueError("Citizenship needs source evidence from the same person")
     existing = PersonCitizenship.objects.filter(
-        person=person, country=country
+        person=person, geolocation=place
     ).first()
     if existing is not None:
         if is_primary is not None and existing.is_primary != is_primary:
@@ -36,7 +36,7 @@ def record_citizenship(
     if is_primary is None:
         is_primary = not PersonCitizenship.objects.filter(person=person).exists()
     row = PersonCitizenship.objects.create(
-        person=person, country=country, is_primary=is_primary
+        person=person, geolocation=place, is_primary=is_primary
     )
     PersonCitizenshipEvidence.objects.create(citizenship=row, person_text=source)
     return row

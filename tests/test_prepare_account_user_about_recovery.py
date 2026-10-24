@@ -10,7 +10,7 @@ from django.core.management import call_command
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from core.models import Account, Country
+from core.models import Account
 from monitor.management.commands.backfill_account_based_in import (
     _parse_recovery_receipt,
 )
@@ -20,13 +20,6 @@ pytestmark = [
     pytest.mark.django_db(transaction=True),
 ]
 
-
-@pytest.fixture(autouse=True)
-def seed_referenced_countries():
-    Country.objects.bulk_create(
-        [Country(code="CN", m49_code="156"), Country(code="US", m49_code="840")],
-        ignore_conflicts=True,
-    )
 
 
 def test_recovery_snapshot_defaults_to_zero_write_dry_run():
@@ -48,9 +41,9 @@ def test_recovery_snapshot_defaults_to_zero_write_dry_run():
     }
 
 
-def test_recovery_snapshot_copies_and_restore_proves_real_account_rows():
-    Account.objects.create(author_id="1", handle="one", country_code="US")
-    Account.objects.create(author_id="2", handle="two", country_code="CN")
+def test_recovery_snapshot_copies_and_restore_proves_real_account_rows(company_country_catalogue):
+    Account.objects.create(author_id="1", handle="one", based_in_location_id=company_country_catalogue["US"])
+    Account.objects.create(author_id="2", handle="two", based_in_location_id=company_country_catalogue["CN"])
     stdout = StringIO()
     relation = None
 

@@ -77,6 +77,8 @@ from core.classification_readers import (
     aggregate_brand_sentiment_counts,
     read_brand_scalars_many,
 )
+from core.geolocation_readers import country_places, descendant_places
+from core.geolocations import geolocation_label
 from core.job_sources.registry import SOURCES as JOB_SOURCES
 from core.models import (
     AudienceTopicConcept,
@@ -85,8 +87,8 @@ from core.models import (
     Brand,
     BrandAccount,
     Company,
-    Country,
-    CountryLabel,
+    Geolocation,
+    GeolocationPolicy,
     GeopoliticalModeLabel,
     JobListing,
     NationalismLabel,
@@ -107,7 +109,6 @@ from core.models import (
     Product,
     ProductLabelLabel,
     ProductVerificationProposal,
-    RegionLabel,
     RoleLabel,
     SentimentKey,
     SentimentLabel,
@@ -1351,12 +1352,6 @@ def _display_role_label(
     return ja_label if _is_ja_locale(locale) else zh_label if _is_zh_locale(locale) else en_label
 
 
-def _geography_label(labels: dict[str, str], locale: str) -> str:
-    """Select a complete seeded label without exposing taxonomy keys."""
-
-    key = "ja" if _is_ja_locale(locale) else "zh_cn" if _is_zh_locale(locale) else "en"
-    label = labels.get(key)
-    return label.strip() if isinstance(label, str) else ""
 
 
 def _geography_accessible_label(label: str, locale: str) -> str:
@@ -1429,188 +1424,69 @@ def _compact_region_label(label: str, locale: str) -> str:
     return label
 
 
-def _region_geography_wire(
-    labels: dict[str, str],
-    locale: str,
-) -> dict[str, Any] | None:
-    label = _geography_label(labels, locale)
+
+
+def _feed_geography_wire(place: Geolocation | None, locale: str) -> dict[str, Any] | None:
+    """Render one selected local place using its current display policy."""
+    if not isinstance(place, Geolocation):
+        return None
+    language = "ja" if _is_ja_locale(locale) else "zh-Hans" if _is_zh_locale(locale) else "en"
+    label = geolocation_label(place, language)
     if not label:
         return None
-    accessible_label = _geography_accessible_label(label, locale)
-    return {
-        "kind": "region",
-        "label": label,
-        "accessible_label": accessible_label,
-        "flags": [],
-        "text": _compact_region_label(label, locale),
-        "relationship_type": "",
+    policy = place.current_policy
+    parent = policy.display_parent if policy else None
+    relationship = GeolocationPolicy.DisplayRelationship(policy.display_relationship).name.lower() if policy and policy.display_relationship else ""
+    result = {
+        "geolocation_id": place.pk,
+        "kind": "region", "label": label,
+        "accessible_label": _geography_accessible_label(label, locale),
+        "flags": [], "text": label, "relationship_type": relationship,
     }
 
+    def flag(target):
+        if target is None:
+            return None
+        symbol = country_flag_symbol_id(target.iso2_country_code)
+        name = geolocation_label(target, language)
+        if not symbol or not name:
+            return None
+        # The ISO code selects a static flag asset only. Identity is the local ID.
+        return {"geolocation_id": target.pk, "code": target.iso2_country_code,
+                "symbol_id": symbol, "label": name}
 
-def _feed_geography_wire(
-    source: dict[str, Any] | None,
-    locale: str,
-) -> dict[str, Any] | None:
-    """Project accepted normalized geography into one presentation-safe object."""
-
-    if not source:
-        return None
-    country_code = source.get("country_code")
-    if not country_code:
-        return _region_geography_wire(
-            source.get("direct_region_labels") or {}, locale
-        )
-
-    label = _geography_label(source.get("country_labels") or {}, locale)
-    if not label:
-        return None
-    parent_code = source.get("parent_country_code")
-    parent_label = _geography_label(
-        source.get("parent_country_labels") or {}, locale
-    )
-    parent_symbol = country_flag_symbol_id(parent_code) if parent_code else None
-    child_symbol = country_flag_symbol_id(country_code)
-    relationship_type = source.get("relationship_type") or ""
-    accessible_label = _geography_accessible_label(label, locale)
-
-    if country_code == "TW":
-        if parent_code != "CN" or not parent_symbol or not parent_label:
-            return _region_geography_wire(
-                source.get("fallback_region_labels") or {}, locale
-            )
-        return {
-            "kind": "taiwan",
-            "label": label,
-            "accessible_label": accessible_label,
-            "flags": [
-                {
-                    "code": parent_code,
-                    "symbol_id": parent_symbol,
-                    "label": parent_label,
-                }
-            ],
-            "text": f"TW · {label}",
-            "relationship_type": relationship_type,
-        }
-
-    if not child_symbol:
-        return _region_geography_wire(
-            source.get("fallback_region_labels") or {}, locale
-        )
-
-    flags: list[dict[str, str]] = []
-    if parent_code:
-        if not parent_symbol or not parent_label:
-            return _region_geography_wire(
-                source.get("fallback_region_labels") or {}, locale
-            )
-        flags.append(
-            {
-                "code": parent_code,
-                "symbol_id": parent_symbol,
-                "label": parent_label,
-            }
-        )
-    flags.append(
-        {"code": country_code, "symbol_id": child_symbol, "label": label}
-    )
-    return {
-        "kind": "hierarchy" if parent_code else "country",
-        "label": label,
-        "accessible_label": accessible_label,
-        "flags": flags,
-        "text": "",
-        "relationship_type": relationship_type,
-    }
+    if policy and policy.flag_mode == GeolocationPolicy.FlagMode.HIDDEN:
+        return result
+    if policy and policy.flag_mode == GeolocationPolicy.FlagMode.DISPLAY_PARENT:
+        parent_flag = flag(parent)
+        if parent_flag:
+            result.update(kind="labelled_parent", flags=[parent_flag])
+        if policy.label_mode == GeolocationPolicy.LabelMode.CODE_AND_NAME and place.iso2_country_code:
+            result["text"] = f"{place.iso2_country_code} · {label}"
+        return result
+    if place.place_kind == Geolocation.Kind.COUNTRY_AREA:
+        child_flag = flag(place)
+        parent_flag = flag(parent)
+        if child_flag:
+            result.update(kind="hierarchy" if parent_flag else "country", text="",
+                          flags=([parent_flag] if parent_flag else []) + [child_flag])
+    elif place.place_kind in {Geolocation.Kind.REGION, Geolocation.Kind.CONTINENT}:
+        result["text"] = _compact_region_label(label, locale)
+    return result
 
 
-def _feed_geography_sources(posts: QuerySet | list[Any]) -> dict[str, dict[str, Any]]:
-    """Bulk-load normalized geography and both feed locales for this page."""
-
-    accounts = {
-        post.author_id: post.author
+def _feed_geography_sources(posts: QuerySet | list[Any]) -> dict[str, Geolocation]:
+    """Bulk-read current based-in claims and their policy/name records by ID."""
+    account_places = {
+        post.author_id: post.author.based_in_location_id
         for post in posts
         if getattr(post, "author_id", None) and getattr(post, "author", None)
+        and post.author.based_in_location_id
     }
-    country_codes = {
-        account.country_id for account in accounts.values() if account.country_id
-    }
-    direct_region_keys = {
-        account.based_in_region_id
-        for account in accounts.values()
-        if account.based_in_region_id
-    }
-    country_rows = {
-        row["code"]: row
-        for row in Country.objects.filter(code__in=country_codes).values(
-            "code",
-            "display_parent_country_id",
-            "display_parent_relationship_type",
-            "region_mapping__region_id",
-        )
-    }
-    parent_codes = {
-        row["display_parent_country_id"]
-        for row in country_rows.values()
-        if row["display_parent_country_id"]
-    }
-    all_country_codes = country_codes | parent_codes
-    country_labels: dict[str, dict[str, str]] = {
-        code: {} for code in all_country_codes
-    }
-    for code, locale, label in CountryLabel.objects.filter(
-        country_id__in=all_country_codes,
-        locale_reference_id__in=("en", "zh-Hans", "ja"),
-    ).values_list("country_id", "locale_reference_id", "label"):
-        country_labels[code]["zh_cn" if locale == "zh-Hans" else locale] = label
-
-    fallback_region_keys = {
-        row["region_mapping__region_id"]
-        for row in country_rows.values()
-        if row["region_mapping__region_id"]
-    }
-    all_region_keys = direct_region_keys | fallback_region_keys
-    region_labels: dict[str, dict[str, str]] = {
-        key: {} for key in all_region_keys
-    }
-    for key, locale, label in RegionLabel.objects.filter(
-        region_id__in=all_region_keys,
-        locale_reference_id__in=("en", "zh-Hans", "ja"),
-    ).values_list("region_id", "locale_reference_id", "label"):
-        region_labels[key]["zh_cn" if locale == "zh-Hans" else locale] = label
-
-    result: dict[str, dict[str, Any]] = {}
-    for author_id, account in accounts.items():
-        if account.country_id:
-            country = country_rows.get(account.country_id)
-            if not country:
-                continue
-            parent_code = country["display_parent_country_id"]
-            region_key = country["region_mapping__region_id"]
-            result[author_id] = {
-                "country_code": account.country_id,
-                "country_labels": country_labels.get(account.country_id, {}),
-                "parent_country_code": parent_code,
-                "parent_country_labels": country_labels.get(parent_code, {}),
-                "relationship_type": country[
-                    "display_parent_relationship_type"
-                ],
-                "fallback_region_labels": region_labels.get(region_key, {}),
-                "direct_region_labels": {},
-            }
-        elif account.based_in_region_id:
-            result[author_id] = {
-                "country_code": None,
-                "country_labels": {},
-                "parent_country_code": None,
-                "parent_country_labels": {},
-                "relationship_type": "",
-                "fallback_region_labels": {},
-                "direct_region_labels": region_labels.get(
-                    account.based_in_region_id, {}
-                ),
-            }
-    return result
+    places = Geolocation.objects.filter(pk__in=set(account_places.values())).select_related(
+        "current_policy__display_parent",
+    ).prefetch_related("alternate_names", "current_policy__display_parent__alternate_names").in_bulk()
+    return {account_id: places[place_id] for account_id, place_id in account_places.items() if place_id in places}
 
 
 def _feed_signal_inspections(
@@ -2781,6 +2657,14 @@ def _normalize_home_filters(filters: dict[str, Any] | None) -> dict[str, Any]:
         values = _bounded_filter_values(value)
         if key == "brands" and "step" in values and Brand.objects.filter(nickname="stepfun").exists():
             values = ["stepfun" if item == "step" else item for item in values]
+        if key in {"country", "region"}:
+            # Old ISO/region keys are not an alternate serving identity.
+            if any(not item.isascii() or not item.isdecimal() or not 0 < int(item) < 2**63 for item in values):
+                normalized[key] = []
+                unavailable.append(key)
+            else:
+                normalized[key] = list(dict.fromkeys(int(item) for item in values))
+            continue
         family = _HOME_FILTER_TAXONOMY_FAMILIES.get(key)
         if family is not None:
             canonical_values: list[str] = []
@@ -3356,15 +3240,14 @@ def _filter_home_posts_queryset(
     if active_countries is not None and active_countries != "__all__":
         if not active_countries:
             return queryset.none()
-        queryset = queryset.filter(author__country_id__in=active_countries)
+        queryset = queryset.filter(author__based_in_location_id__in=country_places(active_countries))
 
     active_regions = normalized_filters.get("region")
     if active_regions is not None and active_regions != "__all__":
         if not active_regions:
             return queryset.none()
         queryset = queryset.filter(
-            Q(author__based_in_region_id__in=active_regions)
-            | Q(author__country__region_mapping__region_id__in=active_regions)
+            author__based_in_location_id__in=descendant_places(active_regions)
         )
 
     for axis, current_field, legacy_model, legacy_field in (

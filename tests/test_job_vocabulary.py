@@ -15,7 +15,6 @@ from core.job_vocabulary import (
 from core.models import (
     Brand,
     Company,
-    Country,
     Currency,
     DefinitionVersion,
     EmploymentType,
@@ -110,17 +109,15 @@ def test_assignment_requires_normalizer_domain_and_null_provenance_is_unique():
         JobEmploymentTypeAssignment.objects.create(**row)
 
 
-def test_currency_registry_and_single_hq_are_real_references():
+def test_currency_registry_and_single_hq_are_real_references(company_country_catalogue):
     with pytest.raises(IntegrityError), transaction.atomic():
         Currency.objects.bulk_create([Currency(code="FAK")])
     with pytest.raises(IntegrityError), transaction.atomic():
         Currency.objects.filter(pk="USD").update(code="EUR")
-    Country.objects.get_or_create(code="CN", defaults={"m49_code": "156"})
-    Country.objects.get_or_create(code="JP", defaults={"m49_code": "392"})
-    company = Company.objects.create(nickname="one-hq", hq_country_reference_id="CN")
-    Company.objects.filter(pk=company.pk).update(hq_country_reference_id="JP")
+    company = Company.objects.create(nickname="one-hq", hq_geolocation_id=company_country_catalogue["CN"])
+    Company.objects.filter(pk=company.pk).update(hq_geolocation_id=company_country_catalogue["JP"])
     company.refresh_from_db()
-    assert company.hq_country_reference_id == "JP"
+    assert company.hq_geolocation_id == company_country_catalogue["JP"]
     assert Company.objects.filter(pk=company.pk).count() == 1
 
 

@@ -105,7 +105,6 @@ def test_complete_response_flattens_every_documented_leaf():
     assert observation.candidates["affiliate_label_description"] == "Affiliate"
     assert observation.candidates["account_based_in"] == "United States"
     assert observation.candidates["created_country_accurate"] is False
-    assert observation.candidates["country_code"] == "US"
     assert observation.candidates["username_changes_count"] == 2
     assert (
         observation.candidates["username_changes_last_changed_at_msec"]
@@ -219,9 +218,7 @@ def test_unresolved_value_stores_exact_value_and_clears_normalized_targets():
     )
 
     assert observation.candidates["account_based_in"] == "Asia Pacific"
-    assert observation.candidates["country_code"] is None
-    assert observation.candidates["based_in_region_key"] is None
-    assert {"country_code", "based_in_region_key"} <= observation.present_fields
+    assert not {"country_code", "based_in_region_key"} & observation.present_fields
 
 
 def test_provider_region_derives_direct_region_and_clears_country():
@@ -234,13 +231,12 @@ def test_provider_region_derives_direct_region_and_clears_country():
     )
 
     assert observation.candidates["account_based_in"] == "Europe"
-    assert observation.candidates["country_code"] is None
-    assert observation.candidates["based_in_region_key"] == "europe"
-    assert {"country_code", "based_in_region_key"} <= observation.present_fields
+    assert not {"country_code", "based_in_region_key"} & observation.present_fields
 
 
 @pytest.mark.django_db
-def test_real_parser_to_orm_transition_clears_stale_geography_target():
+def test_real_parser_to_orm_transition_clears_stale_geography_target(company_country_catalogue):
+    from core.geolocation_resolution import resolve_geolocation
     account = Account.objects.create(author_id="42")
     observed_at = datetime(2026, 8, 29, tzinfo=UTC)
 
@@ -260,8 +256,7 @@ def test_real_parser_to_orm_transition_clears_stale_geography_target():
         present_fields=europe.present_fields,
     )
     account.refresh_from_db()
-    assert account.country_code is None
-    assert account.based_in_region_key == "europe"
+    assert account.based_in_location_id == resolve_geolocation("Europe", context="based_in")
 
     country_payload = _complete_payload()
     country_payload["data"]["about_profile"]["account_based_in"] = "United States"
@@ -279,8 +274,7 @@ def test_real_parser_to_orm_transition_clears_stale_geography_target():
         present_fields=country.present_fields,
     )
     account.refresh_from_db()
-    assert account.country_code == "US"
-    assert account.based_in_region_key is None
+    assert account.based_in_location_id == company_country_catalogue["US"]
 
 
 @pytest.mark.parametrize(
@@ -291,7 +285,7 @@ def test_real_parser_to_orm_transition_clears_stale_geography_target():
         ("Macedonia", "MK"),
     ],
 )
-def test_provider_country_alias_derives_country_code(provider_name, expected_code):
+def test_provider_country_alias_preserves_exact_source_wording(provider_name, expected_code):
     payload = _complete_payload()
     payload["data"]["about_profile"]["account_based_in"] = provider_name
     observation = parse_user_about(
@@ -301,9 +295,7 @@ def test_provider_country_alias_derives_country_code(provider_name, expected_cod
     )
 
     assert observation.candidates["account_based_in"] == provider_name
-    assert observation.candidates["country_code"] == expected_code
-    assert observation.candidates["based_in_region_key"] is None
-    assert {"country_code", "based_in_region_key"} <= observation.present_fields
+    assert not {"country_code", "based_in_region_key"} & observation.present_fields
 
 
 @pytest.mark.parametrize(

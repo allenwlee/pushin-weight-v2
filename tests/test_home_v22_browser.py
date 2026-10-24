@@ -4664,117 +4664,9 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 browser.close()
 
     def _seed_account_geography_fixture(self) -> None:
-        from django.core.management import call_command
+        from tests.geolocation_factory import feed_places
 
-        from core.models import (
-            Country,
-            CountryLabel,
-            CountryRegion,
-            Region,
-            RegionLabel,
-        )
-
-        # TestDatabase flush removes data-migration catalogue rows between
-        # browser cases; seed shared locale identities before inserting labels.
-        call_command("seed_i18n_labels", verbosity=0)
-
-        regions = {
-            "northern-america": ("021", "Northern America", "北美洲"),
-            "eastern-asia": ("030", "Eastern Asia", "东亚"),
-            "australia-and-new-zealand": (
-                "053",
-                "Australia and New Zealand",
-                "澳大利亚和新西兰",
-            ),
-            "europe": ("150", "Europe", "欧洲"),
-            "northern-europe": ("154", "Northern Europe", "北欧"),
-        }
-        for key, (m49_code, label_en, label_zh) in regions.items():
-            Region.objects.update_or_create(
-                key=key,
-                defaults={
-                    "m49_code": m49_code,
-                    "source": "un-m49",
-                    "level": "subregion",
-                    "parent_id": None,
-                },
-            )
-            for locale, label in (("en", label_en), ("zh-Hans", label_zh)):
-                RegionLabel.objects.update_or_create(
-                    region_id=key,
-                    locale_reference_id=locale,
-                    defaults={"label": label},
-                )
-
-        countries = {
-            "CN": ("156", "China", "中国", "eastern-asia", None, None),
-            "AU": (
-                "036",
-                "Australia",
-                "澳大利亚",
-                "australia-and-new-zealand",
-                None,
-                None,
-            ),
-            "US": (
-                "840",
-                "United States of America",
-                "美利坚合众国",
-                "northern-america",
-                None,
-                None,
-            ),
-            "HK": (
-                "344",
-                "China, Hong Kong Special Administrative Region",
-                "中国香港特别行政区",
-                "eastern-asia",
-                "CN",
-                "special_administrative_region",
-            ),
-            "TW": (
-                "158",
-                "Taiwan",
-                "台湾",
-                "eastern-asia",
-                "CN",
-                "owner_display_context",
-            ),
-            "AX": (
-                "248",
-                "Åland Islands",
-                "奥兰群岛",
-                "northern-europe",
-                None,
-                None,
-            ),
-        }
-        for code, (
-            m49_code,
-            label_en,
-            label_zh,
-            region_key,
-            parent_code,
-            relationship_type,
-        ) in countries.items():
-            Country.objects.update_or_create(
-                code=code,
-                defaults={
-                    "m49_code": m49_code,
-                    "display_parent_country_id": parent_code,
-                    "display_parent_relationship_type": relationship_type,
-                },
-            )
-            for locale, label in (("en", label_en), ("zh-Hans", label_zh)):
-                CountryLabel.objects.update_or_create(
-                    country_id=code,
-                    locale_reference_id=locale,
-                    defaults={"label": label},
-                )
-            CountryRegion.objects.update_or_create(
-                country_id=code,
-                defaults={"region_id": region_key, "source": "un-m49"},
-            )
+        self.geolocation_fixture = feed_places()
 
     def _assert_row_contract(self, row: dict[str, object], *, tweet_id: str, tint: str) -> None:
         self.assertEqual(row["tweet_id"], tweet_id)
@@ -5342,13 +5234,13 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self._seed_account_geography_fixture()
 
         Account.objects.filter(author_id="v22-metadata-account-000").update(
-            country_id="US", based_in_region_id=None
+            based_in_location=self.geolocation_fixture["US"]
         )
         Account.objects.filter(author_id="v22-metadata-account-007").update(
-            country_id="AU", based_in_region_id=None
+            based_in_location=self.geolocation_fixture["AU"]
         )
         Account.objects.filter(author_id="v22-metadata-account-006").update(
-            country_id="HK", based_in_region_id=None
+            based_in_location=self.geolocation_fixture["HK"]
         )
         staff_role, _ = Role.objects.get_or_create(key="staff")
         BrandAccount.objects.create(
@@ -5357,13 +5249,13 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             role=staff_role,
         )
         Account.objects.filter(author_id="v22-metadata-account-002").update(
-            country_id="TW", based_in_region_id=None
+            based_in_location=self.geolocation_fixture["TW"]
         )
         Account.objects.filter(author_id="v22-metadata-account-003").update(
-            country_id=None, based_in_region_id="europe"
+            based_in_location=self.geolocation_fixture["europe"]
         )
         Account.objects.filter(author_id="v22-metadata-account-004").update(
-            country_id="AX", based_in_region_id=None
+            based_in_location=self.geolocation_fixture["AX"]
         )
 
         tweet_ids = {
@@ -5472,7 +5364,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     "hierarchy": "China, Hong Kong Special Administrative Region",
                     "taiwan": "TW · Taiwan",
                     "region": "Europe",
-                    "fallback": "N Europe",
+                    "fallback": "Åland Islands",
                 },
             ),
             (
@@ -5484,7 +5376,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     "hierarchy": "中国香港特别行政区",
                     "taiwan": "TW · 台湾",
                     "region": "欧洲",
-                    "fallback": "北欧",
+                    "fallback": "奥兰群岛",
                 },
             ),
         )
@@ -5839,7 +5731,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
 
         self._seed_account_geography_fixture()
         call_command("seed_i18n_labels", verbosity=0)
-        Account.objects.filter(author_id="v22-metadata-account-000").update(country_id="US")
+        Account.objects.filter(author_id="v22-metadata-account-000").update(based_in_location=self.geolocation_fixture["US"])
         Post.objects.filter(tweet_id=self.fixture["replacement_id"]).update(lang_detected="und")
         PostEnrichmentState.objects.update_or_create(
             post_id=self.fixture["replacement_id"],
@@ -6749,19 +6641,19 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self._seed_account_geography_fixture()
 
         Account.objects.filter(author_id="v22-metadata-account-000").update(
-            country_id="US", based_in_region_id=None
+            based_in_location=self.geolocation_fixture["US"]
         )
         Account.objects.filter(author_id="v22-metadata-account-001").update(
-            country_id="HK", based_in_region_id=None
+            based_in_location=self.geolocation_fixture["HK"]
         )
         Account.objects.filter(author_id="v22-metadata-account-002").update(
-            country_id="TW", based_in_region_id=None
+            based_in_location=self.geolocation_fixture["TW"]
         )
         Account.objects.filter(author_id="v22-metadata-account-003").update(
-            country_id=None, based_in_region_id="europe"
+            based_in_location=self.geolocation_fixture["europe"]
         )
         Account.objects.filter(author_id="v22-metadata-account-004").update(
-            country_id="AX", based_in_region_id=None
+            based_in_location=self.geolocation_fixture["AX"]
         )
         with CaptureQueriesContext(connection) as full_queries:
             full_payload = self._feed_payload(

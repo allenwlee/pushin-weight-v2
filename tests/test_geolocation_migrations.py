@@ -109,3 +109,46 @@ def test_populated_geography_mapping_preserves_source_and_policy(migration_rehea
     with connection.cursor() as cursor:
         cursor.execute("SELECT count(*) FROM pg_class WHERE relnamespace=current_schema()::regnamespace AND relkind='r'")
         assert cursor.fetchone()[0] == table_count  # Source projections add no tables.
+
+
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0156_rg4_unknown_job_location_observations")], indirect=True)
+def test_reference_cutover_catches_late_old_writes_and_keeps_source(migration_rehearsal_schema):
+    from django.utils import timezone
+
+    baseline = ("core", "0156_rg4_unknown_job_location_observations")
+    target = ("core", "0157_rg4_geolocation_reference_cutover")
+    old = MigrationExecutor(connection).loader.project_state([baseline]).apps
+    places = dict(old.get_model("core", "Geolocation").objects.values_list("geonames_id", "pk"))
+    Company = old.get_model("core", "Company")
+    company = Company.objects.create(nickname="late-company", hq_country_reference_id="JP", hq_geolocation_id=places[1814991])
+    Account = old.get_model("core", "Account")
+    account = Account.objects.create(data_source_id="x", external_identifier="late", normalized_identifier="late", country_id="US")
+    old.get_model("core", "XAccountDetail").objects.create(account_id=account.pk)
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE x_account_details SET account_based_in='Congo' WHERE account_key=%s", [account.pk])
+    brand = old.get_model("core", "Brand").objects.create(nickname="late", display_name="Late")
+    job = old.get_model("core", "JobListing").objects.create(
+        brand=brand, title="Late", listing_identity="late-job", first_seen_at=timezone.now(), last_seen_at=timezone.now(),
+    )
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE job_listings SET locations=%s::jsonb,locations_raw=%s WHERE id=%s", ['["India","Springfield"]', "India; Springfield", job.pk])
+    MigrationExecutor(connection).migrate([target])
+    current = MigrationExecutor(connection).loader.project_state([target]).apps
+    assert current.get_model("core", "Company").objects.get(pk=company.pk).hq_geolocation_id == places[1861060]
+    assert current.get_model("core", "Account").objects.get(pk=account.pk).based_in_location_id == places[203312]
+    occurrences = list(current.get_model("core", "JobListingLocation").objects.filter(listing_id=job.pk).order_by("ordinal"))
+    assert [row.geolocation_id for row in occurrences] == [places[1269750], None]
+    assert all(row.observed_at is None for row in occurrences)
+    # The still-running old image can change its old columns. The bridge updates
+    # only actual source changes, while a new image writes local PKs directly.
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE companies SET hq_country_id='US' WHERE nickname=%s", [company.pk])
+        cursor.execute("UPDATE x_account_details SET account_based_in='Springfield' WHERE account_key=%s", [account.pk])
+    assert current.get_model("core", "Company").objects.get(pk=company.pk).hq_geolocation_id == places[6252001]
+    assert current.get_model("core", "Account").objects.get(pk=account.pk).based_in_location_id is None
+    new = current.get_model("core", "Company").objects.create(nickname="new-company", hq_geolocation_id=places[1861060])
+    new.refresh_from_db()
+    assert new.hq_geolocation_id == places[1861060]
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT locations_raw FROM job_listings WHERE id=%s", [job.pk])
+        assert cursor.fetchone()[0] == "India; Springfield"

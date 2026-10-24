@@ -33,9 +33,9 @@ services:
       - key: DJANGO_SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
-        fromDatabase:
-          name: pushinweight-staging-db
-          property: connectionString
+        sync: false
+      - key: PW_DATABASE_ACCESS_MODE
+        value: serving
       - key: CELERY_BROKER_URL
         fromService:
           type: keyvalue
@@ -54,10 +54,6 @@ services:
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: STAGING_DATA_REFRESH_ENABLED
-        value: "True"
-      - key: STAGING_REFRESH_SOURCE_DATABASE_URL
         sync: false
       - key: X_MONITOR_HEADLINE_SERVING_ENABLED
         value: "True"
@@ -97,6 +93,8 @@ services:
         fromDatabase:
           name: pushinweight-staging-db
           property: connectionString
+      - key: PW_SERVING_DATABASE_ROLE
+        value: pushinweight_web_serving
       - key: CELERY_BROKER_URL
         fromService:
           type: keyvalue
@@ -147,6 +145,8 @@ services:
         fromDatabase:
           name: pushinweight-staging-db
           property: connectionString
+      - key: PW_SERVING_DATABASE_ROLE
+        value: pushinweight_web_serving
       - key: DEEPINFRA_API_KEY
         sync: false
       - key: X_MONITOR_SYNTHESIS_PROVIDER_CALLS_ENABLED
@@ -181,6 +181,8 @@ services:
         fromDatabase:
           name: pushinweight-staging-db
           property: connectionString
+      - key: PW_SERVING_DATABASE_ROLE
+        value: pushinweight_web_serving
       - key: CELERY_BROKER_URL
         fromService:
           type: keyvalue
@@ -269,6 +271,15 @@ services:
     buildCommand: ./build.sh
     startCommand: python manage.py sync_job_sources
     envVars:
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-staging-headlines-broker
+          property: connectionString
+      - key: STAGING_DATA_REFRESH_ENABLED
+        value: "True"
+      - key: STAGING_REFRESH_SOURCE_DATABASE_URL
+        sync: false
       - key: PYTHON_VERSION
         value: 3.12.0
       - key: DEBUG
@@ -279,6 +290,8 @@ services:
         fromDatabase:
           name: pushinweight-staging-db
           property: connectionString
+      - key: PW_SERVING_DATABASE_ROLE
+        value: pushinweight_web_serving
       - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
         value: staging
 

@@ -65,7 +65,7 @@ def _environment(policy) -> dict[str, str]:
 def test_loads_the_tracked_exhaustive_policy() -> None:
     policy = load_policy(POLICY_PATH)
 
-    assert policy.service.name == "pushinweight-staging-web"
+    assert policy.service.name == "pushinweight-staging-jobs"
     assert policy.source.role == "staging_refresh_reader"
     assert policy.source.database == "pushinweight_shadow"
     assert policy.target.database == "pushinweight_staging"
@@ -238,7 +238,10 @@ def test_migration_graph_tables_are_exhaustively_classified() -> None:
         }
     )
 
-    assert policy.relations.classified_tables == migration_tables
+    # State-only serving cutover retains these physical tables until the
+    # separately deployed deletion. They remain explicitly classified.
+    retained = {"countries", "country_labels", "country_codes_region", "regions", "region_labels"}
+    assert policy.relations.classified_tables == migration_tables | retained
 
 
 def test_per_brand_headline_graph_is_environment_local_state() -> None:

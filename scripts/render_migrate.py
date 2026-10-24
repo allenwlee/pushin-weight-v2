@@ -16,6 +16,23 @@ else:
 _MIGRATION_LOCK_ID = 8_675_309
 
 
+def verify_serving_schema(connection, *, wait_seconds=900, sleep=time.sleep, clock=time.monotonic):
+    """Web builds wait for the owner build's migration without receiving its key."""
+    from django.db.migrations.executor import MigrationExecutor
+    from core.geolocation_access import verify_serving_access
+
+    verify_serving_access(connection)
+    deadline = clock() + wait_seconds
+    while True:
+        executor = MigrationExecutor(connection)
+        if not executor.migration_plan(executor.loader.graph.leaf_nodes()):
+            print("Canonical serving schema and restricted login verified", flush=True)
+            return
+        if clock() >= deadline:
+            raise DatabaseLockError("serving_schema_not_ready")
+        sleep(min(2, max(0, deadline - clock())))
+
+
 def run_migrations(
     *,
     connection,
@@ -69,9 +86,30 @@ def main(
     from django.db import connection
 
     migration_connection = app_connection or connection
-    migration_command = execute_migrate or (
+    execute_owner_migrate = execute_migrate or (
         lambda: execute_from_command_line(["manage.py", "migrate", "--noinput"])
     )
+    access_mode = values.get("PW_DATABASE_ACCESS_MODE", "migrate")
+    if access_mode not in {"migrate", "serving"}:
+        print("Invalid PW_DATABASE_ACCESS_MODE", file=sys.stderr)
+        return 75
+    if access_mode == "serving":
+        try:
+            verify_serving_schema(migration_connection)
+        except (ValueError, DatabaseLockError) as exc:
+            print(f"Serving database verification failed ({exc})", file=sys.stderr)
+            return 75
+        return 0
+
+    def migration_command():
+        execute_owner_migrate()
+        serving_role = values.get("PW_SERVING_DATABASE_ROLE")
+        if serving_role:
+            from django.db import transaction
+            from core.geolocation_access import apply_serving_grants
+            with transaction.atomic(using=migration_connection.alias):
+                apply_serving_grants(migration_connection, serving_role)
+
     lock_options: dict[str, object] = {}
     if connect is not None:
         lock_options["connect"] = connect

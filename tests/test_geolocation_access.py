@@ -49,6 +49,9 @@ def test_serving_login_reads_canonical_columns_but_cannot_reach_source_or_owner(
         cursor.execute("SELECT tweet_id,author_geolocation_id FROM posts WHERE tweet_id='serving-geography'")
         assert cursor.fetchone() == ("serving-geography", None)
         for query in (
+            "SELECT country_code FROM accounts",
+            "SELECT hq_country_id FROM companies",
+            "SELECT * FROM country_labels",
             "SELECT reported_author_location FROM posts",
             "SELECT author_location FROM posts",
             "SELECT raw_profile_payload FROM account_profile_snapshots",
@@ -63,6 +66,19 @@ def test_serving_login_reads_canonical_columns_but_cannot_reach_source_or_owner(
                 cursor.execute(query)
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             cursor.execute(sql.SQL("SET ROLE {}").format(sql.Identifier(owner)))
+
+
+def test_web_build_only_verifies_schema_with_actual_restricted_login(serving_login):
+    from scripts.render_migrate import main
+    serving, _role, _owner, _report = serving_login
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Web build attempted owner connection or DDL")
+    with patch.object(connections["default"], "connection", serving):
+        assert main(
+            environ={"DATABASE_URL": "postgresql://unused", "PW_DATABASE_ACCESS_MODE": "serving"},
+            app_connection=connections["default"], connect=forbidden,
+            execute_migrate=forbidden, setup_django=lambda: None,
+        ) == 0
 
 
 def test_reconciliation_refuses_to_repurpose_owner():
@@ -100,3 +116,46 @@ def test_job_orm_document_uses_local_places_without_source_access(serving_login)
         assert "Springfield" not in str(document)
         with pytest.raises(ProgrammingError, match="permission denied"):
             source_evidence(listing)
+
+
+def test_populated_webpages_and_feeds_work_without_source_privileges(serving_login, client, monkeypatch):
+    from datetime import timedelta
+
+    from django.contrib.auth import get_user_model
+
+    from core.job_locations import write_job_locations
+    from core.models import Account, Event, Opportunity, OpportunityType
+    from tests.general_helpers import NOW, classified_post, saved_commentary
+    from tests.geolocation_factory import feed_places
+    from tests.test_general_jobs_people import affiliation, job
+
+    places = feed_places()
+    account = Account.x.create(author_id="serving-pages", based_in_location=places["TW"])
+    for index, category in enumerate(("events", "opportunities", "job_listings", "personnel_changes")):
+        post = classified_post(str(9500 + index), category)
+        saved_commentary(post)
+        Post.objects.filter(pk=post.pk).update(author=account, created_at=NOW - timedelta(hours=1))
+        if category == "events":
+            Event.objects.create(brand_id="qwen", source_post=post, title="Serving event", event_identity="serving-event", first_seen_at=NOW, last_seen_at=NOW)
+        elif category == "opportunities":
+            Opportunity.objects.create(brand_id="qwen", source_post=post, sponsor_name="Qwen", opportunity_type_reference=OpportunityType.objects.get(code="free_credits"), action_type="apply", benefit_type="credits", benefit_text="Serving offer", opportunity_identity="serving-offer", first_seen_at=NOW, last_seen_at=NOW)
+        elif category == "job_listings":
+            listing = job(post, "Serving role")
+            write_job_locations(listing, ["United States", "Springfield"])
+        else:
+            affiliation(post, "serving-person")
+    monkeypatch.setattr("monitor.general_views.timezone.now", lambda: NOW)
+    user = get_user_model().objects.create_user(username="serving-pages", email="reader@example.org", is_staff=True, is_superuser=True)
+    client.force_login(user)
+    serving, _role, _owner, _report = serving_login
+    with patch.object(connections["default"], "connection", serving):
+        for locale in ("en", "ja", "zh_hans"):
+            for path in ("/", "/general/", "/brands/qwen/", "/stories/", "/posts/9502/", "/admin"):
+                language = "zh-cn" if locale == "zh_hans" else locale
+                response = client.get(f"{path}?lang={language}&locale={locale}", secure=True)
+                assert response.status_code == 200, path
+            for section in ("calendar", "free", "jobs", "moving"):
+                response = client.get(f"/general/feed/?section={section}&lang={locale}", secure=True)
+                assert response.status_code == 200
+                assert response.json()["items"], section
+                assert "Springfield" not in response.content.decode()

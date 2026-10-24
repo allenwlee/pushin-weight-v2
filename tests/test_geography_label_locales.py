@@ -1,95 +1,42 @@
-"""Geography labels use shared locale identities in current readers and writers."""
+"""Shared place names preserve locale identity and historical label cutover."""
 
 import pytest
-from django.core.management import call_command
 from django.db import IntegrityError, connection, transaction
 from django.db.models.deletion import ProtectedError
-
-from core.models import (
-    Account,
-    Country,
-    CountryLabel,
-    Locale,
-    Post,
-    Region,
-    RegionLabel,
-)
+from core.models import Account, GeolocationAlternateName, Locale, Post
 from monitor.views import _feed_geography_sources, _feed_geography_wire
+from tests.geolocation_factory import feed_places
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 
-def parents():
-    country, _ = Country.objects.get_or_create(code="XZ", defaults={"m49_code": "999"})
-    region, _ = Region.objects.get_or_create(
-        key="locale-fixture", defaults={"source": "fixture", "level": "region"}
-    )
-    return country, region
-
-
 def test_current_geography_labels_use_shared_locale_keys_and_keep_feed_output():
-    call_command("seed_shared_vocabulary", catalogue=["languages", "locales"])
-    country, region = parents()
-    labels = (("en", "Fixture"), ("ja", "仮の地名"), ("zh-Hans", "示例地名"))
-    for locale, label in labels:
-        CountryLabel.objects.create(
-            country=country, locale_reference_id=locale, label=label
-        )
-        RegionLabel.objects.create(
-            region=region, locale_reference_id=locale, label=label
-        )
-    account = Account.objects.create(
-        author_id="locale-characterization",
-        handle="locale-fixture",
-        based_in_region=region,
-    )
-    post = Post.objects.create(tweet_id="locale-characterization", author=account)
-    visible_country, _ = Country.objects.get_or_create(
-        code="US", defaults={"m49_code": "840"}
-    )
-    for locale, label in (("en", "United States"), ("ja", "米国"), ("zh-Hans", "美国")):
-        CountryLabel.objects.get_or_create(
-            country=visible_country,
-            locale_reference_id=locale,
-            defaults={"label": label},
-        )
-    country_account = Account.objects.create(
-        author_id="locale-country-characterization",
-        handle="country-fixture",
-        country=visible_country,
-    )
-    country_post = Post.objects.create(
-        tweet_id="locale-country-characterization", author=country_account
-    )
-    posts = [post, country_post]
+    places = feed_places()
+    posts = []
+    for key in ("US", "europe"):
+        account = Account.objects.create(author_id="locale-" + key, based_in_location=places[key])
+        posts.append(Post.objects.create(tweet_id="locale-" + key, author=account))
     sources = _feed_geography_sources(posts)
-    wire = {
-        (item.author_id, locale): _feed_geography_wire(sources[item.author_id], locale)
-        for item in posts
-        for locale in ("en", "ja", "zh_cn")
-    }
+    wire = {(item.author_id, locale): _feed_geography_wire(sources[item.author_id], locale)
+            for item in posts for locale in ("en", "ja", "zh_cn")}
     assert all(wire.values())
-    assert CountryLabel.objects.filter(country=country).count() == 3
-    assert RegionLabel.objects.filter(region=region).count() == 3
+    assert "米国" in str(wire) and "美利坚合众国" in str(wire)
 
 
-def test_duplicate_owner_locale_is_rejected_and_locale_is_protected():
-    call_command("seed_shared_vocabulary", catalogue=["languages", "locales"])
-    country, _ = parents()
-    CountryLabel.objects.create(
-        country=country, locale_reference_id="en", label="Example"
-    )
+def test_exact_duplicate_place_locale_name_is_rejected_and_locale_is_protected():
+    place = feed_places()["US"]
+    row = place.alternate_names.filter(locale_id="en").first()
     with pytest.raises(IntegrityError), transaction.atomic():
-        CountryLabel.objects.create(
-            country=country, locale_reference_id="en", label="Duplicate"
+        GeolocationAlternateName.objects.create(
+            geolocation=place, locale_id="en", name=row.name, source_archive=row.source_archive,
         )
     with pytest.raises(ProtectedError):
         Locale.objects.get(pk="en").delete()
 
 
-@pytest.mark.usefixtures("isolated_migration_database")
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0125_correction_actor_writer_cutover")], indirect=True)
 @pytest.mark.django_db(transaction=True)
-def test_locale_cutover_preserves_old_writers_and_new_fk_writers():
+def test_locale_cutover_preserves_old_writers_and_new_fk_writers(migration_rehearsal_schema):
     from django.db.migrations.executor import MigrationExecutor
 
     executor = MigrationExecutor(connection)
@@ -120,7 +67,7 @@ def test_locale_cutover_preserves_old_writers_and_new_fk_writers():
     executor = MigrationExecutor(connection)
     executor.migrate([cutover])
 
-    from core.models import CountryLabel as CurrentCountryLabel
+    CurrentCountryLabel = executor.loader.project_state([cutover]).apps.get_model("core", "CountryLabel")
 
     row = CurrentCountryLabel.objects.get(pk=("XZ", "zh-Hans"))
     assert row.label == "示例"

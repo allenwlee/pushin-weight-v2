@@ -454,7 +454,7 @@
     var geography = account.geography;
     if (!geography || typeof geography !== 'object') return '';
     var kind = geography.kind;
-    if (['country', 'hierarchy', 'taiwan', 'region'].indexOf(kind) === -1) return '';
+    if (['country', 'hierarchy', 'labelled_parent', 'region'].indexOf(kind) === -1) return '';
     var accessibleLabel = typeof geography.accessible_label === 'string'
       ? geography.accessible_label : '';
     var label = typeof geography.label === 'string' ? geography.label : '';
@@ -467,8 +467,8 @@
     if (flags.length !== rawFlags.length || flags.length > 2) return '';
     if (kind === 'country' && (flags.length !== 1 || text)) return '';
     if (kind === 'hierarchy' && (flags.length !== 2 || text)) return '';
-    if (kind === 'taiwan' &&
-        (flags.length !== 1 || flags[0].code !== 'CN' || text.indexOf('TW · ') !== 0)) {
+    if (kind === 'labelled_parent' &&
+        (flags.length !== 1 || !text)) {
       return '';
     }
     if (kind === 'region' && (flags.length || !text)) return '';
@@ -485,7 +485,7 @@
         '<svg class="account-country-flag" viewBox="0 0 16 9"' +
         ' preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">' +
         '<use href="' + escapeHtml(countryFlagHref(flag.symbolId)) + '"></use></svg></button>';
-      if (kind === 'taiwan' && text) {
+      if (kind === 'labelled_parent' && text) {
         content += '<span class="account-geography-connector" aria-hidden="true"></span>';
       }
     });
