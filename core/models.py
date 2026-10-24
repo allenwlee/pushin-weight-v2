@@ -902,6 +902,10 @@ class Company(models.Model):
         "Country", on_delete=models.PROTECT, db_column="hq_country_id",
         related_name="headquartered_companies", blank=True, null=True,
     )
+    hq_geolocation = models.ForeignKey(
+        "Geolocation", on_delete=models.PROTECT,
+        related_name="headquartered_companies", blank=True, null=True,
+    )
     accent_color = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -1521,6 +1525,10 @@ class CountryRegion(models.Model):
 
 class AccountBasedInMapping(models.Model):
     value = models.TextField(primary_key=True)
+    geolocation = models.ForeignKey(
+        Geolocation, on_delete=models.PROTECT,
+        related_name="based_in_mappings", blank=True, null=True,
+    )
     country = models.ForeignKey(
         Country,
         on_delete=models.CASCADE,
@@ -1724,6 +1732,14 @@ class Account(models.Model):
     following_count = models.IntegerField(blank=True, null=True)
     profile_picture = models.TextField(blank=True, null=True)
     location = models.TextField(blank=True, null=True)
+    profile_location = models.ForeignKey(
+        Geolocation, on_delete=models.PROTECT,
+        related_name="profile_accounts", blank=True, null=True,
+    )
+    based_in_location = models.ForeignKey(
+        Geolocation, on_delete=models.PROTECT,
+        related_name="based_in_accounts", blank=True, null=True,
+    )
     description = models.TextField(blank=True, null=True)
     profile_bio_text = models.TextField(blank=True, null=True)
     followers_fetched_at = models.DateTimeField(blank=True, null=True)
@@ -2196,6 +2212,10 @@ class Post(models.Model):
     author_automated_by = models.TextField(blank=True, null=True)
     author_description = models.TextField(blank=True, null=True)
     author_location = models.TextField(blank=True, null=True)
+    author_geolocation = models.ForeignKey(
+        Geolocation, on_delete=models.PROTECT,
+        related_name="author_posts", blank=True, null=True,
+    )
     author_media_count = models.IntegerField(blank=True, null=True)
     author_statuses_count = models.IntegerField(blank=True, null=True)
     author_favourites_count = models.IntegerField(blank=True, null=True)
@@ -5941,6 +5961,10 @@ class PersonCitizenship(models.Model):
         Country, db_column="country_code", on_delete=models.PROTECT,
         related_name="person_citizenships",
     )
+    geolocation = models.ForeignKey(
+        Geolocation, on_delete=models.PROTECT,
+        related_name="person_citizenships", blank=True, null=True,
+    )
     is_primary = models.BooleanField(default=False)
 
     class Meta:
@@ -6069,6 +6093,10 @@ class AccountProfileSnapshot(models.Model):
     description = models.TextField(blank=True, null=True)
     profile_bio_text = models.TextField(blank=True, null=True)
     location = models.TextField(blank=True, null=True)
+    geolocation = models.ForeignKey(
+        Geolocation, on_delete=models.PROTECT,
+        related_name="profile_snapshots", blank=True, null=True,
+    )
     profile_image_url = models.URLField(max_length=2048, blank=True, null=True)
     verified = models.BooleanField(blank=True, null=True)
     is_blue_verified = models.BooleanField(blank=True, null=True)
@@ -6310,6 +6338,10 @@ class PersonBrandAffiliation(models.Model):
         default="unknown",
     )
     location = models.TextField(blank=True, null=True)
+    geolocation = models.ForeignKey(
+        Geolocation, on_delete=models.PROTECT,
+        related_name="person_affiliations", blank=True, null=True,
+    )
     workplace_type = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     confidence = models.FloatField(blank=True, null=True)
@@ -6860,6 +6892,48 @@ class JobListing(models.Model):
                     )
                 ),
                 name="ck_jobs_extraction_conf",
+            ),
+        ]
+
+
+class JobListingLocation(models.Model):
+    """An ordered location occurrence pinned to immutable source evidence.
+
+    Repeated wording remains separate evidence. Readers use the resolved place;
+    reported_value is a correction input, never a canonical display fallback.
+    """
+
+    listing = models.ForeignKey(JobListing, on_delete=models.PROTECT, related_name="location_occurrences")
+    geolocation = models.ForeignKey(
+        Geolocation, on_delete=models.PROTECT, related_name="job_occurrences", blank=True, null=True,
+    )
+    evidence = models.ForeignKey(
+        "JobListingEvidence", on_delete=models.PROTECT, related_name="location_occurrences", blank=True, null=True,
+    )
+    source_archive = models.ForeignKey(
+        "CollectionEvidenceArchive", on_delete=models.PROTECT, related_name="job_location_occurrences",
+    )
+    ordinal = models.PositiveIntegerField()
+    observed_at = models.DateTimeField(blank=True, null=True)
+    recorded_at = models.DateTimeField(default=timezone.now)
+    superseded_at = models.DateTimeField(blank=True, null=True)
+    reported_value = models.TextField(blank=True, null=True)
+
+    class Meta:
+        db_table = "job_listing_locations"
+        ordering = ["listing_id", "ordinal", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["listing", "ordinal"], condition=models.Q(superseded_at__isnull=True),
+                name="uq_job_location_current_ordinal",
+            ),
+            models.UniqueConstraint(
+                fields=["listing", "source_archive", "ordinal", "observed_at"], nulls_distinct=False,
+                name="uq_job_location_source_occurrence",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(superseded_at__isnull=True) | models.Q(superseded_at__gte=models.F("recorded_at")),
+                name="ck_job_location_recorded_window",
             ),
         ]
 

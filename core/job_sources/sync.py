@@ -8,6 +8,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from django.db import transaction
 from django.utils import timezone
 
+from core.job_locations import write_job_locations
 from core.job_vocabulary import write_job_classifications
 from core.models import Brand, JobListing, JobListingEvidence, JobSourceSyncRun
 
@@ -228,6 +229,10 @@ def _persist_snapshot(
             )},
             evidence=evidence,
             replace=True,
+        )
+        write_job_locations(
+            listing, list(job.locations), reported_value=fields["locations_raw"],
+            evidence=evidence, observed_at=snapshot.observed_at,
         )
 
     if not no_close:

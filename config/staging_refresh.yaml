@@ -145,6 +145,7 @@ relations:
     - job_discovery_runs
     - job_listing_evidence
     - job_listings
+    - job_listing_locations
     - model_release_evidence
     - model_releases
     - nationalism_keys
@@ -386,6 +387,7 @@ relations:
     - job_discovery_runs
     - job_listing_evidence
     - job_listings
+    - job_listing_locations
     - job_source_states
     - job_source_sync_runs
     - model_release_evidence
@@ -523,6 +525,7 @@ relations:
     - job_discovery_runs_id_seq
     - job_listing_evidence_id_seq
     - job_listings_id_seq
+    - job_listing_locations_id_seq
     - job_source_sync_runs_id_seq
     - model_release_evidence_id_seq
     - model_releases_id_seq
@@ -635,6 +638,7 @@ relations:
     - job_discovery_runs_id_seq
     - job_listing_evidence_id_seq
     - job_listings_id_seq
+    - job_listing_locations_id_seq
     - job_source_sync_runs_id_seq
     - model_release_evidence_id_seq
     - model_releases_id_seq

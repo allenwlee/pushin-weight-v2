@@ -1032,6 +1032,12 @@ def _persist_jobs(post: Post, records: list[Mapping[str, Any]], version: str):
             },
         )
         write_job_classifications(listing, record, evidence=_row)
+        from core.job_locations import write_job_locations
+
+        write_job_locations(
+            listing, locations, reported_value=_text(record.get("locations_raw")),
+            evidence=_row, observed_at=now,
+        )
         evidence += int(evidence_created)
     return written, evidence, candidates
 

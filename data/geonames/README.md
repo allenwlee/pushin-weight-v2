@@ -5,11 +5,19 @@ corrections. They cover the existing 249-country catalogue, individually checked
 region/city additions, and provider parent documents needed to examine those
 places. This is not the full GeoNames gazetteer.
 
-`manifest.json` identifies the selected roots, capture time, sizes and SHA-256
+`manifest.json` identifies the selected roots, bundle assembly time, sizes and SHA-256
 checksums. `selected-places-rdf.tar.gz` preserves the original RDF response bytes;
 `countryInfo.txt` supplies provider IDs and approved country-code metadata.
 Database import is limited to the selected roots and usable ancestors. Captured
 political/economic parent candidates need not become stored geographic parents.
+
+`resolution-inputs.json` freezes the existing reviewed country spellings and
+provider based-in mappings against the pinned provider identities. It is used
+only at ingestion boundaries. Country-only structured claims may use source
+codes; free-form `IN`, `Georgia`, `Jordan` and `Chad` remain unresolved. The
+qualified `San Francisco, CA` maps to the verified city. No new submission is
+added to this mapping automatically, and local alias uniqueness is insufficient
+to accept a match. Region matches do not recreate old UN M49 memberships.
 
 Sources are [GeoNames](https://www.geonames.org/) under
 [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/):
