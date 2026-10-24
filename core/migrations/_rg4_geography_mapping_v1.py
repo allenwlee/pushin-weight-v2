@@ -7,7 +7,11 @@ from pathlib import Path
 from django.db import connections, transaction
 from django.utils import timezone
 
-from ._rg4_geography_write_performance_v1 import identity_triggers
+from ._rg4_geography_write_performance_v1 import (
+    identity_triggers,
+    prepare_post_index,
+    write_batch_options,
+)
 from ._rg4_geonames_v1 import (
     archive_document,
     import_geonames_documents,
@@ -114,6 +118,7 @@ def map_rows(model, field, sources, interpret, *, batch_size=100, prepare_batch=
     # estimate IS NULL at 0.5% while it actually matches the whole table, then
     # repeatedly scan/sort that table instead of advancing through its PK.
     connection = connections[model.objects.db]
+    prepare_post_index(connection, model._meta.db_table)
     quote = connection.ops.quote_name
     with connection.cursor() as statistics:
         statistics.execute(
@@ -123,6 +128,8 @@ def map_rows(model, field, sources, interpret, *, batch_size=100, prepare_batch=
     scanned = mapped = 0
     while True:
         with transaction.atomic(using=model.objects.db):
+            with connection.cursor() as options:
+                write_batch_options(options, model._meta.db_table)
             query = model.objects.filter(**{field + "__isnull": True}).order_by("pk")
             if cursor is not None:
                 query = query.filter(pk__gt=cursor)

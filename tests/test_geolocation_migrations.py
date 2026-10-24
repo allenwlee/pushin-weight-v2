@@ -76,12 +76,17 @@ def test_source_copy_resumes_committed_small_batches_without_skipping_unresolved
     with connection.cursor() as cursor:
         cursor.execute("SHOW search_path")
         rehearsal_path = cursor.fetchone()[0]
+        cursor.execute("SELECT current_setting('gin_pending_list_limit')")
+        original_pending_limit = cursor.fetchone()[0]
 
     def fail_second_copy(execute, sql, params, many, context):
         nonlocal writes
         if 'UPDATE "posts" owner SET "reported_author_location"' in sql:
             writes += 1
             if writes == 1:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT pg_size_bytes(current_setting('gin_pending_list_limit')),current_setting('statement_timeout')")
+                    assert cursor.fetchone() == (65536, "30s")
                 # Selection and update remain one transaction: an independent
                 # old-source writer cannot change a selected row between them.
                 with psycopg.connect(**connection.get_connection_params(), autocommit=True) as other:
@@ -102,6 +107,8 @@ def test_source_copy_resumes_committed_small_batches_without_skipping_unresolved
         assert cursor.fetchone() is None
     MigrationExecutor(connection).migrate([target])
     with connection.cursor() as cursor:
+        cursor.execute("SELECT current_setting('gin_pending_list_limit')")
+        assert cursor.fetchone()[0] == original_pending_limit
         cursor.execute("SELECT author_location,reported_author_location,author_geolocation_id FROM posts ORDER BY tweet_id")
         rows = cursor.fetchall()
     assert len(rows) == 205

@@ -11,7 +11,12 @@ from pathlib import Path
 from django.db import migrations, models, transaction
 
 from ._rg4_geography_mapping_v1 import INPUT_HASHES
-from ._rg4_geography_write_performance_v1 import OWNERS, reported_triggers
+from ._rg4_geography_write_performance_v1 import (
+    OWNERS,
+    prepare_post_index,
+    reported_triggers,
+    write_batch_options,
+)
 from ._rg4_home_count_write_v1 import install as home_count_update_trigger
 
 # ruff: noqa: RUF012
@@ -60,28 +65,31 @@ def install(apps, schema_editor):
 def copy_source(apps, schema_editor):
     quote = schema_editor.quote_name
     for table, pk, old, new, field, context in OWNERS:
+        prepare_post_index(schema_editor.connection, table)
         last_key = None
-        copied = 0
+        scanned = copied = 0
         while True:
             with transaction.atomic(using=schema_editor.connection.alias), schema_editor.connection.cursor() as cursor:
-                cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
-                after = f"AND {quote(pk)} > %s" if last_key is not None else ""
+                write_batch_options(cursor, table)
+                after = f"WHERE {quote(pk)} > %s" if last_key is not None else ""
                 cursor.execute(f"""
-                    SELECT {quote(pk)} FROM {quote(table)} WHERE {quote(new)} IS NULL AND {quote(old)} IS NOT NULL
+                    SELECT {quote(pk)},{quote(old)},{quote(new)} FROM {quote(table)}
                     {after} ORDER BY {quote(pk)} LIMIT 100 FOR UPDATE
                 """, [last_key] if last_key is not None else [])
-                keys = [row[0] for row in cursor.fetchall()]
-                if not keys:
+                rows = cursor.fetchall()
+                if not rows:
                     break
-                # Keep the selected rows locked across both statements. This
-                # avoids the combined self-join that timed out on staging even
-                # for ten rows; the separate bounded write completed promptly.
-                cursor.execute(f"""UPDATE {quote(table)} owner SET {quote(new)}=owner.{quote(old)}
-                    WHERE owner.{quote(pk)}=ANY(%s)""", [keys])
-                last_key = keys[-1]
+                keys = [row[0] for row in rows if row[1] is not None and row[2] is None]
+                # Bound scanned rows as well as writes so retry can pass an
+                # already-copied prefix without one unbounded filter scan.
+                if keys:
+                    cursor.execute(f"""UPDATE {quote(table)} owner SET {quote(new)}=owner.{quote(old)}
+                        WHERE owner.{quote(pk)}=ANY(%s)""", [keys])
+                last_key = rows[-1][0]
+                scanned += len(rows)
                 copied += len(keys)
-            if copied % 5000 == 0:
-                print(f"RG4 {table}: source rows copied={copied}", flush=True)
+            if scanned % 5000 == 0:
+                print(f"RG4 {table}: source rows scanned={scanned} copied={copied}", flush=True)
         # The old image could have changed a source after 0150 mapped it but
         # before these bridges existed. Copying identical old/new wording is
         # deliberately not a source-change event, so reconcile that gap here.
@@ -92,7 +100,7 @@ def copy_source(apps, schema_editor):
         scanned = changed = 0
         while True:
             with transaction.atomic(using=schema_editor.connection.alias), schema_editor.connection.cursor() as cursor:
-                cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
+                write_batch_options(cursor, table)
                 after = f"WHERE {quote(pk)} > %s" if last_key is not None else ""
                 cursor.execute(f"""
                     SELECT {quote(pk)},{quote(field)},pw_geo_source_id({quote(new)},%s)

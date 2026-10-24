@@ -1,5 +1,7 @@
 """Keep geography writes from reconstructing unrelated source payloads."""
 
+from django.db import transaction
+
 OWNERS = (
     ("accounts", "account_key", "location", "reported_profile_location", "profile_location_id", "freeform"),
     ("x_account_details", "account_key", "account_based_in", "reported_based_in", "", "based_in"),
@@ -7,6 +9,30 @@ OWNERS = (
     ("account_profile_snapshots", "id", "location", "reported_location", "geolocation_id", "freeform"),
     ("people_brand_affiliations", "id", "location", "reported_location", "geolocation_id", "freeform"),
 )
+
+
+def prepare_post_index(connection, table):
+    """Drain old GIN maintenance work before acquiring source-row locks.
+
+    GIN pending cleanup is physical index maintenance, not a source-data edit.
+    Its initial backlog has a separate bounded allowance; ordinary mapping
+    statements retain their 30-second limit and smaller pending-list threshold.
+    """
+    if table != "posts":
+        return
+    with transaction.atomic(using=connection.alias), connection.cursor() as cursor:
+        cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='180s'")
+        cursor.execute("SELECT gin_clean_pending_list('idx_posts_editorial_context'::regclass)")
+        pages = cursor.fetchone()[0]
+    print(f"RG4 posts: initial search-index pending pages cleaned={pages}", flush=True)
+
+
+def write_batch_options(cursor, table):
+    cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
+    if table == "posts":
+        # A full default 4MB cleanup exceeds the staging statement budget.
+        # Keep its work small without changing the index or any other session.
+        cursor.execute("SET LOCAL gin_pending_list_limit='64kB'")
 
 
 def identity_triggers(schema_editor):
