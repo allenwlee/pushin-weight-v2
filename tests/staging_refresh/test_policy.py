@@ -238,10 +238,7 @@ def test_migration_graph_tables_are_exhaustively_classified() -> None:
         }
     )
 
-    # State-only serving cutover retains these physical tables until the
-    # separately deployed deletion. They remain explicitly classified.
-    retained = {"countries", "country_labels", "country_codes_region", "regions", "region_labels"}
-    assert policy.relations.classified_tables == migration_tables | retained
+    assert policy.relations.classified_tables == migration_tables
 
 
 def test_per_brand_headline_graph_is_environment_local_state() -> None:
@@ -758,15 +755,15 @@ def test_post_drop_schema_contract_does_not_require_retired_identity_columns():
     assert required["metrics"] >= {"unit_id", "window_unit_id", "source_timezone_id"}
     assert required["events"] >= {"source_timezone_id"}
     assert required["opportunities"] >= {"source_timezone_id"}
-    assert required["country_labels"] >= {"locale_id"}
-    assert required["region_labels"] >= {"locale_id"}
+    assert required["geolocation_alternate_names"] >= {"geolocation_id", "locale_id", "name"}
     assert "unit" not in required["metrics"]
     assert "window_unit" not in required["metrics"]
     assert "source_timezone" not in required["metrics"]
     assert "source_timezone" not in required["events"]
     assert "source_timezone" not in required["opportunities"]
-    assert "lang" not in required["country_labels"]
-    assert "lang" not in required["region_labels"]
+    for retired in ("countries", "regions", "country_labels", "region_labels", "country_codes_region",
+                    "person_name_types", "release_disclosure_states"):
+        assert retired not in required and retired not in policy.relations.classified_tables
 
 
 def test_dossier_history_is_copied_and_pre_dossier_sources_remain_supported():

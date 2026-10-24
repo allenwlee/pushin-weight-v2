@@ -30,9 +30,7 @@ def test_changed_reported_source_clears_obsolete_reference_in_bulk_and_orm():
     assert post.author_geolocation_id is None
     assert not hasattr(post, "author_location")
     with connection.cursor() as cursor:
-        cursor.execute("SELECT author_location FROM posts WHERE tweet_id=%s", [post.pk])
-        assert cursor.fetchone()[0] == "Springfield"  # Preceding deployed image remains compatible until drop.
-        cursor.execute("UPDATE posts SET author_location='Korea' WHERE tweet_id=%s", [post.pk])
+        cursor.execute("UPDATE posts SET reported_author_location='Korea' WHERE tweet_id=%s", [post.pk])
     post.refresh_from_db()
     assert post.author_geolocation_id == selected[1835841].pk
     assert source_evidence(post).reported_author_location == "Korea"
@@ -40,8 +38,16 @@ def test_changed_reported_source_clears_obsolete_reference_in_bulk_and_orm():
         write_source_evidence(post, reported_author_location=None)
     post.refresh_from_db()
     assert post.author_geolocation_id is None and source_evidence(post).reported_author_location is None
-    with pytest.raises(IntegrityError), transaction.atomic(), connection.cursor() as cursor:
-        cursor.execute("UPDATE posts SET author_location='India',reported_author_location='Korea' WHERE tweet_id=%s", [post.pk])
+    # Correcting the interpretation without changing its wording must survive
+    # a later save of that identical source, including explicit NULL wording.
+    Post.objects.filter(pk=post.pk).update(author_geolocation=selected[1269750])
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE posts SET reported_author_location=NULL WHERE tweet_id=%s", [post.pk])
+    post.refresh_from_db()
+    assert post.author_geolocation_id == selected[1269750].pk
+    write_source_evidence(post, reported_author_location="Springfield")
+    post.refresh_from_db()
+    assert post.author_geolocation_id is None
 
 
 def test_based_in_defaults_are_distinct_from_profile_location_and_clear_when_changed():
@@ -102,7 +108,8 @@ def test_location_only_writes_preserve_payloads_and_identity_changes_still_valid
         result = cursor.fetchone()[0]
         result = json.loads(result) if isinstance(result, str) else result
         triggers = {row["Trigger Name"] for row in result[0].get("Triggers", [])}
-        assert "pw_geo_reported_bridge" in triggers and "benchmark_account_link" not in triggers
+        assert "pw_geo_reported_source" in triggers and "benchmark_account_link" not in triggers
+        assert "home_counts_update" not in triggers
         cursor.execute("UPDATE posts SET author_id=%s WHERE tweet_id=%s", [other.author_id, post.pk])
     post.refresh_from_db()
     assert post.author_id == other.pk and post.native_author_id == other.author_id

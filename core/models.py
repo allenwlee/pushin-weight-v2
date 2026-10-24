@@ -217,11 +217,6 @@ class RoleAIRelationshipType(BusinessVocabularyCode):
         db_table = "role_ai_relationship_types"
 
 
-class PersonNameType(BusinessVocabularyCode):
-    class Meta(BusinessVocabularyCode.Meta):
-        db_table = "person_name_types"
-
-
 class AffiliationType(BusinessVocabularyCode):
     class Meta(BusinessVocabularyCode.Meta):
         db_table = "affiliation_types"
@@ -255,11 +250,6 @@ class ReleaseAccessChannel(BusinessVocabularyCode):
 class ReleaseAvailabilityState(BusinessVocabularyCode):
     class Meta(BusinessVocabularyCode.Meta):
         db_table = "release_availability_states"
-
-
-class ReleaseDisclosureState(BusinessVocabularyCode):
-    class Meta(BusinessVocabularyCode.Meta):
-        db_table = "release_disclosure_states"
 
 
 class PersonnelChangeType(BusinessVocabularyCode):

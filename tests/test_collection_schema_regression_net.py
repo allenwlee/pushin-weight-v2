@@ -59,39 +59,12 @@ def test_reference_inventory_and_columns_match_all_concrete_application_tables()
         for m in apps.get_app_config("core").get_models()
         if m._meta.managed and not m._meta.proxy
     ]
-    # Explicit rolling-release inventory. Remove these entries only with the
-    # corresponding physical deletion migration; never accept arbitrary drift.
-    retained_tables = {"countries", "regions", "country_labels", "region_labels", "country_codes_region"}
-    compatibility_columns = {
-        "account_based_in_mappings": {"country_code", "region_key"},
-        "account_profile_snapshots": {"location"},
-        "accounts": {"based_in_region_key", "country_code", "location"},
-        "companies": {"hq_country_id"},
-        "event_dossier_claims": {"claim_kind", "event_timezone"},
-        "event_dossiers": {"event_kind"},
-        "job_listings": {"locations", "locations_raw"},
-        "model_release_details": {"availability_state", "disclosure_state_id", "release_channel"},
-        "model_releases": {"release_channel"},
-        "opportunities": {"opportunity_type"},
-        "people": {"nationality"},
-        "people_brand_affiliations": {"affiliation_type", "location"},
-        "people_names": {"name_type_id"},
-        "person_citizenships": {"country_code"},
-        "personnel_change_details": {"change_kind"},
-        "posts": {"author_location"},
-        "x_account_details": {"account_based_in"},
-    }
-    expected = {m._meta.db_table for m in models} | retained_tables
+    expected = {m._meta.db_table for m in models}
     headings = re.findall(r"^### `([^`]+)` —", doc, re.MULTILINE)
     assert set(headings) == expected and len(headings) == len(expected)
     inventory = re.findall(r"^\| \[([^]]+)\]\(#table-[^)]+\) \|", doc, re.MULTILINE)
     assert set(inventory) == expected and len(inventory) == len(expected)
     canonical = {model._meta.db_table: model for model in models}
-    retained = MigrationExecutor(connection).loader.project_state([
-        ("core", "0156_rg4_unknown_job_location_observations")
-    ]).apps
-    canonical.update({model._meta.db_table: model for model in retained.get_app_config("core").get_models()
-                      if model._meta.db_table in retained_tables})
     for table, model in canonical.items():
         section = doc.split(f"### `{table}` —", 1)[1].split(
             "[Back to table inventory]", 1
@@ -100,7 +73,7 @@ def test_reference_inventory_and_columns_match_all_concrete_application_tables()
         orm_columns = {f.column for f in model._meta.local_fields if f.concrete}
         projection = PROJECTIONS.get(table)
         source_columns = {f.column for f in projection._meta.local_concrete_fields} if projection else set()
-        expected_columns = orm_columns | source_columns | compatibility_columns.get(table, set())
+        expected_columns = orm_columns | source_columns
         with connection.cursor() as cursor:
             physical_columns = {
                 column.name

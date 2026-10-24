@@ -14,29 +14,6 @@ from pathlib import Path
 import pytest
 
 
-@pytest.fixture(scope="session", autouse=True)
-def include_retained_geography_tables_in_test_cleanup():
-    """Flush only the five known compatibility tables while they still exist.
-
-    Their models leave the serving ORM before physical deletion. Django's usual
-    transaction-test cleanup otherwise omits their foreign keys to locales.
-    This adds no CASCADE and never discovers or clears arbitrary shared tables.
-    """
-    from django.db.backends.postgresql.introspection import DatabaseIntrospection
-
-    original = DatabaseIntrospection.django_table_names
-    retained = {"countries", "country_labels", "country_codes_region", "regions", "region_labels"}
-
-    def names(self, only_existing=False, include_views=True):
-        result = set(original(self, only_existing=only_existing, include_views=include_views))
-        result.update(retained.intersection(self.table_names()))
-        return sorted(result)
-
-    with pytest.MonkeyPatch.context() as patcher:
-        patcher.setattr(DatabaseIntrospection, "django_table_names", names)
-        yield
-
-
 @pytest.fixture(autouse=True)
 def ensure_shared_locale_rows_for_database_tests(request):
     """Restore the small shared locale catalogue after transactional flushes."""
@@ -81,7 +58,7 @@ def ensure_shared_business_catalogues_for_database_tests(request):
         return
     request.getfixturevalue("db")
     from core.job_vocabulary import NORMALIZER_ID, register_job_normalizer
-    from core.models import Currency, DefinitionVersion, EmploymentType, PersonNameType
+    from core.models import AffiliationType, Currency, DefinitionVersion, EmploymentType
     from core.shared_vocabulary import seed_shared_vocabulary
 
     if not Currency.objects.filter(pk="USD").exists() or not EmploymentType.objects.filter(code="full_time").exists():
@@ -92,11 +69,11 @@ def ensure_shared_business_catalogues_for_database_tests(request):
         ))
     if not DefinitionVersion.objects.filter(pk=NORMALIZER_ID).exists():
         register_job_normalizer()
-    if not PersonNameType.objects.filter(code="professional").exists():
+    if not AffiliationType.objects.filter(code="employment").exists():
         seed_shared_vocabulary(catalogues=(
-            "person_name_types", "affiliation_types", "opportunity_types", "event_kinds",
+            "affiliation_types", "opportunity_types", "event_kinds",
             "event_claim_kinds", "release_maturities", "release_access_channels",
-            "release_availability_states", "release_disclosure_states", "personnel_change_types",
+            "release_availability_states", "personnel_change_types",
         ))
 
 

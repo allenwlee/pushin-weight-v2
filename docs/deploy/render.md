@@ -55,6 +55,14 @@ reconcile canonical column grants after successful migrations. Bootstrap the
 separate login before enabling that setting. Inspect direct variables and linked
 environment groups; never leave an owner URL in the web service as a fallback.
 
+After `0160_rg4_remove_superseded_storage`, recovery and suspended-service
+resumption require the tested deletion revision recorded in the global schema
+plan, or a verified compatible descendant. The superseded geography columns,
+country/region tables and two rejected catalogues are physically absent. Do not
+roll back to the preceding image or reverse this migration. Preserve the current
+database and apply a compatible forward fix; a database restore is a separate
+recovery operation requiring its own authority and verification.
+
 ### Staging snapshot refresh
 
 The existing staging jobs service supplies the build and configuration for the guarded, operator-invoked production

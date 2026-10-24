@@ -11,7 +11,6 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 @pytest.mark.parametrize(
     "model_name",
     [
-        "PersonNameType",
         "AffiliationType",
         "OpportunityType",
         "EventKind",
@@ -19,7 +18,6 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
         "ReleaseMaturity",
         "ReleaseAccessChannel",
         "ReleaseAvailabilityState",
-        "ReleaseDisclosureState",
         "PersonnelChangeType",
     ],
 )
@@ -51,6 +49,7 @@ def test_same_spelling_has_distinct_business_owners():
 
 @pytest.mark.parametrize("domain", ["affiliation", "opportunity"])
 def test_extracted_business_kind_uses_catalogue_without_changing_retry_identity(domain):
+    from core.geolocation_evidence import source_evidence
     from core.intelligence_readers import opportunity_document, person_intelligence
     from core.targeted_extraction import _persist_opportunities, _persist_personnel
     from tests.test_targeted_extraction import _post
@@ -83,7 +82,7 @@ def test_extracted_business_kind_uses_catalogue_without_changing_retry_identity(
     assert getattr(row, identity) == saved_identity
     if domain == "affiliation":
         assert person_intelligence(row.person_id)["affiliations"][0]["affiliation_type"] == code
-        assert row.evidence.get().extracted_claim_data == record
+        assert source_evidence(row.evidence.get()).extracted_claim_data == record
     else:
         assert opportunity_document(row.pk, as_of=post.fetched_at)["opportunity_type"] == code
         assert row.raw_payload == record

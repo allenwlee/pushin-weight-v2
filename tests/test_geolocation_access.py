@@ -49,11 +49,10 @@ def test_serving_login_reads_canonical_columns_but_cannot_reach_source_or_owner(
         cursor.execute("SELECT tweet_id,author_geolocation_id FROM posts WHERE tweet_id='serving-geography'")
         assert cursor.fetchone() == ("serving-geography", None)
         for query in (
-            "SELECT country_code FROM accounts",
-            "SELECT hq_country_id FROM companies",
-            "SELECT * FROM country_labels",
+            "SELECT reported_profile_location FROM accounts",
+            "SELECT reported_based_in FROM x_account_details",
+            "SELECT reported_value FROM job_listing_locations",
             "SELECT reported_author_location FROM posts",
-            "SELECT author_location FROM posts",
             "SELECT raw_profile_payload FROM account_profile_snapshots",
             "SELECT profile_data FROM account_profile_snapshots",
             "SELECT raw_payload FROM job_listings",
