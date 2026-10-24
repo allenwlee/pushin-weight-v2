@@ -35,6 +35,19 @@ SERVING_VIEWS = frozenset({
 })
 
 
+def verify_serving_environment(values):
+    """Reject a second PostgreSQL credential hidden under a legacy setting."""
+    if values.get("PW_DATABASE_ACCESS_MODE") != "serving":
+        return
+    for name, value in values.items():
+        if name != "DATABASE_URL" and isinstance(value, str):
+            scheme = value.partition("://")[0].lower() if "://" in value else ""
+            if "postgres" in scheme:
+                raise ValueError("Web environment contains another database credential: " + name)
+    if values.get("STAGING_REFRESH_SOURCE_DATABASE_URL") or values.get("STAGING_DATA_REFRESH_ENABLED", "").lower() in {"1", "true", "yes"}:
+        raise ValueError("Web environment must not carry staging refresh authority")
+
+
 def verify_serving_access(connection, *, schema="public"):
     """Read-only proof that this connection cannot read location source evidence."""
     with connection.cursor() as cursor:

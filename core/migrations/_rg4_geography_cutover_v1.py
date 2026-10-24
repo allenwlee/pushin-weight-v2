@@ -70,8 +70,16 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;
+DROP TRIGGER IF EXISTS pw_citizenship_geolocation_owner ON person_citizenships;
 CREATE TRIGGER pw_citizenship_geolocation_owner BEFORE UPDATE OF person_id,geolocation_id ON person_citizenships
 FOR EACH ROW EXECUTE FUNCTION pw_citizenship_geolocation_owner();
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint
+    WHERE conrelid='person_citizenships'::regclass AND conname='uq_person_citizenship_geolocation') THEN
+    ALTER TABLE person_citizenships ADD CONSTRAINT uq_person_citizenship_geolocation
+      UNIQUE (person_id,geolocation_id);
+  END IF;
+END $$;
 """
 
 

@@ -25,10 +25,10 @@ class Migration(migrations.Migration):
         migrations.RunPython(reconcile_owners, atomic=False),
         migrations.RunPython(reconcile_jobs, atomic=False),
         migrations.RunSQL(IMMUTABLE_CITIZENSHIP),
-        migrations.AddConstraint(
+        migrations.SeparateDatabaseAndState(state_operations=[migrations.AddConstraint(
             model_name='personcitizenship',
             constraint=models.UniqueConstraint(fields=('person', 'geolocation'), name='uq_person_citizenship_geolocation'),
-        ),
+        )]),
         migrations.SeparateDatabaseAndState(state_operations=[
 
         migrations.RemoveField(

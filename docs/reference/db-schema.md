@@ -1,8 +1,10 @@
 # Database schema reference
 
-Repository candidate scope includes `0134_rg3_remove_legacy_job_and_hq_columns`. Deployment and physical-verification results remain recorded separately in the global schema plan.
+Repository candidate through `0157_rg4_geolocation_reference_cutover`, verified against models, migration state and the shared local PostgreSQL schema on October24,2026. Staging/production deployment is recorded separately in the global schema plan.
 
-Repository scope: **196 core application tables**, **2396 current ORM columns**, nine compatibility views and one native materialized view with five columns. Migration0134 removes the nine RG3 compatibility columns and their temporary bridges after affected old processes drain: `companies.hq_country` and `job_listings.job_function`, `seniority`, `employment_type`, `workplace_type`, `organization_ai_relationship`, `role_ai_relationship`, `salary_currency`, `salary_period`. It verifies retained meanings/source evidence and fingerprints all listing, source, assignment and company values outside those nine fields before and after deletion. Catalogue and assignment guards remain. The materialized view remains a separate unmanaged ORM mapping.
+Scope: **212 physical core application tables**, **2494 physical columns**, **207 managed core models**, nine compatibility views and one native materialized view. Five old geography tables remain physically present during rolling cutover. Two managed compatibility catalogues (`person_name_types`, `release_disclosure_states`) also await the separate deletion release. The final selected design adds14 tables and retires the five old geography tables; the two unwanted compatibility catalogues are not part of that end state.
+
+Canonical geography references use `geolocations.id`. Exact necessary source wording and existing payloads remain in restricted evidence columns on their existing owners, exposed only through unmanaged projections. Those projections add no tables or JSON columns. Ordinary models, webpages and APIs use canonical locations; unresolved claims return NULL without a raw-source fallback. Temporary compatibility columns and tables are explicitly identified below.
 
 Use this guide to find where information lives and how records connect. Start
 with a subject below, or use the [alphabetical table inventory](#table-inventory)
@@ -21,17 +23,17 @@ The retired SQLite database and Graphviz image are not current schema sources.
 | Subject | Tables | Start here when you need… |
 | --- | ---: | --- |
 | [Shared catalogues and performer identities](#shared-catalogues) | 10 | Canonical timezone, language-tag and unit values; internal performers; immutable definition, provider, model and workflow-stage identities. |
-| [People and job history](#people) | 14 | A person, their optional X identity, roles, employment dates, and evidence. |
+| [People and job history](#people) | 19 | A person, their optional X identity, roles, employment dates, and evidence. |
 | [Companies, brands, and organization discovery](#organizations) | 12 | Company/brand identity, ownership, associated accounts, and unresolved organizations. |
 | [Accounts, profiles, and lists](#accounts) | 8 | Shared source accounts, X detail profiles, observed history, list membership and post appearances. |
-| [Countries and regions](#geography) | 6 | Country/region names and interpretation of account geography. |
+| [Shared geography](#geography) | 9 | Country/region names and interpretation of account geography. |
 | [Posts and classification](#posts) | 13 | Source posts, brand attribution, classification, and supporting judgments. |
 | [Homepage counts](#homepage-counts) | 1 + native view | Historical count summaries and their publication validity. |
 | [Classification vocabularies and translated labels](#vocabularies) | 23 | Allowed classification concepts and their translated display labels. |
-| [Products, model releases, and Hugging Face catalog](#products) | 8 | Exact products, release claims, and catalog observations. |
-| [Job listings and official career-site collection](#jobs) | 18 | Advertised roles, their sources, and career-site synchronization status. |
-| [Events and opportunities](#events) | 3 | Attendable occurrences and action-for-benefit offers. |
-| [Event dossiers and evidence](#event-dossiers) | 7 | Source-backed event identity, claims, review history and typed projections. |
+| [Products, model releases, and Hugging Face catalog](#products) | 12 | Exact products, release claims, and catalog observations. |
+| [Job listings and official career-site collection](#jobs) | 19 | Advertised roles, their sources, and career-site synchronization status. |
+| [Events and opportunities](#events) | 5 | Attendable occurrences and action-for-benefit offers. |
+| [Event dossiers and evidence](#event-dossiers) | 8 | Source-backed event identity, claims, review history and typed projections. |
 | [Post translation and commentary](#translation) | 9 | Literal post translations, generated commentary, retries, and budgets. |
 | [Authored content and trend publication](#headlines) | 13 | Prepared headline text, publication pointers, provider batches, work requests, and provider costs. |
 | [Compatible editorial input storage and pictures](#editorial) | 7 | Story identities, accepted editions, quarter-hour decisions, spend and optional assets. |
@@ -134,19 +136,21 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 196 core application tables appears once in this inventory and once in
-the detailed sections. Subject table counts above sum to 196. The native view is
+Each of the 212 physical core application tables appears once in this inventory and once in
+the detailed sections. This includes five retired geography tables retained during
+cutover. There are 207 managed models; unmanaged source projections add no tables. The native view is
 listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 
 | Table | Subject | What one row represents |
 | --- | --- | --- |
 | [_applied_config_snapshot](#table-_applied_config_snapshot) | [Collection, extraction, and processing records](#processing) | One configuration artifact’s last applied content hash. |
-| [account_based_in_mappings](#table-account_based_in_mappings) | [Countries and regions](#geography) | One reviewed mapping from an X “based in” string to a country or region. |
+| [account_based_in_mappings](#table-account_based_in_mappings) | [Shared geography](#geography) | One reviewed mapping from an X “based in” string to a country or region. |
 | [account_post_appearances](#table-account_post_appearances) | [Accounts, profiles, and lists](#accounts) | One account’s appearance in one collected post, with collection context. |
 | [account_profile_snapshots](#table-account_profile_snapshots) | [Accounts, profiles, and lists](#accounts) | One consecutive observation period during which an account’s saved profile hash is unchanged. |
 | [account_profile_text_translations](#table-account_profile_text_translations) | [Accounts, profiles, and lists](#accounts) | One localized translation of profile text, tied to account and source-text role. |
 | [accounts](#table-accounts) | [Accounts, profiles, and lists](#accounts) | One source account with a UUID identity, source/native key and current saved profile. |
 | [actors](#table-actors) | [Shared catalogues and performer identities](#shared-catalogues) | One stable internal human, agent or system performer identity. |
+| [affiliation_types](#table-affiliation_types) | [People and job history](#people) | One allowed kind of relationship between a person and an organization; shared by affiliations and dossier personnel details. |
 | [audience_topic_concepts](#table-audience_topic_concepts) | [Classification vocabularies and translated labels](#vocabularies) | One stable topic identity within an audience-topic scheme. |
 | [audience_topic_labels](#table-audience_topic_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated topic label for a particular revision. |
 | [audience_topic_schemes](#table-audience_topic_schemes) | [Classification vocabularies and translated labels](#vocabularies) | One versioned audience-topic scheme and its manifest identity. |
@@ -177,9 +181,10 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [companies_accounts](#table-companies_accounts) | [Companies, brands, and organization discovery](#organizations) | One account’s role and ownership-review state for a company. |
 | [company_labels](#table-company_labels) | [Companies, brands, and organization discovery](#organizations) | One current company label for a registered locale. |
 | [content_pictures](#table-content_pictures) | [Compatible editorial input storage and pictures](#editorial) | One optional source/derivative assignment for a content revision. |
-| [countries](#table-countries) | [Countries and regions](#geography) | One country/territory code and optional display-parent relationship. |
-| [country_codes_region](#table-country_codes_region) | [Countries and regions](#geography) | One country’s assigned region and the source of that assignment. |
-| [country_labels](#table-country_labels) | [Countries and regions](#geography) | One translated label for a country code. |
+| [countries](#table-countries) | [Shared geography](#geography) | One country/territory code and optional display-parent relationship. |
+| [country_codes_region](#table-country_codes_region) | [Shared geography](#geography) | One country’s assigned region and the source of that assignment. |
+| [country_labels](#table-country_labels) | [Shared geography](#geography) | One translated label for a country code. |
+| [currencies](#table-currencies) | [Shared catalogues and performer identities](#shared-catalogues) | One registered current or historical ISO 4217 currency code; it does not imply exchange-rate conversion. |
 | [data_sources](#table-data_sources) | [Accounts, profiles, and lists](#accounts) | One stable collection-source identity, distinct from original authored content. |
 | [definition_versions](#table-definition_versions) | [Shared catalogues and performer identities](#shared-catalogues) | One immutable identity and provenance record for a versioned software or policy definition. |
 | [discourse_keys](#table-discourse_keys) | [Classification vocabularies and translated labels](#vocabularies) | One legacy pragmatic-register vocabulary key. |
@@ -190,22 +195,36 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [editorial_editions](#table-editorial_editions) | [Compatible editorial input storage and pictures](#editorial) | One immutable accepted story edition for a track, locale and revision. |
 | [editorial_heroes](#table-editorial_heroes) | [Compatible editorial input storage and pictures](#editorial) | One current hero pointer, or the shared provider-lock row. |
 | [editorial_stories](#table-editorial_stories) | [Compatible editorial input storage and pictures](#editorial) | One permanent development identity with original-post anchors. |
+| [employment_types](#table-employment_types) | [Job listings and official career-site collection](#jobs) | One reusable employment-arrangement classification. |
+| [event_claim_kinds](#table-event_claim_kinds) | [Event dossiers and evidence](#event-dossiers) | One allowed evidence-claim kind shared by dossier claims and scoped artifact, endpoint and host records. |
 | [event_dossier_claims](#table-event_dossier_claims) | [Event dossiers and evidence](#event-dossiers) | One extracted assertion with evidence, scope and typed time precision. |
 | [event_dossier_review_claims](#table-event_dossier_review_claims) | [Event dossiers and evidence](#event-dossiers) | One claim disposition included in a review revision. |
 | [event_dossier_reviews](#table-event_dossier_reviews) | [Event dossiers and evidence](#event-dossiers) | One immutable dossier decision revision and evidence cutoff. |
 | [event_dossier_sources](#table-event_dossier_sources) | [Event dossiers and evidence](#event-dossiers) | One captured source attached to one dossier. |
 | [event_dossiers](#table-event_dossiers) | [Event dossiers and evidence](#event-dossiers) | One versioned event identity and its current review pointer. |
 | [event_evidence](#table-event_evidence) | [Events and opportunities](#events) | One source observation supporting an event occurrence. |
+| [event_kinds](#table-event_kinds) | [Events and opportunities](#events) | One allowed kind of event, referenced by the event rather than repeated as its canonical string. |
 | [events](#table-events) | [Events and opportunities](#events) | One attendance-bearing occurrence, such as a conference or meetup. |
+| [geolocation_alternate_names](#table-geolocation_alternate_names) | [Shared geography](#geography) | One attested wording in one locale for one place; includes localized preferred names and vetted aliases. |
+| [geolocation_policies](#table-geolocation_policies) | [Shared geography](#geography) | One immutable local geography policy decision; the place selects its current decision while the supersedes chain preserves history. |
+| [geolocations](#table-geolocations) | [Shared geography](#geography) | One shared geographic place with a local primary key, optional external GeoNames identity and provider-supported ancestry. |
 | [geopolitical_mode_keys](#table-geopolitical_mode_keys) | [Classification vocabularies and translated labels](#vocabularies) | One geopolitical-mode vocabulary key. |
 | [geopolitical_mode_labels](#table-geopolitical_mode_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated geopolitical-mode label. |
 | [harvest_backlog_windows](#table-harvest_backlog_windows) | [Collection, extraction, and processing records](#processing) | One bounded time window still owed collection coverage. |
+| [inference_models](#table-inference_models) | [Shared catalogues and performer identities](#shared-catalogues) | One provider-qualified native model identifier requested from an inference service. |
 | [job_discovery_runs](#table-job_discovery_runs) | [Job listings and official career-site collection](#jobs) | One job-search query/window run, including coverage, cost, and extracted listing count. |
+| [job_employment_type_assignments](#table-job_employment_type_assignments) | [Job listings and official career-site collection](#jobs) | One current, source-supported employment-type assignment on a listing. |
+| [job_function_assignments](#table-job_function_assignments) | [Job listings and official career-site collection](#jobs) | One current, source-supported job-function assignment on a listing. |
+| [job_functions](#table-job_functions) | [Job listings and official career-site collection](#jobs) | One reusable job-function classification. |
 | [job_listing_evidence](#table-job_listing_evidence) | [Job listings and official career-site collection](#jobs) | One source observation supporting a job listing. |
+| [job_listing_locations](#table-job_listing_locations) | [Job listings and official career-site collection](#jobs) | One ordered location occurrence in a job source observation, with preserved evidence and a nullable resolved shared place. |
 | [job_listings](#table-job_listings) | [Job listings and official career-site collection](#jobs) | One advertised position/requisition, including its source identity and current saved details. |
+| [job_organization_ai_relationship_assignments](#table-job_organization_ai_relationship_assignments) | [Job listings and official career-site collection](#jobs) | One current, source-supported organization-to-AI classification on a listing. |
+| [job_role_ai_relationship_assignments](#table-job_role_ai_relationship_assignments) | [Job listings and official career-site collection](#jobs) | One current, source-supported role-to-AI classification on a listing. |
+| [job_seniority_assignments](#table-job_seniority_assignments) | [Job listings and official career-site collection](#jobs) | One current, source-supported seniority assignment on a listing. |
 | [job_source_states](#table-job_source_states) | [Job listings and official career-site collection](#jobs) | One career-site source’s active lease and last successful synchronization state. |
 | [job_source_sync_runs](#table-job_source_sync_runs) | [Job listings and official career-site collection](#jobs) | One attempt to synchronize an official career-site source. |
-| [inference_models](#table-inference_models) | [Shared catalogues and performer identities](#shared-catalogues) | One provider-qualified native model identifier requested from an inference service. |
+| [job_workplace_type_assignments](#table-job_workplace_type_assignments) | [Job listings and official career-site collection](#jobs) | One current, source-supported workplace-type assignment on a listing. |
 | [languages](#table-languages) | [Shared catalogues](#shared-catalogues) | One registered primary-language code. |
 | [locales](#table-locales) | [Shared catalogues](#shared-catalogues) | One full language tag and its registered base language. |
 | [materialization_state](#table-materialization_state) | [Homepage counts](#homepage-counts) | Current publication, coverage and source-change state for one versioned derived dataset in this environment. |
@@ -230,6 +249,8 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [official_company_provider_states](#table-official_company_provider_states) | [Official-company collection](#official-companies) | One provider lifecycle/control record for official-company collection. |
 | [official_company_scans](#table-official_company_scans) | [Official-company collection](#official-companies) | One official-company account scan and its outcome. |
 | [opportunities](#table-opportunities) | [Events and opportunities](#events) | One bounded offer in which an action can provide a benefit, optionally linked to an event. |
+| [opportunity_types](#table-opportunity_types) | [Events and opportunities](#events) | One allowed kind of opportunity; action and benefit wording remain separate deferred fields. |
+| [organization_ai_relationship_types](#table-organization_ai_relationship_types) | [Job listings and official career-site collection](#jobs) | One reusable classification of an organization's relationship to AI. |
 | [original_content](#table-original_content) | [Authored content and trend publication](#headlines) | One prepared brand headline outcome within a run. |
 | [original_content_calls](#table-original_content_calls) | [Authored content and trend publication](#headlines) | One physical model attempt owned by an authored run or provider batch. |
 | [original_content_runs](#table-original_content_runs) | [Authored content and trend publication](#headlines) | One common evidence cutoff for an all-brand headline run and time window. |
@@ -247,8 +268,12 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [people_names](#table-people_names) | [People and job history](#people) | One sourced spelling of a person’s full name, with optional evidenced components. |
 | [people_text_translations](#table-people_text_translations) | [People and job history](#people) | One cached translation of a specific original prose version and provider configuration. |
 | [people_texts](#table-people_texts) | [People and job history](#people) | One immutable version of original biography, role, location or job-description prose. |
+| [person_citizenship_evidence](#table-person_citizenship_evidence) | [People and job history](#people) | One link from a citizenship to an existing source-origin PersonText observation from the same person. |
+| [person_citizenships](#table-person_citizenships) | [People and job history](#people) | One explicitly supported country or area citizenship for a person; multiple citizenships are allowed, with at most one primary. |
 | [person_name_selections](#table-person_name_selections) | [People and job history](#people) | One selected person-name spelling for a display locale. |
+| [person_name_types](#table-person_name_types) | [People and job history](#people) | A compatibility catalogue retained physically during scalar-interface restoration; ordinary person names use the original constrained name_type column. |
 | [personnel_change_details](#table-personnel_change_details) | [Event dossiers and evidence](#event-dossiers) | One typed personnel-change projection owned by a dossier review. |
+| [personnel_change_types](#table-personnel_change_types) | [People and job history](#people) | One allowed kind of personnel change recorded in a dossier detail. |
 | [personnel_discovery_runs](#table-personnel_discovery_runs) | [People and job history](#people) | One personnel-search query/window run, including coverage, cost, and extraction counts. |
 | [post_enrichment_states](#table-post_enrichment_states) | [Post translation and commentary](#translation) | One post’s replayable translation/classification progress and diagnostics. |
 | [post_subject_attributions](#table-post_subject_attributions) | [Measurement subjects, metrics and observations](#measurements) | One sourced post linked to a measurement subject. |
@@ -291,11 +316,18 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [rare_type_search_daily_budgets](#table-rare_type_search_daily_budgets) | [Collection, extraction, and processing records](#processing) | One search lane’s budget accounting for a UTC day. |
 | [rare_type_search_hits](#table-rare_type_search_hits) | [Collection, extraction, and processing records](#processing) | One durable inbox result from an already-paid rare-type search. |
 | [rare_type_search_runs](#table-rare_type_search_runs) | [Collection, extraction, and processing records](#processing) | One paid rare-type search time slot and its coverage/cost record. |
-| [region_labels](#table-region_labels) | [Countries and regions](#geography) | One translated label for a region. |
-| [regions](#table-regions) | [Countries and regions](#geography) | One region in the geographic hierarchy. |
+| [region_labels](#table-region_labels) | [Shared geography](#geography) | One translated label for a region. |
+| [regions](#table-regions) | [Shared geography](#geography) | One region in the geographic hierarchy. |
+| [release_access_channels](#table-release_access_channels) | [Products, model releases, and Hugging Face catalog](#products) | One access channel used by a dossier release endpoint; distinct from release maturity and availability. |
+| [release_availability_states](#table-release_availability_states) | [Products, model releases, and Hugging Face catalog](#products) | One availability state for a dossier release detail; distinct from disclosure evidence. |
+| [release_disclosure_states](#table-release_disclosure_states) | [Products, model releases, and Hugging Face catalog](#products) | A compatibility catalogue retained physically during scalar-interface restoration; ordinary dossier release details use disclosure_state. |
+| [release_maturities](#table-release_maturities) | [Products, model releases, and Hugging Face catalog](#products) | One release maturity value shared by extracted releases and dossier release details. |
+| [role_ai_relationship_types](#table-role_ai_relationship_types) | [Job listings and official career-site collection](#jobs) | One reusable classification of a job role's relationship to AI; no prose explanation is automatically promoted to a category. |
 | [role_labels](#table-role_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated account-role label. |
 | [roles](#table-roles) | [Classification vocabularies and translated labels](#vocabularies) | One account-role vocabulary key. |
+| [salary_periods](#table-salary_periods) | [Job listings and official career-site collection](#jobs) | One canonical compensation period; amounts are not annualized or converted. |
 | [search_queries](#table-search_queries) | [Collection, extraction, and processing records](#processing) | One saved collection/discovery query identity and associated brand/keywords. |
+| [seniority_levels](#table-seniority_levels) | [Job listings and official career-site collection](#jobs) | One reusable job-seniority classification. |
 | [sentiment_keys](#table-sentiment_keys) | [Classification vocabularies and translated labels](#vocabularies) | One sentiment vocabulary key. |
 | [sentiment_labels](#table-sentiment_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated sentiment label. |
 | [service_providers](#table-service_providers) | [Shared catalogues and performer identities](#shared-catalogues) | One identity for a service that receives a model request. |
@@ -314,28 +346,15 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts).
 | [trend_narrative_subjects](#table-trend_narrative_subjects) | [Authored content and trend publication](#headlines) | One reported subject attached to a headline publication. |
 | [trend_narrative_work_slots](#table-trend_narrative_work_slots) | [Authored content and trend publication](#headlines) | One window’s active work claim and optional newer queued cutoff. |
 | [trend_narratives](#table-trend_narratives) | [Authored content and trend publication](#headlines) | One durable attempt/version of a shared time-window headline. |
-| [workflow_stages](#table-workflow_stages) | [Shared catalogues and performer identities](#shared-catalogues) | One stable stage identity within a versioned workflow or contract. |
 | [twitter_list_memberships](#table-twitter_list_memberships) | [Accounts, profiles, and lists](#accounts) | One account’s membership state in one X list. |
 | [twitter_list_sync_state](#table-twitter_list_sync_state) | [Accounts, profiles, and lists](#accounts) | One X list’s last completed membership synchronization. |
 | [unsanctioned_flag_keys](#table-unsanctioned_flag_keys) | [Classification vocabularies and translated labels](#vocabularies) | One legacy unsanctioned-flag vocabulary key; there is no paired label table. |
 | [untracked_brand_promotion_evidence](#table-untracked_brand_promotion_evidence) | [Posts and classification](#posts) | One visible promoted subject supporting an untracked-brand judgment. |
 | [untracked_brand_promotion_keys](#table-untracked_brand_promotion_keys) | [Classification vocabularies and translated labels](#vocabularies) | One current untracked-brand-promotion vocabulary key. |
 | [untracked_brand_promotion_labels](#table-untracked_brand_promotion_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated untracked-brand-promotion label. |
-| [x_account_details](#table-x_account_details) | [Accounts, profiles, and lists](#accounts) | One optional current X profile extension for one shared account. |
-| [currencies](#table-currencies) | [Shared catalogues and performer identities](#shared-catalogues) | One registered current or historical ISO 4217 currency code; it does not imply exchange-rate conversion. |
-| [salary_periods](#table-salary_periods) | [Job listings and official career-site collection](#jobs) | One canonical compensation period; amounts are not annualized or converted. |
-| [job_functions](#table-job_functions) | [Job listings and official career-site collection](#jobs) | One reusable job-function classification. |
-| [seniority_levels](#table-seniority_levels) | [Job listings and official career-site collection](#jobs) | One reusable job-seniority classification. |
-| [employment_types](#table-employment_types) | [Job listings and official career-site collection](#jobs) | One reusable employment-arrangement classification. |
+| [workflow_stages](#table-workflow_stages) | [Shared catalogues and performer identities](#shared-catalogues) | One stable stage identity within a versioned workflow or contract. |
 | [workplace_types](#table-workplace_types) | [Job listings and official career-site collection](#jobs) | One reusable on-site, remote or hybrid work-arrangement classification. |
-| [organization_ai_relationship_types](#table-organization_ai_relationship_types) | [Job listings and official career-site collection](#jobs) | One reusable classification of an organization's relationship to AI. |
-| [role_ai_relationship_types](#table-role_ai_relationship_types) | [Job listings and official career-site collection](#jobs) | One reusable classification of a job role's relationship to AI; no prose explanation is automatically promoted to a category. |
-| [job_function_assignments](#table-job_function_assignments) | [Job listings and official career-site collection](#jobs) | One current, source-supported job-function assignment on a listing. |
-| [job_seniority_assignments](#table-job_seniority_assignments) | [Job listings and official career-site collection](#jobs) | One current, source-supported seniority assignment on a listing. |
-| [job_employment_type_assignments](#table-job_employment_type_assignments) | [Job listings and official career-site collection](#jobs) | One current, source-supported employment-type assignment on a listing. |
-| [job_workplace_type_assignments](#table-job_workplace_type_assignments) | [Job listings and official career-site collection](#jobs) | One current, source-supported workplace-type assignment on a listing. |
-| [job_organization_ai_relationship_assignments](#table-job_organization_ai_relationship_assignments) | [Job listings and official career-site collection](#jobs) | One current, source-supported organization-to-AI classification on a listing. |
-| [job_role_ai_relationship_assignments](#table-job_role_ai_relationship_assignments) | [Job listings and official career-site collection](#jobs) | One current, source-supported role-to-AI classification on a listing. |
+| [x_account_details](#table-x_account_details) | [Accounts, profiles, and lists](#accounts) | One optional current X profile extension for one shared account. |
 
 <a id="shared-catalogues"></a>
 
@@ -430,7 +449,7 @@ normalizer or other named definition, with optional pinned-source or archived
 content provenance. A row identifies a definition; it does not store an
 unstructured configuration body.
 
-Model: [DefinitionVersion](../../core/models.py#L286).
+Model: [DefinitionVersion](../../core/models.py#L336).
 
 **Primary key:** `id`.
 
@@ -463,7 +482,7 @@ One native model key requested from one service provider. The provider-qualified
 key records request identity; it does not prove which checkpoint the service
 actually served.
 
-Model: [InferenceModel](../../core/models.py#L235).
+Model: [InferenceModel](../../core/models.py#L285).
 
 **Primary key:** `id`.
 
@@ -488,7 +507,7 @@ Model: [InferenceModel](../../core/models.py#L235).
 One service identity used to qualify the native model key sent with an
 inference request. It is distinct from a source that supplies collected facts.
 
-Model: [ServiceProvider](../../core/models.py#L220).
+Model: [ServiceProvider](../../core/models.py#L270).
 
 **Primary key:** `code`.
 
@@ -511,7 +530,7 @@ Model: [ServiceProvider](../../core/models.py#L220).
 One stable stage key belonging to a workflow or contract definition version.
 The referenced definition must have the `workflow` or `contract` domain.
 
-Model: [WorkflowStage](../../core/models.py#L362).
+Model: [WorkflowStage](../../core/models.py#L412).
 
 **Primary key:** `id`.
 
@@ -545,7 +564,20 @@ Locale's language reference is protected from deletion. Registry membership is
 curated at the controlled seed-write boundary; the grammar check alone does not
 establish that a manually supplied code is registered.
 
+**Physical constraints:**
+
+- `languages_pkey`: `PRIMARY KEY (code)`.
+
+**Physical indexes:**
+
+- `languages_code_cb780636_like`: `CREATE INDEX languages_code_cb780636_like ON public.languages USING btree (code varchar_pattern_ops)`.
+- `languages_pkey`: `CREATE UNIQUE INDEX languages_pkey ON public.languages USING btree (code)`.
+
 [Back to table inventory](#table-inventory)
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `code` | `character varying(8)` | No | Primary key. |
 
 <a id="table-locales"></a>
 
@@ -566,7 +598,24 @@ parent language. These checks and the FK cover bulk/direct writes, not just mode
 forms. Django adds the ordinary FK index. The seed boundary verifies registry
 membership and canonical spelling; raw unknown tags remain reported evidence.
 
+**Physical constraints:**
+
+- `locales_language_id_351fdb75_fk_languages_code`: `FOREIGN KEY (language_id) REFERENCES languages(code) DEFERRABLE INITIALLY DEFERRED`.
+- `locales_pkey`: `PRIMARY KEY (code)`.
+
+**Physical indexes:**
+
+- `locales_code_8383aa7d_like`: `CREATE INDEX locales_code_8383aa7d_like ON public.locales USING btree (code varchar_pattern_ops)`.
+- `locales_language_id_351fdb75`: `CREATE INDEX locales_language_id_351fdb75 ON public.locales USING btree (language_id)`.
+- `locales_language_id_351fdb75_like`: `CREATE INDEX locales_language_id_351fdb75_like ON public.locales USING btree (language_id varchar_pattern_ops)`.
+- `locales_pkey`: `CREATE UNIQUE INDEX locales_pkey ON public.locales USING btree (code)`.
+
 [Back to table inventory](#table-inventory)
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `code` | `character varying(255)` | No | Primary key. |
+| `language_id` | `character varying(8)` | No | FK → [languages.code](#table-languages); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `language`. |
 
 <a id="table-measurement_units"></a>
 
@@ -584,7 +633,20 @@ The existing metric definition retains its duration basis, window and scale.
 starting with a letter. Seeds derive from the pinned source-metric definitions
 plus `day`/`second`; no conversion factor or universal count unit is inferred.
 
+**Physical constraints:**
+
+- `measurement_units_pkey`: `PRIMARY KEY (code)`.
+
+**Physical indexes:**
+
+- `measurement_units_code_62324d37_like`: `CREATE INDEX measurement_units_code_62324d37_like ON public.measurement_units USING btree (code varchar_pattern_ops)`.
+- `measurement_units_pkey`: `CREATE UNIQUE INDEX measurement_units_pkey ON public.measurement_units USING btree (code)`.
+
 [Back to table inventory](#table-inventory)
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `code` | `character varying(64)` | No | Primary key. |
 
 <a id="table-currencies"></a>
 
@@ -636,7 +698,20 @@ resolve; unknown wording remains evidence with a NULL reference. Metric definiti
 use the reference and frozen definition snapshots; no separate timezone string
 column exists on `metrics`.
 
+**Physical constraints:**
+
+- `time_zones_pkey`: `PRIMARY KEY (code)`.
+
+**Physical indexes:**
+
+- `time_zones_code_4a255d1e_like`: `CREATE INDEX time_zones_code_4a255d1e_like ON public.time_zones USING btree (code varchar_pattern_ops)`.
+- `time_zones_pkey`: `CREATE UNIQUE INDEX time_zones_pkey ON public.time_zones USING btree (code)`.
+
 [Back to table inventory](#table-inventory)
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `code` | `character varying(64)` | No | Primary key. |
 
 <a id="people"></a>
 
@@ -678,24 +753,24 @@ and [profile observations](../../core/profile_snapshots.py) for identity creatio
 
 One person, whether or not they have an X account.
 
-Model: [Person](../../core/models.py#L5291).
+Model: [Person](../../core/models.py#L5265).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `uuid` | No | PK component. Django default: `uuid4` (not an assumed SQL default). |
-| `date_of_birth` | `varchar(10)` | Yes | Source-supported date at the paired precision; not necessarily a full date. |
-| `date_of_birth_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `day`, `month`, `year`, `unknown`. |
+| `date_of_birth` | `character varying(10)` | Yes | Source-supported date at the paired precision; not necessarily a full date. |
+| `date_of_birth_precision` | `character varying(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `day`, `month`, `year`, `unknown`. |
 | `sex` | `text` | Yes | Source-supported sex value. |
-| `primary_name_id` | `bigint` | Yes | FK → [`people_names`](#table-people_names) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `primary_name`. |
-| `english_name_id` | `bigint` | Yes | FK → [`people_names`](#table-people_names) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `english_name`. |
-| `nationality` | `text` | Yes | Stored value. |
+| `nationality` | `text` | Yes | Stored value. Temporary compatibility only; ordinary ORM queries do not select this column. |
 | `ethnicity` | `text` | Yes | Stored value. |
 | `primary_language` | `text` | Yes | Stored value. |
-| `merged_into_id` | `uuid` | Yes | Retired identity redirects to [people](#table-people); Django PROTECT. Original ID remains addressable. FK → [`people`](#table-people) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `merged_into`. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
+| `english_name_id` | `bigint` | Yes | FK → [`people_names`](#table-people_names) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `english_name`. |
+| `primary_name_id` | `bigint` | Yes | FK → [`people_names`](#table-people_names) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `primary_name`. |
+| `merged_into_id` | `uuid` | Yes | Retired identity redirects to [people](#table-people); Django PROTECT. Original ID remains addressable. FK → [`people`](#table-people) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `merged_into`. |
 
 **Named indexes:**
 
@@ -703,8 +778,27 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `ck_person_merge_not_self`: `CONSTRAINT "ck_person_merge_not_self" CHECK (NOT ("merged_into_id" = ("id") AND "merged_into_id" IS NOT NULL))`.
-- `ck_people_dob_precision`: `CONSTRAINT "ck_people_dob_precision" CHECK ((("date_of_birth" IS NULL AND "date_of_birth_precision" = 'unknown') OR ("date_of_birth"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND "date_of_birth_precision" = 'day') OR ("date_of_birth"::text ~ '^[0-9]{4}-[0-9]{2}$' AND "date_of_birth_precision" = 'month') OR ("date_of_birth"::text ~ '^[0-9]{4}$' AND "date_of_birth_precision" = 'year')))`.
+- `ck_person_merge_not_self`: `CHECK ((NOT ((merged_into_id = id) AND (merged_into_id IS NOT NULL))))`.
+- `ck_people_dob_precision`: `CHECK ((((date_of_birth IS NULL) AND ((date_of_birth_precision)::text = 'unknown'::text)) OR (((date_of_birth)::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'::text) AND ((date_of_birth_precision)::text = 'day'::text)) OR (((date_of_birth)::text ~ '^[0-9]{4}-[0-9]{2}$'::text) AND ((date_of_birth_precision)::text = 'month'::text)) OR (((date_of_birth)::text ~ '^[0-9]{4}$'::text) AND ((date_of_birth_precision)::text = 'year'::text))))`.
+
+**Physical constraints:**
+
+- `people_english_name_id_b52fcd9d_fk_people_names_id`: `FOREIGN KEY (english_name_id) REFERENCES people_names(id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_merged_into_id_74aa37ea_fk_people_id`: `FOREIGN KEY (merged_into_id) REFERENCES people(id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_pkey`: `PRIMARY KEY (id)`.
+- `people_primary_name_id_88af08fb_fk_people_names_id`: `FOREIGN KEY (primary_name_id) REFERENCES people_names(id) DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `people_english_name_id_b52fcd9d`: `CREATE INDEX people_english_name_id_b52fcd9d ON public.people USING btree (english_name_id)`.
+- `people_merged_into_id_74aa37ea`: `CREATE INDEX people_merged_into_id_74aa37ea ON public.people USING btree (merged_into_id)`.
+- `people_pkey`: `CREATE UNIQUE INDEX people_pkey ON public.people USING btree (id)`.
+- `people_primary_name_id_88af08fb`: `CREATE INDEX people_primary_name_id_88af08fb ON public.people USING btree (primary_name_id)`.
+
+**Physical triggers:**
+
+- `g1_person_name_selection`: `CREATE TRIGGER g1_person_name_selection BEFORE INSERT OR UPDATE OF primary_name_id, english_name_id ON public.people FOR EACH ROW EXECUTE FUNCTION g1_check_person_name_selection()`.
+- `pw_rg4_nationality_evidence_bridge`: `CREATE TRIGGER pw_rg4_nationality_evidence_bridge AFTER INSERT OR UPDATE OF nationality ON public.people FOR EACH ROW EXECUTE FUNCTION pw_rg4_nationality_evidence_bridge()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -714,7 +808,7 @@ None declared beyond field/FK/constraint indexes.
 
 One proposed or reviewed link between a person and an X account.
 
-Model: [PersonAccount](../../core/models.py#L5714).
+Model: [PersonAccount](../../core/models.py#L5739).
 
 **Primary key:** `person, account`.
 
@@ -751,19 +845,16 @@ None declared beyond field/FK/constraint indexes.
 
 One claim about a person’s role or relationship with an organization.
 
-Model: [PersonBrandAffiliation](../../core/models.py#L5978).
+Model: [PersonBrandAffiliation](../../core/models.py#L6004).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `person_id` | `uuid` | No | FK → [`people`](#table-people) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `person`. |
-| `brand_id` | `varchar(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
-| `brand_discovery_candidate_id` | `bigint` | Yes | FK → [`brand_discovery_candidates`](#table-brand_discovery_candidates) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand_discovery_candidate`. |
-| `affiliation_type` | `varchar(32)` | No | Choices: `employment`, `founder`, `advisor`, `board_member`, `contractor`, `ambassador`, `creator_partner`, `affiliate`, `investor`, `community`, `other`. |
+| `affiliation_type` | `character varying(32)` | No | Choices: `employment`, `founder`, `advisor`, `board_member`, `contractor`, `ambassador`, `creator_partner`, `affiliate`, `investor`, `community`, `other`. Temporary compatibility only; ordinary ORM queries do not select this column. |
 | `observed_organization_name` | `text` | No | Organization name as observed in the source. |
-| `observed_organization_handle` | `varchar(64)` | Yes | Organization handle as observed in the source. |
+| `observed_organization_handle` | `character varying(64)` | Yes | Organization handle as observed in the source. |
 | `title_raw` | `text` | Yes | Title wording retained from the source. |
 | `title_normalized` | `text` | Yes | Standardized title; not a dedicated English-translation field. |
 | `department` | `text` | Yes | Stored value. |
@@ -771,45 +862,84 @@ Model: [PersonBrandAffiliation](../../core/models.py#L5978).
 | `job_function` | `text` | Yes | Stored value. |
 | `seniority` | `text` | Yes | Stored value. |
 | `employment_type` | `text` | Yes | Stored value. |
-| `status` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `current`, `former`, `future`, `unknown`. |
-| `start_date` | `varchar(10)` | Yes | Source-supported relationship start, paired with precision. |
-| `start_date_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `day`, `month`, `year`, `unknown`. |
-| `end_date` | `varchar(10)` | Yes | Source-supported relationship end, paired with precision. |
-| `end_date_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `day`, `month`, `year`, `unknown`. |
-| `location` | `text` | Yes | Stored value. |
+| `status` | `character varying(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `current`, `former`, `future`, `unknown`. |
+| `start_date` | `character varying(10)` | Yes | Source-supported relationship start, paired with precision. |
+| `start_date_precision` | `character varying(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `day`, `month`, `year`, `unknown`. |
+| `end_date` | `character varying(10)` | Yes | Source-supported relationship end, paired with precision. |
+| `end_date_precision` | `character varying(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `day`, `month`, `year`, `unknown`. |
+| `location` | `text` | Yes | Stored value. Temporary compatibility only; ordinary ORM queries do not select this column. |
 | `workplace_type` | `text` | Yes | Stored value. |
 | `description` | `text` | Yes | Relationship description; no language-specific sibling columns. |
 | `confidence` | `double precision` | Yes | Stored value. |
-| `review_status` | `varchar(16)` | No | Django default: `'pending'` (not an assumed SQL default). Choices: `pending`, `confirmed`, `rejected`, `needs_review`. |
+| `review_status` | `character varying(16)` | No | Django default: `'pending'` (not an assumed SQL default). Choices: `pending`, `confirmed`, `rejected`, `needs_review`. |
 | `review_note` | `text` | No | Django default: `''` (not an assumed SQL default). |
 | `reviewed_at` | `timestamp with time zone` | Yes | Stored value. |
-| `source_system` | `varchar(64)` | Yes | Stored value. |
+| `source_system` | `character varying(64)` | Yes | Stored value. |
 | `external_id` | `text` | Yes | Stored value. |
-| `claim_identity` | `varchar(64)` | No | Unique. Stable identity for this claim; uniqueness is not a person-matching algorithm. Field-level unique. |
-| `superseded_by_id` | `bigint` | Yes | Reviewed replacement claim in this table; Django PROTECT. Distinct from current/former job status. FK → [`people_brand_affiliations`](#table-people_brand_affiliations) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `superseded_by`. |
-| `superseded_at` | `timestamp with time zone` | Yes | When the replacement decision was recorded. |
-| `superseded_by_reviewer` | `text` | No | Reviewer; default empty before replacement. Django default: `''` (not an assumed SQL default). |
-| `supersession_reason` | `text` | No | Decision reason; default empty before replacement. Django default: `''` (not an assumed SQL default). |
+| `claim_identity` | `character varying(64)` | No | Unique. Stable identity for this claim; uniqueness is not a person-matching algorithm. Field-level unique. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
+| `brand_id` | `character varying(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
+| `person_id` | `uuid` | No | FK → [`people`](#table-people) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `person`. |
+| `brand_discovery_candidate_id` | `bigint` | Yes | FK → [`brand_discovery_candidates`](#table-brand_discovery_candidates) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand_discovery_candidate`. |
+| `superseded_at` | `timestamp with time zone` | Yes | When the replacement decision was recorded. |
+| `superseded_by_id` | `bigint` | Yes | Reviewed replacement claim in this table; Django PROTECT. Distinct from current/former job status. FK → [`people_brand_affiliations`](#table-people_brand_affiliations) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `superseded_by`. |
+| `superseded_by_reviewer` | `text` | No | Reviewer; default empty before replacement. Django default: `''` (not an assumed SQL default). |
+| `supersession_reason` | `text` | No | Decision reason; default empty before replacement. Django default: `''` (not an assumed SQL default). |
+| `affiliation_type_id` | `bigint` | No | FK → [affiliation_types.id](#table-affiliation_types); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `affiliation_type_reference`. |
+| `geolocation_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `geolocation`. |
+| `reported_location` | `text` | Yes | Permanent source evidence, available only through the explicit unmanaged source projection; excluded from canonical ORM reads and serving privileges. |
 
 **Named indexes:**
 
-- `idx_pba_brand_type_status`: `CREATE INDEX "idx_pba_brand_type_status" ON "people_brand_affiliations" ("brand_id", "affiliation_type", "status")`.
-- `idx_pba_person_type`: `CREATE INDEX "idx_pba_person_type" ON "people_brand_affiliations" ("person_id", "affiliation_type")`.
+- `idx_pba_brand_type_status`: `CREATE INDEX idx_pba_brand_type_status ON public.people_brand_affiliations USING btree (brand_id, affiliation_type_id, status)`.
+- `idx_pba_person_type`: `CREATE INDEX idx_pba_person_type ON public.people_brand_affiliations USING btree (person_id, affiliation_type_id)`.
 
 **Named constraints:**
 
-- `ck_pba_one_organization`: `CONSTRAINT "ck_pba_one_organization" CHECK ((("brand_id" IS NOT NULL AND "brand_discovery_candidate_id" IS NULL) OR ("brand_id" IS NULL AND "brand_discovery_candidate_id" IS NOT NULL)))`.
+- `ck_pba_one_organization`: `CHECK ((((brand_id IS NOT NULL) AND (brand_discovery_candidate_id IS NULL)) OR ((brand_id IS NULL) AND (brand_discovery_candidate_id IS NOT NULL))))`.
 - `ck_pba_affiliation_type`: `CONSTRAINT "ck_pba_affiliation_type" CHECK ("affiliation_type" IN ('employment', 'founder', 'advisor', 'board_member', 'contractor', 'ambassador', 'creator_partner', 'affiliate', 'investor', 'community', 'other'))`.
-- `ck_pba_status`: `CONSTRAINT "ck_pba_status" CHECK ("status" IN ('current', 'former', 'future', 'unknown'))`.
-- `ck_pba_review_status`: `CONSTRAINT "ck_pba_review_status" CHECK ("review_status" IN ('pending', 'confirmed', 'rejected', 'needs_review'))`.
-- `ck_pba_confidence`: `CONSTRAINT "ck_pba_confidence" CHECK (("confidence" IS NULL OR ("confidence" >= 0.0 AND "confidence" <= 1.0)))`.
-- `ck_pba_start_precision`: `CONSTRAINT "ck_pba_start_precision" CHECK ((("start_date" IS NULL AND "start_date_precision" = 'unknown') OR ("start_date"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND "start_date_precision" = 'day') OR ("start_date"::text ~ '^[0-9]{4}-[0-9]{2}$' AND "start_date_precision" = 'month') OR ("start_date"::text ~ '^[0-9]{4}$' AND "start_date_precision" = 'year')))`.
-- `ck_pba_end_precision`: `CONSTRAINT "ck_pba_end_precision" CHECK ((("end_date" IS NULL AND "end_date_precision" = 'unknown') OR ("end_date"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' AND "end_date_precision" = 'day') OR ("end_date"::text ~ '^[0-9]{4}-[0-9]{2}$' AND "end_date_precision" = 'month') OR ("end_date"::text ~ '^[0-9]{4}$' AND "end_date_precision" = 'year')))`.
-- `ck_pba_comparable_dates`: `CONSTRAINT "ck_pba_comparable_dates" CHECK (("start_date" IS NULL OR "end_date" IS NULL OR NOT ("start_date_precision" = ("end_date_precision")) OR "start_date" <= ("end_date")))`.
+- `ck_pba_status`: `CHECK (((status)::text = ANY ((ARRAY['current'::character varying, 'former'::character varying, 'future'::character varying, 'unknown'::character varying])::text[])))`.
+- `ck_pba_review_status`: `CHECK (((review_status)::text = ANY ((ARRAY['pending'::character varying, 'confirmed'::character varying, 'rejected'::character varying, 'needs_review'::character varying])::text[])))`.
+- `ck_pba_confidence`: `CHECK (((confidence IS NULL) OR ((confidence >= (0.0)::double precision) AND (confidence <= (1.0)::double precision))))`.
+- `ck_pba_start_precision`: `CHECK ((((start_date IS NULL) AND ((start_date_precision)::text = 'unknown'::text)) OR (((start_date)::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'::text) AND ((start_date_precision)::text = 'day'::text)) OR (((start_date)::text ~ '^[0-9]{4}-[0-9]{2}$'::text) AND ((start_date_precision)::text = 'month'::text)) OR (((start_date)::text ~ '^[0-9]{4}$'::text) AND ((start_date_precision)::text = 'year'::text))))`.
+- `ck_pba_end_precision`: `CHECK ((((end_date IS NULL) AND ((end_date_precision)::text = 'unknown'::text)) OR (((end_date)::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'::text) AND ((end_date_precision)::text = 'day'::text)) OR (((end_date)::text ~ '^[0-9]{4}-[0-9]{2}$'::text) AND ((end_date_precision)::text = 'month'::text)) OR (((end_date)::text ~ '^[0-9]{4}$'::text) AND ((end_date_precision)::text = 'year'::text))))`.
+- `ck_pba_comparable_dates`: `CHECK (((start_date IS NULL) OR (end_date IS NULL) OR (NOT ((start_date_precision)::text = (end_date_precision)::text)) OR ((start_date)::text <= (end_date)::text)))`.
 
 Migration 0063 enforces same-person/organization replacement, complete review metadata and acyclic chains. Recorded replacement decisions cannot be rewritten. Readers use `active_claims`; latest observation time alone never settles competing claims.
+
+**Physical constraints:**
+
+- `g1_affiliation_replacement`: `TRIGGER DEFERRABLE INITIALLY DEFERRED`.
+- `g1_affiliation_text_owner`: `TRIGGER DEFERRABLE INITIALLY DEFERRED`.
+- `people_brand_affilia_affiliation_type_id_61a04b3f_fk_affiliati`: `FOREIGN KEY (affiliation_type_id) REFERENCES affiliation_types(id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_brand_affilia_brand_discovery_cand_617a9f6f_fk_brand_dis`: `FOREIGN KEY (brand_discovery_candidate_id) REFERENCES brand_discovery_candidates(id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_brand_affilia_geolocation_id_d95a3746_fk_geolocati`: `FOREIGN KEY (geolocation_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_brand_affilia_superseded_by_id_c4eb0713_fk_people_br`: `FOREIGN KEY (superseded_by_id) REFERENCES people_brand_affiliations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_brand_affiliations_brand_id_8bd8e4b0_fk_brands_nickname`: `FOREIGN KEY (brand_id) REFERENCES brands(nickname) DEFERRABLE INITIALLY DEFERRED`.
+- `people_brand_affiliations_claim_identity_key`: `UNIQUE (claim_identity)`.
+- `people_brand_affiliations_person_id_5b5b388d_fk_people_id`: `FOREIGN KEY (person_id) REFERENCES people(id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_brand_affiliations_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `people_brand_affiliations_affiliation_type_id_61a04b3f`: `CREATE INDEX people_brand_affiliations_affiliation_type_id_61a04b3f ON public.people_brand_affiliations USING btree (affiliation_type_id)`.
+- `people_brand_affiliations_brand_discovery_candidate_id_617a9f6f`: `CREATE INDEX people_brand_affiliations_brand_discovery_candidate_id_617a9f6f ON public.people_brand_affiliations USING btree (brand_discovery_candidate_id)`.
+- `people_brand_affiliations_brand_id_8bd8e4b0`: `CREATE INDEX people_brand_affiliations_brand_id_8bd8e4b0 ON public.people_brand_affiliations USING btree (brand_id)`.
+- `people_brand_affiliations_claim_identity_50b4c22e_like`: `CREATE INDEX people_brand_affiliations_claim_identity_50b4c22e_like ON public.people_brand_affiliations USING btree (claim_identity varchar_pattern_ops)`.
+- `people_brand_affiliations_claim_identity_key`: `CREATE UNIQUE INDEX people_brand_affiliations_claim_identity_key ON public.people_brand_affiliations USING btree (claim_identity)`.
+- `people_brand_affiliations_geolocation_id_d95a3746`: `CREATE INDEX people_brand_affiliations_geolocation_id_d95a3746 ON public.people_brand_affiliations USING btree (geolocation_id)`.
+- `people_brand_affiliations_person_id_5b5b388d`: `CREATE INDEX people_brand_affiliations_person_id_5b5b388d ON public.people_brand_affiliations USING btree (person_id)`.
+- `people_brand_affiliations_pkey`: `CREATE UNIQUE INDEX people_brand_affiliations_pkey ON public.people_brand_affiliations USING btree (id)`.
+- `people_brand_affiliations_superseded_by_id_c4eb0713`: `CREATE INDEX people_brand_affiliations_superseded_by_id_c4eb0713 ON public.people_brand_affiliations USING btree (superseded_by_id)`.
+
+**Physical triggers:**
+
+- `g1_affiliation_replacement`: `CREATE CONSTRAINT TRIGGER g1_affiliation_replacement AFTER INSERT OR UPDATE ON public.people_brand_affiliations DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION g1_check_affiliation_replacement()`.
+- `g1_affiliation_text_owner`: `CREATE CONSTRAINT TRIGGER g1_affiliation_text_owner AFTER UPDATE ON public.people_brand_affiliations DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION g1_check_affiliation_text_owner()`.
+- `g1_preserve_affiliation_review`: `CREATE TRIGGER g1_preserve_affiliation_review BEFORE UPDATE ON public.people_brand_affiliations FOR EACH ROW EXECUTE FUNCTION g1_preserve_affiliation_review()`.
+- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE ON public.people_brand_affiliations FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('location', 'reported_location', 'geolocation_id', 'freeform')`.
+- `pw_rg4_affiliation_type_bridge`: `CREATE TRIGGER pw_rg4_affiliation_type_bridge BEFORE INSERT OR UPDATE OF affiliation_type, affiliation_type_id ON public.people_brand_affiliations FOR EACH ROW EXECUTE FUNCTION pw_rg4_affiliation_type_bridge()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -819,30 +949,30 @@ Migration 0063 enforces same-person/organization replacement, complete review me
 
 One source observation supporting an affiliation claim.
 
-Model: [PersonBrandAffiliationEvidence](../../core/models.py#L6153).
+Model: [PersonBrandAffiliationEvidence](../../core/models.py#L6169).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `affiliation_id` | `bigint` | No | FK → [`people_brand_affiliations`](#table-people_brand_affiliations) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `affiliation`. |
-| `source_post_id` | `text` | Yes | FK → [`posts`](#table-posts) (`tweet_id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_post`. |
-| `source_profile_snapshot_id` | `bigint` | Yes | FK → [`account_profile_snapshots`](#table-account_profile_snapshots) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_profile_snapshot`. |
-| `source_url` | `varchar(2048)` | Yes | Stored value. |
+| `source_url` | `character varying(2048)` | Yes | Stored value. |
 | `evidence_text` | `text` | No | Django default: `''` (not an assumed SQL default). |
 | `observed_at` | `timestamp with time zone` | No | When this evidence was observed, not the employment effective date. |
-| `extracted_claim_data` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `extraction_method` | `varchar(64)` | No | Stored value. |
+| `extracted_claim_data` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). Permanent source evidence; excluded from ordinary ORM queries and the serving login. SQL default: `'{}'::jsonb`. |
+| `extraction_method` | `character varying(64)` | No | Stored value. |
 | `extraction_model` | `text` | Yes | Stored value. |
 | `extraction_prompt_version` | `text` | Yes | Stored value. |
 | `confidence` | `double precision` | Yes | Stored value. |
-| `review_status` | `varchar(16)` | No | Django default: `'pending'` (not an assumed SQL default). Choices: `pending`, `confirmed`, `rejected`, `needs_review`. |
+| `review_status` | `character varying(16)` | No | Django default: `'pending'` (not an assumed SQL default). Choices: `pending`, `confirmed`, `rejected`, `needs_review`. |
 | `reviewer` | `text` | Yes | Stored value. |
 | `review_note` | `text` | No | Django default: `''` (not an assumed SQL default). |
 | `reviewed_at` | `timestamp with time zone` | Yes | Stored value. |
-| `evidence_hash` | `varchar(64)` | No | Deduplication identity within an affiliation. |
+| `evidence_hash` | `character varying(64)` | No | Deduplication identity within an affiliation. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
+| `affiliation_id` | `bigint` | No | FK → [`people_brand_affiliations`](#table-people_brand_affiliations) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `affiliation`. |
+| `source_post_id` | `text` | Yes | FK → [`posts`](#table-posts) (`tweet_id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_post`. |
+| `source_profile_snapshot_id` | `bigint` | Yes | FK → [`account_profile_snapshots`](#table-account_profile_snapshots) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_profile_snapshot`. |
 
 **Named indexes:**
 
@@ -850,10 +980,25 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `ck_pbae_review_status`: `CONSTRAINT "ck_pbae_review_status" CHECK ("review_status" IN ('pending', 'confirmed', 'rejected', 'needs_review'))`.
-- `ck_pbae_has_source`: `CONSTRAINT "ck_pbae_has_source" CHECK (("source_post_id" IS NOT NULL OR "source_profile_snapshot_id" IS NOT NULL OR ("source_url" IS NOT NULL AND NOT ("source_url" = '' AND "source_url" IS NOT NULL))))`.
-- `ck_pbae_confidence`: `CONSTRAINT "ck_pbae_confidence" CHECK (("confidence" IS NULL OR ("confidence" >= 0.0 AND "confidence" <= 1.0)))`.
-- `uq_pbae_affiliation_hash`: `CONSTRAINT "uq_pbae_affiliation_hash" UNIQUE ("affiliation_id", "evidence_hash")`.
+- `ck_pbae_review_status`: `CHECK (((review_status)::text = ANY ((ARRAY['pending'::character varying, 'confirmed'::character varying, 'rejected'::character varying, 'needs_review'::character varying])::text[])))`.
+- `ck_pbae_has_source`: `CHECK (((source_post_id IS NOT NULL) OR (source_profile_snapshot_id IS NOT NULL) OR ((source_url IS NOT NULL) AND (NOT (((source_url)::text = ''::text) AND (source_url IS NOT NULL))))))`.
+- `ck_pbae_confidence`: `CHECK (((confidence IS NULL) OR ((confidence >= (0.0)::double precision) AND (confidence <= (1.0)::double precision))))`.
+- `uq_pbae_affiliation_hash`: `CREATE UNIQUE INDEX uq_pbae_affiliation_hash ON public.people_brand_affiliation_evidence USING btree (affiliation_id, evidence_hash)`.
+
+**Physical constraints:**
+
+- `people_brand_affilia_affiliation_id_3849fbf7_fk_people_br`: `FOREIGN KEY (affiliation_id) REFERENCES people_brand_affiliations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_brand_affilia_source_post_id_453ab403_fk_posts_twe`: `FOREIGN KEY (source_post_id) REFERENCES posts(tweet_id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_brand_affilia_source_profile_snaps_d78b1bea_fk_account_p`: `FOREIGN KEY (source_profile_snapshot_id) REFERENCES account_profile_snapshots(id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_brand_affiliation_evidence_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `people_brand_affiliation_e_source_profile_snapshot_id_d78b1bea`: `CREATE INDEX people_brand_affiliation_e_source_profile_snapshot_id_d78b1bea ON public.people_brand_affiliation_evidence USING btree (source_profile_snapshot_id)`.
+- `people_brand_affiliation_evidence_affiliation_id_3849fbf7`: `CREATE INDEX people_brand_affiliation_evidence_affiliation_id_3849fbf7 ON public.people_brand_affiliation_evidence USING btree (affiliation_id)`.
+- `people_brand_affiliation_evidence_pkey`: `CREATE UNIQUE INDEX people_brand_affiliation_evidence_pkey ON public.people_brand_affiliation_evidence USING btree (id)`.
+- `people_brand_affiliation_evidence_source_post_id_453ab403`: `CREATE INDEX people_brand_affiliation_evidence_source_post_id_453ab403 ON public.people_brand_affiliation_evidence USING btree (source_post_id)`.
+- `people_brand_affiliation_evidence_source_post_id_453ab403_like`: `CREATE INDEX people_brand_affiliation_evidence_source_post_id_453ab403_like ON public.people_brand_affiliation_evidence USING btree (source_post_id text_pattern_ops)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -863,7 +1008,7 @@ None declared beyond field/FK/constraint indexes.
 
 One observed profile change queued for personnel-movement interpretation.
 
-Model: [ProfileMovementCandidate](../../core/models.py#L5924).
+Model: [ProfileMovementCandidate](../../core/models.py#L5950).
 
 **Primary key:** `id`.
 
@@ -905,7 +1050,7 @@ None declared beyond field/FK/constraint indexes.
 
 One personnel-search query/window run, including coverage, cost, and extraction counts.
 
-Model: [PersonnelDiscoveryRun](../../core/models.py#L6959).
+Model: [PersonnelDiscoveryRun](../../core/models.py#L7021).
 
 **Primary key:** `id`.
 
@@ -963,27 +1108,28 @@ None declared beyond field/FK/constraint indexes.
 
 One sourced spelling of a person’s full name, with optional evidenced components.
 
-Model: [PersonName](../../core/models.py#L5368).
+Model: [PersonName](../../core/models.py#L5341).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK. PK; database-generated identity. |
-| `person_id` | `uuid` | No | FK → [`people`](#table-people) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `person`. |
 | `full_name` | `text` | No | Stored value. |
 | `given_name` | `text` | Yes | Stored value. |
 | `family_name` | `text` | Yes | Stored value. |
-| `locale_id` | `varchar(35)` | No | FK → [`locales`](#table-locales) (`code`). Django deletion: `PROTECT`; registered language/script tag for this spelling. Model field: `locale`. |
-| `name_type` | `varchar(32)` | No | Django default: `'professional'` (not an assumed SQL default). |
-| `name_order` | `varchar(24)` | No | Django default: `'unknown'` (not an assumed SQL default). |
-| `origin` | `varchar(24)` | No | Django default: `'source'` (not an assumed SQL default). |
-| `derived_from_id` | `bigint` | Yes | FK → [`people_names`](#table-people_names) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `derived_from`. |
-| `review_status` | `varchar(16)` | No | Django default: `'pending'` (not an assumed SQL default). Choices: `pending`, `confirmed`, `rejected`. |
+| `name_type` | `character varying(32)` | No | Django default: `'professional'` (not an assumed SQL default). |
+| `name_order` | `character varying(24)` | No | Django default: `'unknown'` (not an assumed SQL default). |
+| `origin` | `character varying(24)` | No | Django default: `'source'` (not an assumed SQL default). |
+| `review_status` | `character varying(16)` | No | Django default: `'pending'` (not an assumed SQL default). Choices: `pending`, `confirmed`, `rejected`. |
 | `review_history` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
-| `fingerprint` | `varchar(64)` | No | Stored value. |
+| `fingerprint` | `character varying(64)` | No | Stored value. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
+| `derived_from_id` | `bigint` | Yes | FK → [`people_names`](#table-people_names) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `derived_from`. |
+| `person_id` | `uuid` | No | FK → [`people`](#table-people) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `person`. |
+| `locale_id` | `character varying(255)` | No | FK → [`locales`](#table-locales) (`code`). Django deletion: `PROTECT`; registered language/script tag for this spelling. Model field: `locale`. |
+| `name_type_id` | `bigint` | No | Temporary compatibility column, absent from the ordinary ORM; retained until old processes finish and the separate deletion migration runs. |
 
 **Named indexes:**
 
@@ -991,15 +1137,39 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `uq_person_name_fingerprint`: `CONSTRAINT "uq_person_name_fingerprint" UNIQUE ("person_id", "fingerprint")`.
-- `ck_person_name_nonempty`: `CONSTRAINT "ck_person_name_nonempty" CHECK (NOT ("full_name" = ''))`.
-- `ck_person_name_review`: `CONSTRAINT "ck_person_name_review" CHECK ("review_status" IN ('pending', 'confirmed', 'rejected'))`.
-- `ck_person_name_origin`: `CONSTRAINT "ck_person_name_origin" CHECK ("origin" IN ('source', 'owner', 'converted', 'generated', 'legacy'))`.
-- `ck_person_name_not_self`: `CONSTRAINT "ck_person_name_not_self" CHECK (NOT ("derived_from_id" = ("id") AND "derived_from_id" IS NOT NULL))`.
+- `uq_person_name_fingerprint`: `CREATE UNIQUE INDEX uq_person_name_fingerprint ON public.people_names USING btree (person_id, fingerprint)`.
+- `ck_person_name_nonempty`: `CHECK ((NOT (full_name = ''::text)))`.
+- `ck_person_name_review`: `CHECK (((review_status)::text = ANY ((ARRAY['pending'::character varying, 'confirmed'::character varying, 'rejected'::character varying])::text[])))`.
+- `ck_person_name_origin`: `CHECK (((origin)::text = ANY ((ARRAY['source'::character varying, 'owner'::character varying, 'converted'::character varying, 'generated'::character varying, 'legacy'::character varying])::text[])))`.
+- `ck_person_name_not_self`: `CHECK ((NOT ((derived_from_id = id) AND (derived_from_id IS NOT NULL))))`.
 
 Original names stay authoritative. Language/script and origin are independent of the selected display locale. Generated or converted origins remain unchanged after corroboration. Names never identify or merge people. PostgreSQL triggers reject cross-person derivations and edits that would erase an original representation.
 
 Migration 0060 installs `g1_person_name_guard` on this table and `g1_person_name_selection` on `people`. These PostgreSQL triggers enforce same-person derivation/selection, confirmed selections, immutable original representations, and clearing selections before rejecting a name.
+
+**Physical constraints:**
+
+- `ck_person_name_type`: `CHECK (((name_type)::text = ANY ((ARRAY['professional'::character varying, 'romanized'::character varying])::text[])))`.
+- `people_names_derived_from_id_315929ce_fk_people_names_id`: `FOREIGN KEY (derived_from_id) REFERENCES people_names(id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_names_locale_id_2f878162_fk_locales_code`: `FOREIGN KEY (locale_id) REFERENCES locales(code) DEFERRABLE INITIALLY DEFERRED`.
+- `people_names_name_type_id_93a468d5_fk_person_name_types_id`: `FOREIGN KEY (name_type_id) REFERENCES person_name_types(id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_names_person_id_3a3d5484_fk_people_id`: `FOREIGN KEY (person_id) REFERENCES people(id) DEFERRABLE INITIALLY DEFERRED`.
+- `people_names_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `people_names_derived_from_id_315929ce`: `CREATE INDEX people_names_derived_from_id_315929ce ON public.people_names USING btree (derived_from_id)`.
+- `people_names_locale_id_2f878162`: `CREATE INDEX people_names_locale_id_2f878162 ON public.people_names USING btree (locale_id)`.
+- `people_names_locale_id_2f878162_like`: `CREATE INDEX people_names_locale_id_2f878162_like ON public.people_names USING btree (locale_id varchar_pattern_ops)`.
+- `people_names_name_type_id_93a468d5`: `CREATE INDEX people_names_name_type_id_93a468d5 ON public.people_names USING btree (name_type_id)`.
+- `people_names_person_id_3a3d5484`: `CREATE INDEX people_names_person_id_3a3d5484 ON public.people_names USING btree (person_id)`.
+- `people_names_pkey`: `CREATE UNIQUE INDEX people_names_pkey ON public.people_names USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_person_name_type_immutable`: `CREATE TRIGGER pw_person_name_type_immutable BEFORE UPDATE ON public.people_names FOR EACH ROW EXECUTE FUNCTION pw_person_name_type_immutable()`.
+- `pw_rg4_name_kind_bridge`: `CREATE TRIGGER pw_rg4_name_kind_bridge BEFORE INSERT OR UPDATE OF name_type, name_type_id ON public.people_names FOR EACH ROW EXECUTE FUNCTION pw_rg4_name_kind_bridge()`.
+- `pw_rg4_name_kind_identity`: `CREATE TRIGGER pw_rg4_name_kind_identity BEFORE UPDATE ON public.people_names FOR EACH ROW EXECUTE FUNCTION pw_rg4_name_kind_identity()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -1009,16 +1179,35 @@ Migration 0060 installs `g1_person_name_guard` on this table and `g1_person_name
 
 One selected name spelling for one person and display locale.
 
-Model: [PersonNameSelection](../../core/models.py#L5427).
+Model: [PersonNameSelection](../../core/models.py#L5407).
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `person_id` | `uuid` | No | FK → [`people`](#table-people) (`id`); CASCADE. |
-| `display_locale_id` | `varchar(35)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
+| `display_locale_id` | `character varying(255)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
 | `name_id` | `bigint` | No | FK → [`people_names`](#table-people_names) (`id`); PROTECT. |
+| `person_id` | `uuid` | No | FK → [`people`](#table-people) (`id`); CASCADE. |
 
 **Named constraints:** `uq_person_name_selection_locale` (one selected name per person and display locale). A database trigger verifies the selected name belongs to that person.
+
+**Physical constraints:**
+
+- `person_name_selectio_display_locale_id_de82eeba_fk_locales_c`: `FOREIGN KEY (display_locale_id) REFERENCES locales(code) DEFERRABLE INITIALLY DEFERRED`.
+- `person_name_selections_name_id_5db2f4e8_fk_people_names_id`: `FOREIGN KEY (name_id) REFERENCES people_names(id) DEFERRABLE INITIALLY DEFERRED`.
+- `person_name_selections_person_id_4ec6b979_fk_people_id`: `FOREIGN KEY (person_id) REFERENCES people(id) DEFERRABLE INITIALLY DEFERRED`.
+- `person_name_selections_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `person_name_selections_display_locale_id_de82eeba`: `CREATE INDEX person_name_selections_display_locale_id_de82eeba ON public.person_name_selections USING btree (display_locale_id)`.
+- `person_name_selections_display_locale_id_de82eeba_like`: `CREATE INDEX person_name_selections_display_locale_id_de82eeba_like ON public.person_name_selections USING btree (display_locale_id varchar_pattern_ops)`.
+- `person_name_selections_name_id_5db2f4e8`: `CREATE INDEX person_name_selections_name_id_5db2f4e8 ON public.person_name_selections USING btree (name_id)`.
+- `person_name_selections_person_id_4ec6b979`: `CREATE INDEX person_name_selections_person_id_4ec6b979 ON public.person_name_selections USING btree (person_id)`.
+- `person_name_selections_pkey`: `CREATE UNIQUE INDEX person_name_selections_pkey ON public.person_name_selections USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_person_name_selection_owner`: `CREATE TRIGGER pw_person_name_selection_owner BEFORE INSERT OR UPDATE ON public.person_name_selections FOR EACH ROW EXECUTE FUNCTION pw_check_person_name_selection_owner()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -1028,7 +1217,7 @@ Model: [PersonNameSelection](../../core/models.py#L5427).
 
 One observation supporting a name or explicitly supported name components.
 
-Model: [PersonNameEvidence](../../core/models.py#L5450).
+Model: [PersonNameEvidence](../../core/models.py#L5430).
 
 **Primary key:** `id`.
 
@@ -1065,7 +1254,7 @@ Several observations can corroborate the same representation. Source excerpts, o
 
 One immutable source version of biography, role, title, location or job-description prose, with separately reviewed attribution.
 
-Model: [PersonText](../../core/models.py#L5656).
+Model: [PersonText](../../core/models.py#L5636).
 
 **Primary key:** `id`.
 
@@ -1109,7 +1298,7 @@ Migration 0064 prevents changing captured wording, language, source, version, or
 
 One cached translation of a specific original prose version and provider configuration.
 
-Model: [PersonTextTranslation](../../core/models.py#L5693).
+Model: [PersonTextTranslation](../../core/models.py#L5673).
 
 **Primary key:** `id`.
 
@@ -1142,7 +1331,7 @@ English/Japanese display text stays linked to the exact original. Missing or fai
 
 One operator's reviewed account confirmation, merge or selective split. This is
 
-Model: [PersonIdentityCorrection](../../core/models.py#L5341).
+Model: [PersonIdentityCorrection](../../core/models.py#L5314).
 
 **Primary key:** `id`.
 
@@ -1176,7 +1365,7 @@ None declared beyond field/FK/constraint indexes.
 
 One person-specific attribution of an image or video reference to a source.
 
-Model: [PersonMedia](../../core/models.py#L5605).
+Model: [PersonMedia](../../core/models.py#L5585).
 
 **Primary key:** `id`.
 
@@ -1223,7 +1412,7 @@ Multiple publisher attributions may point to identical media bytes. Source verif
 
 One validated image file, addressed by its SHA-256 content hash.
 
-Model: [StaffMediaObject](../../core/models.py#L5592).
+Model: [StaffMediaObject](../../core/models.py#L5572).
 
 **Primary key:** `sha256`.
 
@@ -1251,6 +1440,204 @@ None beyond field-level database rules.
 
 [Back to table inventory](#table-inventory)
 
+<a id="table-affiliation_types"></a>
+
+### `affiliation_types` — AffiliationType
+
+One allowed kind of relationship between a person and an organization; shared by affiliations and dossier personnel details.
+
+Model: [AffiliationType](../../core/models.py#L225).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `code` | `character varying(128)` | No | Unique field. |
+
+
+**Physical constraints:**
+
+- `affiliation_types_code_key`: `UNIQUE (code)`.
+- `affiliation_types_pkey`: `PRIMARY KEY (id)`.
+- `ck_affiliationtype_code`: `CHECK (((code)::text ~ '^[a-z][a-z0-9_]*$'::text))`.
+
+**Physical indexes:**
+
+- `affiliation_types_code_686ba6d6_like`: `CREATE INDEX affiliation_types_code_686ba6d6_like ON public.affiliation_types USING btree (code varchar_pattern_ops)`.
+- `affiliation_types_code_key`: `CREATE UNIQUE INDEX affiliation_types_code_key ON public.affiliation_types USING btree (code)`.
+- `affiliation_types_pkey`: `CREATE UNIQUE INDEX affiliation_types_pkey ON public.affiliation_types USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_catalogue_identity`: `CREATE TRIGGER pw_rg4_catalogue_identity BEFORE UPDATE ON public.affiliation_types FOR EACH ROW EXECUTE FUNCTION pw_rg4_catalogue_identity()`.
+
+[Back to table inventory](#table-inventory)
+
+
+
+<a id="table-personnel_change_types"></a>
+
+### `personnel_change_types` — PersonnelChangeType
+
+One allowed kind of personnel change recorded in a dossier detail.
+
+Model: [PersonnelChangeType](../../core/models.py#L265).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `code` | `character varying(128)` | No | Unique field. |
+
+
+**Physical constraints:**
+
+- `ck_personnelchangetype_code`: `CHECK (((code)::text ~ '^[a-z][a-z0-9_]*$'::text))`.
+- `personnel_change_types_code_key`: `UNIQUE (code)`.
+- `personnel_change_types_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `personnel_change_types_code_6c57ce1e_like`: `CREATE INDEX personnel_change_types_code_6c57ce1e_like ON public.personnel_change_types USING btree (code varchar_pattern_ops)`.
+- `personnel_change_types_code_key`: `CREATE UNIQUE INDEX personnel_change_types_code_key ON public.personnel_change_types USING btree (code)`.
+- `personnel_change_types_pkey`: `CREATE UNIQUE INDEX personnel_change_types_pkey ON public.personnel_change_types USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_catalogue_identity`: `CREATE TRIGGER pw_rg4_catalogue_identity BEFORE UPDATE ON public.personnel_change_types FOR EACH ROW EXECUTE FUNCTION pw_rg4_catalogue_identity()`.
+
+[Back to table inventory](#table-inventory)
+
+
+
+<a id="table-person_citizenships"></a>
+
+### `person_citizenships` — PersonCitizenship
+
+One explicitly supported country or area citizenship for a person; multiple citizenships are allowed, with at most one primary.
+
+Model: [PersonCitizenship](../../core/models.py#L5694).
+
+Legacy nationality prose is retained as PersonText evidence with unknown origin and is not automatically interpreted as citizenship. Explicit citizenship assignments require source-origin text. A selected geolocation must be a country/area. The person/place pair and one-primary-per-person constraints protect independent citizenship claims; evidence must point to source text owned by that same person. The canonical person and a non-null place cannot be silently changed.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Primary key. Django default: `uuid.uuid4()`. |
+| `is_primary` | `boolean` | No | Django default: `False`. |
+| `country_code` | `character varying(2)` | Yes | Temporary compatibility column, absent from the ordinary ORM; retained until old processes finish and the separate deletion migration runs. |
+| `person_id` | `uuid` | No | FK → [people.id](#table-people); Django deletion: `CASCADE`. PostgreSQL action is recorded in the constraint list below. Model field: `person`. |
+| `geolocation_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `geolocation`. |
+
+
+**Physical constraints:**
+
+- `person_citizenships_country_code_e2c0d7ce_fk_countries_code`: `FOREIGN KEY (country_code) REFERENCES countries(code) DEFERRABLE INITIALLY DEFERRED`.
+- `person_citizenships_geolocation_id_b1e2187b_fk_geolocations_id`: `FOREIGN KEY (geolocation_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `person_citizenships_person_id_bf30c54b_fk_people_id`: `FOREIGN KEY (person_id) REFERENCES people(id) DEFERRABLE INITIALLY DEFERRED`.
+- `person_citizenships_pkey`: `PRIMARY KEY (id)`.
+- `pw_rg4_citizenship_supported`: `TRIGGER DEFERRABLE INITIALLY DEFERRED`.
+- `uq_person_citizenship_country`: `UNIQUE (person_id, country_code)`.
+- `uq_person_citizenship_geolocation`: `UNIQUE (person_id, geolocation_id)`.
+
+**Physical indexes:**
+
+- `person_citizenships_country_code_e2c0d7ce`: `CREATE INDEX person_citizenships_country_code_e2c0d7ce ON public.person_citizenships USING btree (country_code)`.
+- `person_citizenships_country_code_e2c0d7ce_like`: `CREATE INDEX person_citizenships_country_code_e2c0d7ce_like ON public.person_citizenships USING btree (country_code varchar_pattern_ops)`.
+- `person_citizenships_geolocation_id_b1e2187b`: `CREATE INDEX person_citizenships_geolocation_id_b1e2187b ON public.person_citizenships USING btree (geolocation_id)`.
+- `person_citizenships_person_id_bf30c54b`: `CREATE INDEX person_citizenships_person_id_bf30c54b ON public.person_citizenships USING btree (person_id)`.
+- `person_citizenships_pkey`: `CREATE UNIQUE INDEX person_citizenships_pkey ON public.person_citizenships USING btree (id)`.
+- `uq_person_citizenship_country`: `CREATE UNIQUE INDEX uq_person_citizenship_country ON public.person_citizenships USING btree (person_id, country_code)`.
+- `uq_person_citizenship_geolocation`: `CREATE UNIQUE INDEX uq_person_citizenship_geolocation ON public.person_citizenships USING btree (person_id, geolocation_id)`.
+- `uq_person_primary_citizenship`: `CREATE UNIQUE INDEX uq_person_primary_citizenship ON public.person_citizenships USING btree (person_id) WHERE is_primary`.
+
+**Physical triggers:**
+
+- `pw_citizenship_geolocation_kind`: `CREATE TRIGGER pw_citizenship_geolocation_kind BEFORE INSERT OR UPDATE OF geolocation_id ON public.person_citizenships FOR EACH ROW EXECUTE FUNCTION pw_citizenship_geolocation_kind()`.
+- `pw_citizenship_geolocation_owner`: `CREATE TRIGGER pw_citizenship_geolocation_owner BEFORE UPDATE OF person_id, geolocation_id ON public.person_citizenships FOR EACH ROW EXECUTE FUNCTION pw_citizenship_geolocation_owner()`.
+- `pw_geo_legacy_reference`: `CREATE TRIGGER pw_geo_legacy_reference BEFORE INSERT OR UPDATE OF country_code ON public.person_citizenships FOR EACH ROW EXECUTE FUNCTION pw_geo_legacy_reference('country_code', 'geolocation_id')`.
+- `pw_rg4_citizenship_owner`: `CREATE TRIGGER pw_rg4_citizenship_owner BEFORE UPDATE OF person_id, country_code ON public.person_citizenships FOR EACH ROW EXECUTE FUNCTION pw_rg4_citizenship_link_guard()`.
+- `pw_rg4_citizenship_supported`: `CREATE CONSTRAINT TRIGGER pw_rg4_citizenship_supported AFTER INSERT ON public.person_citizenships DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION pw_rg4_citizenship_supported()`.
+
+[Back to table inventory](#table-inventory)
+
+
+
+<a id="table-person_citizenship_evidence"></a>
+
+### `person_citizenship_evidence` — PersonCitizenshipEvidence
+
+One link from a citizenship to an existing source-origin PersonText observation from the same person.
+
+Model: [PersonCitizenshipEvidence](../../core/models.py#L5720).
+
+This link reuses versioned PersonText rather than copying nationality wording. A deferred database guard requires each citizenship to have supporting source-origin text from its own person; the relationship can be assembled in one transaction. Removing or mutating the last support cannot leave an unsupported citizenship.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `citizenship_id` | `uuid` | No | FK → [person_citizenships.id](#table-person_citizenships); Django deletion: `CASCADE`. PostgreSQL action is recorded in the constraint list below. Model field: `citizenship`. |
+| `person_text_id` | `bigint` | No | FK → [people_texts.id](#table-people_texts); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `person_text`. |
+
+
+**Physical constraints:**
+
+- `person_citizenship_e_citizenship_id_2454a592_fk_person_ci`: `FOREIGN KEY (citizenship_id) REFERENCES person_citizenships(id) DEFERRABLE INITIALLY DEFERRED`.
+- `person_citizenship_e_person_text_id_c242bb6a_fk_people_te`: `FOREIGN KEY (person_text_id) REFERENCES people_texts(id) DEFERRABLE INITIALLY DEFERRED`.
+- `person_citizenship_evidence_pkey`: `PRIMARY KEY (id)`.
+- `pw_rg4_citizenship_evidence_retained`: `TRIGGER DEFERRABLE INITIALLY DEFERRED`.
+- `uq_person_citizenship_evidence`: `UNIQUE (citizenship_id, person_text_id)`.
+
+**Physical indexes:**
+
+- `person_citizenship_evidence_citizenship_id_2454a592`: `CREATE INDEX person_citizenship_evidence_citizenship_id_2454a592 ON public.person_citizenship_evidence USING btree (citizenship_id)`.
+- `person_citizenship_evidence_person_text_id_c242bb6a`: `CREATE INDEX person_citizenship_evidence_person_text_id_c242bb6a ON public.person_citizenship_evidence USING btree (person_text_id)`.
+- `person_citizenship_evidence_pkey`: `CREATE UNIQUE INDEX person_citizenship_evidence_pkey ON public.person_citizenship_evidence USING btree (id)`.
+- `uq_person_citizenship_evidence`: `CREATE UNIQUE INDEX uq_person_citizenship_evidence ON public.person_citizenship_evidence USING btree (citizenship_id, person_text_id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_citizenship_evidence_owner`: `CREATE TRIGGER pw_rg4_citizenship_evidence_owner BEFORE INSERT OR UPDATE ON public.person_citizenship_evidence FOR EACH ROW EXECUTE FUNCTION pw_rg4_citizenship_link_guard()`.
+- `pw_rg4_citizenship_evidence_retained`: `CREATE CONSTRAINT TRIGGER pw_rg4_citizenship_evidence_retained AFTER DELETE ON public.person_citizenship_evidence DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION pw_rg4_citizenship_supported()`.
+- `pw_rg4_citizenship_source_evidence`: `CREATE TRIGGER pw_rg4_citizenship_source_evidence BEFORE INSERT OR UPDATE ON public.person_citizenship_evidence FOR EACH ROW EXECUTE FUNCTION pw_rg4_citizenship_source_guard()`.
+
+[Back to table inventory](#table-inventory)
+
+
+
+<a id="table-person_name_types"></a>
+
+### `person_name_types` — PersonNameType
+
+**Compatibility storage:** This physical table remains at migration0157. Canonical readers no longer use it; removal belongs to the separate verified deletion release.
+
+A compatibility catalogue retained physically during scalar-interface restoration; ordinary person names use the original constrained name_type column.
+
+Model: [PersonNameType](../../core/models.py#L220).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `code` | `character varying(128)` | No | Unique field. |
+
+
+**Physical constraints:**
+
+- `ck_personnametype_code`: `CHECK (((code)::text ~ '^[a-z][a-z0-9_]*$'::text))`.
+- `person_name_types_code_key`: `UNIQUE (code)`.
+- `person_name_types_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `person_name_types_code_b5965876_like`: `CREATE INDEX person_name_types_code_b5965876_like ON public.person_name_types USING btree (code varchar_pattern_ops)`.
+- `person_name_types_code_key`: `CREATE UNIQUE INDEX person_name_types_code_key ON public.person_name_types USING btree (code)`.
+- `person_name_types_pkey`: `CREATE UNIQUE INDEX person_name_types_pkey ON public.person_name_types USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_catalogue_identity`: `CREATE TRIGGER pw_rg4_catalogue_identity BEFORE UPDATE ON public.person_name_types FOR EACH ROW EXECUTE FUNCTION pw_rg4_catalogue_identity()`.
+
+[Back to table inventory](#table-inventory)
+
+
+
 <a id="organizations"></a>
 
 ## Companies, brands, and organization discovery
@@ -1274,17 +1661,18 @@ and the [lookup guide](lookup-tables.md).
 
 One company identity, including its recorded headquarters country.
 
-Model: [Company](../../core/models.py#L845).
+Model: [Company](../../core/models.py#L895).
 
 **Primary key:** `nickname`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
-| `nickname` | `varchar(64)` | No | PK. Collation: `case_insensitive`. PK component. |
-| `hq_country_id` | `varchar(2)` | Yes | FK → [`countries`](#table-countries) (`code`). Django deletion: `PROTECT`. Model field: `hq_country_reference`. PostgreSQL uses NO ACTION, normally deferred to transaction end. |
+| `nickname` | `character varying(64)` | No | PK. Collation: `case_insensitive`. PK component. |
 | `accent_color` | `text` | Yes | Stored value. |
 | `description` | `text` | Yes | Stored value. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
+| `hq_country_id` | `character varying(2)` | Yes | FK → [`countries`](#table-countries) (`code`). Django deletion: `PROTECT`. Model field: `hq_country_reference`. PostgreSQL uses NO ACTION, normally deferred to transaction end. Temporary compatibility only; ordinary ORM queries do not select this column. |
+| `hq_geolocation_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `hq_geolocation`. |
 
 **Named indexes:**
 
@@ -1298,6 +1686,23 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 Headquarters is a nullable single Country reference; a company cannot store several HQ countries in this field. Country spelling/labels remain owned by the geography catalogue.
 
+**Physical constraints:**
+
+- `companies_hq_country_id_b1398d1a_fk_countries_code`: `FOREIGN KEY (hq_country_id) REFERENCES countries(code) DEFERRABLE INITIALLY DEFERRED`.
+- `companies_hq_geolocation_id_106d96ea_fk_geolocations_id`: `FOREIGN KEY (hq_geolocation_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `companies_pkey`: `PRIMARY KEY (nickname)`.
+
+**Physical indexes:**
+
+- `companies_hq_country_id_b1398d1a`: `CREATE INDEX companies_hq_country_id_b1398d1a ON public.companies USING btree (hq_country_id)`.
+- `companies_hq_country_id_b1398d1a_like`: `CREATE INDEX companies_hq_country_id_b1398d1a_like ON public.companies USING btree (hq_country_id varchar_pattern_ops)`.
+- `companies_hq_geolocation_id_106d96ea`: `CREATE INDEX companies_hq_geolocation_id_106d96ea ON public.companies USING btree (hq_geolocation_id)`.
+- `companies_pkey`: `CREATE UNIQUE INDEX companies_pkey ON public.companies USING btree (nickname)`.
+
+**Physical triggers:**
+
+- `pw_geo_legacy_reference`: `CREATE TRIGGER pw_geo_legacy_reference BEFORE INSERT OR UPDATE OF hq_country_id ON public.companies FOR EACH ROW EXECUTE FUNCTION pw_geo_legacy_reference('hq_country_id', 'hq_geolocation_id')`.
+
 [Back to table inventory](#table-inventory)
 
 <a id="table-company_labels"></a>
@@ -1306,16 +1711,29 @@ Headquarters is a nullable single Country reference; a company cannot store seve
 
 One current company label for one registered locale.
 
-Model: [CompanyLabel](../../core/models.py#L873).
+Model: [CompanyLabel](../../core/models.py#L923).
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `company_id` | `varchar(64)` | No | FK → [`companies`](#table-companies) (`nickname`); CASCADE. |
-| `locale_id` | `varchar(35)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
 | `label` | `text` | No | Current display label; cannot be empty. |
+| `company_id` | `character varying(64)` | No | FK → [`companies`](#table-companies) (`nickname`); CASCADE. |
+| `locale_id` | `character varying(255)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
 
 **Named constraints:** `uq_company_label_locale` (one label per company and locale); `ck_company_label_nonempty`.
+
+**Physical constraints:**
+
+- `company_labels_company_id_e40e7579_fk_companies_nickname`: `FOREIGN KEY (company_id) REFERENCES companies(nickname) DEFERRABLE INITIALLY DEFERRED`.
+- `company_labels_locale_id_8c321832_fk_locales_code`: `FOREIGN KEY (locale_id) REFERENCES locales(code) DEFERRABLE INITIALLY DEFERRED`.
+- `company_labels_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `company_labels_company_id_e40e7579`: `CREATE INDEX company_labels_company_id_e40e7579 ON public.company_labels USING btree (company_id)`.
+- `company_labels_locale_id_8c321832`: `CREATE INDEX company_labels_locale_id_8c321832 ON public.company_labels USING btree (locale_id)`.
+- `company_labels_locale_id_8c321832_like`: `CREATE INDEX company_labels_locale_id_8c321832_like ON public.company_labels USING btree (locale_id varchar_pattern_ops)`.
+- `company_labels_pkey`: `CREATE UNIQUE INDEX company_labels_pkey ON public.company_labels USING btree (id)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -1325,7 +1743,7 @@ Model: [CompanyLabel](../../core/models.py#L873).
 
 One brand identity and its display metadata.
 
-Model: [Brand](../../core/models.py#L766).
+Model: [Brand](../../core/models.py#L816).
 
 **Primary key:** `nickname`.
 
@@ -1357,7 +1775,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One ownership relationship between a brand and a company.
 
-Model: [BrandCompany](../../core/models.py#L2522).
+Model: [BrandCompany](../../core/models.py#L2496).
 
 **Primary key:** `brand, company`.
 
@@ -1385,7 +1803,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One account’s role for a brand, such as official or researcher.
 
-Model: [BrandAccount](../../core/models.py#L2544).
+Model: [BrandAccount](../../core/models.py#L2518).
 
 **Primary key:** `brand, account`.
 
@@ -1415,7 +1833,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One account’s role and ownership-review state for a company.
 
-Model: [CompanyAccount](../../core/models.py#L2577).
+Model: [CompanyAccount](../../core/models.py#L2551).
 
 **Primary key:** `company, account`.
 
@@ -1453,7 +1871,7 @@ account creation dates remain unknown unless observed independently.
 
 One unresolved organization identity awaiting review against known brands.
 
-Model: [BrandDiscoveryCandidate](../../core/models.py#L6225).
+Model: [BrandDiscoveryCandidate](../../core/models.py#L6240).
 
 **Primary key:** `id`.
 
@@ -1497,7 +1915,7 @@ None declared beyond field/FK/constraint indexes.
 
 One exact observed spelling or handle for an unresolved organization.
 
-Model: [BrandDiscoveryCandidateToken](../../core/models.py#L6295).
+Model: [BrandDiscoveryCandidateToken](../../core/models.py#L6310).
 
 **Primary key:** `id`.
 
@@ -1532,7 +1950,7 @@ None declared beyond field/FK/constraint indexes.
 
 One source observation supporting an organization token.
 
-Model: [BrandDiscoveryCandidateTokenEvidence](../../core/models.py#L6340).
+Model: [BrandDiscoveryCandidateTokenEvidence](../../core/models.py#L6355).
 
 **Primary key:** `id`.
 
@@ -1566,7 +1984,7 @@ None declared beyond field/FK/constraint indexes.
 
 One literal or regular-expression matching pattern for a brand.
 
-Model: [BrandKeyword](../../core/models.py#L3576).
+Model: [BrandKeyword](../../core/models.py#L3550).
 
 **Primary key:** `brand, pattern`.
 
@@ -1596,7 +2014,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One search term associated with a brand.
 
-Model: [BrandSearchTerm](../../core/models.py#L3560).
+Model: [BrandSearchTerm](../../core/models.py#L3534).
 
 **Primary key:** `brand, term`.
 
@@ -1624,7 +2042,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One hashtag associated with a brand.
 
-Model: [BrandHashtag](../../core/models.py#L3599).
+Model: [BrandHashtag](../../core/models.py#L3573).
 
 **Primary key:** `brand, hashtag`.
 
@@ -1677,20 +2095,12 @@ and [collection behavior](twitterapi-io-calls.md).
 
 One source account with a UUID identity, source/native key and current saved profile.
 
-Model: [Account](../../core/models.py#L1447).
+Model: [Account](../../core/models.py#L1465).
 
 **Primary key:** `account_key`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
-| `account_key` | `uuid` | No | PK component. Django default: `uuid4` (not an assumed SQL default). |
-| `data_source_id` | `varchar(32)` | No | FK → [`data_sources`](#table-data_sources) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `data_source`. |
-| `external_identifier` | `text` | No | Django default: `''` (not an assumed SQL default). |
-| `normalized_identifier` | `text` | No | Django default: `''` (not an assumed SQL default). |
-| `identifier_kind` | `varchar(32)` | No | Django default: `'provider_id'` (not an assumed SQL default). |
-| `normalized_handle` | `text` | Yes | Stored value. |
-| `account_kind` | `varchar(24)` | No | Django default: `'unknown'` (not an assumed SQL default). |
-| `provider_metadata` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
 | `author_id` | `text` | Yes | Legacy X native-ID alias, unique when supplied; NULL on non-X accounts. Shared identity is account_key. |
 | `handle` | `text` | Yes | Collation: `C`. Provider username/alias; native identifier remains the source identity. Source-qualified normalized_handle enforces case-insensitive uniqueness when present. |
 | `display_name` | `text` | Yes | Current source account display name. |
@@ -1705,30 +2115,41 @@ Model: [Account](../../core/models.py#L1447).
 | `followers_count` | `integer` | Yes | Stored value. |
 | `following_count` | `integer` | Yes | Stored value. |
 | `profile_picture` | `text` | Yes | Saved profile-image URL; the image need not depict the account holder. |
-| `location` | `text` | Yes | Free-form profile location; not the resolved geography. |
+| `location` | `text` | Yes | Free-form profile location; not the resolved geography. Temporary compatibility only; ordinary ORM queries do not select this column. |
 | `description` | `text` | Yes | Provider author.description text. |
 | `profile_bio_text` | `text` | Yes | Provider profile_bio.description text. |
 | `followers_fetched_at` | `timestamp with time zone` | Yes | Observation/write timestamp for saved engagement/profile metadata. |
+| `country_code` | `character varying(2)` | Yes | FK → [`countries`](#table-countries) (`code`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `country`. Temporary compatibility only; ordinary ORM queries do not select this column. |
 | `created_at` | `timestamp with time zone` | Yes | Source account-creation time. |
 | `unavailable` | `boolean` | Yes | Stored value. |
 | `unavailable_reason` | `text` | Yes | Stored value. |
-| `country_code` | `varchar(2)` | Yes | FK → [`countries`](#table-countries) (`code`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `country`. |
-| `based_in_region_key` | `varchar(64)` | Yes | FK → [`regions`](#table-regions) (`key`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `based_in_region`. |
+| `based_in_region_key` | `character varying(64)` | Yes | FK → [`regions`](#table-regions) (`key`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `based_in_region`. Temporary compatibility only; ordinary ORM queries do not select this column. |
+| `account_key` | `uuid` | No | PK component. Django default: `uuid4` (not an assumed SQL default). SQL default: `gen_random_uuid()`. |
+| `data_source_id` | `character varying(32)` | No | FK → [`data_sources`](#table-data_sources) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `data_source`. |
+| `external_identifier` | `text` | No | Django default: `''` (not an assumed SQL default). |
+| `normalized_identifier` | `text` | No | Django default: `''` (not an assumed SQL default). |
+| `identifier_kind` | `character varying(32)` | No | Django default: `'provider_id'` (not an assumed SQL default). |
+| `normalized_handle` | `text` | Yes | Stored value. |
+| `account_kind` | `character varying(24)` | No | Django default: `'unknown'` (not an assumed SQL default). SQL default: `'unknown'::character varying`. |
+| `provider_metadata` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). SQL default: `'{}'::jsonb`. |
+| `based_in_location_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `based_in_location`. |
+| `profile_location_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `profile_location`. |
+| `reported_profile_location` | `text` | Yes | Permanent source evidence, available only through the explicit unmanaged source projection; excluded from canonical ORM reads and serving privileges. |
 
 **Named indexes:**
 
-- `idx_accounts_handle`: `CREATE INDEX "idx_accounts_handle" ON "accounts" ("handle")`.
-- `idx_accounts_last_seen_at`: `CREATE INDEX "idx_accounts_last_seen_at" ON "accounts" ("last_seen_at")`.
+- `idx_accounts_handle`: `CREATE INDEX idx_accounts_handle ON public.accounts USING btree (handle)`.
+- `idx_accounts_last_seen_at`: `CREATE INDEX idx_accounts_last_seen_at ON public.accounts USING btree (last_seen_at)`.
 
 **Named constraints:**
 
-- `uq_account_source_identifier`: `CONSTRAINT "uq_account_source_identifier" UNIQUE ("data_source_id", "normalized_identifier")`.
-- `uq_account_source_handle`: unique partial index on `(data_source_id, normalized_handle)` where normalized_handle is non-NULL.
-- `ck_account_identity_nonempty`: `CONSTRAINT "ck_account_identity_nonempty" CHECK ((NOT ("external_identifier" = '') AND NOT ("normalized_identifier" = '')))`.
-- `ck_account_identifier_kind`: `CONSTRAINT "ck_account_identifier_kind" CHECK ("identifier_kind" IN ('provider_id', 'namespace'))`.
-- `ck_account_kind`: `CONSTRAINT "ck_account_kind" CHECK ("account_kind" IN ('organization', 'individual', 'channel', 'unknown'))`.
-- `ck_account_native_x_id`: `CONSTRAINT "ck_account_native_x_id" CHECK ((("author_id" = ("external_identifier") AND "author_id" IS NOT NULL AND "data_source_id" = 'x') OR (NOT ("data_source_id" = 'x') AND "author_id" IS NULL)))`.
-- `ck_accounts_one_geography_target`: `CONSTRAINT "ck_accounts_one_geography_target" CHECK (("country_code" IS NULL OR "based_in_region_key" IS NULL))`.
+- `uq_account_source_identifier`: `CREATE UNIQUE INDEX uq_account_source_identifier ON public.accounts USING btree (data_source_id, normalized_identifier)`.
+- `uq_account_source_handle`: `CREATE UNIQUE INDEX uq_account_source_handle ON public.accounts USING btree (data_source_id, normalized_handle) WHERE (normalized_handle IS NOT NULL)`.
+- `ck_account_identity_nonempty`: `CHECK (((external_identifier <> ''::text) AND (normalized_identifier <> ''::text)))`.
+- `ck_account_identifier_kind`: `CHECK (((identifier_kind)::text = ANY ((ARRAY['provider_id'::character varying, 'namespace'::character varying])::text[])))`.
+- `ck_account_kind`: `CHECK (((account_kind)::text = ANY ((ARRAY['organization'::character varying, 'individual'::character varying, 'channel'::character varying, 'unknown'::character varying])::text[])))`.
+- `ck_account_native_x_id`: `CHECK (((((data_source_id)::text = 'x'::text) AND (author_id IS NOT NULL) AND (author_id = external_identifier)) OR (((data_source_id)::text <> 'x'::text) AND (author_id IS NULL))))`.
+- `ck_accounts_one_geography_target`: `CHECK (((country_code IS NULL) OR (based_in_region_key IS NULL)))`.
 
 The X current fields are optional [x_account_details](#table-x_account_details).
 Python payload/profile access retains its established field names through
@@ -1740,6 +2161,35 @@ The source-qualified unique indexes are defined by
 
 The country FK is explicitly named `fk_accounts_country_code` in
 [migration 0027](../../core/migrations/0027_account_country_foreign_key.py).
+
+**Physical constraints:**
+
+- `accounts_author_id_key`: `UNIQUE (author_id)`.
+- `accounts_based_in_location_id_4044dc6a_fk_geolocations_id`: `FOREIGN KEY (based_in_location_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `accounts_based_in_region_key_80184e92_fk_regions_key`: `FOREIGN KEY (based_in_region_key) REFERENCES regions(key) DEFERRABLE INITIALLY DEFERRED`.
+- `accounts_data_source_fk`: `FOREIGN KEY (data_source_id) REFERENCES data_sources(id) DEFERRABLE INITIALLY DEFERRED`.
+- `accounts_pkey`: `PRIMARY KEY (account_key)`.
+- `accounts_profile_location_id_c7efa9ab_fk_geolocations_id`: `FOREIGN KEY (profile_location_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `accounts_author_id_c4807c00_like`: `CREATE INDEX accounts_author_id_c4807c00_like ON public.accounts USING btree (author_id text_pattern_ops)`.
+- `accounts_author_id_key`: `CREATE UNIQUE INDEX accounts_author_id_key ON public.accounts USING btree (author_id)`.
+- `accounts_based_in_location_id_4044dc6a`: `CREATE INDEX accounts_based_in_location_id_4044dc6a ON public.accounts USING btree (based_in_location_id)`.
+- `accounts_based_in_region_key_80184e92`: `CREATE INDEX accounts_based_in_region_key_80184e92 ON public.accounts USING btree (based_in_region_key)`.
+- `accounts_based_in_region_key_80184e92_like`: `CREATE INDEX accounts_based_in_region_key_80184e92_like ON public.accounts USING btree (based_in_region_key varchar_pattern_ops)`.
+- `accounts_country_code_535e2221`: `CREATE INDEX accounts_country_code_535e2221 ON public.accounts USING btree (country_code)`.
+- `accounts_country_code_535e2221_like`: `CREATE INDEX accounts_country_code_535e2221_like ON public.accounts USING btree (country_code varchar_pattern_ops)`.
+- `accounts_data_source_idx`: `CREATE INDEX accounts_data_source_idx ON public.accounts USING btree (data_source_id)`.
+- `accounts_pkey`: `CREATE UNIQUE INDEX accounts_pkey ON public.accounts USING btree (account_key)`.
+- `accounts_profile_location_id_c7efa9ab`: `CREATE INDEX accounts_profile_location_id_c7efa9ab ON public.accounts USING btree (profile_location_id)`.
+
+**Physical triggers:**
+
+- `benchmark_account_identity_defaults`: `CREATE TRIGGER benchmark_account_identity_defaults BEFORE INSERT OR UPDATE ON public.accounts FOR EACH ROW EXECUTE FUNCTION benchmark_account_identity_defaults()`.
+- `pw_geo_legacy_reference`: `CREATE TRIGGER pw_geo_legacy_reference BEFORE INSERT OR UPDATE OF country_code, based_in_region_key ON public.accounts FOR EACH ROW EXECUTE FUNCTION pw_geo_legacy_reference('country_code', 'based_in_location_id')`.
+- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE ON public.accounts FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('location', 'reported_profile_location', 'profile_location_id', 'freeform')`.
+- `x_detail_parent_guard`: `CREATE TRIGGER x_detail_parent_guard BEFORE UPDATE OF data_source_id ON public.accounts FOR EACH ROW EXECUTE FUNCTION pw_x_detail_parent_guard()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -1754,7 +2204,7 @@ Badge/affiliation labels, X native counts, username-change evidence and raw
 “based in” observations belong here; normalized country/region links remain
 on the account. Historical profiles remain in account_profile_snapshots.
 
-Model: [XAccountDetail](../../core/models.py#L1354).
+Model: [XAccountDetail](../../core/models.py#L1373).
 
 **Primary key:** `account_key`.
 
@@ -1768,32 +2218,33 @@ Model: [XAccountDetail](../../core/models.py#L1354).
 | `is_blue_verified` | `boolean` | Yes | Stored value. |
 | `verified_type` | `text` | Yes | Stored value. |
 | `protected` | `boolean` | Yes | Stored value. |
-| `affiliate_label_badge_url` | `varchar(2048)` | Yes | Stored value. |
+| `affiliate_label_badge_url` | `character varying(2048)` | Yes | Stored value. |
 | `affiliate_label_description` | `text` | Yes | Stored value. |
-| `affiliate_label_url` | `varchar(2048)` | Yes | Stored value. |
-| `affiliate_label_url_type` | `varchar(128)` | Yes | Stored value. |
-| `affiliate_label_user_label_display_type` | `varchar(128)` | Yes | Stored value. |
-| `affiliate_label_user_label_type` | `varchar(128)` | Yes | Stored value. |
-| `account_based_in` | `text` | Yes | X-provided “based in” text. |
+| `affiliate_label_url` | `character varying(2048)` | Yes | Stored value. |
+| `affiliate_label_url_type` | `character varying(128)` | Yes | Stored value. |
+| `affiliate_label_user_label_display_type` | `character varying(128)` | Yes | Stored value. |
+| `affiliate_label_user_label_type` | `character varying(128)` | Yes | Stored value. |
+| `account_based_in` | `text` | Yes | X-provided “based in” text. Temporary compatibility only; ordinary ORM queries do not select this column. |
 | `location_accurate` | `boolean` | Yes | Stored value. |
-| `learn_more_url` | `varchar(2048)` | Yes | Stored value. |
-| `affiliate_username` | `varchar(64)` | Yes | Stored value. |
-| `source` | `varchar(128)` | Yes | Stored value. |
+| `learn_more_url` | `character varying(2048)` | Yes | Stored value. |
+| `affiliate_username` | `character varying(64)` | Yes | Stored value. |
+| `source` | `character varying(128)` | Yes | Stored value. |
 | `username_changes_count` | `integer` | Yes | Nonnegative. |
 | `username_changes_last_changed_at_msec` | `bigint` | Yes | Nonnegative. |
 | `created_country_accurate` | `boolean` | Yes | Stored value. |
-| `verification_info_id` | `varchar(128)` | Yes | Stored value. |
+| `verification_info_id` | `character varying(128)` | Yes | Stored value. |
 | `verification_info_is_identity_verified` | `boolean` | Yes | Stored value. |
 | `verification_info_reason_verified_since_msec` | `bigint` | Yes | Nonnegative. |
 | `verification_info_reason_override_verified_year` | `smallint` | Yes | Nonnegative. |
-| `identity_profile_label_badge_url` | `varchar(2048)` | Yes | Stored value. |
+| `identity_profile_label_badge_url` | `character varying(2048)` | Yes | Stored value. |
 | `identity_profile_label_description` | `text` | Yes | Stored value. |
 | `identity_profile_label_long_description` | `text` | Yes | Stored value. |
-| `identity_profile_label_url` | `varchar(2048)` | Yes | Stored value. |
-| `identity_profile_label_url_type` | `varchar(128)` | Yes | Stored value. |
-| `identity_profile_label_user_label_display_type` | `varchar(128)` | Yes | Stored value. |
-| `identity_profile_label_user_label_type` | `varchar(128)` | Yes | Stored value. |
+| `identity_profile_label_url` | `character varying(2048)` | Yes | Stored value. |
+| `identity_profile_label_url_type` | `character varying(128)` | Yes | Stored value. |
+| `identity_profile_label_user_label_display_type` | `character varying(128)` | Yes | Stored value. |
+| `identity_profile_label_user_label_type` | `character varying(128)` | Yes | Stored value. |
 | `account_based_in_fetched_at` | `timestamp with time zone` | Yes | Freshness timestamp for the X geography observation. |
+| `reported_based_in` | `text` | Yes | Permanent source evidence, available only through the explicit unmanaged source projection; excluded from canonical ORM reads and serving privileges. |
 
 **Named indexes:** the primary key enforces uniqueness; no extra lookup index.
 
@@ -1814,6 +2265,24 @@ Model: [XAccountDetail](../../core/models.py#L1354).
   handling and freshness remain governed by Account.apply_observation. These
   application rules supplement database integrity; they are not new evidence.
 
+**Physical constraints:**
+
+- `fk_x_details_account`: `FOREIGN KEY (account_key) REFERENCES accounts(account_key) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED`.
+- `x_account_details_pkey`: `PRIMARY KEY (account_key)`.
+- `x_account_details_username_changes_count_check`: `CHECK ((username_changes_count >= 0))`.
+- `x_account_details_username_changes_last_changed_at_msec_check`: `CHECK ((username_changes_last_changed_at_msec >= 0))`.
+- `x_account_details_verification_info_reason_override_verif_check`: `CHECK ((verification_info_reason_override_verified_year >= 0))`.
+- `x_account_details_verification_info_reason_verified_since_check`: `CHECK ((verification_info_reason_verified_since_msec >= 0))`.
+
+**Physical indexes:**
+
+- `x_account_details_pkey`: `CREATE UNIQUE INDEX x_account_details_pkey ON public.x_account_details USING btree (account_key)`.
+
+**Physical triggers:**
+
+- `pw_geo_based_in_reference`: `CREATE TRIGGER pw_geo_based_in_reference AFTER INSERT OR UPDATE ON public.x_account_details FOR EACH ROW EXECUTE FUNCTION pw_geo_based_in_reference()`.
+- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE ON public.x_account_details FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('account_based_in', 'reported_based_in', '', 'based_in')`.
+
 [Back to table inventory](#table-inventory)
 
 <a id="table-account_profile_snapshots"></a>
@@ -1822,52 +2291,80 @@ Model: [XAccountDetail](../../core/models.py#L1354).
 
 One consecutive observation period during which an account’s saved profile hash is unchanged.
 
-Model: [AccountProfileSnapshot](../../core/models.py#L5780).
+Model: [AccountProfileSnapshot](../../core/models.py#L5805).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `author_id` | `text` | Yes | Model field: `native_account_id`. |
-| `account_key` | `uuid` | No | FK → [`accounts`](#table-accounts) (`account_key`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `account`. |
-| `profile_hash` | `varchar(64)` | No | Hash of the observed profile content used for consecutive compression. |
+| `profile_hash` | `character varying(64)` | No | Hash of the observed profile content used for consecutive compression. |
 | `first_observed_at` | `timestamp with time zone` | No | Start of this consecutive observation period. |
 | `last_observed_at` | `timestamp with time zone` | No | Latest observation of this same consecutive profile value. |
 | `observation_count` | `integer` | No | Django default: `1` (not an assumed SQL default). |
-| `first_source_kind` | `varchar(32)` | No | Stored value. |
-| `first_source_post_id` | `text` | Yes | FK → [`posts`](#table-posts) (`tweet_id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `first_source_post`. |
+| `first_source_kind` | `character varying(32)` | No | Stored value. |
 | `first_source_run` | `text` | Yes | Stored value. |
-| `handle` | `varchar(64)` | Yes | Stored value. |
+| `handle` | `character varying(64)` | Yes | Stored value. |
 | `display_name` | `text` | Yes | Source account display name observed during this profile period. |
 | `description` | `text` | Yes | Stored value. |
 | `profile_bio_text` | `text` | Yes | Stored value. |
-| `location` | `text` | Yes | Stored value. |
-| `profile_image_url` | `varchar(2048)` | Yes | Stored value. |
+| `location` | `text` | Yes | Stored value. Temporary compatibility only; ordinary ORM queries do not select this column. |
+| `profile_image_url` | `character varying(2048)` | Yes | Stored value. |
 | `verified` | `boolean` | Yes | Stored value. |
 | `is_blue_verified` | `boolean` | Yes | Stored value. |
 | `verified_type` | `text` | Yes | Stored value. |
-| `affiliate_target_username` | `varchar(64)` | Yes | Stored value. |
-| `affiliate_target_url` | `varchar(2048)` | Yes | Stored value. |
+| `affiliate_target_username` | `character varying(64)` | Yes | Stored value. |
+| `affiliate_target_url` | `character varying(2048)` | Yes | Stored value. |
 | `affiliate_label_description` | `text` | Yes | Stored value. |
-| `affiliate_badge_image_url` | `varchar(2048)` | Yes | Stored value. |
-| `affiliate_label_type` | `varchar(128)` | Yes | Stored value. |
-| `affiliate_display_type` | `varchar(128)` | Yes | Stored value. |
+| `affiliate_badge_image_url` | `character varying(2048)` | Yes | Stored value. |
+| `affiliate_label_type` | `character varying(128)` | Yes | Stored value. |
+| `affiliate_display_type` | `character varying(128)` | Yes | Stored value. |
 | `present_fields` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
-| `profile_data` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `raw_profile_payload` | `jsonb` | Yes | Stored value. |
+| `profile_data` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). Permanent source evidence; excluded from ordinary ORM queries and the serving login. SQL default: `'{}'::jsonb`. |
+| `raw_profile_payload` | `jsonb` | Yes | Stored value. Permanent source evidence; excluded from ordinary ORM queries and the serving login. |
 | `recorded_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
+| `author_id` | `text` | Yes | Model field: `native_account_id`. |
+| `first_source_post_id` | `text` | Yes | FK → [`posts`](#table-posts) (`tweet_id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `first_source_post`. |
+| `account_key` | `uuid` | No | FK → [`accounts`](#table-accounts) (`account_key`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `account`. |
+| `geolocation_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `geolocation`. |
+| `reported_location` | `text` | Yes | Permanent source evidence, available only through the explicit unmanaged source projection; excluded from canonical ORM reads and serving privileges. |
 
 **Named indexes:**
 
-- `idx_profile_snap_account_last`: `CREATE INDEX "idx_profile_snap_account_last" ON "account_profile_snapshots" ("account_key", "last_observed_at" DESC)`.
-- `idx_profile_snap_hash`: `CREATE INDEX "idx_profile_snap_hash" ON "account_profile_snapshots" ("profile_hash")`.
+- `idx_profile_snap_account_last`: `CREATE INDEX idx_profile_snap_account_last ON public.account_profile_snapshots USING btree (account_key, last_observed_at DESC)`.
+- `idx_profile_snap_hash`: `CREATE INDEX idx_profile_snap_hash ON public.account_profile_snapshots USING btree (profile_hash)`.
 
 **Named constraints:**
 
-- `ck_profile_snap_window`: `CONSTRAINT "ck_profile_snap_window" CHECK ("last_observed_at" >= ("first_observed_at"))`.
-- `ck_profile_snap_count`: `CONSTRAINT "ck_profile_snap_count" CHECK ("observation_count" >= 1)`.
-- `uq_profile_snap_identity`: `CONSTRAINT "uq_profile_snap_identity" UNIQUE ("account_key", "profile_hash", "first_observed_at")`.
+- `ck_profile_snap_window`: `CHECK ((last_observed_at >= first_observed_at))`.
+- `ck_profile_snap_count`: `CHECK ((observation_count >= 1))`.
+- `uq_profile_snap_identity`: `CREATE UNIQUE INDEX uq_profile_snap_identity ON public.account_profile_snapshots USING btree (account_key, profile_hash, first_observed_at)`.
+
+**Physical constraints:**
+
+- `account_profile_snap_author_id_a54a6e02_fk_accounts_`: `FOREIGN KEY (author_id) REFERENCES accounts(author_id) DEFERRABLE INITIALLY DEFERRED`.
+- `account_profile_snap_first_source_post_id_5d676deb_fk_posts_twe`: `FOREIGN KEY (first_source_post_id) REFERENCES posts(tweet_id) DEFERRABLE INITIALLY DEFERRED`.
+- `account_profile_snap_geolocation_id_f038326c_fk_geolocati`: `FOREIGN KEY (geolocation_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `account_profile_snapshots_generic_account_fk`: `FOREIGN KEY (account_key) REFERENCES accounts(account_key) DEFERRABLE INITIALLY DEFERRED`.
+- `account_profile_snapshots_observation_count_check`: `CHECK ((observation_count >= 0))`.
+- `account_profile_snapshots_pkey`: `PRIMARY KEY (id)`.
+- `compat_uq_profile_snap_identity`: `UNIQUE (author_id, profile_hash, first_observed_at)`.
+
+**Physical indexes:**
+
+- `account_profile_snapshots_author_id_a54a6e02`: `CREATE INDEX account_profile_snapshots_author_id_a54a6e02 ON public.account_profile_snapshots USING btree (account_key)`.
+- `account_profile_snapshots_author_id_a54a6e02_like`: `CREATE INDEX account_profile_snapshots_author_id_a54a6e02_like ON public.account_profile_snapshots USING btree (author_id text_pattern_ops)`.
+- `account_profile_snapshots_first_source_post_id_5d676deb`: `CREATE INDEX account_profile_snapshots_first_source_post_id_5d676deb ON public.account_profile_snapshots USING btree (first_source_post_id)`.
+- `account_profile_snapshots_first_source_post_id_5d676deb_like`: `CREATE INDEX account_profile_snapshots_first_source_post_id_5d676deb_like ON public.account_profile_snapshots USING btree (first_source_post_id text_pattern_ops)`.
+- `account_profile_snapshots_generic_account_idx`: `CREATE INDEX account_profile_snapshots_generic_account_idx ON public.account_profile_snapshots USING btree (account_key)`.
+- `account_profile_snapshots_geolocation_id_f038326c`: `CREATE INDEX account_profile_snapshots_geolocation_id_f038326c ON public.account_profile_snapshots USING btree (geolocation_id)`.
+- `account_profile_snapshots_pkey`: `CREATE UNIQUE INDEX account_profile_snapshots_pkey ON public.account_profile_snapshots USING btree (id)`.
+- `compat_uq_profile_snap_identity`: `CREATE UNIQUE INDEX compat_uq_profile_snap_identity ON public.account_profile_snapshots USING btree (author_id, profile_hash, first_observed_at)`.
+
+**Physical triggers:**
+
+- `benchmark_account_link`: `CREATE TRIGGER benchmark_account_link BEFORE INSERT OR UPDATE ON public.account_profile_snapshots FOR EACH ROW EXECUTE FUNCTION benchmark_account_link_compatibility('author_id', 'account_key', 'any')`.
+- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE ON public.account_profile_snapshots FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('location', 'reported_location', 'geolocation_id', 'freeform')`.
 
 [Back to table inventory](#table-inventory)
 
@@ -1877,21 +2374,47 @@ Model: [AccountProfileSnapshot](../../core/models.py#L5780).
 
 One localized account-profile text value, retaining its account, source role, locale and optional source snapshot/version.
 
-Model: [AccountProfileTextTranslation](../../core/models.py#L5849).
+Model: [AccountProfileTextTranslation](../../core/models.py#L5875).
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `account_key` | `uuid` | No | FK → [`accounts`](#table-accounts) (`account_key`); CASCADE. |
-| `profile_snapshot_id` | `bigint` | Yes | FK → [`account_profile_snapshots`](#table-account_profile_snapshots) (`id`); PROTECT. |
-| `source_text_role` | `varchar(24)` | No | Choices: `description`, `profile_bio_text`, `legacy_unknown`. |
-| `source_text_sha256` | `varchar(64)` | Yes | Source text digest when known. |
-| `locale_id` | `varchar(35)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
+| `source_text_role` | `character varying(24)` | No | Choices: `description`, `profile_bio_text`, `legacy_unknown`. |
+| `source_text_sha256` | `character varying(64)` | Yes | Source text digest when known. |
 | `text` | `text` | No | Nonempty localized text. |
-| `definition_version_id` | `bigint` | Yes | FK → [`definition_versions`](#table-definition_versions) (`id`); PROTECT. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
+| `account_key` | `uuid` | No | FK → [`accounts`](#table-accounts) (`account_key`); CASCADE. |
+| `definition_version_id` | `uuid` | Yes | FK → [`definition_versions`](#table-definition_versions) (`id`); PROTECT. |
+| `locale_id` | `character varying(255)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
+| `profile_snapshot_id` | `bigint` | Yes | FK → [`account_profile_snapshots`](#table-account_profile_snapshots) (`id`); PROTECT. |
 
 **Named constraints:** one row per account/source role/source hash/locale/version; role, hash and nonempty-text checks. A database trigger ensures a linked snapshot belongs to the same account.
+
+**Physical constraints:**
+
+- `account_profile_text_account_key_913ac809_fk_accounts_`: `FOREIGN KEY (account_key) REFERENCES accounts(account_key) DEFERRABLE INITIALLY DEFERRED`.
+- `account_profile_text_definition_version_i_54842f35_fk_definitio`: `FOREIGN KEY (definition_version_id) REFERENCES definition_versions(id) DEFERRABLE INITIALLY DEFERRED`.
+- `account_profile_text_locale_id_dfa6bcd2_fk_locales_c`: `FOREIGN KEY (locale_id) REFERENCES locales(code) DEFERRABLE INITIALLY DEFERRED`.
+- `account_profile_text_profile_snapshot_id_cc7a3bc3_fk_account_p`: `FOREIGN KEY (profile_snapshot_id) REFERENCES account_profile_snapshots(id) DEFERRABLE INITIALLY DEFERRED`.
+- `account_profile_text_translations_pkey`: `PRIMARY KEY (id)`.
+- `ck_account_profile_translation_nonempty`: `CHECK ((NOT (text = ''::text)))`.
+- `ck_account_profile_translation_role`: `CHECK (((source_text_role)::text = ANY ((ARRAY['description'::character varying, 'profile_bio_text'::character varying, 'legacy_unknown'::character varying])::text[])))`.
+- `ck_account_profile_translation_source_hash`: `CHECK (((source_text_sha256 IS NULL) OR ((source_text_sha256)::text ~ '^[0-9a-f]{64}$'::text)))`.
+- `uq_account_profile_text_translation`: `UNIQUE NULLS NOT DISTINCT (account_key, profile_snapshot_id, source_text_role, source_text_sha256, locale_id, definition_version_id)`.
+
+**Physical indexes:**
+
+- `account_profile_text_trans_definition_version_id_54842f35`: `CREATE INDEX account_profile_text_trans_definition_version_id_54842f35 ON public.account_profile_text_translations USING btree (definition_version_id)`.
+- `account_profile_text_translations_account_key_913ac809`: `CREATE INDEX account_profile_text_translations_account_key_913ac809 ON public.account_profile_text_translations USING btree (account_key)`.
+- `account_profile_text_translations_locale_id_dfa6bcd2`: `CREATE INDEX account_profile_text_translations_locale_id_dfa6bcd2 ON public.account_profile_text_translations USING btree (locale_id)`.
+- `account_profile_text_translations_locale_id_dfa6bcd2_like`: `CREATE INDEX account_profile_text_translations_locale_id_dfa6bcd2_like ON public.account_profile_text_translations USING btree (locale_id varchar_pattern_ops)`.
+- `account_profile_text_translations_pkey`: `CREATE UNIQUE INDEX account_profile_text_translations_pkey ON public.account_profile_text_translations USING btree (id)`.
+- `account_profile_text_translations_profile_snapshot_id_cc7a3bc3`: `CREATE INDEX account_profile_text_translations_profile_snapshot_id_cc7a3bc3 ON public.account_profile_text_translations USING btree (profile_snapshot_id)`.
+- `uq_account_profile_text_translation`: `CREATE UNIQUE INDEX uq_account_profile_text_translation ON public.account_profile_text_translations USING btree (account_key, profile_snapshot_id, source_text_role, source_text_sha256, locale_id, definition_version_id) NULLS NOT DISTINCT`.
+
+**Physical triggers:**
+
+- `pw_account_profile_translation_owner`: `CREATE TRIGGER pw_account_profile_translation_owner BEFORE INSERT OR UPDATE ON public.account_profile_text_translations FOR EACH ROW EXECUTE FUNCTION pw_check_account_profile_translation_owner()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -1901,7 +2424,7 @@ Model: [AccountProfileTextTranslation](../../core/models.py#L5849).
 
 One account’s membership state in one X list.
 
-Model: [TwitterListMembership](../../core/models.py#L1832).
+Model: [TwitterListMembership](../../core/models.py#L1803).
 
 **Primary key:** `id`.
 
@@ -1936,7 +2459,7 @@ Model: [TwitterListMembership](../../core/models.py#L1832).
 
 One X list’s last completed membership synchronization.
 
-Model: [TwitterListSyncState](../../core/models.py#L1881).
+Model: [TwitterListSyncState](../../core/models.py#L1852).
 
 **Primary key:** `list_id`.
 
@@ -1964,7 +2487,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One account’s appearance in one collected post, with collection context.
 
-Model: [AccountPostAppearance](../../core/models.py#L3256).
+Model: [AccountPostAppearance](../../core/models.py#L3230).
 
 **Primary key:** `account, post`.
 
@@ -1994,7 +2517,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One stable collection-source identity, distinct from original authored content.
 
-Model: [DataSource](../../core/models.py#L8203).
+Model: [DataSource](../../core/models.py#L8255).
 
 **Primary key:** `id`.
 
@@ -2042,32 +2565,63 @@ Model: [DataSource](../../core/models.py#L8203).
 
 <a id="geography"></a>
 
-## Countries and regions
+## Shared geography
 
-These tables describe country/territory codes, geographic regions, and
-display names. The account’s free-form `location` text and X’s `account_based_in`
-value are different inputs. A reviewed mapping can resolve a “based in” value
-to one country or one region. An account cannot have both resolved targets at
-once, and an unresolved account can have neither. A display-parent relationship
-does not change a country/territory’s stored identity.
+Shared places, localized names and local policy have separate owners. Accounts
+use `profile_location_id` for their reported profile and `based_in_location_id`
+for the provider's based-in claim. Both reference `geolocations.id`; neither
+stores a GeoNames ID or joins through a country code. Jobs can reference several
+places through ordered `job_listing_locations` evidence occurrences. Country-only
+claims retain country precision. Ambiguous claims stay NULL, including when
+changed wording invalidates an earlier match. Whole-value Korea and Congo use
+the explicitly selected South Korea and Democratic Republic of the Congo defaults.
 
+The bounded, pinned GeoNames import supplies the places currently used, relevant
+ancestors and selected names; it does not import the entire gazetteer. Names can
+use English, Japanese, Simplified Chinese and faithfully tagged existing Chinese
+or unknown-language wording. New arbitrary user wording never creates an alias.
+The importer and strict resolver are in [core/geolocations.py](../../core/geolocations.py)
+and [core/geolocation_resolution.py](../../core/geolocation_resolution.py).
+
+Administrative and geographical parent links express provider-supported ancestry;
+the old country-to-statistical-region graph is not copied. Unknown or conflicting
+ancestry stays absent. `iso2_country_code` is optional flag/integration metadata,
+with partial uniqueness that cannot serve as a PostgreSQL FK target. Django's
+`core.E041` also rejects geography relationships targeting non-primary fields.
+Timezone references reuse the existing `time_zones` catalogue.
+
+Local display/dispute/attribution decisions remain distinct from provider facts.
+Taiwan keeps its own place identity and localized label; the first policy selects
+the existing China flag/display context without silently assigning China's
+country identity. Policy rows are immutable, same-place succession is enforced,
+and provider refresh preserves the current local decision. A policy can explicitly
+withhold country attribution or override it with another local place.
+
+Necessary raw source columns are available through [explicit evidence projections](../../core/geolocation_evidence.py).
+The dedicated web login cannot read those columns, archive bodies or equivalent
+source payloads; normal model queries exclude the restricted columns. Ingestion
+writes canonical references and source evidence in one owner transaction. Raw
+source text never fills an unresolved location on a webpage or API. The five old
+geography tables below remain only for the rolling compatibility window.
 
 <a id="table-countries"></a>
 
 ### `countries` — Country
 
+**Compatibility storage:** This physical table remains at migration0157. Canonical readers no longer use it; removal belongs to the separate verified deletion release.
+
 One country/territory code and optional display-parent relationship.
 
-Model: [Country](../../core/models.py#L1209).
+Historical model: `Country`, retained physical definition from [migration state before0157](../../core/migrations/0157_rg4_geolocation_reference_cutover.py). No current canonical model.
 
 **Primary key:** `code`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
-| `code` | `varchar(2)` | No | PK. PK component. |
-| `m49_code` | `varchar(3)` | No | Unique. Field-level unique. |
-| `display_parent_country_id` | `varchar(2)` | Yes | FK → [`countries`](#table-countries) (`code`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `display_parent_country`. |
-| `display_parent_relationship_type` | `varchar(64)` | Yes | Choices: `special_administrative_region`, `owner_display_context`, `us_insular_area`, `french_overseas`, `british_overseas_territory`, `crown_dependency`, `kingdom_constituent_country`, `netherlands_public_body`. |
+| `code` | `character varying(2)` | No | PK. PK component. |
+| `m49_code` | `character varying(3)` | No | Unique. Field-level unique. |
+| `display_parent_relationship_type` | `character varying(64)` | Yes | Choices: `special_administrative_region`, `owner_display_context`, `us_insular_area`, `french_overseas`, `british_overseas_territory`, `crown_dependency`, `kingdom_constituent_country`, `netherlands_public_body`. |
+| `display_parent_country_id` | `character varying(2)` | Yes | FK → [`countries`](#table-countries) (`code`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `display_parent_country`. |
 
 **Named indexes:**
 
@@ -2075,9 +2629,24 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `ck_countries_display_parent_complete`: `CONSTRAINT "ck_countries_display_parent_complete" CHECK ((("display_parent_country_id" IS NULL AND "display_parent_relationship_type" IS NULL) OR ("display_parent_country_id" IS NOT NULL AND "display_parent_relationship_type" IS NOT NULL)))`.
-- `ck_countries_not_self_parent`: `CONSTRAINT "ck_countries_not_self_parent" CHECK (("display_parent_country_id" IS NULL OR NOT ("display_parent_country_id" = ("code") AND "display_parent_country_id" IS NOT NULL)))`.
-- `ck_countries_parent_relationship_type`: `CONSTRAINT "ck_countries_parent_relationship_type" CHECK (("display_parent_relationship_type" IS NULL OR "display_parent_relationship_type" IN ('special_administrative_region', 'owner_display_context', 'us_insular_area', 'french_overseas', 'british_overseas_territory', 'crown_dependency', 'kingdom_constituent_country', 'netherlands_public_body')))`.
+- `ck_countries_display_parent_complete`: `CHECK ((((display_parent_country_id IS NULL) AND (display_parent_relationship_type IS NULL)) OR ((display_parent_country_id IS NOT NULL) AND (display_parent_relationship_type IS NOT NULL))))`.
+- `ck_countries_not_self_parent`: `CHECK (((display_parent_country_id IS NULL) OR (NOT (((display_parent_country_id)::text = (code)::text) AND (display_parent_country_id IS NOT NULL)))))`.
+- `ck_countries_parent_relationship_type`: `CHECK (((display_parent_relationship_type IS NULL) OR ((display_parent_relationship_type)::text = ANY ((ARRAY['special_administrative_region'::character varying, 'owner_display_context'::character varying, 'us_insular_area'::character varying, 'french_overseas'::character varying, 'british_overseas_territory'::character varying, 'crown_dependency'::character varying, 'kingdom_constituent_country'::character varying, 'netherlands_public_body'::character varying])::text[]))))`.
+
+**Physical constraints:**
+
+- `countries_display_parent_country_id_0f6b450a_fk_countries_code`: `FOREIGN KEY (display_parent_country_id) REFERENCES countries(code) DEFERRABLE INITIALLY DEFERRED`.
+- `countries_m49_code_key`: `UNIQUE (m49_code)`.
+- `countries_pkey`: `PRIMARY KEY (code)`.
+
+**Physical indexes:**
+
+- `countries_code_b47131f8_like`: `CREATE INDEX countries_code_b47131f8_like ON public.countries USING btree (code varchar_pattern_ops)`.
+- `countries_display_parent_country_id_0f6b450a`: `CREATE INDEX countries_display_parent_country_id_0f6b450a ON public.countries USING btree (display_parent_country_id)`.
+- `countries_display_parent_country_id_0f6b450a_like`: `CREATE INDEX countries_display_parent_country_id_0f6b450a_like ON public.countries USING btree (display_parent_country_id varchar_pattern_ops)`.
+- `countries_m49_code_af60756b_like`: `CREATE INDEX countries_m49_code_af60756b_like ON public.countries USING btree (m49_code varchar_pattern_ops)`.
+- `countries_m49_code_key`: `CREATE UNIQUE INDEX countries_m49_code_key ON public.countries USING btree (m49_code)`.
+- `countries_pkey`: `CREATE UNIQUE INDEX countries_pkey ON public.countries USING btree (code)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -2085,30 +2654,32 @@ None declared beyond field/FK/constraint indexes.
 
 ### `country_labels` — CountryLabel
 
+**Compatibility storage:** This physical table remains at migration0157. Canonical readers no longer use it; removal belongs to the separate verified deletion release.
+
 One translated label for a country code and canonical application locale.
 
-Model: [CountryLabel](../../core/models.py#L1269).
+Historical model: `CountryLabel`, retained physical definition from [migration state before0157](../../core/migrations/0157_rg4_geolocation_reference_cutover.py). No current canonical model.
 
 **Primary key:** `(country_code, locale_id)`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
-| `country_code` | `varchar(2)` | No | FK → [`countries`](#table-countries) (`code`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `country`. |
 | `label` | `text` | No | Owned translated wording; preserved exactly. |
-| `locale_id` | `varchar(255)` | No | FK → [`locales`](#table-locales) (`code`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `locale_reference`. Canonical application-edition locale and second PK component. |
+| `country_code` | `character varying(2)` | No | FK → [`countries`](#table-countries) (`code`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `country`. |
+| `locale_id` | `character varying(255)` | No | FK → [`locales`](#table-locales) (`code`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `locale_reference`. Canonical application-edition locale and second PK component. |
 
 **Named indexes:**
 
-- `country_labels_locale_id_39819453`: index on `locale_id`.
-- `country_labels_locale_id_39819453_like`: varchar-pattern index on `locale_id`.
-- `country_labels_country_code_f55e9c01`: index on `country_code`.
-- `country_labels_country_code_f55e9c01_like`: varchar-pattern index on `country_code`.
+- `country_labels_locale_id_39819453`: `CREATE INDEX country_labels_locale_id_39819453 ON public.country_labels USING btree (locale_id)`.
+- `country_labels_locale_id_39819453_like`: `CREATE INDEX country_labels_locale_id_39819453_like ON public.country_labels USING btree (locale_id varchar_pattern_ops)`.
+- `country_labels_country_code_f55e9c01`: `CREATE INDEX country_labels_country_code_f55e9c01 ON public.country_labels USING btree (country_code)`.
+- `country_labels_country_code_f55e9c01_like`: `CREATE INDEX country_labels_country_code_f55e9c01_like ON public.country_labels USING btree (country_code varchar_pattern_ops)`.
 
 **Named constraints:**
 
-- `country_labels_pkey`: primary key on `(country_code, locale_id)`.
-- `country_labels_country_code_f55e9c01_fk_countries_code`: deferred FK to `countries(code)`.
-- `country_labels_locale_id_39819453_fk_locales_code`: deferred FK to `locales(code)`.
+- `country_labels_pkey`: `CREATE UNIQUE INDEX country_labels_pkey ON public.country_labels USING btree (country_code, locale_id)`.
+- `country_labels_country_code_f55e9c01_fk_countries_code`: `FOREIGN KEY (country_code) REFERENCES countries(code) DEFERRABLE INITIALLY DEFERRED`.
+- `country_labels_locale_id_39819453_fk_locales_code`: `FOREIGN KEY (locale_id) REFERENCES locales(code) DEFERRABLE INITIALLY DEFERRED`.
 
 The seed command resolves its input language label through the app-edition locale
 catalogue and writes only the canonical `locale_id`; the raw seed spelling is not
@@ -2123,19 +2694,21 @@ remain unchanged. This app-label locale does not reinterpret source-language fac
 
 ### `regions` — Region
 
+**Compatibility storage:** This physical table remains at migration0157. Canonical readers no longer use it; removal belongs to the separate verified deletion release.
+
 One region in the geographic hierarchy.
 
-Model: [Region](../../core/models.py#L1161).
+Historical model: `Region`, retained physical definition from [migration state before0157](../../core/migrations/0157_rg4_geolocation_reference_cutover.py). No current canonical model.
 
 **Primary key:** `key`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
-| `key` | `varchar(64)` | No | PK. PK component. |
-| `m49_code` | `varchar(3)` | Yes | Unique. Field-level unique. |
-| `source` | `varchar(64)` | No | Stored value. |
-| `level` | `varchar(32)` | No | Stored value. |
-| `parent_id` | `varchar(64)` | Yes | FK → [`regions`](#table-regions) (`key`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `parent`. |
+| `key` | `character varying(64)` | No | PK. PK component. |
+| `m49_code` | `character varying(3)` | Yes | Unique. Field-level unique. |
+| `source` | `character varying(64)` | No | Stored value. |
+| `level` | `character varying(32)` | No | Stored value. |
+| `parent_id` | `character varying(64)` | Yes | FK → [`regions`](#table-regions) (`key`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `parent`. |
 
 **Named indexes:**
 
@@ -2143,7 +2716,22 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `ck_regions_not_self_parent`: `CONSTRAINT "ck_regions_not_self_parent" CHECK (("parent_id" IS NULL OR NOT ("parent_id" = ("key") AND "parent_id" IS NOT NULL)))`.
+- `ck_regions_not_self_parent`: `CHECK (((parent_id IS NULL) OR (NOT (((parent_id)::text = (key)::text) AND (parent_id IS NOT NULL)))))`.
+
+**Physical constraints:**
+
+- `regions_m49_code_key`: `UNIQUE (m49_code)`.
+- `regions_parent_id_db3df24e_fk_regions_key`: `FOREIGN KEY (parent_id) REFERENCES regions(key) DEFERRABLE INITIALLY DEFERRED`.
+- `regions_pkey`: `PRIMARY KEY (key)`.
+
+**Physical indexes:**
+
+- `regions_key_9adcaa2d_like`: `CREATE INDEX regions_key_9adcaa2d_like ON public.regions USING btree (key varchar_pattern_ops)`.
+- `regions_m49_code_d6c99ada_like`: `CREATE INDEX regions_m49_code_d6c99ada_like ON public.regions USING btree (m49_code varchar_pattern_ops)`.
+- `regions_m49_code_key`: `CREATE UNIQUE INDEX regions_m49_code_key ON public.regions USING btree (m49_code)`.
+- `regions_parent_id_db3df24e`: `CREATE INDEX regions_parent_id_db3df24e ON public.regions USING btree (parent_id)`.
+- `regions_parent_id_db3df24e_like`: `CREATE INDEX regions_parent_id_db3df24e_like ON public.regions USING btree (parent_id varchar_pattern_ops)`.
+- `regions_pkey`: `CREATE UNIQUE INDEX regions_pkey ON public.regions USING btree (key)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -2151,30 +2739,32 @@ None declared beyond field/FK/constraint indexes.
 
 ### `region_labels` — RegionLabel
 
+**Compatibility storage:** This physical table remains at migration0157. Canonical readers no longer use it; removal belongs to the separate verified deletion release.
+
 One translated label for a region and canonical application locale.
 
-Model: [RegionLabel](../../core/models.py#L1191).
+Historical model: `RegionLabel`, retained physical definition from [migration state before0157](../../core/migrations/0157_rg4_geolocation_reference_cutover.py). No current canonical model.
 
 **Primary key:** `(region_key, locale_id)`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
-| `region_key` | `varchar(64)` | No | FK → [`regions`](#table-regions) (`key`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `region`. |
 | `label` | `text` | No | Owned translated wording; preserved exactly. |
-| `locale_id` | `varchar(255)` | No | FK → [`locales`](#table-locales) (`code`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `locale_reference`. Canonical application-edition locale and second PK component. |
+| `region_key` | `character varying(64)` | No | FK → [`regions`](#table-regions) (`key`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `region`. |
+| `locale_id` | `character varying(255)` | No | FK → [`locales`](#table-locales) (`code`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `locale_reference`. Canonical application-edition locale and second PK component. |
 
 **Named indexes:**
 
-- `region_labels_locale_id_6647bacd`: index on `locale_id`.
-- `region_labels_locale_id_6647bacd_like`: varchar-pattern index on `locale_id`.
-- `region_labels_region_key_8efd2411`: index on `region_key`.
-- `region_labels_region_key_8efd2411_like`: varchar-pattern index on `region_key`.
+- `region_labels_locale_id_6647bacd`: `CREATE INDEX region_labels_locale_id_6647bacd ON public.region_labels USING btree (locale_id)`.
+- `region_labels_locale_id_6647bacd_like`: `CREATE INDEX region_labels_locale_id_6647bacd_like ON public.region_labels USING btree (locale_id varchar_pattern_ops)`.
+- `region_labels_region_key_8efd2411`: `CREATE INDEX region_labels_region_key_8efd2411 ON public.region_labels USING btree (region_key)`.
+- `region_labels_region_key_8efd2411_like`: `CREATE INDEX region_labels_region_key_8efd2411_like ON public.region_labels USING btree (region_key varchar_pattern_ops)`.
 
 **Named constraints:**
 
-- `region_labels_pkey`: primary key on `(region_key, locale_id)`.
-- `region_labels_region_key_8efd2411_fk_regions_key`: deferred FK to `regions(key)`.
-- `region_labels_locale_id_6647bacd_fk_locales_code`: deferred FK to `locales(code)`.
+- `region_labels_pkey`: `CREATE UNIQUE INDEX region_labels_pkey ON public.region_labels USING btree (region_key, locale_id)`.
+- `region_labels_region_key_8efd2411_fk_regions_key`: `FOREIGN KEY (region_key) REFERENCES regions(key) DEFERRABLE INITIALLY DEFERRED`.
+- `region_labels_locale_id_6647bacd_fk_locales_code`: `FOREIGN KEY (locale_id) REFERENCES locales(code) DEFERRABLE INITIALLY DEFERRED`.
 
 The seed command resolves its input language label through the app-edition locale
 catalogue and writes only the canonical `locale_id`; the raw seed spelling is not
@@ -2189,17 +2779,19 @@ remain unchanged. This app-label locale does not reinterpret source-language fac
 
 ### `country_codes_region` — CountryRegion
 
+**Compatibility storage:** This physical table remains at migration0157. Canonical readers no longer use it; removal belongs to the separate verified deletion release.
+
 One country’s assigned region and the source of that assignment.
 
-Model: [CountryRegion](../../core/models.py#L1287).
+Historical model: `CountryRegion`, retained physical definition from [migration state before0157](../../core/migrations/0157_rg4_geolocation_reference_cutover.py). No current canonical model.
 
 **Primary key:** `country_code`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
-| `country_code` | `varchar(2)` | No | PK component. FK → [`countries`](#table-countries) (`code`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `country`. |
-| `region_key` | `varchar(64)` | No | FK → [`regions`](#table-regions) (`key`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `region`. |
-| `source` | `varchar(64)` | No | Stored value. |
+| `country_code` | `character varying(2)` | No | PK component. FK → [`countries`](#table-countries) (`code`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `country`. |
+| `source` | `character varying(64)` | No | Stored value. |
+| `region_key` | `character varying(64)` | No | FK → [`regions`](#table-regions) (`key`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `region`. |
 
 **Named indexes:**
 
@@ -2211,6 +2803,19 @@ None declared beyond primary keys, field uniqueness and foreign keys.
 
 None beyond the column-level keys, uniqueness, nullability, and type checks described above.
 
+**Physical constraints:**
+
+- `country_codes_region_country_code_ab319108_fk_countries_code`: `FOREIGN KEY (country_code) REFERENCES countries(code) DEFERRABLE INITIALLY DEFERRED`.
+- `country_codes_region_pkey`: `PRIMARY KEY (country_code)`.
+- `country_codes_region_region_key_c1d8bb27_fk_regions_key`: `FOREIGN KEY (region_key) REFERENCES regions(key) DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `country_codes_region_country_code_ab319108_like`: `CREATE INDEX country_codes_region_country_code_ab319108_like ON public.country_codes_region USING btree (country_code varchar_pattern_ops)`.
+- `country_codes_region_pkey`: `CREATE UNIQUE INDEX country_codes_region_pkey ON public.country_codes_region USING btree (country_code)`.
+- `country_codes_region_region_key_c1d8bb27`: `CREATE INDEX country_codes_region_region_key_c1d8bb27 ON public.country_codes_region USING btree (region_key)`.
+- `country_codes_region_region_key_c1d8bb27_like`: `CREATE INDEX country_codes_region_region_key_c1d8bb27_like ON public.country_codes_region USING btree (region_key varchar_pattern_ops)`.
+
 [Back to table inventory](#table-inventory)
 
 <a id="table-account_based_in_mappings"></a>
@@ -2219,16 +2824,17 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One reviewed mapping from an X “based in” string to a country or region.
 
-Model: [AccountBasedInMapping](../../core/models.py#L1309).
+Model: [AccountBasedInMapping](../../core/models.py#L1351).
 
 **Primary key:** `value`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `value` | `text` | No | PK. PK component. |
-| `country_code` | `varchar(2)` | Yes | FK → [`countries`](#table-countries) (`code`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `country`. |
-| `region_key` | `varchar(64)` | Yes | FK → [`regions`](#table-regions) (`key`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `region`. |
 | `review_note` | `text` | No | Stored value. |
+| `country_code` | `character varying(2)` | Yes | FK → [`countries`](#table-countries) (`code`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `country`. Temporary compatibility only; ordinary ORM queries do not select this column. |
+| `region_key` | `character varying(64)` | Yes | FK → [`regions`](#table-regions) (`key`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `region`. Temporary compatibility only; ordinary ORM queries do not select this column. |
+| `geolocation_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `geolocation`. |
 
 **Named indexes:**
 
@@ -2238,7 +2844,217 @@ None declared beyond field/FK/constraint indexes.
 
 - `ck_account_based_in_mapping_one_target`: `CONSTRAINT "ck_account_based_in_mapping_one_target" CHECK ((("country_code" IS NOT NULL AND "region_key" IS NULL) OR ("country_code" IS NULL AND "region_key" IS NOT NULL)))`.
 
+**Physical constraints:**
+
+- `account_based_in_map_country_code_9db2d659_fk_countries`: `FOREIGN KEY (country_code) REFERENCES countries(code) DEFERRABLE INITIALLY DEFERRED`.
+- `account_based_in_map_geolocation_id_9877ac03_fk_geolocati`: `FOREIGN KEY (geolocation_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `account_based_in_mappings_pkey`: `PRIMARY KEY (value)`.
+- `account_based_in_mappings_region_key_4148951c_fk_regions_key`: `FOREIGN KEY (region_key) REFERENCES regions(key) DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `account_based_in_mappings_country_code_9db2d659`: `CREATE INDEX account_based_in_mappings_country_code_9db2d659 ON public.account_based_in_mappings USING btree (country_code)`.
+- `account_based_in_mappings_country_code_9db2d659_like`: `CREATE INDEX account_based_in_mappings_country_code_9db2d659_like ON public.account_based_in_mappings USING btree (country_code varchar_pattern_ops)`.
+- `account_based_in_mappings_geolocation_id_9877ac03`: `CREATE INDEX account_based_in_mappings_geolocation_id_9877ac03 ON public.account_based_in_mappings USING btree (geolocation_id)`.
+- `account_based_in_mappings_pkey`: `CREATE UNIQUE INDEX account_based_in_mappings_pkey ON public.account_based_in_mappings USING btree (value)`.
+- `account_based_in_mappings_region_key_4148951c`: `CREATE INDEX account_based_in_mappings_region_key_4148951c ON public.account_based_in_mappings USING btree (region_key)`.
+- `account_based_in_mappings_region_key_4148951c_like`: `CREATE INDEX account_based_in_mappings_region_key_4148951c_like ON public.account_based_in_mappings USING btree (region_key varchar_pattern_ops)`.
+- `account_based_in_mappings_value_ab652650_like`: `CREATE INDEX account_based_in_mappings_value_ab652650_like ON public.account_based_in_mappings USING btree (value text_pattern_ops)`.
+
+**Physical triggers:**
+
+- `pw_geo_legacy_reference`: `CREATE TRIGGER pw_geo_legacy_reference BEFORE INSERT OR UPDATE OF country_code, region_key ON public.account_based_in_mappings FOR EACH ROW EXECUTE FUNCTION pw_geo_legacy_reference('country_code', 'geolocation_id')`.
+
 [Back to table inventory](#table-inventory)
+
+<a id="table-geolocations"></a>
+
+### `geolocations` — Geolocation
+
+One shared geographic place with a local primary key, optional external GeoNames identity and provider-supported ancestry.
+
+Model: [Geolocation](../../core/models.py#L1178).
+
+The external GeoNames ID identifies the provider feature; the local `id` is the only application relationship key. Coordinates are a nullable pair, within latitude/longitude bounds. `refreshed_at` is the import clock, not an observation about an account or job. `source_archive_id` retains the captured provider document; `current_policy_id` must belong to this same place. The provider country and each parent reference must have appropriate kind, and ancestry cycles are rejected.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `geonames_id` | `bigint` | Yes | Unique field. |
+| `place_kind` | `smallint` | No | Choices: `1` (World), `2` (Continent), `3` (Geographic region), `4` (Country or area), `5` (Administrative subdivision), `6` (Populated place), `7` (Other geographic feature). |
+| `iso2_country_code` | `character varying(2)` | Yes | Stored iso2 country code value. |
+| `latitude` | `numeric(9,6)` | Yes | Stored latitude value. |
+| `longitude` | `numeric(9,6)` | Yes | Stored longitude value. |
+| `refreshed_at` | `timestamp with time zone` | No | Django default: `django.utils.timezone.now()`. |
+| `administrative_parent_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `administrative_parent`. |
+| `country_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `country`. |
+| `geographical_parent_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `geographical_parent`. |
+| `source_archive_id` | `uuid` | No | FK → [collection_evidence_archives.id](#table-collection_evidence_archives); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `source_archive`. |
+| `time_zone_id` | `character varying(64)` | Yes | FK → [time_zones.code](#table-time_zones); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `time_zone`. |
+| `current_policy_id` | `bigint` | Yes | FK → [geolocation_policies.id](#table-geolocation_policies); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `current_policy`. |
+
+
+**Physical constraints:**
+
+- `ck_geolocation_admin_self`: `CHECK (((administrative_parent_id IS NULL) OR (NOT ((administrative_parent_id = id) AND (administrative_parent_id IS NOT NULL)))))`.
+- `ck_geolocation_coordinates`: `CHECK ((((latitude IS NULL) AND (longitude IS NULL)) OR ((latitude IS NOT NULL) AND ((latitude >= ('-90'::integer)::numeric) AND (latitude <= (90)::numeric)) AND (longitude IS NOT NULL) AND ((longitude >= ('-180'::integer)::numeric) AND (longitude <= (180)::numeric)))))`.
+- `ck_geolocation_country_self`: `CHECK (((country_id IS NULL) OR (NOT ((country_id = id) AND (country_id IS NOT NULL)))))`.
+- `ck_geolocation_external_id`: `CHECK (((geonames_id IS NULL) OR (geonames_id > 0)))`.
+- `ck_geolocation_geo_self`: `CHECK (((geographical_parent_id IS NULL) OR (NOT ((geographical_parent_id = id) AND (geographical_parent_id IS NOT NULL)))))`.
+- `ck_geolocation_iso_metadata`: `CHECK (((iso2_country_code IS NULL) OR (((iso2_country_code)::text ~ '^[A-Z]{2}$'::text) AND (place_kind = 4))))`.
+- `ck_geolocation_kind`: `CHECK ((place_kind = ANY (ARRAY[1, 2, 3, 4, 5, 6, 7])))`.
+- `geolocations_administrative_paren_9cdb110b_fk_geolocati`: `FOREIGN KEY (administrative_parent_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocations_country_id_cfe41240_fk_geolocations_id`: `FOREIGN KEY (country_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocations_current_policy_id_1065d58c_fk_geolocati`: `FOREIGN KEY (current_policy_id) REFERENCES geolocation_policies(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocations_geographical_parent_id_1dd6e0e7_fk_geolocations_id`: `FOREIGN KEY (geographical_parent_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocations_geonames_id_check`: `CHECK ((geonames_id >= 0))`.
+- `geolocations_geonames_id_key`: `UNIQUE (geonames_id)`.
+- `geolocations_pkey`: `PRIMARY KEY (id)`.
+- `geolocations_place_kind_check`: `CHECK ((place_kind >= 0))`.
+- `geolocations_source_archive_id_6b3cb6a6_fk_collectio`: `FOREIGN KEY (source_archive_id) REFERENCES collection_evidence_archives(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocations_time_zone_id_31d65b1f_fk_time_zones_code`: `FOREIGN KEY (time_zone_id) REFERENCES time_zones(code) DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `geolocations_administrative_parent_id_9cdb110b`: `CREATE INDEX geolocations_administrative_parent_id_9cdb110b ON public.geolocations USING btree (administrative_parent_id)`.
+- `geolocations_country_id_cfe41240`: `CREATE INDEX geolocations_country_id_cfe41240 ON public.geolocations USING btree (country_id)`.
+- `geolocations_current_policy_id_1065d58c`: `CREATE INDEX geolocations_current_policy_id_1065d58c ON public.geolocations USING btree (current_policy_id)`.
+- `geolocations_geographical_parent_id_1dd6e0e7`: `CREATE INDEX geolocations_geographical_parent_id_1dd6e0e7 ON public.geolocations USING btree (geographical_parent_id)`.
+- `geolocations_geonames_id_key`: `CREATE UNIQUE INDEX geolocations_geonames_id_key ON public.geolocations USING btree (geonames_id)`.
+- `geolocations_pkey`: `CREATE UNIQUE INDEX geolocations_pkey ON public.geolocations USING btree (id)`.
+- `geolocations_source_archive_id_6b3cb6a6`: `CREATE INDEX geolocations_source_archive_id_6b3cb6a6 ON public.geolocations USING btree (source_archive_id)`.
+- `geolocations_time_zone_id_31d65b1f`: `CREATE INDEX geolocations_time_zone_id_31d65b1f ON public.geolocations USING btree (time_zone_id)`.
+- `geolocations_time_zone_id_31d65b1f_like`: `CREATE INDEX geolocations_time_zone_id_31d65b1f_like ON public.geolocations USING btree (time_zone_id varchar_pattern_ops)`.
+- `uq_geolocation_iso_metadata`: `CREATE UNIQUE INDEX uq_geolocation_iso_metadata ON public.geolocations USING btree (iso2_country_code) WHERE (iso2_country_code IS NOT NULL)`.
+
+**Physical triggers:**
+
+- `pw_citizenship_geolocation_target`: `CREATE TRIGGER pw_citizenship_geolocation_target BEFORE UPDATE OF place_kind ON public.geolocations FOR EACH ROW EXECUTE FUNCTION pw_citizenship_geolocation_kind()`.
+- `pw_geolocation_guard`: `CREATE TRIGGER pw_geolocation_guard BEFORE INSERT OR UPDATE ON public.geolocations FOR EACH ROW EXECUTE FUNCTION pw_geolocation_guard()`.
+
+[Back to table inventory](#table-inventory)
+
+
+
+<a id="table-geolocation_alternate_names"></a>
+
+### `geolocation_alternate_names` — GeolocationAlternateName
+
+One attested wording in one locale for one place; includes localized preferred names and vetted aliases.
+
+Model: [GeolocationAlternateName](../../core/models.py#L1247).
+
+The Unicode `name` is actual wording, with a shared locale FK. Several names and languages may describe one place, while the same wording can legitimately describe different places. Preferred, short and historical flags describe the attested name. Provider alternate-name IDs are optional external metadata. Source provenance is required; importing a user profile does not create an alternate-name row.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `name` | `text` | No | Stored name value. |
+| `geonames_alternate_name_id` | `bigint` | Yes | Unique field. |
+| `is_preferred` | `boolean` | No | Django default: `False`. |
+| `is_short` | `boolean` | No | Django default: `False`. |
+| `is_historical` | `boolean` | No | Django default: `False`. |
+| `geolocation_id` | `bigint` | No | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `geolocation`. |
+| `locale_id` | `character varying(255)` | No | FK → [locales.code](#table-locales); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `locale`. |
+| `source_archive_id` | `uuid` | No | FK → [collection_evidence_archives.id](#table-collection_evidence_archives); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `source_archive`. |
+
+
+**Physical constraints:**
+
+- `ck_geolocation_name_external_id`: `CHECK (((geonames_alternate_name_id IS NULL) OR (geonames_alternate_name_id > 0)))`.
+- `ck_geolocation_name_wording`: `CHECK ((NOT (name ~ '^\s*$'::text)))`.
+- `geolocation_alternat_geolocation_id_095b290d_fk_geolocati`: `FOREIGN KEY (geolocation_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocation_alternat_source_archive_id_37bf44e3_fk_collectio`: `FOREIGN KEY (source_archive_id) REFERENCES collection_evidence_archives(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocation_alternate_names_geonames_alternate_name_id_check`: `CHECK ((geonames_alternate_name_id >= 0))`.
+- `geolocation_alternate_names_geonames_alternate_name_id_key`: `UNIQUE (geonames_alternate_name_id)`.
+- `geolocation_alternate_names_locale_id_66dd5fd8_fk_locales_code`: `FOREIGN KEY (locale_id) REFERENCES locales(code) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocation_alternate_names_pkey`: `PRIMARY KEY (id)`.
+- `uq_geolocation_name_locale`: `UNIQUE (geolocation_id, locale_id, name)`.
+
+**Physical indexes:**
+
+- `geolocation_alternate_names_geolocation_id_095b290d`: `CREATE INDEX geolocation_alternate_names_geolocation_id_095b290d ON public.geolocation_alternate_names USING btree (geolocation_id)`.
+- `geolocation_alternate_names_geonames_alternate_name_id_key`: `CREATE UNIQUE INDEX geolocation_alternate_names_geonames_alternate_name_id_key ON public.geolocation_alternate_names USING btree (geonames_alternate_name_id)`.
+- `geolocation_alternate_names_locale_id_66dd5fd8`: `CREATE INDEX geolocation_alternate_names_locale_id_66dd5fd8 ON public.geolocation_alternate_names USING btree (locale_id)`.
+- `geolocation_alternate_names_locale_id_66dd5fd8_like`: `CREATE INDEX geolocation_alternate_names_locale_id_66dd5fd8_like ON public.geolocation_alternate_names USING btree (locale_id varchar_pattern_ops)`.
+- `geolocation_alternate_names_pkey`: `CREATE UNIQUE INDEX geolocation_alternate_names_pkey ON public.geolocation_alternate_names USING btree (id)`.
+- `geolocation_alternate_names_source_archive_id_37bf44e3`: `CREATE INDEX geolocation_alternate_names_source_archive_id_37bf44e3 ON public.geolocation_alternate_names USING btree (source_archive_id)`.
+- `uq_geolocation_name_locale`: `CREATE UNIQUE INDEX uq_geolocation_name_locale ON public.geolocation_alternate_names USING btree (geolocation_id, locale_id, name)`.
+
+[Back to table inventory](#table-inventory)
+
+
+
+<a id="table-geolocation_policies"></a>
+
+### `geolocation_policies` — GeolocationPolicy
+
+One immutable local geography policy decision; the place selects its current decision while the supersedes chain preserves history.
+
+Model: [GeolocationPolicy](../../core/models.py#L1271).
+
+`decided_at` records the actual local decision time. `actor_id` reuses the shared performer registry; `source_archive_id` preserves the decision input. `supersedes_id` builds one same-place history with a single root and no rewriting of recorded decisions. Country attribution, display parent, flag and label behavior are separate decisions; an override requires its country reference, and a display relationship requires its display parent.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `decided_at` | `timestamp with time zone` | No | Stored decided at value. |
+| `dispute_state` | `smallint` | No | Django default: `0`. Choices: `0` (Not assessed), `1` (Disputed), `2` (Not disputed). |
+| `country_attribution` | `smallint` | No | Django default: `0`. Choices: `0` (Use provider attribution), `1` (Use explicit local country or area), `2` (Withhold country attribution). |
+| `display_relationship` | `smallint` | No | Django default: `0`. Choices: `0` (No display parent), `1` (Special administrative region), `2` (Owner-selected display context), `3` (US insular area), `4` (French overseas arrangement), `5` (British Overseas Territory), `6` (Crown Dependency), `7` (Kingdom constituent country), `8` (Netherlands public body). |
+| `flag_mode` | `smallint` | No | Django default: `0`. Choices: `0` (Place flag), `1` (Display parent flag), `2` (No flag). |
+| `label_mode` | `smallint` | No | Django default: `0`. Choices: `0` (Localized name), `1` (Area code and localized name). |
+| `actor_id` | `uuid` | No | FK → [actors.id](#table-actors); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `actor`. |
+| `country_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `country`. |
+| `display_parent_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `display_parent`. |
+| `geolocation_id` | `bigint` | No | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `geolocation`. |
+| `source_archive_id` | `uuid` | No | FK → [collection_evidence_archives.id](#table-collection_evidence_archives); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `source_archive`. |
+| `supersedes_id` | `bigint` | Yes | FK → [geolocation_policies.id](#table-geolocation_policies); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `supersedes`. Unique field. |
+
+
+**Physical constraints:**
+
+- `ck_geolocation_attribution`: `CHECK ((country_attribution = ANY (ARRAY[0, 1, 2])))`.
+- `ck_geolocation_display_relation`: `CHECK ((display_relationship = ANY (ARRAY[0, 1, 2, 3, 4, 5, 6, 7, 8])))`.
+- `ck_geolocation_dispute_state`: `CHECK ((dispute_state = ANY (ARRAY[0, 1, 2])))`.
+- `ck_geolocation_flag_mode`: `CHECK ((flag_mode = ANY (ARRAY[0, 1, 2])))`.
+- `ck_geolocation_label_mode`: `CHECK ((label_mode = ANY (ARRAY[0, 1])))`.
+- `ck_geolocation_parent_flag`: `CHECK (((NOT (flag_mode = 1)) OR (display_parent_id IS NOT NULL)))`.
+- `ck_geolocation_policy_country`: `CHECK ((((country_id IS NOT NULL) AND (country_attribution = 1)) OR ((country_id IS NULL) AND (country_attribution = ANY (ARRAY[0, 2])))))`.
+- `ck_geolocation_policy_parent`: `CHECK ((((display_parent_id IS NULL) AND (display_relationship = 0)) OR ((display_parent_id IS NOT NULL) AND (display_relationship > 0))))`.
+- `ck_geolocation_policy_self`: `CHECK (((display_parent_id IS NULL) OR (NOT ((display_parent_id = geolocation_id) AND (display_parent_id IS NOT NULL)))))`.
+- `geolocation_policies_actor_id_29d937e5_fk_actors_id`: `FOREIGN KEY (actor_id) REFERENCES actors(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocation_policies_country_attribution_check`: `CHECK ((country_attribution >= 0))`.
+- `geolocation_policies_country_id_891eb989_fk_geolocations_id`: `FOREIGN KEY (country_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocation_policies_display_parent_id_53c6c4d7_fk_geolocati`: `FOREIGN KEY (display_parent_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocation_policies_display_relationship_check`: `CHECK ((display_relationship >= 0))`.
+- `geolocation_policies_dispute_state_check`: `CHECK ((dispute_state >= 0))`.
+- `geolocation_policies_flag_mode_check`: `CHECK ((flag_mode >= 0))`.
+- `geolocation_policies_geolocation_id_b46321db_fk_geolocations_id`: `FOREIGN KEY (geolocation_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocation_policies_label_mode_check`: `CHECK ((label_mode >= 0))`.
+- `geolocation_policies_pkey`: `PRIMARY KEY (id)`.
+- `geolocation_policies_source_archive_id_b264a9eb_fk_collectio`: `FOREIGN KEY (source_archive_id) REFERENCES collection_evidence_archives(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocation_policies_supersedes_id_23a3497f_fk_geolocati`: `FOREIGN KEY (supersedes_id) REFERENCES geolocation_policies(id) DEFERRABLE INITIALLY DEFERRED`.
+- `geolocation_policies_supersedes_id_key`: `UNIQUE (supersedes_id)`.
+
+**Physical indexes:**
+
+- `geolocation_policies_actor_id_29d937e5`: `CREATE INDEX geolocation_policies_actor_id_29d937e5 ON public.geolocation_policies USING btree (actor_id)`.
+- `geolocation_policies_country_id_891eb989`: `CREATE INDEX geolocation_policies_country_id_891eb989 ON public.geolocation_policies USING btree (country_id)`.
+- `geolocation_policies_display_parent_id_53c6c4d7`: `CREATE INDEX geolocation_policies_display_parent_id_53c6c4d7 ON public.geolocation_policies USING btree (display_parent_id)`.
+- `geolocation_policies_geolocation_id_b46321db`: `CREATE INDEX geolocation_policies_geolocation_id_b46321db ON public.geolocation_policies USING btree (geolocation_id)`.
+- `geolocation_policies_pkey`: `CREATE UNIQUE INDEX geolocation_policies_pkey ON public.geolocation_policies USING btree (id)`.
+- `geolocation_policies_source_archive_id_b264a9eb`: `CREATE INDEX geolocation_policies_source_archive_id_b264a9eb ON public.geolocation_policies USING btree (source_archive_id)`.
+- `geolocation_policies_supersedes_id_key`: `CREATE UNIQUE INDEX geolocation_policies_supersedes_id_key ON public.geolocation_policies USING btree (supersedes_id)`.
+- `uq_geolocation_policy_root`: `CREATE UNIQUE INDEX uq_geolocation_policy_root ON public.geolocation_policies USING btree (geolocation_id) WHERE (supersedes_id IS NULL)`.
+
+**Physical triggers:**
+
+- `pw_geolocation_policy_guard`: `CREATE TRIGGER pw_geolocation_policy_guard BEFORE INSERT OR DELETE OR UPDATE ON public.geolocation_policies FOR EACH ROW EXECUTE FUNCTION pw_geolocation_policy_guard()`.
+
+[Back to table inventory](#table-inventory)
+
+
 
 <a id="posts"></a>
 
@@ -2273,16 +3089,14 @@ current saved profile, not an automatic reconstruction from every post snapshot.
 
 One collected X post, its source text, metrics, and author snapshot.
 
-Model: [Post](../../core/models.py#L1897).
+Model: [Post](../../core/models.py#L1868).
 
 **Primary key:** `tweet_id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `tweet_id` | `text` | No | PK. X status/post ID as text. PK component. |
-| `author_handle` | `varchar(64)` | Yes | Collation: `case_insensitive`. Saved author handle for direct display. |
-| `author_id` | `text` | Yes | Model field: `native_author_id`. |
-| `author_account_key` | `uuid` | Yes | FK → [`accounts`](#table-accounts) (`account_key`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `author`. |
+| `author_handle` | `character varying(64)` | Yes | Collation: `case_insensitive`. Saved author handle for direct display. |
 | `text` | `text` | Yes | Original source post text. |
 | `lang` | `text` | Yes | Provider-declared language. |
 | `created_at` | `timestamp with time zone` | Yes | Parsed source posting time. |
@@ -2300,76 +3114,80 @@ Model: [Post](../../core/models.py#L1897).
 | `headline_source` | `text` | Yes | Stored value. |
 | `text_en` | `text` | Yes | English translation compatibility field. |
 | `text_zh_cn` | `text` | Yes | Chinese translation compatibility field. |
-| `commentary_en` | `text` | Yes | English commentary compatibility field. |
-| `commentary_zh_cn` | `text` | Yes | Chinese commentary compatibility field. |
 | `lang_detected` | `text` | Yes | Detected source language. |
 | `quoted_text` | `text` | Yes | Stored value. |
 | `last_quote_count_seen` | `integer` | Yes | Stored value. |
 | `last_quote_fetched_at` | `timestamp with time zone` | Yes | Stored value. |
-| `metrics_refreshed_at` | `timestamp with time zone` | Yes | Completion timestamp for metrics refresh. |
 | `created_at_epoch` | `bigint` | Yes | Posting time as epoch seconds for range queries. |
-| `created_at_raw` | `text` | Yes | Provider’s unparsed posting timestamp. |
-| `bookmark_count` | `integer` | Yes | Stored value. |
-| `is_reply` | `boolean` | Yes | Stored value. |
-| `is_retweet` | `boolean` | Yes | Stored value. |
-| `is_quote` | `boolean` | Yes | Stored value. |
-| `in_reply_to_id` | `text` | Yes | Replied-to post/status ID; distinct from in_reply_to_user_id. |
-| `in_reply_to_username` | `text` | Yes | Stored value. |
-| `tweet_type` | `text` | Yes | Stored value. |
-| `tweet_url` | `text` | Yes | Stored value. |
-| `tweet_twitter_url` | `text` | Yes | Stored value. |
-| `card` | `jsonb` | Yes | Provider card object. |
-| `place` | `jsonb` | Yes | Provider geo-place object. |
-| `client_source` | `text` | Yes | Source client application. |
-| `view_count` | `integer` | Yes | Stored value. |
+| `author_id` | `text` | Yes | Model field: `native_author_id`. |
 | `article` | `jsonb` | Yes | X Article/long-form post object. |
-| `is_limited_reply` | `boolean` | Yes | Stored value. |
-| `community_info` | `jsonb` | Yes | Stored value. |
-| `display_text_range` | `jsonb` | Yes | Display-text start/end indices. |
-| `extended_entities` | `jsonb` | Yes | Full media/entity payload. |
-| `quoted_author_handle` | `text` | Yes | Saved handle of the quoted post’s author. |
-| `author_name` | `text` | Yes | Stored value. |
-| `author_followers_count` | `integer` | Yes | Stored value. |
-| `author_following_count` | `integer` | Yes | Stored value. |
-| `author_verified` | `boolean` | Yes | Stored value. |
-| `author_is_blue_verified` | `boolean` | Yes | Stored value. |
-| `author_verified_type` | `text` | Yes | Provider verification type, e.g. Business or Government. |
-| `author_is_translator` | `boolean` | Yes | Stored value. |
-| `author_is_automated` | `boolean` | Yes | Stored value. |
+| `author_affiliates_highlighted_label` | `jsonb` | Yes | Stored value. |
 | `author_automated_by` | `text` | Yes | Stored value. |
-| `author_description` | `text` | Yes | Stored value. |
-| `author_location` | `text` | Yes | Stored value. |
-| `author_media_count` | `integer` | Yes | Stored value. |
-| `author_statuses_count` | `integer` | Yes | Stored value. |
-| `author_favourites_count` | `integer` | Yes | Stored value. |
-| `author_fast_followers_count` | `integer` | Yes | Stored value. |
 | `author_can_dm` | `boolean` | Yes | Stored value. |
 | `author_can_media_tag` | `boolean` | Yes | Stored value. |
-| `author_profile_picture` | `text` | Yes | Profile-image URL in this post’s author snapshot. |
-| `author_profile_bio` | `jsonb` | Yes | Full profile_bio object in this post’s author snapshot. |
 | `author_cover_picture` | `text` | Yes | Stored value. |
-| `author_pinned_tweet_ids` | `jsonb` | Yes | List of pinned post IDs in the author snapshot. |
-| `author_affiliates_highlighted_label` | `jsonb` | Yes | Stored value. |
-| `author_withheld_in_countries` | `jsonb` | Yes | Country-code list in the author snapshot. |
-| `author_possibly_sensitive` | `boolean` | Yes | Stored value. |
-| `author_has_custom_timelines` | `boolean` | Yes | Stored value. |
+| `author_created_at_raw` | `text` | Yes | Stored value. |
+| `author_description` | `text` | Yes | Stored value. |
 | `author_entities` | `jsonb` | Yes | Stored value. |
+| `author_fast_followers_count` | `integer` | Yes | Stored value. |
+| `author_favourites_count` | `integer` | Yes | Stored value. |
+| `author_followers_count` | `integer` | Yes | Stored value. |
+| `author_following_count` | `integer` | Yes | Stored value. |
+| `author_has_custom_timelines` | `boolean` | Yes | Stored value. |
+| `author_is_automated` | `boolean` | Yes | Stored value. |
+| `author_is_blue_verified` | `boolean` | Yes | Stored value. |
+| `author_is_translator` | `boolean` | Yes | Stored value. |
+| `author_location` | `text` | Yes | Stored value. Temporary compatibility only; ordinary ORM queries do not select this column. |
+| `author_media_count` | `integer` | Yes | Stored value. |
+| `author_name` | `text` | Yes | Stored value. |
+| `author_pinned_tweet_ids` | `jsonb` | Yes | List of pinned post IDs in the author snapshot. |
+| `author_possibly_sensitive` | `boolean` | Yes | Stored value. |
+| `author_profile_bio` | `jsonb` | Yes | Full profile_bio object in this post’s author snapshot. |
+| `author_profile_picture` | `text` | Yes | Profile-image URL in this post’s author snapshot. |
+| `author_status` | `text` | Yes | Stored value. |
+| `author_statuses_count` | `integer` | Yes | Stored value. |
 | `author_twitter_url` | `text` | Yes | Stored value. |
 | `author_type` | `text` | Yes | Provider account type, e.g. user or bot. |
 | `author_url` | `text` | Yes | Author’s external URL from the snapshot. |
-| `author_created_at_raw` | `text` | Yes | Stored value. |
-| `author_status` | `text` | Yes | Stored value. |
+| `author_verified` | `boolean` | Yes | Stored value. |
+| `author_verified_type` | `text` | Yes | Provider verification type, e.g. Business or Government. |
+| `author_withheld_in_countries` | `jsonb` | Yes | Country-code list in the author snapshot. |
+| `bookmark_count` | `integer` | Yes | Stored value. |
+| `card` | `jsonb` | Yes | Provider card object. |
+| `client_source` | `text` | Yes | Source client application. |
+| `community_info` | `jsonb` | Yes | Stored value. |
+| `created_at_raw` | `text` | Yes | Provider’s unparsed posting timestamp. |
+| `display_text_range` | `jsonb` | Yes | Display-text start/end indices. |
+| `extended_entities` | `jsonb` | Yes | Full media/entity payload. |
+| `in_reply_to_id` | `text` | Yes | Replied-to post/status ID; distinct from in_reply_to_user_id. |
+| `in_reply_to_username` | `text` | Yes | Stored value. |
+| `is_limited_reply` | `boolean` | Yes | Stored value. |
+| `is_quote` | `boolean` | Yes | Stored value. |
+| `is_reply` | `boolean` | Yes | Stored value. |
+| `is_retweet` | `boolean` | Yes | Stored value. |
+| `place` | `jsonb` | Yes | Provider geo-place object. |
+| `quoted_author_handle` | `text` | Yes | Saved handle of the quoted post’s author. |
+| `tweet_twitter_url` | `text` | Yes | Stored value. |
+| `tweet_type` | `text` | Yes | Stored value. |
+| `tweet_url` | `text` | Yes | Stored value. |
+| `view_count` | `integer` | Yes | Stored value. |
+| `metrics_refreshed_at` | `timestamp with time zone` | Yes | Completion timestamp for metrics refresh. |
+| `commentary_en` | `text` | Yes | English commentary compatibility field. |
+| `commentary_zh_cn` | `text` | Yes | Chinese commentary compatibility field. |
+| `author_account_key` | `uuid` | Yes | FK → [`accounts`](#table-accounts) (`account_key`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `author`. |
+| `author_geolocation_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `author_geolocation`. |
+| `reported_author_location` | `text` | Yes | Permanent source evidence, available only through the explicit unmanaged source projection; excluded from canonical ORM reads and serving privileges. |
 
 **Named indexes:**
 
-- `idx_posts_editorial_context`: `CREATE INDEX "idx_posts_editorial_context" ON "posts" USING gin ((UPPER("text")) gin_trgm_ops, (UPPER("quoted_text")) gin_trgm_ops)`.
-- `idx_posts_author_id`: `CREATE INDEX "idx_posts_author_id" ON "posts" ("author_account_key")`.
-- `idx_posts_created_at`: `CREATE INDEX "idx_posts_created_at" ON "posts" ("created_at")`.
-- `idx_posts_created_cover`: `CREATE INDEX "idx_posts_created_cover" ON "posts" ("created_at") INCLUDE ("tweet_id", "author_account_key")`.
-- `idx_posts_lang`: `CREATE INDEX "idx_posts_lang" ON "posts" ("lang")`.
-- `idx_posts_lang_detected`: `CREATE INDEX "idx_posts_lang_detected" ON "posts" ("lang_detected")`.
-- `idx_posts_source_query_id`: `CREATE INDEX "idx_posts_source_query_id" ON "posts" ("source_query_id")`.
-- `idx_posts_created_at_epoch`: `CREATE INDEX "idx_posts_created_at_epoch" ON "posts" ("created_at_epoch")`.
+- `idx_posts_editorial_context`: `CREATE INDEX idx_posts_editorial_context ON public.posts USING gin (upper(text) gin_trgm_ops, upper(quoted_text) gin_trgm_ops)`.
+- `idx_posts_author_id`: `CREATE INDEX idx_posts_author_id ON public.posts USING btree (author_account_key)`.
+- `idx_posts_created_at`: `CREATE INDEX idx_posts_created_at ON public.posts USING btree (created_at)`.
+- `idx_posts_created_cover`: `CREATE INDEX idx_posts_created_cover ON public.posts USING btree (created_at) INCLUDE (tweet_id, author_account_key)`.
+- `idx_posts_lang`: `CREATE INDEX idx_posts_lang ON public.posts USING btree (lang)`.
+- `idx_posts_lang_detected`: `CREATE INDEX idx_posts_lang_detected ON public.posts USING btree (lang_detected)`.
+- `idx_posts_source_query_id`: `CREATE INDEX idx_posts_source_query_id ON public.posts USING btree (source_query_id)`.
+- `idx_posts_created_at_epoch`: `CREATE INDEX idx_posts_created_at_epoch ON public.posts USING btree (created_at_epoch)`.
 
 **Named constraints:**
 
@@ -2382,6 +3200,33 @@ explicitly gives the SQL `author_id` and `quoted_status_id` foreign keys
 `ON DELETE SET NULL`, `DEFERRABLE INITIALLY DEFERRED`. Do not generalize those
 SQL clauses to every Django `on_delete=SET_NULL` field.
 
+**Physical constraints:**
+
+- `posts_author_geolocation_id_e90f9750_fk_geolocations_id`: `FOREIGN KEY (author_geolocation_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `posts_author_id_099b8aca_fk_accounts_author_id`: `FOREIGN KEY (author_id) REFERENCES accounts(author_id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED`.
+- `posts_generic_account_fk`: `FOREIGN KEY (author_account_key) REFERENCES accounts(account_key) DEFERRABLE INITIALLY DEFERRED`.
+- `posts_pkey`: `PRIMARY KEY (tweet_id)`.
+- `posts_quoted_status_id_eccff4ad_fk_posts_tweet_id`: `FOREIGN KEY (quoted_status_id) REFERENCES posts(tweet_id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `posts_author_geolocation_id_e90f9750`: `CREATE INDEX posts_author_geolocation_id_e90f9750 ON public.posts USING btree (author_geolocation_id)`.
+- `posts_author_id_099b8aca`: `CREATE INDEX posts_author_id_099b8aca ON public.posts USING btree (author_account_key)`.
+- `posts_author_id_099b8aca_like`: `CREATE INDEX posts_author_id_099b8aca_like ON public.posts USING btree (author_id text_pattern_ops)`.
+- `posts_generic_account_idx`: `CREATE INDEX posts_generic_account_idx ON public.posts USING btree (author_account_key)`.
+- `posts_pkey`: `CREATE UNIQUE INDEX posts_pkey ON public.posts USING btree (tweet_id)`.
+- `posts_quoted_status_id_eccff4ad`: `CREATE INDEX posts_quoted_status_id_eccff4ad ON public.posts USING btree (quoted_status_id)`.
+- `posts_quoted_status_id_eccff4ad_like`: `CREATE INDEX posts_quoted_status_id_eccff4ad_like ON public.posts USING btree (quoted_status_id text_pattern_ops)`.
+- `posts_tweet_id_2d4eb885_like`: `CREATE INDEX posts_tweet_id_2d4eb885_like ON public.posts USING btree (tweet_id text_pattern_ops)`.
+
+**Physical triggers:**
+
+- `benchmark_account_link`: `CREATE TRIGGER benchmark_account_link BEFORE INSERT OR UPDATE ON public.posts FOR EACH ROW EXECUTE FUNCTION benchmark_account_link_compatibility('author_id', 'author_account_key', 'x')`.
+- `home_counts_delete`: `CREATE TRIGGER home_counts_delete AFTER DELETE ON public.posts REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION home_counts_invalidate()`.
+- `home_counts_truncate`: `CREATE TRIGGER home_counts_truncate AFTER TRUNCATE ON public.posts FOR EACH STATEMENT EXECUTE FUNCTION home_counts_invalidate()`.
+- `home_counts_update`: `CREATE TRIGGER home_counts_update AFTER UPDATE ON public.posts REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION home_counts_invalidate()`.
+- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE ON public.posts FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('author_location', 'reported_author_location', 'author_geolocation_id', 'freeform')`.
+
 [Back to table inventory](#table-inventory)
 
 <a id="table-posts_brands"></a>
@@ -2390,7 +3235,7 @@ SQL clauses to every Django `on_delete=SET_NULL` field.
 
 One post-to-brand attribution and its relevance weight.
 
-Model: [PostBrand](../../core/models.py#L2611).
+Model: [PostBrand](../../core/models.py#L2585).
 
 **Primary key:** `post, brand`.
 
@@ -2418,7 +3263,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One matching source that connected a post to a brand.
 
-Model: [PostBrandMention](../../core/models.py#L2636).
+Model: [PostBrandMention](../../core/models.py#L2610).
 
 **Primary key:** `post, brand, source`.
 
@@ -2448,7 +3293,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One post type and sentiment assignment for a post/brand pair.
 
-Model: [PostBrandSignal](../../core/models.py#L2665).
+Model: [PostBrandSignal](../../core/models.py#L2639).
 
 **Primary key:** `post, brand, post_type`.
 
@@ -2478,7 +3323,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One current versioned classification state for a post/brand pair.
 
-Model: [PostBrandClassificationState](../../core/models.py#L2710).
+Model: [PostBrandClassificationState](../../core/models.py#L2684).
 
 **Primary key:** `post, brand`.
 
@@ -2520,7 +3365,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One recorded stage of a classifier judgment, including inputs and validation.
 
-Model: [PostBrandClassificationJudgment](../../core/models.py#L2895).
+Model: [PostBrandClassificationJudgment](../../core/models.py#L2869).
 
 **Primary key:** `id`.
 
@@ -2565,7 +3410,7 @@ Model: [PostBrandClassificationJudgment](../../core/models.py#L2895).
 
 One audience-topic assignment for a post/brand pair.
 
-Model: [PostBrandAudienceTopic](../../core/models.py#L2783).
+Model: [PostBrandAudienceTopic](../../core/models.py#L2757).
 
 **Primary key:** `post, brand, concept`.
 
@@ -2602,7 +3447,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One geopolitical-mode assignment for a post/brand pair.
 
-Model: [PostBrandGeopoliticalMode](../../core/models.py#L2842).
+Model: [PostBrandGeopoliticalMode](../../core/models.py#L2816).
 
 **Primary key:** `post, brand, geopolitical_mode`.
 
@@ -2638,7 +3483,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One independent product-feedback label for a post/brand pair.
 
-Model: [PostBrandProductLabel](../../core/models.py#L3014).
+Model: [PostBrandProductLabel](../../core/models.py#L2988).
 
 **Primary key:** `post, brand, product_label`.
 
@@ -2666,7 +3511,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One legacy pragmatic speech-act assignment for a post/brand pair.
 
-Model: [PostBrandDiscourse](../../core/models.py#L3041).
+Model: [PostBrandDiscourse](../../core/models.py#L3015).
 
 **Primary key:** `post, brand, discourse, act_id`.
 
@@ -2699,7 +3544,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One current post-level judgment about promotion of an untracked brand.
 
-Model: [PostUntrackedBrandPromotion](../../core/models.py#L3139).
+Model: [PostUntrackedBrandPromotion](../../core/models.py#L3113).
 
 **Primary key:** `post_id`.
 
@@ -2734,7 +3579,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One visible promoted subject supporting an untracked-brand judgment.
 
-Model: [UntrackedBrandPromotionEvidence](../../core/models.py#L3176).
+Model: [UntrackedBrandPromotionEvidence](../../core/models.py#L3150).
 
 **Primary key:** `id`.
 
@@ -2780,7 +3625,7 @@ Model: [UntrackedBrandPromotionEvidence](../../core/models.py#L3176).
 
 One post’s legacy unsanctioned-flag assignment.
 
-Model: [PostUnsanctionedFlag](../../core/models.py#L3109).
+Model: [PostUnsanctionedFlag](../../core/models.py#L3083).
 
 **Primary key:** `post_id`.
 
@@ -2826,7 +3671,7 @@ This validity state cannot live in a post/brand row or collection execution:
 source changes arrive through multiple writers, and publication must describe
 one atomic view refresh. The table has no foreign keys or source identity role.
 
-Model: [MaterializationState](../../core/models.py#L786). Lifecycle implementation:
+Model: [MaterializationState](../../core/models.py#L836). Lifecycle implementation:
 [core/materializations.py](../../core/materializations.py). Native migrations:
 [0093_homepage_count_materialization](../../core/migrations/0093_homepage_count_materialization.py)
 and [0094_shared_materialization_state](../../core/migrations/0094_shared_materialization_state.py).
@@ -2919,7 +3764,7 @@ scale. Current runtime vocabulary and seed details are in [Lookup tables](lookup
 
 One account-role vocabulary key.
 
-Model: [Role](../../core/models.py#L710).
+Model: [Role](../../core/models.py#L760).
 
 **Primary key:** `key`.
 
@@ -2946,7 +3791,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One translated account-role label.
 
-Model: [RoleLabel](../../core/models.py#L728).
+Model: [RoleLabel](../../core/models.py#L778).
 
 **Primary key:** `role, lang`.
 
@@ -2974,7 +3819,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One post-type vocabulary key, such as release or review.
 
-Model: [PostTypeKey](../../core/models.py#L387).
+Model: [PostTypeKey](../../core/models.py#L437).
 
 **Primary key:** `key`.
 
@@ -3001,7 +3846,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One translated post-type label.
 
-Model: [PostTypeLabel](../../core/models.py#L405).
+Model: [PostTypeLabel](../../core/models.py#L455).
 
 **Primary key:** `post_type, lang`.
 
@@ -3029,7 +3874,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One sentiment vocabulary key.
 
-Model: [SentimentKey](../../core/models.py#L605).
+Model: [SentimentKey](../../core/models.py#L655).
 
 **Primary key:** `key`.
 
@@ -3056,7 +3901,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One translated sentiment label.
 
-Model: [SentimentLabel](../../core/models.py#L623).
+Model: [SentimentLabel](../../core/models.py#L673).
 
 **Primary key:** `sentiment, lang`.
 
@@ -3084,7 +3929,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One independent product-feedback vocabulary key.
 
-Model: [ProductLabelKey](../../core/models.py#L421).
+Model: [ProductLabelKey](../../core/models.py#L471).
 
 **Primary key:** `key`.
 
@@ -3111,7 +3956,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One translated product-feedback label.
 
-Model: [ProductLabelLabel](../../core/models.py#L436).
+Model: [ProductLabelLabel](../../core/models.py#L486).
 
 **Primary key:** `product_label, lang`.
 
@@ -3139,7 +3984,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One versioned audience-topic scheme and its manifest identity.
 
-Model: [AudienceTopicScheme](../../core/models.py#L452).
+Model: [AudienceTopicScheme](../../core/models.py#L502).
 
 **Primary key:** `key`.
 
@@ -3168,7 +4013,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One stable topic identity within an audience-topic scheme.
 
-Model: [AudienceTopicConcept](../../core/models.py#L469).
+Model: [AudienceTopicConcept](../../core/models.py#L519).
 
 **Primary key:** `id`.
 
@@ -3195,7 +4040,7 @@ None declared beyond field/FK/constraint indexes.
 
 One translated topic label for a particular revision.
 
-Model: [AudienceTopicLabel](../../core/models.py#L494).
+Model: [AudienceTopicLabel](../../core/models.py#L544).
 
 **Primary key:** `concept, revision, lang`.
 
@@ -3224,7 +4069,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One geopolitical-mode vocabulary key.
 
-Model: [GeopoliticalModeKey](../../core/models.py#L512).
+Model: [GeopoliticalModeKey](../../core/models.py#L562).
 
 **Primary key:** `key`.
 
@@ -3251,7 +4096,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One translated geopolitical-mode label.
 
-Model: [GeopoliticalModeLabel](../../core/models.py#L527).
+Model: [GeopoliticalModeLabel](../../core/models.py#L577).
 
 **Primary key:** `geopolitical_mode, lang`.
 
@@ -3279,7 +4124,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One China/US national-stance direction vocabulary key.
 
-Model: [NationalStanceKey](../../core/models.py#L543).
+Model: [NationalStanceKey](../../core/models.py#L593).
 
 **Primary key:** `key`.
 
@@ -3306,7 +4151,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One translated national-stance label.
 
-Model: [NationalStanceLabel](../../core/models.py#L558).
+Model: [NationalStanceLabel](../../core/models.py#L608).
 
 **Primary key:** `national_stance, lang`.
 
@@ -3334,7 +4179,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One current untracked-brand-promotion vocabulary key.
 
-Model: [UntrackedBrandPromotionKey](../../core/models.py#L574).
+Model: [UntrackedBrandPromotionKey](../../core/models.py#L624).
 
 **Primary key:** `key`.
 
@@ -3361,7 +4206,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One translated untracked-brand-promotion label.
 
-Model: [UntrackedBrandPromotionLabel](../../core/models.py#L589).
+Model: [UntrackedBrandPromotionLabel](../../core/models.py#L639).
 
 **Primary key:** `untracked_brand_promotion, lang`.
 
@@ -3389,7 +4234,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One legacy pragmatic-register vocabulary key.
 
-Model: [DiscourseKey](../../core/models.py#L639).
+Model: [DiscourseKey](../../core/models.py#L689).
 
 **Primary key:** `key`.
 
@@ -3416,7 +4261,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One translated legacy pragmatic-register label.
 
-Model: [DiscourseLabel](../../core/models.py#L657).
+Model: [DiscourseLabel](../../core/models.py#L707).
 
 **Primary key:** `discourse, lang`.
 
@@ -3444,7 +4289,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One legacy nationalism-scale vocabulary key shared by the China and US axes.
 
-Model: [NationalismKey](../../core/models.py#L673).
+Model: [NationalismKey](../../core/models.py#L723).
 
 **Primary key:** `key`.
 
@@ -3471,7 +4316,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One translated legacy nationalism-scale label.
 
-Model: [NationalismLabel](../../core/models.py#L694).
+Model: [NationalismLabel](../../core/models.py#L744).
 
 **Primary key:** `nationalism, lang`.
 
@@ -3499,7 +4344,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One legacy unsanctioned-flag vocabulary key; there is no paired label table.
 
-Model: [UnsanctionedFlagKey](../../core/models.py#L744).
+Model: [UnsanctionedFlagKey](../../core/models.py#L794).
 
 **Primary key:** `key`.
 
@@ -3525,7 +4370,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One versioned taxonomy identity and its manifest.
 
-Model: [TaxonomyVersion](../../core/models.py#L8234).
+Model: [TaxonomyVersion](../../core/models.py#L8286).
 
 **Primary key:** `id`.
 
@@ -3580,7 +4425,7 @@ collection. Raw JSON columns remain separate from selected searchable fields.
 
 One model/product identity, with optional Hugging Face repository metadata.
 
-Model: [Product](../../core/models.py#L3288).
+Model: [Product](../../core/models.py#L3262).
 
 **Primary key:** `id`.
 
@@ -3637,7 +4482,7 @@ Model: [Product](../../core/models.py#L3288).
 
 One source-backed claim that a post names an exact product for a brand.
 
-Model: [PostBrandProduct](../../core/models.py#L3392).
+Model: [PostBrandProduct](../../core/models.py#L3366).
 
 **Primary key:** `post, brand, product`.
 
@@ -3669,7 +4514,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One reviewable proposal to resolve an observed product name to a product.
 
-Model: [ProductVerificationProposal](../../core/models.py#L3427).
+Model: [ProductVerificationProposal](../../core/models.py#L3401).
 
 **Primary key:** `id`.
 
@@ -3719,27 +4564,28 @@ Model: [ProductVerificationProposal](../../core/models.py#L3427).
 
 One source-backed model-release occurrence and its stated date precision.
 
-Model: [ModelRelease](../../core/models.py#L7404).
+Model: [ModelRelease](../../core/models.py#L7451).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `brand_id` | `varchar(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
-| `brand_discovery_candidate_id` | `bigint` | Yes | FK → [`brand_discovery_candidates`](#table-brand_discovery_candidates) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand_discovery_candidate`. |
 | `observed_model_name` | `text` | No | Stored value. |
 | `version` | `text` | No | Django default: `''` (not an assumed SQL default). |
-| `release_channel` | `varchar(16)` | No | Django default: `'other'` (not an assumed SQL default). Choices: `stable`, `preview`, `beta`, `other`. |
-| `release_value` | `varchar(64)` | Yes | Stored value. |
-| `release_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `day`, `month`, `year`, `unknown`. |
-| `release_identity` | `varchar(64)` | No | Unique. Field-level unique. |
+| `release_channel` | `character varying(16)` | No | Django default: `'other'` (not an assumed SQL default). Choices: `stable`, `preview`, `beta`, `other`. Temporary compatibility only; ordinary ORM queries do not select this column. |
+| `release_value` | `character varying(64)` | Yes | Stored value. |
+| `release_precision` | `character varying(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `day`, `month`, `year`, `unknown`. |
+| `release_identity` | `character varying(64)` | No | Unique. Field-level unique. |
 | `first_seen_at` | `timestamp with time zone` | No | Stored value. |
 | `last_seen_at` | `timestamp with time zone` | No | Stored value. |
 | `extraction_version` | `text` | No | Stored value. |
-| `review_status` | `varchar(16)` | No | Django default: `'pending'` (not an assumed SQL default). Choices: `pending`, `confirmed`, `rejected`, `needs_review`. |
+| `review_status` | `character varying(16)` | No | Django default: `'pending'` (not an assumed SQL default). Choices: `pending`, `confirmed`, `rejected`, `needs_review`. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
+| `brand_id` | `character varying(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
+| `brand_discovery_candidate_id` | `bigint` | Yes | FK → [`brand_discovery_candidates`](#table-brand_discovery_candidates) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand_discovery_candidate`. |
+| `release_maturity_id` | `bigint` | No | FK → [release_maturities.id](#table-release_maturities); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `release_maturity_reference`. |
 
 **Named indexes:**
 
@@ -3747,9 +4593,30 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `ck_model_release_one_owner`: `CONSTRAINT "ck_model_release_one_owner" CHECK ((("brand_id" IS NOT NULL AND "brand_discovery_candidate_id" IS NULL) OR ("brand_id" IS NULL AND "brand_discovery_candidate_id" IS NOT NULL)))`.
-- `ck_model_release_seen_window`: `CONSTRAINT "ck_model_release_seen_window" CHECK ("last_seen_at" >= ("first_seen_at"))`.
-- `ck_model_release_precision`: `CONSTRAINT "ck_model_release_precision" CHECK ((("release_precision" = 'unknown' AND "release_value" IS NULL) OR ("release_precision" = 'day' AND "release_value"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') OR ("release_precision" = 'month' AND "release_value"::text ~ '^[0-9]{4}-[0-9]{2}$') OR ("release_precision" = 'year' AND "release_value"::text ~ '^[0-9]{4}$')))`.
+- `ck_model_release_one_owner`: `CHECK ((((brand_id IS NOT NULL) AND (brand_discovery_candidate_id IS NULL)) OR ((brand_id IS NULL) AND (brand_discovery_candidate_id IS NOT NULL))))`.
+- `ck_model_release_seen_window`: `CHECK ((last_seen_at >= first_seen_at))`.
+- `ck_model_release_precision`: `CHECK (((((release_precision)::text = 'unknown'::text) AND (release_value IS NULL)) OR (((release_precision)::text = 'day'::text) AND ((release_value)::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'::text)) OR (((release_precision)::text = 'month'::text) AND ((release_value)::text ~ '^[0-9]{4}-[0-9]{2}$'::text)) OR (((release_precision)::text = 'year'::text) AND ((release_value)::text ~ '^[0-9]{4}$'::text))))`.
+
+**Physical constraints:**
+
+- `model_releases_brand_discovery_cand_da5ee731_fk_brand_dis`: `FOREIGN KEY (brand_discovery_candidate_id) REFERENCES brand_discovery_candidates(id) DEFERRABLE INITIALLY DEFERRED`.
+- `model_releases_brand_id_d1262894_fk_brands_nickname`: `FOREIGN KEY (brand_id) REFERENCES brands(nickname) DEFERRABLE INITIALLY DEFERRED`.
+- `model_releases_pkey`: `PRIMARY KEY (id)`.
+- `model_releases_release_identity_key`: `UNIQUE (release_identity)`.
+- `model_releases_release_maturity_id_7a423aeb_fk_release_m`: `FOREIGN KEY (release_maturity_id) REFERENCES release_maturities(id) DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `model_releases_brand_discovery_candidate_id_da5ee731`: `CREATE INDEX model_releases_brand_discovery_candidate_id_da5ee731 ON public.model_releases USING btree (brand_discovery_candidate_id)`.
+- `model_releases_brand_id_d1262894`: `CREATE INDEX model_releases_brand_id_d1262894 ON public.model_releases USING btree (brand_id)`.
+- `model_releases_pkey`: `CREATE UNIQUE INDEX model_releases_pkey ON public.model_releases USING btree (id)`.
+- `model_releases_release_identity_1090f5a0_like`: `CREATE INDEX model_releases_release_identity_1090f5a0_like ON public.model_releases USING btree (release_identity varchar_pattern_ops)`.
+- `model_releases_release_identity_key`: `CREATE UNIQUE INDEX model_releases_release_identity_key ON public.model_releases USING btree (release_identity)`.
+- `model_releases_release_maturity_id_7a423aeb`: `CREATE INDEX model_releases_release_maturity_id_7a423aeb ON public.model_releases USING btree (release_maturity_id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_release_channel_bridge`: `CREATE TRIGGER pw_rg4_release_channel_bridge BEFORE INSERT OR UPDATE OF release_channel, release_maturity_id ON public.model_releases FOR EACH ROW EXECUTE FUNCTION pw_rg4_release_channel_bridge()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -3759,7 +4626,7 @@ None declared beyond field/FK/constraint indexes.
 
 One observed source claim supporting a model release.
 
-Model: [ModelReleaseEvidence](../../core/models.py#L7458).
+Model: [ModelReleaseEvidence](../../core/models.py#L7510).
 
 **Primary key:** `id`.
 
@@ -3791,7 +4658,7 @@ None declared beyond field/FK/constraint indexes.
 
 One stable grouping identity for related products.
 
-Model: [ProductGroup](../../core/models.py#L8247).
+Model: [ProductGroup](../../core/models.py#L8299).
 
 **Primary key:** `id`.
 
@@ -3828,7 +4695,7 @@ None declared beyond field/FK/constraint indexes.
 
 One product belonging to a versioned group.
 
-Model: [ProductGroupMembership](../../core/models.py#L8294).
+Model: [ProductGroupMembership](../../core/models.py#L8346).
 
 **Primary key:** `id`.
 
@@ -3861,7 +4728,7 @@ Model: [ProductGroupMembership](../../core/models.py#L8294).
 
 One typed relationship between two products.
 
-Model: [ProductRelationship](../../core/models.py#L8270).
+Model: [ProductRelationship](../../core/models.py#L8322).
 
 **Primary key:** `id`.
 
@@ -3892,6 +4759,144 @@ Model: [ProductRelationship](../../core/models.py#L8270).
 - `ck_product_relationship_method`: `CONSTRAINT "ck_product_relationship_method" CHECK ("evidence_method" IN ('source_reported', 'publisher_declared', 'provider_inferred', 'artifact_verified', 'our_inference'))`.
 
 [Back to table inventory](#table-inventory)
+
+<a id="table-release_disclosure_states"></a>
+
+### `release_disclosure_states` — ReleaseDisclosureState
+
+**Compatibility storage:** This physical table remains at migration0157. Canonical readers no longer use it; removal belongs to the separate verified deletion release.
+
+A compatibility catalogue retained physically during scalar-interface restoration; ordinary dossier release details use disclosure_state.
+
+Model: [ReleaseDisclosureState](../../core/models.py#L260).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `code` | `character varying(128)` | No | Unique field. |
+
+
+**Physical constraints:**
+
+- `ck_releasedisclosurestate_code`: `CHECK (((code)::text ~ '^[a-z][a-z0-9_]*$'::text))`.
+- `release_disclosure_states_code_key`: `UNIQUE (code)`.
+- `release_disclosure_states_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `release_disclosure_states_code_305c5b96_like`: `CREATE INDEX release_disclosure_states_code_305c5b96_like ON public.release_disclosure_states USING btree (code varchar_pattern_ops)`.
+- `release_disclosure_states_code_key`: `CREATE UNIQUE INDEX release_disclosure_states_code_key ON public.release_disclosure_states USING btree (code)`.
+- `release_disclosure_states_pkey`: `CREATE UNIQUE INDEX release_disclosure_states_pkey ON public.release_disclosure_states USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_catalogue_identity`: `CREATE TRIGGER pw_rg4_catalogue_identity BEFORE UPDATE ON public.release_disclosure_states FOR EACH ROW EXECUTE FUNCTION pw_rg4_catalogue_identity()`.
+
+[Back to table inventory](#table-inventory)
+
+
+
+<a id="table-release_maturities"></a>
+
+### `release_maturities` — ReleaseMaturity
+
+One release maturity value shared by extracted releases and dossier release details.
+
+Model: [ReleaseMaturity](../../core/models.py#L245).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `code` | `character varying(128)` | No | Unique field. |
+
+
+**Physical constraints:**
+
+- `ck_releasematurity_code`: `CHECK (((code)::text ~ '^[a-z][a-z0-9_]*$'::text))`.
+- `release_maturities_code_key`: `UNIQUE (code)`.
+- `release_maturities_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `release_maturities_code_76ab9771_like`: `CREATE INDEX release_maturities_code_76ab9771_like ON public.release_maturities USING btree (code varchar_pattern_ops)`.
+- `release_maturities_code_key`: `CREATE UNIQUE INDEX release_maturities_code_key ON public.release_maturities USING btree (code)`.
+- `release_maturities_pkey`: `CREATE UNIQUE INDEX release_maturities_pkey ON public.release_maturities USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_catalogue_identity`: `CREATE TRIGGER pw_rg4_catalogue_identity BEFORE UPDATE ON public.release_maturities FOR EACH ROW EXECUTE FUNCTION pw_rg4_catalogue_identity()`.
+
+[Back to table inventory](#table-inventory)
+
+
+
+<a id="table-release_access_channels"></a>
+
+### `release_access_channels` — ReleaseAccessChannel
+
+One access channel used by a dossier release endpoint; distinct from release maturity and availability.
+
+Model: [ReleaseAccessChannel](../../core/models.py#L250).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `code` | `character varying(128)` | No | Unique field. |
+
+
+**Physical constraints:**
+
+- `ck_releaseaccesschannel_code`: `CHECK (((code)::text ~ '^[a-z][a-z0-9_]*$'::text))`.
+- `release_access_channels_code_key`: `UNIQUE (code)`.
+- `release_access_channels_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `release_access_channels_code_78808d42_like`: `CREATE INDEX release_access_channels_code_78808d42_like ON public.release_access_channels USING btree (code varchar_pattern_ops)`.
+- `release_access_channels_code_key`: `CREATE UNIQUE INDEX release_access_channels_code_key ON public.release_access_channels USING btree (code)`.
+- `release_access_channels_pkey`: `CREATE UNIQUE INDEX release_access_channels_pkey ON public.release_access_channels USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_catalogue_identity`: `CREATE TRIGGER pw_rg4_catalogue_identity BEFORE UPDATE ON public.release_access_channels FOR EACH ROW EXECUTE FUNCTION pw_rg4_catalogue_identity()`.
+
+[Back to table inventory](#table-inventory)
+
+
+
+<a id="table-release_availability_states"></a>
+
+### `release_availability_states` — ReleaseAvailabilityState
+
+One availability state for a dossier release detail; distinct from disclosure evidence.
+
+Model: [ReleaseAvailabilityState](../../core/models.py#L255).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `code` | `character varying(128)` | No | Unique field. |
+
+
+**Physical constraints:**
+
+- `ck_releaseavailabilitystate_code`: `CHECK (((code)::text ~ '^[a-z][a-z0-9_]*$'::text))`.
+- `release_availability_states_code_key`: `UNIQUE (code)`.
+- `release_availability_states_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `release_availability_states_code_d3355fa1_like`: `CREATE INDEX release_availability_states_code_d3355fa1_like ON public.release_availability_states USING btree (code varchar_pattern_ops)`.
+- `release_availability_states_code_key`: `CREATE UNIQUE INDEX release_availability_states_code_key ON public.release_availability_states USING btree (code)`.
+- `release_availability_states_pkey`: `CREATE UNIQUE INDEX release_availability_states_pkey ON public.release_availability_states USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_catalogue_identity`: `CREATE TRIGGER pw_rg4_catalogue_identity BEFORE UPDATE ON public.release_availability_states FOR EACH ROW EXECUTE FUNCTION pw_rg4_catalogue_identity()`.
+
+[Back to table inventory](#table-inventory)
+
+
 
 <a id="jobs"></a>
 
@@ -4128,7 +5133,7 @@ Catalogue codes are immutable. The controlled seed command verifies input digest
 
 One current, source-supported job-function assignment on a listing.
 
-Model: [JobFunctionAssignment](../../core/models.py#L6839).
+Model: [JobFunctionAssignment](../../core/models.py#L6901).
 
 **Primary key:** `id`.
 
@@ -4170,7 +5175,7 @@ The same-listing evidence FK, source hash guard and normalizer-domain guard appl
 
 One current, source-supported seniority assignment on a listing.
 
-Model: [JobSeniorityAssignment](../../core/models.py#L6847).
+Model: [JobSeniorityAssignment](../../core/models.py#L6909).
 
 **Primary key:** `id`.
 
@@ -4212,7 +5217,7 @@ The same-listing evidence FK, source hash guard and normalizer-domain guard appl
 
 One current, source-supported employment-type assignment on a listing.
 
-Model: [JobEmploymentTypeAssignment](../../core/models.py#L6855).
+Model: [JobEmploymentTypeAssignment](../../core/models.py#L6917).
 
 **Primary key:** `id`.
 
@@ -4254,7 +5259,7 @@ The same-listing evidence FK, source hash guard and normalizer-domain guard appl
 
 One current, source-supported workplace-type assignment on a listing.
 
-Model: [JobWorkplaceTypeAssignment](../../core/models.py#L6863).
+Model: [JobWorkplaceTypeAssignment](../../core/models.py#L6925).
 
 **Primary key:** `id`.
 
@@ -4296,7 +5301,7 @@ The same-listing evidence FK, source hash guard and normalizer-domain guard appl
 
 One current, source-supported organization-to-AI classification on a listing.
 
-Model: [JobOrganizationAIRelationshipAssignment](../../core/models.py#L6871).
+Model: [JobOrganizationAIRelationshipAssignment](../../core/models.py#L6933).
 
 **Primary key:** `id`.
 
@@ -4338,7 +5343,7 @@ The same-listing evidence FK, source hash guard and normalizer-domain guard appl
 
 One current, source-supported role-to-AI classification on a listing.
 
-Model: [JobRoleAIRelationshipAssignment](../../core/models.py#L6879).
+Model: [JobRoleAIRelationshipAssignment](../../core/models.py#L6941).
 
 **Primary key:** `id`.
 
@@ -4380,46 +5385,39 @@ The same-listing evidence FK, source hash guard and normalizer-domain guard appl
 
 One advertised position/requisition, including its source identity and current saved details.
 
-Model: [JobListing](../../core/models.py#L6418).
+Model: [JobListing](../../core/models.py#L6433).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `brand_id` | `varchar(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
-| `brand_discovery_candidate_id` | `bigint` | Yes | FK → [`brand_discovery_candidates`](#table-brand_discovery_candidates) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand_discovery_candidate`. |
 | `hiring_organization` | `text` | No | Stored value. |
-| `source_key` | `varchar(64)` | Yes | Field index. |
 | `source_name` | `text` | Yes | Stored value. |
 | `source_listing_id` | `text` | Yes | Stored value. |
-| `canonical_url` | `varchar(2048)` | Yes | Stored value. |
-| `application_url` | `varchar(2048)` | Yes | Stored value. |
-| `application_route_kind` | `varchar(32)` | No | Django default: `'unresolved'` (not an assumed SQL default). Choices: `direct_url`, `careers_page`, `email`, `qr`, `direct_message`, `other`, `unresolved`. |
+| `canonical_url` | `character varying(2048)` | Yes | Stored value. |
+| `application_url` | `character varying(2048)` | Yes | Stored value. |
+| `application_route_kind` | `character varying(32)` | No | Django default: `'unresolved'` (not an assumed SQL default). Choices: `direct_url`, `careers_page`, `email`, `qr`, `direct_message`, `other`, `unresolved`. |
 | `application_contact` | `text` | Yes | Stored value. |
-| `application_resolution_status` | `varchar(32)` | Yes | Stored value. |
+| `application_resolution_status` | `character varying(32)` | Yes | Stored value. |
 | `title` | `text` | No | Saved source job title. |
 | `description_html` | `text` | Yes | Saved source description HTML. |
 | `description_text` | `text` | Yes | Saved source description text. |
 | `department` | `text` | Yes | Stored value. |
 | `team` | `text` | Yes | Stored value. |
-| `locations_raw` | `text` | Yes | Stored value. |
-| `locations` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
+| `locations_raw` | `text` | Yes | Stored value. Temporary compatibility only; ordinary ORM queries do not select this column. |
+| `locations` | `jsonb` | No | Django default: `list` (not an assumed SQL default). Temporary compatibility only; ordinary ORM queries do not select this column. SQL default: `'[]'::jsonb`. |
 | `remote_applicant_restrictions` | `text` | Yes | Stored value. |
 | `salary_text` | `text` | Yes | Stored value. |
-| `salary_min` | `numeric(18, 2)` | Yes | Stored value. |
-| `salary_max` | `numeric(18, 2)` | Yes | Stored value. |
-| `salary_currency_id` | `varchar(3)` | Yes | FK → [`currencies`](#table-currencies) (`code`). Django deletion: `PROTECT`. Model field: `salary_currency_reference`. PostgreSQL uses NO ACTION, normally deferred to transaction end. |
-| `salary_period_id` | `bigint` | Yes | FK → [`salary_periods`](#table-salary_periods) (`id`). Django deletion: `PROTECT`. Model field: `salary_period_reference`. PostgreSQL uses NO ACTION, normally deferred to transaction end. |
+| `salary_min` | `numeric(18,2)` | Yes | Stored value. |
+| `salary_max` | `numeric(18,2)` | Yes | Stored value. |
 | `posted_at` | `timestamp with time zone` | Yes | Source posting time, when supplied. |
 | `updated_source_at` | `timestamp with time zone` | Yes | Source-side last update, when supplied. |
 | `first_seen_at` | `timestamp with time zone` | No | First observation of this listing. |
 | `last_seen_at` | `timestamp with time zone` | No | Latest observation of this listing. |
 | `expires_at` | `timestamp with time zone` | Yes | Stored value. |
 | `closed_at` | `timestamp with time zone` | Yes | Stored value. |
-| `status` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `open`, `closed`, `future`, `unknown`. |
-| `consecutive_missing_snapshots` | `smallint` | No | Django default: `0` (not an assumed SQL default). |
-| `last_complete_source_sync_at` | `timestamp with time zone` | Yes | Last complete career-site snapshot that observed this listing. |
+| `status` | `character varying(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `open`, `closed`, `future`, `unknown`. |
 | `campaign_openings` | `integer` | Yes | Nonnegative. |
 | `role_openings` | `integer` | Yes | Nonnegative. |
 | `skills` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
@@ -4429,34 +5427,75 @@ Model: [JobListing](../../core/models.py#L6418).
 | `experience_requirements` | `text` | Yes | Stored value. |
 | `benefits` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
 | `eligibility` | `text` | Yes | Stored value. |
-| `source_language` | `varchar(32)` | Yes | Source language tag; official-source sync currently assigns zh-CN. |
-| `listing_identity` | `varchar(64)` | No | Unique. Stable listing/requisition deduplication identity. Field-level unique. |
-| `content_hash` | `varchar(64)` | Yes | Stored value. |
+| `source_language` | `character varying(32)` | Yes | Source language tag; official-source sync currently assigns zh-CN. |
+| `listing_identity` | `character varying(64)` | No | Unique. Stable listing/requisition deduplication identity. Field-level unique. |
+| `content_hash` | `character varying(64)` | Yes | Stored value. |
 | `extraction_version` | `text` | Yes | Stored value. |
 | `extraction_confidence` | `double precision` | Yes | Stored value. |
-| `raw_payload` | `jsonb` | Yes | Saved structured source payload; no dedicated translation bundle. |
+| `raw_payload` | `jsonb` | Yes | Saved structured source payload; no dedicated translation bundle. Permanent source evidence; excluded from ordinary ORM queries and the serving login. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
+| `brand_id` | `character varying(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
+| `brand_discovery_candidate_id` | `bigint` | Yes | FK → [`brand_discovery_candidates`](#table-brand_discovery_candidates) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand_discovery_candidate`. |
+| `consecutive_missing_snapshots` | `smallint` | No | Django default: `0` (not an assumed SQL default). |
+| `last_complete_source_sync_at` | `timestamp with time zone` | Yes | Last complete career-site snapshot that observed this listing. |
+| `source_key` | `character varying(64)` | Yes | Field index. |
+| `salary_currency_id` | `character varying(3)` | Yes | FK → [`currencies`](#table-currencies) (`code`). Django deletion: `PROTECT`. Model field: `salary_currency_reference`. PostgreSQL uses NO ACTION, normally deferred to transaction end. |
+| `salary_period_id` | `bigint` | Yes | FK → [`salary_periods`](#table-salary_periods) (`id`). Django deletion: `PROTECT`. Model field: `salary_period_reference`. PostgreSQL uses NO ACTION, normally deferred to transaction end. |
+| `geolocation_source_archive_id` | `uuid` | Yes | FK → [collection_evidence_archives.id](#table-collection_evidence_archives); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `geolocation_source_archive`. |
 
 **Named indexes:**
 
-- `idx_jobs_brand_status`: `CREATE INDEX "idx_jobs_brand_status" ON "job_listings" ("brand_id", "status")`.
-- `idx_jobs_source_status`: `CREATE INDEX "idx_jobs_source_status" ON "job_listings" ("source_key", "status")`.
-- `idx_jobs_status_expiry`: `CREATE INDEX "idx_jobs_status_expiry" ON "job_listings" ("status", "expires_at")`.
+- `idx_jobs_brand_status`: `CREATE INDEX idx_jobs_brand_status ON public.job_listings USING btree (brand_id, status)`.
+- `idx_jobs_source_status`: `CREATE INDEX idx_jobs_source_status ON public.job_listings USING btree (source_key, status)`.
+- `idx_jobs_status_expiry`: `CREATE INDEX idx_jobs_status_expiry ON public.job_listings USING btree (status, expires_at)`.
 
 **Named constraints:**
 
-- `ck_jobs_one_organization`: `CONSTRAINT "ck_jobs_one_organization" CHECK ((("brand_id" IS NOT NULL AND "brand_discovery_candidate_id" IS NULL) OR ("brand_id" IS NULL AND "brand_discovery_candidate_id" IS NOT NULL)))`.
-- `ck_jobs_application_route`: `CONSTRAINT "ck_jobs_application_route" CHECK ("application_route_kind" IN ('direct_url', 'careers_page', 'email', 'qr', 'direct_message', 'other', 'unresolved'))`.
-- `ck_jobs_status`: `CONSTRAINT "ck_jobs_status" CHECK ("status" IN ('open', 'closed', 'future', 'unknown'))`.
-- `ck_jobs_seen_window`: `CONSTRAINT "ck_jobs_seen_window" CHECK ("last_seen_at" >= ("first_seen_at"))`.
-- `ck_jobs_salary_range`: `CONSTRAINT "ck_jobs_salary_range" CHECK (("salary_min" IS NULL OR "salary_max" IS NULL OR "salary_max" >= ("salary_min")))`.
-- `ck_jobs_salary_nonnegative`: `CONSTRAINT "ck_jobs_salary_nonnegative" CHECK ((("salary_min" IS NULL OR "salary_min" >= 0) AND ("salary_max" IS NULL OR "salary_max" >= 0)))`.
-- `ck_jobs_campaign_openings`: `CONSTRAINT "ck_jobs_campaign_openings" CHECK (("campaign_openings" IS NULL OR "campaign_openings" >= 1))`.
-- `ck_jobs_role_openings`: `CONSTRAINT "ck_jobs_role_openings" CHECK (("role_openings" IS NULL OR "role_openings" >= 1))`.
-- `ck_jobs_extraction_conf`: `CONSTRAINT "ck_jobs_extraction_conf" CHECK (("extraction_confidence" IS NULL OR ("extraction_confidence" >= 0.0 AND "extraction_confidence" <= 1.0)))`.
+- `ck_jobs_one_organization`: `CHECK ((((brand_id IS NOT NULL) AND (brand_discovery_candidate_id IS NULL)) OR ((brand_id IS NULL) AND (brand_discovery_candidate_id IS NOT NULL))))`.
+- `ck_jobs_application_route`: `CHECK (((application_route_kind)::text = ANY ((ARRAY['direct_url'::character varying, 'careers_page'::character varying, 'email'::character varying, 'qr'::character varying, 'direct_message'::character varying, 'other'::character varying, 'unresolved'::character varying])::text[])))`.
+- `ck_jobs_status`: `CHECK (((status)::text = ANY ((ARRAY['open'::character varying, 'closed'::character varying, 'future'::character varying, 'unknown'::character varying])::text[])))`.
+- `ck_jobs_seen_window`: `CHECK ((last_seen_at >= first_seen_at))`.
+- `ck_jobs_salary_range`: `CHECK (((salary_min IS NULL) OR (salary_max IS NULL) OR (salary_max >= salary_min)))`.
+- `ck_jobs_salary_nonnegative`: `CHECK ((((salary_min IS NULL) OR (salary_min >= (0)::numeric)) AND ((salary_max IS NULL) OR (salary_max >= (0)::numeric))))`.
+- `ck_jobs_campaign_openings`: `CHECK (((campaign_openings IS NULL) OR (campaign_openings >= 1)))`.
+- `ck_jobs_role_openings`: `CHECK (((role_openings IS NULL) OR (role_openings >= 1)))`.
+- `ck_jobs_extraction_conf`: `CHECK (((extraction_confidence IS NULL) OR ((extraction_confidence >= (0.0)::double precision) AND (extraction_confidence <= (1.0)::double precision))))`.
 
 Six typed assignment owners store plural classifications and unresolved source wording. Compensation references canonical currency/period rows; captured source payloads/evidence retain unresolved values. Listing IDs, source links, content hashes and location wording remain on their existing owners.
+
+**Physical constraints:**
+
+- `job_listings_brand_discovery_cand_c4db876d_fk_brand_dis`: `FOREIGN KEY (brand_discovery_candidate_id) REFERENCES brand_discovery_candidates(id) DEFERRABLE INITIALLY DEFERRED`.
+- `job_listings_brand_id_46ce89b5_fk_brands_nickname`: `FOREIGN KEY (brand_id) REFERENCES brands(nickname) DEFERRABLE INITIALLY DEFERRED`.
+- `job_listings_campaign_openings_check`: `CHECK ((campaign_openings >= 0))`.
+- `job_listings_consecutive_missing_snapshots_check`: `CHECK ((consecutive_missing_snapshots >= 0))`.
+- `job_listings_geolocation_source_a_1524c939_fk_collectio`: `FOREIGN KEY (geolocation_source_archive_id) REFERENCES collection_evidence_archives(id) DEFERRABLE INITIALLY DEFERRED`.
+- `job_listings_listing_identity_key`: `UNIQUE (listing_identity)`.
+- `job_listings_pkey`: `PRIMARY KEY (id)`.
+- `job_listings_role_openings_check`: `CHECK ((role_openings >= 0))`.
+- `job_listings_salary_currency_id_7fb0b3ce_fk_currencies_code`: `FOREIGN KEY (salary_currency_id) REFERENCES currencies(code) DEFERRABLE INITIALLY DEFERRED`.
+- `job_listings_salary_period_id_4abaaa61_fk_salary_periods_id`: `FOREIGN KEY (salary_period_id) REFERENCES salary_periods(id) DEFERRABLE INITIALLY DEFERRED`.
+- `pw_job_location_source_selection`: `TRIGGER DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `job_listings_brand_discovery_candidate_id_c4db876d`: `CREATE INDEX job_listings_brand_discovery_candidate_id_c4db876d ON public.job_listings USING btree (brand_discovery_candidate_id)`.
+- `job_listings_brand_id_46ce89b5`: `CREATE INDEX job_listings_brand_id_46ce89b5 ON public.job_listings USING btree (brand_id)`.
+- `job_listings_geolocation_source_archive_id_1524c939`: `CREATE INDEX job_listings_geolocation_source_archive_id_1524c939 ON public.job_listings USING btree (geolocation_source_archive_id)`.
+- `job_listings_listing_identity_0d6b2b8e_like`: `CREATE INDEX job_listings_listing_identity_0d6b2b8e_like ON public.job_listings USING btree (listing_identity varchar_pattern_ops)`.
+- `job_listings_listing_identity_key`: `CREATE UNIQUE INDEX job_listings_listing_identity_key ON public.job_listings USING btree (listing_identity)`.
+- `job_listings_pkey`: `CREATE UNIQUE INDEX job_listings_pkey ON public.job_listings USING btree (id)`.
+- `job_listings_salary_currency_id_7fb0b3ce`: `CREATE INDEX job_listings_salary_currency_id_7fb0b3ce ON public.job_listings USING btree (salary_currency_id)`.
+- `job_listings_salary_currency_id_7fb0b3ce_like`: `CREATE INDEX job_listings_salary_currency_id_7fb0b3ce_like ON public.job_listings USING btree (salary_currency_id varchar_pattern_ops)`.
+- `job_listings_salary_period_id_4abaaa61`: `CREATE INDEX job_listings_salary_period_id_4abaaa61 ON public.job_listings USING btree (salary_period_id)`.
+- `job_listings_source_key_fa3e2024`: `CREATE INDEX job_listings_source_key_fa3e2024 ON public.job_listings USING btree (source_key)`.
+- `job_listings_source_key_fa3e2024_like`: `CREATE INDEX job_listings_source_key_fa3e2024_like ON public.job_listings USING btree (source_key varchar_pattern_ops)`.
+
+**Physical triggers:**
+
+- `pw_job_location_legacy_invalidation`: `CREATE TRIGGER pw_job_location_legacy_invalidation BEFORE UPDATE OF locations, locations_raw ON public.job_listings FOR EACH ROW EXECUTE FUNCTION pw_job_location_legacy_invalidation()`.
+- `pw_job_location_source_selection`: `CREATE CONSTRAINT TRIGGER pw_job_location_source_selection AFTER INSERT OR UPDATE ON public.job_listings DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION pw_job_location_current_source()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -4466,31 +5505,31 @@ Six typed assignment owners store plural classifications and unresolved source w
 
 One source observation supporting a job listing.
 
-Model: [JobListingEvidence](../../core/models.py#L6699).
+Model: [JobListingEvidence](../../core/models.py#L6762).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `listing_id` | `bigint` | No | FK → [`job_listings`](#table-job_listings) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `listing`. |
-| `source_post_id` | `text` | Yes | FK → [`posts`](#table-posts) (`tweet_id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_post`. |
-| `source_url` | `varchar(2048)` | Yes | Stored value. |
-| `observed_author_handle` | `varchar(64)` | Yes | Stored value. |
+| `source_url` | `character varying(2048)` | Yes | Stored value. |
+| `observed_author_handle` | `character varying(64)` | Yes | Stored value. |
 | `observed_author_display_name` | `text` | Yes | Stored value. |
-| `source_relationship` | `varchar(16)` | No | Choices: `official`, `staff`, `third_party`. |
+| `source_relationship` | `character varying(16)` | No | Choices: `official`, `staff`, `third_party`. |
 | `evidence_text` | `text` | No | Django default: `''` (not an assumed SQL default). |
 | `linked_urls` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
 | `observed_at` | `timestamp with time zone` | No | Stored value. |
-| `media_url` | `varchar(2048)` | Yes | Stored value. |
-| `media_hash` | `varchar(64)` | Yes | Stored value. |
-| `extraction_method` | `varchar(32)` | No | Choices: `structured_text`, `ocr`, `vision`, `manual`. |
+| `media_url` | `character varying(2048)` | Yes | Stored value. |
+| `media_hash` | `character varying(64)` | Yes | Stored value. |
+| `extraction_method` | `character varying(32)` | No | Choices: `structured_text`, `ocr`, `vision`, `manual`. |
 | `image_derived_fields` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
 | `confidence` | `double precision` | Yes | Stored value. |
-| `raw_evidence` | `jsonb` | Yes | Stored value. |
-| `extraction_identity` | `varchar(64)` | No | Stored value. |
-| `evidence_hash` | `varchar(64)` | No | Stored value. |
+| `raw_evidence` | `jsonb` | Yes | Stored value. Permanent source evidence; excluded from ordinary ORM queries and the serving login. |
+| `extraction_identity` | `character varying(64)` | No | Stored value. |
+| `evidence_hash` | `character varying(64)` | No | Stored value. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
+| `listing_id` | `bigint` | No | FK → [`job_listings`](#table-job_listings) (`id`). Django deletion: `CASCADE`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `listing`. |
+| `source_post_id` | `text` | Yes | FK → [`posts`](#table-posts) (`tweet_id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_post`. |
 
 **Named indexes:**
 
@@ -4498,13 +5537,26 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `ck_job_evidence_relationship`: `CONSTRAINT "ck_job_evidence_relationship" CHECK ("source_relationship" IN ('official', 'staff', 'third_party'))`.
-- `ck_job_evidence_method`: `CONSTRAINT "ck_job_evidence_method" CHECK ("extraction_method" IN ('structured_text', 'ocr', 'vision', 'manual'))`.
-- `ck_job_evidence_has_source`: `CONSTRAINT "ck_job_evidence_has_source" CHECK (("source_post_id" IS NOT NULL OR ("source_url" IS NOT NULL AND NOT ("source_url" = '' AND "source_url" IS NOT NULL)) OR ("media_url" IS NOT NULL AND NOT ("media_url" = '' AND "media_url" IS NOT NULL))))`.
-- `ck_job_evidence_conf`: `CONSTRAINT "ck_job_evidence_conf" CHECK (("confidence" IS NULL OR ("confidence" >= 0.0 AND "confidence" <= 1.0)))`.
-- `uq_job_evidence_hash`: `CONSTRAINT "uq_job_evidence_hash" UNIQUE ("listing_id", "evidence_hash")`.
+- `ck_job_evidence_relationship`: `CHECK (((source_relationship)::text = ANY ((ARRAY['official'::character varying, 'staff'::character varying, 'third_party'::character varying])::text[])))`.
+- `ck_job_evidence_method`: `CHECK (((extraction_method)::text = ANY ((ARRAY['structured_text'::character varying, 'ocr'::character varying, 'vision'::character varying, 'manual'::character varying])::text[])))`.
+- `ck_job_evidence_has_source`: `CHECK (((source_post_id IS NOT NULL) OR ((source_url IS NOT NULL) AND (NOT (((source_url)::text = ''::text) AND (source_url IS NOT NULL)))) OR ((media_url IS NOT NULL) AND (NOT (((media_url)::text = ''::text) AND (media_url IS NOT NULL))))))`.
+- `ck_job_evidence_conf`: `CHECK (((confidence IS NULL) OR ((confidence >= (0.0)::double precision) AND (confidence <= (1.0)::double precision))))`.
+- `uq_job_evidence_hash`: `CREATE UNIQUE INDEX uq_job_evidence_hash ON public.job_listing_evidence USING btree (listing_id, evidence_hash)`.
 
 `uq_job_evidence_owner` uniquely identifies `(id, listing_id)` as the target of the six assignment owners' same-listing composite foreign keys. Reassigning referenced evidence to a different listing is rejected.
+
+**Physical constraints:**
+
+- `job_listing_evidence_listing_id_0145017f_fk_job_listings_id`: `FOREIGN KEY (listing_id) REFERENCES job_listings(id) DEFERRABLE INITIALLY DEFERRED`.
+- `job_listing_evidence_pkey`: `PRIMARY KEY (id)`.
+- `job_listing_evidence_source_post_id_c17146df_fk_posts_tweet_id`: `FOREIGN KEY (source_post_id) REFERENCES posts(tweet_id) DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `job_listing_evidence_listing_id_0145017f`: `CREATE INDEX job_listing_evidence_listing_id_0145017f ON public.job_listing_evidence USING btree (listing_id)`.
+- `job_listing_evidence_pkey`: `CREATE UNIQUE INDEX job_listing_evidence_pkey ON public.job_listing_evidence USING btree (id)`.
+- `job_listing_evidence_source_post_id_c17146df`: `CREATE INDEX job_listing_evidence_source_post_id_c17146df ON public.job_listing_evidence USING btree (source_post_id)`.
+- `job_listing_evidence_source_post_id_c17146df_like`: `CREATE INDEX job_listing_evidence_source_post_id_c17146df_like ON public.job_listing_evidence USING btree (source_post_id text_pattern_ops)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -4514,7 +5566,7 @@ None declared beyond field/FK/constraint indexes.
 
 One attempt to synchronize an official career-site source.
 
-Model: [JobSourceSyncRun](../../core/models.py#L6616).
+Model: [JobSourceSyncRun](../../core/models.py#L6679).
 
 **Primary key:** `id`.
 
@@ -4552,7 +5604,7 @@ Model: [JobSourceSyncRun](../../core/models.py#L6616).
 
 One career-site source’s active lease and last successful synchronization state.
 
-Model: [JobSourceState](../../core/models.py#L6660).
+Model: [JobSourceState](../../core/models.py#L6723).
 
 **Primary key:** `source_key`.
 
@@ -4583,7 +5635,7 @@ None declared beyond field/FK/constraint indexes.
 
 One job-search query/window run, including coverage, cost, and extracted listing count.
 
-Model: [JobDiscoveryRun](../../core/models.py#L6937).
+Model: [JobDiscoveryRun](../../core/models.py#L6999).
 
 **Primary key:** `id`.
 
@@ -4634,6 +5686,62 @@ None declared beyond field/FK/constraint indexes.
 
 [Back to table inventory](#table-inventory)
 
+<a id="table-job_listing_locations"></a>
+
+### `job_listing_locations` — JobListingLocation
+
+One ordered location occurrence in a job source observation, with preserved evidence and a nullable resolved shared place.
+
+Model: [JobListingLocation](../../core/models.py#L6632).
+
+`ordinal` is the zero-based position in the captured source array. `observed_at` is the source observation clock and remains NULL when unknown; `recorded_at` is the actual insertion clock. `superseded_at` closes a current occurrence without deleting it. Source archive, listing, ordinal, source wording and clocks are immutable. Evidence must belong to the same listing. One current row per listing/ordinal is allowed, and all current rows must match the listing selected source archive. Known-time replay uses observed time; unknown-time A→B→A creates a new occurrence using recorded time. Readers deduplicate resolved places while preserving all original occurrences.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `ordinal` | `integer` | No | Stored ordinal value. |
+| `observed_at` | `timestamp with time zone` | Yes | Stored observed at value. |
+| `recorded_at` | `timestamp with time zone` | No | Django default: `django.utils.timezone.now()`. |
+| `superseded_at` | `timestamp with time zone` | Yes | Stored superseded at value. |
+| `reported_value` | `text` | Yes | Permanent source evidence, available only through the explicit unmanaged source projection; excluded from canonical ORM reads and serving privileges. |
+| `evidence_id` | `bigint` | Yes | FK → [job_listing_evidence.id](#table-job_listing_evidence); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `evidence`. |
+| `geolocation_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `geolocation`. |
+| `listing_id` | `bigint` | No | FK → [job_listings.id](#table-job_listings); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `listing`. |
+| `source_archive_id` | `uuid` | No | FK → [collection_evidence_archives.id](#table-collection_evidence_archives); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `source_archive`. |
+
+
+**Physical constraints:**
+
+- `ck_job_location_recorded_window`: `CHECK (((superseded_at IS NULL) OR (superseded_at >= recorded_at)))`.
+- `fk_job_location_evidence_owner`: `FOREIGN KEY (evidence_id, listing_id) REFERENCES job_listing_evidence(id, listing_id)`.
+- `job_listing_location_evidence_id_1330ae09_fk_job_listi`: `FOREIGN KEY (evidence_id) REFERENCES job_listing_evidence(id) DEFERRABLE INITIALLY DEFERRED`.
+- `job_listing_location_geolocation_id_3aaba11f_fk_geolocati`: `FOREIGN KEY (geolocation_id) REFERENCES geolocations(id) DEFERRABLE INITIALLY DEFERRED`.
+- `job_listing_location_source_archive_id_3b95aab4_fk_collectio`: `FOREIGN KEY (source_archive_id) REFERENCES collection_evidence_archives(id) DEFERRABLE INITIALLY DEFERRED`.
+- `job_listing_locations_listing_id_f0e10016_fk_job_listings_id`: `FOREIGN KEY (listing_id) REFERENCES job_listings(id) DEFERRABLE INITIALLY DEFERRED`.
+- `job_listing_locations_ordinal_check`: `CHECK ((ordinal >= 0))`.
+- `job_listing_locations_pkey`: `PRIMARY KEY (id)`.
+- `pw_job_location_current_source`: `TRIGGER DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `job_listing_locations_evidence_id_1330ae09`: `CREATE INDEX job_listing_locations_evidence_id_1330ae09 ON public.job_listing_locations USING btree (evidence_id)`.
+- `job_listing_locations_geolocation_id_3aaba11f`: `CREATE INDEX job_listing_locations_geolocation_id_3aaba11f ON public.job_listing_locations USING btree (geolocation_id)`.
+- `job_listing_locations_listing_id_f0e10016`: `CREATE INDEX job_listing_locations_listing_id_f0e10016 ON public.job_listing_locations USING btree (listing_id)`.
+- `job_listing_locations_pkey`: `CREATE UNIQUE INDEX job_listing_locations_pkey ON public.job_listing_locations USING btree (id)`.
+- `job_listing_locations_source_archive_id_3b95aab4`: `CREATE INDEX job_listing_locations_source_archive_id_3b95aab4 ON public.job_listing_locations USING btree (source_archive_id)`.
+- `uq_job_location_current_ordinal`: `CREATE UNIQUE INDEX uq_job_location_current_ordinal ON public.job_listing_locations USING btree (listing_id, ordinal) WHERE (superseded_at IS NULL)`.
+- `uq_job_location_recorded_occurrence`: `CREATE UNIQUE INDEX uq_job_location_recorded_occurrence ON public.job_listing_locations USING btree (listing_id, source_archive_id, ordinal, recorded_at) WHERE (observed_at IS NULL)`.
+- `uq_job_location_source_occurrence`: `CREATE UNIQUE INDEX uq_job_location_source_occurrence ON public.job_listing_locations USING btree (listing_id, source_archive_id, ordinal, observed_at) WHERE (observed_at IS NOT NULL)`.
+
+**Physical triggers:**
+
+- `pw_job_location_current_source`: `CREATE CONSTRAINT TRIGGER pw_job_location_current_source AFTER INSERT OR UPDATE ON public.job_listing_locations DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION pw_job_location_current_source()`.
+- `pw_job_location_source_guard`: `CREATE TRIGGER pw_job_location_source_guard BEFORE INSERT OR DELETE OR UPDATE ON public.job_listing_locations FOR EACH ROW EXECUTE FUNCTION pw_job_location_source_guard()`.
+
+[Back to table inventory](#table-inventory)
+
+
+
 <a id="events"></a>
 
 ## Events and opportunities
@@ -4670,6 +5778,74 @@ unknown owners and conflicting apply/preview controls fail before writing.
 
 
 
+<a id="table-opportunity_types"></a>
+
+### `opportunity_types` — OpportunityType
+
+One allowed kind of opportunity; action and benefit wording remain separate deferred fields.
+
+Model: [OpportunityType](../../core/models.py#L230).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `code` | `character varying(128)` | No | Unique field. |
+
+
+**Physical constraints:**
+
+- `ck_opportunitytype_code`: `CHECK (((code)::text ~ '^[a-z][a-z0-9_]*$'::text))`.
+- `opportunity_types_code_key`: `UNIQUE (code)`.
+- `opportunity_types_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `opportunity_types_code_c944cc82_like`: `CREATE INDEX opportunity_types_code_c944cc82_like ON public.opportunity_types USING btree (code varchar_pattern_ops)`.
+- `opportunity_types_code_key`: `CREATE UNIQUE INDEX opportunity_types_code_key ON public.opportunity_types USING btree (code)`.
+- `opportunity_types_pkey`: `CREATE UNIQUE INDEX opportunity_types_pkey ON public.opportunity_types USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_catalogue_identity`: `CREATE TRIGGER pw_rg4_catalogue_identity BEFORE UPDATE ON public.opportunity_types FOR EACH ROW EXECUTE FUNCTION pw_rg4_catalogue_identity()`.
+
+[Back to table inventory](#table-inventory)
+
+
+
+<a id="table-event_kinds"></a>
+
+### `event_kinds` — EventKind
+
+One allowed kind of event, referenced by the event rather than repeated as its canonical string.
+
+Model: [EventKind](../../core/models.py#L235).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `code` | `character varying(128)` | No | Unique field. |
+
+
+**Physical constraints:**
+
+- `ck_eventkind_code`: `CHECK (((code)::text ~ '^[a-z][a-z0-9_]*$'::text))`.
+- `event_kinds_code_key`: `UNIQUE (code)`.
+- `event_kinds_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `event_kinds_code_ededa2ba_like`: `CREATE INDEX event_kinds_code_ededa2ba_like ON public.event_kinds USING btree (code varchar_pattern_ops)`.
+- `event_kinds_code_key`: `CREATE UNIQUE INDEX event_kinds_code_key ON public.event_kinds USING btree (code)`.
+- `event_kinds_pkey`: `CREATE UNIQUE INDEX event_kinds_pkey ON public.event_kinds USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_catalogue_identity`: `CREATE TRIGGER pw_rg4_catalogue_identity BEFORE UPDATE ON public.event_kinds FOR EACH ROW EXECUTE FUNCTION pw_rg4_catalogue_identity()`.
+
+[Back to table inventory](#table-inventory)
+
+
+
 <a id="event-dossiers"></a>
 
 ## Event dossiers and evidence
@@ -4682,7 +5858,7 @@ An EventDossier owns one source-backed event or change identity. Sources, claims
 
 One attendance-bearing occurrence, such as a conference or meetup.
 
-Model: [Event](../../core/models.py#L6982).
+Model: [Event](../../core/models.py#L7044).
 
 **Primary key:** `id`.
 
@@ -4756,7 +5932,7 @@ and observation timestamps keep their existing meaning.
 
 One source observation supporting an event occurrence.
 
-Model: [EventEvidence](../../core/models.py#L7150).
+Model: [EventEvidence](../../core/models.py#L7212).
 
 **Primary key:** `id`.
 
@@ -4798,65 +5974,66 @@ None declared beyond field/FK/constraint indexes.
 
 One bounded offer in which an action can provide a benefit, optionally linked to an event.
 
-Model: [Opportunity](../../core/models.py#L7218).
+Model: [Opportunity](../../core/models.py#L7280).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `brand_id` | `varchar(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
-| `brand_discovery_candidate_id` | `bigint` | Yes | FK → [`brand_discovery_candidates`](#table-brand_discovery_candidates) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand_discovery_candidate`. |
-| `related_event_id` | `bigint` | Yes | FK → [`events`](#table-events) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `related_event`. |
-| `source_post_id` | `text` | Yes | FK → [`posts`](#table-posts) (`tweet_id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_post`. |
-| `source_url` | `varchar(2048)` | Yes | Stored value. |
+| `source_url` | `character varying(2048)` | Yes | Stored value. |
 | `sponsor_name` | `text` | No | Stored value. |
-| `sponsor_handle` | `varchar(64)` | Yes | Stored value. |
-| `opportunity_type` | `varchar(32)` | No | Choices: `giveaway`, `discount`, `free_credits`, `beta_access`, `grant`, `bounty`, `contest`, `referral`, `collaboration`, `other`. |
+| `sponsor_handle` | `character varying(64)` | Yes | Stored value. |
+| `opportunity_type` | `character varying(32)` | No | Choices: `giveaway`, `discount`, `free_credits`, `beta_access`, `grant`, `bounty`, `contest`, `referral`, `collaboration`, `other`. Temporary compatibility only; ordinary ORM queries do not select this column. |
 | `action_type` | `text` | No | Stored value. |
-| `action_url` | `varchar(2048)` | Yes | Stored value. |
+| `action_url` | `character varying(2048)` | Yes | Stored value. |
 | `benefit_type` | `text` | No | Stored value. |
-| `benefit_value` | `numeric(18, 2)` | Yes | Stored value. |
-| `benefit_currency` | `varchar(8)` | Yes | Stored value. |
+| `benefit_value` | `numeric(18,2)` | Yes | Stored value. |
+| `benefit_currency` | `character varying(8)` | Yes | Stored value. |
 | `benefit_text` | `text` | Yes | Stored value. |
 | `eligibility` | `text` | Yes | Stored value. |
 | `geographic_restrictions` | `text` | Yes | Stored value. |
-| `open_value` | `varchar(64)` | Yes | Stored value. |
-| `open_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `datetime`, `day`, `month`, `year`, `unknown`. |
-| `close_value` | `varchar(64)` | Yes | Stored value. |
-| `close_precision` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `datetime`, `day`, `month`, `year`, `unknown`. |
-| `source_timezone_id` | `varchar(64)` | Yes | FK → [`time_zones`](#table-time_zones) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `source_timezone_reference`. Exact registered code or unresolved NULL. |
+| `open_value` | `character varying(64)` | Yes | Stored value. |
+| `open_precision` | `character varying(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `datetime`, `day`, `month`, `year`, `unknown`. |
+| `close_value` | `character varying(64)` | Yes | Stored value. |
+| `close_precision` | `character varying(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `datetime`, `day`, `month`, `year`, `unknown`. |
 | `source_availability_text` | `text` | Yes | Stored value. |
-| `source_status` | `varchar(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `upcoming`, `open`, `closed`, `cancelled`, `unknown`. |
+| `source_status` | `character varying(16)` | No | Django default: `'unknown'` (not an assumed SQL default). Choices: `upcoming`, `open`, `closed`, `cancelled`, `unknown`. |
 | `first_seen_at` | `timestamp with time zone` | No | Stored value. |
 | `last_seen_at` | `timestamp with time zone` | No | Stored value. |
-| `opportunity_identity` | `varchar(64)` | No | Unique. Field-level unique. |
-| `content_hash` | `varchar(64)` | Yes | Stored value. |
+| `opportunity_identity` | `character varying(64)` | No | Unique. Field-level unique. |
+| `content_hash` | `character varying(64)` | Yes | Stored value. |
 | `extraction_version` | `text` | Yes | Stored value. |
 | `extraction_confidence` | `double precision` | Yes | Stored value. |
-| `review_status` | `varchar(16)` | No | Django default: `'pending'` (not an assumed SQL default). Choices: `pending`, `confirmed`, `rejected`, `needs_review`. |
+| `review_status` | `character varying(16)` | No | Django default: `'pending'` (not an assumed SQL default). Choices: `pending`, `confirmed`, `rejected`, `needs_review`. |
 | `raw_payload` | `jsonb` | Yes | Stored value. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
+| `brand_id` | `character varying(64)` | Yes | FK → [`brands`](#table-brands) (`nickname`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand`. |
+| `related_event_id` | `bigint` | Yes | FK → [`events`](#table-events) (`id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `related_event`. |
+| `source_post_id` | `text` | Yes | FK → [`posts`](#table-posts) (`tweet_id`). Django deletion: `SET_NULL`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_post`. |
+| `brand_discovery_candidate_id` | `bigint` | Yes | FK → [`brand_discovery_candidates`](#table-brand_discovery_candidates) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `brand_discovery_candidate`. |
+| `source_timezone_id` | `character varying(64)` | Yes | FK → [`time_zones`](#table-time_zones) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `source_timezone_reference`. Exact registered code or unresolved NULL. |
+| `opportunity_type_id` | `bigint` | No | FK → [opportunity_types.id](#table-opportunity_types); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `opportunity_type_reference`. |
 
 **Named indexes:**
 
-- `opportunities_source_timezone_id_1eaf0cd8`: index on `source_timezone_id`.
-- `opportunities_source_timezone_id_1eaf0cd8_like`: varchar-pattern index on `source_timezone_id`.
+- `opportunities_source_timezone_id_1eaf0cd8`: `CREATE INDEX opportunities_source_timezone_id_1eaf0cd8 ON public.opportunities USING btree (source_timezone_id)`.
+- `opportunities_source_timezone_id_1eaf0cd8_like`: `CREATE INDEX opportunities_source_timezone_id_1eaf0cd8_like ON public.opportunities USING btree (source_timezone_id varchar_pattern_ops)`.
 
 **Named constraints:**
 
-- `opportunities_source_timezone_id_1eaf0cd8_fk_time_zones_code`: deferred FK from `source_timezone_id` to `time_zones(code)`.
+- `opportunities_source_timezone_id_1eaf0cd8_fk_time_zones_code`: `FOREIGN KEY (source_timezone_id) REFERENCES time_zones(code) DEFERRABLE INITIALLY DEFERRED`.
 
-- `ck_opportunities_one_organization`: `CONSTRAINT "ck_opportunities_one_organization" CHECK ((("brand_id" IS NOT NULL AND "brand_discovery_candidate_id" IS NULL) OR ("brand_id" IS NULL AND "brand_discovery_candidate_id" IS NOT NULL)))`.
+- `ck_opportunities_one_organization`: `CHECK ((((brand_id IS NOT NULL) AND (brand_discovery_candidate_id IS NULL)) OR ((brand_id IS NULL) AND (brand_discovery_candidate_id IS NOT NULL))))`.
 - `ck_opportunities_type`: `CONSTRAINT "ck_opportunities_type" CHECK ("opportunity_type" IN ('giveaway', 'discount', 'free_credits', 'beta_access', 'grant', 'bounty', 'contest', 'referral', 'collaboration', 'other'))`.
-- `ck_opportunities_source_status`: `CONSTRAINT "ck_opportunities_source_status" CHECK ("source_status" IN ('upcoming', 'open', 'closed', 'cancelled', 'unknown'))`.
-- `ck_opportunities_review_status`: `CONSTRAINT "ck_opportunities_review_status" CHECK ("review_status" IN ('pending', 'confirmed', 'rejected', 'needs_review'))`.
-- `ck_opportunities_has_source`: `CONSTRAINT "ck_opportunities_has_source" CHECK (("source_post_id" IS NOT NULL OR ("source_url" IS NOT NULL AND NOT ("source_url" = '' AND "source_url" IS NOT NULL))))`.
-- `ck_opportunities_seen_window`: `CONSTRAINT "ck_opportunities_seen_window" CHECK ("last_seen_at" >= ("first_seen_at"))`.
-- `ck_opportunities_open_precision`: `CONSTRAINT "ck_opportunities_open_precision" CHECK ((("open_precision" = 'unknown' AND "open_value" IS NULL) OR ("open_precision" = 'day' AND "open_value"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') OR ("open_precision" = 'month' AND "open_value"::text ~ '^[0-9]{4}-[0-9]{2}$') OR ("open_precision" = 'year' AND "open_value"::text ~ '^[0-9]{4}$') OR ("open_precision" = 'datetime' AND "open_value"::text ~  E'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?(Z\|[+-][0-9]{2}:[0-9]{2})$')))`.
-- `ck_opportunities_close_precision`: `CONSTRAINT "ck_opportunities_close_precision" CHECK ((("close_precision" = 'unknown' AND "close_value" IS NULL) OR ("close_precision" = 'day' AND "close_value"::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$') OR ("close_precision" = 'month' AND "close_value"::text ~ '^[0-9]{4}-[0-9]{2}$') OR ("close_precision" = 'year' AND "close_value"::text ~ '^[0-9]{4}$') OR ("close_precision" = 'datetime' AND "close_value"::text ~  E'^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?(Z\|[+-][0-9]{2}:[0-9]{2})$')))`.
-- `ck_opportunities_extraction_conf`: `CONSTRAINT "ck_opportunities_extraction_conf" CHECK (("extraction_confidence" IS NULL OR ("extraction_confidence" >= 0.0 AND "extraction_confidence" <= 1.0)))`.
+- `ck_opportunities_source_status`: `CHECK (((source_status)::text = ANY ((ARRAY['upcoming'::character varying, 'open'::character varying, 'closed'::character varying, 'cancelled'::character varying, 'unknown'::character varying])::text[])))`.
+- `ck_opportunities_review_status`: `CHECK (((review_status)::text = ANY ((ARRAY['pending'::character varying, 'confirmed'::character varying, 'rejected'::character varying, 'needs_review'::character varying])::text[])))`.
+- `ck_opportunities_has_source`: `CHECK (((source_post_id IS NOT NULL) OR ((source_url IS NOT NULL) AND (NOT (((source_url)::text = ''::text) AND (source_url IS NOT NULL))))))`.
+- `ck_opportunities_seen_window`: `CHECK ((last_seen_at >= first_seen_at))`.
+- `ck_opportunities_open_precision`: `CHECK (((((open_precision)::text = 'unknown'::text) AND (open_value IS NULL)) OR (((open_precision)::text = 'day'::text) AND ((open_value)::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'::text)) OR (((open_precision)::text = 'month'::text) AND ((open_value)::text ~ '^[0-9]{4}-[0-9]{2}$'::text)) OR (((open_precision)::text = 'year'::text) AND ((open_value)::text ~ '^[0-9]{4}$'::text)) OR (((open_precision)::text = 'datetime'::text) AND ((open_value)::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?(Z\|[+-][0-9]{2}:[0-9]{2})$'::text))))`.
+- `ck_opportunities_close_precision`: `CHECK (((((close_precision)::text = 'unknown'::text) AND (close_value IS NULL)) OR (((close_precision)::text = 'day'::text) AND ((close_value)::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'::text)) OR (((close_precision)::text = 'month'::text) AND ((close_value)::text ~ '^[0-9]{4}-[0-9]{2}$'::text)) OR (((close_precision)::text = 'year'::text) AND ((close_value)::text ~ '^[0-9]{4}$'::text)) OR (((close_precision)::text = 'datetime'::text) AND ((close_value)::text ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]+)?)?(Z\|[+-][0-9]{2}:[0-9]{2})$'::text))))`.
+- `ck_opportunities_extraction_conf`: `CHECK (((extraction_confidence IS NULL) OR ((extraction_confidence >= (0.0)::double precision) AND (extraction_confidence <= (1.0)::double precision))))`.
 
 Application writers resolve exact registered timezone codes to the protected
 reference. Original reported wording remains in `raw_payload`; readers preserve
@@ -4864,6 +6041,32 @@ explicit null evidence and unmatched wording, falling back to the reference only
 when the evidence has no timezone key. No timezone synchronization trigger or
 legacy string column is present. Date precision, source evidence, content hashes
 and observation timestamps keep their existing meaning.
+
+**Physical constraints:**
+
+- `opportunities_brand_discovery_cand_714ffc54_fk_brand_dis`: `FOREIGN KEY (brand_discovery_candidate_id) REFERENCES brand_discovery_candidates(id) DEFERRABLE INITIALLY DEFERRED`.
+- `opportunities_brand_id_a0045d91_fk_brands_nickname`: `FOREIGN KEY (brand_id) REFERENCES brands(nickname) DEFERRABLE INITIALLY DEFERRED`.
+- `opportunities_opportunity_identity_key`: `UNIQUE (opportunity_identity)`.
+- `opportunities_opportunity_type_id_94cb48ea_fk_opportuni`: `FOREIGN KEY (opportunity_type_id) REFERENCES opportunity_types(id) DEFERRABLE INITIALLY DEFERRED`.
+- `opportunities_pkey`: `PRIMARY KEY (id)`.
+- `opportunities_related_event_id_4d67a399_fk_events_id`: `FOREIGN KEY (related_event_id) REFERENCES events(id) DEFERRABLE INITIALLY DEFERRED`.
+- `opportunities_source_post_id_5bc14489_fk_posts_tweet_id`: `FOREIGN KEY (source_post_id) REFERENCES posts(tweet_id) DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `opportunities_brand_discovery_candidate_id_714ffc54`: `CREATE INDEX opportunities_brand_discovery_candidate_id_714ffc54 ON public.opportunities USING btree (brand_discovery_candidate_id)`.
+- `opportunities_brand_id_a0045d91`: `CREATE INDEX opportunities_brand_id_a0045d91 ON public.opportunities USING btree (brand_id)`.
+- `opportunities_opportunity_identity_e65c0182_like`: `CREATE INDEX opportunities_opportunity_identity_e65c0182_like ON public.opportunities USING btree (opportunity_identity varchar_pattern_ops)`.
+- `opportunities_opportunity_identity_key`: `CREATE UNIQUE INDEX opportunities_opportunity_identity_key ON public.opportunities USING btree (opportunity_identity)`.
+- `opportunities_opportunity_type_id_94cb48ea`: `CREATE INDEX opportunities_opportunity_type_id_94cb48ea ON public.opportunities USING btree (opportunity_type_id)`.
+- `opportunities_pkey`: `CREATE UNIQUE INDEX opportunities_pkey ON public.opportunities USING btree (id)`.
+- `opportunities_related_event_id_4d67a399`: `CREATE INDEX opportunities_related_event_id_4d67a399 ON public.opportunities USING btree (related_event_id)`.
+- `opportunities_source_post_id_5bc14489`: `CREATE INDEX opportunities_source_post_id_5bc14489 ON public.opportunities USING btree (source_post_id)`.
+- `opportunities_source_post_id_5bc14489_like`: `CREATE INDEX opportunities_source_post_id_5bc14489_like ON public.opportunities USING btree (source_post_id text_pattern_ops)`.
+
+**Physical triggers:**
+
+- `pw_rg4_opportunity_type_bridge`: `CREATE TRIGGER pw_rg4_opportunity_type_bridge BEFORE INSERT OR UPDATE OF opportunity_type, opportunity_type_id ON public.opportunities FOR EACH ROW EXECUTE FUNCTION pw_rg4_opportunity_type_bridge()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -4873,15 +6076,15 @@ and observation timestamps keep their existing meaning.
 
 One extracted assertion from an attached source, with its scope, excerpt, method version and date precision.
 
-Model: [EventDossierClaim](../../core/models.py#L9883).
+Model: [EventDossierClaim](../../core/models.py#L9934).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `uuid` | No | Primary key. |
-| `claim_kind` | `character varying(64)` | No | Claim kind. |
-| `event_timezone` | `character varying(64)` | Yes | Event timezone. |
+| `claim_kind` | `character varying(64)` | No | Claim kind. Temporary compatibility only; ordinary ORM queries do not select this column. |
+| `event_timezone` | `character varying(64)` | Yes | Event timezone. Temporary compatibility only; ordinary ORM queries do not select this column. |
 | `not_before` | `timestamp with time zone` | Yes | Not before. |
 | `not_after` | `timestamp with time zone` | Yes | Not after. |
 | `scope_key` | `text` | No | Scope key. |
@@ -4898,6 +6101,9 @@ Model: [EventDossierClaim](../../core/models.py#L9883).
 | `effective_month` | `smallint` | Yes | Effective month. |
 | `effective_precision` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
 | `event_dossier_source_id` | `bigint` | No | FK → [`event_dossier_sources`](#table-event_dossier_sources) (`id`); Django deletion: `PROTECT`. Model field: `event_dossier_source`. |
+| `claim_kind_id` | `bigint` | No | FK → [event_claim_kinds.id](#table-event_claim_kinds); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `claim_kind_reference`. |
+| `event_timezone_id` | `character varying(64)` | Yes | FK → [time_zones.code](#table-time_zones); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `event_timezone_reference`. |
+| `access_channel_id` | `bigint` | Yes | FK → [release_access_channels.id](#table-release_access_channels); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `release_access_channel_reference`. |
 
 **Named indexes:**
 
@@ -4909,18 +6115,36 @@ Model: [EventDossierClaim](../../core/models.py#L9883).
 - `ck_ed_claim_hashes`: `CHECK ((((claim_hash)::text ~ '^[0-9a-f]{64}$'::text) AND ((source_hash)::text ~ '^[0-9a-f]{64}$'::text)))`.
 - `ck_ed_claim_month`: `CHECK (((effective_month IS NULL) OR ((effective_month >= 1) AND (effective_month <= 12))))`.
 - `ck_ed_claim_range`: `CHECK (((not_before IS NULL) OR (not_after IS NULL) OR (not_after >= not_before)))`.
-- `ck_ed_claim_text`: `CHECK (((NOT ((claim_kind)::text = ''::text)) AND (NOT (scope_key = ''::text)) AND (NOT (extraction_version = ''::text)) AND (NOT (assertion_text = ''::text)) AND (NOT (source_excerpt = ''::text))))`.
+- `ck_ed_claim_text`: `CHECK (((NOT (scope_key = ''::text)) AND (NOT (extraction_version = ''::text)) AND (NOT (assertion_text = ''::text)) AND (NOT (source_excerpt = ''::text))))`.
 - `ck_ed_claim_time_shape`: `CHECK ((((effective_at IS NOT NULL) AND (effective_date IS NULL) AND (effective_month IS NULL) AND ((effective_precision)::text = 'datetime'::text) AND (effective_year IS NULL) AND (not_after IS NULL) AND (not_before IS NULL)) OR ((effective_at IS NULL) AND (effective_date IS NOT NULL) AND (effective_month IS NULL) AND ((effective_precision)::text = 'day'::text) AND (effective_year IS NULL) AND (not_after IS NULL) AND (not_before IS NULL)) OR ((effective_at IS NULL) AND (effective_date IS NULL) AND (effective_month IS NOT NULL) AND ((effective_precision)::text = 'month'::text) AND (effective_year IS NOT NULL) AND (not_after IS NULL) AND (not_before IS NULL)) OR ((effective_at IS NULL) AND (effective_date IS NULL) AND (effective_month IS NULL) AND ((effective_precision)::text = 'year'::text) AND (effective_year IS NOT NULL) AND (not_after IS NULL) AND (not_before IS NULL)) OR ((effective_at IS NULL) AND (effective_date IS NULL) AND (effective_month IS NULL) AND ((effective_precision)::text = 'unknown'::text) AND (effective_year IS NULL) AND (not_after IS NULL) AND (not_before IS NULL)) OR ((effective_at IS NULL) AND (effective_date IS NULL) AND (effective_month IS NULL) AND ((effective_precision)::text = 'range'::text) AND (effective_year IS NULL) AND ((not_before IS NOT NULL) OR (not_after IS NOT NULL)))))`.
 - `ck_ed_claim_year`: `CHECK (((effective_year IS NULL) OR ((effective_year >= 1) AND (effective_year <= 9999))))`.
-- `event_dossier_claims_claim_hash_key`: `UNIQUE (claim_hash)`.
+- `event_dossier_claims_claim_hash_key`: `CREATE UNIQUE INDEX event_dossier_claims_claim_hash_key ON public.event_dossier_claims USING btree (claim_hash)`.
 - `event_dossier_claims_effective_month_check`: `CHECK ((effective_month >= 0))`.
 - `event_dossier_claims_effective_year_check`: `CHECK ((effective_year >= 0))`.
 - `event_dossier_claims_event_dossier_source_bbd7477c_fk_event_dos`: `FOREIGN KEY (event_dossier_source_id) REFERENCES event_dossier_sources(id) DEFERRABLE INITIALLY DEFERRED`.
-- `event_dossier_claims_pkey`: `PRIMARY KEY (id)`.
+- `event_dossier_claims_pkey`: `CREATE UNIQUE INDEX event_dossier_claims_pkey ON public.event_dossier_claims USING btree (id)`.
 
 **Migration-level triggers:**
 
 - `ed_frozen`: `CREATE TRIGGER ed_frozen BEFORE DELETE OR UPDATE ON public.event_dossier_claims FOR EACH ROW EXECUTE FUNCTION ed_frozen_v1()`.
+
+**Physical constraints:**
+
+- `event_dossier_claims_access_channel_id_de8e3f9b_fk_release_a`: `FOREIGN KEY (access_channel_id) REFERENCES release_access_channels(id) DEFERRABLE INITIALLY DEFERRED`.
+- `event_dossier_claims_claim_kind_id_198af767_fk_event_cla`: `FOREIGN KEY (claim_kind_id) REFERENCES event_claim_kinds(id) DEFERRABLE INITIALLY DEFERRED`.
+- `event_dossier_claims_event_timezone_id_47bbea4d_fk_time_zone`: `FOREIGN KEY (event_timezone_id) REFERENCES time_zones(code) DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `event_dossier_claims_access_channel_id_de8e3f9b`: `CREATE INDEX event_dossier_claims_access_channel_id_de8e3f9b ON public.event_dossier_claims USING btree (access_channel_id)`.
+- `event_dossier_claims_claim_kind_id_198af767`: `CREATE INDEX event_dossier_claims_claim_kind_id_198af767 ON public.event_dossier_claims USING btree (claim_kind_id)`.
+- `event_dossier_claims_event_timezone_id_47bbea4d`: `CREATE INDEX event_dossier_claims_event_timezone_id_47bbea4d ON public.event_dossier_claims USING btree (event_timezone_id)`.
+- `event_dossier_claims_event_timezone_id_47bbea4d_like`: `CREATE INDEX event_dossier_claims_event_timezone_id_47bbea4d_like ON public.event_dossier_claims USING btree (event_timezone_id varchar_pattern_ops)`.
+
+**Physical triggers:**
+
+- `pw_rg4_claim_kind_bridge`: `CREATE TRIGGER pw_rg4_claim_kind_bridge BEFORE INSERT OR UPDATE OF claim_kind, claim_kind_id ON public.event_dossier_claims FOR EACH ROW EXECUTE FUNCTION pw_rg4_claim_kind_bridge()`.
+- `pw_rg4_claim_timezone_bridge`: `CREATE TRIGGER pw_rg4_claim_timezone_bridge BEFORE INSERT OR UPDATE OF event_timezone, event_timezone_id ON public.event_dossier_claims FOR EACH ROW EXECUTE FUNCTION pw_rg4_claim_timezone_bridge()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -4930,7 +6154,7 @@ Model: [EventDossierClaim](../../core/models.py#L9883).
 
 One claim and its disposition within a review revision.
 
-Model: [EventDossierReviewClaim](../../core/models.py#L10039).
+Model: [EventDossierReviewClaim](../../core/models.py#L10109).
 
 **Primary key:** `id`.
 
@@ -4969,7 +6193,7 @@ Model: [EventDossierReviewClaim](../../core/models.py#L10039).
 
 One immutable revision that records a decision about the dossier at a stated evidence cutoff.
 
-Model: [EventDossierReview](../../core/models.py#L9946).
+Model: [EventDossierReview](../../core/models.py#L10016).
 
 **Primary key:** `id`.
 
@@ -5028,7 +6252,7 @@ Model: [EventDossierReview](../../core/models.py#L9946).
 
 One source document attached to a dossier, preserving either a Post or collection observation as evidence.
 
-Model: [EventDossierSource](../../core/models.py#L9813).
+Model: [EventDossierSource](../../core/models.py#L9864).
 
 **Primary key:** `id`.
 
@@ -5070,14 +6294,14 @@ Model: [EventDossierSource](../../core/models.py#L9813).
 
 One stable identity for a source-backed event or personnel change, with first/last seen dates and a pointer to its current review.
 
-Model: [EventDossier](../../core/models.py#L9765).
+Model: [EventDossier](../../core/models.py#L9817).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `uuid` | No | Primary key. |
-| `event_kind` | `character varying(32)` | No | Event kind. |
+| `event_kind` | `character varying(32)` | No | Event kind. Temporary compatibility only; ordinary ORM queries do not select this column. |
 | `identity_key` | `character varying(64)` | No | Unique. |
 | `first_seen_at` | `timestamp with time zone` | No | First seen at. |
 | `last_seen_at` | `timestamp with time zone` | No | Last seen at. |
@@ -5085,6 +6309,7 @@ Model: [EventDossier](../../core/models.py#L9765).
 | `created_at` | `timestamp with time zone` | No | Created at. |
 | `merged_into_id` | `uuid` | Yes | FK → [`event_dossiers`](#table-event_dossiers) (`id`); Django deletion: `PROTECT`. Model field: `merged_into`. |
 | `current_review_id` | `uuid` | Yes | FK → [`event_dossier_reviews`](#table-event_dossier_reviews) (`id`); Django deletion: `PROTECT`. Model field: `current_review`. |
+| `event_kind_id` | `bigint` | No | FK → [event_kinds.id](#table-event_kinds); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `event_kind_reference`. |
 
 **Named indexes:**
 
@@ -5100,14 +6325,27 @@ Model: [EventDossier](../../core/models.py#L9765).
 - `ck_ed_merge_not_self`: `CHECK ((NOT ((merged_into_id = id) AND (merged_into_id IS NOT NULL))))`.
 - `ck_ed_seen_order`: `CHECK ((last_seen_at >= first_seen_at))`.
 - `event_dossiers_current_review_id_de7fc66c_fk_event_dos`: `FOREIGN KEY (current_review_id) REFERENCES event_dossier_reviews(id) DEFERRABLE INITIALLY DEFERRED`.
-- `event_dossiers_identity_key_key`: `UNIQUE (identity_key)`.
+- `event_dossiers_identity_key_key`: `CREATE UNIQUE INDEX event_dossiers_identity_key_key ON public.event_dossiers USING btree (identity_key)`.
 - `event_dossiers_merged_into_id_fcf699f6_fk_event_dossiers_id`: `FOREIGN KEY (merged_into_id) REFERENCES event_dossiers(id) DEFERRABLE INITIALLY DEFERRED`.
-- `event_dossiers_pkey`: `PRIMARY KEY (id)`.
+- `event_dossiers_pkey`: `CREATE UNIQUE INDEX event_dossiers_pkey ON public.event_dossiers USING btree (id)`.
 
 **Migration-level triggers:**
 
 - `ed_dossier_complete`: `CREATE CONSTRAINT TRIGGER ed_dossier_complete AFTER INSERT OR UPDATE ON public.event_dossiers DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ed_complete_v1()`.
 - `ed_identity_frozen`: `CREATE TRIGGER ed_identity_frozen BEFORE UPDATE ON public.event_dossiers FOR EACH ROW EXECUTE FUNCTION ed_identity_v1()`.
+
+**Physical constraints:**
+
+- `event_dossiers_event_kind_id_51af7923_fk_event_kinds_id`: `FOREIGN KEY (event_kind_id) REFERENCES event_kinds(id) DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `event_dossiers_event_kind_id_51af7923`: `CREATE INDEX event_dossiers_event_kind_id_51af7923 ON public.event_dossiers USING btree (event_kind_id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_dossier_kind_bridge`: `CREATE TRIGGER pw_rg4_dossier_kind_bridge BEFORE INSERT OR UPDATE OF event_kind, event_kind_id ON public.event_dossiers FOR EACH ROW EXECUTE FUNCTION pw_rg4_dossier_kind_bridge()`.
+- `pw_rg4_dossier_kind_identity`: `CREATE TRIGGER pw_rg4_dossier_kind_identity BEFORE UPDATE ON public.event_dossiers FOR EACH ROW EXECUTE FUNCTION pw_rg4_dossier_kind_identity()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -5117,7 +6355,7 @@ Model: [EventDossier](../../core/models.py#L9765).
 
 One typed model release projection owned by a particular dossier review.
 
-Model: [ModelReleaseDetail](../../core/models.py#L10067).
+Model: [ModelReleaseDetail](../../core/models.py#L10137).
 
 **Primary key:** `review_id`.
 
@@ -5128,11 +6366,14 @@ Model: [ModelReleaseDetail](../../core/models.py#L10067).
 | `native_identifier` | `text` | No | Native identifier. |
 | `version_label` | `text` | Yes | Version label. |
 | `variant` | `text` | Yes | Variant. |
-| `release_channel` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
-| `availability_state` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
+| `release_channel` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). Temporary compatibility only; ordinary ORM queries do not select this column. |
+| `availability_state` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). Temporary compatibility only; ordinary ORM queries do not select this column. |
 | `disclosure_state` | `character varying(16)` | No | Django default: `unknown` (not an assumed SQL default). |
 | `product_key` | `uuid` | Yes | FK → [`products`](#table-products) (`product_key`); Django deletion: `PROTECT`. Model field: `product`. |
 | `release_issuer_company_id` | `character varying(64)` | Yes | FK → [`companies`](#table-companies) (`nickname`); Django deletion: `PROTECT`. Model field: `release_issuer_company`. |
+| `release_maturity_id` | `bigint` | No | FK → [release_maturities.id](#table-release_maturities); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `release_maturity_reference`. |
+| `availability_state_id` | `bigint` | No | FK → [release_availability_states.id](#table-release_availability_states); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `release_availability_reference`. |
+| `disclosure_state_id` | `bigint` | No | Temporary compatibility column, absent from the ordinary ORM; retained until old processes finish and the separate deletion migration runs. |
 
 **Named indexes:**
 
@@ -5148,12 +6389,30 @@ Model: [ModelReleaseDetail](../../core/models.py#L10067).
 - `model_release_detail_product_key_985a0e29_fk_products_`: `FOREIGN KEY (product_key) REFERENCES products(product_key) DEFERRABLE INITIALLY DEFERRED`.
 - `model_release_detail_release_issuer_compa_ccfc1783_fk_companies`: `FOREIGN KEY (release_issuer_company_id) REFERENCES companies(nickname) DEFERRABLE INITIALLY DEFERRED`.
 - `model_release_detail_review_id_4b1ee480_fk_event_dos`: `FOREIGN KEY (review_id) REFERENCES event_dossier_reviews(id) DEFERRABLE INITIALLY DEFERRED`.
-- `model_release_details_pkey`: `PRIMARY KEY (review_id)`.
+- `model_release_details_pkey`: `CREATE UNIQUE INDEX model_release_details_pkey ON public.model_release_details USING btree (review_id)`.
 
 **Migration-level triggers:**
 
 - `ed_child`: `CREATE TRIGGER ed_child BEFORE INSERT ON public.model_release_details FOR EACH ROW EXECUTE FUNCTION ed_child_v1()`.
 - `ed_frozen`: `CREATE TRIGGER ed_frozen BEFORE DELETE OR UPDATE ON public.model_release_details FOR EACH ROW EXECUTE FUNCTION ed_frozen_v1()`.
+
+**Physical constraints:**
+
+- `model_release_detail_availability_state_i_c3f83b43_fk_release_a`: `FOREIGN KEY (availability_state_id) REFERENCES release_availability_states(id) DEFERRABLE INITIALLY DEFERRED`.
+- `model_release_detail_disclosure_state_id_1c763003_fk_release_d`: `FOREIGN KEY (disclosure_state_id) REFERENCES release_disclosure_states(id) DEFERRABLE INITIALLY DEFERRED`.
+- `model_release_detail_release_maturity_id_2f9a616e_fk_release_m`: `FOREIGN KEY (release_maturity_id) REFERENCES release_maturities(id) DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `model_release_details_availability_state_id_c3f83b43`: `CREATE INDEX model_release_details_availability_state_id_c3f83b43 ON public.model_release_details USING btree (availability_state_id)`.
+- `model_release_details_disclosure_state_id_1c763003`: `CREATE INDEX model_release_details_disclosure_state_id_1c763003 ON public.model_release_details USING btree (disclosure_state_id)`.
+- `model_release_details_release_maturity_id_2f9a616e`: `CREATE INDEX model_release_details_release_maturity_id_2f9a616e ON public.model_release_details USING btree (release_maturity_id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_detail_availability_state_bridge`: `CREATE TRIGGER pw_rg4_detail_availability_state_bridge BEFORE INSERT OR UPDATE OF availability_state, availability_state_id ON public.model_release_details FOR EACH ROW EXECUTE FUNCTION pw_rg4_detail_availability_state_bridge()`.
+- `pw_rg4_detail_disclosure_state_bridge`: `CREATE TRIGGER pw_rg4_detail_disclosure_state_bridge BEFORE INSERT OR UPDATE OF disclosure_state, disclosure_state_id ON public.model_release_details FOR EACH ROW EXECUTE FUNCTION pw_rg4_detail_disclosure_state_bridge()`.
+- `pw_rg4_detail_release_channel_bridge`: `CREATE TRIGGER pw_rg4_detail_release_channel_bridge BEFORE INSERT OR UPDATE OF release_channel, release_maturity_id ON public.model_release_details FOR EACH ROW EXECUTE FUNCTION pw_rg4_detail_release_channel_bridge()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -5163,7 +6422,7 @@ Model: [ModelReleaseDetail](../../core/models.py#L10067).
 
 One typed personnel change projection owned by a particular dossier review.
 
-Model: [PersonnelChangeDetail](../../core/models.py#L10132).
+Model: [PersonnelChangeDetail](../../core/models.py#L10195).
 
 **Primary key:** `review_id`.
 
@@ -5171,7 +6430,7 @@ Model: [PersonnelChangeDetail](../../core/models.py#L10132).
 | --- | --- | --- | --- |
 | `review_id` | `uuid` | No | Primary key. |
 | `observed_person_name` | `text` | No | Observed person name. |
-| `change_kind` | `character varying(16)` | No | Change kind. |
+| `change_kind` | `character varying(16)` | No | Change kind. Temporary compatibility only; ordinary ORM queries do not select this column. |
 | `from_organization_name` | `text` | Yes | From organization name. |
 | `to_organization_name` | `text` | Yes | To organization name. |
 | `from_title` | `text` | Yes | From title. |
@@ -5179,6 +6438,7 @@ Model: [PersonnelChangeDetail](../../core/models.py#L10132).
 | `from_affiliation_id` | `bigint` | Yes | FK → [`people_brand_affiliations`](#table-people_brand_affiliations) (`id`); Django deletion: `PROTECT`. Model field: `from_affiliation`. |
 | `person_id` | `uuid` | Yes | FK → [`people`](#table-people) (`id`); Django deletion: `PROTECT`. Model field: `person`. |
 | `to_affiliation_id` | `bigint` | Yes | FK → [`people_brand_affiliations`](#table-people_brand_affiliations) (`id`); Django deletion: `PROTECT`. Model field: `to_affiliation`. |
+| `change_kind_id` | `bigint` | No | FK → [personnel_change_types.id](#table-personnel_change_types); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `change_type_reference`. |
 
 **Named indexes:**
 
@@ -5195,14 +6455,60 @@ Model: [PersonnelChangeDetail](../../core/models.py#L10132).
 - `personnel_change_det_review_id_4314be91_fk_event_dos`: `FOREIGN KEY (review_id) REFERENCES event_dossier_reviews(id) DEFERRABLE INITIALLY DEFERRED`.
 - `personnel_change_det_to_affiliation_id_93cf285e_fk_people_br`: `FOREIGN KEY (to_affiliation_id) REFERENCES people_brand_affiliations(id) DEFERRABLE INITIALLY DEFERRED`.
 - `personnel_change_details_person_id_835848de_fk_people_id`: `FOREIGN KEY (person_id) REFERENCES people(id) DEFERRABLE INITIALLY DEFERRED`.
-- `personnel_change_details_pkey`: `PRIMARY KEY (review_id)`.
+- `personnel_change_details_pkey`: `CREATE UNIQUE INDEX personnel_change_details_pkey ON public.personnel_change_details USING btree (review_id)`.
 
 **Migration-level triggers:**
 
 - `ed_child`: `CREATE TRIGGER ed_child BEFORE INSERT ON public.personnel_change_details FOR EACH ROW EXECUTE FUNCTION ed_child_v1()`.
 - `ed_frozen`: `CREATE TRIGGER ed_frozen BEFORE DELETE OR UPDATE ON public.personnel_change_details FOR EACH ROW EXECUTE FUNCTION ed_frozen_v1()`.
 
+**Physical constraints:**
+
+- `personnel_change_det_change_kind_id_a6f2228e_fk_personnel`: `FOREIGN KEY (change_kind_id) REFERENCES personnel_change_types(id) DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `personnel_change_details_change_kind_id_a6f2228e`: `CREATE INDEX personnel_change_details_change_kind_id_a6f2228e ON public.personnel_change_details USING btree (change_kind_id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_personnel_kind_bridge`: `CREATE TRIGGER pw_rg4_personnel_kind_bridge BEFORE INSERT OR UPDATE OF change_kind, change_kind_id ON public.personnel_change_details FOR EACH ROW EXECUTE FUNCTION pw_rg4_personnel_kind_bridge()`.
+
 [Back to table inventory](#table-inventory)
+
+
+<a id="table-event_claim_kinds"></a>
+
+### `event_claim_kinds` — EventClaimKind
+
+One allowed evidence-claim kind shared by dossier claims and scoped artifact, endpoint and host records.
+
+Model: [EventClaimKind](../../core/models.py#L240).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Primary key. Database-generated identity. |
+| `code` | `character varying(128)` | No | Unique field. |
+
+
+**Physical constraints:**
+
+- `ck_eventclaimkind_code`: `CHECK (((code)::text ~ '^[a-z][a-z0-9_]*$'::text))`.
+- `event_claim_kinds_code_key`: `UNIQUE (code)`.
+- `event_claim_kinds_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `event_claim_kinds_code_69a48368_like`: `CREATE INDEX event_claim_kinds_code_69a48368_like ON public.event_claim_kinds USING btree (code varchar_pattern_ops)`.
+- `event_claim_kinds_code_key`: `CREATE UNIQUE INDEX event_claim_kinds_code_key ON public.event_claim_kinds USING btree (code)`.
+- `event_claim_kinds_pkey`: `CREATE UNIQUE INDEX event_claim_kinds_pkey ON public.event_claim_kinds USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_rg4_catalogue_identity`: `CREATE TRIGGER pw_rg4_catalogue_identity BEFORE UPDATE ON public.event_claim_kinds FOR EACH ROW EXECUTE FUNCTION pw_rg4_catalogue_identity()`.
+
+[Back to table inventory](#table-inventory)
+
 
 
 <a id="translation"></a>
@@ -5230,7 +6536,7 @@ translation](translator-output.md) and [post commentary](commenter.md).
 
 One post’s replayable translation/classification progress and diagnostics.
 
-Model: [PostEnrichmentState](../../core/models.py#L2035).
+Model: [PostEnrichmentState](../../core/models.py#L2009).
 
 **Primary key:** `post_id`.
 
@@ -5282,7 +6588,7 @@ brand's final judgment; a succeeded flag alone is insufficient.
 
 One versioned literal-translation attempt/state for a post body.
 
-Model: [PostTranslationArtifact](../../core/models.py#L2096).
+Model: [PostTranslationArtifact](../../core/models.py#L2070).
 
 **Primary key:** `id`.
 
@@ -5326,7 +6632,7 @@ Model: [PostTranslationArtifact](../../core/models.py#L2096).
 
 One locale’s validated literal text within a translation artifact.
 
-Model: [PostTranslationText](../../core/models.py#L2177).
+Model: [PostTranslationText](../../core/models.py#L2151).
 
 **Primary key:** `id`.
 
@@ -5357,7 +6663,7 @@ None declared beyond field/FK/constraint indexes.
 
 One validated locale chunk retained for resuming a long post translation.
 
-Model: [PostTranslationChunk](../../core/models.py#L2204).
+Model: [PostTranslationChunk](../../core/models.py#L2178).
 
 **Primary key:** `id`.
 
@@ -5395,7 +6701,7 @@ None declared beyond field/FK/constraint indexes.
 
 One versioned commentary artifact for a post and its context.
 
-Model: [PostSynthesisArtifact](../../core/models.py#L2248).
+Model: [PostSynthesisArtifact](../../core/models.py#L2222).
 
 **Primary key:** `id`.
 
@@ -5441,7 +6747,7 @@ Model: [PostSynthesisArtifact](../../core/models.py#L2248).
 
 One locale’s commentary text within a synthesis artifact.
 
-Model: [PostSynthesisText](../../core/models.py#L2331).
+Model: [PostSynthesisText](../../core/models.py#L2305).
 
 **Primary key:** `id`.
 
@@ -5471,7 +6777,7 @@ None declared beyond field/FK/constraint indexes.
 
 One coalesced request for post commentary, including its worker claim and retry state.
 
-Model: [PostSynthesisDemand](../../core/models.py#L2357).
+Model: [PostSynthesisDemand](../../core/models.py#L2331).
 
 **Primary key:** `id`.
 
@@ -5521,7 +6827,7 @@ Model: [PostSynthesisDemand](../../core/models.py#L2357).
 
 One day’s commentary request/token budget accounting.
 
-Model: [PostSynthesisDailyBudget](../../core/models.py#L2468).
+Model: [PostSynthesisDailyBudget](../../core/models.py#L2442).
 
 **Primary key:** `id`.
 
@@ -5556,7 +6862,7 @@ None declared beyond field/FK/constraint indexes.
 
 One request-throttle bucket keyed without storing a user ID or IP address.
 
-Model: [PostSynthesisRateLimitBucket](../../core/models.py#L2493).
+Model: [PostSynthesisRateLimitBucket](../../core/models.py#L2467).
 
 **Primary key:** `id`.
 
@@ -5607,7 +6913,7 @@ behavior. The SQL view `trend_narrative_versions` is listed separately below.
 
 One durable attempt/version of a shared time-window headline.
 
-Model: [TrendNarrative](../../core/models.py#L3994).
+Model: [TrendNarrative](../../core/models.py#L3968).
 
 **Primary key:** `id`.
 
@@ -5701,7 +7007,7 @@ Model: [TrendNarrative](../../core/models.py#L3994).
 
 One reported subject attached to a headline publication.
 
-Model: [TrendNarrativeSubject](../../core/models.py#L5026).
+Model: [TrendNarrativeSubject](../../core/models.py#L5000).
 
 **Primary key:** `id`.
 
@@ -5742,16 +7048,35 @@ None declared beyond field/FK/constraint indexes.
 
 One immutable localized name snapshot for a reported subject.
 
-Model: [TrendNarrativeSubjectLabel](../../core/models.py#L5160).
+Model: [TrendNarrativeSubjectLabel](../../core/models.py#L5134).
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `subject_id` | `bigint` | No | FK → [`trend_narrative_subjects`](#table-trend_narrative_subjects) (`id`); PROTECT. |
-| `locale_id` | `varchar(35)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
 | `label_snapshot` | `text` | No | Immutable localized label snapshot; cannot be empty. |
+| `locale_id` | `character varying(255)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
+| `subject_id` | `bigint` | No | FK → [`trend_narrative_subjects`](#table-trend_narrative_subjects) (`id`); PROTECT. |
 
 **Named constraints:** `uq_tns_label_locale` (one label per subject and locale); `ck_tns_label_nonempty`. A deferred database trigger requires English and Simplified Chinese labels for each subject.
+
+**Physical constraints:**
+
+- `pw_trend_subject_label_delete`: `TRIGGER DEFERRABLE INITIALLY DEFERRED`.
+- `trend_narrative_subj_locale_id_65f8d9f8_fk_locales_c`: `FOREIGN KEY (locale_id) REFERENCES locales(code) DEFERRABLE INITIALLY DEFERRED`.
+- `trend_narrative_subj_subject_id_436e5154_fk_trend_nar`: `FOREIGN KEY (subject_id) REFERENCES trend_narrative_subjects(id) DEFERRABLE INITIALLY DEFERRED`.
+- `trend_narrative_subject_labels_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `trend_narrative_subject_labels_locale_id_65f8d9f8`: `CREATE INDEX trend_narrative_subject_labels_locale_id_65f8d9f8 ON public.trend_narrative_subject_labels USING btree (locale_id)`.
+- `trend_narrative_subject_labels_locale_id_65f8d9f8_like`: `CREATE INDEX trend_narrative_subject_labels_locale_id_65f8d9f8_like ON public.trend_narrative_subject_labels USING btree (locale_id varchar_pattern_ops)`.
+- `trend_narrative_subject_labels_pkey`: `CREATE UNIQUE INDEX trend_narrative_subject_labels_pkey ON public.trend_narrative_subject_labels USING btree (id)`.
+- `trend_narrative_subject_labels_subject_id_436e5154`: `CREATE INDEX trend_narrative_subject_labels_subject_id_436e5154 ON public.trend_narrative_subject_labels USING btree (subject_id)`.
+
+**Physical triggers:**
+
+- `pw_trend_subject_label_delete`: `CREATE CONSTRAINT TRIGGER pw_trend_subject_label_delete AFTER DELETE ON public.trend_narrative_subject_labels DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION pw_check_localized_snapshot_deletion()`.
+- `pw_trend_subject_label_immutable`: `CREATE TRIGGER pw_trend_subject_label_immutable BEFORE UPDATE ON public.trend_narrative_subject_labels FOR EACH ROW EXECUTE FUNCTION pw_immutable_localized_snapshot()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -5762,7 +7087,7 @@ Model: [TrendNarrativeSubjectLabel](../../core/models.py#L5160).
 
 One evidence preparation/dispatch execution and its immutable cutoff/configuration snapshot.
 
-Model: [OriginalContentRun](../../core/models.py#L4309).
+Model: [OriginalContentRun](../../core/models.py#L4283).
 
 **Primary key:** `id`.
 
@@ -5819,7 +7144,7 @@ Model: [OriginalContentRun](../../core/models.py#L4309).
 
 One authored output version or held headline outcome, grouped by its producing workflow.
 
-Model: [OriginalContent](../../core/models.py#L4795).
+Model: [OriginalContent](../../core/models.py#L4769).
 
 **Primary key:** `id`.
 
@@ -5892,16 +7217,35 @@ Model: [OriginalContent](../../core/models.py#L4795).
 
 One immutable localized subject-label snapshot for saved authored content.
 
-Model: [OriginalContentSubjectLabel](../../core/models.py#L5186).
+Model: [OriginalContentSubjectLabel](../../core/models.py#L5160).
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `content_id` | `bigint` | No | FK → [`original_content`](#table-original_content) (`id`); PROTECT. |
-| `locale_id` | `varchar(35)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
 | `label_snapshot` | `text` | No | Immutable localized label snapshot; cannot be empty. |
+| `content_id` | `bigint` | No | FK → [`original_content`](#table-original_content) (`id`); PROTECT. |
+| `locale_id` | `character varying(255)` | No | FK → [`locales`](#table-locales) (`code`); PROTECT. |
 
 **Named constraints:** `uq_ocs_label_locale` (one label per content row and locale); `ck_ocs_label_nonempty`.
+
+**Physical constraints:**
+
+- `original_content_sub_content_id_25e4c0f6_fk_original_`: `FOREIGN KEY (content_id) REFERENCES original_content(id) DEFERRABLE INITIALLY DEFERRED`.
+- `original_content_sub_locale_id_6ca65936_fk_locales_c`: `FOREIGN KEY (locale_id) REFERENCES locales(code) DEFERRABLE INITIALLY DEFERRED`.
+- `original_content_subject_labels_pkey`: `PRIMARY KEY (id)`.
+- `pw_original_content_subject_label_delete`: `TRIGGER DEFERRABLE INITIALLY DEFERRED`.
+
+**Physical indexes:**
+
+- `original_content_subject_labels_content_id_25e4c0f6`: `CREATE INDEX original_content_subject_labels_content_id_25e4c0f6 ON public.original_content_subject_labels USING btree (content_id)`.
+- `original_content_subject_labels_locale_id_6ca65936`: `CREATE INDEX original_content_subject_labels_locale_id_6ca65936 ON public.original_content_subject_labels USING btree (locale_id)`.
+- `original_content_subject_labels_locale_id_6ca65936_like`: `CREATE INDEX original_content_subject_labels_locale_id_6ca65936_like ON public.original_content_subject_labels USING btree (locale_id varchar_pattern_ops)`.
+- `original_content_subject_labels_pkey`: `CREATE UNIQUE INDEX original_content_subject_labels_pkey ON public.original_content_subject_labels USING btree (id)`.
+
+**Physical triggers:**
+
+- `pw_original_content_subject_label_delete`: `CREATE CONSTRAINT TRIGGER pw_original_content_subject_label_delete AFTER DELETE ON public.original_content_subject_labels DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION pw_check_localized_snapshot_deletion()`.
+- `pw_original_content_subject_label_immutable`: `CREATE TRIGGER pw_original_content_subject_label_immutable BEFORE UPDATE ON public.original_content_subject_labels FOR EACH ROW EXECUTE FUNCTION pw_immutable_localized_snapshot()`.
 
 [Back to table inventory](#table-inventory)
 
@@ -5911,7 +7255,7 @@ Model: [OriginalContentSubjectLabel](../../core/models.py#L5186).
 
 One saved language/version with exact copy, a public UUID and producing-call provenance.
 
-Model: [OriginalContentText](../../core/models.py#L4956).
+Model: [OriginalContentText](../../core/models.py#L4930).
 
 **Primary key:** `id`.
 
@@ -5947,7 +7291,7 @@ None declared beyond field/FK/constraint indexes.
 
 One selected all-brand window run or exact featured locale/version.
 
-Model: [OriginalContentSelection](../../core/models.py#L4482).
+Model: [OriginalContentSelection](../../core/models.py#L4456).
 
 **Primary key:** `id`.
 
@@ -5979,7 +7323,7 @@ None declared beyond field/FK/constraint indexes.
 
 One window’s active work claim and optional newer queued cutoff.
 
-Model: [TrendNarrativeWorkSlot](../../core/models.py#L4402).
+Model: [TrendNarrativeWorkSlot](../../core/models.py#L4376).
 
 **Primary key:** `window_days`.
 
@@ -6016,7 +7360,7 @@ None declared beyond field/FK/constraint indexes.
 
 One coalesced brand/window headline request and its scheduling state.
 
-Model: [TrendNarrativeDemand](../../core/models.py#L4517).
+Model: [TrendNarrativeDemand](../../core/models.py#L4491).
 
 **Primary key:** `id`.
 
@@ -6071,7 +7415,7 @@ Model: [TrendNarrativeDemand](../../core/models.py#L4517).
 
 One physical provider attempt with its actual request identity, pessimistic reservation and completion/uncertainty state. Its owner is exactly one authored-content run or provider batch.
 
-Model: [OriginalContentCall](../../core/models.py#L4674).
+Model: [OriginalContentCall](../../core/models.py#L4648).
 
 **Primary key:** `id`.
 
@@ -6170,7 +7514,7 @@ One resumable group of provider requests for a real source CollectionJob.
 The group owns external file/submission/poll/import progress; child
 OriginalContentCall rows own each physical model attempt and its cost.
 
-Model: [ProviderBatch](../../core/models.py#L4616).
+Model: [ProviderBatch](../../core/models.py#L4590).
 Migration: [0085_provider_batch_enrichment](../../core/migrations/0085_provider_batch_enrichment.py).
 
 **Primary key:** `id` (UUID; no generated-ID sequence).
@@ -6250,7 +7594,7 @@ evidence rather than silently discarding it.
 
 One distinct cited post supporting one saved locale/version, with immutable ordered URL/author/hash snapshots.
 
-Model: [OriginalContentSource](../../core/models.py#L5002).
+Model: [OriginalContentSource](../../core/models.py#L4976).
 
 **Primary key:** `id`.
 
@@ -6298,7 +7642,7 @@ can progress while a video task is collected.
 
 One fenced quarter-hour editorial or content-picture assessment, with frozen evidence and outcome.
 
-Model: [EditorialAssessment](../../core/models.py#L9339).
+Model: [EditorialAssessment](../../core/models.py#L9391).
 
 **Primary key:** `id`.
 
@@ -6333,14 +7677,14 @@ Model: [EditorialAssessment](../../core/models.py#L9339).
 
 One UTC day of conservative spend reservations and text/media call counts.
 
-Model: [EditorialBudget](../../core/models.py#L9368).
+Model: [EditorialBudget](../../core/models.py#L9420).
 
 **Primary key:** `day`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `day` | `date` | No | Primary key. PK component. |
-| `reserved_usd` | `numeric(12, 6)` | No | Django default: `0` (not an assumed SQL default). |
+| `reserved_usd` | `numeric(12,6)` | No | Django default: `0` (not an assumed SQL default). |
 | `calls` | `integer` | No | Django default: `0` (not an assumed SQL default). |
 | `media_calls` | `integer` | No | Django default: `0` (not an assumed SQL default). |
 
@@ -6350,9 +7694,19 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `ck_editorial_budget_positive`: `CONSTRAINT "ck_editorial_budget_positive" CHECK ("reserved_usd" >= 0)`.
+- `ck_editorial_budget_positive`: `CHECK ((reserved_usd >= (0)::numeric))`.
 
 None beyond primary-key, unique-field and automatic FK indexes.
+
+**Physical constraints:**
+
+- `editorial_budgets_calls_check`: `CHECK ((calls >= 0))`.
+- `editorial_budgets_media_calls_check`: `CHECK ((media_calls >= 0))`.
+- `editorial_budgets_pkey`: `PRIMARY KEY (day)`.
+
+**Physical indexes:**
+
+- `editorial_budgets_pkey`: `CREATE UNIQUE INDEX editorial_budgets_pkey ON public.editorial_budgets USING btree (day)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -6362,31 +7716,41 @@ None beyond primary-key, unique-field and automatic FK indexes.
 
 One reserved provider stage and its saved response or uncertain-send outcome.
 
-Model: [EditorialCall](../../core/models.py#L9384).
+Model: [EditorialCall](../../core/models.py#L9436).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | Primary key. Database-generated identity. PK; database-generated identity. |
-| `assessment_id` | `bigint` | No | FK → [`editorial_assessments`](#table-editorial_assessments) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `assessment`. |
-| `stage` | `varchar(200)` | No | Stored value. |
-| `kind` | `varchar(16)` | No | Stored value. |
-| `state` | `varchar(24)` | No | Django default: `'sent'` (not an assumed SQL default). |
-| `reserved_usd` | `numeric(12, 6)` | No | Stored value. |
+| `stage` | `character varying(200)` | No | Stored value. |
+| `kind` | `character varying(16)` | No | Stored value. |
+| `state` | `character varying(24)` | No | Django default: `'sent'` (not an assumed SQL default). |
+| `reserved_usd` | `numeric(12,6)` | No | Stored value. |
 | `budget_day` | `date` | No | Stored value. |
 | `response` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `error_code` | `varchar(80)` | No | Django default: `''` (not an assumed SQL default). |
+| `error_code` | `character varying(80)` | No | Django default: `''` (not an assumed SQL default). |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
+| `assessment_id` | `bigint` | No | FK → [`editorial_assessments`](#table-editorial_assessments) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `assessment`. |
 
 **Named indexes:**
 
-- `idx_editorial_call_state`: `CREATE INDEX "idx_editorial_call_state" ON "editorial_calls" ("state", "created_at")`.
+- `idx_editorial_call_state`: `CREATE INDEX idx_editorial_call_state ON public.editorial_calls USING btree (state, created_at)`.
 
 **Named constraints:**
 
-- `uq_editorial_call_stage`: `CONSTRAINT "uq_editorial_call_stage" UNIQUE ("assessment_id", "stage")`.
-- `uq_editorial_media_stage`: `None`.
+- `uq_editorial_call_stage`: `CREATE UNIQUE INDEX uq_editorial_call_stage ON public.editorial_calls USING btree (assessment_id, stage)`.
+- `uq_editorial_media_stage`: `CREATE UNIQUE INDEX uq_editorial_media_stage ON public.editorial_calls USING btree (stage) WHERE ((kind)::text = 'media'::text)`.
+
+**Physical constraints:**
+
+- `editorial_calls_assessment_id_e6259232_fk_editorial`: `FOREIGN KEY (assessment_id) REFERENCES editorial_assessments(id) DEFERRABLE INITIALLY DEFERRED`.
+- `editorial_calls_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `editorial_calls_assessment_id_e6259232`: `CREATE INDEX editorial_calls_assessment_id_e6259232 ON public.editorial_calls USING btree (assessment_id)`.
+- `editorial_calls_pkey`: `CREATE UNIQUE INDEX editorial_calls_pkey ON public.editorial_calls USING btree (id)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -6396,7 +7760,7 @@ Model: [EditorialCall](../../core/models.py#L9384).
 
 One permanent development identity with original-post anchors.
 
-Model: [EditorialStory](../../core/models.py#L9416).
+Model: [EditorialStory](../../core/models.py#L9468).
 
 **Primary key:** `id`.
 
@@ -6425,7 +7789,7 @@ None beyond the keys and field checks described above.
 
 One immutable accepted story edition for a track, locale and revision.
 
-Model: [EditorialEdition](../../core/models.py#L9427).
+Model: [EditorialEdition](../../core/models.py#L9479).
 
 **Primary key:** `id`.
 
@@ -6469,7 +7833,7 @@ Model: [EditorialEdition](../../core/models.py#L9427).
 
 One current hero pointer, or the shared provider-lock row.
 
-Model: [EditorialHero](../../core/models.py#L9483).
+Model: [EditorialHero](../../core/models.py#L9535).
 
 **Primary key:** `key`.
 
@@ -6499,7 +7863,7 @@ None beyond the keys and field checks described above.
 
 One optional generic source/derivative attachment, with protected optional shared text/run relationships.
 
-Model: [ContentPicture](../../core/models.py#L9491).
+Model: [ContentPicture](../../core/models.py#L9543).
 
 **Primary key:** `id`.
 
@@ -6561,7 +7925,7 @@ See [Rare-type intelligence](rare-types.md) and [collection calls](twitterapi-io
 
 One saved collection/discovery query identity and associated brand/keywords.
 
-Model: [SearchQuery](../../core/models.py#L3625).
+Model: [SearchQuery](../../core/models.py#L3599).
 
 **Primary key:** `id`.
 
@@ -6608,7 +7972,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One harvest cursor for a brand, call, bucket, and query combination.
 
-Model: [CallState](../../core/models.py#L3651).
+Model: [CallState](../../core/models.py#L3625).
 
 **Primary key:** `brand_id, call_id, call_kind, bucket, query_id`.
 
@@ -6640,7 +8004,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One bounded time window still owed collection coverage.
 
-Model: [HarvestBacklogWindow](../../core/models.py#L3900).
+Model: [HarvestBacklogWindow](../../core/models.py#L3874).
 
 **Primary key:** `id`.
 
@@ -6693,7 +8057,7 @@ Model: [HarvestBacklogWindow](../../core/models.py#L3900).
 
 One configuration artifact’s last applied content hash.
 
-Model: [AppliedConfigSnapshot](../../core/models.py#L5214).
+Model: [AppliedConfigSnapshot](../../core/models.py#L5188).
 
 **Primary key:** `artifact`.
 
@@ -6721,7 +8085,7 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 One post/role extraction state, used to avoid repeating the same work.
 
-Model: [TargetedExtractionState](../../core/models.py#L7523).
+Model: [TargetedExtractionState](../../core/models.py#L7575).
 
 **Primary key:** `id`.
 
@@ -6760,7 +8124,7 @@ Model: [TargetedExtractionState](../../core/models.py#L7523).
 
 One recorded attempt to extract a role-specific fact from a post.
 
-Model: [TargetedExtractionAttempt](../../core/models.py#L7580).
+Model: [TargetedExtractionAttempt](../../core/models.py#L7632).
 
 **Primary key:** `id`.
 
@@ -6794,7 +8158,7 @@ None declared beyond field/FK/constraint indexes.
 
 One source-backed rare-category assignment for a post and organization.
 
-Model: [RareTypeCategoryAssignment](../../core/models.py#L7480).
+Model: [RareTypeCategoryAssignment](../../core/models.py#L7532).
 
 **Primary key:** `id`.
 
@@ -6827,7 +8191,7 @@ None declared beyond field/FK/constraint indexes.
 
 One search lane’s budget accounting for a UTC day.
 
-Model: [RareTypeSearchDailyBudget](../../core/models.py#L7618).
+Model: [RareTypeSearchDailyBudget](../../core/models.py#L7670).
 
 **Primary key:** `id`.
 
@@ -6835,12 +8199,12 @@ Model: [RareTypeSearchDailyBudget](../../core/models.py#L7618).
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
 | `usage_date` | `date` | No | Stored value. |
-| `lane` | `varchar(64)` | No | Stored value. |
+| `lane` | `character varying(64)` | No | Stored value. |
 | `search_credits_reserved` | `integer` | No | Django default: `0` (not an assumed SQL default). |
 | `search_credits_accounted` | `integer` | No | Django default: `0` (not an assumed SQL default). |
-| `decision_usd_reserved` | `numeric(16, 9)` | No | Django default: `0` (not an assumed SQL default). |
-| `decision_usd_accounted` | `numeric(16, 9)` | No | Django default: `0` (not an assumed SQL default). |
-| `decision_usd_confirmed` | `numeric(16, 9)` | No | Django default: `0` (not an assumed SQL default). |
+| `decision_usd_reserved` | `numeric(16,9)` | No | Django default: `0` (not an assumed SQL default). |
+| `decision_usd_accounted` | `numeric(16,9)` | No | Django default: `0` (not an assumed SQL default). |
+| `decision_usd_confirmed` | `numeric(16,9)` | No | Django default: `0` (not an assumed SQL default). |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
 
@@ -6850,10 +8214,20 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `uq_rare_budget_day_lane`: `CONSTRAINT "uq_rare_budget_day_lane" UNIQUE ("usage_date", "lane")`.
-- `ck_rare_budget_dec_reserved`: `CONSTRAINT "ck_rare_budget_dec_reserved" CHECK ("decision_usd_reserved" >= 0)`.
-- `ck_rare_budget_dec_accounted`: `CONSTRAINT "ck_rare_budget_dec_accounted" CHECK ("decision_usd_accounted" >= 0)`.
-- `ck_rare_budget_dec_confirmed`: `CONSTRAINT "ck_rare_budget_dec_confirmed" CHECK ("decision_usd_confirmed" >= 0)`.
+- `uq_rare_budget_day_lane`: `CREATE UNIQUE INDEX uq_rare_budget_day_lane ON public.rare_type_search_daily_budgets USING btree (usage_date, lane)`.
+- `ck_rare_budget_dec_reserved`: `CHECK ((decision_usd_reserved >= (0)::numeric))`.
+- `ck_rare_budget_dec_accounted`: `CHECK ((decision_usd_accounted >= (0)::numeric))`.
+- `ck_rare_budget_dec_confirmed`: `CHECK ((decision_usd_confirmed >= (0)::numeric))`.
+
+**Physical constraints:**
+
+- `rare_type_search_daily_budgets_pkey`: `PRIMARY KEY (id)`.
+- `rare_type_search_daily_budgets_search_credits_accounted_check`: `CHECK ((search_credits_accounted >= 0))`.
+- `rare_type_search_daily_budgets_search_credits_reserved_check`: `CHECK ((search_credits_reserved >= 0))`.
+
+**Physical indexes:**
+
+- `rare_type_search_daily_budgets_pkey`: `CREATE UNIQUE INDEX rare_type_search_daily_budgets_pkey ON public.rare_type_search_daily_budgets USING btree (id)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -6863,70 +8237,88 @@ None declared beyond field/FK/constraint indexes.
 
 One paid rare-type search time slot and its coverage/cost record.
 
-Model: [RareTypeSearchRun](../../core/models.py#L7658).
+Model: [RareTypeSearchRun](../../core/models.py#L7710).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `lane` | `varchar(64)` | No | Stored value. |
+| `lane` | `character varying(64)` | No | Stored value. |
 | `slot_start` | `timestamp with time zone` | No | Stored value. |
-| `daily_budget_id` | `bigint` | No | FK → [`rare_type_search_daily_budgets`](#table-rare_type_search_daily_budgets) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `daily_budget`. |
-| `source_query_id` | `bigint` | No | FK → [`search_queries`](#table-search_queries) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_query`. |
 | `query_string` | `text` | No | Stored value. |
-| `query_hash` | `varchar(64)` | No | Stored value. |
-| `query_version` | `varchar(128)` | No | Stored value. |
+| `query_hash` | `character varying(64)` | No | Stored value. |
+| `query_version` | `character varying(128)` | No | Stored value. |
 | `window_start` | `timestamp with time zone` | No | Stored value. |
 | `window_end` | `timestamp with time zone` | No | Stored value. |
 | `attempted_start` | `timestamp with time zone` | No | Stored value. |
 | `attempted_end` | `timestamp with time zone` | No | Stored value. |
 | `complete_start` | `timestamp with time zone` | Yes | Stored value. |
 | `complete_end` | `timestamp with time zone` | Yes | Stored value. |
-| `status` | `varchar(16)` | No | Django default: `RareTypeSearchRun.Status.RESERVED` (not an assumed SQL default). Choices: `reserved`, `dispatched`, `returned`, `empty`, `failed`, `usage_unknown`. |
+| `status` | `character varying(16)` | No | Django default: `RareTypeSearchRun.Status.RESERVED` (not an assumed SQL default). Choices: `reserved`, `dispatched`, `returned`, `empty`, `failed`, `usage_unknown`. |
 | `request_count` | `smallint` | No | Django default: `0` (not an assumed SQL default). |
 | `raw_result_count` | `integer` | Yes | Nonnegative. |
 | `normalized_result_count` | `integer` | Yes | Nonnegative. |
 | `reserved_credits` | `integer` | No | Django default: `300` (not an assumed SQL default). |
 | `estimated_credits` | `integer` | Yes | Nonnegative. |
 | `confirmed_credits` | `integer` | Yes | Nonnegative. |
-| `decision_usd_reserved` | `numeric(16, 9)` | No | Django default: `0` (not an assumed SQL default). |
-| `decision_usd_accounted` | `numeric(16, 9)` | No | Django default: `0` (not an assumed SQL default). |
-| `decision_usd_confirmed` | `numeric(16, 9)` | No | Django default: `0` (not an assumed SQL default). |
+| `decision_usd_reserved` | `numeric(16,9)` | No | Django default: `0` (not an assumed SQL default). |
+| `decision_usd_accounted` | `numeric(16,9)` | No | Django default: `0` (not an assumed SQL default). |
+| `decision_usd_confirmed` | `numeric(16,9)` | No | Django default: `0` (not an assumed SQL default). |
 | `has_coverage_gap` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
 | `gap_start` | `timestamp with time zone` | Yes | Stored value. |
 | `gap_end` | `timestamp with time zone` | Yes | Stored value. |
-| `gap_reason` | `varchar(128)` | No | Django default: `''` (not an assumed SQL default). |
+| `gap_reason` | `character varying(128)` | No | Django default: `''` (not an assumed SQL default). |
 | `truncated` | `boolean` | No | Django default: `False` (not an assumed SQL default). |
-| `error_code` | `varchar(128)` | No | Django default: `''` (not an assumed SQL default). |
+| `error_code` | `character varying(128)` | No | Django default: `''` (not an assumed SQL default). |
 | `error_detail` | `text` | No | Django default: `''` (not an assumed SQL default). |
-| `environment` | `varchar(64)` | No | Stored value. |
-| `release_sha` | `varchar(64)` | No | Stored value. |
+| `environment` | `character varying(64)` | No | Stored value. |
+| `release_sha` | `character varying(64)` | No | Stored value. |
 | `reserved_at` | `timestamp with time zone` | No | Stored value. |
 | `dispatched_at` | `timestamp with time zone` | Yes | Stored value. |
 | `returned_at` | `timestamp with time zone` | Yes | Stored value. |
 | `finished_at` | `timestamp with time zone` | Yes | Stored value. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
+| `daily_budget_id` | `bigint` | No | FK → [`rare_type_search_daily_budgets`](#table-rare_type_search_daily_budgets) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `daily_budget`. |
+| `source_query_id` | `bigint` | No | FK → [`search_queries`](#table-search_queries) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source_query`. |
 
 **Named indexes:**
 
-- `idx_rare_run_attempted`: `CREATE INDEX "idx_rare_run_attempted" ON "rare_type_search_runs" ("lane", "attempted_end" DESC)`.
-- `idx_rare_run_status_slot`: `CREATE INDEX "idx_rare_run_status_slot" ON "rare_type_search_runs" ("status", "slot_start")`.
+- `idx_rare_run_attempted`: `CREATE INDEX idx_rare_run_attempted ON public.rare_type_search_runs USING btree (lane, attempted_end DESC)`.
+- `idx_rare_run_status_slot`: `CREATE INDEX idx_rare_run_status_slot ON public.rare_type_search_runs USING btree (status, slot_start)`.
 
 **Named constraints:**
 
-- `uq_rare_run_lane_slot`: `CONSTRAINT "uq_rare_run_lane_slot" UNIQUE ("lane", "slot_start")`.
-- `ck_rare_run_status`: `CONSTRAINT "ck_rare_run_status" CHECK ("status" IN ('reserved', 'dispatched', 'returned', 'empty', 'failed', 'usage_unknown'))`.
-- `ck_rare_run_window`: `CONSTRAINT "ck_rare_run_window" CHECK ("window_end" > ("window_start"))`.
-- `ck_rare_run_attempted_window`: `CONSTRAINT "ck_rare_run_attempted_window" CHECK ("attempted_end" > ("attempted_start"))`.
-- `ck_rare_run_complete_window`: `CONSTRAINT "ck_rare_run_complete_window" CHECK ((("complete_end" IS NULL AND "complete_start" IS NULL) OR ("complete_end" > ("complete_start") AND "complete_end" IS NOT NULL AND "complete_start" IS NOT NULL)))`.
-- `ck_rare_run_gap_shape`: `CONSTRAINT "ck_rare_run_gap_shape" CHECK ((("gap_end" IS NULL AND "gap_reason" = '' AND "gap_start" IS NULL AND NOT "has_coverage_gap") OR ("gap_end" > ("gap_start") AND "gap_end" IS NOT NULL AND "gap_reason" > '' AND "gap_start" IS NOT NULL AND "has_coverage_gap")))`.
-- `ck_rare_run_dispatch_shape`: `CONSTRAINT "ck_rare_run_dispatch_shape" CHECK ((("dispatched_at" IS NULL AND "request_count" = 0 AND "status" = 'reserved') OR ("dispatched_at" IS NOT NULL AND "request_count" = 1 AND "status" IN ('dispatched', 'returned', 'empty', 'usage_unknown')) OR ("request_count" IN (0, 1) AND "status" = 'failed')))`.
-- `ck_rare_run_result_shape`: `CONSTRAINT "ck_rare_run_result_shape" CHECK ((("confirmed_credits" IS NULL AND "estimated_credits" IS NULL AND "normalized_result_count" IS NULL AND "raw_result_count" IS NULL AND "returned_at" IS NULL AND "status" IN ('reserved', 'dispatched')) OR ("estimated_credits" IS NOT NULL AND "normalized_result_count" IS NOT NULL AND "normalized_result_count" <= ("raw_result_count") AND "raw_result_count" > 0 AND "raw_result_count" IS NOT NULL AND "returned_at" IS NOT NULL AND "status" = 'returned') OR ("estimated_credits" IS NOT NULL AND "normalized_result_count" = 0 AND "normalized_result_count" IS NOT NULL AND "raw_result_count" = 0 AND "raw_result_count" IS NOT NULL AND "returned_at" IS NOT NULL AND "status" = 'empty') OR "status" IN ('failed', 'usage_unknown')))`.
-- `ck_rare_run_dec_reserved`: `CONSTRAINT "ck_rare_run_dec_reserved" CHECK ("decision_usd_reserved" >= 0)`.
-- `ck_rare_run_dec_accounted`: `CONSTRAINT "ck_rare_run_dec_accounted" CHECK ("decision_usd_accounted" >= 0)`.
-- `ck_rare_run_dec_confirmed`: `CONSTRAINT "ck_rare_run_dec_confirmed" CHECK ("decision_usd_confirmed" >= 0)`.
+- `uq_rare_run_lane_slot`: `CREATE UNIQUE INDEX uq_rare_run_lane_slot ON public.rare_type_search_runs USING btree (lane, slot_start)`.
+- `ck_rare_run_status`: `CHECK (((status)::text = ANY ((ARRAY['reserved'::character varying, 'dispatched'::character varying, 'returned'::character varying, 'empty'::character varying, 'failed'::character varying, 'usage_unknown'::character varying])::text[])))`.
+- `ck_rare_run_window`: `CHECK ((window_end > window_start))`.
+- `ck_rare_run_attempted_window`: `CHECK ((attempted_end > attempted_start))`.
+- `ck_rare_run_complete_window`: `CHECK ((((complete_end IS NULL) AND (complete_start IS NULL)) OR ((complete_end > complete_start) AND (complete_end IS NOT NULL) AND (complete_start IS NOT NULL))))`.
+- `ck_rare_run_gap_shape`: `CHECK ((((gap_end IS NULL) AND ((gap_reason)::text = ''::text) AND (gap_start IS NULL) AND (NOT has_coverage_gap)) OR ((gap_end > gap_start) AND (gap_end IS NOT NULL) AND ((gap_reason)::text > ''::text) AND (gap_start IS NOT NULL) AND has_coverage_gap)))`.
+- `ck_rare_run_dispatch_shape`: `CHECK ((((dispatched_at IS NULL) AND (request_count = 0) AND ((status)::text = 'reserved'::text)) OR ((dispatched_at IS NOT NULL) AND (request_count = 1) AND ((status)::text = ANY ((ARRAY['dispatched'::character varying, 'returned'::character varying, 'empty'::character varying, 'usage_unknown'::character varying])::text[]))) OR ((request_count = ANY (ARRAY[0, 1])) AND ((status)::text = 'failed'::text))))`.
+- `ck_rare_run_result_shape`: `CHECK ((((confirmed_credits IS NULL) AND (estimated_credits IS NULL) AND (normalized_result_count IS NULL) AND (raw_result_count IS NULL) AND (returned_at IS NULL) AND ((status)::text = ANY ((ARRAY['reserved'::character varying, 'dispatched'::character varying])::text[]))) OR ((estimated_credits IS NOT NULL) AND (normalized_result_count IS NOT NULL) AND (normalized_result_count <= raw_result_count) AND (raw_result_count > 0) AND (raw_result_count IS NOT NULL) AND (returned_at IS NOT NULL) AND ((status)::text = 'returned'::text)) OR ((estimated_credits IS NOT NULL) AND (normalized_result_count = 0) AND (normalized_result_count IS NOT NULL) AND (raw_result_count = 0) AND (raw_result_count IS NOT NULL) AND (returned_at IS NOT NULL) AND ((status)::text = 'empty'::text)) OR ((status)::text = ANY ((ARRAY['failed'::character varying, 'usage_unknown'::character varying])::text[]))))`.
+- `ck_rare_run_dec_reserved`: `CHECK ((decision_usd_reserved >= (0)::numeric))`.
+- `ck_rare_run_dec_accounted`: `CHECK ((decision_usd_accounted >= (0)::numeric))`.
+- `ck_rare_run_dec_confirmed`: `CHECK ((decision_usd_confirmed >= (0)::numeric))`.
+
+**Physical constraints:**
+
+- `rare_type_search_run_daily_budget_id_48619df1_fk_rare_type`: `FOREIGN KEY (daily_budget_id) REFERENCES rare_type_search_daily_budgets(id) DEFERRABLE INITIALLY DEFERRED`.
+- `rare_type_search_run_source_query_id_9e5c72ef_fk_search_qu`: `FOREIGN KEY (source_query_id) REFERENCES search_queries(id) DEFERRABLE INITIALLY DEFERRED`.
+- `rare_type_search_runs_confirmed_credits_check`: `CHECK ((confirmed_credits >= 0))`.
+- `rare_type_search_runs_estimated_credits_check`: `CHECK ((estimated_credits >= 0))`.
+- `rare_type_search_runs_normalized_result_count_check`: `CHECK ((normalized_result_count >= 0))`.
+- `rare_type_search_runs_pkey`: `PRIMARY KEY (id)`.
+- `rare_type_search_runs_raw_result_count_check`: `CHECK ((raw_result_count >= 0))`.
+- `rare_type_search_runs_request_count_check`: `CHECK ((request_count >= 0))`.
+- `rare_type_search_runs_reserved_credits_check`: `CHECK ((reserved_credits >= 0))`.
+
+**Physical indexes:**
+
+- `rare_type_search_runs_daily_budget_id_48619df1`: `CREATE INDEX rare_type_search_runs_daily_budget_id_48619df1 ON public.rare_type_search_runs USING btree (daily_budget_id)`.
+- `rare_type_search_runs_pkey`: `CREATE UNIQUE INDEX rare_type_search_runs_pkey ON public.rare_type_search_runs USING btree (id)`.
+- `rare_type_search_runs_source_query_id_9e5c72ef`: `CREATE INDEX rare_type_search_runs_source_query_id_9e5c72ef ON public.rare_type_search_runs USING btree (source_query_id)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -6936,7 +8328,7 @@ Model: [RareTypeSearchRun](../../core/models.py#L7658).
 
 One durable inbox result from an already-paid rare-type search.
 
-Model: [RareTypeSearchHit](../../core/models.py#L8112).
+Model: [RareTypeSearchHit](../../core/models.py#L8164).
 
 **Primary key:** `id`.
 
@@ -6988,7 +8380,7 @@ Model: [RareTypeSearchHit](../../core/models.py#L8112).
 
 One reusable, versioned relevance interpretation of a provider result.
 
-Model: [RareTypeDecision](../../core/models.py#L7908).
+Model: [RareTypeDecision](../../core/models.py#L7960).
 
 **Primary key:** `id`.
 
@@ -6996,43 +8388,56 @@ Model: [RareTypeDecision](../../core/models.py#L7908).
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
 | `provider_post_id` | `text` | No | Stored value. |
-| `content_hash` | `varchar(64)` | No | Stored value. |
-| `model` | `varchar(255)` | No | Stored value. |
-| `question_version` | `varchar(128)` | No | Stored value. |
-| `threshold_version` | `varchar(128)` | No | Stored value. |
-| `status` | `varchar(16)` | No | Django default: `RareTypeDecision.Status.PENDING` (not an assumed SQL default). Choices: `pending`, `claimed`, `completed`, `review_needed`, `failed`. |
-| `response_id` | `varchar(255)` | No | Django default: `''` (not an assumed SQL default). |
+| `content_hash` | `character varying(64)` | No | Stored value. |
+| `model` | `character varying(255)` | No | Stored value. |
+| `question_version` | `character varying(128)` | No | Stored value. |
+| `threshold_version` | `character varying(128)` | No | Stored value. |
+| `status` | `character varying(16)` | No | Django default: `RareTypeDecision.Status.PENDING` (not an assumed SQL default). Choices: `pending`, `claimed`, `completed`, `review_needed`, `failed`. |
+| `response_id` | `character varying(255)` | No | Django default: `''` (not an assumed SQL default). |
 | `probabilities` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
 | `derived_types` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
-| `gate_outcome` | `varchar(16)` | No | Django default: `''` (not an assumed SQL default). Choices: `kept`, `junk`, `review_needed`. |
 | `input_tokens` | `integer` | No | Django default: `0` (not an assumed SQL default). |
 | `output_tokens` | `integer` | No | Django default: `0` (not an assumed SQL default). |
-| `cost_usd` | `numeric(16, 9)` | No | Django default: `0` (not an assumed SQL default). |
+| `cost_usd` | `numeric(16,9)` | No | Django default: `0` (not an assumed SQL default). |
 | `latency_ms` | `integer` | Yes | Nonnegative. |
 | `attempts` | `smallint` | No | Django default: `0` (not an assumed SQL default). |
 | `next_attempt_at` | `timestamp with time zone` | Yes | Stored value. |
-| `last_error_code` | `varchar(128)` | No | Django default: `''` (not an assumed SQL default). |
-| `claim_owner` | `varchar(128)` | No | Django default: `''` (not an assumed SQL default). |
+| `last_error_code` | `character varying(128)` | No | Django default: `''` (not an assumed SQL default). |
+| `claim_owner` | `character varying(128)` | No | Django default: `''` (not an assumed SQL default). |
 | `claim_fence` | `integer` | No | Django default: `0` (not an assumed SQL default). |
 | `claimed_at` | `timestamp with time zone` | Yes | Stored value. |
 | `claim_expires_at` | `timestamp with time zone` | Yes | Stored value. |
 | `completed_at` | `timestamp with time zone` | Yes | Stored value. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
+| `gate_outcome` | `character varying(16)` | No | Django default: `''` (not an assumed SQL default). Choices: `kept`, `junk`, `review_needed`. |
 
 **Named indexes:**
 
-- `idx_rare_decision_due`: `CREATE INDEX "idx_rare_decision_due" ON "rare_type_decisions" ("status", "next_attempt_at")`.
-- `idx_rare_decision_post`: `CREATE INDEX "idx_rare_decision_post" ON "rare_type_decisions" ("provider_post_id")`.
+- `idx_rare_decision_due`: `CREATE INDEX idx_rare_decision_due ON public.rare_type_decisions USING btree (status, next_attempt_at)`.
+- `idx_rare_decision_post`: `CREATE INDEX idx_rare_decision_post ON public.rare_type_decisions USING btree (provider_post_id)`.
 
 **Named constraints:**
 
-- `uq_rare_decision_identity`: `CONSTRAINT "uq_rare_decision_identity" UNIQUE ("provider_post_id", "content_hash", "model", "question_version", "threshold_version")`.
-- `ck_rare_decision_status`: `CONSTRAINT "ck_rare_decision_status" CHECK ("status" IN ('pending', 'claimed', 'completed', 'review_needed', 'failed'))`.
-- `ck_rare_decision_attempts`: `CONSTRAINT "ck_rare_decision_attempts" CHECK ("attempts" <= 2)`.
-- `ck_rare_decision_claim_shape`: `CONSTRAINT "ck_rare_decision_claim_shape" CHECK ((("claim_expires_at" > ("claimed_at") AND "claim_expires_at" IS NOT NULL AND "claim_fence" > 0 AND "claim_owner" > '' AND "claimed_at" IS NOT NULL AND "status" = 'claimed') OR (NOT ("status" = 'claimed') AND "claim_expires_at" IS NULL AND "claim_owner" = '' AND "claimed_at" IS NULL)))`.
-- `ck_rare_decision_complete_shape`: `CONSTRAINT "ck_rare_decision_complete_shape" CHECK ((("completed_at" IS NOT NULL AND "status" = 'completed') OR (NOT ("status" = 'completed') AND "completed_at" IS NULL)))`.
-- `ck_rare_decision_cost`: `CONSTRAINT "ck_rare_decision_cost" CHECK ("cost_usd" >= 0)`.
+- `uq_rare_decision_identity`: `CREATE UNIQUE INDEX uq_rare_decision_identity ON public.rare_type_decisions USING btree (provider_post_id, content_hash, model, question_version, threshold_version)`.
+- `ck_rare_decision_status`: `CHECK (((status)::text = ANY ((ARRAY['pending'::character varying, 'claimed'::character varying, 'completed'::character varying, 'review_needed'::character varying, 'failed'::character varying])::text[])))`.
+- `ck_rare_decision_attempts`: `CHECK ((attempts <= 2))`.
+- `ck_rare_decision_claim_shape`: `CHECK ((((claim_expires_at > claimed_at) AND (claim_expires_at IS NOT NULL) AND (claim_fence > 0) AND ((claim_owner)::text > ''::text) AND (claimed_at IS NOT NULL) AND ((status)::text = 'claimed'::text)) OR ((NOT ((status)::text = 'claimed'::text)) AND (claim_expires_at IS NULL) AND ((claim_owner)::text = ''::text) AND (claimed_at IS NULL))))`.
+- `ck_rare_decision_complete_shape`: `CHECK ((((completed_at IS NOT NULL) AND ((status)::text = 'completed'::text)) OR ((NOT ((status)::text = 'completed'::text)) AND (completed_at IS NULL))))`.
+- `ck_rare_decision_cost`: `CHECK ((cost_usd >= (0)::numeric))`.
+
+**Physical constraints:**
+
+- `rare_type_decisions_attempts_check`: `CHECK ((attempts >= 0))`.
+- `rare_type_decisions_claim_fence_check`: `CHECK ((claim_fence >= 0))`.
+- `rare_type_decisions_input_tokens_check`: `CHECK ((input_tokens >= 0))`.
+- `rare_type_decisions_latency_ms_check`: `CHECK ((latency_ms >= 0))`.
+- `rare_type_decisions_output_tokens_check`: `CHECK ((output_tokens >= 0))`.
+- `rare_type_decisions_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `rare_type_decisions_pkey`: `CREATE UNIQUE INDEX rare_type_decisions_pkey ON public.rare_type_decisions USING btree (id)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -7042,28 +8447,28 @@ Model: [RareTypeDecision](../../core/models.py#L7908).
 
 One processing time slot that funds relevance-decision attempts.
 
-Model: [RareTypeDecisionProcessingCycle](../../core/models.py#L7843).
+Model: [RareTypeDecisionProcessingCycle](../../core/models.py#L7895).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `lane` | `varchar(64)` | No | Stored value. |
-| `environment` | `varchar(16)` | No | Stored value. |
+| `lane` | `character varying(64)` | No | Stored value. |
+| `environment` | `character varying(16)` | No | Stored value. |
 | `slot_start` | `timestamp with time zone` | No | Stored value. |
 | `usage_date` | `date` | No | Stored value. |
-| `daily_budget_id` | `bigint` | No | FK → [`rare_type_search_daily_budgets`](#table-rare_type_search_daily_budgets) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `daily_budget`. |
 | `attempts_reserved` | `smallint` | No | Django default: `0` (not an assumed SQL default). |
 | `attempts_accounted` | `smallint` | No | Django default: `0` (not an assumed SQL default). |
 | `attempts_in_flight` | `smallint` | No | Django default: `0` (not an assumed SQL default). |
-| `decision_usd_reserved` | `numeric(16, 9)` | No | Django default: `0` (not an assumed SQL default). |
-| `decision_usd_accounted` | `numeric(16, 9)` | No | Django default: `0` (not an assumed SQL default). |
-| `decision_usd_confirmed` | `numeric(16, 9)` | No | Django default: `0` (not an assumed SQL default). |
+| `decision_usd_reserved` | `numeric(16,9)` | No | Django default: `0` (not an assumed SQL default). |
+| `decision_usd_accounted` | `numeric(16,9)` | No | Django default: `0` (not an assumed SQL default). |
+| `decision_usd_confirmed` | `numeric(16,9)` | No | Django default: `0` (not an assumed SQL default). |
 | `allocation_started_at` | `timestamp with time zone` | No | Stored value. |
 | `allocation_deadline` | `timestamp with time zone` | No | Stored value. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
+| `daily_budget_id` | `bigint` | No | FK → [`rare_type_search_daily_budgets`](#table-rare_type_search_daily_budgets) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `daily_budget`. |
 
 **Named indexes:**
 
@@ -7071,13 +8476,26 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `uq_rare_dec_cycle_slot`: `CONSTRAINT "uq_rare_dec_cycle_slot" UNIQUE ("lane", "environment", "slot_start")`.
-- `ck_rare_dec_cycle_environment`: `CONSTRAINT "ck_rare_dec_cycle_environment" CHECK ("environment" IN ('normal', 'staging'))`.
-- `ck_rare_dec_cycle_reserved`: `CONSTRAINT "ck_rare_dec_cycle_reserved" CHECK ("decision_usd_reserved" >= 0)`.
-- `ck_rare_dec_cycle_accounted`: `CONSTRAINT "ck_rare_dec_cycle_accounted" CHECK ("decision_usd_accounted" >= 0)`.
-- `ck_rare_dec_cycle_confirmed`: `CONSTRAINT "ck_rare_dec_cycle_confirmed" CHECK ("decision_usd_confirmed" >= 0)`.
-- `ck_rare_dec_cycle_inflight`: `CONSTRAINT "ck_rare_dec_cycle_inflight" CHECK ("attempts_in_flight" <= 2)`.
-- `ck_rare_dec_cycle_allocation`: `CONSTRAINT "ck_rare_dec_cycle_allocation" CHECK ("allocation_deadline" > ("allocation_started_at"))`.
+- `uq_rare_dec_cycle_slot`: `CREATE UNIQUE INDEX uq_rare_dec_cycle_slot ON public.rare_type_decision_processing_cycles USING btree (lane, environment, slot_start)`.
+- `ck_rare_dec_cycle_environment`: `CHECK (((environment)::text = ANY ((ARRAY['normal'::character varying, 'staging'::character varying])::text[])))`.
+- `ck_rare_dec_cycle_reserved`: `CHECK ((decision_usd_reserved >= (0)::numeric))`.
+- `ck_rare_dec_cycle_accounted`: `CHECK ((decision_usd_accounted >= (0)::numeric))`.
+- `ck_rare_dec_cycle_confirmed`: `CHECK ((decision_usd_confirmed >= (0)::numeric))`.
+- `ck_rare_dec_cycle_inflight`: `CHECK ((attempts_in_flight <= 2))`.
+- `ck_rare_dec_cycle_allocation`: `CHECK ((allocation_deadline > allocation_started_at))`.
+
+**Physical constraints:**
+
+- `rare_type_decision_p_daily_budget_id_68423638_fk_rare_type`: `FOREIGN KEY (daily_budget_id) REFERENCES rare_type_search_daily_budgets(id) DEFERRABLE INITIALLY DEFERRED`.
+- `rare_type_decision_processing_cycles_attempts_accounted_check`: `CHECK ((attempts_accounted >= 0))`.
+- `rare_type_decision_processing_cycles_attempts_in_flight_check`: `CHECK ((attempts_in_flight >= 0))`.
+- `rare_type_decision_processing_cycles_attempts_reserved_check`: `CHECK ((attempts_reserved >= 0))`.
+- `rare_type_decision_processing_cycles_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `rare_type_decision_processing_cycles_daily_budget_id_68423638`: `CREATE INDEX rare_type_decision_processing_cycles_daily_budget_id_68423638 ON public.rare_type_decision_processing_cycles USING btree (daily_budget_id)`.
+- `rare_type_decision_processing_cycles_pkey`: `CREATE UNIQUE INDEX rare_type_decision_processing_cycles_pkey ON public.rare_type_decision_processing_cycles USING btree (id)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -7087,22 +8505,20 @@ None declared beyond field/FK/constraint indexes.
 
 One funded provider attempt for a relevance decision, with one settlement record.
 
-Model: [RareTypeDecisionAttempt](../../core/models.py#L8027).
+Model: [RareTypeDecisionAttempt](../../core/models.py#L8079).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `decision_id` | `bigint` | No | FK → [`rare_type_decisions`](#table-rare_type_decisions) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `decision`. |
-| `processing_cycle_id` | `bigint` | No | FK → [`rare_type_decision_processing_cycles`](#table-rare_type_decision_processing_cycles) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `processing_cycle`. |
 | `fence` | `integer` | No | Nonnegative. |
-| `state` | `varchar(16)` | No | Django default: `RareTypeDecisionAttempt.State.RESERVED` (not an assumed SQL default). Choices: `reserved`, `sent`, `settled`, `retained`. |
-| `reserved_usd` | `numeric(16, 9)` | No | Stored value. |
-| `accounted_usd` | `numeric(16, 9)` | No | Django default: `0` (not an assumed SQL default). |
-| `confirmed_usd` | `numeric(16, 9)` | Yes | Stored value. |
-| `error_code` | `varchar(128)` | No | Django default: `''` (not an assumed SQL default). |
-| `response_id` | `varchar(255)` | No | Django default: `''` (not an assumed SQL default). |
+| `state` | `character varying(16)` | No | Django default: `RareTypeDecisionAttempt.State.RESERVED` (not an assumed SQL default). Choices: `reserved`, `sent`, `settled`, `retained`. |
+| `reserved_usd` | `numeric(16,9)` | No | Stored value. |
+| `accounted_usd` | `numeric(16,9)` | No | Django default: `0` (not an assumed SQL default). |
+| `confirmed_usd` | `numeric(16,9)` | Yes | Stored value. |
+| `error_code` | `character varying(128)` | No | Django default: `''` (not an assumed SQL default). |
+| `response_id` | `character varying(255)` | No | Django default: `''` (not an assumed SQL default). |
 | `input_tokens` | `integer` | No | Django default: `0` (not an assumed SQL default). |
 | `output_tokens` | `integer` | No | Django default: `0` (not an assumed SQL default). |
 | `reserved_at` | `timestamp with time zone` | No | Stored value. |
@@ -7110,6 +8526,8 @@ Model: [RareTypeDecisionAttempt](../../core/models.py#L8027).
 | `settled_at` | `timestamp with time zone` | Yes | Stored value. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `updated_at` | `timestamp with time zone` | No | Set by Django on model save. Set by Django on model save. |
+| `decision_id` | `bigint` | No | FK → [`rare_type_decisions`](#table-rare_type_decisions) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `decision`. |
+| `processing_cycle_id` | `bigint` | No | FK → [`rare_type_decision_processing_cycles`](#table-rare_type_decision_processing_cycles) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `processing_cycle`. |
 
 **Named indexes:**
 
@@ -7117,13 +8535,28 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `uq_rare_dec_attempt_fence`: `CONSTRAINT "uq_rare_dec_attempt_fence" UNIQUE ("decision_id", "fence")`.
-- `ck_rare_dec_attempt_state`: `CONSTRAINT "ck_rare_dec_attempt_state" CHECK ("state" IN ('reserved', 'sent', 'settled', 'retained'))`.
-- `ck_rare_dec_attempt_reserved`: `CONSTRAINT "ck_rare_dec_attempt_reserved" CHECK ("reserved_usd" > 0)`.
-- `ck_rare_dec_attempt_accounted`: `CONSTRAINT "ck_rare_dec_attempt_accounted" CHECK ("accounted_usd" >= 0)`.
-- `ck_rare_dec_attempt_confirmed`: `CONSTRAINT "ck_rare_dec_attempt_confirmed" CHECK (("confirmed_usd" IS NULL OR "confirmed_usd" >= 0))`.
-- `ck_rare_dec_attempt_send_shape`: `CONSTRAINT "ck_rare_dec_attempt_send_shape" CHECK ((("sent_at" IS NULL AND "state" = 'reserved') OR ("sent_at" IS NOT NULL AND "state" IN ('sent', 'settled', 'retained'))))`.
-- `ck_rare_dec_attempt_settle_shape`: `CONSTRAINT "ck_rare_dec_attempt_settle_shape" CHECK ((("settled_at" IS NOT NULL AND "state" = 'settled') OR (NOT ("state" = 'settled') AND "settled_at" IS NULL)))`.
+- `uq_rare_dec_attempt_fence`: `CREATE UNIQUE INDEX uq_rare_dec_attempt_fence ON public.rare_type_decision_attempts USING btree (decision_id, fence)`.
+- `ck_rare_dec_attempt_state`: `CHECK (((state)::text = ANY ((ARRAY['reserved'::character varying, 'sent'::character varying, 'settled'::character varying, 'retained'::character varying])::text[])))`.
+- `ck_rare_dec_attempt_reserved`: `CHECK ((reserved_usd > (0)::numeric))`.
+- `ck_rare_dec_attempt_accounted`: `CHECK ((accounted_usd >= (0)::numeric))`.
+- `ck_rare_dec_attempt_confirmed`: `CHECK (((confirmed_usd IS NULL) OR (confirmed_usd >= (0)::numeric)))`.
+- `ck_rare_dec_attempt_send_shape`: `CHECK ((((sent_at IS NULL) AND ((state)::text = 'reserved'::text)) OR ((sent_at IS NOT NULL) AND ((state)::text = ANY ((ARRAY['sent'::character varying, 'settled'::character varying, 'retained'::character varying])::text[])))))`.
+- `ck_rare_dec_attempt_settle_shape`: `CHECK ((((settled_at IS NOT NULL) AND ((state)::text = 'settled'::text)) OR ((NOT ((state)::text = 'settled'::text)) AND (settled_at IS NULL))))`.
+
+**Physical constraints:**
+
+- `rare_type_decision_a_decision_id_32887020_fk_rare_type`: `FOREIGN KEY (decision_id) REFERENCES rare_type_decisions(id) DEFERRABLE INITIALLY DEFERRED`.
+- `rare_type_decision_a_processing_cycle_id_b8e400ba_fk_rare_type`: `FOREIGN KEY (processing_cycle_id) REFERENCES rare_type_decision_processing_cycles(id) DEFERRABLE INITIALLY DEFERRED`.
+- `rare_type_decision_attempts_fence_check`: `CHECK ((fence >= 0))`.
+- `rare_type_decision_attempts_input_tokens_check`: `CHECK ((input_tokens >= 0))`.
+- `rare_type_decision_attempts_output_tokens_check`: `CHECK ((output_tokens >= 0))`.
+- `rare_type_decision_attempts_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `rare_type_decision_attempts_decision_id_32887020`: `CREATE INDEX rare_type_decision_attempts_decision_id_32887020 ON public.rare_type_decision_attempts USING btree (decision_id)`.
+- `rare_type_decision_attempts_pkey`: `CREATE UNIQUE INDEX rare_type_decision_attempts_pkey ON public.rare_type_decision_attempts USING btree (id)`.
+- `rare_type_decision_attempts_processing_cycle_id_b8e400ba`: `CREATE INDEX rare_type_decision_attempts_processing_cycle_id_b8e400ba ON public.rare_type_decision_attempts USING btree (processing_cycle_id)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -7133,7 +8566,7 @@ None declared beyond field/FK/constraint indexes.
 
 One versioned staff-source observation, including eligibility and its input payload.
 
-Model: [StaffIntake](../../core/models.py#L5476).
+Model: [StaffIntake](../../core/models.py#L5456).
 
 **Primary key:** `id`.
 
@@ -7168,7 +8601,7 @@ Migration 0064 prevents updates to the source key, fingerprint, payload and capt
 
 One person/source-fingerprint/policy unit of resumable collection work.
 
-Model: [StaffCollectionWork](../../core/models.py#L5502).
+Model: [StaffCollectionWork](../../core/models.py#L5482).
 
 **Primary key:** `id`.
 
@@ -7209,7 +8642,7 @@ Source writers register work after commit; periodic catch-up covers bulk writes.
 
 One reserved provider request, its outcome and safe response evidence.
 
-Model: [StaffProviderRequest](../../core/models.py#L5561).
+Model: [StaffProviderRequest](../../core/models.py#L5541).
 
 **Primary key:** `id`.
 
@@ -7247,7 +8680,7 @@ Reservations commit before HTTP. They count toward lifetime per-person, per-run 
 
 One separately admitted execution of a logical collection run, including its limits and outcome.
 
-Model: [CollectionAttempt](../../core/models.py#L9097).
+Model: [CollectionAttempt](../../core/models.py#L9149).
 
 **Primary key:** `id`.
 
@@ -7307,7 +8740,7 @@ Model: [CollectionAttempt](../../core/models.py#L9097).
 
 One bounded collection campaign that coordinates related jobs and records.
 
-Model: [CollectionCampaign](../../core/models.py#L9040).
+Model: [CollectionCampaign](../../core/models.py#L9092).
 
 **Primary key:** `id`.
 
@@ -7346,7 +8779,7 @@ Model: [CollectionCampaign](../../core/models.py#L9040).
 
 One immutable before/after correction to measurement attribution or timing.
 
-Model: [CollectionCorrection](../../core/models.py#L9278).
+Model: [CollectionCorrection](../../core/models.py#L9330).
 
 **Primary key:** `id`.
 
@@ -7440,7 +8873,7 @@ Model: [CollectionCorrection](../../core/models.py#L9278).
 
 One immutable, content-addressed response body stored as opaque bytes.
 
-Model: [CollectionEvidenceArchive](../../core/models.py#L9132).
+Model: [CollectionEvidenceArchive](../../core/models.py#L9184).
 
 **Primary key:** `id`.
 
@@ -7478,7 +8911,7 @@ None declared beyond primary/unique constraints.
 
 One frozen target or query that a collection job intends to process.
 
-Model: [CollectionJobTarget](../../core/models.py#L9059).
+Model: [CollectionJobTarget](../../core/models.py#L9111).
 
 **Primary key:** `id`.
 
@@ -7548,7 +8981,7 @@ Model: [CollectionJobTarget](../../core/models.py#L9059).
 
 One selected metric that was absent from an observation, with reason and recoverability.
 
-Model: [CollectionMetricGap](../../core/models.py#L9259).
+Model: [CollectionMetricGap](../../core/models.py#L9311).
 
 **Primary key:** `id`.
 
@@ -7586,7 +9019,7 @@ Model: [CollectionMetricGap](../../core/models.py#L9259).
 
 One link from an observation to the request or preceding observation that supports it.
 
-Model: [CollectionObservationInput](../../core/models.py#L9199).
+Model: [CollectionObservationInput](../../core/models.py#L9251).
 
 **Primary key:** `id`.
 
@@ -7629,7 +9062,7 @@ Model: [CollectionObservationInput](../../core/models.py#L9199).
 
 One physical transport request, its outcome and any retained response evidence.
 
-Model: [CollectionRequest](../../core/models.py#L9156).
+Model: [CollectionRequest](../../core/models.py#L9208).
 
 **Primary key:** `id`.
 
@@ -7698,7 +9131,7 @@ Model: [CollectionRequest](../../core/models.py#L9156).
 
 One captured set of nonnumeric facts about a collected resource at an observation.
 
-Model: [CollectionResourceSnapshot](../../core/models.py#L9219).
+Model: [CollectionResourceSnapshot](../../core/models.py#L9271).
 
 **Primary key:** `observation_id`.
 
@@ -7812,7 +9245,7 @@ The definition contains frozen selections, schedules and budgets; it is hashed
 with source, purpose, operation, mode and contract. Registration creates paused
 instructions and does not activate a source or scheduler.
 
-Model: [CollectionJob](../../core/models.py#L8609). **Primary key:** `id`.
+Model: [CollectionJob](../../core/models.py#L8661). **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
@@ -7920,7 +9353,7 @@ next_due_at)`. Field-level uniqueness on `job_key` uses
 
 One source scope’s pagination, ownership and request progress within a collection run.
 
-Model: [CollectionScopeRun](../../core/models.py#L3511).
+Model: [CollectionScopeRun](../../core/models.py#L3485).
 
 **Primary key:** `id`.
 
@@ -7994,7 +9427,7 @@ None beyond field/FK/constraint indexes.
 
 One identity that measurements describe, optionally linked to a product, group, brand or company.
 
-Model: [MeasurementSubject](../../core/models.py#L8314).
+Model: [MeasurementSubject](../../core/models.py#L8366).
 
 **Primary key:** `id`.
 
@@ -8025,7 +9458,7 @@ None declared beyond field/FK/constraint indexes.
 
 One versioned collection contract for a data source.
 
-Model: [MetricCollectionContract](../../core/models.py#L8497).
+Model: [MetricCollectionContract](../../core/models.py#L8549).
 
 **Primary key:** `id`.
 
@@ -8069,7 +9502,7 @@ None declared beyond field/FK/constraint indexes.
 
 One execution record for numeric measurements, catalog discovery or content invocation accounting. Every run references the job owning its source, purpose, contract and frozen scope. Catalog partial runs resume; content attempts remain separate terminal receipts. Instance properties expose job-owned instructions for existing Python callers; ORM queries use `job__source`, `job__purpose` and other job relations.
 
-Model: [CollectionRun](../../core/models.py#L8715).
+Model: [CollectionRun](../../core/models.py#L8767).
 
 **Primary key:** `id`.
 
@@ -8148,7 +9581,7 @@ The `collection_run_job_instructions` trigger validates lifecycle against the li
 
 One sourced evidence record: numeric rows are immutable evidence, catalog rows retain repository enrichment progress, and typed Post rows prove collection membership.
 
-Model: [CollectionObservation](../../core/models.py#L8799).
+Model: [CollectionObservation](../../core/models.py#L8851).
 
 **Primary key:** `id`.
 
@@ -8257,7 +9690,7 @@ Older reports retain bounded, exact page-receipt reconciliation.
 
 One allowed family of measurements and its interpretation.
 
-Model: [MetricType](../../core/models.py#L8378).
+Model: [MetricType](../../core/models.py#L8430).
 
 **Primary key:** `id`.
 
@@ -8283,7 +9716,7 @@ None declared beyond primary keys, field uniqueness and foreign keys.
 
 One value for a metric in an observation.
 
-Model: [MetricValue](../../core/models.py#L8937).
+Model: [MetricValue](../../core/models.py#L8989).
 
 **Primary key:** `id`.
 
@@ -8375,60 +9808,60 @@ WHERE m.measurement_kind = 'flow' AND window_range IS NULL;
 
 One metric definition with units, scale and methodology.
 
-Model: [SourceMetric](../../core/models.py#L8387).
+Model: [SourceMetric](../../core/models.py#L8439).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `source_id` | `varchar(32)` | No | FK → [`data_sources`](#table-data_sources) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source`. |
-| `metric_type_id` | `varchar(32)` | No | FK → [`metric_types`](#table-metric_types) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `metric_type`. |
-| `metric_key` | `varchar(64)` | No | Stored value. |
+| `metric_key` | `character varying(64)` | No | Stored value. |
 | `version` | `smallint` | No | Stored value. |
-| `name` | `varchar(128)` | No | Stored value. |
-| `value_kind` | `varchar(16)` | No | Stored value. |
-| `quantity_form` | `varchar(16)` | No | Stored value. |
-| `value_role` | `varchar(32)` | No | Django default: `'value'` (not an assumed SQL default). |
-| `measurement_kind` | `varchar(24)` | No | Stored value. |
-| `window_mode` | `varchar(16)` | No | Django default: `'none'` (not an assumed SQL default). |
-| `window_amount` | `numeric(12, 3)` | Yes | Stored value. |
-| `window_duration_basis` | `varchar(16)` | No | Django default: `'none'` (not an assumed SQL default). |
-| `window_alignment` | `varchar(32)` | Yes | Stored value. |
+| `name` | `character varying(128)` | No | Stored value. |
+| `value_kind` | `character varying(16)` | No | Stored value. |
+| `quantity_form` | `character varying(16)` | No | Stored value. |
+| `value_role` | `character varying(32)` | No | Django default: `'value'` (not an assumed SQL default). |
+| `measurement_kind` | `character varying(24)` | No | Stored value. |
+| `window_mode` | `character varying(16)` | No | Django default: `'none'` (not an assumed SQL default). |
+| `window_amount` | `numeric(12,3)` | Yes | Stored value. |
+| `window_duration_basis` | `character varying(16)` | No | Django default: `'none'` (not an assumed SQL default). |
+| `window_alignment` | `character varying(32)` | Yes | Stored value. |
 | `required` | `boolean` | No | Django default: `True` (not an assumed SQL default). |
 | `definition_metadata` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
 | `created_at` | `timestamp with time zone` | No | Django default: `now` (not an assumed SQL default). |
-| `source_timezone_id` | `varchar(64)` | Yes | FK → [`time_zones`](#table-time_zones) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `source_timezone_reference`. Exact registered code or unresolved NULL. |
-| `unit_id` | `varchar(64)` | No | Required FK → [`measurement_units`](#table-measurement_units) (`code`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `unit_reference`. Exact registered unit code. |
-| `window_unit_id` | `varchar(64)` | Yes | FK → [`measurement_units`](#table-measurement_units) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `window_unit_reference`. Same catalogue, distinct duration role. NULL when no window unit or no exact registered code. |
+| `metric_type_id` | `character varying(32)` | No | FK → [`metric_types`](#table-metric_types) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `metric_type`. |
+| `source_id` | `character varying(32)` | No | FK → [`data_sources`](#table-data_sources) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `source`. |
+| `source_timezone_id` | `character varying(64)` | Yes | FK → [`time_zones`](#table-time_zones) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `source_timezone_reference`. Exact registered code or unresolved NULL. |
+| `unit_id` | `character varying(64)` | No | Required FK → [`measurement_units`](#table-measurement_units) (`code`); Django deletion: `PROTECT`; PostgreSQL FK is deferred NO ACTION. Model field: `unit_reference`. Exact registered unit code. |
+| `window_unit_id` | `character varying(64)` | Yes | FK → [`measurement_units`](#table-measurement_units) (`code`); Django deletion: `PROTECT`, PostgreSQL NO ACTION/deferred. Model field: `window_unit_reference`. Same catalogue, distinct duration role. NULL when no window unit or no exact registered code. |
 
 **Named indexes:**
 
-- `idx_metric_type_source`: `CREATE INDEX "idx_metric_type_source" ON "metrics" ("metric_type_id", "source_id")`.
-- `metrics_source_timezone_id_183a4919`: index on `source_timezone_id`.
-- `metrics_source_timezone_id_183a4919_like`: varchar-pattern index on `source_timezone_id`.
-- `metrics_unit_id_6337e316`: index on `unit_id`.
-- `metrics_unit_id_6337e316_like`: varchar-pattern index on `unit_id`.
-- `metrics_window_unit_id_2fe033ff`: index on `window_unit_id`.
-- `metrics_window_unit_id_2fe033ff_like`: varchar-pattern index on `window_unit_id`.
-- `source_metrics_pkey`: primary-key index on `id`.
+- `idx_metric_type_source`: `CREATE INDEX idx_metric_type_source ON public.metrics USING btree (metric_type_id, source_id)`.
+- `metrics_source_timezone_id_183a4919`: `CREATE INDEX metrics_source_timezone_id_183a4919 ON public.metrics USING btree (source_timezone_id)`.
+- `metrics_source_timezone_id_183a4919_like`: `CREATE INDEX metrics_source_timezone_id_183a4919_like ON public.metrics USING btree (source_timezone_id varchar_pattern_ops)`.
+- `metrics_unit_id_6337e316`: `CREATE INDEX metrics_unit_id_6337e316 ON public.metrics USING btree (unit_id)`.
+- `metrics_unit_id_6337e316_like`: `CREATE INDEX metrics_unit_id_6337e316_like ON public.metrics USING btree (unit_id varchar_pattern_ops)`.
+- `metrics_window_unit_id_2fe033ff`: `CREATE INDEX metrics_window_unit_id_2fe033ff ON public.metrics USING btree (window_unit_id)`.
+- `metrics_window_unit_id_2fe033ff_like`: `CREATE INDEX metrics_window_unit_id_2fe033ff_like ON public.metrics USING btree (window_unit_id varchar_pattern_ops)`.
+- `source_metrics_pkey`: `CREATE UNIQUE INDEX source_metrics_pkey ON public.metrics USING btree (id)`.
 - `source_metrics_source_id_d7b688a7` and `source_metrics_source_id_d7b688a7_like`: indexes on `source_id`.
 - `source_metrics_metric_type_id_a11a87f9` and `source_metrics_metric_type_id_a11a87f9_like`: indexes on `metric_type_id`.
 
 **Named constraints:**
 
-- `uq_source_metric_version`: `CONSTRAINT "uq_source_metric_version" UNIQUE ("source_id", "metric_key", "version")`.
-- `ck_metric_version`: `CONSTRAINT "ck_metric_version" CHECK ("version" > 0)`.
-- `source_metrics_version_check`: retained migration-level `CHECK (version >= 0)` from the positive-small-integer column definition; `ck_metric_version` further requires versions greater than zero.
-- `source_metrics_source_id_d7b688a7_fk_data_sources_id`: deferred FK from `source_id` to `data_sources(id)`.
-- `source_metrics_metric_type_id_a11a87f9_fk_metric_types_id`: deferred FK from `metric_type_id` to `metric_types(id)`.
-- `metrics_source_timezone_id_183a4919_fk_time_zones_code`: deferred FK from `source_timezone_id` to `time_zones(code)`.
-- `metrics_unit_id_6337e316_fk_measurement_units_code`: deferred FK from `unit_id` to `measurement_units(code)`.
-- `metrics_window_unit_id_2fe033ff_fk_measurement_units_code`: deferred FK from `window_unit_id` to `measurement_units(code)`.
-- `ck_metric_value_kind`: `CONSTRAINT "ck_metric_value_kind" CHECK ("value_kind" IN ('integer', 'float'))`.
-- `ck_metric_quantity`: `CONSTRAINT "ck_metric_quantity" CHECK ("quantity_form" IN ('count', 'score', 'rank', 'variance', 'ratio'))`.
-- `ck_metric_value_role`: `CONSTRAINT "ck_metric_value_role" CHECK ("value_role" IN ('value', 'lower_bound', 'upper_bound'))`.
-- `ck_metric_kind_window`: `CHECK (((((measurement_kind)::text = 'state'::text) AND (window_alignment IS NULL) AND (window_amount IS NULL) AND ((window_duration_basis)::text = 'none'::text) AND ((window_mode)::text = 'none'::text) AND (window_unit_id IS NULL)) OR (((measurement_kind)::text = 'flow'::text) AND (window_alignment IS NULL) AND (window_amount IS NULL) AND ((window_duration_basis)::text = 'none'::text) AND ((window_mode)::text = 'since_origin'::text) AND (window_unit_id IS NULL)) OR (((measurement_kind)::text = 'flow'::text) AND (window_amount > (0)::numeric) AND (window_amount IS NOT NULL) AND (window_amount < (1000000000)::numeric) AND ((window_duration_basis)::text = ANY ((ARRAY['calendar'::character varying, 'fixed'::character varying, 'unknown'::character varying])::text[])) AND ((window_mode)::text = ANY ((ARRAY['rolling'::character varying, 'calendar'::character varying, 'fixed'::character varying])::text[])) AND ((window_unit_id)::text = ANY ((ARRAY['day'::character varying, 'second'::character varying])::text[])) AND (window_unit_id IS NOT NULL) AND ((((window_alignment)::text = ANY ((ARRAY['source_local_midnight'::character varying, 'provider_defined'::character varying])::text[])) AND (window_alignment IS NOT NULL) AND ((window_mode)::text = 'calendar'::text)) OR ((window_alignment IS NULL) AND (NOT ((window_mode)::text = 'calendar'::text)))))))`. It allows state metrics without a window, flow `since_origin` metrics without a bounded unit, and rolling/calendar/fixed flow windows only when the amount, duration basis, mode, registered `day`/`second` unit and calendar alignment have a valid shape.
+- `uq_source_metric_version`: `CREATE UNIQUE INDEX uq_source_metric_version ON public.metrics USING btree (source_id, metric_key, version)`.
+- `ck_metric_version`: `CHECK ((version > 0))`.
+- `source_metrics_version_check`: `CHECK ((version >= 0))`.
+- `source_metrics_source_id_d7b688a7_fk_data_sources_id`: `FOREIGN KEY (source_id) REFERENCES data_sources(id) DEFERRABLE INITIALLY DEFERRED`.
+- `source_metrics_metric_type_id_a11a87f9_fk_metric_types_id`: `FOREIGN KEY (metric_type_id) REFERENCES metric_types(id) DEFERRABLE INITIALLY DEFERRED`.
+- `metrics_source_timezone_id_183a4919_fk_time_zones_code`: `FOREIGN KEY (source_timezone_id) REFERENCES time_zones(code) DEFERRABLE INITIALLY DEFERRED`.
+- `metrics_unit_id_6337e316_fk_measurement_units_code`: `FOREIGN KEY (unit_id) REFERENCES measurement_units(code) DEFERRABLE INITIALLY DEFERRED`.
+- `metrics_window_unit_id_2fe033ff_fk_measurement_units_code`: `FOREIGN KEY (window_unit_id) REFERENCES measurement_units(code) DEFERRABLE INITIALLY DEFERRED`.
+- `ck_metric_value_kind`: `CHECK (((value_kind)::text = ANY ((ARRAY['integer'::character varying, 'float'::character varying])::text[])))`.
+- `ck_metric_quantity`: `CHECK (((quantity_form)::text = ANY ((ARRAY['count'::character varying, 'score'::character varying, 'rank'::character varying, 'variance'::character varying, 'ratio'::character varying])::text[])))`.
+- `ck_metric_value_role`: `CHECK (((value_role)::text = ANY ((ARRAY['value'::character varying, 'lower_bound'::character varying, 'upper_bound'::character varying])::text[])))`.
+- `ck_metric_kind_window`: `CHECK (((((measurement_kind)::text = 'state'::text) AND (window_alignment IS NULL) AND (window_amount IS NULL) AND ((window_duration_basis)::text = 'none'::text) AND ((window_mode)::text = 'none'::text) AND (window_unit_id IS NULL)) OR (((measurement_kind)::text = 'flow'::text) AND (window_alignment IS NULL) AND (window_amount IS NULL) AND ((window_duration_basis)::text = 'none'::text) AND ((window_mode)::text = 'since_origin'::text) AND (window_unit_id IS NULL)) OR (((measurement_kind)::text = 'flow'::text) AND (window_amount > (0)::numeric) AND (window_amount IS NOT NULL) AND (window_amount < (1000000000)::numeric) AND ((window_duration_basis)::text = ANY ((ARRAY['calendar'::character varying, 'fixed'::character varying, 'unknown'::character varying])::text[])) AND ((window_mode)::text = ANY ((ARRAY['rolling'::character varying, 'calendar'::character varying, 'fixed'::character varying])::text[])) AND ((window_unit_id)::text = ANY ((ARRAY['day'::character varying, 'second'::character varying])::text[])) AND (window_unit_id IS NOT NULL) AND ((((window_alignment)::text = ANY ((ARRAY['source_local_midnight'::character varying, 'provider_defined'::character varying])::text[])) AND (window_alignment IS NOT NULL) AND ((window_mode)::text = 'calendar'::text)) OR ((window_alignment IS NULL) AND (NOT ((window_mode)::text = 'calendar'::text)))))))`.
 
 Application writers store the required unit FK directly. Window units use the
 same catalogue in a separate role and are required only for bounded flow windows;
@@ -8453,7 +9886,7 @@ snapshots retain their nineteen-field shape and hashes.
 
 One sourced post linked to a measurement subject.
 
-Model: [PostSubjectAttribution](../../core/models.py#L8357).
+Model: [PostSubjectAttribution](../../core/models.py#L8409).
 
 **Primary key:** `id`.
 
@@ -8490,7 +9923,7 @@ One reviewed external source identifier mapped to a measurement subject. Catalog
 relations can represent a family repository shared by multiple models; they do
 not automatically admit numeric measurements under a metric contract.
 
-Model: [SourceSubjectMapping](../../core/models.py#L8534).
+Model: [SourceSubjectMapping](../../core/models.py#L8586).
 
 **Primary key:** `id`.
 
@@ -8536,7 +9969,7 @@ Model: [SourceSubjectMapping](../../core/models.py#L8534).
 
 One typed relationship between measurement subjects.
 
-Model: [SubjectRelationship](../../core/models.py#L8335).
+Model: [SubjectRelationship](../../core/models.py#L8387).
 
 **Primary key:** `id`.
 
@@ -8577,7 +10010,7 @@ None declared beyond field/FK/constraint indexes.
 
 One official-company account collection state and cursor.
 
-Model: [OfficialCompanyAccountState](../../core/models.py#L9553).
+Model: [OfficialCompanyAccountState](../../core/models.py#L9605).
 
 **Primary key:** `id`.
 
@@ -8622,29 +10055,29 @@ Model: [OfficialCompanyAccountState](../../core/models.py#L9553).
 
 One official-company provider attempt with its budget charge and state.
 
-Model: [OfficialCompanyAttempt](../../core/models.py#L9635).
+Model: [OfficialCompanyAttempt](../../core/models.py#L9687).
 
 **Primary key:** `id`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
 | `id` | `bigint` | No | PK; database-generated identity. |
-| `state_id` | `bigint` | No | FK → [`official_company_account_states`](#table-official_company_account_states) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `state`. |
-| `evidence_hash` | `varchar(64)` | No | Stored value. |
+| `evidence_hash` | `character varying(64)` | No | Stored value. |
 | `evidence` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `claim_token` | `varchar(64)` | No | Field-level unique. |
-| `model` | `varchar(128)` | No | Stored value. |
-| `policy_version` | `varchar(96)` | No | Stored value. |
-| `status` | `varchar(24)` | No | Django default: `'reserved'` (not an assumed SQL default). |
+| `claim_token` | `character varying(64)` | No | Field-level unique. |
+| `model` | `character varying(128)` | No | Stored value. |
+| `policy_version` | `character varying(96)` | No | Stored value. |
+| `status` | `character varying(24)` | No | Django default: `'reserved'` (not an assumed SQL default). |
 | `decision` | `jsonb` | No | Django default: `dict` (not an assumed SQL default). |
-| `reserved_usd` | `numeric(16, 10)` | No | Stored value. |
-| `actual_usd` | `numeric(16, 10)` | Yes | Stored value. |
+| `reserved_usd` | `numeric(16,10)` | No | Stored value. |
+| `actual_usd` | `numeric(16,10)` | Yes | Stored value. |
 | `budget_keys` | `jsonb` | No | Django default: `list` (not an assumed SQL default). |
 | `input_tokens` | `integer` | No | Django default: `0` (not an assumed SQL default). |
 | `output_tokens` | `integer` | No | Django default: `0` (not an assumed SQL default). |
-| `error_code` | `varchar(128)` | No | Django default: `''` (not an assumed SQL default). |
+| `error_code` | `character varying(128)` | No | Django default: `''` (not an assumed SQL default). |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. |
 | `completed_at` | `timestamp with time zone` | Yes | Stored value. |
+| `state_id` | `bigint` | No | FK → [`official_company_account_states`](#table-official_company_account_states) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `state`. |
 
 **Named indexes:**
 
@@ -8652,7 +10085,22 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `ck_official_co_attempt_cost`: `CONSTRAINT "ck_official_co_attempt_cost" CHECK (("reserved_usd" >= 0 AND ("actual_usd" IS NULL OR "actual_usd" >= 0)))`.
+- `ck_official_co_attempt_cost`: `CHECK (((reserved_usd >= (0)::numeric) AND ((actual_usd IS NULL) OR (actual_usd >= (0)::numeric))))`.
+
+**Physical constraints:**
+
+- `official_company_att_state_id_ac82cce3_fk_official_`: `FOREIGN KEY (state_id) REFERENCES official_company_account_states(id) DEFERRABLE INITIALLY DEFERRED`.
+- `official_company_attempts_claim_token_key`: `UNIQUE (claim_token)`.
+- `official_company_attempts_input_tokens_check`: `CHECK ((input_tokens >= 0))`.
+- `official_company_attempts_output_tokens_check`: `CHECK ((output_tokens >= 0))`.
+- `official_company_attempts_pkey`: `PRIMARY KEY (id)`.
+
+**Physical indexes:**
+
+- `official_company_attempts_claim_token_8340daf5_like`: `CREATE INDEX official_company_attempts_claim_token_8340daf5_like ON public.official_company_attempts USING btree (claim_token varchar_pattern_ops)`.
+- `official_company_attempts_claim_token_key`: `CREATE UNIQUE INDEX official_company_attempts_claim_token_key ON public.official_company_attempts USING btree (claim_token)`.
+- `official_company_attempts_pkey`: `CREATE UNIQUE INDEX official_company_attempts_pkey ON public.official_company_attempts USING btree (id)`.
+- `official_company_attempts_state_id_ac82cce3`: `CREATE INDEX official_company_attempts_state_id_ac82cce3 ON public.official_company_attempts USING btree (state_id)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -8662,15 +10110,15 @@ None declared beyond field/FK/constraint indexes.
 
 One period of reserved official-company collection spend.
 
-Model: [OfficialCompanyBudget](../../core/models.py#L9620).
+Model: [OfficialCompanyBudget](../../core/models.py#L9672).
 
 **Primary key:** `key`.
 
 | SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
 | --- | --- | --- | --- |
-| `key` | `varchar(96)` | No | PK component. |
-| `reserved_usd` | `numeric(16, 10)` | No | Django default: `0` (not an assumed SQL default). |
-| `spent_usd` | `numeric(16, 10)` | No | Django default: `0` (not an assumed SQL default). |
+| `key` | `character varying(96)` | No | PK component. |
+| `reserved_usd` | `numeric(16,10)` | No | Django default: `0` (not an assumed SQL default). |
+| `spent_usd` | `numeric(16,10)` | No | Django default: `0` (not an assumed SQL default). |
 
 **Named indexes:**
 
@@ -8678,7 +10126,16 @@ None declared beyond field/FK/constraint indexes.
 
 **Named constraints:**
 
-- `ck_official_co_funding`: `CONSTRAINT "ck_official_co_funding" CHECK (("reserved_usd" >= 0 AND "spent_usd" >= 0))`.
+- `ck_official_co_funding`: `CHECK (((reserved_usd >= (0)::numeric) AND (spent_usd >= (0)::numeric)))`.
+
+**Physical constraints:**
+
+- `official_company_budgets_pkey`: `PRIMARY KEY (key)`.
+
+**Physical indexes:**
+
+- `official_company_budgets_key_c5351702_like`: `CREATE INDEX official_company_budgets_key_c5351702_like ON public.official_company_budgets USING btree (key varchar_pattern_ops)`.
+- `official_company_budgets_pkey`: `CREATE UNIQUE INDEX official_company_budgets_pkey ON public.official_company_budgets USING btree (key)`.
 
 [Back to table inventory](#table-inventory)
 
@@ -8688,7 +10145,7 @@ None declared beyond field/FK/constraint indexes.
 
 One desired official-company list membership action.
 
-Model: [OfficialCompanyListIntent](../../core/models.py#L9668).
+Model: [OfficialCompanyListIntent](../../core/models.py#L9720).
 
 **Primary key:** `id`.
 
@@ -8729,7 +10186,7 @@ Model: [OfficialCompanyListIntent](../../core/models.py#L9668).
 
 One owner-scoped credential reference; secret material is not documented here.
 
-Model: [OfficialCompanyOwnerCredential](../../core/models.py#L9729).
+Model: [OfficialCompanyOwnerCredential](../../core/models.py#L9781).
 
 **Primary key:** `key`.
 
@@ -8757,7 +10214,7 @@ None declared beyond field/FK/constraint indexes.
 
 One provider lifecycle/control record for official-company collection.
 
-Model: [OfficialCompanyProviderState](../../core/models.py#L9748).
+Model: [OfficialCompanyProviderState](../../core/models.py#L9800).
 
 **Primary key:** `key`.
 
@@ -8784,7 +10241,7 @@ None declared beyond primary keys, field uniqueness and foreign keys.
 
 One official-company account scan and its outcome.
 
-Model: [OfficialCompanyScan](../../core/models.py#L9540).
+Model: [OfficialCompanyScan](../../core/models.py#L9592).
 
 **Primary key:** `key`.
 

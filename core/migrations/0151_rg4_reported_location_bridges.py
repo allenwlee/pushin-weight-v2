@@ -23,7 +23,7 @@ OWNERS = (
 )
 
 BRIDGE = """
-CREATE FUNCTION pw_geo_reported_bridge() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION pw_geo_reported_bridge() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE before_value text; before_new text; old_value text; new_value text;
         chosen text; resolved bigint; source_changed boolean;
 BEGIN
@@ -55,7 +55,7 @@ BEGIN
   RETURN NEW;
 END $$;
 
-CREATE FUNCTION pw_geo_based_in_reference() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION pw_geo_based_in_reference() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF (TG_OP='INSERT' AND NEW.reported_based_in IS NOT NULL)
      OR (TG_OP='UPDATE' AND NEW.reported_based_in IS DISTINCT FROM OLD.account_based_in) THEN
@@ -79,7 +79,7 @@ def install(apps, schema_editor):
     # columns. All relationships returned by the boundary use our local PK.
     literal = "'" + json.dumps({key:inputs[key] for key in ("freeform","based_in")},ensure_ascii=False).replace("'","''") + "'"
     schema_editor.execute(f"""
-        CREATE FUNCTION pw_geo_source_id(source_value text,source_context text) RETURNS bigint
+        CREATE OR REPLACE FUNCTION pw_geo_source_id(source_value text,source_context text) RETURNS bigint
         LANGUAGE sql STABLE AS $body$
           SELECT id FROM geolocations WHERE geonames_id=({literal}::jsonb -> source_context ->>
             lower(btrim(normalize(COALESCE(source_value,''),NFKC))))::bigint
@@ -88,15 +88,17 @@ def install(apps, schema_editor):
     schema_editor.execute(BRIDGE)
     quote = schema_editor.quote_name
     for table, _pk, old, new, field, context in OWNERS:
-        schema_editor.execute(f"ALTER TABLE {quote(table)} ADD COLUMN {quote(new)} text")
+        schema_editor.execute(f"ALTER TABLE {quote(table)} ADD COLUMN IF NOT EXISTS {quote(new)} text")
         args = ",".join("'" + part + "'" for part in (old, new, field, context))
+        schema_editor.execute(f"DROP TRIGGER IF EXISTS pw_geo_reported_bridge ON {quote(table)}")
         schema_editor.execute(f"CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE ON {quote(table)} FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge({args})")
+    schema_editor.execute("DROP TRIGGER IF EXISTS pw_geo_based_in_reference ON x_account_details")
     schema_editor.execute("CREATE TRIGGER pw_geo_based_in_reference AFTER INSERT OR UPDATE ON x_account_details FOR EACH ROW EXECUTE FUNCTION pw_geo_based_in_reference()")
 
 
 def copy_source(apps, schema_editor):
     quote = schema_editor.quote_name
-    for table, pk, old, new, _field, _context in OWNERS:
+    for table, pk, old, new, field, context in OWNERS:
         while True:
             with transaction.atomic(using=schema_editor.connection.alias), schema_editor.connection.cursor() as cursor:
                 cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
@@ -105,6 +107,22 @@ def copy_source(apps, schema_editor):
                     ORDER BY {quote(pk)} LIMIT 1000 FOR UPDATE
                 ) UPDATE {quote(table)} owner SET {quote(new)}=owner.{quote(old)}
                 FROM selected WHERE owner.{quote(pk)}=selected.{quote(pk)}""")
+                if cursor.rowcount == 0:
+                    break
+        # The old image could have changed a source after 0150 mapped it but
+        # before these bridges existed. Copying identical old/new wording is
+        # deliberately not a source-change event, so reconcile that gap here.
+        if not field:
+            continue
+        while True:
+            with transaction.atomic(using=schema_editor.connection.alias), schema_editor.connection.cursor() as cursor:
+                cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
+                cursor.execute(f"""WITH selected AS (
+                    SELECT {quote(pk)},pw_geo_source_id({quote(new)},%s) AS target
+                    FROM {quote(table)} WHERE {quote(field)} IS DISTINCT FROM pw_geo_source_id({quote(new)},%s)
+                    ORDER BY {quote(pk)} LIMIT 1000 FOR UPDATE
+                ) UPDATE {quote(table)} owner SET {quote(field)}=selected.target
+                FROM selected WHERE owner.{quote(pk)}=selected.{quote(pk)}""", [context, context])
                 if cursor.rowcount == 0:
                     break
 

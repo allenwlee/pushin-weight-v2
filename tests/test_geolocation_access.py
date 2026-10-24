@@ -89,6 +89,17 @@ def test_reconciliation_refuses_to_repurpose_owner():
         apply_serving_grants(connection, owner)
 
 
+@pytest.mark.parametrize("key", ["CELERY_BROKER_URL", "CELERY_RESULT_BACKEND", "MIGRATION_DATABASE_URL", "STAGING_REFRESH_SOURCE_DATABASE_URL"])
+def test_serving_environment_rejects_secondary_database_credentials(key):
+    from core.geolocation_access import verify_serving_environment
+    with pytest.raises(ValueError, match="another database credential") as caught:
+        verify_serving_environment({
+            "PW_DATABASE_ACCESS_MODE": "serving", "DATABASE_URL": "postgresql://serving:<password>@db/app",
+            key: "postgresql://owner:<do-not-print>@db/app",
+        })
+    assert "do-not-print" not in str(caught.value)
+
+
 def test_job_orm_document_uses_local_places_without_source_access(serving_login):
     from django.utils import timezone
 

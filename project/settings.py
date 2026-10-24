@@ -17,6 +17,7 @@ from pathlib import Path
 
 import environ
 
+from core.geolocation_access import verify_serving_environment
 from project.staging import validate_staging_environment
 
 # ============================================================================
@@ -40,6 +41,10 @@ env = environ.Env(
 env_file = BASE_DIR / ".env"
 if env_file.exists():
     environ.Env.read_env(str(env_file))
+
+# A serving process must not retain an owner/source credential under another
+# setting, even when it would not normally use that setting for PostgreSQL.
+verify_serving_environment(environ.Env.ENVIRON)
 
 # ============================================================================
 # Core

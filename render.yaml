@@ -39,6 +39,16 @@ services:
         sync: false
       - key: PW_DATABASE_ACCESS_MODE
         value: serving
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: keyvalue
+          name: pushinweight-headlines-broker
+          property: connectionString
       - key: X_MONITOR_HEADLINE_SERVING_ENABLED
         value: "True"
       - key: X_MONITOR_HEADLINE_ACTIVATION_STATE

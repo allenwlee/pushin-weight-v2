@@ -7,6 +7,7 @@ from django.db.migrations.executor import MigrationExecutor
 from core.benchmark_metric_identity import register_definitions
 from core.collection_corrections import correct_attribution
 from core.models import Actor, TimeZone
+from tests.collection_fixtures import historical_fixture_models
 from tests.test_source_metric_projection import configured, evidence, project
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
@@ -19,8 +20,10 @@ def test_rg1_removal_drops_only_replaced_columns_and_switches_label_keys(migrati
     actor_requirement = ("core", "0128_require_correction_actor")
     MigrationExecutor(connection).migrate([cutover])
 
-    contract, raw, _, _ = configured(mapped=True, product_type="llm-model")
-    observation = project(contract, "hf", [evidence("hf", raw)]).observations.get()
+    historical = MigrationExecutor(connection).loader.project_state([cutover]).apps
+    with historical_fixture_models(historical):
+        contract, raw, _, _ = configured(mapped=True, product_type="llm-model")
+        observation = project(contract, "hf", [evidence("hf", raw)]).observations.get()
     actor = Actor.objects.create(actor_kind="system", actor_key="rg1-retirement-test")
     correction = correct_attribution(
         observation,
@@ -116,8 +119,9 @@ def test_rg1_removal_drops_only_replaced_columns_and_switches_label_keys(migrati
         )
         assert cursor.fetchall() == []
 
-    assert CountryLabel.objects.get(pk=("XZ", "zh-Hans")).label == "示例"
-    assert RegionLabel.objects.get(pk=("rg1-retirement-test", "ja")).label == "例"
+    removed = MigrationExecutor(connection).loader.project_state([removal]).apps
+    assert removed.get_model("core", "CountryLabel").objects.get(pk=("XZ", "zh-Hans")).label == "示例"
+    assert removed.get_model("core", "RegionLabel").objects.get(pk=("rg1-retirement-test", "ja")).label == "例"
     correction.refresh_from_db()
     assert correction.actor_id == actor.pk
 
@@ -140,8 +144,10 @@ def test_actor_requirement_migration_refuses_null_rows(migration_rehearsal_schem
     actor_requirement = ("core", "0128_require_correction_actor")
     MigrationExecutor(connection).migrate([cutover])
 
-    contract, raw, _, _ = configured(mapped=True, product_type="llm-model")
-    observation = project(contract, "hf", [evidence("hf", raw)]).observations.get()
+    historical = MigrationExecutor(connection).loader.project_state([cutover]).apps
+    with historical_fixture_models(historical):
+        contract, raw, _, _ = configured(mapped=True, product_type="llm-model")
+        observation = project(contract, "hf", [evidence("hf", raw)]).observations.get()
     actor = Actor.objects.create(actor_kind="system", actor_key="rg1-null-actor-test")
     correction = correct_attribution(
         observation,

@@ -113,6 +113,8 @@ def test_populated_geography_mapping_preserves_source_and_policy(migration_rehea
 
 @pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0156_rg4_unknown_job_location_observations")], indirect=True)
 def test_reference_cutover_catches_late_old_writes_and_keeps_source(migration_rehearsal_schema):
+    from importlib import import_module
+
     from django.utils import timezone
 
     baseline = ("core", "0156_rg4_unknown_job_location_observations")
@@ -132,6 +134,12 @@ def test_reference_cutover_catches_late_old_writes_and_keeps_source(migration_re
     )
     with connection.cursor() as cursor:
         cursor.execute("UPDATE job_listings SET locations=%s::jsonb,locations_raw=%s WHERE id=%s", ['["India","Springfield"]', "India; Springfield", job.pk])
+    # Simulate loss of the process after committed DDL, before Django records
+    # completion. A retry must preserve data and finish the same migration.
+    migration = import_module("core.migrations.0157_rg4_geolocation_reference_cutover")
+    with connection.schema_editor(atomic=True) as editor:
+        migration.install(old, editor)
+        editor.execute(migration.IMMUTABLE_CITIZENSHIP)
     MigrationExecutor(connection).migrate([target])
     current = MigrationExecutor(connection).loader.project_state([target]).apps
     assert current.get_model("core", "Company").objects.get(pk=company.pk).hq_geolocation_id == places[1861060]
@@ -152,3 +160,38 @@ def test_reference_cutover_catches_late_old_writes_and_keeps_source(migration_re
     with connection.cursor() as cursor:
         cursor.execute("SELECT locations_raw FROM job_listings WHERE id=%s", [job.pk])
         assert cursor.fetchone()[0] == "India; Springfield"
+
+
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0150_rg4_geolocation_mapping")], indirect=True)
+def test_source_bridge_retries_after_committed_install(migration_rehearsal_schema):
+    from importlib import import_module
+
+    baseline = ("core", "0150_rg4_geolocation_mapping")
+    target = ("core", "0151_rg4_reported_location_bridges")
+    old = MigrationExecutor(connection).loader.project_state([baseline]).apps
+    places = dict(old.get_model("core", "Geolocation").objects.values_list("geonames_id", "pk"))
+    late = old.get_model("core", "Account").objects.create(
+        data_source_id="x", external_identifier="late-before-bridge", normalized_identifier="late-before-bridge",
+        location="India", profile_location_id=places[1814991],
+    )
+    cleared = old.get_model("core", "Account").objects.create(
+        data_source_id="x", external_identifier="cleared-before-bridge", normalized_identifier="cleared-before-bridge",
+        location=None, profile_location_id=places[1269750],
+    )
+    account = old.get_model("core", "Account").objects.create(
+        data_source_id="x", external_identifier="retry-geo", normalized_identifier="retry-geo", location="India",
+    )
+    migration = import_module("core.migrations.0151_rg4_reported_location_bridges")
+    with connection.schema_editor(atomic=True) as editor:
+        migration.install(old, editor)
+    # An old writer may commit while the mapper is being restarted.
+    with connection.cursor() as cursor:
+        cursor.execute("UPDATE accounts SET location='Springfield' WHERE account_key=%s", [account.pk])
+    MigrationExecutor(connection).migrate([target])
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT location,reported_profile_location,profile_location_id FROM accounts WHERE account_key=%s", [account.pk])
+        assert cursor.fetchone() == ("Springfield", "Springfield", None)
+    late.refresh_from_db()
+    cleared.refresh_from_db()
+    assert late.profile_location_id == places[1269750]
+    assert cleared.profile_location_id is None

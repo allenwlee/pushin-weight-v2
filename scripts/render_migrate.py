@@ -95,6 +95,8 @@ def main(
         return 75
     if access_mode == "serving":
         try:
+            from core.geolocation_access import verify_serving_environment
+            verify_serving_environment(values)
             verify_serving_schema(migration_connection)
         except (ValueError, DatabaseLockError) as exc:
             print(f"Serving database verification failed ({exc})", file=sys.stderr)
