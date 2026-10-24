@@ -76,18 +76,37 @@ def verify_serving_access(connection, *, schema="public"):
     return role
 
 
+def canonical_serving_columns():
+    columns = {
+        model._meta.db_table: {field.column for field in model._meta.local_concrete_fields}
+        - SOURCE_COLUMNS.get(model._meta.db_table, set())
+        for model in apps.get_models(include_auto_created=True)
+        if model._meta.managed and not model._meta.proxy
+    }
+    columns["django_migrations"] = {"id", "app", "name", "applied"}
+    return columns
+
+
+def serving_grants_ready(connection, *, schema="public"):
+    """The migration ledger may commit before the owner's grant transaction."""
+    expected = {(table, column) for table, columns in canonical_serving_columns().items()
+                for column in columns}
+    with connection.cursor() as cursor:
+        cursor.execute("""SELECT c.relname,a.attname FROM pg_class c
+            JOIN pg_namespace n ON n.oid=c.relnamespace
+            JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
+            WHERE n.nspname=%s AND c.relkind IN ('r','p')
+            AND has_column_privilege(current_user,c.oid,a.attname,'SELECT')""", [schema])
+        return expected.issubset(set(cursor.fetchall()))
+
+
 def apply_serving_grants(connection, role, *, schema="public"):
     """Reconcile grants on one dedicated role; refuse privileged/mixed roles."""
     if connection.get_autocommit():
         raise ValueError("Serving grant reconciliation requires one transaction")
     identifier = sql.Identifier(role)
     namespace = sql.Identifier(schema)
-    canonical_columns = {
-        model._meta.db_table: {field.column for field in model._meta.local_concrete_fields}
-        for model in apps.get_models(include_auto_created=True)
-        if model._meta.managed and not model._meta.proxy
-    }
-    canonical_columns["django_migrations"] = {"id", "app", "name", "applied"}
+    canonical_columns = canonical_serving_columns()
     with connection.cursor() as cursor:
         cursor.execute("SELECT current_user,current_database()")
         owner, database = cursor.fetchone()

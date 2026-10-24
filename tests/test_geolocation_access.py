@@ -81,6 +81,22 @@ def test_web_build_only_verifies_schema_with_actual_restricted_login(serving_log
         ) == 0
 
 
+def test_web_build_waits_for_grants_after_migration_ledger_is_complete(serving_login):
+    from scripts.database_lock import DatabaseLockError
+    from scripts.render_migrate import verify_serving_schema
+
+    serving, role, _owner, _report = serving_login
+    with connection.cursor() as cursor:
+        cursor.execute(sql.SQL("REVOKE SELECT (author_geolocation_id) ON posts FROM {}").format(sql.Identifier(role)))
+    with patch.object(connections["default"], "connection", serving):
+        with pytest.raises(DatabaseLockError, match="serving_schema_not_ready"):
+            verify_serving_schema(connections["default"], wait_seconds=0)
+    with connection.cursor() as cursor:
+        cursor.execute(sql.SQL("GRANT SELECT (author_geolocation_id) ON posts TO {}").format(sql.Identifier(role)))
+    with patch.object(connections["default"], "connection", serving):
+        verify_serving_schema(connections["default"], wait_seconds=0)
+
+
 def test_reconciliation_refuses_to_repurpose_owner():
     with connection.cursor() as cursor:
         cursor.execute("SELECT current_user")

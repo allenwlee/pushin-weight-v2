@@ -19,13 +19,15 @@ _MIGRATION_LOCK_ID = 8_675_309
 def verify_serving_schema(connection, *, wait_seconds=900, sleep=time.sleep, clock=time.monotonic):
     """Web builds wait for the owner build's migration without receiving its key."""
     from django.db.migrations.executor import MigrationExecutor
-    from core.geolocation_access import verify_serving_access
+    from core.geolocation_access import serving_grants_ready, verify_serving_access
 
     verify_serving_access(connection)
     deadline = clock() + wait_seconds
     while True:
         executor = MigrationExecutor(connection)
-        if not executor.migration_plan(executor.loader.graph.leaf_nodes()):
+        if (not executor.migration_plan(executor.loader.graph.leaf_nodes())
+                and serving_grants_ready(connection)):
+            verify_serving_access(connection)
             print("Canonical serving schema and restricted login verified", flush=True)
             return
         if clock() >= deadline:
