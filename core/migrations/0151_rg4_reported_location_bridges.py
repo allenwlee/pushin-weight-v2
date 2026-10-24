@@ -59,32 +59,45 @@ def install(apps, schema_editor):
 def copy_source(apps, schema_editor):
     quote = schema_editor.quote_name
     for table, pk, old, new, field, context in OWNERS:
+        last_key = None
         while True:
             with transaction.atomic(using=schema_editor.connection.alias), schema_editor.connection.cursor() as cursor:
                 cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
+                after = f"AND {quote(pk)} > %s" if last_key is not None else ""
                 cursor.execute(f"""WITH selected AS (
                     SELECT {quote(pk)} FROM {quote(table)} WHERE {quote(new)} IS NULL AND {quote(old)} IS NOT NULL
-                    ORDER BY {quote(pk)} LIMIT 1000 FOR UPDATE
-                ) UPDATE {quote(table)} owner SET {quote(new)}=owner.{quote(old)}
-                FROM selected WHERE owner.{quote(pk)}=selected.{quote(pk)}""")
-                if cursor.rowcount == 0:
+                    {after} ORDER BY {quote(pk)} LIMIT 100 FOR UPDATE
+                ), changed AS (UPDATE {quote(table)} owner SET {quote(new)}=owner.{quote(old)}
+                FROM selected WHERE owner.{quote(pk)}=selected.{quote(pk)}
+                RETURNING owner.{quote(pk)}) SELECT {quote(pk)} FROM changed ORDER BY {quote(pk)} DESC LIMIT 1""",
+                [last_key] if last_key is not None else [])
+                last = cursor.fetchone()
+                if last is None:
                     break
+                last_key = last[0]
         # The old image could have changed a source after 0150 mapped it but
         # before these bridges existed. Copying identical old/new wording is
         # deliberately not a source-change event, so reconcile that gap here.
         if not field:
             continue
+        last_key = None
         while True:
             with transaction.atomic(using=schema_editor.connection.alias), schema_editor.connection.cursor() as cursor:
                 cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
+                after = f"AND {quote(pk)} > %s" if last_key is not None else ""
                 cursor.execute(f"""WITH selected AS (
                     SELECT {quote(pk)},pw_geo_source_id({quote(new)},%s) AS target
                     FROM {quote(table)} WHERE {quote(field)} IS DISTINCT FROM pw_geo_source_id({quote(new)},%s)
-                    ORDER BY {quote(pk)} LIMIT 1000 FOR UPDATE
-                ) UPDATE {quote(table)} owner SET {quote(field)}=selected.target
-                FROM selected WHERE owner.{quote(pk)}=selected.{quote(pk)}""", [context, context])
-                if cursor.rowcount == 0:
+                    {after} ORDER BY {quote(pk)} LIMIT 100 FOR UPDATE
+                ), changed AS (UPDATE {quote(table)} owner SET {quote(field)}=selected.target
+                FROM selected WHERE owner.{quote(pk)}=selected.{quote(pk)}
+                RETURNING owner.{quote(pk)}) SELECT {quote(pk)} FROM changed ORDER BY {quote(pk)} DESC LIMIT 1""",
+                [context, context, *([last_key] if last_key is not None else [])])
+                last = cursor.fetchone()
+                if last is None:
                     break
+                last_key = last[0]
+        print(f"RG4 {table}: reported source copy and reconciliation complete", flush=True)
 
 
 def uninstall(apps, schema_editor):

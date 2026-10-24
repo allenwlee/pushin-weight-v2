@@ -10,6 +10,43 @@ BASE = ("core", "0147_rg4_restore_selected_scalar_fields")
 TARGET = ("core", "0148_rg4_geolocation_owners")
 
 
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0150_rg4_geolocation_mapping")], indirect=True)
+def test_source_copy_resumes_committed_small_batches_without_skipping_unresolved_rows(migration_rehearsal_schema):
+    baseline = ("core", "0150_rg4_geolocation_mapping")
+    target = ("core", "0151_rg4_reported_location_bridges")
+    old = MigrationExecutor(connection).loader.project_state([baseline]).apps
+    india = old.get_model("core", "Geolocation").objects.get(geonames_id=1269750).pk
+    Post = old.get_model("core", "Post")
+    Post.objects.bulk_create([
+        Post(tweet_id=f"source-batch-{index:04d}", author_location=("India", "Springfield", "")[index % 3],
+             author_geolocation_id=india if index % 3 else None)
+        for index in range(205)
+    ])
+    writes = 0
+
+    def fail_second_copy(execute, sql, params, many, context):
+        nonlocal writes
+        if 'UPDATE "posts" owner SET "reported_author_location"' in sql:
+            writes += 1
+            if writes == 2:
+                raise RuntimeError("simulated interruption between committed source batches")
+        return execute(sql, params, many, context)
+
+    with pytest.raises(RuntimeError, match="simulated interruption"), connection.execute_wrapper(fail_second_copy):
+        MigrationExecutor(connection).migrate([target])
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT count(*) FROM posts WHERE reported_author_location IS NOT NULL")
+        assert cursor.fetchone()[0] == 100
+        cursor.execute("SELECT 1 FROM django_migrations WHERE app='core' AND name=%s", [target[1]])
+        assert cursor.fetchone() is None
+    MigrationExecutor(connection).migrate([target])
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT author_location,reported_author_location,author_geolocation_id FROM posts ORDER BY tweet_id")
+        rows = cursor.fetchall()
+    assert len(rows) == 205
+    assert all(old == new and reference == (india if old == "India" else None) for old, new, reference in rows)
+
+
 @pytest.mark.parametrize("migration_rehearsal_schema", [BASE], indirect=True)
 def test_new_geography_owners_import_beside_preserved_legacy_data(migration_rehearsal_schema):
     from core.geolocations import import_geonames_documents, load_pinned_geonames

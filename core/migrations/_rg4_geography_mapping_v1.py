@@ -107,7 +107,7 @@ def preserve_labels_and_policies(apps, country_ids, region_ids):
         Place.objects.filter(pk=location.pk).update(current_policy_id=policy.pk)
 
 
-def map_rows(model, field, sources, interpret, *, batch_size=1000, prepare_batch=None):
+def map_rows(model, field, sources, interpret, *, batch_size=100, prepare_batch=None):
     """Keyset batches, current-row locks and no changes to source/hash fields."""
     # A just-added nullable indexed column has no statistics. PostgreSQL can
     # estimate IS NULL at 0.5% while it actually matches the whole table, then
@@ -119,6 +119,7 @@ def map_rows(model, field, sources, interpret, *, batch_size=1000, prepare_batch
             f"ANALYZE {quote(model._meta.db_table)} ({quote(model._meta.get_field(field).column)})"
         )
     cursor = None
+    scanned = mapped = 0
     while True:
         with transaction.atomic(using=model.objects.db):
             query = model.objects.filter(**{field + "__isnull": True}).order_by("pk")
@@ -137,6 +138,11 @@ def map_rows(model, field, sources, interpret, *, batch_size=1000, prepare_batch
             if changed:
                 model.objects.bulk_update(changed, [field], batch_size=batch_size)
             cursor = rows[-1].pk
+            scanned += len(rows)
+            mapped += len(changed)
+        if scanned % 5000 == 0:
+            print(f"RG4 {model._meta.db_table}.{field}: scanned={scanned} mapped={mapped}", flush=True)
+    print(f"RG4 {model._meta.db_table}.{field}: complete scanned={scanned} mapped={mapped}", flush=True)
 
 
 def forward(apps, schema_editor):

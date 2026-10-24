@@ -112,16 +112,22 @@ def reconcile_owners(apps, schema_editor):
           "owner.country_code IS NOT NULL OR owner.based_in_region_key IS NOT NULL OR EXISTS(SELECT 1 FROM x_account_details x WHERE x.account_key=owner.account_key AND x.reported_based_in IS NOT NULL)"),
     )
     for table, pk, field, expression, predicate in expressions:
+        last_key = None
         while True:
             with transaction.atomic(using=conn.alias), conn.cursor() as cursor:
                 cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
+                after = f"AND owner.{pk} > %s" if last_key is not None else ""
                 cursor.execute(f"""WITH selected AS (
                     SELECT owner.{pk}, {expression} AS target FROM {table} owner
                     WHERE ({predicate}) AND owner.{field} IS DISTINCT FROM ({expression})
-                    ORDER BY owner.{pk} LIMIT 1000 FOR UPDATE
-                ) UPDATE {table} owner SET {field}=selected.target FROM selected WHERE owner.{pk}=selected.{pk}""")
-                if cursor.rowcount == 0:
+                    {after} ORDER BY owner.{pk} LIMIT 100 FOR UPDATE
+                ), changed AS (UPDATE {table} owner SET {field}=selected.target FROM selected WHERE owner.{pk}=selected.{pk}
+                RETURNING owner.{pk}) SELECT {pk} FROM changed ORDER BY {pk} DESC LIMIT 1""",
+                [last_key] if last_key is not None else [])
+                last = cursor.fetchone()
+                if last is None:
                     break
+                last_key = last[0]
     # Preserve unsupported typed claims before their reference columns disappear.
     # Existing source archives own this historical evidence; no new storage owner.
     with conn.cursor() as cursor:
