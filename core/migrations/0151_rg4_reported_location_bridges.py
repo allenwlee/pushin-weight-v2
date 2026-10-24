@@ -16,6 +16,7 @@ from ._rg4_geography_write_performance_v1 import (
     finish_post_batch,
     prepare_post_index,
     reported_triggers,
+    trigger_matches,
     write_batch_options,
 )
 from ._rg4_home_count_write_v1 import install as home_count_update_trigger
@@ -56,11 +57,20 @@ def install(apps, schema_editor):
     schema_editor.execute(BRIDGE)
     quote = schema_editor.quote_name
     for table, _pk, old, new, field, context in OWNERS:
-        schema_editor.execute(f"ALTER TABLE {quote(table)} ADD COLUMN IF NOT EXISTS {quote(new)} text")
+        with schema_editor.connection.cursor() as cursor:
+            cursor.execute("""SELECT format_type(atttypid,atttypmod),attnotnull FROM pg_attribute
+                WHERE attrelid=%s::regclass AND attname=%s AND attnum>0 AND NOT attisdropped""", [table, new])
+            existing = cursor.fetchone()
+        if existing is None:
+            schema_editor.execute(f"ALTER TABLE {quote(table)} ADD COLUMN {quote(new)} text")
+        elif existing != ("text", False):
+            raise RuntimeError(f"Unexpected installed source column: {table}.{new}")
     reported_triggers(schema_editor)
     home_count_update_trigger(apps, schema_editor)
-    schema_editor.execute("DROP TRIGGER IF EXISTS pw_geo_based_in_reference ON x_account_details")
-    schema_editor.execute("CREATE TRIGGER pw_geo_based_in_reference AFTER INSERT OR UPDATE ON x_account_details FOR EACH ROW EXECUTE FUNCTION pw_geo_based_in_reference()")
+    if not trigger_matches(schema_editor.connection, "x_account_details", "pw_geo_based_in_reference",
+            "pw_geo_based_in_reference", 21):
+        schema_editor.execute("DROP TRIGGER IF EXISTS pw_geo_based_in_reference ON x_account_details")
+        schema_editor.execute("CREATE TRIGGER pw_geo_based_in_reference AFTER INSERT OR UPDATE ON x_account_details FOR EACH ROW EXECUTE FUNCTION pw_geo_based_in_reference()")
 
 
 def copy_source(apps, schema_editor):

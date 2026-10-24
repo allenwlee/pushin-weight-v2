@@ -1,6 +1,9 @@
 """Keep geography writes from reconstructing unrelated source payloads."""
 
-from django.db import transaction
+import re
+import time
+
+from django.db import OperationalError, transaction
 
 OWNERS = (
     ("accounts", "account_key", "location", "reported_profile_location", "profile_location_id", "freeform"),
@@ -9,6 +12,30 @@ OWNERS = (
     ("account_profile_snapshots", "id", "location", "reported_location", "geolocation_id", "freeform"),
     ("people_brand_affiliations", "id", "location", "reported_location", "geolocation_id", "freeform"),
 )
+
+
+def trigger_matches(connection, table, name, function, event_type, *, columns=(), arguments=(), condition=None):
+    """Avoid taking table DDL locks when a resumable setup is already exact."""
+    with connection.cursor() as cursor:
+        cursor.execute("""SELECT t.tgtype,t.tgenabled,t.tgargs,t.tgoldtable,t.tgnewtable,
+            p.proname,p.pronamespace=c.relnamespace,
+            ARRAY(SELECT a.attname FROM unnest(t.tgattr::smallint[]) WITH ORDINALITY v(num,pos)
+                JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum=v.num ORDER BY v.pos),
+            pg_get_triggerdef(t.oid),t.tgconstraint
+            FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
+            JOIN pg_proc p ON p.oid=t.tgfoid
+            WHERE t.tgrelid=%s::regclass AND t.tgname=%s AND NOT t.tgisinternal""", [table, name])
+        row = cursor.fetchone()
+    if row is None:
+        return False
+    when = re.search(r" WHEN (.+) EXECUTE FUNCTION ", row[8])
+    encoded_arguments = b"".join(value.encode() + b"\0" for value in arguments)
+    return (
+        row[:2] == (event_type, "O") and bytes(row[2]) == encoded_arguments
+        and row[3:5] == (None, None) and row[5:7] == (function, True)
+        and row[7] == list(columns) and not row[9]
+        and (when.group(1) if when else None) == condition
+    )
 
 
 def prepare_post_index(connection, table, *, phase="initial"):
@@ -22,10 +49,21 @@ def prepare_post_index(connection, table, *, phase="initial"):
         return
     if connection.in_atomic_block:
         raise RuntimeError("Post index maintenance must run after source-row locks are released")
-    with transaction.atomic(using=connection.alias), connection.cursor() as cursor:
-        cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='180s'")
-        cursor.execute("SELECT gin_clean_pending_list('idx_posts_editorial_context'::regclass)")
-        pages = cursor.fetchone()[0]
+    for attempt in range(3):
+        try:
+            with transaction.atomic(using=connection.alias), connection.cursor() as cursor:
+                cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='180s'")
+                cursor.execute("SELECT gin_clean_pending_list('idx_posts_editorial_context'::regclass)")
+                pages = cursor.fetchone()[0]
+        except OperationalError as error:
+            if getattr(error.__cause__, "sqlstate", None) != "55P03" or attempt == 2:
+                raise
+            # The failed maintenance transaction has rolled back. No source
+            # rows are locked while another index maintainer finishes.
+            print(f"RG4 posts: maintenance lock busy; retry={attempt + 1}/2", flush=True)
+            time.sleep(attempt + 1)
+        else:
+            break
     print(f"RG4 posts: {phase} search-index pending pages cleaned={pages}", flush=True)
 
 
@@ -60,6 +98,10 @@ def identity_triggers(schema_editor):
         ("posts", "author_id", "author_account_key", "x"),
         ("account_profile_snapshots", "author_id", "account_key", "any"),
     ):
+        if trigger_matches(schema_editor.connection, table, "benchmark_account_link",
+                "benchmark_account_link_compatibility", 23, columns=(native, generic),
+                arguments=(native, generic, source)):
+            continue
         schema_editor.execute(f'DROP TRIGGER benchmark_account_link ON "{table}"')
         schema_editor.execute(f"""CREATE TRIGGER benchmark_account_link
             BEFORE INSERT OR UPDATE OF "{native}","{generic}" ON "{table}"
@@ -113,6 +155,9 @@ END $$;
 def reported_triggers(schema_editor):
     schema_editor.execute(source_bridge_sql())
     for table, _pk, old, new, field, context in OWNERS:
+        if trigger_matches(schema_editor.connection, table, "pw_geo_reported_bridge",
+                "pw_geo_reported_bridge", 23, columns=(old, new), arguments=(old, new, field, context)):
+            continue
         args = ",".join("'" + part + "'" for part in (old, new, field, context))
         schema_editor.execute(f'DROP TRIGGER IF EXISTS pw_geo_reported_bridge ON "{table}"')
         schema_editor.execute(f"""CREATE TRIGGER pw_geo_reported_bridge

@@ -6,6 +6,8 @@ retain their existing statement-level invalidation. No transition row sets are
 built for Post updates, including large source-copy batches.
 """
 
+from ._rg4_geography_write_performance_v1 import trigger_matches
+
 SQL = """
 CREATE OR REPLACE FUNCTION home_counts_post_update() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE changed_since timestamptz;
@@ -27,4 +29,10 @@ EXECUTE FUNCTION home_counts_post_update();
 
 def install(apps, schema_editor):
     schema_editor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
-    schema_editor.execute(SQL)
+    function, trigger = SQL.split("DROP TRIGGER home_counts_update ON posts;", 1)
+    schema_editor.execute(function)
+    condition = "(((old.tweet_id IS DISTINCT FROM new.tweet_id) OR (old.created_at IS DISTINCT FROM new.created_at)))"
+    if trigger_matches(schema_editor.connection, "posts", "home_counts_update",
+            "home_counts_post_update", 17, condition=condition):
+        return
+    schema_editor.execute("DROP TRIGGER home_counts_update ON posts;" + trigger)

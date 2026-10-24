@@ -10,6 +10,90 @@ BASE = ("core", "0147_rg4_restore_selected_scalar_fields")
 TARGET = ("core", "0148_rg4_geolocation_owners")
 
 
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0150_rg4_geolocation_mapping")], indirect=True)
+def test_source_install_resume_reuses_exact_setup_while_writers_hold_table_locks(migration_rehearsal_schema):
+    from importlib import import_module
+
+    import psycopg
+    from django.db import transaction
+
+    migration = import_module("core.migrations.0151_rg4_reported_location_bridges")
+    old = MigrationExecutor(connection).loader.project_state([("core", "0150_rg4_geolocation_mapping")]).apps
+    old.get_model("core", "Post").objects.create(tweet_id="resume-installed", author_location="India")
+    with transaction.atomic(), connection.schema_editor(atomic=False) as editor:
+        migration.install(old, editor)
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW search_path")
+        path = cursor.fetchone()[0]
+    with psycopg.connect(**connection.get_connection_params()) as writer:
+        writer.execute("SELECT set_config('search_path', %s, false)", [path])
+        writer.execute("""LOCK TABLE accounts,x_account_details,posts,account_profile_snapshots,
+            people_brand_affiliations IN ROW EXCLUSIVE MODE""")
+        # Reissuing ALTER TABLE or DROP/CREATE TRIGGER would conflict with this
+        # live writer and exhaust the five-second lock budget.
+        MigrationExecutor(connection).migrate([("core", "0151_rg4_reported_location_bridges")])
+        writer.rollback()
+    with connection.cursor() as cursor:
+        cursor.execute("""SELECT author_location,reported_author_location,g.geonames_id
+            FROM posts p LEFT JOIN geolocations g ON g.id=p.author_geolocation_id
+            WHERE p.tweet_id='resume-installed'""")
+        assert cursor.fetchone() == ("India", "India", 1269750)
+        cursor.execute("ALTER TABLE posts DISABLE TRIGGER pw_geo_reported_bridge")
+    # A changed trigger must be repaired, rather than skipped by name alone.
+    with transaction.atomic(), connection.schema_editor(atomic=False) as editor:
+        migration.install(old, editor)
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT tgenabled FROM pg_trigger WHERE tgrelid='posts'::regclass AND tgname='pw_geo_reported_bridge'")
+        assert cursor.fetchone() == ("O",)
+    with pytest.raises(RuntimeError, match="Unexpected installed source column"), transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("DROP TRIGGER pw_geo_reported_bridge ON posts")
+            cursor.execute("ALTER TABLE posts ALTER COLUMN reported_author_location TYPE varchar(100)")
+        with connection.schema_editor(atomic=False) as editor:
+            migration.install(old, editor)
+
+
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0150_rg4_geolocation_mapping")], indirect=True)
+@pytest.mark.parametrize("release_after_first_wait", [True, False])
+def test_post_index_maintenance_retries_only_bounded_lock_waits(migration_rehearsal_schema, monkeypatch, release_after_first_wait):
+    import psycopg
+    from django.db import OperationalError
+
+    from core.migrations import _rg4_geography_write_performance_v1 as performance
+
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW search_path")
+        path = cursor.fetchone()[0]
+        cursor.execute("SHOW lock_timeout")
+        original_timeout = cursor.fetchone()[0]
+    waits = []
+    with psycopg.connect(**connection.get_connection_params()) as maintainer:
+        maintainer.execute("SELECT set_config('search_path', %s, false)", [path])
+        # REINDEX's index lock survives until commit and conflicts with the
+        # actual maintenance call; this is a real PostgreSQL lock timeout.
+        maintainer.execute("REINDEX INDEX idx_posts_editorial_context")
+
+        def release_or_keep_lock(seconds):
+            waits.append(seconds)
+            assert not connection.in_atomic_block
+            if release_after_first_wait:
+                maintainer.commit()
+
+        monkeypatch.setattr(performance.time, "sleep", release_or_keep_lock)
+        if release_after_first_wait:
+            performance.prepare_post_index(connection, "posts")
+            assert waits == [1]
+        else:
+            with pytest.raises(OperationalError) as caught:
+                performance.prepare_post_index(connection, "posts")
+            assert caught.value.__cause__.sqlstate == "55P03"
+            assert waits == [1, 2]
+        maintainer.rollback()
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW lock_timeout")
+        assert cursor.fetchone()[0] == original_timeout
+
+
 @pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0158_rg4_scope_geography_write_triggers")], indirect=True)
 def test_post_source_updates_skip_transition_capture_but_date_changes_still_invalidate(migration_rehearsal_schema):
     from datetime import timedelta
