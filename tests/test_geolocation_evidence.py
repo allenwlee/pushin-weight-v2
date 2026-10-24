@@ -89,6 +89,36 @@ def test_source_projection_cannot_insert_or_replace_parent_identity():
         write_source_evidence(post, tweet_id="different-owner")
 
 
+def test_location_only_writes_preserve_payloads_and_identity_changes_still_validate():
+    import json
+
+    selected = places()
+    account = Account.x.create(author_id="location-identity-a")
+    other = Account.x.create(author_id="location-identity-b")
+    post = Post.objects.create(tweet_id="location-identity", author=account,
+                               entities={"urls": [{"expanded_url": "https://example.org/source"}]})
+    with connection.cursor() as cursor:
+        cursor.execute("EXPLAIN (ANALYZE,FORMAT JSON) UPDATE posts SET reported_author_location='India' WHERE tweet_id=%s", [post.pk])
+        result = cursor.fetchone()[0]
+        result = json.loads(result) if isinstance(result, str) else result
+        triggers = {row["Trigger Name"] for row in result[0].get("Triggers", [])}
+        assert "pw_geo_reported_bridge" in triggers and "benchmark_account_link" not in triggers
+        cursor.execute("UPDATE posts SET author_id=%s WHERE tweet_id=%s", [other.author_id, post.pk])
+    post.refresh_from_db()
+    assert post.author_id == other.pk and post.native_author_id == other.author_id
+    assert post.author_geolocation_id == selected[1269750].pk
+    assert post.entities == {"urls": [{"expanded_url": "https://example.org/source"}]}
+    with pytest.raises(IntegrityError), transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute("UPDATE posts SET author_id='missing-native-identity' WHERE tweet_id=%s", [post.pk])
+    Post.objects.filter(pk=post.pk).update(author=account)
+    post.refresh_from_db()
+    assert post.native_author_id == account.author_id
+    foreign = Account.objects.create(data_source_id="hf", external_identifier="location-foreign",
+                                     normalized_identifier="location-foreign", identifier_kind="namespace")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Post.objects.filter(pk=post.pk).update(author=foreign)
+
+
 def test_harvest_profile_call_chain_preserves_fingerprint_and_clears_ambiguous_location():
     from django.utils import timezone
 

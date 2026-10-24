@@ -14,47 +14,9 @@ from ._rg4_geography_mapping_v1 import INPUT_HASHES
 
 # ruff: noqa: RUF012
 
-OWNERS = (
-    ("accounts", "account_key", "location", "reported_profile_location", "profile_location_id", "freeform"),
-    ("x_account_details", "account_key", "account_based_in", "reported_based_in", "", "based_in"),
-    ("posts", "tweet_id", "author_location", "reported_author_location", "author_geolocation_id", "freeform"),
-    ("account_profile_snapshots", "id", "location", "reported_location", "geolocation_id", "freeform"),
-    ("people_brand_affiliations", "id", "location", "reported_location", "geolocation_id", "freeform"),
-)
+from ._rg4_geography_write_performance_v1 import OWNERS, reported_triggers
 
 BRIDGE = """
-CREATE OR REPLACE FUNCTION pw_geo_reported_bridge() RETURNS trigger LANGUAGE plpgsql AS $$
-DECLARE before_value text; before_new text; old_value text; new_value text;
-        chosen text; resolved bigint; source_changed boolean;
-BEGIN
-  old_value := to_jsonb(NEW)->>TG_ARGV[0];
-  new_value := to_jsonb(NEW)->>TG_ARGV[1];
-  IF TG_OP='INSERT' THEN
-    IF old_value IS NOT NULL AND new_value IS NOT NULL AND old_value IS DISTINCT FROM new_value THEN
-      RAISE EXCEPTION 'conflicting location source representations' USING ERRCODE='23514';
-    END IF;
-    chosen := COALESCE(new_value,old_value);
-    source_changed := chosen IS NOT NULL;
-  ELSE
-    before_value := to_jsonb(OLD)->>TG_ARGV[0];
-    before_new := to_jsonb(OLD)->>TG_ARGV[1];
-    IF old_value IS DISTINCT FROM before_value AND new_value IS DISTINCT FROM before_new
-       AND old_value IS DISTINCT FROM new_value THEN
-      RAISE EXCEPTION 'conflicting location source representations' USING ERRCODE='23514';
-    END IF;
-    IF new_value IS DISTINCT FROM before_new THEN chosen:=new_value;
-    ELSIF old_value IS DISTINCT FROM before_value THEN chosen:=old_value;
-    ELSE chosen:=COALESCE(new_value,old_value); END IF;
-    source_changed := chosen IS DISTINCT FROM before_value;
-  END IF;
-  NEW := jsonb_populate_record(NEW,jsonb_build_object(TG_ARGV[0],chosen,TG_ARGV[1],chosen));
-  IF source_changed AND TG_ARGV[2]<>'' THEN
-    resolved := pw_geo_source_id(chosen,TG_ARGV[3]);
-    NEW := jsonb_populate_record(NEW,jsonb_build_object(TG_ARGV[2],resolved));
-  END IF;
-  RETURN NEW;
-END $$;
-
 CREATE OR REPLACE FUNCTION pw_geo_based_in_reference() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF (TG_OP='INSERT' AND NEW.reported_based_in IS NOT NULL)
@@ -89,9 +51,7 @@ def install(apps, schema_editor):
     quote = schema_editor.quote_name
     for table, _pk, old, new, field, context in OWNERS:
         schema_editor.execute(f"ALTER TABLE {quote(table)} ADD COLUMN IF NOT EXISTS {quote(new)} text")
-        args = ",".join("'" + part + "'" for part in (old, new, field, context))
-        schema_editor.execute(f"DROP TRIGGER IF EXISTS pw_geo_reported_bridge ON {quote(table)}")
-        schema_editor.execute(f"CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE ON {quote(table)} FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge({args})")
+    reported_triggers(schema_editor)
     schema_editor.execute("DROP TRIGGER IF EXISTS pw_geo_based_in_reference ON x_account_details")
     schema_editor.execute("CREATE TRIGGER pw_geo_based_in_reference AFTER INSERT OR UPDATE ON x_account_details FOR EACH ROW EXECUTE FUNCTION pw_geo_based_in_reference()")
 

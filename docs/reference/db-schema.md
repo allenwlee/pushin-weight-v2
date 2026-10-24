@@ -938,7 +938,7 @@ Migration 0063 enforces same-person/organization replacement, complete review me
 - `g1_affiliation_replacement`: `CREATE CONSTRAINT TRIGGER g1_affiliation_replacement AFTER INSERT OR UPDATE ON public.people_brand_affiliations DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION g1_check_affiliation_replacement()`.
 - `g1_affiliation_text_owner`: `CREATE CONSTRAINT TRIGGER g1_affiliation_text_owner AFTER UPDATE ON public.people_brand_affiliations DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION g1_check_affiliation_text_owner()`.
 - `g1_preserve_affiliation_review`: `CREATE TRIGGER g1_preserve_affiliation_review BEFORE UPDATE ON public.people_brand_affiliations FOR EACH ROW EXECUTE FUNCTION g1_preserve_affiliation_review()`.
-- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE ON public.people_brand_affiliations FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('location', 'reported_location', 'geolocation_id', 'freeform')`.
+- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE OF location, reported_location ON public.people_brand_affiliations FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('location', 'reported_location', 'geolocation_id', 'freeform')`.
 - `pw_rg4_affiliation_type_bridge`: `CREATE TRIGGER pw_rg4_affiliation_type_bridge BEFORE INSERT OR UPDATE OF affiliation_type, affiliation_type_id ON public.people_brand_affiliations FOR EACH ROW EXECUTE FUNCTION pw_rg4_affiliation_type_bridge()`.
 
 [Back to table inventory](#table-inventory)
@@ -2188,7 +2188,7 @@ The country FK is explicitly named `fk_accounts_country_code` in
 
 - `benchmark_account_identity_defaults`: `CREATE TRIGGER benchmark_account_identity_defaults BEFORE INSERT OR UPDATE ON public.accounts FOR EACH ROW EXECUTE FUNCTION benchmark_account_identity_defaults()`.
 - `pw_geo_legacy_reference`: `CREATE TRIGGER pw_geo_legacy_reference BEFORE INSERT OR UPDATE OF country_code, based_in_region_key ON public.accounts FOR EACH ROW EXECUTE FUNCTION pw_geo_legacy_reference('country_code', 'based_in_location_id')`.
-- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE ON public.accounts FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('location', 'reported_profile_location', 'profile_location_id', 'freeform')`.
+- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE OF location, reported_profile_location ON public.accounts FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('location', 'reported_profile_location', 'profile_location_id', 'freeform')`.
 - `x_detail_parent_guard`: `CREATE TRIGGER x_detail_parent_guard BEFORE UPDATE OF data_source_id ON public.accounts FOR EACH ROW EXECUTE FUNCTION pw_x_detail_parent_guard()`.
 
 [Back to table inventory](#table-inventory)
@@ -2281,7 +2281,7 @@ Model: [XAccountDetail](../../core/models.py#L1373).
 **Physical triggers:**
 
 - `pw_geo_based_in_reference`: `CREATE TRIGGER pw_geo_based_in_reference AFTER INSERT OR UPDATE ON public.x_account_details FOR EACH ROW EXECUTE FUNCTION pw_geo_based_in_reference()`.
-- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE ON public.x_account_details FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('account_based_in', 'reported_based_in', '', 'based_in')`.
+- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE OF account_based_in, reported_based_in ON public.x_account_details FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('account_based_in', 'reported_based_in', '', 'based_in')`.
 
 [Back to table inventory](#table-inventory)
 
@@ -2363,8 +2363,8 @@ Model: [AccountProfileSnapshot](../../core/models.py#L5805).
 
 **Physical triggers:**
 
-- `benchmark_account_link`: `CREATE TRIGGER benchmark_account_link BEFORE INSERT OR UPDATE ON public.account_profile_snapshots FOR EACH ROW EXECUTE FUNCTION benchmark_account_link_compatibility('author_id', 'account_key', 'any')`.
-- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE ON public.account_profile_snapshots FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('location', 'reported_location', 'geolocation_id', 'freeform')`.
+- `benchmark_account_link`: `CREATE TRIGGER benchmark_account_link BEFORE INSERT OR UPDATE OF author_id, account_key ON public.account_profile_snapshots FOR EACH ROW EXECUTE FUNCTION benchmark_account_link_compatibility('author_id', 'account_key', 'any')`.
+- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE OF location, reported_location ON public.account_profile_snapshots FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('location', 'reported_location', 'geolocation_id', 'freeform')`.
 
 [Back to table inventory](#table-inventory)
 
@@ -3221,11 +3221,11 @@ SQL clauses to every Django `on_delete=SET_NULL` field.
 
 **Physical triggers:**
 
-- `benchmark_account_link`: `CREATE TRIGGER benchmark_account_link BEFORE INSERT OR UPDATE ON public.posts FOR EACH ROW EXECUTE FUNCTION benchmark_account_link_compatibility('author_id', 'author_account_key', 'x')`.
+- `benchmark_account_link`: `CREATE TRIGGER benchmark_account_link BEFORE INSERT OR UPDATE OF author_id, author_account_key ON public.posts FOR EACH ROW EXECUTE FUNCTION benchmark_account_link_compatibility('author_id', 'author_account_key', 'x')`.
 - `home_counts_delete`: `CREATE TRIGGER home_counts_delete AFTER DELETE ON public.posts REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION home_counts_invalidate()`.
 - `home_counts_truncate`: `CREATE TRIGGER home_counts_truncate AFTER TRUNCATE ON public.posts FOR EACH STATEMENT EXECUTE FUNCTION home_counts_invalidate()`.
 - `home_counts_update`: `CREATE TRIGGER home_counts_update AFTER UPDATE ON public.posts REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION home_counts_invalidate()`.
-- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE ON public.posts FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('author_location', 'reported_author_location', 'author_geolocation_id', 'freeform')`.
+- `pw_geo_reported_bridge`: `CREATE TRIGGER pw_geo_reported_bridge BEFORE INSERT OR UPDATE OF author_location, reported_author_location ON public.posts FOR EACH ROW EXECUTE FUNCTION pw_geo_reported_bridge('author_location', 'reported_author_location', 'author_geolocation_id', 'freeform')`.
 
 [Back to table inventory](#table-inventory)
 

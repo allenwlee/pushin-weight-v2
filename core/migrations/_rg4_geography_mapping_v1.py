@@ -13,6 +13,7 @@ from ._rg4_geonames_v1 import (
     load_pinned_geonames,
     normalized_place_wording,
 )
+from ._rg4_geography_write_performance_v1 import identity_triggers
 
 INPUT_HASHES = {
     "manifest.json": "b00d8e6df23e644e97bca0a5d0145661c74fdd58eed1f12b159b793c946bd0e3",
@@ -139,6 +140,9 @@ def map_rows(model, field, sources, interpret, *, batch_size=1000, prepare_batch
 
 
 def forward(apps, schema_editor):
+    with transaction.atomic(using=schema_editor.connection.alias):
+        schema_editor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
+        identity_triggers(schema_editor)
     inputs, local_ids, country_ids, region_ids = prepare(apps, schema_editor.connection)
     def model(name):
         return apps.get_model("core", name)
