@@ -70,7 +70,7 @@ def test_source_copy_resumes_committed_small_batches_without_skipping_unresolved
         Post(tweet_id=f"source-batch-{index:04d}", author_location=("India", "Springfield", "")[index % 3],
              author_geolocation_id=(india if index % 3 == 0 else None) if index < 150
                  else (india if index % 3 else None))
-        for index in range(205)
+        for index in range(605)
     ])
     writes = 0
     with connection.cursor() as cursor:
@@ -86,7 +86,7 @@ def test_source_copy_resumes_committed_small_batches_without_skipping_unresolved
             if writes == 1:
                 with connection.cursor() as cursor:
                     cursor.execute("SELECT pg_size_bytes(current_setting('gin_pending_list_limit')),current_setting('statement_timeout')")
-                    assert cursor.fetchone() == (65536, "30s")
+                    assert cursor.fetchone() == (67108864, "30s")
                 # Selection and update remain one transaction: an independent
                 # old-source writer cannot change a selected row between them.
                 with psycopg.connect(**connection.get_connection_params(), autocommit=True) as other:
@@ -105,13 +105,45 @@ def test_source_copy_resumes_committed_small_batches_without_skipping_unresolved
         assert cursor.fetchone()[0] == 100
         cursor.execute("SELECT 1 FROM django_migrations WHERE app='core' AND name=%s", [target[1]])
         assert cursor.fetchone() is None
-    MigrationExecutor(connection).migrate([target])
+    cleanups = 0
+
+    def fail_periodic_cleanup(execute, sql, params, many, context):
+        nonlocal cleanups
+        if "SELECT gin_clean_pending_list(" in sql:
+            cleanups += 1
+            if cleanups == 2:
+                raise RuntimeError("simulated interruption during periodic index cleanup")
+        return execute(sql, params, many, context)
+
+    with pytest.raises(RuntimeError, match="periodic index cleanup"), connection.execute_wrapper(fail_periodic_cleanup):
+        MigrationExecutor(connection).migrate([target])
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT count(*) FROM posts WHERE reported_author_location IS NOT NULL")
+        assert cursor.fetchone()[0] == 600
+        cursor.execute("SELECT 1 FROM django_migrations WHERE app='core' AND name=%s", [target[1]])
+        assert cursor.fetchone() is None
+
+    def assert_cleanup_released_rows(execute, sql, params, many, context):
+        if "SELECT gin_clean_pending_list(" in sql:
+            with psycopg.connect(**connection.get_connection_params(), autocommit=True) as other:
+                other.execute("SELECT set_config('search_path',%s,false)", [rehearsal_path])
+                other.execute("BEGIN")
+                try:
+                    # Index maintenance must not retain any source-copy row
+                    # locks, even the final partial batch or reconciliation.
+                    other.execute("SELECT tweet_id FROM posts FOR UPDATE NOWAIT").fetchall()
+                finally:
+                    other.execute("ROLLBACK")
+        return execute(sql, params, many, context)
+
+    with connection.execute_wrapper(assert_cleanup_released_rows):
+        MigrationExecutor(connection).migrate([target])
     with connection.cursor() as cursor:
         cursor.execute("SELECT current_setting('gin_pending_list_limit')")
         assert cursor.fetchone()[0] == original_pending_limit
         cursor.execute("SELECT author_location,reported_author_location,author_geolocation_id FROM posts ORDER BY tweet_id")
         rows = cursor.fetchall()
-    assert len(rows) == 205
+    assert len(rows) == 605
     assert all(old == new and reference == (india if old == "India" else None) for old, new, reference in rows)
 
 

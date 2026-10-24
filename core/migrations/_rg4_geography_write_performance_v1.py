@@ -11,28 +11,47 @@ OWNERS = (
 )
 
 
-def prepare_post_index(connection, table):
+def prepare_post_index(connection, table, *, phase="initial"):
     """Drain old GIN maintenance work before acquiring source-row locks.
 
     GIN pending cleanup is physical index maintenance, not a source-data edit.
-    Its initial backlog has a separate bounded allowance; ordinary mapping
-    statements retain their 30-second limit and smaller pending-list threshold.
+    Cleanup has a separate bounded allowance; ordinary mapping statements
+    retain their 30-second limit and commit before periodic maintenance.
     """
     if table != "posts":
         return
+    if connection.in_atomic_block:
+        raise RuntimeError("Post index maintenance must run after source-row locks are released")
     with transaction.atomic(using=connection.alias), connection.cursor() as cursor:
         cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='180s'")
         cursor.execute("SELECT gin_clean_pending_list('idx_posts_editorial_context'::regclass)")
         pages = cursor.fetchone()[0]
-    print(f"RG4 posts: initial search-index pending pages cleaned={pages}", flush=True)
+    print(f"RG4 posts: {phase} search-index pending pages cleaned={pages}", flush=True)
+
+
+def finish_post_batch(connection, table, pending_rows, changed_rows=0, *, finish=False):
+    """Bound queued index work, cleaning only after source writes commit.
+
+    A cleanup can exceed the ordinary write timeout on a small database. It
+    has its own allowance and never extends source-row lock ownership. If it
+    fails, committed source batches survive and the next run cleans first.
+    """
+    if table != "posts":
+        return 0
+    pending_rows += changed_rows
+    if pending_rows >= 500 or (finish and pending_rows):
+        prepare_post_index(connection, table, phase="batch")
+        return 0
+    return pending_rows
 
 
 def write_batch_options(cursor, table):
     cursor.execute("SET LOCAL lock_timeout='5s'; SET LOCAL statement_timeout='30s'")
     if table == "posts":
-        # A full default 4MB cleanup exceeds the staging statement budget.
-        # Keep its work small without changing the index or any other session.
-        cursor.execute("SET LOCAL gin_pending_list_limit='64kB'")
+        # Explicit cleanup runs every 500 changed rows, outside their locks.
+        # Leave headroom so ordinary 100-row writes do not trigger it inline.
+        # This affects only this transaction, not index options/other writers.
+        cursor.execute("SET LOCAL gin_pending_list_limit='64MB'")
 
 
 def identity_triggers(schema_editor):

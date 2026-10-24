@@ -13,6 +13,7 @@ from django.db import migrations, models, transaction
 from ._rg4_geography_mapping_v1 import INPUT_HASHES
 from ._rg4_geography_write_performance_v1 import (
     OWNERS,
+    finish_post_batch,
     prepare_post_index,
     reported_triggers,
     write_batch_options,
@@ -68,6 +69,7 @@ def copy_source(apps, schema_editor):
         prepare_post_index(schema_editor.connection, table)
         last_key = None
         scanned = copied = 0
+        pending_index_rows = 0
         while True:
             with transaction.atomic(using=schema_editor.connection.alias), schema_editor.connection.cursor() as cursor:
                 write_batch_options(cursor, table)
@@ -88,8 +90,12 @@ def copy_source(apps, schema_editor):
                 last_key = rows[-1][0]
                 scanned += len(rows)
                 copied += len(keys)
+            pending_index_rows = finish_post_batch(
+                schema_editor.connection, table, pending_index_rows, len(keys),
+            )
             if scanned % 5000 == 0:
                 print(f"RG4 {table}: source rows scanned={scanned} copied={copied}", flush=True)
+        finish_post_batch(schema_editor.connection, table, pending_index_rows, finish=True)
         # The old image could have changed a source after 0150 mapped it but
         # before these bridges existed. Copying identical old/new wording is
         # deliberately not a source-change event, so reconcile that gap here.
@@ -98,6 +104,7 @@ def copy_source(apps, schema_editor):
             continue
         last_key = None
         scanned = changed = 0
+        pending_index_rows = 0
         while True:
             with transaction.atomic(using=schema_editor.connection.alias), schema_editor.connection.cursor() as cursor:
                 write_batch_options(cursor, table)
@@ -118,8 +125,12 @@ def copy_source(apps, schema_editor):
                 last_key = rows[-1][0]
                 scanned += len(rows)
                 changed += len(keys)
+            pending_index_rows = finish_post_batch(
+                schema_editor.connection, table, pending_index_rows, len(keys),
+            )
             if scanned % 5000 == 0:
                 print(f"RG4 {table}: source references scanned={scanned} changed={changed}", flush=True)
+        finish_post_batch(schema_editor.connection, table, pending_index_rows, finish=True)
         print(f"RG4 {table}: reported source copy and reconciliation complete", flush=True)
 
 

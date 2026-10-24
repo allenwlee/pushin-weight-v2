@@ -8,6 +8,7 @@ from django.db import connections, transaction
 from django.utils import timezone
 
 from ._rg4_geography_write_performance_v1 import (
+    finish_post_batch,
     identity_triggers,
     prepare_post_index,
     write_batch_options,
@@ -126,6 +127,7 @@ def map_rows(model, field, sources, interpret, *, batch_size=100, prepare_batch=
         )
     cursor = None
     scanned = mapped = 0
+    pending_index_rows = 0
     while True:
         with transaction.atomic(using=model.objects.db):
             with connection.cursor() as options:
@@ -148,8 +150,12 @@ def map_rows(model, field, sources, interpret, *, batch_size=100, prepare_batch=
             cursor = rows[-1].pk
             scanned += len(rows)
             mapped += len(changed)
+        pending_index_rows = finish_post_batch(
+            connection, model._meta.db_table, pending_index_rows, len(changed),
+        )
         if scanned % 5000 == 0:
             print(f"RG4 {model._meta.db_table}.{field}: scanned={scanned} mapped={mapped}", flush=True)
+    finish_post_batch(connection, model._meta.db_table, pending_index_rows, finish=True)
     print(f"RG4 {model._meta.db_table}.{field}: complete scanned={scanned} mapped={mapped}", flush=True)
 
 
