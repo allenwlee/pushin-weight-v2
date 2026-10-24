@@ -499,6 +499,9 @@ def _collect_window(window, *, frozen, cfg, collection_options=None, legacy_eval
             raise RuntimeError("campaign_deadline_exhausted")
         if job.next_retry_at and job.next_retry_at > timezone.now():
             _wait((job.next_retry_at - timezone.now()).total_seconds())
+            # A recorded provider cooldown is intentional waiting, like live
+            # writer priority. The original campaign deadline remains binding.
+            idle_since = time.monotonic()
             job.refresh_from_db()
             continue
         try:

@@ -801,6 +801,10 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
                    "scope_errors": scope_errors})
     if prefetch is not None:
         report["prefetch"] = prefetch.metrics
+        if error is None and getattr(prefetch, "retry_at", None):
+            retry_at = prefetch.retry_at
+            report["state"] = "waiting_for_provider"
+            report["retry_at"] = retry_at.isoformat()
     if global_failure is not None:
         report["global_failure"] = global_failure
     if deferred_state and error is None:
