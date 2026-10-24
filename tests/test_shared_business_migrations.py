@@ -708,3 +708,72 @@ def test_citizenship_cutover_preserves_ambiguous_nationality_as_source_text(
     with pytest.raises(IntegrityError), transaction.atomic():
         old_writer.nationality = None
         old_writer.save(update_fields=["nationality"])
+
+
+@pytest.mark.parametrize(
+    "migration_rehearsal_schema", [("core", "0146_rg4_career_site_source_type")],
+    indirect=True,
+)
+def test_selected_scalar_restoration_preserves_rows_and_completed_review(
+    migration_rehearsal_schema,
+):
+    from core import models
+    from core.event_dossiers import ModelReleaseInput, read_dossier
+    from tests.test_event_dossiers import claim, dossier, review
+
+    baseline = ("core", "0146_rg4_career_site_source_type")
+    target = ("core", "0147_rg4_restore_selected_scalar_fields")
+    old = MigrationExecutor(connection).loader.project_state([baseline]).apps
+    person = old.get_model("core", "Person").objects.create()
+    old.get_model("core", "Language").objects.get_or_create(code="und")
+    old.get_model("core", "Locale").objects.get_or_create(
+        code="und", defaults={"language_id": "und"},
+    )
+    names = old.get_model("core", "PersonName")
+    kind = old.get_model("core", "PersonNameType").objects.get(code="professional")
+    original = names.objects.create(
+        person=person, full_name="Original source name", locale_id="und",
+        name_type_reference=kind, fingerprint="a" * 64,
+    )
+    event = dossier("scalar-restoration")
+    evidence = claim(event, key="scalar-restoration")
+    saved = review(
+        event, evidence, model_release=ModelReleaseInput(
+            observed_name="Source model", native_identifier="source/model",
+            disclosure_state="announced",
+        ),
+    )
+    document = read_dossier(event.pk)
+
+    def stored_rows():
+        rows = []
+        with connection.cursor() as cursor:
+            for table, key in (
+                ("people_names", "id"), ("model_release_details", "review_id"),
+                ("event_dossier_reviews", "id"),
+            ):
+                cursor.execute(f"SELECT row_to_json(r)::text FROM {table} r ORDER BY {key}")
+                rows.append(cursor.fetchall())
+        return rows
+
+    before = stored_rows()
+    MigrationExecutor(connection).migrate([target])
+    assert stored_rows() == before
+    assert read_dossier(event.pk) == document
+    restored = models.PersonName.objects.get(pk=original.pk)
+    assert restored.name_type == "professional"
+    assert restored.fingerprint == "a" * 64
+    assert models.ModelReleaseDetail.objects.get(pk=saved.pk).disclosure_state == "announced"
+    # The preceding image remains usable throughout the cutover window.
+    later = names.objects.create(
+        person=person, full_name="Later preceding-image name", locale_id="und",
+        name_type_reference=kind, fingerprint="b" * 64,
+    )
+    assert models.PersonName.objects.get(pk=later.pk).name_type == "professional"
+    assert names.objects.get(pk=original.pk).name_type_reference.code == "professional"
+    with pytest.raises(IntegrityError), transaction.atomic():
+        models.ModelReleaseDetail.objects.filter(pk=saved.pk).update(disclosure_state="unannounced")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        names.objects.filter(pk=original.pk).update(
+            name_type_reference=old.get_model("core", "PersonNameType").objects.get(code="romanized")
+        )

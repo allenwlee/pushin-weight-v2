@@ -5427,9 +5427,9 @@ class PersonName(models.Model):
         on_delete=models.PROTECT,
         related_name="person_names",
     )
-    name_type_reference = models.ForeignKey(
-        PersonNameType, on_delete=models.PROTECT, db_column="name_type_id",
-        related_name="names",
+    name_type = models.CharField(
+        max_length=32, default="professional",
+        choices=[("professional", "professional"), ("romanized", "romanized")],
     )
     name_order = models.CharField(max_length=24, default="unknown")
     origin = models.CharField(max_length=24, default="source")
@@ -5456,6 +5456,10 @@ class PersonName(models.Model):
             ),
             models.CheckConstraint(
                 condition=~models.Q(full_name=""), name="ck_person_name_nonempty"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(name_type__in=["professional", "romanized"]),
+                name="ck_person_name_type",
             ),
             models.CheckConstraint(
                 condition=models.Q(
@@ -10188,11 +10192,9 @@ class ModelReleaseDetail(models.Model):
         on_delete=models.PROTECT,
         related_name="reviewed_releases",
     )
-    release_disclosure_reference = models.ForeignKey(
-        ReleaseDisclosureState,
-        db_column="disclosure_state_id",
-        on_delete=models.PROTECT,
-        related_name="reviewed_releases",
+    disclosure_state = models.CharField(
+        max_length=16, default="unknown",
+        choices=[(value, value) for value in ("unknown", "unannounced", "announced")],
     )
     release_issuer_company = models.ForeignKey(
         Company,
@@ -10208,6 +10210,10 @@ class ModelReleaseDetail(models.Model):
             models.CheckConstraint(
                 condition=~models.Q(observed_name="") & ~models.Q(native_identifier=""),
                 name="ck_ed_release_identity",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(disclosure_state__in=["unknown", "unannounced", "announced"]),
+                name="ck_ed_release_disclosure",
             ),
         ]
 

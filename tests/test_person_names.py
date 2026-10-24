@@ -33,7 +33,7 @@ def test_homonyms_do_not_merge_and_components_require_evidence():
         name(a, given_name="元")
     assert name(a).pk == first.pk
     assert first.evidence.count() == 1
-    assert first.name_type_reference.code == "professional"
+    assert first.name_type == "professional"
 
 
 def test_selection_requires_review_and_preserves_derived_origin():
@@ -73,6 +73,22 @@ def test_selection_requires_review_and_preserves_derived_origin():
     ).exists()
 
 
+def test_name_kind_is_constrained_and_cannot_rewrite_fingerprinted_identity():
+    person = person_with_name("Name kind contract")
+    original = name(person)
+    with pytest.raises(ValueError, match="Unsupported person name kind"):
+        name(person, name_type="invented")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        PersonName.objects.filter(pk=original.pk).update(name_type="romanized")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        PersonName.objects.create(
+            person=person, full_name="Unsupported", locale_id="und",
+            name_type="invented", fingerprint="f" * 64,
+        )
+    original.refresh_from_db()
+    assert original.name_type == "professional"
+
+
 def test_locale_selection_rejects_a_name_owned_by_another_person():
     first = person_with_name("First")
     second = person_with_name("Second")
@@ -107,7 +123,7 @@ def test_database_rejects_cross_person_selection_and_derivation():
             person=b,
             full_name="Li Yuan",
             locale_id="en",
-            name_type_reference=original.name_type_reference,
+            name_type=original.name_type,
             fingerprint="x" * 64,
             derived_from=original,
         )

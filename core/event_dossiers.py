@@ -34,7 +34,6 @@ from core.models import (
     Post,
     ReleaseAccessChannel,
     ReleaseAvailabilityState,
-    ReleaseDisclosureState,
     ReleaseMaturity,
     TimeZone,
 )
@@ -376,9 +375,6 @@ def complete_review(
         detail["release_availability_reference"] = ReleaseAvailabilityState.objects.get(
             code=detail.pop("availability_state")
         )
-        detail["release_disclosure_reference"] = ReleaseDisclosureState.objects.get(
-            code=detail.pop("disclosure_state")
-        )
         _insert(ModelReleaseDetail(review=saved, **detail))
     else:
         detail = asdict(personnel_change)
@@ -414,7 +410,6 @@ def _release_columns(row):
     for column, name, reference in (
         ("release_maturity_id", "release_channel", "release_maturity_reference"),
         ("availability_state_id", "availability_state", "release_availability_reference"),
-        ("disclosure_state_id", "disclosure_state", "release_disclosure_reference"),
     ):
         result.pop(column)
         result[name] = getattr(row, reference).code

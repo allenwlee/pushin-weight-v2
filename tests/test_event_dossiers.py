@@ -129,7 +129,7 @@ def test_shadow_history_unresolved_then_confirmed_and_exact_retry():
     third = review(event, official, **values)
     assert third.model_release.release_maturity_reference.code == "unknown"
     assert third.model_release.release_availability_reference.code == "available"
-    assert third.model_release.release_disclosure_reference.code == "announced"
+    assert third.model_release.disclosure_state == "announced"
     assert read_dossier(event.pk)["model_release"]["release_channel"] == "unknown"
     assert read_dossier(event.pk)["model_release"]["availability_state"] == "available"
     assert read_dossier(event.pk)["model_release"]["disclosure_state"] == "announced"
@@ -506,9 +506,7 @@ def test_raw_review_with_foreign_claim_or_wrong_detail_cannot_commit():
                     release_availability_reference=models.ReleaseAvailabilityState.objects.get(
                         code="unknown"
                     ),
-                    release_disclosure_reference=models.ReleaseDisclosureState.objects.get(
-                        code="unknown"
-                    ),
+                    disclosure_state="unknown",
                 )
             models.EventDossier.objects.filter(pk=event.pk).update(current_review=saved)
     assert models.EventDossierReview.objects.count() == 0
