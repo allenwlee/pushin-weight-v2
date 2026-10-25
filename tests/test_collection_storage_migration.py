@@ -1,5 +1,7 @@
 """The collection archive copy is exact, repeatable, and detects live changes."""
 
+from datetime import UTC, datetime
+
 import pytest
 
 from core.collection_capture import read_document
@@ -8,7 +10,9 @@ from core.collection_storage_migration import (
     project_arena_publication_batch,
     project_benchmark_provenance_batch,
     project_run_ingestion_mode,
+    project_scope_bounds_batch,
     provenance_mismatch_counts,
+    scope_bounds_mismatch_counts,
     stale_legacy_archive_count,
 )
 from core.models import CollectionObservation
@@ -48,6 +52,34 @@ def test_arena_publication_copy_rebuilds_an_empty_cohort_without_duplicate_rows(
     assert project_arena_publication_batch(verify_only=True).scanned == 1
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
+
+
+def test_x_scope_bounds_copy_rechecks_older_rows_and_rejects_invalid_epochs():
+    _, _, scope = execution()
+    scope.scope_kind = "x_query"
+    scope.ownership = {
+        "call_id": "B1", "query": "test query",
+        "since_epoch": 1783809000, "until_epoch": 1783809300,
+    }
+    scope.save(update_fields=["scope_kind", "ownership"])
+    assert scope_bounds_mismatch_counts() == (0, 1)
+    assert project_scope_bounds_batch(after_id=scope.pk - 1).updated == 1
+    scope.refresh_from_db()
+    assert scope.requested_start_at == datetime.fromtimestamp(1783809000, UTC)
+    assert scope.requested_end_at == datetime.fromtimestamp(1783809300, UTC)
+    assert scope_bounds_mismatch_counts() == (0, 0)
+
+    scope.ownership["until_epoch"] = 1783809600
+    scope.save(update_fields=["ownership"])
+    assert scope_bounds_mismatch_counts() == (0, 1)
+    assert project_scope_bounds_batch(after_id=scope.pk - 1).updated == 1
+    assert scope_bounds_mismatch_counts() == (0, 0)
+
+    scope.ownership["since_epoch"] = "bad"
+    scope.save(update_fields=["ownership"])
+    assert scope_bounds_mismatch_counts() == (1, 0)
+    with pytest.raises(ValueError, match="invalid historical request bounds"):
+        project_scope_bounds_batch(after_id=scope.pk - 1)
 
 
 def test_legacy_documents_are_archived_once_and_changed_rows_are_reconciled():

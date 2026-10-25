@@ -1,4 +1,5 @@
 """Real command, shared runner and PostgreSQL: jobs never borrow scheduled keys."""
+from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
 
@@ -470,6 +471,9 @@ def test_recoverable_scope_error_does_not_starve_independent_queries(pipeline):
     assert Post.objects.filter(pk="survivor").exists()
     assert attempt.scopes.get(scope_key="B1:independent").enumeration_complete
     assert not attempt.scopes.get(scope_key="B1:aug09").enumeration_complete
+    for scoped in attempt.scopes.all():
+        assert scoped.requested_start_at == datetime.fromtimestamp(1786233600, UTC)
+        assert scoped.requested_end_at == datetime.fromtimestamp(1786234500, UTC)
 
 
 def policy_job(monkeypatch, tmp_path, *, calls, rare=False, selected_calls=None):

@@ -54,6 +54,13 @@ class EndpointBatch:
     inserted: int
 
 
+@dataclass(frozen=True)
+class ScopeBoundsBatch:
+    last_id: int
+    scanned: int
+    updated: int
+
+
 PROVENANCE_EXPRESSIONS = {
     "archive_snapshot_date": (
         "CASE WHEN t.source_metadata->>'archive_snapshot_date' ~ "
@@ -82,6 +89,64 @@ PROVENANCE_EXPRESSIONS = {
         "THEN (t.source_metadata->>'reconstruction_date')::date END"
     ),
 }
+
+SCOPE_BOUNDS_VALID = (
+    "CASE WHEN t.ownership->>'since_epoch' ~ '^[0-9]{1,12}$' "
+    "AND t.ownership->>'until_epoch' ~ '^[0-9]{1,12}$' "
+    "THEN (t.ownership->>'since_epoch')::bigint "
+    "< (t.ownership->>'until_epoch')::bigint ELSE FALSE END"
+)
+SCOPE_START = "to_timestamp((t.ownership->>'since_epoch')::double precision)"
+SCOPE_END = "to_timestamp((t.ownership->>'until_epoch')::double precision)"
+
+
+def project_scope_bounds_batch(
+    *, after_id: int = 0, batch_size: int = 500
+) -> ScopeBoundsBatch:
+    """Copy X scope request windows, leaving original query wording untouched."""
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative integer")
+    if type(batch_size) is not int or not 1 <= batch_size <= 1000:
+        raise ValueError("batch_size must be an integer from 1 to 1000")
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute("SET LOCAL lock_timeout = '5s'")
+        cursor.execute("SET LOCAL statement_timeout = '30s'")
+        cursor.execute(
+            "SELECT id FROM collection_scope_runs WHERE scope_kind='x_query' "
+            "AND id>%s ORDER BY id LIMIT %s FOR UPDATE",
+            [after_id, batch_size],
+        )
+        ids = [row[0] for row in cursor.fetchall()]
+        if not ids:
+            return ScopeBoundsBatch(after_id, 0, 0)
+        cursor.execute(
+            f"SELECT count(*) FROM collection_scope_runs t WHERE t.id=ANY(%s) "
+            f"AND NOT ({SCOPE_BOUNDS_VALID})",
+            [ids],
+        )
+        if cursor.fetchone()[0]:
+            raise ValueError("X scope has invalid historical request bounds")
+        cursor.execute(
+            f"UPDATE collection_scope_runs t SET "
+            f"requested_start_at={SCOPE_START}, requested_end_at={SCOPE_END} "
+            f"WHERE t.id=ANY(%s) AND (t.requested_start_at IS DISTINCT FROM {SCOPE_START} "
+            f"OR t.requested_end_at IS DISTINCT FROM {SCOPE_END})",
+            [ids],
+        )
+        return ScopeBoundsBatch(ids[-1], len(ids), cursor.rowcount)
+
+
+def scope_bounds_mismatch_counts() -> tuple[int, int]:
+    """Check all X scopes, including rows changed below a copy cursor."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"SELECT count(*) FILTER (WHERE NOT ({SCOPE_BOUNDS_VALID})), "
+            f"count(*) FILTER (WHERE CASE WHEN {SCOPE_BOUNDS_VALID} THEN "
+            f"t.requested_start_at IS DISTINCT FROM {SCOPE_START} OR "
+            f"t.requested_end_at IS DISTINCT FROM {SCOPE_END} ELSE FALSE END) "
+            "FROM collection_scope_runs t WHERE t.scope_kind='x_query'"
+        )
+        return tuple(cursor.fetchone())
 
 
 def project_benchmark_provenance_batch(

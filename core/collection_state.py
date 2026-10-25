@@ -11,7 +11,7 @@ import uuid
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 from django.db import transaction
 from django.utils import timezone
@@ -508,6 +508,24 @@ def checkpoint_scope(
     safe_payload(envelopes or [])
     safe_payload(cursor_history or [])
     require(isinstance(ownership, dict), "scope ownership object required")
+    if scope_kind == "x_query":
+        lower = ownership.get("since_epoch")
+        upper = ownership.get("until_epoch")
+        require(
+            type(lower) is int and type(upper) is int and 0 <= lower < upper,
+            "X scope requires ordered integer request epochs",
+        )
+        lower_at = datetime.fromtimestamp(lower, UTC)
+        upper_at = datetime.fromtimestamp(upper, UTC)
+        require(
+            requested_start_at is None or requested_start_at == lower_at,
+            "X scope requested start differs from ownership",
+        )
+        require(
+            requested_end_at is None or requested_end_at == upper_at,
+            "X scope requested end differs from ownership",
+        )
+        requested_start_at, requested_end_at = lower_at, upper_at
     require(
         raw_count is None or type(raw_count) is int and raw_count >= 0,
         "invalid raw count",
