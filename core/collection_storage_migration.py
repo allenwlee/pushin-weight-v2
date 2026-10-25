@@ -37,6 +37,13 @@ class ProvenanceBatch:
 
 
 PROVENANCE_EXPRESSIONS = {
+    "archive_snapshot_date": (
+        "CASE WHEN t.source_metadata->>'archive_snapshot_date' ~ "
+        "'^[0-9]{4}-[0-9]{2}-[0-9]{2}$' "
+        "AND pg_input_is_valid(t.source_metadata->>'archive_snapshot_date','date') "
+        "THEN (t.source_metadata->>'archive_snapshot_date')::date END"
+    ),
+    "period_status": "t.source_metadata->>'period_status'",
     "history_reconstructed": (
         "CASE WHEN t.source_metadata ? 'history_basis' THEN "
         "t.source_metadata->>'history_basis' = "

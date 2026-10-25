@@ -74,6 +74,8 @@ def test_benchmark_provenance_copy_is_bounded_and_repeatable():
             "secondary_source": True,
             "publication_complete": False,
             "reconstruction_date": "2026-10-24",
+            "archive_snapshot_date": "2026-10-23",
+            "period_status": "partial",
         },
     )
     assert provenance_mismatch_counts() == (1, 1)
@@ -92,6 +94,8 @@ def test_benchmark_provenance_copy_is_bounded_and_repeatable():
     assert observation.secondary_source is True
     assert observation.publication_complete is False
     assert observation.reconstruction_date.isoformat() == "2026-10-24"
+    assert observation.archive_snapshot_date.isoformat() == "2026-10-23"
+    assert observation.period_status == "partial"
     assert provenance_mismatch_counts() == (0, 0)
 
     observation.source_metadata["reconstruction_date"] = "2026-10-23"
