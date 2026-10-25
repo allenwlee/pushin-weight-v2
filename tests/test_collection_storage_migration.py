@@ -11,9 +11,11 @@ from core.collection_storage_migration import (
     project_benchmark_provenance_batch,
     project_run_ingestion_mode,
     project_scope_bounds_batch,
+    project_x_query_targets_batch,
     provenance_mismatch_counts,
     scope_bounds_mismatch_counts,
     stale_legacy_archive_count,
+    x_query_target_mismatch_counts,
 )
 from core.models import CollectionObservation
 from tests.test_collection_relational_storage import execution
@@ -80,6 +82,31 @@ def test_x_scope_bounds_copy_rechecks_older_rows_and_rejects_invalid_epochs():
     assert scope_bounds_mismatch_counts() == (1, 0)
     with pytest.raises(ValueError, match="invalid historical request bounds"):
         project_scope_bounds_batch(after_id=scope.pk - 1)
+
+
+def test_x_query_target_copy_preserves_frozen_query_and_detects_pin_drift():
+    _, _, scope = execution()
+    scope.scope_kind = "x_query"
+    scope.ownership = {
+        "call_id": "B1", "query": "exact source query",
+        "since_epoch": 1783809000, "until_epoch": 1783809300,
+    }
+    scope.save(update_fields=["scope_kind", "ownership"])
+    assert x_query_target_mismatch_counts() == (0, 1)
+    result = project_x_query_targets_batch(after_id=scope.pk - 1)
+    assert result.scanned == result.updated == 1
+    scope.refresh_from_db()
+    assert scope.job_target.search_query.query_text == "exact source query"
+    assert scope.job_target.target_role == "B1"
+    assert scope.job_target.requested_start_at == datetime.fromtimestamp(1783809000, UTC)
+    assert x_query_target_mismatch_counts() == (0, 0)
+    assert project_x_query_targets_batch(after_id=scope.pk - 1).updated == 0
+
+    scope.job_target.target_role = "A"
+    scope.job_target.save(update_fields=["target_role"])
+    assert x_query_target_mismatch_counts() == (0, 1)
+    with pytest.raises(ValueError, match="differs from scope ownership"):
+        project_x_query_targets_batch(after_id=scope.pk - 1)
 
 
 def test_legacy_documents_are_archived_once_and_changed_rows_are_reconciled():

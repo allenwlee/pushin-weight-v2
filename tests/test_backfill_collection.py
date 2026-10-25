@@ -474,6 +474,8 @@ def test_recoverable_scope_error_does_not_starve_independent_queries(pipeline):
     for scoped in attempt.scopes.all():
         assert scoped.requested_start_at == datetime.fromtimestamp(1786233600, UTC)
         assert scoped.requested_end_at == datetime.fromtimestamp(1786234500, UTC)
+        assert scoped.job_target.search_query.query_text == "Qwen"
+        assert scoped.job_target.target_role == "B1"
 
 
 def policy_job(monkeypatch, tmp_path, *, calls, rare=False, selected_calls=None):

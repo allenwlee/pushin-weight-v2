@@ -12,7 +12,7 @@ from uuid import UUID
 from django.db import connection, transaction
 
 from core.benchmark_metric_timing import native_date
-from core.models import CollectionObservation, CollectionRun
+from core.models import CollectionObservation, CollectionRun, CollectionScopeRun
 
 LEGACY_FIELDS = {
     "collection_runs": (
@@ -56,6 +56,13 @@ class EndpointBatch:
 
 @dataclass(frozen=True)
 class ScopeBoundsBatch:
+    last_id: int
+    scanned: int
+    updated: int
+
+
+@dataclass(frozen=True)
+class XQueryTargetBatch:
     last_id: int
     scanned: int
     updated: int
@@ -145,6 +152,81 @@ def scope_bounds_mismatch_counts() -> tuple[int, int]:
             f"t.requested_start_at IS DISTINCT FROM {SCOPE_START} OR "
             f"t.requested_end_at IS DISTINCT FROM {SCOPE_END} ELSE FALSE END) "
             "FROM collection_scope_runs t WHERE t.scope_kind='x_query'"
+        )
+        return tuple(cursor.fetchone())
+
+
+def project_x_query_targets_batch(
+    *, after_id: int = 0, batch_size: int = 200
+) -> XQueryTargetBatch:
+    """Pin historical X scope query identity without changing sealed job JSON."""
+    from core.collection_state import ensure_x_query_target, x_query_instruction
+
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative integer")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        scopes = list(
+            CollectionScopeRun.objects.select_for_update()
+            .filter(scope_kind="x_query", pk__gt=after_id)
+            .select_related("run__job")
+            .order_by("pk")[:batch_size]
+        )
+        if not scopes:
+            return XQueryTargetBatch(after_id, 0, 0)
+        targets = {}
+        changed = []
+        for scope in scopes:
+            query, call_id, start, end = x_query_instruction(scope.ownership)
+            key = (scope.run.job_id, scope.scope_key)
+            if key not in targets:
+                targets[key] = ensure_x_query_target(
+                    scope.run.job, scope.scope_key,
+                    query_text=query, call_id=call_id, start_at=start, end_at=end,
+                )
+            target = targets[key]
+            if scope.job_target_id not in (None, target.pk):
+                raise ValueError("historical X scope target pin changed")
+            if scope.requested_start_at not in (None, start) or scope.requested_end_at not in (None, end):
+                raise ValueError("historical X scope request bounds differ")
+            if scope.job_target_id is None or scope.requested_start_at is None or scope.requested_end_at is None:
+                scope.job_target = target
+                scope.requested_start_at = start
+                scope.requested_end_at = end
+                changed.append(scope)
+        if changed:
+            CollectionScopeRun.objects.bulk_update(
+                changed, ["job_target", "requested_start_at", "requested_end_at"]
+            )
+        return XQueryTargetBatch(scopes[-1].pk, len(scopes), len(changed))
+
+
+def x_query_target_mismatch_counts() -> tuple[int, int]:
+    """Verify all X scope pins, including rows changed below a copy cursor."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT count(*) FILTER (WHERE jsonb_typeof(s.ownership) <> 'object' "
+            "OR jsonb_typeof(s.ownership->'call_id') <> 'string' "
+            "OR jsonb_typeof(s.ownership->'query') <> 'string' "
+            "OR coalesce(s.ownership->>'call_id','')='' "
+            "OR coalesce(s.ownership->>'query','')='' "
+            "OR s.ownership - 'call_id' - 'query' - 'since_epoch' - 'until_epoch' <> '{}'::jsonb "
+            f"OR NOT ({SCOPE_BOUNDS_VALID.replace('t.', 's.')})), "
+            "count(*) FILTER (WHERE s.job_target_id IS NULL OR jt.job_id <> r.job_id "
+            "OR jt.target_key <> s.scope_key OR jt.target_kind <> 'query' "
+            "OR jt.resolution_state <> 'resolved' "
+            "OR jt.target_role IS DISTINCT FROM s.ownership->>'call_id' "
+            "OR q.query_text IS DISTINCT FROM s.ownership->>'query' "
+            "OR jt.requested_start_at IS DISTINCT FROM s.requested_start_at "
+            "OR jt.requested_end_at IS DISTINCT FROM s.requested_end_at) "
+            "FROM collection_scope_runs s JOIN collection_runs r ON r.id=s.run_id "
+            "LEFT JOIN collection_job_targets jt ON jt.id=s.job_target_id "
+            "LEFT JOIN search_queries q ON q.id=jt.search_query_id "
+            "WHERE s.scope_kind='x_query'"
         )
         return tuple(cursor.fetchone())
 

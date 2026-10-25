@@ -7,6 +7,7 @@ to checkpoint_scope or use fenced_run around their existing database writer.
 from __future__ import annotations
 
 import copy
+import hashlib
 import uuid
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -14,6 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 
 from core.benchmark_metric_store import safe_payload
@@ -22,8 +24,10 @@ from core.measurement_taxonomy import digest, require
 from core.models import (
     CollectionAttempt,
     CollectionJob,
+    CollectionJobTarget,
     CollectionRun,
     CollectionScopeRun,
+    SearchQuery,
 )
 
 
@@ -482,6 +486,63 @@ def fenced_run(claim: RunClaim, *, now=None):
         yield job, run
 
 
+def x_query_instruction(ownership):
+    """Return the frozen X query and window without accepting partial ownership."""
+    require(
+        isinstance(ownership, dict)
+        and set(ownership) == {"call_id", "query", "since_epoch", "until_epoch"}
+        and isinstance(ownership["call_id"], str)
+        and 0 < len(ownership["call_id"]) <= 32
+        and isinstance(ownership["query"], str)
+        and bool(ownership["query"]),
+        "X scope requires its frozen call and query",
+    )
+    lower, upper = ownership["since_epoch"], ownership["until_epoch"]
+    require(
+        type(lower) is int and type(upper) is int and 0 <= lower < upper,
+        "X scope requires ordered integer request epochs",
+    )
+    return (
+        ownership["query"], ownership["call_id"],
+        datetime.fromtimestamp(lower, UTC), datetime.fromtimestamp(upper, UTC),
+    )
+
+
+def ensure_x_query_target(job, scope_key, *, query_text, call_id, start_at, end_at):
+    """Pin one query and call role per job scope; never modify a sealed target."""
+    query_id = "x-backfill:" + hashlib.sha256(query_text.encode()).hexdigest()
+    search_query, _ = SearchQuery.objects.get_or_create(
+        query_id=query_id, defaults={"query_text": query_text}
+    )
+    require(search_query.query_text == query_text, "X query identity changed")
+    target = job.targets.filter(target_key=scope_key).first()
+    if target is None:
+        CollectionJob.objects.select_for_update().get(pk=job.pk)
+        target = job.targets.filter(target_key=scope_key).first()
+    if target is None:
+        require(
+            job.instruction_version == 1,
+            "sealed X job requires a frozen query target",
+        )
+        maximum = job.targets.aggregate(Max("ordinal"))["ordinal__max"]
+        ordinal = 0 if maximum is None else maximum + 1
+        target = CollectionJobTarget.objects.create(
+            job=job, target_key=scope_key, ordinal=ordinal,
+            target_kind="query", target_role=call_id,
+            resolution_state="resolved", search_query=search_query,
+            requested_start_at=start_at, requested_end_at=end_at,
+        )
+    require(
+        target.target_kind == "query"
+        and target.target_role == call_id
+        and target.search_query_id == search_query.pk
+        and target.requested_start_at == start_at
+        and target.requested_end_at == end_at,
+        "frozen X query target differs from scope ownership",
+    )
+    return target
+
+
 def checkpoint_scope(
     claim: RunClaim,
     *,
@@ -509,14 +570,7 @@ def checkpoint_scope(
     safe_payload(cursor_history or [])
     require(isinstance(ownership, dict), "scope ownership object required")
     if scope_kind == "x_query":
-        lower = ownership.get("since_epoch")
-        upper = ownership.get("until_epoch")
-        require(
-            type(lower) is int and type(upper) is int and 0 <= lower < upper,
-            "X scope requires ordered integer request epochs",
-        )
-        lower_at = datetime.fromtimestamp(lower, UTC)
-        upper_at = datetime.fromtimestamp(upper, UTC)
+        query_text, call_id, lower_at, upper_at = x_query_instruction(ownership)
         require(
             requested_start_at is None or requested_start_at == lower_at,
             "X scope requested start differs from ownership",
@@ -536,6 +590,11 @@ def checkpoint_scope(
             if run.job.instruction_version == 2 and scope_kind == "product_match"
             else None
         )
+        if scope_kind == "x_query":
+            target = ensure_x_query_target(
+                run.job, scope_key, query_text=query_text, call_id=call_id,
+                start_at=requested_start_at, end_at=requested_end_at,
+            )
         scope, created = CollectionScopeRun.objects.get_or_create(
             run=run,
             scope_kind=scope_kind,
@@ -543,6 +602,12 @@ def checkpoint_scope(
             defaults={"ownership": ownership, "job_target": target},
         )
         require(created or scope.ownership == ownership, "scope ownership pin changed")
+        require(
+            created or scope.job_target_id in (None, target.pk if target else None),
+            "scope target pin changed",
+        )
+        if target and scope.job_target_id is None:
+            scope.job_target = target
         for field, value in (
             ("requested_start_at", requested_start_at),
             ("requested_end_at", requested_end_at),
