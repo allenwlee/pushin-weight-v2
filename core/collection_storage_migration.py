@@ -29,6 +29,112 @@ class ArchiveBatch:
     more_unarchived: bool
 
 
+@dataclass(frozen=True)
+class ProvenanceBatch:
+    last_id: int
+    scanned: int
+    updated: int
+
+
+PROVENANCE_EXPRESSIONS = {
+    "history_reconstructed": (
+        "CASE WHEN t.source_metadata ? 'history_basis' THEN "
+        "t.source_metadata->>'history_basis' = "
+        "'reconstructed_current_relationships' END"
+    ),
+    "secondary_source": (
+        "CASE WHEN t.source_metadata ? 'secondary_source' THEN "
+        "t.source_metadata->'secondary_source' = 'true'::jsonb END"
+    ),
+    "publication_complete": (
+        "CASE WHEN t.source_metadata ? 'publication_complete' THEN "
+        "t.source_metadata->'publication_complete' = 'true'::jsonb END"
+    ),
+    "reconstruction_date": (
+        "CASE WHEN t.source_metadata->>'reconstruction_date' ~ "
+        "'^[0-9]{4}-[0-9]{2}-[0-9]{2}$' "
+        "AND pg_input_is_valid(t.source_metadata->>'reconstruction_date','date') "
+        "THEN (t.source_metadata->>'reconstruction_date')::date END"
+    ),
+}
+
+
+def project_benchmark_provenance_batch(
+    *, after_id: int = 0, batch_size: int = 500
+) -> ProvenanceBatch:
+    """Copy one observation ID range; rerunning from zero is safe.
+
+    A final full mismatch sweep must catch changed rows below the last ID.
+    """
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative integer")
+    if type(batch_size) is not int or not 1 <= batch_size <= 1000:
+        raise ValueError("batch_size must be an integer from 1 to 1000")
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute("SET LOCAL lock_timeout = '5s'")
+        cursor.execute("SET LOCAL statement_timeout = '30s'")
+        cursor.execute(
+            "SELECT id FROM collection_observations WHERE id > %s "
+            "ORDER BY id LIMIT %s",
+            [after_id, batch_size],
+        )
+        ids = [row[0] for row in cursor.fetchall()]
+        if not ids:
+            return ProvenanceBatch(after_id, 0, 0)
+        assignments = ", ".join(
+            f"{name} = {expression}"
+            for name, expression in PROVENANCE_EXPRESSIONS.items()
+        )
+        changed = " OR ".join(
+            f"t.{name} IS DISTINCT FROM {expression}"
+            for name, expression in PROVENANCE_EXPRESSIONS.items()
+        )
+        cursor.execute(
+            f"UPDATE collection_observations t SET {assignments} "
+            f"WHERE t.id = ANY(%s) AND ({changed})",
+            [ids],
+        )
+        return ProvenanceBatch(ids[-1], len(ids), cursor.rowcount)
+
+
+def project_run_ingestion_mode() -> int:
+    """Copy the small run-level scalar consumed by benchmark provenance."""
+    expression = (
+        "CASE WHEN source_metadata ? 'ingestion_mode' THEN "
+        "source_metadata->>'ingestion_mode' = 'direct' END"
+    )
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute("SET LOCAL lock_timeout = '5s'")
+        cursor.execute("SET LOCAL statement_timeout = '30s'")
+        cursor.execute(
+            "UPDATE collection_runs SET direct_ingestion = " + expression
+            + " WHERE direct_ingestion IS DISTINCT FROM " + expression
+        )
+        return cursor.rowcount
+
+
+def provenance_mismatch_counts() -> tuple[int, int]:
+    """Full comparison also catches edits below a previous ID checkpoint."""
+    changed = " OR ".join(
+        f"t.{name} IS DISTINCT FROM {expression}"
+        for name, expression in PROVENANCE_EXPRESSIONS.items()
+    )
+    run_expression = (
+        "CASE WHEN source_metadata ? 'ingestion_mode' THEN "
+        "source_metadata->>'ingestion_mode' = 'direct' END"
+    )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT count(*) FROM collection_runs WHERE direct_ingestion "
+            "IS DISTINCT FROM " + run_expression
+        )
+        runs = cursor.fetchone()[0]
+        cursor.execute(
+            f"SELECT count(*) FROM collection_observations t WHERE {changed}"
+        )
+        return runs, cursor.fetchone()[0]
+
+
 def _document_expression(fields: tuple[str, ...]) -> str:
     # Only the fixed, reviewed table/field manifest above reaches this builder.
     arguments = ", ".join(f"'{field}', t.{field}" for field in fields)
