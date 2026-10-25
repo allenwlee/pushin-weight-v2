@@ -10,6 +10,7 @@ from django.utils import timezone
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 BEFORE = ("core", "0160_rg4_remove_superseded_storage")
 AFTER = ("core", "0166_rg5_reference_source_guards")
+RETIRED = ("core", "0168_rg5_remove_superseded_storage")
 
 
 @pytest.mark.parametrize("migration_rehearsal_schema", [BEFORE], indirect=True)
@@ -249,10 +250,9 @@ def test_populated_rg5_maps_all_24_columns_without_changing_evidence(
         .listing,
     )
     retirement = importlib.import_module("core.migrations._rg5_retirement_v1")
-    with connection.schema_editor(atomic=False) as editor:
-        retirement.prepare_retirement(None, editor)
-    with transaction.atomic(), connection.schema_editor() as editor:
-        retirement.remove_storage(None, editor)
+    executor = MigrationExecutor(connection)
+    executor.migrate([RETIRED])
+    assert executor.recorder.migration_qs.filter(app=RETIRED[0], name=RETIRED[1]).exists()
     with connection.cursor() as cursor:
         for item in retirement.domains():
             cursor.execute(

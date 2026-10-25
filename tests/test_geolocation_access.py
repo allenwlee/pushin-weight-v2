@@ -83,7 +83,7 @@ def test_web_build_only_verifies_schema_with_actual_restricted_login(serving_log
         ) == 0
 
 
-def test_rg5_rolling_grants_keep_old_web_reads_until_columns_are_deleted(serving_login):
+def test_rg5_serving_login_reads_references_after_old_columns_are_deleted(serving_login):
     from core.migrations._rg5_retirement_v1 import domains
 
     serving, _role, _owner, _report = serving_login
@@ -91,12 +91,10 @@ def test_rg5_rolling_grants_keep_old_web_reads_until_columns_are_deleted(serving
         cursor.execute("SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public'")
         physical = set(cursor.fetchall())
     for item in domains():
-        columns = [item["new"]]
-        if (item["table"], item["old"]) in physical:
-            columns.append(item["old"])
+        assert (item["table"], item["old"]) not in physical
         with serving.cursor() as cursor:
             cursor.execute(sql.SQL("SELECT {} FROM {} LIMIT 0").format(
-                sql.SQL(",").join(map(sql.Identifier, columns)), sql.Identifier(item["table"]),
+                sql.Identifier(item["new"]), sql.Identifier(item["table"]),
             ))
 
 

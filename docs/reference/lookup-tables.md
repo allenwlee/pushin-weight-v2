@@ -1,25 +1,24 @@
 # Lookup Tables (v2 Django ORM)
 
 Version: v0.2.0-beta.1 (current write taxonomy `stage1-taxonomy-v4`)
-Last updated: 2026-09-25 JST
+Last updated: 2026-10-25 JST (shared product/provider catalogues and geography references)
 
 
 
-This document catalogs every lookup/enum table in the current v2 Django
-architecture. Each table constrains what the classifier and dashboard may
-emit; compatibility tables remain readable for older persisted rows.
+This document describes classifier/dashboard vocabularies and shared product
+and provider catalogues. The complete table and column inventory is in
+[Database schema](db-schema.md). Compatibility vocabularies remain readable
+for older persisted rows.
 
 **Source of truth.** `core/models.py` defines the Django models (the schema).
 `monitor/management/commands/load_seed.py` seeds brands, companies, and roles.
 `core/management/commands/seed_i18n_labels.py` seeds en/zh-cn/ja labels for
 active and feed-visible historical post types, product labels, Audience Topics,
 sentiments, geopolitical modes, national stance, roles, discourse, nationalism,
-and unsanctioned promotions. It also adds Japanese country and region labels
-from `monitor/data/account_geography_ja.json` to the existing geography keys.
-The catalog covers 249 countries and 31 regions, sourced from pinned Unicode
-CLDR Japanese territory names with reviewed overrides for three current region
-names. No Japanese schema columns are needed: each label is a row keyed by
-language. Run this command after deploying code that reads the new labels.
+and unsanctioned promotions. Geographic names belong to the shared geolocation
+importer and `geolocation_alternate_names`; this command does not recreate
+country/region tables. The alternate names reference existing locales, so each
+language has its own rows. See [Shared geography](db-schema.md#geography).
 
 **i18n label pattern.** The post type, product-label, Audience Topic,
 geopolitical, national-stance, and role key tables have corresponding `*Label` models with a
@@ -288,8 +287,9 @@ dashboard view (`monitor/views.py::MODEL_ACCENT_COLORS` and
 does `brand_obj.display_name or MODEL_DISPLAY_NAMES.get(...)`, so the
 DB row wins. The 20 rows above mirror the live `brands` table as of
 2026-08-05. Parent-company mappings are from `BRAND_TO_COMPANY` in
-`load_seed.py` and HQ countries are derived from `Company.hq_country`
-via `brands_companies`.
+`load_seed.py`. Current headquarters use `Company.hq_geolocation`, reached
+through `brands_companies`. The two-letter codes shown above are display
+metadata on geolocations, not relationship keys.
 
 ### 8.2 Sentinel brand
 
@@ -308,6 +308,37 @@ and `Role`. Edit handles via `load_seed` or a Django migration -- there are
 no flat files to update.
 
 ---
+
+## Shared product and provider catalogues
+
+Consumers store a foreign key to the catalogue row. Code values are resolved
+at the write boundary; readers follow the reference. The physical fields,
+constraints and model links are in [Database schema](db-schema.md).
+
+| Catalogue | Meaning and consumers | Identity and supported values |
+| --- | --- | --- |
+| [product_types](db-schema.md#table-product_types) | One product category, selected by `products.product_type_id`. | Unique `code`; seeded `llm-model`, `other-ai-model`, `agent-harness`. An optional protected parent supports a hierarchy; database guards reject cycles. |
+| [product_relationship_types](db-schema.md#table-product_relationship_types) | One relationship meaning, selected by `product_relationships.product_relationship_type_id`. | Unique `code`; seeded `new_version`, `finetune`, `adapter`, `quantized`, `merge`. |
+| [model_gating_states](db-schema.md#table-model_gating_states) | One model-access state, shared by products and resource snapshots through `gating_state_id`. | Unique `code`; seeded `public`, `gated`, `manual`, `auto`. Source booleans map to `public`/`gated`; original provider captures remain intact. |
+| [software_libraries](db-schema.md#table-software_libraries) | One provider's software-library code, shared by products and resource snapshots through `library_name_id`. | Unique `(data_source_id, code)`; exact provider spelling and case, such as HF `transformers`. |
+| [model_tasks](db-schema.md#table-model_tasks) | One provider's task code, shared by products and resource snapshots through `pipeline_tag_id`. | Unique `(data_source_id, code)`, such as HF `text-generation`. |
+| [account_verification_types](db-schema.md#table-account_verification_types) | One provider's verification code, shared by X details, profile snapshots and observed post authors. | Unique `(data_source_id, code)`; explicit empty code is distinct from NULL. |
+| [provider_label_types](db-schema.md#table-provider_label_types) | One provider's label kind, shared by profile snapshots and current affiliate/identity labels. | Unique `(data_source_id, code)`, preserving source spelling. Missing or empty input resolves to NULL. |
+| [provider_label_display_types](db-schema.md#table-provider_label_display_types) | One provider's label-display code, shared by profile snapshots and current affiliate/identity labels. | Unique `(data_source_id, code)`; missing or empty input resolves to NULL. |
+| [provider_link_types](db-schema.md#table-provider_link_types) | One provider's link-kind code, shared by current affiliate and identity-profile labels. | Unique `(data_source_id, code)`; missing or empty input resolves to NULL. |
+| [source_identifier_namespaces](db-schema.md#table-source_identifier_namespaces) | One source's identifier scope, shared by source-subject mappings and collection job targets through `identifier_scope_id`. | Unique `(data_source_id, subject_kind, code)`; kind is `repository`, `model`, `lab` or `account`. Empty code explicitly means unscoped. |
+
+The three business catalogues use registered values. Provider catalogues may
+register a new exact code during ingestion; that does not imply equivalence
+between providers or create a new business category. Database checks reject
+cross-source and wrong-resource-kind assignments and prevent reassignment of
+referenced source identities. Codes cannot be renamed in place.
+
+`core.product_vocabulary` resolves business categories and gating states.
+`core.source_vocabulary.reference_id` resolves source-qualified codes without
+caching database IDs across restores or rolled-back transactions. Existing
+frozen taxonomy snapshots keep their original bytes and hashes; new snapshots
+explicitly capture the current product-category ancestry.
 
 ## i18n label pattern
 

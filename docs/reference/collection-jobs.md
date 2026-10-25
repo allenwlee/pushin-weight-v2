@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Last verified: 2026-10-21, candidate `3b7e729d` through migration `0120_merge_homepage_shared_vocabulary` on production PostgreSQL18.4, web deployment `dep-dbc45t95efls73bbustg`; the same candidate passed staging deployment `dep-dbc40iek1f9s73bo0m80`. Isolated migration rehearsals used PostgreSQL18.6. Production authority, budget, legacy-job scope and frozen metric-definition readers passed provider-free checks.
+Shared-reference schema verified against the repository candidate through `0168_rg5_remove_superseded_storage` and the permanent local PostgreSQL test database on 2026-10-25. Staging/production revision and runtime verification are recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
@@ -9,25 +9,43 @@ observations retain provider evidence, and metric values hold admitted numbers.
 All authoritative business state lives in PostgreSQL. JSON input files and
 optional exports are transport, not a second runtime database.
 
-Metric definitions can reference a shared timezone through `metrics.source_timezone_id`. Their original timezone wording and schema1 nineteen-field definition snapshots remain unchanged. Adding this relationship creates no new collection-contract identity, changes no measurement value and does not infer a timezone for unresolved source evidence. See the [metric definition and bounded mapping contract](db-schema.md#table-metrics).
+Metric definitions reference shared timezones through `metrics.source_timezone_id`.
+Individual values use `metric_values.source_timezone_id`; timing corrections use
+`before_source_timezone_id` and `after_source_timezone_id`. These columns refer
+to `time_zones`; NULL remains unknown. Serialized correction inputs still use
+the existing `unknown` token so historical correction identities remain stable.
+Frozen nineteen-field definition snapshots and measurement values do not change.
+See the [metric definition contract](db-schema.md#table-metrics).
 
 Metric definitions also have optional `metrics.unit_id` and `metrics.window_unit_id`
-references to the shared unit catalogue. Both preserve their original strings
-and the same nineteen-field snapshots. The database keeps exact registered
-codes consistent for old and new writers; unknown codes remain unresolved.
+references to the shared unit catalogue. Frozen snapshots retain their original
+unit representations. Current readers use the shared references; unknown codes
+remain unresolved.
 Window units still follow the existing `day`/`second` and calendar/elapsed rules.
-`map_metric_units` previews by default and applies bounded exact mapping only
-with `--apply`. These references neither change saved contract identity nor
-authorize unit conversion.
+`map_metric_units` audits required references and reports missing or invalid
+assignments; it does not write values. These references neither change saved
+contract identity nor authorize unit conversion.
 
-Immutable correction records retain their exact recorded performer label and an
-optional `actor_id` to the shared performer registry. The timing-repair command
+Immutable correction records reference the shared performer registry through
+required `actor_id`. The timing-repair command
 records the known `benchmark_metric_timing_repair` system actor. Explicitly
-registered performers may be supplied for attribution corrections; unverified
-legacy labels remain unresolved. An actor identifies a performer and grants no
-approval or access rights. Existing correction rows are never rewritten to infer
+registered performers are required for attribution corrections. An actor
+identifies a performer and grants no approval or access rights. Existing
+correction rows are never rewritten to infer
 an actor, and staging refresh preserves actor/correction history while clearing
 environment-local login accounts.
+
+Source-subject mappings and collection job targets use `identifier_scope_id`
+to reference `source_identifier_namespaces`. A namespace belongs to one source
+and resource kind; its empty code is an explicit unscoped identity. A target's
+source comes from its pinned mapping or evidence, which may differ from the
+orchestrating job's source. Existing mapping hashes remain unchanged.
+
+Resource snapshots share `gating_state_id`, `library_name_id` and `pipeline_tag_id`
+with product metadata. Source documents remain with their original captures.
+Web charts read typed provenance through the three
+[benchmark serving views](db-schema.md#benchmark-serving-views), while their
+database login remains unable to read raw collection documents.
 
 ```mermaid
 flowchart TD

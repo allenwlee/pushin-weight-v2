@@ -7,7 +7,8 @@ prints credentials, grants owner membership, or adds a second web connection.
 from django.apps import apps
 from psycopg import sql
 
-from core.migrations._benchmark_serving_v1 import VIEWS as BENCHMARK_VIEWS, validate_view
+from core.migrations._benchmark_serving_v1 import VIEWS as BENCHMARK_VIEWS
+from core.migrations._benchmark_serving_v1 import validate_view
 
 # Both names are denied during the rolling-image bridge. Old entries disappear
 # from the physical inventory after final deletion; they must never be granted.
@@ -35,26 +36,6 @@ SERVING_VIEWS = frozenset({
     "trend_narrative_provider_calls", "trend_narrative_runs", "trend_narrative_visible_runs",
     "brand_trend_narrative_texts", "home_brand_time_counts",
 })
-
-# These columns already belong to the serving contract on the pre-RG5 image.
-# Keep their grants during its overlap with the new image; remove this list in
-# the final deletion candidate, after every serving process uses the references.
-ROLLING_CANONICAL_COLUMNS = {
-    "products": {"type", "gated", "library_name", "pipeline_tag"},
-    "product_relationships": {"relationship_type"},
-    "collection_resource_snapshots": {"gated_status", "library_name", "pipeline_tag"},
-    "metric_values": {"source_timezone"},
-    "collection_corrections": {"before_source_timezone", "after_source_timezone"},
-    "account_profile_snapshots": {"verified_type", "affiliate_label_type", "affiliate_display_type"},
-    "posts": {"author_verified_type"},
-    "x_account_details": {
-        "verified_type", "affiliate_label_url_type", "affiliate_label_user_label_display_type",
-        "affiliate_label_user_label_type", "identity_profile_label_url_type",
-        "identity_profile_label_user_label_display_type", "identity_profile_label_user_label_type",
-    },
-    "source_subject_mappings": {"identifier_scope"},
-    "collection_job_targets": {"identifier_scope"},
-}
 
 
 def verify_serving_environment(values):
@@ -186,7 +167,7 @@ def apply_serving_grants(connection, role, *, schema="public"):
                     raise ValueError("Serving view exposes source evidence: " + table)
                 cursor.execute(sql.SQL("GRANT SELECT ON {} TO {}").format(relation, identifier))
                 continue
-            allowed = canonical_columns.get(table, set()) | ROLLING_CANONICAL_COLUMNS.get(table, set())
+            allowed = canonical_columns.get(table, set())
             safe = [column for column in columns if column in allowed
                     and column not in SOURCE_COLUMNS.get(table, ())]
             if not safe:
