@@ -19,6 +19,7 @@ from core.models import (
     PostBrandProduct,
     Product,
     ProductVerificationProposal,
+    ReleaseMaturity,
 )
 from core.product_verification import decide_product_proposal
 from tests.company_factory import company_with_label
@@ -75,6 +76,7 @@ def _staff_client(*, csrf: bool = False) -> Client:
 def _release(brand: Brand) -> ModelRelease:
     now = timezone.now()
     return ModelRelease.objects.create(
+        release_maturity_reference=ReleaseMaturity.objects.get(code="unknown"),
         brand=brand,
         observed_model_name="Model X",
         release_identity="r" * 64,

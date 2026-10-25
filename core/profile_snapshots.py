@@ -22,6 +22,7 @@ from urllib.parse import unquote, urlparse
 from django.db import transaction
 from django.db.models import F
 
+from core.account_vocabulary import X_FIELDS, code_for, snapshot_references
 from core.models import (
     Account,
     AccountProfileSnapshot,
@@ -324,6 +325,8 @@ def profile_observation_from_post(post: Post) -> ProfileObservation:
     raw_profile: dict[str, Any] = {}
     for target, source in _POST_FIELD_MAP:
         value = source_location if source == "author_location" else getattr(post, source)
+        if source == "author_verified_type":
+            value = code_for(post, source)
         if value is None:
             continue
         if source == "author_profile_bio":
@@ -365,6 +368,8 @@ def profile_observation_from_account(account: Account) -> ProfileObservation:
     present: set[str] = set()
     for target, source in _ACCOUNT_FIELD_MAP:
         value = source_location if source == "location" else getattr(account, source)
+        if source in X_FIELDS:
+            value = code_for(account, source)
         if value is None:
             continue
         data[target] = _json_safe(value)
@@ -433,7 +438,7 @@ def record_profile_snapshot(
             latest.refresh_from_db()
             return latest, False, False
 
-        defaults = _snapshot_defaults(observation)
+        defaults = snapshot_references(_snapshot_defaults(observation), account.data_source_id)
         snapshot = AccountProfileSnapshot.objects.create(
             account=account,
             profile_hash=observation.profile_hash,

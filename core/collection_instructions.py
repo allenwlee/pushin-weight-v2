@@ -216,7 +216,7 @@ def scope_for_job(job):
                 continue
             native = _native(
                 target.evidence_observation,
-                target.identifier_scope,
+                target.identifier_scope_code,
                 target.source_row_index,
             )
             require(
@@ -409,13 +409,24 @@ def validate_selection_ownership(job):
             )
 
 
+def target_documents(query):
+    """Preserve the sealed string-based instruction format after FK conversion."""
+    rows = list(query.values(*(
+        "identifier_scope__code" if name == "identifier_scope" else name
+        for name in TARGET_FIELDS
+    )))
+    for row in rows:
+        row["identifier_scope"] = row.pop("identifier_scope__code")
+    return rows
+
+
 def relational_identity(job):
     values = {name: getattr(job, name) for name in SETTINGS}
     values = {
         key: str(value) if key.endswith("_id") and value is not None else value
         for key, value in values.items()
     }
-    targets = list(job.targets.order_by("ordinal").values(*TARGET_FIELDS))
+    targets = target_documents(job.targets.order_by("ordinal"))
     for target in targets:
         for name, value in target.items():
             if hasattr(value, "isoformat"):
@@ -474,7 +485,13 @@ def register_relational_job(
             isinstance(target, dict) and set(target) <= allowed_target_fields,
             "unsupported target field",
         )
-        normalized_targets.append(_normalize_references(CollectionJobTarget, target))
+        scalar = {key: value for key, value in target.items() if key != "identifier_scope"}
+        normalized = _normalize_references(CollectionJobTarget, scalar)
+        if "identifier_scope" in target:
+            require(target["identifier_scope"] is None or isinstance(target["identifier_scope"], str),
+                    "identifier scope must be a source code")
+            normalized["identifier_scope"] = target["identifier_scope"]
+        normalized_targets.append(normalized)
     targets = normalized_targets
     candidate = CollectionJob(
         job_key=job_key,
@@ -512,7 +529,7 @@ def register_relational_job(
             normalized = {name: getattr(defaults, name) for name in TARGET_FIELDS}
             normalized.update({"ordinal": ordinal, "gap_reason": "", **target})
             requested.append(normalized)
-        actual = list(existing.targets.order_by("ordinal").values(*TARGET_FIELDS))
+        actual = target_documents(existing.targets.order_by("ordinal"))
         require(
             requested == actual, "immutable job targets changed; register a new job"
         )
@@ -524,6 +541,10 @@ def register_relational_job(
     for ordinal, target in enumerate(targets):
         values = {"ordinal": ordinal, **target}
         parent_key = values.pop("parent_target_key", None)
+        if "identifier_scope" in values:
+            from core.identifier_namespaces import target_namespace_id
+            values["identifier_scope_id"] = target_namespace_id(values)
+            del values["identifier_scope"]
         created = CollectionJobTarget.objects.create(job=candidate, **values)
         created_targets[created.target_key] = created
         if parent_key is not None:

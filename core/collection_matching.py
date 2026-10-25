@@ -86,7 +86,7 @@ def ownership_pin(product, publisher):
         "product_key": str(product.product_key),
         "repo_id": product.repo_id,
         "brand_id": product.brand_id,
-        "product_type": product.type,
+        "product_type": product.product_type_code,
         "product_evidence_sha256": digest(product.card_data),
         "product_publisher": links(product.publisher_account),
         "source_publisher": links(publisher),
@@ -309,7 +309,7 @@ def identifier_presence(*, source, kind, scope, identifier, cutoff=None, checked
         if SourceSubjectMapping.objects.filter(
             source_id=source,
             source_subject_kind=kind,
-            identifier_scope=scope,
+            identifier_scope__code=scope,
             external_identifier=identifier,
             reviewed_at__lte=cutoff,
         ).exists():
@@ -333,7 +333,7 @@ def _existing_mappings(product_keys, sources, cutoff):
             subject__product_id__in=product_keys,
             reviewed_at__lte=cutoff,
         )
-        .select_related("subject")
+        .select_related("subject", "identifier_scope")
         .order_by("pk")
     )
     result = defaultdict(list)
@@ -342,7 +342,7 @@ def _existing_mappings(product_keys, sources, cutoff):
             {
                 "source": mapping.source_id,
                 "identifier": mapping.external_identifier,
-                "identifier_scope": mapping.identifier_scope,
+                "identifier_scope": mapping.identifier_scope_code,
                 "source_subject_kind": mapping.source_subject_kind,
                 "observed_label": mapping.identifier_metadata.get(
                     "current_full_name", mapping.external_identifier
@@ -490,7 +490,7 @@ def preview_matches(*, brand_ids, sources=SOURCES, cutoff=None):
                     if product.created_at
                     else None,
                     "brand_id": product.brand_id,
-                    "product_type": product.type,
+                    "product_type": product.product_type_code,
                     "existing": retained,
                     "candidates": candidates[:MAX_CANDIDATES],
                     "candidate_overflow": too_many,

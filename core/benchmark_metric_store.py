@@ -20,6 +20,7 @@ from core.benchmark_metric_timing import (
     aware_instant,
     calendar_window,
     native_date,
+    timing_storage,
     value_times,
 )
 from core.measurement_taxonomy import digest, require
@@ -393,8 +394,8 @@ def prepare_rows(contract, source, payload, *, adapter=None):
             "pinned definition changed",
         )
     mappings = {
-        (m.source_subject_kind, m.identifier_scope, m.normalized_identifier): m
-        for m in contract.mappings.filter(purpose="metric", source_id=source)
+        (m.source_subject_kind, m.identifier_scope_code, m.normalized_identifier): m
+        for m in contract.mappings.filter(purpose="metric", source_id=source).select_related("identifier_scope")
     }
     required = {key for key, obj in definitions.items() if obj.required}
     result = []
@@ -678,6 +679,8 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
                 for field, expected in value.items():
                     if field == "source_metric":
                         actual, expected = previous.source_metric_id, expected.pk
+                    elif field == "source_timezone":
+                        actual = previous.source_timezone_reference_id or "unknown"
                     else:
                         actual = getattr(previous, field)
                     require(
@@ -685,7 +688,7 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
                         "immutable numeric snapshot conflict: " + field,
                     )
             else:
-                pending_values.append(MetricValue(observation=observation, **value))
+                pending_values.append(MetricValue(observation=observation, **timing_storage(value)))
     MetricValue.objects.bulk_create(pending_values, batch_size=1000)
     from core.collection_resources import attach_numeric_evidence
 

@@ -2336,6 +2336,12 @@ def _upsert_post(
         if val is not None:
             defaults[col] = val
 
+    if "author_verified_type" in defaults:
+        from core.source_vocabulary import reference_id
+
+        defaults["author_verified_type_id"] = reference_id(
+            "account_verification_types", "x", defaults.pop("author_verified_type")
+        )
     post, created = Post.objects.update_or_create(
         tweet_id=tweet_id, defaults=defaults
     )

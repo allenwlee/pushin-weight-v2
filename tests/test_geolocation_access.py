@@ -80,6 +80,23 @@ def test_web_build_only_verifies_schema_with_actual_restricted_login(serving_log
         ) == 0
 
 
+def test_rg5_rolling_grants_keep_old_web_reads_until_columns_are_deleted(serving_login):
+    from core.migrations._rg5_retirement_v1 import domains
+
+    serving, _role, _owner, _report = serving_login
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT table_name,column_name FROM information_schema.columns WHERE table_schema='public'")
+        physical = set(cursor.fetchall())
+    for item in domains():
+        columns = [item["new"]]
+        if (item["table"], item["old"]) in physical:
+            columns.append(item["old"])
+        with serving.cursor() as cursor:
+            cursor.execute(sql.SQL("SELECT {} FROM {} LIMIT 0").format(
+                sql.SQL(",").join(map(sql.Identifier, columns)), sql.Identifier(item["table"]),
+            ))
+
+
 def test_web_build_waits_for_grants_after_migration_ledger_is_complete(serving_login):
     from scripts.database_lock import DatabaseLockError
     from scripts.render_migrate import verify_serving_schema

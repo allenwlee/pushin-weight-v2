@@ -17,6 +17,7 @@ from core.models import (
     SourceSubjectMapping,
 )
 from tests.collection_fixtures import with_database_models
+from tests.product_factory import product_type_fields
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
@@ -34,7 +35,7 @@ def identities():
     role, _ = Role.objects.get_or_create(key="official")
     BrandAccount.objects.create(brand=brand, account=account, role=role)
     product = Product.objects.create(
-        brand=brand, repo_id="HFPublisher/Model", type="llm-model"
+        brand=brand, repo_id="HFPublisher/Model", **product_type_fields(Product, "llm-model")
     )
     subject = MeasurementSubject.objects.create(subject_kind="product", product=product)
     repo = {
@@ -71,7 +72,7 @@ def test_family_repository_maps_to_two_models_without_duplicate_native_identity(
     brand, account, subject, repo = identities()
     first = admit(subject, repo)
     second_product = Product.objects.create(
-        brand=brand, repo_id="HFPublisher/Model2", type="llm-model"
+        brand=brand, repo_id="HFPublisher/Model2", **product_type_fields(Product, "llm-model")
     )
     second_subject = MeasurementSubject.objects.create(
         subject_kind="product", product=second_product

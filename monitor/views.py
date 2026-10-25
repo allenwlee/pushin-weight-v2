@@ -106,7 +106,6 @@ from core.models import (
     PostTypeLabel,
     PostUnsanctionedFlag,
     PostUntrackedBrandPromotion,
-    Product,
     ProductLabelLabel,
     ProductVerificationProposal,
     RoleLabel,
@@ -115,6 +114,7 @@ from core.models import (
     UntrackedBrandPromotionLabel,
 )
 from core.product_verification import ProductReviewError, decide_product_proposal
+from core.product_vocabulary import product_type_choices
 from core.u18a_activation import enabled_audience_topics
 from core.u18a_activation import is_enabled as u18a_enabled
 from monitor.country_flags import COUNTRY_FLAG_CODES, country_flag_symbol_id
@@ -6094,7 +6094,7 @@ def _product_review_context(
         "proposal": proposal,
         "brands": Brand.objects.filter(is_sentinel=False).order_by("nickname"),
         "companies": Company.objects.prefetch_related("labels").order_by("nickname"),
-        "product_types": Product.TYPES,
+        "product_types": product_type_choices(),
     }
 
 
@@ -6102,7 +6102,11 @@ def _product_review_context(
 def frozen_account_run(request: HttpRequest) -> HttpResponse:
     if not _can_review_products(request):
         return HttpResponseForbidden("Admin requires owner or staff access.")
-    from core.official_company_requalification_admin import OTHER_CATEGORIES, TABS, frozen_run_report
+    from core.official_company_requalification_admin import (
+        OTHER_CATEGORIES,
+        TABS,
+        frozen_run_report,
+    )
 
     locale = _resolve_locale(request)
     copy_locale = "zh_hans" if locale in {"zh_cn", "zh-CN"} else locale

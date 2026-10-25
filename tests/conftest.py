@@ -58,8 +58,18 @@ def ensure_shared_business_catalogues_for_database_tests(request):
         return
     request.getfixturevalue("db")
     from core.job_vocabulary import NORMALIZER_ID, register_job_normalizer
-    from core.models import AffiliationType, Currency, DefinitionVersion, EmploymentType
+    from core.models import (
+        AffiliationType,
+        Currency,
+        DefinitionVersion,
+        EmploymentType,
+        ProductType,
+    )
     from core.shared_vocabulary import seed_shared_vocabulary
+    if not ProductType.objects.filter(code="llm-model").exists():
+        seed_shared_vocabulary(catalogues=(
+            "product_types", "product_relationship_types", "model_gating_states",
+        ))
 
     if not Currency.objects.filter(pk="USD").exists() or not EmploymentType.objects.filter(code="full_time").exists():
         seed_shared_vocabulary(catalogues=(
@@ -81,6 +91,7 @@ def ensure_shared_business_catalogues_for_database_tests(request):
 def company_country_catalogue(db):
     """Seed the pinned selected places; return local IDs for external-input fixtures."""
     from django.conf import settings
+
     from core.geolocations import import_geonames_documents, load_pinned_geonames
     documents, metadata, roots = load_pinned_geonames(settings.BASE_DIR / "data/geonames")
     identities = import_geonames_documents(documents, country_metadata=metadata, selected_ids=roots)

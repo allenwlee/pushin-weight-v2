@@ -406,16 +406,33 @@ def _catalog_counts(cursor: Any) -> dict[str, int]:
     return counts
 
 
-def _translation_counts(cursor: Any, policy: RefreshPolicy) -> dict[str, int]:
+def _translation_counts(
+    cursor: Any, policy: RefreshPolicy, *, source_tables: frozenset[str] | None = None
+) -> dict[str, int]:
     counts: dict[str, int] = {}
+    # Pre-0129 snapshots store these exact translations on their owner. Compare
+    # the same nonblank values across the migration, rather than silently
+    # omitting a check because its new table has not been created yet.
+    legacy_sources = {
+        ("account_profile_text_translations", "text"): ("accounts", ("bio_en", "bio_zh_cn")),
+        ("company_labels", "label"): ("companies", ("display_name", "display_name_en", "display_name_zh_cn")),
+    }
     for table, columns in policy.validation.translation_columns.items():
         for column in columns:
-            cursor.execute(
-                sql.SQL(
-                    "SELECT count(*) FROM {} WHERE NULLIF(BTRIM({}), '') IS NOT NULL"
-                ).format(sql.Identifier(table), sql.Identifier(column))
-            )
-            counts[f"{table}.{column}"] = int(cursor.fetchone()[0])
+            owner, source_columns = table, (column,)
+            if source_tables is not None and table not in source_tables:
+                if table not in policy.relations.optional_source_tables or (table, column) not in legacy_sources:
+                    raise RefreshError(f"source_translation_table_missing:{table}")
+                owner, source_columns = legacy_sources[table, column]
+            count = 0
+            for source_column in source_columns:
+                cursor.execute(
+                    sql.SQL(
+                        "SELECT count(*) FROM {} WHERE NULLIF(BTRIM({}), '') IS NOT NULL"
+                    ).format(sql.Identifier(owner), sql.Identifier(source_column))
+                )
+                count += int(cursor.fetchone()[0])
+            counts[f"{table}.{column}"] = count
     return counts
 
 
@@ -701,7 +718,7 @@ class PsycopgSnapshotAdapter:
             )
             value = cursor.fetchone()[0]
             latest[f"{table}.{column}"] = value.isoformat() if value else None
-            translation_counts = _translation_counts(cursor, self.policy)
+            translation_counts = _translation_counts(cursor, self.policy, source_tables=source_tables)
             classification_counts = {
                 table: _table_count(cursor, table)
                 for table in self.policy.validation.classification_tables
@@ -1485,7 +1502,7 @@ class CandidateProcessor:
         if result.returncode != 0:
             if arguments == ("migrate", "--check"):
                 raise RefreshError("candidate_migrations_pending")
-            if arguments and arguments[0] == "migrate":
+            if arguments and arguments[0] in {"migrate", "prepare_refresh_references"}:
                 raise RefreshError("candidate_migration_failed")
             if arguments and arguments[0] == "normalize_collection_run_jobs":
                 raise RefreshError("candidate_run_normalization_failed")
@@ -1555,6 +1572,7 @@ class CandidateProcessor:
 
     def process(self, candidate: ShadowCandidate) -> CandidateResult:
         purged = self.adapter.purge_collection_runtime(self.target_url, candidate.name)
+        self._run_django(candidate.name, "prepare_refresh_references")
         self._run_django(candidate.name, "migrate", "--noinput")
         self._run_django(candidate.name, "check", "--deploy")
         self._run_django(candidate.name, "migrate", "--check")

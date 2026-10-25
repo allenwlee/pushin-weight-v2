@@ -2,6 +2,7 @@ import pytest
 
 from core.measurement_taxonomy import configure_taxonomy, subject_id
 from core.models import Brand, Company, Post, Product
+from tests.product_factory import product_type_fields
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
@@ -11,8 +12,8 @@ def test_two_product_mentions_count_once_for_company_and_broad_stays_broad():
 
     brand = Brand.objects.create(nickname="minimax")
     company = Company.objects.create(nickname="minimax")
-    a = Product.objects.create(repo_id="MiniMaxAI/M2", type="llm-model", brand=brand)
-    b = Product.objects.create(repo_id="MiniMaxAI/M3", type="llm-model", brand=brand)
+    a = Product.objects.create(repo_id="MiniMaxAI/M2", **product_type_fields(Product, "llm-model"), brand=brand)
+    b = Product.objects.create(repo_id="MiniMaxAI/M3", **product_type_fields(Product, "llm-model"), brand=brand)
     subjects = [
         {"kind": "company", "key": company.pk},
         {"kind": "brand", "key": brand.pk},

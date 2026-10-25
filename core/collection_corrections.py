@@ -91,6 +91,9 @@ def record_timing_correction(
             "fields": serialized,
         }
     )
+    for side in ("before", "after"):
+        zone = fields.pop(f"{side}_source_timezone")
+        fields[f"{side}_source_timezone_reference_id"] = None if zone == "unknown" else zone
     return CollectionCorrection.objects.create(
         id=uuid.uuid5(uuid.NAMESPACE_URL, "pushinweight:timing-correction:" + key),
         observation=observation,

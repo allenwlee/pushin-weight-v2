@@ -454,6 +454,11 @@ def port_accounts(
 
         if not dry_run:
             with transaction.atomic():
+                from core.source_vocabulary import reference_id
+
+                defaults["verified_type_id"] = reference_id(
+                    "account_verification_types", "x", defaults.pop("verified_type")
+                )
                 account, _ = Account.objects.update_or_create(
                     author_id=author_id, defaults=defaults
                 )
@@ -1093,8 +1098,10 @@ def port_products(
             defaults["publisher_account_id"] = get_publisher(source="hf", identifier=hf_org_ns).account_id
 
         if not dry_run:
+            from core.product_vocabulary import metadata_references
+
             Product.objects.update_or_create(
-                repo_id=repo_id, defaults=defaults
+                repo_id=repo_id, defaults=metadata_references(defaults, source_id="hf")
             )
         _inc(report, "products", "inserted")
 

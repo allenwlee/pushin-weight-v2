@@ -4,6 +4,7 @@ import pytest
 from django.db import IntegrityError, connection, transaction
 
 from core.models import Account, DataSource, XAccountDetail
+from tests.account_factory import x_verification_id
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
@@ -24,12 +25,12 @@ def test_x_details_keep_zero_false_and_shared_identity():
 def test_split_write_rolls_back_parent_when_detail_save_fails():
     account = Account.objects.create(author_id="x-extensions-2", bio="before")
     account.bio = "after"
-    account.verified_type = "Business"
+    account.verified_type_id = x_verification_id("Business")
     with patch.object(
         XAccountDetail, "save", side_effect=RuntimeError("detail failed")
     ):
         with pytest.raises(RuntimeError, match="detail failed"):
-            account.save(update_fields=["bio", "verified_type"])
+            account.save(update_fields=["bio", "verified_type_id"])
     account.refresh_from_db()
     assert account.bio == "before"
     assert account.verified_type is None

@@ -91,8 +91,10 @@ def test_pre_ledger_rich_columns_survive_first_listing():
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.usefixtures("isolated_migration_database")
-def test_additive_migration_preserves_existing_products():
+@pytest.mark.parametrize(
+    "migration_rehearsal_schema", [("core", "0044_merge_20260918_1344")], indirect=True
+)
+def test_additive_migration_preserves_existing_products(migration_rehearsal_schema):
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor
 
@@ -124,7 +126,10 @@ def test_additive_migration_preserves_existing_products():
             "core", "Product"
         )
         assert [
-            (merged_product.objects.get(pk=pk).pk, merged_product.objects.get(pk=pk).repo_id)
+            (
+                merged_product.objects.get(pk=pk).pk,
+                merged_product.objects.get(pk=pk).repo_id,
+            )
             for pk, _ in identities
         ] == identities
         assert merged_product.objects.get(pk=hf.pk).raw == {"review": "kept"}

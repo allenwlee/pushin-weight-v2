@@ -34,16 +34,16 @@ def measurement_contract(contract, line):
         "measurement pin provider configuration mismatch",
     )
     current = {
-        (m.external_identifier, m.source_subject_kind, m.identifier_scope, m.subject_id)
-        for m in contract.mappings.filter(
+        (m.external_identifier, m.source_subject_kind, m.identifier_scope_code, m.subject_id)
+        for m in contract.mappings.select_related("identifier_scope").filter(
             purpose="metric",
             source_id=source,
             external_identifier__in=line["mapping_identifiers"],
         )
     }
     previous = {
-        (m.external_identifier, m.source_subject_kind, m.identifier_scope, m.subject_id)
-        for m in parent.mappings.filter(
+        (m.external_identifier, m.source_subject_kind, m.identifier_scope_code, m.subject_id)
+        for m in parent.mappings.select_related("identifier_scope").filter(
             source_id=source, external_identifier__in=line["mapping_identifiers"]
         )
     }
@@ -96,10 +96,10 @@ def validate_pin(line, mappings, config):
         (
             m.external_identifier,
             m.source_subject_kind,
-            m.identifier_scope,
+            m.identifier_scope_code,
             str(m.subject_id),
         )
-        for m in parent.mappings.filter(
+        for m in parent.mappings.select_related("identifier_scope").filter(
             source_id=source, external_identifier__in=line["mapping_identifiers"]
         )
     }

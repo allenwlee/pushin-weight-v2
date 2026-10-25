@@ -9,6 +9,7 @@ from django.core.management import call_command
 from core.models import Account, OfficialCompanyAccountState, Post, PostBrand
 from core.official_company_accounts import enqueue_account
 from monitor.cycle import CycleRunner
+from tests.account_factory import x_verification_id
 from x_monitor.config import Config, OfficialCompanyConfig
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
@@ -331,7 +332,7 @@ def test_scheduled_extractor_resumes_legacy_native_account_cursor():
     account = Account.objects.create(
         author_id="12345", handle="voice_lab",
         bio="We are Voice Lab. We release our own speech models.",
-        verified_type="Business",
+        verified_type_id=x_verification_id("Business"),
     )
     Account.objects.filter(pk=account.pk).update(last_seen_at=at)
     OfficialCompanyScan.objects.create(

@@ -10,7 +10,7 @@ from django.db import close_old_connections, transaction
 from django.utils import timezone
 
 from core.hf_catalog import execute_catalog, resolve_scope
-from core.models import Product, TrendNarrative
+from core.models import Product, TrendNarrative, TrendNarrativeSubjectLabel
 from core.product_metadata import apply_metadata
 from monitor.cycle import _classification_tracked_brand_catalog
 from monitor.trend_narrative_lifecycle import _write_subjects
@@ -75,29 +75,30 @@ def test_refresh_preserves_existing_headline_product_reference():
         status=TrendNarrative.Status.CHECKED,
         facts_as_of=timezone.now(),
     )
-    _write_subjects(
-        narrative,
-        [
-            {
-                "position": 0,
-                "support_type": "measured_candidate",
-                "entity_type": "model",
-                "identity_type": "product",
-                "canonical_key_snapshot": product.repo_id,
-                "observed_name": "",
-                "name_zh_cn_snapshot": "A curated model",
-                "candidate_id": "lab:full_window",
-                "name_en_snapshot": "A curated model",
-            }
-        ],
-    )
+    with transaction.atomic():
+        _write_subjects(
+            narrative,
+            [
+                {
+                    "position": 0,
+                    "support_type": "measured_candidate",
+                    "entity_type": "model",
+                    "identity_type": "product",
+                    "canonical_key_snapshot": product.repo_id,
+                    "observed_name": "",
+                    "name_zh_cn_snapshot": "A curated model",
+                    "candidate_id": "lab:full_window",
+                    "name_en_snapshot": "A curated model",
+                }
+            ],
+        )
     subject = narrative.subjects.get()
     assert subject.product_id == product.pk
     assert execute_catalog(scope=manifest, hf=api())["imported"] == 0
     subject.refresh_from_db()
     assert subject.product_id == product.pk
     assert subject.canonical_key_snapshot == "lab/model"
-    assert subject.name_en_snapshot == "A curated model"
+    assert TrendNarrativeSubjectLabel.objects.get(subject=subject, locale_id="en").label_snapshot == "A curated model"
 
 
 def test_stale_catalog_writer_waits_for_curated_edit_and_preserves_it():

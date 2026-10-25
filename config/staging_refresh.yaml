@@ -58,6 +58,16 @@ relations:
     - release_access_channels
     - release_availability_states
     - personnel_change_types
+    - product_types
+    - product_relationship_types
+    - model_gating_states
+    - software_libraries
+    - model_tasks
+    - account_verification_types
+    - provider_label_types
+    - provider_label_display_types
+    - provider_link_types
+    - source_identifier_namespaces
     # Shared catalogues are data, not scheduling or credential authority.
     - time_zones
     - languages
@@ -287,6 +297,16 @@ relations:
     - release_access_channels
     - release_availability_states
     - personnel_change_types
+    - product_types
+    - product_relationship_types
+    - model_gating_states
+    - software_libraries
+    - model_tasks
+    - account_verification_types
+    - provider_label_types
+    - provider_label_display_types
+    - provider_link_types
+    - source_identifier_namespaces
     # Earlier source snapshots predate the additive foundation migrations.
     - time_zones
     - languages
@@ -461,6 +481,16 @@ relations:
     - release_access_channels_id_seq
     - release_availability_states_id_seq
     - personnel_change_types_id_seq
+    - product_types_id_seq
+    - product_relationship_types_id_seq
+    - model_gating_states_id_seq
+    - software_libraries_id_seq
+    - model_tasks_id_seq
+    - account_verification_types_id_seq
+    - provider_label_types_id_seq
+    - provider_label_display_types_id_seq
+    - provider_link_types_id_seq
+    - source_identifier_namespaces_id_seq
     - event_dossier_sources_id_seq
     - event_dossier_review_claims_id_seq
     # Benchmark taxonomy and measurement evidence; never collection credentials.
@@ -583,6 +613,16 @@ relations:
     - release_access_channels_id_seq
     - release_availability_states_id_seq
     - personnel_change_types_id_seq
+    - product_types_id_seq
+    - product_relationship_types_id_seq
+    - model_gating_states_id_seq
+    - software_libraries_id_seq
+    - model_tasks_id_seq
+    - account_verification_types_id_seq
+    - provider_label_types_id_seq
+    - provider_label_display_types_id_seq
+    - provider_link_types_id_seq
+    - source_identifier_namespaces_id_seq
     - event_dossier_sources_id_seq
     - event_dossier_review_claims_id_seq
     - original_content_sources_id_seq
@@ -787,6 +827,76 @@ validation:
   forward_migration_count_deltas: {}
   forward_migration_translation_count_deltas: {}
   required_columns:
+    product_types:
+      - id
+      - code
+    product_relationship_types:
+      - id
+      - code
+    model_gating_states:
+      - id
+      - code
+    software_libraries:
+      - id
+      - code
+      - data_source_id
+    model_tasks:
+      - id
+      - code
+      - data_source_id
+    account_verification_types:
+      - id
+      - code
+      - data_source_id
+    provider_label_types:
+      - id
+      - code
+      - data_source_id
+    provider_label_display_types:
+      - id
+      - code
+      - data_source_id
+    provider_link_types:
+      - id
+      - code
+      - data_source_id
+    source_identifier_namespaces:
+      - id
+      - code
+      - data_source_id
+      - subject_kind
+    products:
+      - product_type_id
+      - gating_state_id
+      - library_name_id
+      - pipeline_tag_id
+    product_relationships:
+      - product_relationship_type_id
+    collection_resource_snapshots:
+      - gating_state_id
+      - library_name_id
+      - pipeline_tag_id
+    source_subject_mappings:
+      - identifier_scope_id
+    collection_job_targets:
+      - identifier_scope_id
+    metric_values:
+      - source_timezone_id
+    collection_corrections:
+      - before_source_timezone_id
+      - after_source_timezone_id
+    x_account_details:
+      - verified_type_id
+      - affiliate_label_url_type_id
+      - affiliate_label_user_label_display_type_id
+      - affiliate_label_user_label_type_id
+      - identity_profile_label_url_type_id
+      - identity_profile_label_user_label_display_type_id
+      - identity_profile_label_user_label_type_id
+    account_profile_snapshots:
+      - verified_type_id
+      - affiliate_label_type_id
+      - affiliate_display_type_id
     geolocation_alternate_names:
       - geolocation_id
       - name
@@ -817,6 +927,7 @@ validation:
       - display_name_en
       - display_name_zh_cn
     posts:
+      - author_verified_type_id
       - author_account_key
       - tweet_id
       - author_id

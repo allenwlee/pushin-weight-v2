@@ -169,6 +169,16 @@ SELECT format('GRANT SELECT ON %I.%I TO staging_refresh_reader', schemaname, tab
 FROM pg_tables
 WHERE schemaname = 'public'
   AND tablename IN (
+    'product_types',
+    'product_relationship_types',
+    'model_gating_states',
+    'software_libraries',
+    'model_tasks',
+    'account_verification_types',
+    'provider_label_types',
+    'provider_label_display_types',
+    'provider_link_types',
+    'source_identifier_namespaces',
     'currencies',
     'salary_periods',
     'job_functions',
@@ -209,6 +219,16 @@ SELECT format('GRANT SELECT ON SEQUENCE %I.%I TO staging_refresh_reader', schema
 FROM pg_sequences
 WHERE schemaname = 'public'
   AND sequencename IN (
+    'product_types_id_seq',
+    'product_relationship_types_id_seq',
+    'model_gating_states_id_seq',
+    'software_libraries_id_seq',
+    'model_tasks_id_seq',
+    'account_verification_types_id_seq',
+    'provider_label_types_id_seq',
+    'provider_label_display_types_id_seq',
+    'provider_link_types_id_seq',
+    'source_identifier_namespaces_id_seq',
     'salary_periods_id_seq',
     'job_functions_id_seq',
     'seniority_levels_id_seq',
@@ -378,6 +398,18 @@ source-dependent expectations; the shared Anthropic seed is counted only once
 when both migrations are pending. A conflicting Company owner for an 0049
 canonical Brand fails before dump work, matching the migration's own refusal.
 Validators still require exact equality; there is no range or broad allowance.
+For sources before the translation-table migrations, the source census counts
+the nonempty existing account biography and company display-name columns that
+those migrations copy. The candidate census still reads the resulting translation
+tables and requires exact equality; absent old tables do not disable validation.
+
+Before the full migration step, candidate processing runs
+`prepare_refresh_references`. On a source predating `0124`, it migrates forward
+through `0123` and loads the approved, hash-pinned measurement-unit catalogue.
+This prepares the existing unit references before `0124` validates them; unknown
+units still fail. Candidates already past `0124` skip this preparation. Published
+migrations and their frozen seed lists remain unchanged.
+
 Once those migrations are in production, apply the new grants above before the
 next refresh; preflight then requires each present optional relation to have
 its declared read or maintenance privilege.

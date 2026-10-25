@@ -14,6 +14,7 @@ from core.benchmark_metric_timing import (
     catalog_origins,
     native_origin,
     reported_times,
+    timing_storage,
 )
 from core.collection_corrections import (
     TIME_BASIS_FIELDS,
@@ -178,7 +179,8 @@ def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False
             for value in selected:
                 previous_basis_fields = {name: getattr(value, name) for name in TIME_BASIS_FIELDS}
                 previous = serial_fields(
-                    {field: getattr(value, field) for field in FIELDS}
+                    {field: (value.source_timezone_reference_id or "unknown")
+                     if field == "source_timezone" else getattr(value, field) for field in FIELDS}
                 )
                 marker = metadata.get(REPAIR_KEY, {}).get(str(value.pk))
                 current_basis = (
@@ -270,7 +272,7 @@ def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False
                 if target != previous:
                     result["changed_values"] += 1
                 if apply and (target != previous or previous_basis_fields != target_basis_fields):
-                    for field, instant in {**validated, **target_basis_fields}.items():
+                    for field, instant in {**timing_storage(validated), **target_basis_fields}.items():
                         setattr(value, field, instant)
                     changed_values.append(value)
             if metadata != observation.source_metadata:
@@ -279,7 +281,9 @@ def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False
                     observation.source_metadata = metadata
                     changed_observations.append(observation)
         if apply:
-            _update_locked_batch(MetricValue, changed_values, (*FIELDS, *TIME_BASIS_FIELDS))
+            _update_locked_batch(MetricValue, changed_values, (
+                *TIME_FIELDS, "temporal_status", "source_timezone_reference", *TIME_BASIS_FIELDS,
+            ))
             _update_locked_batch(
                 CollectionObservation, changed_observations, ["source_metadata"]
             )

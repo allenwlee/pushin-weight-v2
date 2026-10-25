@@ -34,6 +34,26 @@ SERVING_VIEWS = frozenset({
     "brand_trend_narrative_texts", "home_brand_time_counts",
 })
 
+# These columns already belong to the serving contract on the pre-RG5 image.
+# Keep their grants during its overlap with the new image; remove this list in
+# the final deletion candidate, after every serving process uses the references.
+ROLLING_CANONICAL_COLUMNS = {
+    "products": {"type", "gated", "library_name", "pipeline_tag"},
+    "product_relationships": {"relationship_type"},
+    "collection_resource_snapshots": {"gated_status", "library_name", "pipeline_tag"},
+    "metric_values": {"source_timezone"},
+    "collection_corrections": {"before_source_timezone", "after_source_timezone"},
+    "account_profile_snapshots": {"verified_type", "affiliate_label_type", "affiliate_display_type"},
+    "posts": {"author_verified_type"},
+    "x_account_details": {
+        "verified_type", "affiliate_label_url_type", "affiliate_label_user_label_display_type",
+        "affiliate_label_user_label_type", "identity_profile_label_url_type",
+        "identity_profile_label_user_label_display_type", "identity_profile_label_user_label_type",
+    },
+    "source_subject_mappings": {"identifier_scope"},
+    "collection_job_targets": {"identifier_scope"},
+}
+
 
 def verify_serving_environment(values):
     """Reject a second PostgreSQL credential hidden under a legacy setting."""
@@ -155,7 +175,8 @@ def apply_serving_grants(connection, role, *, schema="public"):
                     raise ValueError("Serving view exposes source evidence: " + table)
                 cursor.execute(sql.SQL("GRANT SELECT ON {} TO {}").format(relation, identifier))
                 continue
-            safe = [column for column in columns if column in canonical_columns.get(table, ())
+            allowed = canonical_columns.get(table, set()) | ROLLING_CANONICAL_COLUMNS.get(table, set())
+            safe = [column for column in columns if column in allowed
                     and column not in SOURCE_COLUMNS.get(table, ())]
             if not safe:
                 cursor.execute("SELECT has_table_privilege(%s,%s,'SELECT')", [role, f'{schema}.{table}'])

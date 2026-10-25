@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlparse
 
+from core.account_vocabulary import code_for
 from core.official_company_offerings import SYSTEM_PROMPT
 
 ROLE = "official_co_account_extraction"
@@ -130,8 +131,8 @@ def build_evidence(
         "domains": sorted(domains),
         "policy_version": EVIDENCE_POLICY_VERSION,
     }
-    if getattr(account, "verified_type", None):
-        result["verification_type"] = account.verified_type
+    if code_for(account, "verified_type"):
+        result["verification_type"] = code_for(account, "verified_type")
     result["identity"] = digest(
         {
             **result,
@@ -314,7 +315,7 @@ def enqueue_account(
     explicit = candidate_priority is _EXPLICIT_CANDIDATE
     if explicit:
         candidate_priority = (
-            1 if (account.verified_type or "").casefold() == "business" else 2
+            1 if (code_for(account, "verified_type") or "").casefold() == "business" else 2
         )
     if candidate_priority not in {None, 1, 2, 3}:
         raise ValueError("invalid candidate priority")
@@ -331,7 +332,7 @@ def enqueue_account(
             # An explicitly selected account is not an accidental scan admission.
             candidate_priority = (
                 1
-                if (account.verified_type or "").casefold() == "business"
+                if (code_for(account, "verified_type") or "").casefold() == "business"
                 else state.candidate_priority
             )
             policy = MANUAL_POLICY

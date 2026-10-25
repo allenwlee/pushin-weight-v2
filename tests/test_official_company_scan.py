@@ -9,6 +9,7 @@ from core.official_company_discovery import (
     enqueue_incremental,
     scan_initial_batch,
 )
+from tests.account_factory import x_verification_id
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
 
@@ -24,7 +25,7 @@ def test_existing_official_brand_link_skips_paid_discovery_without_list_writes()
     from core.official_company_accounts import enqueue_account, evaluate_account
     from x_monitor.config import OfficialCompanyConfig
 
-    a = Account.objects.create(author_id="1034844617261248512", handle="AIatMeta", bio="Official AI research", verified_type="Business")
+    a = Account.objects.create(author_id="1034844617261248512", handle="AIatMeta", bio="Official AI research", verified_type_id=x_verification_id("Business"))
     brand = Brand.objects.create(nickname="llama")
     role, _ = Role.objects.get_or_create(key="official")
     BrandAccount.objects.create(brand=brand, account=a, role=role)
@@ -50,7 +51,7 @@ def test_blockchain_prompt_and_provenance_follow_actual_call():
     )
     from x_monitor.config import OfficialCompanyConfig
 
-    a = Account.objects.create(author_id="944255537121656833", handle="iotex_io", bio="The blockchain platform for Real-World AI.", verified_type="Business")
+    a = Account.objects.create(author_id="944255537121656833", handle="iotex_io", bio="The blockchain platform for Real-World AI.", verified_type_id=x_verification_id("Business"))
     state = enqueue_account(a)
     OfficialCompanyBudget.objects.create(key="initial-total")
     calls = []
@@ -71,7 +72,7 @@ def test_blockchain_prompt_and_provenance_follow_actual_call():
 def test_full_inventory_has_no_age_cutoff_and_resumes_without_duplicates():
     for identifier in ["1", "2", "3"]:
         Account.objects.create(
-            author_id=identifier, bio="AI model research lab", verified_type="Business"
+            author_id=identifier, bio="AI model research lab", verified_type_id=x_verification_id("Business")
         )
     Account.objects.filter(author_id="1").update(
         first_seen_at=timezone.now() - timedelta(days=900)
@@ -92,7 +93,7 @@ def test_no_evidence_is_explicit_and_arrivals_during_initial_are_incremental():
     Account.objects.create(author_id="1")
     scan_initial_batch(limit=1)
     Account.objects.create(
-        author_id="2", bio="We develop our own speech models", verified_type="Business"
+        author_id="2", bio="We develop our own speech models", verified_type_id=x_verification_id("Business")
     )
     enqueue_incremental(limit=100)
     assert not OfficialCompanyAccountState.objects.filter(account__author_id="1").exists()
@@ -102,7 +103,7 @@ def test_no_evidence_is_explicit_and_arrivals_during_initial_are_incremental():
 
 def test_material_profile_change_is_reenqueued_but_followers_are_not():
     account = Account.objects.create(
-        author_id="1", bio="Voice research", verified_type="Business"
+        author_id="1", bio="Voice research", verified_type_id=x_verification_id("Business")
     )
     enqueue_incremental(limit=10)
     state = OfficialCompanyAccountState.objects.get(account=account)
@@ -147,7 +148,7 @@ def test_incremental_account_work_never_exceeds_requested_limit(limit, monkeypat
         )
     for i in range(10):
         Account.objects.create(
-            author_id=str(i + 1), bio="AI lab", verified_type="Business"
+            author_id=str(i + 1), bio="AI lab", verified_type_id=x_verification_id("Business")
         )
     calls = []
     original = discovery.enqueue_account
@@ -219,7 +220,7 @@ def test_gold_without_bio_or_posts_is_candidate_and_beats_old_retry(monkeypatch)
     older.save()
     gold = Account.objects.create(
         author_id="8002",
-        verified_type="Business",
+        verified_type_id=x_verification_id("Business"),
         verified=False,
         is_blue_verified=False,
     )
@@ -319,11 +320,11 @@ def test_registered_and_suppressed_decisions_survive_screening():
 
 def test_badge_change_between_batches_does_not_double_count_inventory():
     account = Account.objects.create(
-        author_id="9103", verified_type="Business", bio="AI lab"
+        author_id="9103", verified_type_id=x_verification_id("Business"), bio="AI lab"
     )
     Account.objects.create(author_id="9104")
     scan_initial_batch(limit=1)
-    account.x_details.verified_type = ""
+    account.x_details.verified_type_id = x_verification_id("")
     account.x_details.save(update_fields=["verified_type"])
     for _ in range(4):
         report = scan_initial_batch(limit=1)
@@ -499,7 +500,7 @@ def test_legacy_account_cursor_replays_timestamp_boundary_without_losing_ties():
     accounts = [
         Account.objects.create(
             account_key=UUID(int=i), author_id=str(200 - i),
-            bio="AI model lab", verified_type="Business",
+            bio="AI model lab", verified_type_id=x_verification_id("Business"),
         )
         for i in [1, 2, 3]
     ]

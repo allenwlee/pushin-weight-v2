@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import Product
+from core.product_vocabulary import metadata_references
 
 FIELD_KEYS = {
     "author": ("author",),
@@ -82,7 +83,7 @@ def apply_metadata(product, payload, *, group, observation=None):
         "sha": payload.get("sha"),
         "observation": deepcopy(observation),
     }
-    values = source_fields(accepted)
+    values = metadata_references(source_fields(accepted), source_id="hf")
     values.update(raw=raw, hf_metadata=metadata)
     for field, value in values.items():
         setattr(current, field, value)

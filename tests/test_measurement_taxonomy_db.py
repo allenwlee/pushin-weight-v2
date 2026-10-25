@@ -2,12 +2,13 @@ import pytest
 from django.db import IntegrityError, transaction
 
 from core.models import Brand, Product
+from tests.product_factory import product_type_fields
 
 pytestmark = pytest.mark.django_db
 
 
 def product(name, brand):
-    return Product.objects.create(repo_id=f"lab/{name}", brand=brand, type="llm-model")
+    return Product.objects.create(repo_id=f"lab/{name}", brand=brand, **product_type_fields(Product, "llm-model"))
 
 
 def test_reviewed_successors_preserve_manual_exclusion_and_frozen_labels():

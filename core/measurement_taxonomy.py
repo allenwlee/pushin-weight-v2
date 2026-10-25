@@ -23,6 +23,7 @@ from core.models import (
     SubjectRelationship,
     TaxonomyVersion,
 )
+from core.product_vocabulary import category_ancestry, relationship_type_id
 
 RELATIONS = {"new_version", "finetune", "adapter", "quantized", "merge"}
 
@@ -99,14 +100,16 @@ def prepare_taxonomy(spec):
 
                 validate_model_kind(obj, qualification)
             require(
-                obj.type is not None or qualification, f"unreviewed product type: {key}"
+                obj.product_type_code is not None or qualification, f"unreviewed product type: {key}"
             )
             snapshot["products"][key] = {
                 "label": label,
-                "type": obj.type,
+                "type": obj.product_type_code,
                 "brand": obj.brand_id,
                 "repo_id": obj.repo_id,
             }
+            if obj.product_type_id and obj.product_type.parent_id:
+                snapshot["products"][key]["category_ancestry"] = category_ancestry(obj.product_type)
             if qualification:
                 snapshot["products"][key]["model_kind_qualification"] = qualification
         sid = str(resolve_subject_id(kind, key))
@@ -307,7 +310,7 @@ def configure_taxonomy(spec):
             taxonomy_version=version,
             parent_product_id=edge["parent"],
             child_product_id=edge["child"],
-            relationship_type=edge["type"],
+            product_relationship_type_id=relationship_type_id(edge["type"]),
             source_id=source,
             evidence_method=edge.get("evidence_method", "source_reported"),
             evidence=edge["evidence"],

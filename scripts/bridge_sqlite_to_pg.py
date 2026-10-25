@@ -27,7 +27,7 @@ import sqlite3
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.models import (  # noqa: F401
@@ -237,6 +237,12 @@ def _upsert_account_from_row(row: dict[str, Any], dry_run: bool) -> Any:
     from core.geolocation_evidence import write_source_evidence
 
     with transaction.atomic():
+        if "verified_type" in defaults:
+            from core.source_vocabulary import reference_id
+
+            defaults["verified_type_id"] = reference_id(
+                "account_verification_types", "x", defaults.pop("verified_type")
+            )
         acc, _created = _Account.objects.update_or_create(
             author_id=author_id, defaults=defaults
         )

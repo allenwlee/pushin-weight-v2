@@ -7,8 +7,9 @@ from typing import Any
 
 from django.db.models import F, Prefetch
 
-from core.job_locations import canonical_job_locations, location_prefetch
+from core.account_vocabulary import code_for
 from core.geolocations import geolocation_label
+from core.job_locations import canonical_job_locations, location_prefetch
 from core.job_vocabulary import (
     classification_prefetches,
     classification_text,
@@ -95,7 +96,7 @@ def rare_type_post_document(post_id: str) -> dict[str, Any]:
     )
     products = (
         PostBrandProduct.objects.filter(post_id=post_id)
-        .select_related("product")
+        .select_related("product__product_type")
         .order_by("brand_id", "product_id")
     )
     proposals = (
@@ -157,7 +158,7 @@ def rare_type_post_document(post_id: str) -> dict[str, Any]:
                 "product_key": str(row.product.product_key),
                 "repo_id": row.product.repo_id,
                 "name": row.observed_name,
-                "type": row.product.type,
+                "type": row.product.product_type_code,
                 "policy_version": row.verification_policy_version,
                 "source_evidence": row.source_evidence,
             }
@@ -266,8 +267,8 @@ def _evidence(row: PersonBrandAffiliationEvidence) -> dict[str, Any]:
                 "business_affiliate_label": {
                     "target_username": snapshot.affiliate_target_username,
                     "description": snapshot.affiliate_label_description,
-                    "label_type": snapshot.affiliate_label_type,
-                    "display_type": snapshot.affiliate_display_type,
+                    "label_type": code_for(snapshot, "affiliate_label_type"),
+                    "display_type": code_for(snapshot, "affiliate_display_type"),
                 },
             }
             if snapshot is not None

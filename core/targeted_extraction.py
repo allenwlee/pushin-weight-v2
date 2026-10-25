@@ -19,6 +19,7 @@ from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
+from core.account_vocabulary import code_for
 from core.geolocation_evidence import AffiliationClaimEvidence, write_source_evidence
 from core.job_locations import write_job_locations
 from core.job_vocabulary import compensation_references, write_job_classifications
@@ -1682,8 +1683,8 @@ def _persist_model_releases(
                         "stable_account_id": post.author.author_id,
                         "handle": post.author_handle or "",
                         "account_handle_at_extraction": post.author.handle or "",
-                        "account_verified_type": post.author.verified_type,
-                        "post_author_verified_type": post.author_verified_type,
+                        "account_verified_type": code_for(post.author, "verified_type"),
+                        "post_author_verified_type": code_for(post, "author_verified_type"),
                         **source_identity_evidence,
                     },
                     "policy_version": POLICY_VERSION,
@@ -1774,10 +1775,13 @@ def _prompts(role: str, post: Post) -> tuple[str, str]:
             "profile_bio_text",
             "affiliate_target_username",
             "affiliate_label_description",
-            "affiliate_label_type",
-            "affiliate_display_type",
+            "affiliate_label_type__code",
+            "affiliate_display_type__code",
         )
-        payload["profile_observations"] = list(snapshots)
+        payload["profile_observations"] = [
+            {key.removesuffix("__code"): value for key, value in row.items()}
+            for row in snapshots
+        ]
         payload["profile_movements"] = [
             {
                 "id": movement.pk,

@@ -5,6 +5,7 @@ from core.benchmark_metric_series import build_comparison
 from core.benchmark_metric_store import persist_source
 from core.measurement_taxonomy import configure_taxonomy, digest, subject_id
 from core.models import Product
+from tests.product_factory import product_type_fields
 from tests.test_benchmark_download_db_identity import setup_spec
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
@@ -16,7 +17,7 @@ def proxy_spec():
         repo_id="lab/Previous",
         publisher_account=successor.publisher_account,
         brand=successor.brand,
-        type="llm-model",
+        **product_type_fields(Product, "llm-model"),
         private=False,
         disabled=False,
     )

@@ -175,7 +175,7 @@ class Command(BaseCommand):
                                 **(
                                     {
                                         "account_identifier": m.external_identifier,
-                                        "account_kind": m.identifier_scope,
+                                        "account_kind": m.identifier_scope_code,
                                     }
                                     if m.source_subject_kind == "account"
                                     else {"repo_id": m.external_identifier}

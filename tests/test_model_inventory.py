@@ -17,6 +17,7 @@ from core.models import (
     Role,
 )
 from scripts.benchmark_download_collector.sources import Budget
+from tests.product_factory import product_type_fields
 from tests.test_model_history_cohort import freeze, inventory
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
@@ -56,7 +57,7 @@ def test_openrouter_model_catalog_correlates_api_only_creation_through_reviewed_
         brand_id=brands[-1], account=account, role=Role.objects.get_or_create(key="official")[0]
     )
     product = Product.objects.create(
-        brand_id=brands[-1], type="llm-model", display_name="API only"
+        brand_id=brands[-1], **product_type_fields(Product, "llm-model"), display_name="API only"
     )
     subject = MeasurementSubject.objects.create(subject_kind="product", product=product)
     obj = inventory_job("openrouter", {"authors": ["publisher"]})

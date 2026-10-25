@@ -30,6 +30,7 @@ from core.official_company_accounts import (
     enqueue_account,
 )
 from monitor.cycle import CycleRunner
+from tests.account_factory import x_verification_id
 from x_monitor.config import OfficialCompanyConfig, load_config
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
@@ -154,7 +155,7 @@ def test_recurring_discovery_admits_each_settled_pattern_from_one_post(
 @pytest.mark.parametrize("kind", ["model", "agent", "harness"])
 def test_recurring_caller_uses_amended_product_rule_without_hf(recurring_cycle, kind):
     a = Account.objects.create(
-        author_id="97811", handle="new_company", verified_type="business",
+        author_id="97811", handle="new_company", verified_type_id=x_verification_id("business"),
         bio=f"We are New Company. We develop our own {kind}; our speech model is closed-weight with no HF page.",
     )
 
@@ -191,7 +192,7 @@ def test_gold_alone_enters_recurring_queue_before_older_lower_priority_retry(rec
     retry = enqueue_account(lower, candidate_priority=2)
     retry.status = "retry_due"
     retry.save()
-    gold = Account.objects.create(author_id="97511", verified_type="Business")
+    gold = Account.objects.create(author_id="97511", verified_type_id=x_verification_id("Business"))
     observed = []
 
     def call(system, user, model, max_tokens):
@@ -212,7 +213,7 @@ def test_gold_alone_enters_recurring_queue_before_older_lower_priority_retry(rec
 
 def test_recurring_known_multibrand_account_avoids_paid_rediscovery(recurring_cycle):
     account = Account.objects.create(
-        author_id="97520", handle="known_ai", verified_type="Business",
+        author_id="97520", handle="known_ai", verified_type_id=x_verification_id("Business"),
         bio="We develop AI models.",
     )
     role, _ = Role.objects.get_or_create(key="official")
@@ -241,7 +242,7 @@ def test_recurring_known_multibrand_account_avoids_paid_rediscovery(recurring_cy
 def test_recurring_evaluation_uses_conditional_hurdle_and_keeps_unverified_positives_held(
     recurring_cycle, bio, policy,
 ):
-    account = Account.objects.create(author_id="97530", bio=bio, verified_type="Business")
+    account = Account.objects.create(author_id="97530", bio=bio, verified_type_id=x_verification_id("Business"))
     call = Mock(side_effect=nomination)
     result = recurring_cycle(call)
     state = OfficialCompanyAccountState.objects.get(account=account)
@@ -257,7 +258,7 @@ def test_recurring_evaluation_uses_conditional_hurdle_and_keeps_unverified_posit
 
 def test_unchanged_recurring_evidence_does_not_repeat_paid_evaluation(recurring_cycle):
     account = Account.objects.create(
-        author_id="97540", bio="We develop our own speech models.", verified_type="Business",
+        author_id="97540", bio="We develop our own speech models.", verified_type_id=x_verification_id("Business"),
     )
     call = Mock(side_effect=nomination)
     assert recurring_cycle(call)["attempted"] == 1
@@ -281,7 +282,7 @@ def test_recurring_hf_proof_controls_automatic_registration_and_call_a_list_inte
     from core.official_company_hf import approved
 
     account = Account.objects.create(
-        author_id="97550", handle="examplelab", verified_type="Business",
+        author_id="97550", handle="examplelab", verified_type_id=x_verification_id("Business"),
         bio="We are Example Lab. We develop our own speech models.",
     )
     sha = "a" * 40

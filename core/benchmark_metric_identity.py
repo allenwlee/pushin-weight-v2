@@ -612,13 +612,13 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
             product = subject.product
             require(
                 (
-                    product.type in {"llm-model", "other-ai-model", "agent-harness"}
+                    product.product_type_code in {"llm-model", "other-ai-model", "agent-harness"}
                     or taxonomy.snapshot["products"][str(product.product_key)].get(
                         "model_kind_qualification"
                     )
                 )
                 if statistics
-                else product.type == "llm-model",
+                else product.product_type_code == "llm-model",
                 "product type is not reviewed as llm-model",
             )
             require(
@@ -627,7 +627,7 @@ def prepare_collection(spec, *, eligibility_policy="text-benchmark-v1"):
             )
             frozen = taxonomy.snapshot["products"][str(product.product_key)]
             require(
-                product.type == frozen["type"] and product.brand_id == frozen["brand"],
+                product.product_type_code == frozen["type"] and product.brand_id == frozen["brand"],
                 "catalog identity changed since taxonomy review",
             )
             if product.hf_namespace and product.hf_namespace.casefold() == "google":
@@ -745,6 +745,10 @@ def configure_collection(spec, *, eligibility_policy="text-benchmark-v1"):
         row = dict(mapping)
         row["source_id"] = row.pop("source")
         row["publisher_account_id"] = row.pop("publisher_account_key")
+        from core.identifier_namespaces import namespace_id
+        row["identifier_scope_id"] = namespace_id(
+            row["source_id"], row["source_subject_kind"], row.pop("identifier_scope")
+        )
         SourceSubjectMapping.objects.create(
             contract=obj, reviewed_by=spec["reviewed_by"], **row
         )

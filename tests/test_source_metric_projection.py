@@ -13,8 +13,15 @@ from django.utils import timezone
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import StaleClaim, claim_job
 from core.measurement_taxonomy import configure_taxonomy, digest, subject_id
-from core.models import CollectionObservation, CollectionRun, MetricValue, TimeZone
+from core.models import (
+    CollectionObservation,
+    CollectionRun,
+    MetricValue,
+    Product,
+    TimeZone,
+)
 from tests.collection_fixtures import evidence_job
+from tests.product_factory import product_type_fields
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 CAPTURED = datetime(2026, 10, 12, 4, 5, tzinfo=UTC)
@@ -57,7 +64,7 @@ def configured(source="hf", *, product_type=None, mapped=False):
         "use_policy": {use: decision() for use in ("collection", "retention")},
     }
     source_row.save()
-    product.type = product_type
+    product.product_type_id = product_type_fields(Product, product_type)["product_type_id"]
     product.save()
     subjects = [{"kind": "account", "key": str(account.pk)}]
     if mapped:
@@ -188,7 +195,7 @@ def test_saved_native_counters_write_and_cross_job_replay_reuses_original_clock(
         CollectionObservation.objects.filter(pk=snapshot.pk).values().get() == original
     )
     product.refresh_from_db()
-    assert product.type is None
+    assert product.product_type_code is None
 
 
 def test_bad_optional_fields_do_not_drop_other_numbers_and_new_capture_is_distinct():
@@ -601,7 +608,7 @@ def test_campaign_over_1000_models_partitions_and_routes_each_native_grain_once(
                 repo_id=f"lab/Model-{n}",
                 publisher_account=product.publisher_account,
                 brand=product.brand,
-                type="llm-model",
+                **product_type_fields(Product, "llm-model"),
             )
             for n in range(2100)
         ]

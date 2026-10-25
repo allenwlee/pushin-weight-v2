@@ -257,6 +257,109 @@ class PersonnelChangeType(BusinessVocabularyCode):
         db_table = "personnel_change_types"
 
 
+class ProductType(BusinessVocabularyCode):
+    """One product category; reparenting does not change its stable identity."""
+
+    parent = models.ForeignKey("self", null=True, blank=True, on_delete=models.PROTECT,
+                               related_name="children")
+
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "product_types"
+        constraints: ClassVar[list] = [
+            models.CheckConstraint(condition=models.Q(code__regex=r"^[a-z][a-z0-9_-]*$"),
+                                   name="ck_producttype_code"),
+            models.CheckConstraint(condition=~models.Q(parent=models.F("id")),
+                                   name="ck_producttype_parent_not_self"),
+        ]
+
+
+class ProductRelationshipType(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "product_relationship_types"
+
+
+class ModelGatingState(BusinessVocabularyCode):
+    class Meta(BusinessVocabularyCode.Meta):
+        db_table = "model_gating_states"
+
+
+class SourceVocabularyCode(models.Model):
+    """An exact provider code, never merged with another source by spelling."""
+
+    id = models.BigAutoField(primary_key=True)
+    data_source = models.ForeignKey("DataSource", on_delete=models.PROTECT)
+    code = models.CharField(max_length=256, db_collation="C")
+
+    class Meta:
+        abstract = True
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["data_source", "code"],
+                                    name="uq_%(class)s_source_code"),
+            models.CheckConstraint(
+                condition=~models.Q(code__regex=r"^[[:space:]]|[[:space:]]$|[[:cntrl:]]|^$"),
+                name="ck_%(class)s_code"),
+        ]
+
+
+class SoftwareLibrary(SourceVocabularyCode):
+    class Meta(SourceVocabularyCode.Meta):
+        db_table = "software_libraries"
+
+
+class ModelTask(SourceVocabularyCode):
+    class Meta(SourceVocabularyCode.Meta):
+        db_table = "model_tasks"
+
+
+class AccountVerificationType(SourceVocabularyCode):
+    class Meta(SourceVocabularyCode.Meta):
+        db_table = "account_verification_types"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["data_source", "code"],
+                                    name="uq_accountverificationtype_source_code"),
+            models.CheckConstraint(
+                condition=~models.Q(code__regex=r"^[[:space:]]|[[:space:]]$|[[:cntrl:]]"),
+                name="ck_accountverificationtype_code"),
+        ]
+
+
+class ProviderLabelType(SourceVocabularyCode):
+    class Meta(SourceVocabularyCode.Meta):
+        db_table = "provider_label_types"
+
+
+class ProviderLabelDisplayType(SourceVocabularyCode):
+    class Meta(SourceVocabularyCode.Meta):
+        db_table = "provider_label_display_types"
+
+
+class ProviderLinkType(SourceVocabularyCode):
+    class Meta(SourceVocabularyCode.Meta):
+        db_table = "provider_link_types"
+
+
+class SourceIdentifierNamespace(models.Model):
+    """A source/resource namespace; an empty code means explicitly unscoped."""
+
+    id = models.BigAutoField(primary_key=True)
+    data_source = models.ForeignKey("DataSource", on_delete=models.PROTECT)
+    subject_kind = models.CharField(max_length=32)
+    code = models.CharField(max_length=128, db_collation="C")
+
+    class Meta:
+        db_table = "source_identifier_namespaces"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["data_source", "subject_kind", "code"],
+                                    name="uq_identifier_namespace_source_kind_code"),
+            models.CheckConstraint(
+                condition=models.Q(subject_kind__in=["repository", "model", "lab", "account"]),
+                name="ck_identifier_namespace_subject_kind"),
+            models.CheckConstraint(
+                condition=~models.Q(code__regex=r"^[[:space:]]|[[:space:]]$|[[:cntrl:]]"),
+                name="ck_identifier_namespace_code"),
+        ]
+
+
 class ServiceProvider(models.Model):
     """Actual request-service identity, distinct from an original data source."""
 
@@ -1372,18 +1475,14 @@ class XAccountDetail(models.Model):
     media_count = models.IntegerField(blank=True, null=True)
     fast_followers_count = models.IntegerField(blank=True, null=True)
     is_blue_verified = models.BooleanField(blank=True, null=True)
-    verified_type = models.TextField(blank=True, null=True)
+    verified_type = models.ForeignKey(AccountVerificationType, blank=True, null=True, on_delete=models.PROTECT, related_name="+")
     protected = models.BooleanField(blank=True, null=True)
     affiliate_label_badge_url = models.URLField(max_length=2048, blank=True, null=True)
     affiliate_label_description = models.TextField(blank=True, null=True)
     affiliate_label_url = models.URLField(max_length=2048, blank=True, null=True)
-    affiliate_label_url_type = models.CharField(max_length=128, blank=True, null=True)
-    affiliate_label_user_label_display_type = models.CharField(
-        max_length=128, blank=True, null=True
-    )
-    affiliate_label_user_label_type = models.CharField(
-        max_length=128, blank=True, null=True
-    )
+    affiliate_label_url_type = models.ForeignKey(ProviderLinkType, blank=True, null=True, on_delete=models.PROTECT, related_name="+")
+    affiliate_label_user_label_display_type = models.ForeignKey(ProviderLabelDisplayType, blank=True, null=True, on_delete=models.PROTECT, related_name="+")
+    affiliate_label_user_label_type = models.ForeignKey(ProviderLabelType, blank=True, null=True, on_delete=models.PROTECT, related_name="+")
     location_accurate = models.BooleanField(blank=True, null=True)
     learn_more_url = models.URLField(max_length=2048, blank=True, null=True)
     affiliate_username = models.CharField(max_length=64, blank=True, null=True)
@@ -1413,15 +1512,9 @@ class XAccountDetail(models.Model):
     identity_profile_label_url = models.URLField(
         max_length=2048, blank=True, null=True
     )
-    identity_profile_label_url_type = models.CharField(
-        max_length=128, blank=True, null=True
-    )
-    identity_profile_label_user_label_display_type = models.CharField(
-        max_length=128, blank=True, null=True
-    )
-    identity_profile_label_user_label_type = models.CharField(
-        max_length=128, blank=True, null=True
-    )
+    identity_profile_label_url_type = models.ForeignKey(ProviderLinkType, blank=True, null=True, on_delete=models.PROTECT, related_name="+")
+    identity_profile_label_user_label_display_type = models.ForeignKey(ProviderLabelDisplayType, blank=True, null=True, on_delete=models.PROTECT, related_name="+")
+    identity_profile_label_user_label_type = models.ForeignKey(ProviderLabelType, blank=True, null=True, on_delete=models.PROTECT, related_name="+")
     account_based_in_fetched_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
@@ -1429,8 +1522,8 @@ class XAccountDetail(models.Model):
 
 
 X_DETAIL_FIELDS = frozenset(
-    field.name for field in XAccountDetail._meta.concrete_fields
-    if field.name != "account"
+    name for field in XAccountDetail._meta.concrete_fields
+    if field.name != "account" for name in (field.name, field.attname)
 )
 
 
@@ -1721,6 +1814,11 @@ class Account(models.Model):
                     continue
                 storage_attribute = field_name
                 model_field = field_name
+                from core.account_vocabulary import X_FIELDS
+                from core.source_vocabulary import reference_id
+                if field_name in X_FIELDS:
+                    storage_attribute = model_field = field_name + "_id"
+                    value = reference_id(X_FIELDS[field_name], "x", value)
                 if getattr(account, storage_attribute) == value:
                     unchanged.append(field_name)
                 else:
@@ -1938,7 +2036,7 @@ class Post(models.Model):
     author_following_count = models.IntegerField(blank=True, null=True)
     author_verified = models.BooleanField(blank=True, null=True)
     author_is_blue_verified = models.BooleanField(blank=True, null=True)
-    author_verified_type = models.TextField(blank=True, null=True)
+    author_verified_type = models.ForeignKey(AccountVerificationType, blank=True, null=True, on_delete=models.PROTECT, related_name="+")
     author_is_translator = models.BooleanField(blank=True, null=True)
     author_is_automated = models.BooleanField(blank=True, null=True)
     author_automated_by = models.TextField(blank=True, null=True)
@@ -3250,12 +3348,6 @@ class AccountPostAppearance(models.Model):
 
 
 class Product(models.Model):
-    TYPES = (
-        ("llm-model", "LLM model"),
-        ("other-ai-model", "Other AI model"),
-        ("agent-harness", "Agent harness"),
-    )
-
     id = models.BigAutoField(primary_key=True)
     product_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     repo_id = models.CharField(
@@ -3265,7 +3357,7 @@ class Product(models.Model):
         blank=True,
         null=True,
     )
-    type = models.CharField(max_length=32, choices=TYPES, blank=True, null=True)
+    product_type = models.ForeignKey(ProductType, blank=True, null=True, on_delete=models.PROTECT)
     brand = models.ForeignKey(
         Brand,
         on_delete=models.SET_NULL,
@@ -3289,10 +3381,10 @@ class Product(models.Model):
     author = models.TextField(blank=True, null=True)
     sha = models.TextField(blank=True, null=True)
     private = models.BooleanField(blank=True, null=True)
-    gated = models.TextField(blank=True, null=True)
+    gating_state = models.ForeignKey(ModelGatingState, blank=True, null=True, on_delete=models.PROTECT)
     disabled = models.BooleanField(blank=True, null=True)
-    pipeline_tag = models.TextField(blank=True, null=True)
-    library_name = models.TextField(blank=True, null=True)
+    pipeline_tag = models.ForeignKey(ModelTask, blank=True, null=True, on_delete=models.PROTECT)
+    library_name = models.ForeignKey(SoftwareLibrary, blank=True, null=True, on_delete=models.PROTECT)
     downloads = models.BigIntegerField(blank=True, null=True)
     downloads_all_time = models.BigIntegerField(blank=True, null=True)
     download_velocity = models.FloatField(blank=True, null=True)
@@ -3310,6 +3402,10 @@ class Product(models.Model):
     hf_metadata = models.JSONField(default=dict, blank=True)
     collected_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    @property
+    def product_type_code(self):
+        return self.product_type.code if self.product_type_id else None
 
     @property
     def hf_namespace(self):
@@ -3337,17 +3433,6 @@ class Product(models.Model):
             ),
         ]
         ordering = ["display_name", "id"]
-        constraints = [
-            models.CheckConstraint(
-                condition=(
-                    models.Q(type__isnull=True)
-                    | models.Q(
-                        type__in=["llm-model", "other-ai-model", "agent-harness"]
-                    )
-                ),
-                name="ck_product_type",
-            ),
-        ]
 
     def __str__(self) -> str:
         return self.repo_id or self.display_name or str(self.product_key)
@@ -5826,13 +5911,13 @@ class AccountProfileSnapshot(models.Model):
     profile_image_url = models.URLField(max_length=2048, blank=True, null=True)
     verified = models.BooleanField(blank=True, null=True)
     is_blue_verified = models.BooleanField(blank=True, null=True)
-    verified_type = models.TextField(blank=True, null=True)
+    verified_type = models.ForeignKey(AccountVerificationType, blank=True, null=True, on_delete=models.PROTECT, related_name="+")
     affiliate_target_username = models.CharField(max_length=64, blank=True, null=True)
     affiliate_target_url = models.URLField(max_length=2048, blank=True, null=True)
     affiliate_label_description = models.TextField(blank=True, null=True)
     affiliate_badge_image_url = models.URLField(max_length=2048, blank=True, null=True)
-    affiliate_label_type = models.CharField(max_length=128, blank=True, null=True)
-    affiliate_display_type = models.CharField(max_length=128, blank=True, null=True)
+    affiliate_label_type = models.ForeignKey(ProviderLabelType, blank=True, null=True, on_delete=models.PROTECT, related_name="+")
+    affiliate_display_type = models.ForeignKey(ProviderLabelDisplayType, blank=True, null=True, on_delete=models.PROTECT, related_name="+")
     present_fields = models.JSONField(default=list)
     recorded_at = models.DateTimeField(auto_now_add=True)
 
@@ -8314,7 +8399,7 @@ class ProductRelationship(models.Model):
     taxonomy_version = models.ForeignKey(TaxonomyVersion, on_delete=models.PROTECT)
     parent_product = models.ForeignKey(Product, to_field='product_key', db_column='parent_product_key', related_name='child_relationships', on_delete=models.PROTECT)
     child_product = models.ForeignKey(Product, to_field='product_key', db_column='child_product_key', related_name='parent_relationships', on_delete=models.PROTECT)
-    relationship_type = models.CharField(max_length=32)
+    product_relationship_type = models.ForeignKey(ProductRelationshipType, on_delete=models.PROTECT)
     source = models.ForeignKey(DataSource, null=True, on_delete=models.PROTECT)
     evidence_method = models.CharField(max_length=32, default='source_reported')
     evidence = models.JSONField()
@@ -8324,13 +8409,12 @@ class ProductRelationship(models.Model):
 
     class Meta:
         db_table = 'product_relationships'
-        constraints = [
-            models.UniqueConstraint(fields=['taxonomy_version','parent_product','child_product','relationship_type'],name='uq_product_relationship'),
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=['taxonomy_version','parent_product','child_product','product_relationship_type'],name='uq_product_relationship'),
             models.CheckConstraint(condition=~models.Q(parent_product=models.F('child_product')),name='ck_product_relationship_self'),
-            models.CheckConstraint(condition=models.Q(relationship_type__in=['new_version','finetune','adapter','quantized','merge']),name='ck_product_relationship_type'),
             models.CheckConstraint(condition=models.Q(evidence_method__in=['source_reported','publisher_declared','provider_inferred','artifact_verified','our_inference']),name='ck_product_relationship_method'),
         ]
-        indexes=[models.Index(fields=['taxonomy_version','parent_product','relationship_type']),models.Index(fields=['taxonomy_version','child_product','relationship_type'])]
+        indexes: ClassVar[list] = [models.Index(fields=['taxonomy_version','parent_product','product_relationship_type']),models.Index(fields=['taxonomy_version','child_product','product_relationship_type'])]
 
 
 class ProductGroupMembership(models.Model):
@@ -8581,7 +8665,7 @@ class SourceSubjectMapping(models.Model):
     )
     source = models.ForeignKey(DataSource, on_delete=models.PROTECT)
     source_subject_kind = models.CharField(max_length=32)
-    identifier_scope = models.CharField(max_length=128, default="")
+    identifier_scope = models.ForeignKey(SourceIdentifierNamespace, on_delete=models.PROTECT)
     external_identifier = models.CharField(max_length=256)
     normalized_identifier = models.CharField(max_length=256, db_collation="C")
     subject = models.ForeignKey(MeasurementSubject, on_delete=models.PROTECT)
@@ -8594,6 +8678,10 @@ class SourceSubjectMapping(models.Model):
     identifier_metadata = models.JSONField(default=dict)
     reviewed_by = models.TextField()
     reviewed_at = models.DateTimeField(default=timezone.now)
+
+    @property
+    def identifier_scope_code(self):
+        return self.identifier_scope.code if self.identifier_scope_id else None
 
     class Meta:
         db_table = "source_subject_mappings"
@@ -8984,7 +9072,10 @@ class MetricValue(models.Model):
     integer_value = models.DecimalField(max_digits=30, decimal_places=0, null=True)
     float_value = models.FloatField(null=True)
     temporal_status = models.CharField(max_length=16, default="unknown")
-    source_timezone = models.CharField(max_length=64, default="unknown")
+    source_timezone_reference = models.ForeignKey(
+        TimeZone, db_column="source_timezone_id", null=True, on_delete=models.PROTECT,
+        db_index=False,
+    )
     as_of_at = models.DateTimeField(null=True)
     as_of_date = models.DateField(null=True)
     window_start_at = models.DateTimeField(
@@ -9121,10 +9212,14 @@ class CollectionJobTarget(models.Model):
     last_reconciled_at = models.DateTimeField(null=True)
     selection_basis = models.CharField(max_length=64, null=True)
     selection_sha256 = models.CharField(max_length=64, null=True)
-    identifier_scope = models.CharField(max_length=32, null=True)
+    identifier_scope = models.ForeignKey(SourceIdentifierNamespace, null=True, on_delete=models.PROTECT)
     source_row_index = models.PositiveIntegerField(null=True)
     review_confirmed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    @property
+    def identifier_scope_code(self):
+        return self.identifier_scope.code if self.identifier_scope_id else None
 
     class Meta:
         db_table = "collection_job_targets"
@@ -9282,10 +9377,10 @@ class CollectionResourceSnapshot(models.Model):
     content_hash = models.TextField(null=True)
     hash_algorithm = models.CharField(max_length=16, null=True)
     is_private = models.BooleanField(null=True)
-    gated_status = models.CharField(max_length=32, null=True)
+    gating_state = models.ForeignKey(ModelGatingState, null=True, on_delete=models.PROTECT)
     is_disabled = models.BooleanField(null=True)
-    pipeline_tag = models.CharField(max_length=128, null=True)
-    library_name = models.CharField(max_length=128, null=True)
+    pipeline_tag = models.ForeignKey(ModelTask, null=True, on_delete=models.PROTECT)
+    library_name = models.ForeignKey(SoftwareLibrary, null=True, on_delete=models.PROTECT)
     file_change_kind = models.CharField(max_length=32, null=True)
     file_comparison_basis = models.CharField(max_length=64, null=True)
     prior_snapshot = models.ForeignKey("self", null=True, on_delete=models.PROTECT)
@@ -9337,8 +9432,14 @@ class CollectionCorrection(models.Model):
     after_mapping = models.ForeignKey(SourceSubjectMapping, null=True, on_delete=models.PROTECT, related_name="corrections_after")
     before_temporal_status = models.CharField(max_length=16, null=True)
     after_temporal_status = models.CharField(max_length=16, null=True)
-    before_source_timezone = models.CharField(max_length=64, null=True)
-    after_source_timezone = models.CharField(max_length=64, null=True)
+    before_source_timezone_reference = models.ForeignKey(
+        TimeZone, db_column="before_source_timezone_id", null=True,
+        on_delete=models.PROTECT, related_name="corrections_before", db_index=False,
+    )
+    after_source_timezone_reference = models.ForeignKey(
+        TimeZone, db_column="after_source_timezone_id", null=True,
+        on_delete=models.PROTECT, related_name="corrections_after", db_index=False,
+    )
     before_as_of_at = models.DateTimeField(null=True)
     after_as_of_at = models.DateTimeField(null=True)
     before_as_of_date = models.DateField(null=True)

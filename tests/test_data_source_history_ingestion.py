@@ -23,6 +23,7 @@ from core.models import (
 )
 from scripts.benchmark_download_collector.sources import Budget
 from tests.collection_fixtures import evidence_job
+from tests.product_factory import product_type_fields
 from tests.test_benchmark_download_db_identity import setup_spec
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
@@ -66,7 +67,7 @@ def publication_scope(source="openrouter", *, config="text", identifier_scope=No
                         "mapping_hash": mapping.mapping_hash,
                         "source": source,
                         "native_identifier": "lab/model",
-                        "identifier_scope": mapping.identifier_scope,
+                        "identifier_scope": mapping.identifier_scope_code,
                     }
                 ],
             }
@@ -335,7 +336,7 @@ def test_opt_in_model_kind_pins_native_evidence_without_changing_taxonomy_type(d
     from core.models import Brand, Product
 
     product, _ = setup_spec()
-    product.type = None
+    product.product_type = None
     product.created_at = datetime(2026, 9, 1, tzinfo=UTC)
     product.save()
     brands = [product.brand_id] + [
@@ -390,7 +391,7 @@ def test_opt_in_model_kind_pins_native_evidence_without_changing_taxonomy_type(d
         ownership.save()
     with pytest.raises(ValueError):
         validate_model_pins(job)
-    assert Product.objects.get(pk=product.pk).type is None
+    assert Product.objects.get(pk=product.pk).product_type_code is None
 
 
 def test_rolling_publication_selection_uses_current_window_with_frozen_cohort():
@@ -501,7 +502,7 @@ def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benc
     from tests.test_source_metric_projection import project
 
     product, _ = setup_spec()
-    product.type = None
+    product.product_type = None
     product.save()
     evidence_run = CollectionRun.objects.create(
         job=evidence_job(source_id="hf", purpose="catalog"),
@@ -585,7 +586,7 @@ def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benc
             }
         )
     product.refresh_from_db()
-    assert product.type is None
+    assert product.product_type_code is None
 
 
 def test_history_statistics_reuses_existing_product_and_publisher_subjects():
@@ -600,7 +601,7 @@ def test_history_statistics_reuses_existing_product_and_publisher_subjects():
         repo_id="lab/Legacy",
         brand=original_product.brand,
         publisher_account=account,
-        type=None,
+        **product_type_fields(Product, None),
         private=False,
         disabled=False,
     )
@@ -703,7 +704,7 @@ def test_history_statistics_reuses_existing_product_and_publisher_subjects():
         == old_contract
     )
     product.refresh_from_db()
-    assert product.type is None
+    assert product.product_type_code is None
 
 
 @pytest.mark.parametrize("items", [1000, 2])
@@ -723,7 +724,7 @@ def test_sparse_hf_archive_acquisition_automatically_projects_without_interpolat
         repo_id="lab/Second",
         publisher_account=product.publisher_account,
         brand=product.brand,
-        type="llm-model",
+        **product_type_fields(Product, "llm-model"),
         private=False,
         disabled=False,
     )

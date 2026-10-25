@@ -19,6 +19,7 @@ import httpx
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
+from core.account_vocabulary import code_for
 from core.models import (
     Account,
     Brand,
@@ -33,6 +34,11 @@ from core.models import (
     Product,
     ProductVerificationProposal,
     RareTypeCategoryAssignment,
+)
+from core.product_vocabulary import (
+    metadata_references,
+    product_type_choices,
+    product_type_id,
 )
 from core.publisher_accounts import get_publisher, publisher_links
 from x_monitor.hf_client import HF_API_BASE
@@ -159,7 +165,7 @@ def decide_product_proposal(
             if (
                 product
                 and product.brand_id == submitted_brand
-                and product.type == product_type
+                and product.product_type_code == product_type
                 and submitted_mode == catalog_mode
             ):
                 return proposal
@@ -177,7 +183,7 @@ def decide_product_proposal(
         proposal.save()
         return proposal
 
-    if product_type not in {value for value, _label in Product.TYPES}:
+    if product_type not in {value for value, _label in product_type_choices()}:
         raise ProductReviewError("invalid product type")
     new_brand_id = new_brand_id.strip()
     company_id = company_id.strip()
@@ -268,7 +274,7 @@ def decide_product_proposal(
                 defaults={
                     "brand": brand,
                     "display_name": proposal.observed_name,
-                    "type": product_type,
+                    "product_type_id": product_type_id(product_type),
                     "raw": proposal.hf_evidence,
                 },
             )
@@ -280,15 +286,15 @@ def decide_product_proposal(
             repo_id=repo_id,
             brand=brand,
             display_name=proposal.observed_name,
-            type=product_type,
+            product_type_id=product_type_id(product_type),
             raw=proposal.hf_evidence if repo_id else None,
         )
     else:
         product.brand = brand
-        product.type = product_type
+        product.product_type_id = product_type_id(product_type)
         if not product.display_name:
             product.display_name = proposal.observed_name
-        product.save(update_fields=["brand", "type", "display_name", "updated_at"])
+        product.save(update_fields=["brand", "product_type", "display_name", "updated_at"])
 
     PostBrandProduct.objects.get_or_create(
         post=proposal.source_post,
@@ -376,8 +382,8 @@ def _evaluate_new_publisher_source(
     proposal: ProductVerificationProposal, *, namespace: str
 ) -> LegitimacyDecision:
     source = _proposal_source_gate(proposal, namespace=namespace)
-    account_type = str(proposal.account.verified_type or "")
-    post_type = str(proposal.source_post.author_verified_type or "")
+    account_type = str(code_for(proposal.account, "verified_type") or "")
+    post_type = str(code_for(proposal.source_post, "author_verified_type") or "")
     is_business = (
         account_type.casefold() == "business" and post_type.casefold() == "business"
     )
@@ -525,7 +531,7 @@ def _product_defaults(
             if key in payload:
                 values[field] = payload[key]
                 break
-    return values
+    return metadata_references(values, source_id="hf")
 
 
 def _upsert_hf_product(
@@ -565,7 +571,7 @@ def _upsert_hf_product(
         product = repo_product
 
     defaults = _product_defaults(metadata, brand=brand, hf_org=hf_org)
-    defaults["type"] = product_type
+    defaults["product_type_id"] = product_type_id(product_type)
     if product is None:
         product, _created = Product.objects.get_or_create(
             repo_id=repo_id,
@@ -578,7 +584,7 @@ def _upsert_hf_product(
         raise ValueError("product_owner_conflict")
     if product.repo_id not in (None, repo_id):
         raise ValueError("product_repository_conflict")
-    if product.type not in (None, product_type):
+    if product.product_type_code not in (None, product_type):
         raise ValueError("product_type_conflict")
     product.repo_id = repo_id
     defaults["raw"] = {
@@ -605,7 +611,7 @@ def attach_verified_product(
     policy_version: str = POLICY_VERSION,
     source_release: ModelRelease | None = None,
 ) -> Product:
-    if product_type not in {value for value, _label in Product.TYPES}:
+    if product_type not in {value for value, _label in product_type_choices()}:
         raise ValueError("invalid_product_type")
     if not _REPO_ID.fullmatch(repo_id):
         raise ValueError("malformed_repo_id")

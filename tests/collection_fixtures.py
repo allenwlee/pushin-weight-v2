@@ -1,7 +1,7 @@
 """Explicit instruction registration for saved collection evidence fixtures."""
 
 import sys
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from functools import wraps
 
@@ -45,7 +45,13 @@ def historical_fixture_models(historical):
     }
     job_properties = {
         name: getattr(current.CollectionJob, name)
-        for name in ("scope", "budgets", "schedule", "campaign_settings", "instructions")
+        for name in (
+            "scope",
+            "budgets",
+            "schedule",
+            "campaign_settings",
+            "instructions",
+        )
     }
     replacements = {
         m._meta.model_name: m for m in historical.get_app_config("core").get_models()
@@ -91,7 +97,11 @@ def historical_fixture_models(historical):
                         patch.setattr(module, name, replacement)
         token = _historical_fixture_active.set(True)
         try:
-            yield
+            from tests.historical_catalog_fixture import catalog_runtime
+
+            pre_rg5 = product and any(f.name == "type" for f in product._meta.fields)
+            with catalog_runtime(historical) if pre_rg5 else nullcontext():
+                yield
         finally:
             _historical_fixture_active.reset(token)
             # A module first imported inside this context copied the historical

@@ -11,6 +11,7 @@ from core.models import (
     CollectionResourceSnapshot,
     SourceMetric,
 )
+from core.product_vocabulary import metadata_references
 
 
 def metric_time_provenance(definition, point, basis):
@@ -112,7 +113,8 @@ def snapshot_resource(observation):
         "file_comparison_basis": change.get("comparison_basis"),
     }
     snapshot, _ = CollectionResourceSnapshot.objects.get_or_create(
-        observation=observation, defaults=values
+        observation=observation,
+        defaults=metadata_references(values, source_id=observation.run.job.source_id),
     )
     return snapshot
 

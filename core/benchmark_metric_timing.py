@@ -145,6 +145,14 @@ def value_times(definition, point):
     return dict(result, temporal_status=status, source_timezone=zone)
 
 
+def timing_storage(fields):
+    """Translate the stable timing document only at the ORM write boundary."""
+    result = dict(fields)
+    zone = result.pop("source_timezone")
+    result["source_timezone_reference_id"] = None if zone == "unknown" else zone
+    return result
+
+
 def _definition_window_unit(definition):
     return getattr(definition, "window_unit_reference_id", None) or getattr(
         definition, "window_unit", None

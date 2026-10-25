@@ -272,7 +272,7 @@ def test_new_comparison_reuses_reviewed_history_without_copying_facts(tmp_path):
             {
                 "source": m.source_id,
                 "source_subject_kind": m.source_subject_kind,
-                "identifier_scope": m.identifier_scope,
+                "identifier_scope": m.identifier_scope_code,
                 "external_identifier": m.external_identifier,
                 "subject_id": str(m.subject_id),
                 "evidence_url": m.evidence_url,

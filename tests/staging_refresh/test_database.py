@@ -582,6 +582,7 @@ def test_candidate_runs_migrations_scrub_and_full_validation_before_marking(
         if Path(command[0]).name == "python"
     ]
     assert django_commands == [
+        ["manage.py", "prepare_refresh_references"],
         ["manage.py", "migrate", "--noinput"],
         ["manage.py", "check", "--deploy"],
         ["manage.py", "migrate", "--check"],

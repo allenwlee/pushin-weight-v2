@@ -20,6 +20,7 @@ from core.models import (
     RareTypeCategoryAssignment,
     ReleaseMaturity,
 )
+from tests.product_factory import product_type_fields
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
@@ -121,7 +122,7 @@ def test_post_reader_keeps_brand_candidate_categories_and_product_evidence_disti
         brand=brand,
         display_name="MiniMax M3",
         repo_id="MiniMaxAI/M3",
-        type="llm-model",
+        **product_type_fields(Product, "llm-model"),
     )
     PostBrandProduct.objects.create(
         post=post,

@@ -7,6 +7,8 @@ import re
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 
+from core.account_vocabulary import code_for
+
 CANDIDATE_POLICY = "official-company-candidates-v2-offerings"
 MANUAL_POLICY = "explicit-operator-candidate-v1"
 AI = re.compile(
@@ -146,7 +148,7 @@ class CandidateSignals:
 
     def priority(self):
         if (
-            getattr(self.account, "verified_type", None) or ""
+            code_for(self.account, "verified_type") or ""
         ).casefold() == "business":
             return 1
         website_ai = bool(self.domains) and self.profile_ai
@@ -172,11 +174,13 @@ class CandidateSignals:
 
 def candidate_priorities(accounts):
     """Bulk reads all available history once per bounded account batch; no calls."""
-    from django.db.models import OuterRef, Subquery
+    from django.db.models import OuterRef, Subquery, prefetch_related_objects
 
     from core.geolocation_evidence import ProfileLocationEvidence
     from core.models import AccountProfileSnapshot, AccountProfileTextTranslation, Post
 
+    accounts = list(accounts)
+    prefetch_related_objects(accounts, "x_details__verified_type")
     signals = {account.pk: CandidateSignals(account) for account in accounts}
     # Gold is independently admitted; do not read its post history to qualify it.
     inspect_ids = [pk for pk, signal in signals.items() if signal.priority() != 1]

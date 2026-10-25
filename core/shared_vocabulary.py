@@ -27,9 +27,12 @@ from core.models import (
     Language,
     Locale,
     MeasurementUnit,
+    ModelGatingState,
     OpportunityType,
     OrganizationAIRelationshipType,
     PersonnelChangeType,
+    ProductRelationshipType,
+    ProductType,
     ReleaseAccessChannel,
     ReleaseAvailabilityState,
     ReleaseMaturity,
@@ -42,6 +45,9 @@ from core.models import (
 
 SEED_DIRECTORY = Path(settings.BASE_DIR) / "data"
 CATALOGUES = {
+    "product_types": (ProductType, "shared_product_types.csv", ("code",)),
+    "product_relationship_types": (ProductRelationshipType, "shared_product_relationship_types.csv", ("code",)),
+    "model_gating_states": (ModelGatingState, "shared_model_gating_states.csv", ("code",)),
     "time_zones": (TimeZone, "shared_time_zones.csv", ("code",)),
     "languages": (Language, "shared_languages.csv", ("code",)),
     "locales": (Locale, "shared_locales.csv", ("code", "language_code")),
@@ -64,6 +70,9 @@ CATALOGUES = {
     "personnel_change_types": (PersonnelChangeType, "shared_personnel_change_types.csv", ("code",)),
 }
 CODE_GRAMMARS = {
+    "product_types": r"[a-z][a-z0-9_-]*",
+    "product_relationship_types": r"[a-z][a-z0-9_]*",
+    "model_gating_states": r"[a-z][a-z0-9_]*",
     "time_zones": r"[A-Za-z0-9._+-]+(/[A-Za-z0-9._+-]+)*",
     "languages": r"[a-z]{2,8}",
     "locales": r"[a-z]{2,8}(-[A-Za-z0-9]{1,8})*",

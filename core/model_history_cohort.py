@@ -31,7 +31,7 @@ def _provider_pins(mappings):
             "mapping_hash": m.mapping_hash,
             "source": m.source_id,
             "source_subject_kind": m.source_subject_kind,
-            "identifier_scope": m.identifier_scope,
+            "identifier_scope": m.identifier_scope_code,
             "native_identifier": m.external_identifier,
             "publisher_account_key": str(m.publisher_account_id)
             if m.publisher_account_id
@@ -153,7 +153,7 @@ def build_cohort(*, brand_ids, cutoff, cap=100, qualification_policy=None):
     require(type(cap) is int and 1 <= cap <= 100, "model cap must be at most 100")
     products = list(
         Product.objects.filter(brand_id__in=brand_ids)
-        .select_related("publisher_account")
+        .select_related("publisher_account", "product_type")
         .prefetch_related("publisher_account__companies")
         .order_by("product_key")
     )
@@ -164,7 +164,7 @@ def build_cohort(*, brand_ids, cutoff, cap=100, qualification_policy=None):
             subject__subject_kind="product",
             subject__product_id__in=by_key,
         )
-        .select_related("subject", "publisher_account")
+        .select_related("subject", "publisher_account", "identifier_scope")
         .order_by("source_id", "normalized_identifier", "pk")
     )
     per_product = {key: [] for key in by_key}
@@ -210,15 +210,15 @@ def build_cohort(*, brand_ids, cutoff, cap=100, qualification_policy=None):
                 continue
             qualification = (
                 qualify_model_kind(product)
-                if qualification_policy and product.type is None
+                if qualification_policy and product.product_type_code is None
                 else None
             )
-            if product.type not in MODEL_TYPES and qualification is None:
+            if product.product_type_code not in MODEL_TYPES and qualification is None:
                 unqualified.append(
                     {
                         "product_key": str(key),
                         "reason": "product_type_unqualified"
-                        if product.type is None
+                        if product.product_type_code is None
                         else "outside_model_slots",
                     }
                 )
@@ -402,7 +402,7 @@ def validate_model_pins(job):
     keys = [row["product_key"] for row in models]
     require(len(set(keys)) == len(keys), "duplicate frozen model")
     products = {
-        str(p.product_key): p for p in Product.objects.filter(product_key__in=keys)
+        str(p.product_key): p for p in Product.objects.filter(product_key__in=keys).select_related("product_type")
     }
     require(set(products) == set(keys), "frozen product no longer exists")
     for row in models:
@@ -410,7 +410,7 @@ def validate_model_pins(job):
         require(
             product.brand_id == job.scope["brand_id"]
             and (
-                product.type in MODEL_TYPES
+                product.product_type_code in MODEL_TYPES
                 or isinstance(row.get("qualification"), dict)
             ),
             "frozen product ownership/type changed",

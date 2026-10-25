@@ -5,6 +5,7 @@ import pytest
 from core.measurement_taxonomy import configure_taxonomy, subject_id
 from core.models import Brand, BrandCompany, Product
 from tests.company_factory import company_with_label
+from tests.product_factory import product_type_fields
 from tests.publisher_fixtures import hf_publisher
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
@@ -48,7 +49,7 @@ def setup_spec():
         repo_id="lab/Model",
         publisher_account=org.account,
         brand=brand,
-        type="llm-model",
+        **product_type_fields(Product, "llm-model"),
         private=False,
         disabled=False,
     )
@@ -101,7 +102,7 @@ def test_unreviewed_or_incompatible_hf_mapping_rejected(change):
 
     product, spec = setup_spec()
     if change == "type":
-        product.type = None
+        product.product_type = None
         product.save()
     if change == "private":
         product.private = True

@@ -71,7 +71,7 @@ def validate_statistics_mapping(subject, row, source, taxonomy):
             reviewed.mapping_hash == metadata.get("catalog_mapping_hash")
             and reviewed.subject_id == subject.pk
             and reviewed.external_identifier == row["external_identifier"]
-            and reviewed.identifier_scope
+            and reviewed.identifier_scope_code
             == ("rankings_permaslug" if source == "openrouter" else "arena_model_name")
             and reviewed.publisher_account is not None
             and qualified_ownership(reviewed.publisher_account, subject),
@@ -106,7 +106,7 @@ def validate_statistics_mapping(subject, row, source, taxonomy):
         frozen = taxonomy.snapshot["products"][str(subject.product_id)]
         require(
             subject.product.brand_id == frozen["brand"]
-            and subject.product.type == frozen["type"]
+            and subject.product.product_type_code == frozen["type"]
             and subject.product.private is not True
             and subject.product.disabled is not True,
             "publication product identity changed",
@@ -149,7 +149,7 @@ def validate_statistics_mapping(subject, row, source, taxonomy):
         frozen = taxonomy.snapshot["products"][str(subject.product_id)]
         require(
             subject.product.brand_id == frozen["brand"]
-            and subject.product.type == frozen["type"]
+            and subject.product.product_type_code == frozen["type"]
             and subject.product.private is not True
             and subject.product.disabled is not True,
             "statistics product identity changed",
@@ -328,7 +328,7 @@ def evidence_rows(contract, source, evidence):
         publisher = _publisher(contract, source, identity)
         native = {
             "account_identifier": identity,
-            "account_kind": publisher.identifier_scope,
+            "account_kind": publisher.identifier_scope_code,
             "raw": raw,
         }
     elif source == "hf":

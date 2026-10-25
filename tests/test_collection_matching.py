@@ -21,6 +21,7 @@ from core.models import (
     Product,
     SourceSubjectMapping,
 )
+from tests.product_factory import product_type_fields
 from tests.publisher_fixtures import hf_publisher
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
@@ -36,7 +37,7 @@ def catalog_fixture(name="Model-7B-Instruct", source="arena", native=None):
         brand=brand,
         publisher_account=publisher.account,
         created_at=timezone.now(),
-        type="llm-model",
+        **product_type_fields(Product, "llm-model"),
         private=False,
     )
     provider, _ = DataSource.objects.get_or_create(
@@ -126,7 +127,7 @@ def test_variant_tokens_are_not_erased(native):
 
 def test_null_brand_and_type_catalog_is_visible_through_confirmed_publisher():
     brand, product, _ = catalog_fixture()
-    product.brand = product.type = None
+    product.brand = product.product_type = None
     product.save()
     report = preview(brand)
     assert report["products"][0]["product_key"] == str(product.product_key)
@@ -192,7 +193,7 @@ def test_reviewed_apply_is_idempotent_and_durable_without_metric_writes():
     mapping = SourceSubjectMapping.objects.get()
     assert mapping.subject.product_id == product.product_key
     assert (
-        mapping.identifier_scope == "arena_model_name" and mapping.purpose == "catalog"
+        mapping.identifier_scope_code == "arena_model_name" and mapping.purpose == "catalog"
     )
     assert mapping.reviewed_by == "allenwlee"
     assert (
@@ -253,12 +254,12 @@ def test_null_brand_review_does_not_change_metric_ownership_qualification():
     from core.collection_identity import qualified_ownership
 
     brand, product, _ = catalog_fixture()
-    product.brand = product.type = None
+    product.brand = product.product_type = None
     product.save()
     apply_reviewed(preview(brand))
     mapping = SourceSubjectMapping.objects.get()
     product.refresh_from_db()
-    assert product.brand_id is None and product.type is None
+    assert product.brand_id is None and product.product_type_code is None
     assert not qualified_ownership(mapping.publisher_account, mapping.subject)
 
 

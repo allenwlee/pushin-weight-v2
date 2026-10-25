@@ -42,7 +42,7 @@ def export_inputs(brand_ids, start_date, end_date):
         )
         products = (
             Product.objects.filter(
-                brand_id__in=brand_ids, type="llm-model", hf_type="model"
+                brand_id__in=brand_ids, product_type__code="llm-model", hf_type="model"
             )
             .select_related("publisher_account").prefetch_related("publisher_account__companies")
             .order_by("product_key")

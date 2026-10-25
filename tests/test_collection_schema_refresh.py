@@ -4,7 +4,6 @@ import json
 import os
 import subprocess
 import sys
-import uuid
 from dataclasses import replace
 from getpass import getuser
 from pathlib import Path
@@ -27,12 +26,11 @@ from scripts.staging_refresh.policy import load_policy
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
-@pytest.mark.usefixtures("isolated_migration_database")
 @pytest.mark.parametrize(
     "legacy_source", [False, True, "0080", "0087", "0088", "0088-active-metric"]
 )
 def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
-    tmp_path, legacy_source
+    tmp_path, legacy_source, collection_history_schema, monkeypatch
 ):
     from core.benchmark_metric_store import persist_source
     from core.models import CollectionObservation, CollectionRun, CollectionScopeRun
@@ -177,6 +175,10 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
             [("core", "0087_source_statistics_snapshot")]
         )
 
+    if legacy_source:
+        with connection.cursor() as cursor:
+            cursor.execute("UPDATE accounts SET bio_en='Kept English',bio_zh_cn='保留中文'")
+
     root = Path(__file__).resolve().parents[1]
     policy = load_policy(root / "config/staging_refresh.yaml")
     # This fixture has no harvested posts; all parity/FK/schema/scrub checks stay.
@@ -184,14 +186,18 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
         policy, validation=replace(policy.validation, required_nonempty_tables=())
     )
     source_name = connection.settings_dict["NAME"]
-    assert source_name.startswith("test_pw_migration_")
+    namespace = collection_history_schema
+    assert source_name.startswith("test_")
     user = quote(connection.settings_dict["USER"] or getuser(), safe="")
     password = connection.settings_dict["PASSWORD"]
     if password:
         user += ":" + quote(password, safe="")
     url = f"postgresql://{user}@{connection.settings_dict['HOST']}:{connection.settings_dict['PORT']}/{source_name}"
-    adapter = PsycopgSnapshotAdapter(policy)
-    destination = "test_pw_collection_refresh_" + uuid.uuid4().hex[:20]
+    from tests.refresh_schema_fixture import schema_connector
+
+    connect, search_path = schema_connector(namespace, source_name)
+    adapter = PsycopgSnapshotAdapter(policy, connect=connect)
+    destination = source_name
     dump = tmp_path / "snapshot.dump"
     configured_bin = os.environ.get("PW_TEST_PG_BIN")
     homebrew_bin = Path("/opt/homebrew/opt/postgresql@18/bin")
@@ -212,11 +218,10 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
                 "--format=custom",
                 "--no-owner",
                 "--no-privileges",
-                "--schema=public",
-                "--extension=pg_trgm",
+                "--schema=" + namespace,
                 "--snapshot=" + census.snapshot_id,
                 *(
-                    "--exclude-table-data=public." + table
+                    "--exclude-table-data=" + namespace + "." + table
                     for table in sorted(policy.relations.source_excluded_tables)
                 ),
                 "--file=" + str(dump),
@@ -229,125 +234,141 @@ def test_real_snapshot_restores_numeric_history_and_clears_catalog_work(
         )
         assert result.returncode == 0, result.stderr
     marker = policy.lifecycle.marker_prefix + ":" + json.dumps({"state": "building"})
-    adapter.create_shadow(url, destination, marker)
-    try:
-        result = subprocess.run(
-            [
-                str(pg_bin / "pg_restore"),
-                "--no-owner",
-                "--no-privileges",
-                "--exit-on-error",
-                "--clean",
-                "--if-exists",
-                "--dbname=" + destination,
-                str(dump),
-            ],
-            env=environment,
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=False,
-        )
-        assert result.returncode == 0, result.stderr
-        candidate = ShadowCandidate(
-            destination,
-            marker,
-            DumpArtifact(dump, "a" * 64, dump.stat().st_size, census),
-        )
-        processor = CandidateProcessor(
-            policy=policy, target_url=url, adapter=adapter, python=sys.executable
-        )
-        if legacy_source == "0088-active-metric":
-            with pytest.raises(RefreshError, match="candidate_migration_failed"):
-                processor.process(candidate)
-            import psycopg
+    result = subprocess.run(
+        [
+            str(pg_bin / "pg_restore"),
+            "--no-owner",
+            "--no-privileges",
+            "--exit-on-error",
+            "--clean",
+            "--if-exists",
+            "--dbname=" + destination,
+            str(dump),
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    with connect(url, autocommit=True) as marker_db:
+        from psycopg import sql
 
-            with psycopg.connect(
-                **{
-                    **connection.get_connection_params(),
-                    "dbname": destination,
-                }
-            ) as db:
-                assert db.execute(
-                    "SELECT status, completed_at, job_id FROM collection_runs WHERE id = %s",
-                    [numeric.pk],
-                ).fetchone() == ("running", None, None)
-                assert (
-                    "validated"
-                    not in db.execute(
-                        "SELECT shobj_description(oid, 'pg_database') FROM pg_database WHERE datname = %s",
-                        [destination],
-                    ).fetchone()[0]
-                )
-            return
-        result = processor.process(candidate)
-        assert result.census.row_counts["collection_runs"] == 1
-        assert result.census.row_counts["collection_observations"] == 1
-        assert all(count == 0 for count in result.census.scrubbed_counts.values())
-        assert result.census.scrubbed_counts["collection_runs:jobless_metric"] == 0
-        reader = subprocess.run(
-            [
-                sys.executable,
-                "manage.py",
-                "shell",
-                "--command",
-                (
-                    "from core.collection_reports import resource_statistics; "
-                    f"r=resource_statistics(contract_id='{numeric.contract_id}', "
-                    "source='hf', identifier='lab/Model'); "
-                    "assert any(v['value']=='4000000000' for v in r['values']), r"
-                ),
-            ],
-            cwd=root,
-            env=processor._django_environment(destination),
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
+        marker_db.execute(
+            sql.SQL("COMMENT ON SCHEMA {} IS {}").format(
+                sql.Identifier(namespace), sql.Literal(marker)
+            )
         )
-        assert reader.returncode == 0, reader.stderr
-        import psycopg
+    candidate = ShadowCandidate(
+        destination,
+        marker,
+        DumpArtifact(dump, "a" * 64, dump.stat().st_size, census),
+    )
+    def run_candidate(*args, **kwargs):
+        check = kwargs.pop("check", False)
+        result = subprocess.run(*args, check=check, **kwargs)
+        if result.returncode:
+            print(result.stdout[-6000:])
+            print(result.stderr[-6000:])
+        return result
 
-        with (
-            psycopg.connect(
-                dbname=destination,
-                host=connection.settings_dict["HOST"],
-                port=connection.settings_dict["PORT"],
-                user=connection.settings_dict["USER"],
-                password=connection.settings_dict["PASSWORD"],
-            ) as db,
-            db.cursor() as cursor,
-        ):
-            cursor.execute("SELECT id FROM collection_runs")
-            assert cursor.fetchone()[0] == numeric.pk
-            cursor.execute("SELECT integer_value FROM metric_values")
-            assert cursor.fetchone()[0] == 4_000_000_000
-            cursor.execute("SELECT count(*) FROM collection_runs WHERE job_id IS NULL")
-            assert cursor.fetchone()[0] == 0
+    processor = CandidateProcessor(
+        policy=policy, target_url=url, adapter=adapter, python=sys.executable,
+        runner=run_candidate,
+    )
+    original_environment = processor._django_environment
+
+    def django_environment(database):
+        return {
+            **original_environment(database),
+            "PGOPTIONS": "-csearch_path=" + search_path,
+        }
+
+    monkeypatch.setattr(processor, "_django_environment", django_environment)
+    if legacy_source == "0088-active-metric":
+        with pytest.raises(RefreshError, match="candidate_migration_failed"):
+            processor.process(candidate)
+        with connect(
+            **{
+                **connection.get_connection_params(),
+                "dbname": destination,
+            }
+        ) as db:
+            assert db.execute(
+                "SELECT status, completed_at, job_id FROM collection_runs WHERE id = %s",
+                [numeric.pk],
+            ).fetchone() == ("running", None, None)
+            assert (
+                "validated"
+                not in db.execute(
+                    "SELECT shobj_description(oid, 'pg_database') FROM pg_database WHERE datname = %s",
+                    [destination],
+                ).fetchone()[0]
+            )
+        return
+    result = processor.process(candidate)
+    if legacy_source:
+        assert result.census.translation_counts["account_profile_text_translations.text"] > 0
+        assert result.census.translation_counts["account_profile_text_translations.text"] == census.translation_counts["account_profile_text_translations.text"]
+    assert result.census.row_counts["collection_runs"] == 1
+    assert result.census.row_counts["collection_observations"] == 1
+    assert all(count == 0 for count in result.census.scrubbed_counts.values())
+    assert result.census.scrubbed_counts["collection_runs:jobless_metric"] == 0
+    reader = subprocess.run(
+        [
+            sys.executable,
+            "manage.py",
+            "shell",
+            "--command",
+            (
+                "from core.collection_reports import resource_statistics; "
+                f"r=resource_statistics(contract_id='{numeric.contract_id}', "
+                "source='hf', identifier='lab/Model'); "
+                "assert any(v['value']=='4000000000' for v in r['values']), r"
+            ),
+        ],
+        cwd=root,
+        env=processor._django_environment(destination),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert reader.returncode == 0, reader.stderr
+    with (
+        connect(
+            dbname=destination,
+            host=connection.settings_dict["HOST"],
+            port=connection.settings_dict["PORT"],
+            user=connection.settings_dict["USER"],
+            password=connection.settings_dict["PASSWORD"],
+        ) as db,
+        db.cursor() as cursor,
+    ):
+        cursor.execute("SELECT id FROM collection_runs")
+        assert cursor.fetchone()[0] == numeric.pk
+        cursor.execute("SELECT integer_value FROM metric_values")
+        assert cursor.fetchone()[0] == 4_000_000_000
+        cursor.execute("SELECT count(*) FROM collection_runs WHERE job_id IS NULL")
+        assert cursor.fetchone()[0] == 0
+        cursor.execute(
+            "SELECT count(*) FROM collection_jobs WHERE operation = 'archived_run' AND purpose <> 'metric'"
+        )
+        assert cursor.fetchone()[0] == 0
+        cursor.execute(
+            "SELECT state, active_run_id, next_due_at, next_retry_at FROM collection_jobs "
+            "WHERE operation IN ('archived_run', 'legacy_direct')"
+        )
+        assert all(row == ("completed", None, None, None) for row in cursor.fetchall())
+        if jobs:
             cursor.execute(
-                "SELECT count(*) FROM collection_jobs WHERE operation = 'archived_run' AND purpose <> 'metric'"
+                "SELECT state, active_run_id, last_attempt_id, last_success_id FROM collection_jobs WHERE id = %s",
+                [jobs[0]],
             )
-            assert cursor.fetchone()[0] == 0
+            assert cursor.fetchone() == ("paused", None, numeric.pk, numeric.pk)
             cursor.execute(
-                "SELECT state, active_run_id, next_due_at, next_retry_at FROM collection_jobs "
-                "WHERE operation IN ('archived_run', 'legacy_direct')"
+                "SELECT state, active_run_id, last_attempt_id, last_success_id FROM collection_jobs WHERE id = ANY(%s)",
+                [jobs[1:]],
             )
-            assert all(
-                row == ("completed", None, None, None) for row in cursor.fetchall()
-            )
-            if jobs:
-                cursor.execute(
-                    "SELECT state, active_run_id, last_attempt_id, last_success_id FROM collection_jobs WHERE id = %s",
-                    [jobs[0]],
-                )
-                assert cursor.fetchone() == ("paused", None, numeric.pk, numeric.pk)
-                cursor.execute(
-                    "SELECT state, active_run_id, last_attempt_id, last_success_id FROM collection_jobs WHERE id = ANY(%s)",
-                    [jobs[1:]],
-                )
-                assert all(
-                    row == ("paused", None, None, None) for row in cursor.fetchall()
-                )
-    finally:
-        with connection.cursor() as cursor:
-            cursor.execute(f'DROP DATABASE "{destination}"')
+            assert all(row == ("paused", None, None, None) for row in cursor.fetchall())

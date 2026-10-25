@@ -18,6 +18,7 @@ from core.models import (
     Product,
     ProductVerificationProposal,
     RareTypeCategoryAssignment,
+    ReleaseMaturity,
     Role,
 )
 from core.product_verification import (
@@ -30,6 +31,7 @@ from core.product_verification import (
     hf_org_socials,
     source_repo_evidence,
 )
+from tests.account_factory import x_verification_id
 from tests.company_factory import company_with_label
 from tests.publisher_fixtures import hf_publisher
 
@@ -98,6 +100,7 @@ def test_known_publisher_hf_match_attaches_to_owner_approved_x_only_product():
     brand, _org, account, post = _publisher()
     now = timezone.now()
     release = ModelRelease.objects.create(
+        release_maturity_reference=ReleaseMaturity.objects.get(code="unknown"),
         brand=brand,
         observed_model_name="M2",
         release_identity="known-m2-release",
@@ -284,14 +287,14 @@ def _new_publisher_proposal(*, verified_type: str = "Business"):
     account = Account.objects.create(
         author_id="1888791214864072705",
         handle="NewPublisher_AI",
-        verified_type=verified_type,
+        verified_type_id=x_verification_id(verified_type),
         is_blue_verified=False,
     )
     post = Post.objects.create(
         tweet_id="new-publisher-release",
         author=account,
         author_handle="NewPublisher_AI",
-        author_verified_type=verified_type,
+        author_verified_type_id=x_verification_id(verified_type),
         text="New model: https://huggingface.co/NewPublisher-AI/Model-One",
         entities={
             "urls": [
@@ -330,6 +333,7 @@ def _new_publisher_proposal(*, verified_type: str = "Business"):
         policy_version=POLICY_VERSION,
     )
     release = ModelRelease.objects.create(
+        release_maturity_reference=ReleaseMaturity.objects.get(code="unknown"),
         brand_discovery_candidate=candidate,
         observed_model_name="Model One",
         release_identity="new-publisher-release",

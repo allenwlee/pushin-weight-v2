@@ -47,7 +47,7 @@ def prepare_history_statistics_scope(*, source, scope, reviewed_by, use_policy=N
                 and reviewed.subject.product_id == product.product_key,
                 "frozen catalog crosswalk changed",
             )
-            if source.pk in {"arena", "openrouter"} and reviewed.identifier_scope != (
+            if source.pk in {"arena", "openrouter"} and reviewed.identifier_scope_code != (
                 "arena_model_name" if source.pk == "arena" else "rankings_permaslug"
             ):
                 continue
@@ -63,7 +63,7 @@ def prepare_history_statistics_scope(*, source, scope, reviewed_by, use_policy=N
                 {
                     "source": source.pk,
                     "source_subject_kind": reviewed.source_subject_kind,
-                    "identifier_scope": reviewed.identifier_scope,
+                    "identifier_scope": reviewed.identifier_scope_code,
                     "external_identifier": reviewed.external_identifier,
                     "subject_id": str(reviewed.subject_id),
                     "publisher_account_key": str(account.pk),

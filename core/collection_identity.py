@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from core.benchmark_metric_identity import validate_evidence_url
 from core.benchmark_metric_store import safe_payload
+from core.identifier_namespaces import namespace_id
 from core.measurement_taxonomy import digest, require
 from core.models import (
     Account,
@@ -207,7 +208,7 @@ def review_catalog_mapping(
     competing = SourceSubjectMapping.objects.filter(
         source=source,
         source_subject_kind=source_subject_kind,
-        identifier_scope=identifier_scope,
+        identifier_scope__code=identifier_scope,
         normalized_identifier=native,
         subject__subject_kind="product",
     ).exclude(subject=subject)
@@ -239,7 +240,7 @@ def review_catalog_mapping(
         "purpose": "catalog",
         "source": source,
         "source_subject_kind": source_subject_kind,
-        "identifier_scope": identifier_scope,
+        "identifier_scope_id": namespace_id(source.pk, source_subject_kind, identifier_scope),
         "normalized_identifier": native,
         "subject": subject,
     }

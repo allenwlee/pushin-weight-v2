@@ -178,7 +178,7 @@ def _point(value, definition, day):
         "source_date": day,
         "measurement_kind": definition.measurement_kind,
         "temporal_status": value.temporal_status,
-        "source_timezone": value.source_timezone,
+        "source_timezone": value.source_timezone_reference_id or "unknown",
         **{
             field: (
                 getattr(value, field).isoformat()
@@ -450,7 +450,7 @@ def metric_points(contract, line, days):
             if aggregation == "sum_fixed_cohort":
                 time_signature = lambda v: (
                     v.temporal_status,
-                    v.source_timezone,
+                    v.source_timezone_reference_id or "unknown",
                     v.as_of_at,
                     v.as_of_date,
                     v.window_start_at,

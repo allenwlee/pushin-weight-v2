@@ -126,7 +126,7 @@ def scan_initial_batch(*, limit=100, deadline=None):
         if not gold.complete:
             gold_rows = list(
                 inventory.filter(
-                    x_details__verified_type__iexact="Business", author_id__gt=gold.cursor
+                    x_details__verified_type__code__iexact="Business", author_id__gt=gold.cursor
                 ).order_by("author_id")[:limit]
             )
             for account in enqueue_filtered_accounts(
@@ -135,7 +135,7 @@ def scan_initial_batch(*, limit=100, deadline=None):
                 gold.cursor = account.author_id
                 gold.enumerated += 1
             gold.complete = not inventory.filter(
-                x_details__verified_type__iexact="Business", author_id__gt=gold.cursor
+                x_details__verified_type__code__iexact="Business", author_id__gt=gold.cursor
             ).exists()
             gold.save()
             if (

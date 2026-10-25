@@ -9,7 +9,7 @@ MODEL_KIND_POLICY = "hf-public-model-registry-v1"
 def _qualification(product, observation):
     ownership = product.publisher_ownership
     require(
-        product.type is None
+        product.product_type_code is None
         and product.hf_type == "model"
         and product.repo_id
         and product.publisher_account_id

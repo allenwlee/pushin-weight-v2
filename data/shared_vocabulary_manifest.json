@@ -117,6 +117,18 @@
       "rows": 5,
       "sha256": "688c71b8ce527744dd52153fefa8cbd6f539224434845c22ebdd9f896753a955",
       "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
+    },
+    "shared_product_types.csv": {
+      "rows": 3,
+      "sha256": "3e1861090aea5b1ed9f69ee2026ca4bd09d2749578158913fcf789d4ce672f77"
+    },
+    "shared_product_relationship_types.csv": {
+      "rows": 5,
+      "sha256": "63bd352b84bf49b62c7a1f7efb923b9c322749d86f18c869a99bb5aaabe5de15"
+    },
+    "shared_model_gating_states.csv": {
+      "rows": 4,
+      "sha256": "f46b6782334b1c8befab52cfd19cfcf3a05f460de96984671163aca941170049"
     }
   },
   "sources": {

@@ -14,6 +14,7 @@ from core.model_history_collection import (
     import_selected_history,
 )
 from core.models import CollectionRun, DataSource, MetricValue
+from tests.product_factory import product_type_fields
 from tests.test_benchmark_download_history import manifest
 from tests.test_benchmark_download_persistence import configured
 
@@ -71,7 +72,7 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download(
 
     scope()
     product = Product.objects.create(
-        brand_id="lab", repo_id="lab/model", type="llm-model"
+        brand_id="lab", repo_id="lab/model", **product_type_fields(Product, "llm-model")
     )
     source = DataSource.objects.get(pk="hf")
     source.enabled, source.adapter_key = True, "hf-catalog-v1"
@@ -201,7 +202,7 @@ def test_hf_history_access_failure_keeps_evidence_and_transient_resume(
 
     scope()
     product = Product.objects.create(
-        brand_id="lab", repo_id="lab/model", type="llm-model"
+        brand_id="lab", repo_id="lab/model", **product_type_fields(Product, "llm-model")
     )
     source = DataSource.objects.get(pk="hf")
     source.enabled, source.adapter_key = True, "hf-catalog-v1"
@@ -562,7 +563,7 @@ def test_shared_openrouter_window_is_fetched_once_and_other_never_fills_missing_
         brand=other_brand, account=account, role=Role.objects.get(pk="official")
     )
     other_product = Product.objects.create(
-        brand=other_brand, type="llm-model", display_name="missing from ranking"
+        brand=other_brand, **product_type_fields(Product, "llm-model"), display_name="missing from ranking"
     )
     other_subject = MeasurementSubject.objects.create(
         subject_kind="product", product=other_product

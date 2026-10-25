@@ -63,7 +63,7 @@ def evidence_selection(contract, mapping_ids, cutoff):
                     source_id=mapping.source_id,
                     external_identifier=mapping.external_identifier,
                     source_subject_kind=mapping.source_subject_kind,
-                    identifier_scope=mapping.identifier_scope,
+                    identifier_scope_id=mapping.identifier_scope_id,
                     subject_id=mapping.subject_id,
                 )
                 selection |= Q(
@@ -166,7 +166,7 @@ def forecast_inputs(
                 "unit": definition.unit_reference_id,
                 "measurement_kind": definition.measurement_kind,
                 "window_mode": definition.window_mode,
-                "source_timezone": value.source_timezone,
+                "source_timezone": value.source_timezone_reference_id or "unknown",
                 "temporal_status": value.temporal_status,
                 "dimensions": observation.dimensions,
                 "source_metadata": metadata,
