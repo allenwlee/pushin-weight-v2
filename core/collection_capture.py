@@ -40,6 +40,7 @@ def archive_document(
             "decoded-body-v1",
             "selected-json-canonical-v1",
             "legacy-json-canonical-v1",
+            "legacy-jsonb-text-v1",
         },
         "unsupported capture encoding",
     )
