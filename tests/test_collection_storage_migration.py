@@ -5,6 +5,7 @@ import pytest
 from core.collection_capture import read_document
 from core.collection_storage_migration import (
     archive_legacy_batch,
+    project_arena_publication_batch,
     project_benchmark_provenance_batch,
     project_run_ingestion_mode,
     provenance_mismatch_counts,
@@ -12,6 +13,39 @@ from core.collection_storage_migration import (
 )
 from core.models import CollectionObservation
 from tests.test_collection_relational_storage import execution
+
+
+def test_arena_publication_copy_rebuilds_an_empty_cohort_without_duplicate_rows():
+    from core.benchmark_metric_store import persist_source
+    from core.measurement_taxonomy import digest
+    from tests.test_benchmark_download_persistence import provider_contract
+
+    contract = provider_contract(
+        "arena", ["rating", "rating_lower", "rating_upper", "rank"]
+    )
+    run = persist_source(
+        contract,
+        "arena",
+        digest("rg6-empty-arena-publication"),
+        {
+            "status": "ok",
+            "config": "text_style_control",
+            "coverage": "publication_window",
+            "rows": [],
+        },
+        source_metadata={"publication_dates": ["2026-09-27"]},
+    )
+    markers = CollectionObservation.objects.filter(
+        run=run, observation_kind="publication_marker"
+    )
+    assert markers.count() == 1
+    assert project_arena_publication_batch(verify_only=True).inserted == 0
+    markers.delete()
+    with pytest.raises(ValueError, match="incomplete"):
+        project_arena_publication_batch(verify_only=True)
+    assert project_arena_publication_batch().inserted == 1
+    assert project_arena_publication_batch().inserted == 0
+    assert project_arena_publication_batch(verify_only=True).scanned == 1
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 

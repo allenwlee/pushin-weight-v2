@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 
 from core.benchmark_metric_history import import_history
@@ -119,6 +121,7 @@ def test_arena_stops_carrying_after_complete_publication_drops_selected_product(
 ):
     from core.benchmark_metric_series import metric_points
     from core.benchmark_metric_store import persist_source
+    from core.models import CollectionObservation
     from tests.test_benchmark_download_persistence import provider_contract
 
     contract = provider_contract(
@@ -144,7 +147,7 @@ def test_arena_stops_carrying_after_complete_publication_drops_selected_product(
             "rows": [row],
         },
     )
-    persist_source(
+    removed_run = persist_source(
         contract,
         "arena",
         digest("removed"),
@@ -168,6 +171,15 @@ def test_arena_stops_carrying_after_complete_publication_drops_selected_product(
             "publication_end": "2026-09-27",
         },
     )
+    markers = CollectionObservation.objects.filter(
+        run=removed_run,
+        source_subject_kind="aggregate",
+        observation_kind="publication_marker",
+    )
+    assert list(markers.values_list("published_date", flat=True)) == [
+        date(2026, 9, 27)
+    ]
+    assert markers.get().publication_complete is True
     line = {
         "source": "arena",
         "subject_id": str(contract.mappings.get().subject_id),

@@ -709,6 +709,41 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
     }
 
 
+def record_arena_publications(run, dates):
+    """Keep a publication occurrence even when no selected model has a row."""
+    require(run.observed_at is not None, "publication observation time required")
+    inserted = 0
+    for day in dates:
+        published_date = date.fromisoformat(day)
+        marker, created = CollectionObservation.objects.get_or_create(
+            run=run,
+            observation_key=digest(["arena-publication-v1", str(run.pk), day]),
+            defaults={
+                "source_identifier": "arena:publication",
+                "source_subject_kind": "aggregate",
+                "observed_at": run.observed_at,
+                "published_date": published_date,
+                "publication_precision": "date",
+                "observation_kind": "publication_marker",
+                "publication_complete": True,
+                "dimensions": {"kind": "publication_marker"},
+                "source_metadata": {"publication_complete": True},
+            },
+        )
+        require(
+            marker.source_identifier == "arena:publication"
+            and marker.source_subject_kind == "aggregate"
+            and marker.observed_at == run.observed_at
+            and marker.published_date == published_date
+            and marker.publication_precision == "date"
+            and marker.observation_kind == "publication_marker"
+            and marker.publication_complete is True,
+            "conflicting publication marker",
+        )
+        inserted += int(created)
+    return inserted
+
+
 def persist_source(
     contract,
     source,
@@ -944,6 +979,8 @@ def persist_source(
             successful = retained_successful
             errors = False
             observations, _ = commit_prepared_rows(run, prepared)
+            if source == "arena" and run.source_metadata.get("publication_dates"):
+                record_arena_publications(run, dates)
             for observation, (_, values) in zip(observations, prepared, strict=True):
                 errors |= observation.status == "error"
                 if observation.mapping_id and values:

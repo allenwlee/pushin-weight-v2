@@ -9632,7 +9632,7 @@ The `collection_run_job_instructions` trigger validates lifecycle against the li
 
 ### `collection_observations` — CollectionObservation
 
-One sourced evidence record: numeric rows are immutable evidence, catalog rows retain repository enrichment progress, and typed Post rows prove collection membership.
+One sourced evidence record: numeric rows are immutable evidence, catalog rows retain repository enrichment progress, typed Post rows prove collection membership, and an Arena `aggregate` row with `observation_kind='publication_marker'` records a publication date even when no selected model has a metric row. The marker uses `published_date`, date precision and `publication_complete`; it does not invent a model measurement.
 
 Model: [CollectionObservation](../../core/models.py#L8929).
 

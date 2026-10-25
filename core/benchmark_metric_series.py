@@ -504,7 +504,7 @@ def metric_points(contract, line, days):
                 run__job__source_id=source,
                 run__status__in=["success", "partial"],
                 status="ok",
-                id__in=observation_ids("publication_complete IS TRUE", mapping_ids=None,
+                id__in=observation_ids("p.publication_complete IS TRUE", mapping_ids=None,
                                      contract_id=contract.pk, source_id=source),
                 published_date__gte=prior or lower,
                 published_date__lte=upper,

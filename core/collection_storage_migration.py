@@ -7,8 +7,12 @@ bytes. It is retained evidence; operational reads must use typed owners.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import UUID
 
 from django.db import connection, transaction
+
+from core.benchmark_metric_timing import native_date
+from core.models import CollectionObservation, CollectionRun
 
 LEGACY_FIELDS = {
     "collection_runs": (
@@ -34,6 +38,13 @@ class ProvenanceBatch:
     last_id: int
     scanned: int
     updated: int
+
+
+@dataclass(frozen=True)
+class PublicationBatch:
+    last_id: UUID | None
+    scanned: int
+    inserted: int
 
 
 PROVENANCE_EXPRESSIONS = {
@@ -118,6 +129,79 @@ def project_run_ingestion_mode() -> int:
             + " WHERE direct_ingestion IS DISTINCT FROM " + expression
         )
         return cursor.rowcount
+
+
+def project_arena_publication_batch(
+    *, after_id: UUID | None = None, batch_size: int = 10,
+    verify_only: bool = False,
+) -> PublicationBatch:
+    """Preserve run-wide publication dates as typed aggregate observations."""
+    if after_id is not None and not isinstance(after_id, UUID):
+        raise ValueError("after_id must be a UUID or None")
+    if type(batch_size) is not int or not 1 <= batch_size <= 50:
+        raise ValueError("batch_size must be an integer from 1 to 50")
+    from core.benchmark_metric_store import record_arena_publications
+
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        runs = CollectionRun.objects.filter(
+            job__source_id="arena",
+            job__purpose="metric",
+            status__in=["success", "partial"],
+            source_metadata__has_key="publication_dates",
+        )
+        if after_id is not None:
+            runs = runs.filter(pk__gt=after_id)
+        if not verify_only:
+            runs = runs.select_for_update()
+        selected = list(runs.order_by("pk")[:batch_size])
+        inserted = 0
+        for run in selected:
+            native = run.source_metadata["publication_dates"]
+            if not isinstance(native, list) or not 0 < len(native) <= 366:
+                raise ValueError("invalid Arena publication-date evidence")
+            dates = sorted({native_date(day).isoformat() for day in native})
+            payload = run.raw_payload
+            if not isinstance(payload, dict) or payload.get("coverage") not in {
+                "publication_window", "latest_publication_only"
+            }:
+                raise ValueError("Arena publication coverage evidence is missing")
+            if not isinstance(payload.get("rows"), list) or any(
+                not isinstance(row, dict) for row in payload["rows"]
+            ):
+                raise ValueError("Arena publication rows are invalid")
+            if any(
+                row.get("leaderboard_publish_date") not in dates
+                for row in payload["rows"]
+            ):
+                raise ValueError("Arena publication date excludes a source row")
+            markers = list(CollectionObservation.objects.filter(
+                run=run, observation_kind="publication_marker"
+            ))
+            expected_dates = {native_date(day) for day in dates}
+            saved_dates = {marker.published_date for marker in markers}
+            if saved_dates - expected_dates:
+                raise ValueError("Arena publication markers conflict with source evidence")
+            if verify_only:
+                if saved_dates != expected_dates or len(markers) != len(dates):
+                    raise ValueError("Arena publication markers are incomplete")
+                for marker in markers:
+                    if (
+                        marker.source_identifier != "arena:publication"
+                        or marker.source_subject_kind != "aggregate"
+                        or marker.observed_at != run.observed_at
+                        or marker.publication_precision != "date"
+                        or marker.publication_complete is not True
+                    ):
+                        raise ValueError("Arena publication marker disagrees with source")
+            else:
+                inserted += record_arena_publications(run, dates)
+        return PublicationBatch(
+            selected[-1].pk if selected else after_id,
+            len(selected), inserted,
+        )
 
 
 def provenance_mismatch_counts() -> tuple[int, int]:

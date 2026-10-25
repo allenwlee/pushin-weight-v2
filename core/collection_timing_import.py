@@ -97,14 +97,14 @@ def import_legacy_timing_batch(
         with connection.cursor() as cursor:
             cursor.execute("SET LOCAL lock_timeout = '5s'")
             cursor.execute("SET LOCAL statement_timeout = '30s'")
+        observations_query = CollectionObservation.objects.filter(
+            pk__gt=after_id,
+            source_metadata__has_key="timing_correction_v1",
+        )
+        if not verify_only:
+            observations_query = observations_query.select_for_update()
         observations = list(
-            CollectionObservation.objects.filter(
-                pk__gt=after_id,
-                source_metadata__has_key="timing_correction_v1",
-            )
-            .select_for_update()
-            .only("id", "source_metadata")
-            .order_by("pk")[:batch_size]
+            observations_query.only("id", "source_metadata").order_by("pk")[:batch_size]
         )
         if not observations:
             return CorrectionImportBatch(after_id, 0, 0, 0)
@@ -118,7 +118,10 @@ def import_legacy_timing_batch(
                     raise ValueError("invalid historical timing correction identity")
                 selected.append((observation.pk, int(value_id), marker))
         value_ids = {value_id for _, value_id, _ in selected}
-        values = MetricValue.objects.filter(pk__in=value_ids).select_for_update().in_bulk()
+        values_query = MetricValue.objects.filter(pk__in=value_ids)
+        if not verify_only:
+            values_query = values_query.select_for_update()
+        values = values_query.in_bulk()
         if len(values) != len(value_ids):
             raise ValueError("historical timing correction refers to a missing value")
         zones = {
