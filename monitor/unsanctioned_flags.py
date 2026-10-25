@@ -14,7 +14,11 @@ from typing import Any
 
 from django.db import transaction
 
-from core.models import PostUnsanctionedFlag, UnsanctionedFlagKey
+from core.models import (
+    PostUnsanctionedFlag,
+    PostUnsanctionedFlagAssignment,
+    UnsanctionedFlagKey,
+)
 
 _SAFE_IDENTIFIER = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 _SAFE_FLAG_KEY = re.compile(r"^[a-z0-9_-]{1,64}$")
@@ -149,13 +153,25 @@ def persist_classifier_flags(
         )
 
     with transaction.atomic():
-        PostUnsanctionedFlag.objects.update_or_create(
+        assessment, _ = PostUnsanctionedFlag.objects.update_or_create(
             post_id=post_id,
             defaults={
                 "flags": json.dumps(known, separators=(",", ":")),
                 "flag_set": known,
                 "evidence": None,
             },
+        )
+        assignments = PostUnsanctionedFlagAssignment.objects.filter(
+            post_flag=assessment
+        )
+        assignments.exclude(flag_id__in=known).delete()
+        existing = set(assignments.values_list("flag_id", flat=True))
+        PostUnsanctionedFlagAssignment.objects.bulk_create(
+            [
+                PostUnsanctionedFlagAssignment(post_flag=assessment, flag_id=key)
+                for key in known
+                if key not in existing
+            ]
         )
 
     dead_letter = None

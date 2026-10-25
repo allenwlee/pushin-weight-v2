@@ -3198,6 +3198,31 @@ class PostUnsanctionedFlag(models.Model):
         ]
 
 
+class PostUnsanctionedFlagAssignment(models.Model):
+    """One known legacy flag assigned to a post-level assessment."""
+
+    post_flag = models.ForeignKey(
+        PostUnsanctionedFlag,
+        db_column="post_id",
+        on_delete=models.CASCADE,
+        related_name="assignments",
+    )
+    flag = models.ForeignKey(
+        UnsanctionedFlagKey,
+        db_column="flag_key",
+        on_delete=models.PROTECT,
+    )
+
+    class Meta:
+        db_table = "post_unsanctioned_flag_assignments"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                fields=["post_flag", "flag"],
+                name="uq_post_unsanctioned_flag_assignment",
+            ),
+        ]
+
+
 class PostUntrackedBrandPromotion(models.Model):
     """Current post-level promotion judgment, separate from legacy flags."""
 
@@ -3693,6 +3718,42 @@ class SearchQuery(models.Model):
         indexes = [
             models.Index(
                 fields=["brand"], name="idx_search_queries_brand_id"
+            ),
+        ]
+
+
+class AccountQueryMembership(models.Model):
+    """A query associated with an account, optionally at one saved appearance."""
+
+    account = models.ForeignKey(
+        Account, on_delete=models.CASCADE, related_name="query_memberships",
+        db_column="account_key",
+    )
+    search_query = models.ForeignKey(
+        SearchQuery, on_delete=models.PROTECT, related_name="account_memberships",
+    )
+    post = models.ForeignKey(
+        Post, null=True, on_delete=models.CASCADE,
+        related_name="account_query_memberships", db_column="post_id",
+        to_field="tweet_id",
+    )
+    observation = models.ForeignKey(
+        "CollectionObservation", null=True, on_delete=models.PROTECT,
+        related_name="account_query_memberships",
+    )
+    imported_at = models.DateTimeField(null=True)
+
+    class Meta:
+        db_table = "account_query_memberships"
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(
+                fields=["account", "search_query", "post"],
+                nulls_distinct=False,
+                name="uq_account_query_membership",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(observation__isnull=True) | models.Q(post__isnull=False),
+                name="ck_account_query_observation_post",
             ),
         ]
 

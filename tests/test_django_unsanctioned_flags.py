@@ -7,6 +7,14 @@ import pytest
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
+@pytest.fixture(autouse=True)
+def _known_flag_keys():
+    from core.models import UnsanctionedFlagKey
+
+    for key in ("crypto", "marketing_spam", "scam", "unauthorized"):
+        UnsanctionedFlagKey.objects.get_or_create(key=key)
+
+
 def _post(tweet_id: str):
     from core.models import Post
 
@@ -24,7 +32,7 @@ def _seed_existing(post, flags: list[str]):
 
 
 def test_valid_flags_create_and_update_the_one_to_one_row():
-    from core.models import PostUnsanctionedFlag
+    from core.models import PostUnsanctionedFlag, PostUnsanctionedFlagAssignment
     from monitor.unsanctioned_flags import persist_classifier_flags
 
     post = _post("flags-valid")
@@ -45,6 +53,11 @@ def test_valid_flags_create_and_update_the_one_to_one_row():
     assert json.loads(row.flags) == ["unauthorized"]
     assert row.flag_set == ["unauthorized"]
     assert PostUnsanctionedFlag.objects.filter(post=post).count() == 1
+    assert set(
+        PostUnsanctionedFlagAssignment.objects.filter(post_flag=row).values_list(
+            "flag_id", flat=True
+        )
+    ) == {"unauthorized"}
 
 
 def test_successful_explicit_empty_deletes_existing_row():
@@ -117,7 +130,7 @@ def test_unknown_only_preserves_prior_and_dead_letter_is_minimized():
 
 
 def test_mixed_known_unknown_persists_known_and_dead_letters_unknown():
-    from core.models import PostUnsanctionedFlag
+    from core.models import PostUnsanctionedFlag, PostUnsanctionedFlagAssignment
     from monitor.unsanctioned_flags import persist_classifier_flags
 
     post = _post("flags-mixed")
@@ -133,5 +146,10 @@ def test_mixed_known_unknown_persists_known_and_dead_letters_unknown():
     assert result.outcome == "persisted"
     assert result.degraded is True
     assert json.loads(row.flags) == ["scam", "crypto"]
+    assert set(
+        PostUnsanctionedFlagAssignment.objects.filter(post_flag=row).values_list(
+            "flag_id", flat=True
+        )
+    ) == {"scam", "crypto"}
     assert result.dead_letter["known_keys"] == ["scam", "crypto"]
     assert result.dead_letter["rejected_keys"] == ["future_flag"]
