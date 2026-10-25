@@ -413,7 +413,11 @@ def metric_points(contract, line, days):
             "multiple measurements for a subject/date in one run",
         )
         groups[key][observation.mapping_id] = value
-        direct = run.source_metadata.get("ingestion_mode") == "direct"
+        direct = (
+            run.direct_ingestion
+            if run.direct_ingestion is not None
+            else run.source_metadata.get("ingestion_mode") == "direct"
+        )
         revisions[key] = (
             1 if source == "hf" and direct else 0,
             run.source_as_of or run.completed_at,
