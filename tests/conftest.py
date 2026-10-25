@@ -89,6 +89,17 @@ def company_country_catalogue(db):
 
 @pytest.fixture
 def migration_rehearsal_schema(transactional_db, request):
+    baseline = getattr(request, "param", ("core", "0128_require_correction_actor"))
+    yield from _migration_rehearsal_schema(baseline)
+
+
+@pytest.fixture
+def collection_history_schema(transactional_db):
+    """Historical collection tests share the approved database, not a new one."""
+    yield from _migration_rehearsal_schema(("core", "0065_measurement_taxonomy"))
+
+
+def _migration_rehearsal_schema(baseline):
     """Rehearse in a temporary schema in the same exclusively owned test database.
 
     Never include public in search_path: an absent recorder/table must not fall
@@ -132,9 +143,8 @@ def migration_rehearsal_schema(transactional_db, request):
             assert cursor.fetchone()[0] is None
         executor = MigrationExecutor(connection)
         assert not executor.loader.applied_migrations
-        baseline = getattr(request, "param", ("core", "0128_require_correction_actor"))
         executor.migrate([baseline])
-        yield
+        yield namespace
     finally:
         with connection.cursor() as cursor:
             cursor.execute("SELECT set_config('search_path', %s, false)", [original_path])
@@ -317,7 +327,7 @@ def isolated_migration_database(transactional_db):
 
 
 @pytest.fixture
-def collection_instruction_bridge(isolated_migration_database, monkeypatch):
+def collection_instruction_bridge(collection_history_schema, monkeypatch):
     """Preceding-reader compatibility belongs to the explicit 0089 bridge."""
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor

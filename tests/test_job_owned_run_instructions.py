@@ -290,7 +290,7 @@ def test_stale_direct_object_cannot_replace_a_new_job_identity():
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.usefixtures("isolated_migration_database")
+@pytest.mark.usefixtures("collection_history_schema")
 def test_cutover_preserves_all_evidence_and_physical_compatibility_copies():
     from tests.test_run_job_normalization import previous_module
 
@@ -381,18 +381,18 @@ def test_cutover_preserves_all_evidence_and_physical_compatibility_copies():
     )
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = 'collection_runs' AND column_name IN ('source_id', 'purpose', 'contract_id', 'scope')"
+            "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'collection_runs' AND column_name IN ('source_id', 'purpose', 'contract_id', 'scope')"
         )
         assert len(cursor.fetchall()) == 4
         cursor.execute(
-            "SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_metric_run_outcome'"
+            "SELECT indexdef FROM pg_indexes WHERE schemaname = current_schema() AND indexname = 'idx_metric_run_outcome'"
         )
         assert "(job_id, status, completed_at)" in cursor.fetchone()[0]
     call_command("normalize_collection_run_jobs", verbosity=0)
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.usefixtures("isolated_migration_database")
+@pytest.mark.usefixtures("collection_history_schema")
 def test_cutover_rejects_running_jobless_source_attempt_without_inventing_facts():
     target = [("core", "0088_archive_run_instructions")]
     executor = MigrationExecutor(connection)
@@ -426,10 +426,14 @@ def test_legacy_run_update_does_not_acquire_a_job_row_lock():
         .apps
     )
     legacy = historical.get_model("core", "CollectionRun").objects.get(pk=run.pk)
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW search_path")
+        search_path = cursor.fetchone()[0]
     with psycopg.connect(**connection.get_connection_params()) as holder:
-        holder.execute(
+        holder.execute("SELECT set_config('search_path', %s, false)", [search_path])
+        assert holder.execute(
             "SELECT id FROM collection_jobs WHERE id = %s FOR UPDATE", [job.pk]
-        )
+        ).fetchone() == (job.pk,)
         with transaction.atomic(), connection.cursor() as cursor:
             cursor.execute("SET LOCAL lock_timeout = '500ms'")
             legacy.report = {"no_lock_inversion": True}

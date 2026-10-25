@@ -119,11 +119,11 @@ def test_0089_to_0090_preserves_rows_clocks_evidence_views_and_instruction_links
         columns = [c.name for c in cursor.description]
         rows = [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
         cursor.execute(
-            "SELECT c.relname, c.oid, c.relfilenode FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ('collection_runs','metric_collection_runs','metric_observations') ORDER BY c.relname"
+            "SELECT c.relname, c.oid, c.relfilenode FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relname IN ('collection_runs','metric_collection_runs','metric_observations') ORDER BY c.relname"
         )
         relations = cursor.fetchall()
         cursor.execute(
-            "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name, ordinal_position"
+            "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema=current_schema() ORDER BY table_name, ordinal_position"
         )
         physical = set(cursor.fetchall())
         cursor.execute(
@@ -131,7 +131,7 @@ def test_0089_to_0090_preserves_rows_clocks_evidence_views_and_instruction_links
         )
         constraints = cursor.fetchall()
         cursor.execute(
-            "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname='public' AND tablename='collection_runs' AND indexname='idx_metric_run_outcome'"
+            "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname=current_schema() AND tablename='collection_runs' AND indexname='idx_metric_run_outcome'"
         )
         outcome_index = cursor.fetchall()
     snapshots = {
@@ -159,11 +159,11 @@ def test_0089_to_0090_preserves_rows_clocks_evidence_views_and_instruction_links
             {k: v for k, v in row.items() if k not in COPIES} for row in rows
         ]
         cursor.execute(
-            "SELECT c.relname, c.oid, c.relfilenode FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ('collection_runs','metric_collection_runs','metric_observations') ORDER BY c.relname"
+            "SELECT c.relname, c.oid, c.relfilenode FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relname IN ('collection_runs','metric_collection_runs','metric_observations') ORDER BY c.relname"
         )
         assert cursor.fetchall() == relations
         cursor.execute(
-            "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public' ORDER BY table_name, ordinal_position"
+            "SELECT table_name, column_name FROM information_schema.columns WHERE table_schema=current_schema() ORDER BY table_name, ordinal_position"
         )
         final_physical = set(cursor.fetchall())
         assert physical - final_physical == {
@@ -184,7 +184,7 @@ def test_0089_to_0090_preserves_rows_clocks_evidence_views_and_instruction_links
             )
         ]
         cursor.execute(
-            "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname='public' AND tablename='collection_runs' AND indexname='idx_metric_run_outcome'"
+            "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname=current_schema() AND tablename='collection_runs' AND indexname='idx_metric_run_outcome'"
         )
         assert cursor.fetchall() == outcome_index
         cursor.execute("SELECT * FROM metric_collection_runs WHERE id=%s", [metric.pk])
@@ -302,8 +302,12 @@ def test_drop_lock_timeout_rolls_back_function_and_columns_then_retry_succeeds()
         job=evidence_job(source_id="hf"), status="pending", ingestion_key="a" * 64
     )
     original = function_definition("collection_run_job_instructions")
+    with connection.cursor() as cursor:
+        cursor.execute("SHOW search_path")
+        search_path = cursor.fetchone()[0]
     with psycopg.connect(**connection.get_connection_params()) as reader:
-        reader.execute("SELECT id FROM collection_runs WHERE id=%s", [run.pk])
+        reader.execute("SELECT set_config('search_path', %s, false)", [search_path])
+        assert reader.execute("SELECT id FROM collection_runs WHERE id=%s", [run.pk]).fetchone() == (run.pk,)
         with pytest.raises(OperationalError, match="lock timeout"):
             MigrationExecutor(connection).migrate(FINAL)
         assert run_columns() & COPIES == COPIES
