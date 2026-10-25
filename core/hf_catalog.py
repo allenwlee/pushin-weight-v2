@@ -452,7 +452,7 @@ def _walk_namespace(ns, hf, rules, visited, max_models, claim):
     _save_scope(ns, claim, update_fields=["outcome"])
 
 
-def catalog_report(run, *, requests=0, stop_reason=None):
+def catalog_report(run, *, requests=0, cumulative_requests=0, stop_reason=None):
     observations = CollectionObservation.objects.filter(scope_run__run=run)
     conflicts = observations.filter(processing_outcome="owner_conflict").count()
     gaps = observations.filter(
@@ -505,7 +505,7 @@ def catalog_report(run, *, requests=0, stop_reason=None):
         "imported": imported,
         "updated": products - imported,
         "requests": requests,
-        "cumulative_requests": sum(i["requests"] for i in run.invocations),
+        "cumulative_requests": cumulative_requests,
         "stop_reason": stop_reason
         or (
             "model_cap"
@@ -572,6 +572,11 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
             seconds=hf.max_seconds + 60,
             limits=limits,
         )
+        prior_requests = sum(
+            run.attempts.exclude(pk=claim.attempt_id).values_list(
+                "actual_requests", flat=True
+            )
+        )
         if run_id is not None and not run.scopes.exists():
             with fenced_run(claim):
                 for entry in run.job.scope["namespaces"]:
@@ -603,7 +608,7 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
             invocation["last_request"] = {
                 key: envelope[key] for key in ("endpoint", "attempted_at")
             }
-            run.request_count = sum(i["requests"] for i in run.invocations)
+            run.request_count = prior_requests + hf.requests
             with fenced_run(claim):
                 run.save(update_fields=["invocations", "request_count", "updated_at"])
 
@@ -622,7 +627,10 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                     claim,
                 )
             report = catalog_report(
-                run, requests=hf.requests, stop_reason=hf.stop_reason
+                run,
+                requests=hf.requests,
+                cumulative_requests=prior_requests + hf.requests,
+                stop_reason=hf.stop_reason,
             )
             run.status = "success" if report["complete"] else "partial"
             report["stop_reason"] = (
@@ -653,7 +661,7 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                 outcome="complete" if run.status == "success" else run.status,
                 ended_at=timezone.now().isoformat(),
             )
-            run.request_count = sum(i["requests"] for i in run.invocations)
+            run.request_count = prior_requests + hf.requests
             try:
                 with fenced_run(claim):
                     run.save()
