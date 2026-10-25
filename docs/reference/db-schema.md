@@ -1,8 +1,8 @@
 # Database schema reference
 
-The repository and permanent local test database are at `0172_rg6_endpoint_revision_conflict` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
+The repository and permanent local test database are at `0173_rg6_scope_rare_hit_memberships` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
 
-Local branch scope: **217 physical core application tables**, **2491 physical columns**, **217 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables. The deployed 0168 scope is 215 tables and 2476 columns.
+Local branch scope: **218 physical core application tables**, **2493 physical columns**, **218 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables. The deployed 0168 scope is 215 tables and 2476 columns.
 
 Canonical geography references use `geolocations.id`. Necessary source wording and existing payloads remain in restricted evidence columns on their existing owners. Ordinary models, webpages and APIs use canonical locations; unresolved claims return NULL without a raw-source fallback. Database guards re-resolve changed wording and preserve explicit canonical corrections when the wording is unchanged.
 
@@ -37,7 +37,7 @@ The retired SQLite database and Graphviz image are not current schema sources.
 | [Post translation and commentary](#translation) | 9 | Literal post translations, generated commentary, retries, and budgets. |
 | [Authored content and trend publication](#headlines) | 13 | Prepared headline text, publication pointers, provider batches, work requests, and provider costs. |
 | [Compatible editorial input storage and pictures](#editorial) | 7 | Story identities, accepted editions, quarter-hour decisions, spend and optional assets. |
-| [Collection, extraction, and processing records](#processing) | 25 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
+| [Collection, extraction, and processing records](#processing) | 26 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
 | [Measurement subjects, metrics and observations](#measurements) | 13 | Sourced measurements and their collection state. |
 | [Official-company collection](#official-companies) | 7 | Official-company account collection, attempts and spending. |
 
@@ -136,8 +136,8 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 217 local physical core application tables appears once in this inventory and once in
-the detailed sections. All 217 have managed models; unmanaged source projections add no tables. The native view is
+Each of the 218 local physical core application tables appears once in this inventory and once in
+the detailed sections. All 218 have managed models; unmanaged source projections add no tables. The native view is
 listed separately: [home_brand_time_counts](#view-home_brand_time_counts). The three [benchmark serving views](#benchmark-serving-views) are also outside the physical-table count.
 
 | Table | Subject | What one row represents |
@@ -177,6 +177,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts). The t
 | [collection_requests](#table-collection_requests) | [Collection, extraction, and processing records](#processing) | One transport request and its outcome. |
 | [collection_resource_snapshots](#table-collection_resource_snapshots) | [Collection, extraction, and processing records](#processing) | One nonnumeric historical snapshot of a collected resource. |
 | [collection_runs](#table-collection_runs) | [Measurement subjects, metrics and observations](#measurements) | One source collection run, for numeric measurements or catalog discovery. |
+| [collection_scope_rare_hits](#table-collection_scope_rare_hits) | [Collection, extraction, and processing records](#processing) | One saved association between a collection scope and a rare-type search hit. |
 | [collection_scope_runs](#table-collection_scope_runs) | [Measurement subjects, metrics and observations](#measurements) | One source scope’s pagination and ownership progress within a collection run. |
 | [companies](#table-companies) | [Companies, brands, and organization discovery](#organizations) | One company identity, including its recorded headquarters country. |
 | [companies_accounts](#table-companies_accounts) | [Companies, brands, and organization discovery](#organizations) | One account’s role and ownership-review state for a company. |
@@ -8313,6 +8314,33 @@ Model: [RareTypeSearchRun](../../core/models.py#L7785).
 - `rare_type_search_runs_daily_budget_id_48619df1`: `CREATE INDEX rare_type_search_runs_daily_budget_id_48619df1 ON public.rare_type_search_runs USING btree (daily_budget_id)`.
 - `rare_type_search_runs_pkey`: `CREATE UNIQUE INDEX rare_type_search_runs_pkey ON public.rare_type_search_runs USING btree (id)`.
 - `rare_type_search_runs_source_query_id_9e5c72ef`: `CREATE INDEX rare_type_search_runs_source_query_id_9e5c72ef ON public.rare_type_search_runs USING btree (source_query_id)`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-collection_scope_rare_hits"></a>
+
+### `collection_scope_rare_hits` — CollectionScopeRareHit
+
+One saved association between an X collection scope and a rare-type search hit. A hit can appear in more than one scope when saved evidence is reused or a collection continues, so neither owner can hold a single foreign key to the other. The source scope and hit remain separate records. The local RG6 writer records this link alongside the compatibility receipt; historical links are copied from saved scope evidence before that receipt is retired.
+
+Model: [CollectionScopeRareHit](../../core/models.py#L8390).
+
+**Primary key:** (`scope_run_id`, `rare_hit_id`).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `scope_run_id` | `bigint` | No | PK component. FK → [`collection_scope_runs`](#table-collection_scope_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `scope_run`. |
+| `rare_hit_id` | `bigint` | No | PK component. FK → [`rare_type_search_hits`](#table-rare_type_search_hits) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `rare_hit`. |
+
+**Physical indexes:**
+
+- `collection_scope_rare_hits_pkey`: `CREATE UNIQUE INDEX collection_scope_rare_hits_pkey ON public.collection_scope_rare_hits USING btree (scope_run_id, rare_hit_id)`.
+- `collection_scope_rare_hits_scope_run_id_ee38e33d`: `CREATE INDEX collection_scope_rare_hits_scope_run_id_ee38e33d ON public.collection_scope_rare_hits USING btree (scope_run_id)`.
+- `collection_scope_rare_hits_rare_hit_id_a19d53aa`: `CREATE INDEX collection_scope_rare_hits_rare_hit_id_a19d53aa ON public.collection_scope_rare_hits USING btree (rare_hit_id)`.
+
+**Named constraints:**
+
+None beyond the composite primary key, non-null columns and foreign keys described above.
 
 [Back to table inventory](#table-inventory)
 

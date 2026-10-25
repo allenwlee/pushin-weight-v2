@@ -12,7 +12,13 @@ from uuid import UUID
 from django.db import connection, transaction
 
 from core.benchmark_metric_timing import native_date
-from core.models import CollectionObservation, CollectionRun, CollectionScopeRun
+from core.models import (
+    CollectionObservation,
+    CollectionRun,
+    CollectionScopeRareHit,
+    CollectionScopeRun,
+    RareTypeSearchHit,
+)
 
 LEGACY_FIELDS = {
     "collection_runs": (
@@ -73,6 +79,13 @@ class ProductTargetBatch:
     last_id: int
     scanned: int
     updated: int
+
+
+@dataclass(frozen=True)
+class RareHitMembershipBatch:
+    last_id: int
+    scanned: int
+    inserted: int
 
 
 PROVENANCE_EXPRESSIONS = {
@@ -292,6 +305,89 @@ def product_match_target_mismatch_counts() -> tuple[int, int]:
             "LEFT JOIN collection_job_targets jt ON jt.id=s.job_target_id "
             "LEFT JOIN measurement_subjects ms ON ms.id=jt.subject_id "
             "WHERE s.scope_kind='product_match'"
+        )
+        return tuple(cursor.fetchone())
+
+
+def project_scope_rare_hits_batch(
+    *, after_id: int = 0, batch_size: int = 200
+) -> RareHitMembershipBatch:
+    """Copy exact scope↔rare-hit pairs; one hit may occur in several scopes."""
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative integer")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute("SET LOCAL lock_timeout = '5s'")
+        cursor.execute("SET LOCAL statement_timeout = '30s'")
+        cursor.execute(
+            "SELECT id FROM collection_scope_runs WHERE id>%s "
+            "AND EXISTS (SELECT 1 FROM jsonb_array_elements(envelopes) e "
+            "WHERE e ? 'rare_hit_ids') "
+            "ORDER BY id LIMIT %s FOR UPDATE",
+            [after_id, batch_size],
+        )
+        ids = [row[0] for row in cursor.fetchall()]
+        if not ids:
+            return RareHitMembershipBatch(after_id, 0, 0)
+        scopes = list(
+            CollectionScopeRun.objects.filter(pk__in=ids).select_related("run")
+        )
+        expected = set()
+        for scope in scopes:
+            if scope.scope_kind != "x_query":
+                raise ValueError("rare hit belongs to a non-X scope")
+            for envelope in scope.envelopes:
+                if "rare_hit_ids" not in envelope:
+                    continue
+                hits = envelope["rare_hit_ids"]
+                if not isinstance(hits, list) or any(type(hit) is not int or hit <= 0 for hit in hits):
+                    raise ValueError("invalid historical rare hit IDs")
+                expected.update((scope.pk, hit) for hit in hits)
+        hit_rows = {
+            hit.pk: hit
+            for hit in RareTypeSearchHit.objects.filter(
+                pk__in={hit_id for _, hit_id in expected}
+            ).select_related("run")
+        }
+        if len(hit_rows) != len({hit_id for _, hit_id in expected}):
+            raise ValueError("historical rare hit is missing")
+        job_by_scope = {scope.pk: scope.run.job_id for scope in scopes}
+        if any(
+            not hit_rows[hit_id].run.lane.startswith(f"bf:{job_by_scope[scope_id]}:")
+            for scope_id, hit_id in expected
+        ):
+            raise ValueError("historical rare hit belongs to another job")
+        existing = set(
+            CollectionScopeRareHit.objects.filter(scope_run_id__in=ids)
+            .values_list("scope_run_id", "rare_hit_id")
+        )
+        if existing - expected:
+            raise ValueError("typed rare hit association exceeds saved scope evidence")
+        missing = expected - existing
+        CollectionScopeRareHit.objects.bulk_create(
+            [CollectionScopeRareHit(scope_run_id=scope_id, rare_hit_id=hit_id)
+             for scope_id, hit_id in sorted(missing)],
+            batch_size=500,
+        )
+        return RareHitMembershipBatch(ids[-1], len(ids), len(missing))
+
+
+def scope_rare_hit_mismatch_counts() -> tuple[int, int]:
+    """Compare full historical membership pairs in both directions."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "WITH expected AS ("
+            "SELECT DISTINCT s.id AS scope_run_id, hit.value::bigint AS rare_hit_id "
+            "FROM collection_scope_runs s "
+            "CROSS JOIN LATERAL jsonb_array_elements(s.envelopes) e "
+            "CROSS JOIN LATERAL jsonb_array_elements_text(e->'rare_hit_ids') hit(value) "
+            "WHERE e ? 'rare_hit_ids'), "
+            "missing AS (SELECT * FROM expected EXCEPT SELECT scope_run_id,rare_hit_id "
+            "FROM collection_scope_rare_hits), "
+            "extra AS (SELECT scope_run_id,rare_hit_id FROM collection_scope_rare_hits "
+            "EXCEPT SELECT * FROM expected) "
+            "SELECT (SELECT count(*) FROM missing),(SELECT count(*) FROM extra)"
         )
         return tuple(cursor.fetchone())
 

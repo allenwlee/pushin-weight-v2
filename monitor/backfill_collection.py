@@ -520,6 +520,12 @@ class PageCheckpoint:
             )
             hits = persist_hit_batch(rare.pk, items, now=now, raw_count=raw_count)
             hit_ids.extend(hit.pk for hit in hits)
+            from core.models import CollectionScopeRareHit
+
+            CollectionScopeRareHit.objects.bulk_create(
+                [CollectionScopeRareHit(scope_run=scope, rare_hit=hit) for hit in hits],
+                ignore_conflicts=True,
+            )
         self._checkpoint(runner._backfill_fetch_receipt, write=write, extra={
             "rare_hit_ids": hit_ids,
             "inbox_post_ids": [str(item.get("id") or item.get("tweet_id")) for item in items],

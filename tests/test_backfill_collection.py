@@ -650,7 +650,13 @@ def test_historical_call_a_staff_uses_on_demand_model_and_durable_usage(pipeline
 def test_historical_rare_inbox_precedes_gate_and_never_uses_live_slot(pipeline, monkeypatch, tmp_path):
     from decimal import Decimal
 
+    from core.collection_storage_migration import (
+        project_scope_rare_hits_batch,
+        scope_rare_hit_mismatch_counts,
+    )
     from core.models import (
+        CollectionScopeRareHit,
+        CollectionScopeRun,
         RareTypeDecisionProcessingCycle,
         RareTypeSearchHit,
         RareTypeSearchRun,
@@ -682,9 +688,24 @@ def test_historical_rare_inbox_precedes_gate_and_never_uses_live_slot(pipeline, 
     assert not RareTypeDecisionProcessingCycle.objects.filter(lane="rare_types").exists()
     assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
     assert reopened == ["rare-kept"]
-    evidence = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_key="RARE_EXTRA").envelopes[0]
+    scoped = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_key="RARE_EXTRA")
+    evidence = scoped.envelopes[0]
     assert evidence["received_post_ids"] == evidence["inbox_post_ids"] == ["rare-kept"]
     assert evidence["raw_count"] == 1 and len(evidence["rare_hit_ids"]) == 1
+    assert list(scoped.rare_hit_memberships.values_list("rare_hit_id", flat=True)) == evidence["rare_hit_ids"]
+    assert scope_rare_hit_mismatch_counts() == (0, 0)
+    CollectionScopeRareHit.objects.filter(scope_run=scoped).delete()
+    replay = CollectionScopeRun.objects.create(
+        run=scoped.run, scope_kind="x_query", scope_key="rare-replay",
+        ownership=scoped.ownership,
+        envelopes=[{"rare_hit_ids": evidence["rare_hit_ids"]}],
+    )
+    assert scope_rare_hit_mismatch_counts() == (2, 0)
+    assert project_scope_rare_hits_batch(after_id=scoped.pk - 1).inserted == 2
+    assert set(CollectionScopeRareHit.objects.filter(
+        rare_hit_id=evidence["rare_hit_ids"][0]
+    ).values_list("scope_run_id", flat=True)) == {scoped.pk, replay.pk}
+    assert scope_rare_hit_mismatch_counts() == (0, 0)
     assert not evidence["exclusions"]
 
 

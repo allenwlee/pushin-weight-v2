@@ -8387,6 +8387,23 @@ class RareTypeSearchHit(models.Model):
         ]
 
 
+class CollectionScopeRareHit(models.Model):
+    """A saved rare-type hit selected by a collection scope, including replay."""
+
+    pk = models.CompositePrimaryKey("scope_run", "rare_hit")
+    scope_run = models.ForeignKey(
+        "CollectionScopeRun", on_delete=models.PROTECT,
+        related_name="rare_hit_memberships",
+    )
+    rare_hit = models.ForeignKey(
+        RareTypeSearchHit, on_delete=models.PROTECT,
+        related_name="collection_scopes",
+    )
+
+    class Meta:
+        db_table = "collection_scope_rare_hits"
+
+
 # Shared taxonomy and external measurements. Provider facts never rewrite catalog identity.
 class DataSource(models.Model):
     id = models.CharField(max_length=32, primary_key=True)
