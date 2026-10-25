@@ -292,6 +292,12 @@ class Command(BaseCommand):
                             else 0
                         },
                     )
+                    if budget is not None:
+                        from core.models import CollectionRun
+
+                        CollectionRun.objects.filter(pk=claim.run_id).update(
+                            physical_bytes_received=budget.total_bytes_read
+                        )
                 except StaleClaim:
                     pass
             raise CommandError(str(exc)) from exc

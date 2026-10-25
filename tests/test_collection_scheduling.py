@@ -1,12 +1,15 @@
 """Real command paths prove scheduler authority and fenced numeric admission."""
 
+import importlib
 import json
 from datetime import UTC, datetime, timedelta
 from io import StringIO
+from types import SimpleNamespace
 
 import httpx
 import pytest
 from django.core.management import call_command
+from django.db import connection
 
 from core.benchmark_metric_identity import configure_collection
 from core.collection_budgets import invocation_budget
@@ -108,6 +111,7 @@ def test_metric_due_command_writes_values_to_claimed_run_once(settings, monkeypa
     assert len(seen) == 1
     request = run.attempts.get().requests.get()
     assert request.archive_id and request.http_status == 200
+    assert run.physical_bytes_received == request.response_bytes
     assert run.observations.get().inputs.get().input_request_id == request.pk
     # The legacy command sees shared ownership and cannot fetch the same slot again.
     call_command(
@@ -117,6 +121,23 @@ def test_metric_due_command_writes_values_to_claimed_run_once(settings, monkeypa
         stdout=StringIO(),
     )
     assert len(seen) == 1 and CollectionRun.objects.count() == 1
+
+
+def test_historical_run_bytes_survive_without_an_attempt(settings):
+    job = scheduled(settings)
+    run = CollectionRun.objects.create(
+        job=job,
+        ingestion_key="a" * 64,
+        status="failed",
+        completed_at=NOW,
+        lease_expires_at=NOW,
+        source_metadata={"physical_bytes_received": 42},
+    )
+    assert not run.attempts.exists()
+    migration = importlib.import_module("core.migrations.0175_rg6_run_physical_bytes")
+    migration.copy_historical_bytes(None, SimpleNamespace(connection=connection))
+    run.refresh_from_db()
+    assert run.physical_bytes_received == 42
 
 
 def test_dispatch_invocation_budget_stops_before_second_job(settings):

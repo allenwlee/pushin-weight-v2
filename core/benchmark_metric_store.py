@@ -914,6 +914,8 @@ def persist_source(
                 run.batch_id = batch_id
 
         def save_result():
+            if transport_budget is not None:
+                run.physical_bytes_received = transport_budget.total_bytes_read
             if claim.direct_driver == "persist_source":
                 run.save()
                 save_metric_request_coordinates(run, request_coordinates)

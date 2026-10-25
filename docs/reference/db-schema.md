@@ -1,8 +1,8 @@
 # Database schema reference
 
-The repository and permanent local test database are at `0174_rg6_scope_request_uses` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
+The repository and permanent local test database are at `0175_rg6_attempt_physical_bytes` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
 
-Local branch scope: **219 physical core application tables**, **2497 physical columns**, **219 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables. The deployed 0168 scope is 215 tables and 2476 columns.
+Local branch scope: **219 physical core application tables**, **2498 physical columns**, **219 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables. The deployed 0168 scope is 215 tables and 2476 columns.
 
 Canonical geography references use `geolocations.id`. Necessary source wording and existing payloads remain in restricted evidence columns on their existing owners. Ordinary models, webpages and APIs use canonical locations; unresolved claims return NULL without a raw-source fallback. Database guards re-resolve changed wording and preserve explicit canonical corrections when the wording is unchanged.
 
@@ -9628,6 +9628,7 @@ Model: [CollectionRun](../../core/models.py#L8845).
 | `request_params` | `jsonb` | No | Django default: `dict`. |
 | `source_metadata` | `jsonb` | No | Django default: `dict`. |
 | `request_count` | `integer` | No | Django default: `0`. |
+| `physical_bytes_received` | `bigint` | Yes | Actual bytes counted by the metric transport budget for this run; NULL means historical accounting was not recorded. This can exceed saved response bytes and older runs can lack attempt rows. |
 | `selected_count` | `integer` | No | Django default: `0`. |
 | `success_count` | `integer` | No | Django default: `0`. |
 | `payload_sha256` | `character varying(64)` | Yes | Stored value. |
@@ -9675,6 +9676,7 @@ The `collection_run_job_instructions` trigger validates lifecycle against the li
 - `metric_collection_runs_ingestion_key_key`: `UNIQUE (ingestion_key)`.
 - `metric_collection_runs_pkey`: `PRIMARY KEY (id)`.
 - `metric_collection_runs_request_count_check`: `CHECK ((request_count >= 0))`.
+- `collection_runs_physical_bytes_received_check`: `CHECK ((physical_bytes_received >= 0))`.
 - `metric_collection_runs_selected_count_check`: `CHECK ((selected_count >= 0))`.
 - `metric_collection_runs_success_count_check`: `CHECK ((success_count >= 0))`.
 

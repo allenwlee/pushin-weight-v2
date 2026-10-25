@@ -326,10 +326,13 @@ def execute_due_job(job, decision, budget):
             job.refresh_from_db()
             if job.last_attempt_id and job.last_attempt_id != preceding_attempt:
                 budget.remaining -= job.last_attempt.request_count
-                budget.total_bytes_read += job.last_attempt.source_metadata.get(
-                    "physical_bytes_received",
-                    job.last_attempt.report.get("physical_bytes_received", 0),
-                )
+                physical_bytes = job.last_attempt.physical_bytes_received
+                if physical_bytes is None:
+                    physical_bytes = job.last_attempt.source_metadata.get(
+                        "physical_bytes_received",
+                        job.last_attempt.report.get("physical_bytes_received", 0),
+                    )
+                budget.total_bytes_read += physical_bytes
         return job.last_attempt
     if job.operation == "github_catalog":
         return execute_github_catalog(

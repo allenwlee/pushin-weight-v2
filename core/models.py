@@ -8945,6 +8945,7 @@ class CollectionRun(models.Model):
     request_params = models.JSONField(default=dict)
     source_metadata = models.JSONField(default=dict)
     request_count = models.PositiveIntegerField(default=0)
+    physical_bytes_received = models.PositiveBigIntegerField(null=True)
     selected_count = models.PositiveIntegerField(default=0)
     success_count = models.PositiveIntegerField(default=0)
     payload_sha256 = models.CharField(max_length=64, null=True)
