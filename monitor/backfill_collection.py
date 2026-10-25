@@ -28,6 +28,7 @@ from core.collection_state import (
     fenced_run,
     finish_run,
     import_scope_checkpoints,
+    x_scope_ownership,
 )
 from core.measurement_taxonomy import require
 from core.models import (
@@ -410,7 +411,7 @@ class PageCheckpoint:
             write = replay_write
         self.scoped = checkpoint_scope(
             self.claim, scope_key=self.scoped.scope_key, scope_kind="x_query",
-            ownership=self.scoped.ownership,
+            ownership=x_scope_ownership(self.scoped),
             cursor=progress.get("cursor") if advanced else self.scoped.cursor,
             cursor_history=progress.get("seen_cursors", []) if advanced else self.scoped.cursor_history,
             outcome="blocked" if blocked else ("complete" if drained else "pending"),
@@ -473,7 +474,7 @@ class PageCheckpoint:
         """A returned HTTP error is an attempt receipt, never a drained page."""
         self.scoped = checkpoint_scope(
             self.claim, scope_key=self.scoped.scope_key, scope_kind="x_query",
-            ownership=self.scoped.ownership, cursor=self.scoped.cursor,
+            ownership=x_scope_ownership(self.scoped), cursor=self.scoped.cursor,
             cursor_history=self.scoped.cursor_history, outcome=self.scoped.outcome,
             enumeration_complete=False, raw_count=self.scoped.raw_count,
             envelopes=[*self.scoped.envelopes, {
@@ -493,7 +494,7 @@ class PageCheckpoint:
         )
         from core.rare_type_search import persist_hit_batch
         now = datetime.now(UTC)
-        owner = self.scoped.ownership
+        owner = x_scope_ownership(self.scoped)
         lane = f"bf:{self.claim.job_id}:{hashlib.sha256(self.scoped.scope_key.encode()).hexdigest()[:8]}"
         hit_ids = []
 
@@ -713,7 +714,9 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
                     return
                 scoped = CollectionScopeRun.objects.filter(
                     run_id=claim.run_id, scope_kind="x_query", enumeration_complete=False,
-                ).exclude(outcome="blocked").exclude(scope_key__in=deferred_scopes).order_by("id").first()
+                ).exclude(outcome="blocked").exclude(scope_key__in=deferred_scopes).select_related(
+                    "run", "job_target__search_query"
+                ).order_by("id").first()
                 if scoped is None or not budget.can_start(38):
                     return
                 yield scoped, None
@@ -731,7 +734,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
             with harvest_writer_lock(execution_mode="backfill", entrypoint="management.backfill.job") as lease:
                 if not lease.acquired:
                     break
-                owner = scoped.ownership
+                owner = x_scope_ownership(scoped)
                 settings.X_MONITOR_CYCLE_SINCE_TIME = owner["since_epoch"]
                 settings.X_MONITOR_CYCLE_UNTIL_TIME = owner["until_epoch"]
                 settings.X_MONITOR_CYCLE_LIMIT_PER_CALL = 20

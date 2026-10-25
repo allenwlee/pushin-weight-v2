@@ -508,6 +508,36 @@ def x_query_instruction(ownership):
     )
 
 
+def x_scope_ownership(scope):
+    """Read a pinned X query from typed owners, with legacy rollout fallback."""
+    if getattr(scope, "job_target_id", None) is None:
+        x_query_instruction(scope.ownership)
+        return scope.ownership
+    target = scope.job_target
+    require(
+        scope.scope_kind == "x_query"
+        and target.job_id == scope.run.job_id
+        and target.target_key == scope.scope_key
+        and target.target_kind == "query"
+        and target.resolution_state == "resolved"
+        and target.search_query_id is not None
+        and scope.requested_start_at == target.requested_start_at
+        and scope.requested_end_at == target.requested_end_at,
+        "X scope typed query pin differs from its run",
+    )
+    start = scope.requested_start_at.timestamp()
+    end = scope.requested_end_at.timestamp()
+    require(start.is_integer() and end.is_integer(), "X scope request epoch is not whole")
+    ownership = {
+        "call_id": target.target_role,
+        "query": target.search_query.query_text,
+        "since_epoch": int(start),
+        "until_epoch": int(end),
+    }
+    x_query_instruction(ownership)
+    return ownership
+
+
 def ensure_x_query_target(job, scope_key, *, query_text, call_id, start_at, end_at):
     """Pin one query and call role per job scope; never modify a sealed target."""
     query_id = "x-backfill:" + hashlib.sha256(query_text.encode()).hexdigest()

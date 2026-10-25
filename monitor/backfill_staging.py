@@ -20,7 +20,7 @@ from django.conf import settings
 from django.db.models import Sum
 
 from core.collection_capture import begin_request, finish_request
-from core.collection_state import fenced_run
+from core.collection_state import fenced_run, x_scope_ownership
 from core.measurement_taxonomy import require
 from core.models import Brand, CollectionAttempt, CollectionRequest, CollectionScopeRun
 from monitor.backfill_prefetch import (
@@ -78,13 +78,15 @@ class StagingPrefetcher(Prefetcher):
         requests = CollectionRequest.objects.filter(
             attempt__run__job_id=self.claim.job_id, scope_run__scope_key=scope.scope_key,
             request_category=CATEGORY,
-        ).exclude(pk__in=consumed).select_related("scope_run", "attempt__run").order_by("started_at", "pk")
+        ).exclude(pk__in=consumed).select_related(
+            "scope_run__run", "scope_run__job_target__search_query", "attempt__run"
+        ).order_by("started_at", "pk")
         failures, not_before, group = 0, None, None
         for request in requests:
-            require(request.scope_run.ownership == scope.ownership, "staging scope ancestry changed")
+            require(x_scope_ownership(request.scope_run) == x_scope_ownership(scope), "staging scope ancestry changed")
             if (request.http_method == "GET" and request.transport_outcome in {"received", "transport_error", "timeout"}
                     and transient(request.error_code, request.http_status)):
-                original_scope = SimpleNamespace(ownership=scope.ownership, cursor=request.cursor_before)
+                original_scope = SimpleNamespace(ownership=x_scope_ownership(scope), cursor=request.cursor_before)
                 require(request.request_config == _request_identity(original_scope)
                         and request.endpoint_url == _endpoint(original_scope), "staging retry ancestry changed")
                 if request.cursor_before == scope.cursor:

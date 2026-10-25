@@ -111,6 +111,28 @@ def test_x_query_target_copy_preserves_frozen_query_and_detects_pin_drift():
         project_x_query_targets_batch(after_id=scope.pk - 1)
 
 
+def test_x_prefetch_reads_pinned_query_when_legacy_ownership_is_stale():
+    from core.collection_state import x_scope_ownership
+    from monitor.backfill_prefetch import _params
+
+    _, _, scope = execution()
+    scope.scope_kind = "x_query"
+    scope.ownership = {
+        "call_id": "B1", "query": "original query",
+        "since_epoch": 1783809000, "until_epoch": 1783809300,
+    }
+    scope.save(update_fields=["scope_kind", "ownership"])
+    project_x_query_targets_batch(after_id=scope.pk - 1)
+    scope.refresh_from_db()
+    scope.ownership = {**scope.ownership, "query": "stale query"}
+    scope.save(update_fields=["ownership"])
+
+    assert x_scope_ownership(scope)["query"] == "original query"
+    assert "original query" in _params(scope)["query"]
+    assert "stale query" not in _params(scope)["query"]
+    assert x_query_target_mismatch_counts() == (0, 1)
+
+
 def test_legacy_product_match_scope_pins_existing_subject_and_input_digest():
     from django.utils import timezone
 

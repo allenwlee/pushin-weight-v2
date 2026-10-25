@@ -17,7 +17,7 @@ from urllib.parse import urlencode
 from django.db.models import Sum
 
 from core.collection_capture import begin_request, finish_request, read_document
-from core.collection_state import fenced_run
+from core.collection_state import fenced_run, x_scope_ownership
 from core.measurement_taxonomy import require
 from core.models import CollectionAttempt, CollectionRequest, CollectionScopeRun
 from monitor.backfill_resources import BackfillBudgetExhausted
@@ -102,7 +102,7 @@ def fetch_page(api_key, params, *, max_bytes, timeout):
 
 
 def _params(scope):
-    owner = scope.ownership
+    owner = x_scope_ownership(scope)
     query = TwitterApiClient._effective_search_query(
         owner["query"], since=None, since_time=owner["since_epoch"], until_time=owner["until_epoch"],
     )
@@ -135,10 +135,12 @@ class Prefetcher:
         requests = CollectionRequest.objects.filter(
             attempt__run__job_id=self.claim.job_id, scope_run__scope_key=scope.scope_key,
             request_category="x_backfill_prefetch",
-        ).exclude(pk__in=consumed).select_related("archive", "scope_run").order_by("started_at", "pk")
+        ).exclude(pk__in=consumed).select_related(
+            "archive", "scope_run__run", "scope_run__job_target__search_query"
+        ).order_by("started_at", "pk")
         pending = []
         for request in requests:
-            require(request.scope_run.ownership == scope.ownership,
+            require(x_scope_ownership(request.scope_run) == x_scope_ownership(scope),
                     "prefetch scope ancestry changed")
             if request.transport_outcome in {"pending", "unknown", "timeout", "transport_error"}:
                 raise ValueError("prefetch physical request outcome unknown; reconcile before retry")
@@ -191,6 +193,7 @@ class Prefetcher:
                 scopes = list(CollectionScopeRun.objects.filter(
                     run_id=self.claim.run_id, scope_kind="x_query", enumeration_complete=False,
                 ).exclude(outcome="blocked").exclude(scope_key__in=deferred_scopes)
+                    .select_related("run", "job_target__search_query")
                     .order_by("id")[:self.options.concurrency])
                 if not scopes:
                     return
