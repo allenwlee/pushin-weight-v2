@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -61,6 +61,23 @@ def test_hf_atomic_idempotent_values_do_not_invent_window_bounds():
         == "missing_repository_creation"
     )
     assert all(v.observation.observed_at is not None for v in values)
+
+
+def test_metric_request_options_survive_in_typed_scope_without_implied_http_call():
+    from core.benchmark_metric_store import persist_source
+
+    run = persist_source(
+        configured(), "hf", "e" * 64, payload(),
+        request_params={
+            "start_date": "2026-09-01", "end_date": "2026-09-30",
+            "cursor": "next-page",
+        },
+    )
+    scope = run.scopes.get(scope_kind="metric_fetch", scope_key="source")
+    assert scope.requested_start_date == date(2026, 9, 1)
+    assert scope.requested_end_date == date(2026, 9, 30)
+    assert scope.cursor == "next-page"
+    assert scope.requests.count() == 0
 
 
 @pytest.mark.parametrize("replacement", ["expired", "replaced"])

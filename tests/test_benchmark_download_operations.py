@@ -274,6 +274,9 @@ def test_daily_hf_real_command_persists_once_without_provider_calls(settings):
     assert requests == ["/api/models/lab/Model"]
     assert CollectionRun.objects.get().status == "success"
     assert CollectionRun.objects.get().started_at.hour == 10
+    scope = CollectionRun.objects.get().scopes.get(scope_kind="metric_fetch", scope_key="source")
+    assert scope.requested_start_date == datetime(2026, 10, 9, tzinfo=UTC).date()
+    assert scope.requested_end_date == datetime(2026, 10, 9, tzinfo=UTC).date()
     assert MetricValue.objects.count() == 2
 
 

@@ -27,6 +27,7 @@ from core.measurement_taxonomy import digest, require
 from core.models import (
     CollectionObservation,
     CollectionRun,
+    CollectionScopeRun,
     DataSource,
     MetricValue,
     SourceMetric,
@@ -59,6 +60,50 @@ def safe_payload(value, depth=0):
         require(math.isfinite(value), "nonfinite_payload")
     elif value is not None:
         require(type(value) in (str, int, bool), "unsupported_payload_type")
+
+
+def metric_request_coordinates(params):
+    """Restrict persisted metric request options to existing typed scope fields."""
+    require(isinstance(params, dict) and set(params) <= {"start_date", "end_date", "cursor"},
+            "unsupported metric request option")
+    require(
+        ("start_date" in params) == ("end_date" in params),
+        "metric request dates must be paired",
+    )
+    coordinates = {}
+    if "start_date" in params:
+        start, end = params["start_date"], params["end_date"]
+        require(
+            isinstance(start, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", start)
+            and isinstance(end, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", end),
+            "metric request dates must be ISO calendar days",
+        )
+        coordinates["requested_start_date"] = date.fromisoformat(start)
+        coordinates["requested_end_date"] = date.fromisoformat(end)
+        require(
+            coordinates["requested_start_date"] <= coordinates["requested_end_date"],
+            "metric request dates are reversed",
+        )
+    if "cursor" in params:
+        require(isinstance(params["cursor"], str) and params["cursor"],
+                "metric request cursor must be nonempty text")
+        coordinates["cursor"] = params["cursor"]
+    return coordinates
+
+
+def save_metric_request_coordinates(run, coordinates):
+    if not coordinates:
+        return
+    ownership = {"contract_id": str(run.job.contract_id)}
+    scope, _ = CollectionScopeRun.objects.get_or_create(
+        run=run, scope_kind="metric_fetch", scope_key="source",
+        defaults={"ownership": ownership},
+    )
+    require(scope.ownership == ownership, "metric request owner changed")
+    for field, value in coordinates.items():
+        require(getattr(scope, field) in (None, value), "metric request option changed")
+        setattr(scope, field, value)
+    scope.save(update_fields=list(coordinates))
 
 
 def numeric_value(definition, value):
@@ -871,13 +916,14 @@ def persist_source(
         def save_result():
             if claim.direct_driver == "persist_source":
                 run.save()
+                save_metric_request_coordinates(run, request_coordinates)
                 return run
             from core.collection_state import finish_run
 
             status, error = run.status, run.error_code
             run.status, run.completed_at = "running", None
             run.save()
-            return finish_run(
+            result = finish_run(
                 claim,
                 status=status,
                 request_count=run.request_count,
@@ -885,7 +931,10 @@ def persist_source(
                 success_count=run.success_count,
                 error_code=error,
             )
+            save_metric_request_coordinates(run, request_coordinates)
+            return result
 
+        request_coordinates = {}
         try:
             if fetch is not None:
                 require(payload is None, "supply a payload or fetch, not both")
@@ -904,6 +953,7 @@ def persist_source(
                         payload = fetch()
             safe_payload(payload)
             safe_payload(request_params or {})
+            request_coordinates = metric_request_coordinates(request_params or {})
             safe_payload(source_metadata or {})
             raw_hash = digest(payload)
             require(
