@@ -1,8 +1,8 @@
 # Database schema reference
 
-Deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381`. Models, migration state and physical PostgreSQL inventories agree in the permanent local test database, staging and production as of 2026-10-25. Runtime and retained-history proof is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
+The repository and permanent local test database are at `0171_rg6_benchmark_provenance_fields` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
 
-Scope: **215 physical core application tables**, **2476 physical columns**, **215 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables.
+Local branch scope: **217 physical core application tables**, **2490 physical columns**, **217 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables. The deployed 0168 scope is 215 tables and 2476 columns.
 
 Canonical geography references use `geolocations.id`. Necessary source wording and existing payloads remain in restricted evidence columns on their existing owners. Ordinary models, webpages and APIs use canonical locations; unresolved claims return NULL without a raw-source fallback. Database guards re-resolve changed wording and preserve explicit canonical corrections when the wording is unchanged.
 
@@ -25,9 +25,9 @@ The retired SQLite database and Graphviz image are not current schema sources.
 | [Shared catalogues and performer identities](#shared-catalogues) | 10 | Canonical timezone, language-tag and unit values; internal performers; immutable definition, provider, model and workflow-stage identities. |
 | [People and job history](#people) | 18 | A person, their optional X identity, roles, employment dates, and evidence. |
 | [Companies, brands, and organization discovery](#organizations) | 12 | Company/brand identity, ownership, associated accounts, and unresolved organizations. |
-| [Accounts, profiles, and lists](#accounts) | 12 | Shared source accounts, X detail profiles, observed history, list membership and post appearances. |
+| [Accounts, profiles, and lists](#accounts) | 13 | Shared source accounts, X detail profiles, observed history, list membership and post appearances. |
 | [Shared geography](#geography) | 4 | Country/region names and interpretation of account geography. |
-| [Posts and classification](#posts) | 13 | Source posts, brand attribution, classification, and supporting judgments. |
+| [Posts and classification](#posts) | 14 | Source posts, brand attribution, classification, and supporting judgments. |
 | [Homepage counts](#homepage-counts) | 1 + native view | Historical count summaries and their publication validity. |
 | [Classification vocabularies and translated labels](#vocabularies) | 23 | Allowed classification concepts and their translated display labels. |
 | [Products, model releases, and Hugging Face catalog](#products) | 16 | Exact products, release claims, and catalog observations. |
@@ -136,8 +136,8 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 215 physical core application tables appears once in this inventory and once in
-the detailed sections. All 215 have managed models; unmanaged source projections add no tables. The native view is
+Each of the 217 local physical core application tables appears once in this inventory and once in
+the detailed sections. All 217 have managed models; unmanaged source projections add no tables. The native view is
 listed separately: [home_brand_time_counts](#view-home_brand_time_counts). The three [benchmark serving views](#benchmark-serving-views) are also outside the physical-table count.
 
 | Table | Subject | What one row represents |
@@ -145,6 +145,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts). The t
 | [_applied_config_snapshot](#table-_applied_config_snapshot) | [Collection, extraction, and processing records](#processing) | One configuration artifact’s last applied content hash. |
 | [account_based_in_mappings](#table-account_based_in_mappings) | [Shared geography](#geography) | One reviewed mapping from an X “based in” string to a country or region. |
 | [account_post_appearances](#table-account_post_appearances) | [Accounts, profiles, and lists](#accounts) | One account’s appearance in one collected post, with collection context. |
+| [account_query_memberships](#table-account_query_memberships) | [Accounts, profiles, and lists](#accounts) | One search query associated with an account, optionally at a saved post appearance. |
 | [account_profile_snapshots](#table-account_profile_snapshots) | [Accounts, profiles, and lists](#accounts) | One consecutive observation period during which an account’s saved profile hash is unchanged. |
 | [account_profile_text_translations](#table-account_profile_text_translations) | [Accounts, profiles, and lists](#accounts) | One localized translation of profile text, tied to account and source-text role. |
 | [account_verification_types](#table-account_verification_types) | [Accounts, profiles, and lists](#accounts) | One exact provider verification code. Current X details, observed profile snapshots and post-author observations share it. An explicit empty provider code is distinct from a missing reference. |
@@ -283,6 +284,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts). The t
 | [post_translation_artifacts](#table-post_translation_artifacts) | [Post translation and commentary](#translation) | One versioned literal-translation attempt/state for a post body. |
 | [post_translation_chunks](#table-post_translation_chunks) | [Post translation and commentary](#translation) | One validated locale chunk retained for resuming a long post translation. |
 | [post_translation_texts](#table-post_translation_texts) | [Post translation and commentary](#translation) | One locale’s validated literal text within a translation artifact. |
+| [post_unsanctioned_flag_assignments](#table-post_unsanctioned_flag_assignments) | [Posts and classification](#posts) | One known unsanctioned flag assigned to a post-level assessment. |
 | [post_type_keys](#table-post_type_keys) | [Classification vocabularies and translated labels](#vocabularies) | One post-type vocabulary key, such as release or review. |
 | [post_type_labels](#table-post_type_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated post-type label. |
 | [posts](#table-posts) | [Posts and classification](#posts) | One collected X post, its source text, metrics, and author snapshot. |
@@ -2480,6 +2482,31 @@ None beyond the column-level keys, uniqueness, nullability, and type checks desc
 
 [Back to table inventory](#table-inventory)
 
+<a id="table-account_query_memberships"></a>
+
+### `account_query_memberships` — AccountQueryMembership
+
+One query associated with an account, optionally tied to the post appearance and saved collection observation that established that association. A query without a post is an account-level association. This is the local RG6 structure; current harvest readers and writers have not yet cut over from legacy `source_query_ids`.
+
+Model: [AccountQueryMembership](../../core/models.py#L3725).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK; database-generated identity. |
+| `account_key` | `uuid` | No | FK → [`accounts`](#table-accounts) (`account_key`); Django `CASCADE`, PostgreSQL deferred NO ACTION. Model field: `account`. |
+| `search_query_id` | `bigint` | No | FK → [`search_queries`](#table-search_queries) (`id`); Django `PROTECT`, PostgreSQL deferred NO ACTION. Model field: `search_query`. |
+| `post_id` | `text` | Yes | FK → [`posts`](#table-posts) (`tweet_id`); Django `CASCADE`, PostgreSQL deferred NO ACTION. With `account_key`, must match one [`account_post_appearances`](#table-account_post_appearances) row. Model field: `post`. |
+| `observation_id` | `bigint` | Yes | FK → [`collection_observations`](#table-collection_observations) (`id`); Django `PROTECT`, PostgreSQL deferred NO ACTION. If present, its `post_id` must equal this row’s `post_id`. Model field: `observation`. |
+| `imported_at` | `timestamp with time zone` | Yes | Time a historical association was imported, when known. |
+
+**Named indexes:** `account_query_memberships_account_key_062acbe3`, `account_query_memberships_search_query_id_e95ec86c`, `account_query_memberships_post_id_93d1d493` (plus its pattern-operator index), `account_query_memberships_observation_id_35cfe157`, and `uq_account_query_membership` support the FKs and unique association.
+
+**Named constraints:** `account_query_memberships_pkey`; `uq_account_query_membership` enforces one row per `(account_key, search_query_id, post_id)` including a NULL `post_id`; `ck_account_query_observation_post` requires a post when an observation is set; `fk_account_query_appearance` binds the account/post pair to the appearance table. A trigger named `account_query_membership_observation_guard` rejects an observation for a different post. Ordinary Django FKs retain their deferred PostgreSQL NO ACTION behavior.
+
+[Back to table inventory](#table-inventory)
+
 <a id="table-data_sources"></a>
 
 ### `data_sources` — DataSource
@@ -3497,6 +3524,28 @@ Model: [UntrackedBrandPromotionEvidence](../../core/models.py#L3238).
 - `ck_untracked_promo_evidence_window`: `CONSTRAINT "ck_untracked_promo_evidence_window" CHECK ("last_seen_at" >= ("first_seen_at"))`.
 - `ck_untracked_promo_evidence_recurrence`: `CONSTRAINT "ck_untracked_promo_evidence_recurrence" CHECK ("recurrence_count" >= 1)`.
 - `ck_untracked_promo_evidence_source_post`: `CONSTRAINT "ck_untracked_promo_evidence_source_post" CHECK ("source_post_id" = ("promotion_post_id"))`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-post_unsanctioned_flag_assignments"></a>
+
+### `post_unsanctioned_flag_assignments` — PostUnsanctionedFlagAssignment
+
+One allowed flag key assigned to an existing post-level flag assessment. Several rows may belong to one assessment; the same key appears only once per assessment. The local RG6 migration copies existing known keys, while current legacy parent fields remain until caller cutover and deletion.
+
+Model: [PostUnsanctionedFlagAssignment](../../core/models.py#L3201).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | PK; database-generated identity. |
+| `post_id` | `text` | No | FK → [`posts_unsanctioned_flags`](#table-posts_unsanctioned_flags) (`post_id`); Django `CASCADE`, PostgreSQL deferred NO ACTION. Model field: `post_flag`. |
+| `flag_key` | `character varying(64)` | No | FK → [`unsanctioned_flag_keys`](#table-unsanctioned_flag_keys) (`key`); Django `PROTECT`, PostgreSQL deferred NO ACTION. Model field: `flag`. |
+
+**Named indexes:** `post_unsanctioned_flag_assignments_post_id_97daa4e6` (plus its pattern-operator index), `post_unsanctioned_flag_assignments_flag_key_8b1bcda8`, and the unique index `uq_post_unsanctioned_flag_assignment`.
+
+**Named constraints:** `post_unsanctioned_flag_assignments_pkey`, `uq_post_unsanctioned_flag_assignment` on `(post_id, flag_key)`, and the two deferred foreign keys.
 
 [Back to table inventory](#table-inventory)
 
@@ -9534,6 +9583,7 @@ Model: [CollectionRun](../../core/models.py#L8845).
 | `execution_state` | `character varying(16)` | No | Django default: `pending` (not an assumed SQL default). |
 | `legacy_archive_id` | `uuid` | Yes | FK → [`collection_evidence_archives`](#table-collection_evidence_archives) (`id`); Django deletion: `PROTECT`. Model field: `legacy_archive`. |
 | `scheduled_slot_at` | `timestamp with time zone` | Yes | Scheduled slot at. |
+| `direct_ingestion` | `boolean` | Yes | Whether the run directly ingested source observations; NULL means the historical evidence does not establish this. |
 
 **Named indexes:**
 
@@ -9632,6 +9682,10 @@ Model: [CollectionObservation](../../core/models.py#L8929).
 | `source_record_date` | `date` | Yes | Source record date. |
 | `supersedes_observation_id` | `bigint` | Yes | FK → [`collection_observations`](#table-collection_observations) (`id`); Django deletion: `PROTECT`. Model field: `supersedes_observation`. |
 | `source_record_at` | `timestamp with time zone` | Yes | Source record at. |
+| `reconstruction_date` | `date` | Yes | Date of a historical reconstruction, when source evidence gives one. |
+| `history_reconstructed` | `boolean` | Yes | Whether the observation represents reconstructed history; NULL means unknown. |
+| `secondary_source` | `boolean` | Yes | Whether the observation came through a secondary source; NULL means unknown. |
+| `publication_complete` | `boolean` | Yes | Whether publication evidence indicates a complete series; NULL means unknown. |
 
 **Named indexes:**
 
