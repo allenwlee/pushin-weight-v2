@@ -88,6 +88,13 @@ class RareHitMembershipBatch:
     inserted: int
 
 
+@dataclass(frozen=True)
+class RequestUseBatch:
+    last_id: int
+    scanned: int
+    inserted: int
+
+
 PROVENANCE_EXPRESSIONS = {
     "archive_snapshot_date": (
         "CASE WHEN t.source_metadata->>'archive_snapshot_date' ~ "
@@ -387,6 +394,63 @@ def scope_rare_hit_mismatch_counts() -> tuple[int, int]:
             "FROM collection_scope_rare_hits), "
             "extra AS (SELECT scope_run_id,rare_hit_id FROM collection_scope_rare_hits "
             "EXCEPT SELECT * FROM expected) "
+            "SELECT (SELECT count(*) FROM missing),(SELECT count(*) FROM extra)"
+        )
+        return tuple(cursor.fetchone())
+
+
+def project_scope_request_uses_batch(
+    *, after_id: int = 0, batch_size: int = 200
+) -> RequestUseBatch:
+    """Copy page-use order and clock without pretending a reused reply is new HTTP."""
+    from core.collection_state import record_scope_request_uses
+
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative integer")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute("SET LOCAL lock_timeout = '5s'")
+        cursor.execute("SET LOCAL statement_timeout = '30s'")
+        cursor.execute(
+            "SELECT id FROM collection_scope_runs WHERE id>%s "
+            "AND EXISTS (SELECT 1 FROM jsonb_array_elements(envelopes) e "
+            "WHERE e ? 'prefetch_request_id') "
+            "ORDER BY id LIMIT %s FOR UPDATE",
+            [after_id, batch_size],
+        )
+        ids = [row[0] for row in cursor.fetchall()]
+        if not ids:
+            return RequestUseBatch(after_id, 0, 0)
+        scopes = list(
+            CollectionScopeRun.objects.filter(pk__in=ids)
+            .select_related("run")
+            .order_by("pk")
+        )
+        inserted = 0
+        for scope in scopes:
+            if scope.scope_kind != "x_query":
+                raise ValueError("prefetch page belongs to a non-X scope")
+            inserted += record_scope_request_uses(scope, scope.envelopes)
+        return RequestUseBatch(ids[-1], len(ids), inserted)
+
+
+def scope_request_use_mismatch_counts() -> tuple[int, int]:
+    """Compare every old page-use order/time with typed links both ways."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "WITH expected AS ("
+            "SELECT s.id AS scope_run_id, (e.value->>'prefetch_request_id')::uuid AS request_id, "
+            "(e.ordinal - 1)::integer AS ordinal, "
+            "(e.value->>'observed_at')::timestamptz AS observed_at "
+            "FROM collection_scope_runs s "
+            "CROSS JOIN LATERAL jsonb_array_elements(s.envelopes) "
+            "WITH ORDINALITY AS e(value,ordinal) "
+            "WHERE e.value ? 'prefetch_request_id'), "
+            "missing AS (SELECT * FROM expected EXCEPT "
+            "SELECT scope_run_id,request_id,ordinal,observed_at FROM collection_scope_request_uses), "
+            "extra AS (SELECT scope_run_id,request_id,ordinal,observed_at "
+            "FROM collection_scope_request_uses EXCEPT SELECT * FROM expected) "
             "SELECT (SELECT count(*) FROM missing),(SELECT count(*) FROM extra)"
         )
         return tuple(cursor.fetchone())

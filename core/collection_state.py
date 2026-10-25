@@ -543,6 +543,62 @@ def ensure_x_query_target(job, scope_key, *, query_text, call_id, start_at, end_
     return target
 
 
+def record_scope_request_uses(scope, envelopes):
+    """Pin ordered page uses, including an earlier run's captured reply."""
+    from core.benchmark_metric_store import aware_instant
+    from core.models import CollectionRequest, CollectionScopeRequestUse
+
+    wanted = [
+        (ordinal, envelope)
+        for ordinal, envelope in enumerate(envelopes)
+        if envelope.get("prefetch_request_id")
+    ]
+    if not wanted:
+        require(not scope.request_uses.exists(), "typed request use exceeds scope receipt")
+        return 0
+    ids = [str(envelope["prefetch_request_id"]) for _, envelope in wanted]
+    require(len(ids) == len(set(ids)), "scope repeats the same captured request")
+    requests = {
+        str(request.pk): request
+        for request in CollectionRequest.objects.filter(pk__in=ids)
+        .select_related("scope_run__run")
+    }
+    require(len(requests) == len(ids), "scope captured request is missing")
+    existing = {
+        str(use.request_id): use
+        for use in scope.request_uses.all()
+    }
+    require(set(existing) <= set(ids), "typed request use exceeds scope receipt")
+    inserted = 0
+    for ordinal, envelope in wanted:
+        request = requests[str(envelope["prefetch_request_id"])]
+        observed_at = aware_instant(envelope["observed_at"])
+        require(
+            request.scope_run.run.job_id == scope.run.job_id
+            and request.transport_outcome == "received"
+            and request.http_status == 200
+            and (
+                request.archive_id is not None
+                or request.request_category == "x_backfill_staging"
+            )
+            and str(request.scope_run.run_id) == envelope["prefetch_request_run_id"],
+            "captured request is outside the scope's collection job",
+        )
+        use = existing.get(str(request.pk))
+        if use:
+            require(
+                use.ordinal == ordinal and use.observed_at == observed_at,
+                "scope captured request order or time changed",
+            )
+        else:
+            CollectionScopeRequestUse.objects.create(
+                scope_run=scope, request=request,
+                ordinal=ordinal, observed_at=observed_at,
+            )
+            inserted += 1
+    return inserted
+
+
 def checkpoint_scope(
     claim: RunClaim,
     *,
@@ -626,6 +682,8 @@ def checkpoint_scope(
         )
         if write is not None:
             write(run, scope)
+        if envelopes is not None:
+            record_scope_request_uses(scope, envelopes)
         if envelopes or scope.requests.exists():
             from core.collection_capture import link_request
             from core.models import CollectionObservationInput, CollectionRequest

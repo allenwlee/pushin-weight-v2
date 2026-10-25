@@ -13,9 +13,14 @@ import requests
 from django.core.management.base import CommandError
 
 from core.collection_jobs import register_job, set_job_state
+from core.collection_storage_migration import (
+    project_scope_request_uses_batch,
+    scope_request_use_mismatch_counts,
+)
 from core.models import (
     CollectionObservation,
     CollectionRequest,
+    CollectionScopeRequestUse,
     CollectionScopeRun,
     Post,
 )
@@ -126,6 +131,13 @@ def test_twenty_fetches_use_exact_page_counts_and_shared_storage(http_pages):
         assert row.raw_count == 1 + (i % 2)
         assert row.envelopes[-1]["raw_count"] == row.raw_count
         assert row.envelopes[-1]["prefetch_request_id"]
+        assert str(row.request_uses.get().request_id) == row.envelopes[-1]["prefetch_request_id"]
+    assert scope_request_use_mismatch_counts() == (0, 0)
+    first = rows.first()
+    CollectionScopeRequestUse.objects.filter(scope_run=first).delete()
+    assert scope_request_use_mismatch_counts() == (1, 0)
+    assert project_scope_request_uses_batch(after_id=first.pk - 1).inserted == 1
+    assert scope_request_use_mismatch_counts() == (0, 0)
     assert Post.objects.count() == 30
     assert CollectionObservation.objects.filter(run_id=result["run_id"]).count() == 30
     assert CollectionRequest.objects.filter(transport_outcome="received", archive__isnull=False).count() == 20
@@ -153,6 +165,9 @@ def test_restart_replays_archives_across_legacy_runs_without_paid_refetch(http_p
     assert result["cumulative_api_requests"] == 2
     assert Post.objects.count() == 2
     assert CollectionRequest.objects.count() == 2
+    assert CollectionScopeRequestUse.objects.filter(
+        scope_run__run_id=result["run_id"]
+    ).exclude(request__scope_run__run_id=result["run_id"]).count() == 2
 
 
 def test_live_writer_can_acquire_during_http_and_blocks_replay(http_pages):

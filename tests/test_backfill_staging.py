@@ -56,6 +56,9 @@ def test_twenty_simultaneous_requests_without_body_archives(http_pages, monkeypa
     assert not CollectionEvidenceArchive.objects.exists()
     assert CollectionRequest.objects.filter(request_category="x_backfill_staging", archive__isnull=True,
         transport_outcome="received", accounting_complete=True).count() == 20
+    from core.models import CollectionScopeRequestUse
+
+    assert CollectionScopeRequestUse.objects.filter(scope_run__run_id=report["run_id"]).count() == 20
     job.refresh_from_db()
     receipts = job.last_attempt.report["staging_responses"]
     assert len(receipts) == 20

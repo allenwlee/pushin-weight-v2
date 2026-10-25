@@ -1,8 +1,8 @@
 # Database schema reference
 
-The repository and permanent local test database are at `0173_rg6_scope_rare_hit_memberships` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
+The repository and permanent local test database are at `0174_rg6_scope_request_uses` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
 
-Local branch scope: **218 physical core application tables**, **2493 physical columns**, **218 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables. The deployed 0168 scope is 215 tables and 2476 columns.
+Local branch scope: **219 physical core application tables**, **2497 physical columns**, **219 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables. The deployed 0168 scope is 215 tables and 2476 columns.
 
 Canonical geography references use `geolocations.id`. Necessary source wording and existing payloads remain in restricted evidence columns on their existing owners. Ordinary models, webpages and APIs use canonical locations; unresolved claims return NULL without a raw-source fallback. Database guards re-resolve changed wording and preserve explicit canonical corrections when the wording is unchanged.
 
@@ -37,7 +37,7 @@ The retired SQLite database and Graphviz image are not current schema sources.
 | [Post translation and commentary](#translation) | 9 | Literal post translations, generated commentary, retries, and budgets. |
 | [Authored content and trend publication](#headlines) | 13 | Prepared headline text, publication pointers, provider batches, work requests, and provider costs. |
 | [Compatible editorial input storage and pictures](#editorial) | 7 | Story identities, accepted editions, quarter-hour decisions, spend and optional assets. |
-| [Collection, extraction, and processing records](#processing) | 26 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
+| [Collection, extraction, and processing records](#processing) | 27 | Search cursors, coverage gaps, extraction attempts, and rare-type search accounting. |
 | [Measurement subjects, metrics and observations](#measurements) | 13 | Sourced measurements and their collection state. |
 | [Official-company collection](#official-companies) | 7 | Official-company account collection, attempts and spending. |
 
@@ -136,8 +136,8 @@ for staff. Job listings retain their own source text and language fields.
 
 ## Alphabetical table inventory
 
-Each of the 218 local physical core application tables appears once in this inventory and once in
-the detailed sections. All 218 have managed models; unmanaged source projections add no tables. The native view is
+Each of the 219 local physical core application tables appears once in this inventory and once in
+the detailed sections. All 219 have managed models; unmanaged source projections add no tables. The native view is
 listed separately: [home_brand_time_counts](#view-home_brand_time_counts). The three [benchmark serving views](#benchmark-serving-views) are also outside the physical-table count.
 
 | Table | Subject | What one row represents |
@@ -178,6 +178,7 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts). The t
 | [collection_resource_snapshots](#table-collection_resource_snapshots) | [Collection, extraction, and processing records](#processing) | One nonnumeric historical snapshot of a collected resource. |
 | [collection_runs](#table-collection_runs) | [Measurement subjects, metrics and observations](#measurements) | One source collection run, for numeric measurements or catalog discovery. |
 | [collection_scope_rare_hits](#table-collection_scope_rare_hits) | [Collection, extraction, and processing records](#processing) | One saved association between a collection scope and a rare-type search hit. |
+| [collection_scope_request_uses](#table-collection_scope_request_uses) | [Collection, extraction, and processing records](#processing) | One ordered use of a captured request by a collection scope, including later runs. |
 | [collection_scope_runs](#table-collection_scope_runs) | [Measurement subjects, metrics and observations](#measurements) | One source scope’s pagination and ownership progress within a collection run. |
 | [companies](#table-companies) | [Companies, brands, and organization discovery](#organizations) | One company identity, including its recorded headquarters country. |
 | [companies_accounts](#table-companies_accounts) | [Companies, brands, and organization discovery](#organizations) | One account’s role and ownership-review state for a company. |
@@ -9089,6 +9090,37 @@ Model: [CollectionObservationInput](../../core/models.py#L9336).
 **Migration-level triggers:**
 
 - `collection_input_membership`: `CREATE TRIGGER collection_input_membership BEFORE INSERT OR UPDATE ON public.collection_observation_inputs FOR EACH ROW EXECUTE FUNCTION collection_input_membership()`.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-collection_scope_request_uses"></a>
+
+### `collection_scope_request_uses` — CollectionScopeRequestUse
+
+One ordered use of an already captured reply by an X collection scope. The request itself keeps its original physical attempt and scope; a later collection run can use its saved response without claiming another network request. A scope can use several replies, including a page that yielded no saved post observation. The recorded time is when this scope processed that page, distinct from the request's transport time. Staging's deliberately unarchived streaming replies retain the same use relationship and keep their lightweight source receipts.
+
+Model: [CollectionScopeRequestUse](../../core/models.py#L9420).
+
+**Primary key:** (`scope_run_id`, `request_id`).
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `scope_run_id` | `bigint` | No | PK component. FK → [`collection_scope_runs`](#table-collection_scope_runs) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `scope_run`. |
+| `request_id` | `uuid` | No | PK component. FK → [`collection_requests`](#table-collection_requests) (`id`). Django deletion: `PROTECT`; PostgreSQL FK uses NO ACTION, normally deferred to transaction end. Model field: `request`. |
+| `ordinal` | `integer` | No | Zero-based position in the scope's saved page sequence. Unique within a scope. |
+| `observed_at` | `timestamp with time zone` | No | Time this scope recorded use of the page; no time is inferred from the original request. |
+
+**Physical indexes:**
+
+- `collection_scope_request_uses_pkey`: `CREATE UNIQUE INDEX collection_scope_request_uses_pkey ON public.collection_scope_request_uses USING btree (scope_run_id, request_id)`.
+- `collection_scope_request_uses_scope_run_id_44699eab`: `CREATE INDEX collection_scope_request_uses_scope_run_id_44699eab ON public.collection_scope_request_uses USING btree (scope_run_id)`.
+- `collection_scope_request_uses_request_id_0ae05a08`: `CREATE INDEX collection_scope_request_uses_request_id_0ae05a08 ON public.collection_scope_request_uses USING btree (request_id)`.
+- `uq_scope_request_use_order`: `CREATE UNIQUE INDEX uq_scope_request_use_order ON public.collection_scope_request_uses USING btree (scope_run_id, ordinal)`.
+
+**Named constraints:**
+
+- `uq_scope_request_use_order`: `UNIQUE (scope_run_id, ordinal)`.
+- `collection_scope_request_uses_ordinal_check`: `CHECK ((ordinal >= 0))`.
 
 [Back to table inventory](#table-inventory)
 

@@ -9417,6 +9417,30 @@ class CollectionRequest(models.Model):
         ]
 
 
+class CollectionScopeRequestUse(models.Model):
+    """An ordered use of a captured reply by a scope, including later runs."""
+
+    pk = models.CompositePrimaryKey("scope_run", "request")
+    scope_run = models.ForeignKey(
+        CollectionScopeRun, on_delete=models.PROTECT,
+        related_name="request_uses",
+    )
+    request = models.ForeignKey(
+        CollectionRequest, on_delete=models.PROTECT,
+        related_name="scope_uses",
+    )
+    ordinal = models.PositiveIntegerField()
+    observed_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "collection_scope_request_uses"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["scope_run", "ordinal"], name="uq_scope_request_use_order"
+            ),
+        ]
+
+
 class CollectionObservationInput(models.Model):
     """One captured reply or preceding resource result used by an observation."""
 
