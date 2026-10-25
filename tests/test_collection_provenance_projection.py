@@ -39,3 +39,12 @@ def test_missing_and_explicit_false_provenance_remain_distinct():
     assert reconstructed["secondary_source"] is True
     assert reconstructed["publication_complete"] is True
     assert reconstructed["reconstruction_date"] is None
+
+
+def test_source_artifact_hash_and_revision_reuse_existing_typed_fields():
+    facts = _facts({
+        "raw_artifact_sha256": "a" * 64,
+        "immutable_revision": "dataset-revision-7",
+    })
+    assert facts["payload_sha256"] == "a" * 64
+    assert facts["provider_revision"] == "dataset-revision-7"

@@ -154,6 +154,12 @@ def _snapshot_publisher(observation, raw):
 
 def observation_fact_values(observation):
     metadata, dimensions = observation.source_metadata, observation.dimensions
+    artifact_sha256 = metadata.get("raw_artifact_sha256")
+    if artifact_sha256 is not None and not (
+        isinstance(artifact_sha256, str)
+        and re.fullmatch(r"[0-9a-f]{64}", artifact_sha256)
+    ):
+        raise ValueError("invalid raw artifact SHA-256")
     reconstructed = metadata.get("history_basis")
     secondary = metadata.get("secondary_source")
     publication = metadata.get("publication_complete")
@@ -165,9 +171,9 @@ def observation_fact_values(observation):
         "mapping_sha256": metadata.get("publisher_mapping_hash"),
         "config_key": dimensions.get("config"),
         "category_key": dimensions.get("category"),
-        "provider_revision": metadata.get("revision"),
+        "provider_revision": metadata.get("immutable_revision") or metadata.get("revision"),
         "period_status": metadata.get("period_status"),
-        "payload_sha256": digest(observation.listing),
+        "payload_sha256": artifact_sha256 or digest(observation.listing),
         "historical_visibility_proven": metadata.get(
             "historical_public_visibility_proven"
         ),
