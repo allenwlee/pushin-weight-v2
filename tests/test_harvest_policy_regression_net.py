@@ -286,7 +286,7 @@ EXPECTED_AFTER_BRAND_TO_CALL_IDS = {
     "hunyuan": {"B1", "B2"}, "dots": {"B1"},
     "mimo": {"B3", "C1"}, "mistral": {"B2", "C1"},
     "moonshot_kimi": {"B3", "C1"}, "yi": {"B3", "C1"},
-    "llama": {"B3", "C1"}, "ernie": {"B3", "C2"},
+    "llama": {"B3", "C4"}, "ernie": {"B3", "C2"},
     "upstage": {"B3", "C2"}, "doubao": {"B3", "C3"},
     "sensechat": {"B3", "C3"}, "kuaishou": {"C3"},
     "glm": {"C3"}, "inclusionai": {"B2"}, "sakana_ai": {"B2"},
@@ -294,7 +294,7 @@ EXPECTED_AFTER_BRAND_TO_CALL_IDS = {
 }
 
 EXPECTED_AFTER_CO_ALLOWLIST_SIZES = {
-    "B1": 0, "B2": 0, "B3": 0, "C1": 5, "C2": 7, "C3": 5,
+    "B1": 0, "B2": 0, "B3": 0, "C1": 5, "C2": 7, "C3": 5, "C4": 5,
 }
 
 EXPECTED_AFTER_B1_BRANDS = {
@@ -322,7 +322,7 @@ EXPECTED_AFTER_QUERIES = {
 }
 
 EXPECTED_AFTER_QUERY_LENGTHS = {
-    "B1": 382, "B2": 305, "B3": 214, "C1": 288, "C2": 140, "C3": 247,
+    "B1": 432, "B2": 305, "B3": 214, "C1": 227, "C2": 140, "C3": 247, "C4": 380,
 }
 
 

@@ -286,8 +286,74 @@ web or careers-job service. Staging acceptance uses its existing manual donor.
 Collection instructions and page checkpoints live in the shared collection
 tables. Enrichment uses `ProviderBatch` and `OriginalContentCall`, retaining
 saved replies, reservations, unknown costs and the original campaign limits.
-Ordinary inference defaults to 32 simultaneous requests per one-off. Collection
-page writes coordinate with the normal harvester; HTTP runs outside that lock.
+Legacy campaign execution defaults to 32 simultaneous model requests per one-off.
+The opt-in phase commands below default to eight for enrichment. Collection page
+writes coordinate with the normal harvester. In the parallel fetch path, only
+HTTP overlaps: the controller archives each response and replays pages through
+the shared, serial Post writer. It releases the writer lock during HTTP and
+checks live-harvester priority before admitting more requests or replaying pages.
+
+To collect an existing compact month recipe before ordinary enrichment:
+
+```bash
+python manage.py run_backfill --month-recipe month-recipe.json \
+  --phase collect \
+  --runtime-revision FULL_TESTED_COMMIT_SHA \
+  --runtime-attestation runtime.json --execute
+```
+
+Use `--dry-run` instead of `--execute` to validate inputs and print the unchanged
+recipe without starting provider calls or writing collection jobs. A month recipe
+preserves its original daily manifests, five-minute query boundaries, routes,
+author roles, budgets and deadline. `runtime.json` contains `runtime_revision`
+and `source_sha256`; its hashes must cover the original recipe's source inventory
+and the required runtime modules declared in `scripts/backfill_month.py`.
+Updating the runtime attestation does not rewrite saved collection instructions.
+
+After collection is verified, run the same recipe and runtime inputs with
+`--phase enrich --enrichment-concurrency 8 --execute`. Enrichment uses saved Post
+memberships and makes no X searches. `--phase all` performs both passes across the
+entire requested range: every collection window precedes the first ordinary
+enrichment window. Existing `--manifest` campaigns support the same phases;
+invocations without `--phase` retain the legacy ordering. Enrichment concurrency
+may be reduced or raised only within the original saved ceiling, at most 32.
+Collection concurrency is 1–20, independently bounded by the request-start rate,
+remaining request allowance, attempt deadline and response byte allowance.
+It defaults to one. Opt in with `--collection-concurrency 20` and an explicit
+`--collection-starts-per-second` value only when that workload warrants it.
+The October 22 low-latency staging fixture preserved identical data and request
+counts but averaged 477 seconds serial versus 490 seconds parallel. A second
+fixture with eight-second responses sustained 20 active requests and completed
+the same 800 Posts/40 requests in 141 seconds versus 434 seconds serially.
+Live harvesting acquired its writer lock in 16 milliseconds while 20 requests
+were outstanding; captured responses replayed without refetching. These controlled
+tests establish concurrency, data parity and priority, not production throughput
+or provider capacity. Separating collection from enrichment does not depend on
+parallel fetching.
+
+Collection still includes relevance and rare-type admission decisions. Those
+model calls are required to decide which source results belong in Post storage.
+Phase receipts under `CollectionRun.report.backfill_campaign` distinguish
+collection and enrichment, preserving existing campaign history. Their
+`phase_usage` separates X requests, inline collection-gate model usage, and
+post-enrichment model usage; unknown outcomes and missing provider usage remain
+explicit. Post-enrichment totals include counts of ambiguous calls and sent calls
+without a reported cost; the reported-cost sum is partial when that count is
+nonzero. All usage is cumulative for the collection job, not a per-phase charge.
+The model path uses `DEEPINFRA_ON_DEMAND`; the X path uses the on-demand key above.
+
+Received parallel pages are stored using existing collection request/archive
+records. A restart replays unconsumed saved responses without another search.
+Unknown transport outcomes stop automatic resending and require reconciliation.
+`--evaluate-at-end` retains the known enrichment deferral policy; collection
+integrity failures still stop acquisition. Neither a completed cursor chain nor
+equal ingestion output establishes exhaustive historical X keyword coverage.
+
+Before changing shared database columns, identify any one-off still using an
+older image. Deploying its base service does not update an already running job.
+After an authorized cancellation, verify terminal native status and release of
+its controller lock; retained run markers recover through the existing lease
+fencing. Preserve saved posts, cursors, paid history and uncertain final requests.
 
 For an ordinary-API enrichment handover, run these commands against the
 campaign's pinned database, substituting its collection-job UUID:

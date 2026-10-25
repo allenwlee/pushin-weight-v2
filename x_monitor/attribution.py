@@ -422,9 +422,23 @@ def extract_hashtag_mentions(
 # --- Extractor 3: body keywords (R5) ------------------------------------
 
 
+@dataclass(frozen=True)
+class ContextualKeywordIndex:
+    base: tuple[re.Pattern[str] | None, dict[str, str]]
+    contexts: dict[tuple[str, str], re.Pattern[str]]
+
+
+def _context_term_pattern(term: str) -> str:
+    # ASCII word boundaries must permit adjoining Chinese/Japanese characters.
+    escaped = re.escape(term)
+    east_asian = _is_cjk(term) or any("\u3040" <= ch <= "\u30ff" for ch in term)
+    return escaped if east_asian else rf"(?<![a-zA-Z0-9_]){escaped}(?![a-zA-Z0-9_])"
+
+
 def compile_keyword_index(
     brand_keywords: list[tuple[str, str, bool]],
-) -> tuple[re.Pattern[str] | None, dict[str, str]]:
+    *, policy=None,
+) -> tuple[re.Pattern[str] | None, dict[str, str]] | ContextualKeywordIndex:
     """Compile all `brand_keywords` into a single alternation regex.
 
     Mirrors the v1.7 `build_compiled_brand_pattern` from
@@ -453,6 +467,19 @@ def compile_keyword_index(
         the matched substring via a casefold scan of the pattern
         keys. Returns (None, {}) when brand_keywords is empty.
     """
+    from .harvest_policy import normalize_policy_token
+
+    contexts = {}
+    if policy is not None:
+        for brand in policy.brands.values():
+            for rule in brand.alias_context:
+                contexts[(brand.nickname, normalize_policy_token(rule.alias))] = re.compile(
+                    "|".join(_context_term_pattern(term) for term in rule.any_of), re.IGNORECASE,
+                )
+    if contexts:
+        # Longer literal evidence (腾讯混元, Muse Voice, Meta Llama) must win
+        # before its ambiguous substring. Leave legacy callers unchanged.
+        brand_keywords = sorted(brand_keywords, key=lambda row: -len(row[1]) if not row[2] else 0)
     parts: list[str] = []
     token_to_brand: dict[str, str] = {}
     for brand_id, pattern, is_regex in brand_keywords:
@@ -484,13 +511,15 @@ def compile_keyword_index(
                 if esc not in token_to_brand:
                     token_to_brand[esc] = brand_id
             else:
-                parts.append(r"\b(" + esc + r")\b")
+                contextual_literal = any(brand_id == b and (pattern.casefold() == alias or pattern.casefold().startswith(alias + " ")) for b, alias in contexts)
+                parts.append("(" + _context_term_pattern(pattern) + ")" if contextual_literal else r"\b(" + esc + r")\b")
                 if esc not in token_to_brand:
                     token_to_brand[esc] = brand_id
     if not parts:
         return None, {}
     compiled = re.compile("|".join(parts), re.IGNORECASE)
-    return compiled, token_to_brand
+    base = (compiled, token_to_brand)
+    return ContextualKeywordIndex(base, contexts) if contexts else base
 
 
 def detect_brand_mentions(
@@ -517,14 +546,21 @@ def detect_brand_mentions(
         A list of deduplicated brand_id slugs. Empty when no
         pattern, no text, or no matches.
     """
+    return list(dict.fromkeys(brand for _, brand in _keyword_matches(text, compiled_keyword_index)))
+
+
+def _keyword_matches(text, compiled_keyword_index):
+    """Resolve and gate evidence once for detection and persisted mentions."""
+    contexts = {}
+    if isinstance(compiled_keyword_index, ContextualKeywordIndex):
+        contexts = compiled_keyword_index.contexts
+        compiled_keyword_index = compiled_keyword_index.base
     pattern, token_to_brand = compiled_keyword_index
     if pattern is None or not token_to_brand or not text:
-        return []
+        return
     regex_keys = [k for k in token_to_brand if any(
         c in k for c in "()[]{}.*+?\\^$|"
     )]
-    seen: set[str] = set()
-    out: list[str] = []
     for m in pattern.finditer(text):
         raw_token = m.group(0)
         brand_id: str | None = None
@@ -547,10 +583,10 @@ def detect_brand_mentions(
                     continue
         if brand_id is None or brand_id == UNATTRIBUTED_BRAND_ID:
             continue
-        if brand_id not in seen:
-            seen.add(brand_id)
-            out.append(brand_id)
-    return out
+        context = contexts.get((brand_id, raw_token.casefold()))
+        if context is not None and not context.search(text):
+            continue
+        yield raw_token, brand_id
 
 
 def extract_body_keywords(
@@ -586,53 +622,11 @@ def extract_body_keywords(
     if not post_id or not mentioned_at or not text:
         return []
 
-    pattern, token_to_brand = compiled_keyword_index
-    if pattern is None or not token_to_brand:
-        return []
-
-    # Pre-compile per-regex candidates so we can re-test the matched
-    # substring to identify the owner brand. Only entries whose key
-    # contains regex metacharacters are tested this way; literal
-    # entries hit the token_to_brand.get path on the first try.
-    regex_keys = [k for k in token_to_brand if any(
-        c in k for c in "()[]{}.*+?\\^$|"
-    )]
-
-    out: list[MentionRow] = []
-    for m in pattern.finditer(text):
-        raw_token = m.group(0)
-        brand_id: str | None = None
-        # 1. Try literal-token lookup first.
-        brand_id = token_to_brand.get(raw_token)
-        if brand_id is None:
-            cf = raw_token.casefold()
-            for tok, b in token_to_brand.items():
-                if tok.casefold() == cf:
-                    brand_id = b
-                    break
-        # 2. Fall back to per-regex re-test. Re-compile on the fly;
-        #    the index is built once per cycle so this is amortized.
-        if brand_id is None and regex_keys:
-            for pat_str in regex_keys:
-                try:
-                    if re.fullmatch(pat_str, raw_token, re.IGNORECASE):
-                        brand_id = token_to_brand[pat_str]
-                        break
-                except re.error:
-                    continue
-        if brand_id is None:
-            continue
-        if brand_id == UNATTRIBUTED_BRAND_ID:
-            # R5: filter out sentinel matches.
-            continue
-        out.append(MentionRow(
-            post_id=post_id,
-            brand_id=brand_id,
-            source="body_keyword",
-            raw_token=raw_token,
-            mentioned_at=mentioned_at,
-        ))
-    return out
+    return [
+        MentionRow(post_id=post_id, brand_id=brand_id, source="body_keyword",
+                   raw_token=raw_token, mentioned_at=mentioned_at)
+        for raw_token, brand_id in _keyword_matches(text, compiled_keyword_index)
+    ]
 
 
 # --- Extractor 4: search terms (R6) -------------------------------------

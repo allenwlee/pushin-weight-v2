@@ -7,6 +7,7 @@ on:
       - 'monitor/metrics_refresh.py'
       - 'monitor/backfill_resources.py'
       - 'monitor/backfill_collection.py'
+      - 'monitor/backfill_prefetch.py'
       - 'monitor/backfill_enrichment.py'
       - 'monitor/backfill_direct.py'
       - 'core/provider_batches.py'
@@ -15,6 +16,10 @@ on:
       - 'core/collection*.py'
       - 'monitor/post_artifacts.py'
       - 'monitor/management/commands/backfill.py'
+      - 'monitor/management/commands/run_backfill.py'
+      - 'scripts/backfill_campaign.py'
+      - 'scripts/backfill_month.py'
+      - 'scripts/backfill_verify.py'
       - 'monitor/run_lock.py'
       - 'x_monitor/apify.py'
       - 'x_monitor/config.py'
@@ -28,6 +33,7 @@ on:
       - 'tests/test_provider_batches.py'
       - 'tests/test_deepinfra_batch.py'
       - 'tests/test_backfill*.py'
+      - 'tests/test_run_backfill_command.py'
       - 'tests/test_literal_translation_plaintext.py'
       - 'tests/test_translator_literal.py'
       - 'tests/test_bounded_classifier_client.py'
@@ -81,6 +87,11 @@ jobs:
         run: >-
           python -m ruff check monitor/backfill_resources.py
           monitor/backfill_collection.py tests/test_backfill_collection.py
+          monitor/backfill_prefetch.py tests/test_backfill_prefetch.py
+          tests/test_backfill_prefetch_transport.py
+          scripts/backfill_campaign.py scripts/backfill_month.py scripts/backfill_verify.py
+          tests/test_backfill_campaign.py tests/test_backfill_month.py tests/test_backfill_verify.py
+          monitor/management/commands/run_backfill.py tests/test_run_backfill_command.py
           monitor/backfill_enrichment.py core/provider_batches.py
           monitor/backfill_direct.py tests/test_backfill_direct_enrichment.py
           tests/test_backfill_enrichment_control.py tests/test_backfill_account_merge_migration.py
@@ -96,6 +107,9 @@ jobs:
           tests/test_enrichment_attempt_deadline.py tests/test_backfill_quarantined.py
           tests/test_backfill_pipeline.py tests/test_backfill_resources.py
           tests/test_backfill_collection.py tests/test_collection_jobs.py tests/test_collection_state.py
+          tests/test_backfill_prefetch.py tests/test_backfill_prefetch_transport.py
+          tests/test_backfill_campaign.py tests/test_backfill_month.py tests/test_backfill_verify.py
+          tests/test_run_backfill_command.py
           tests/test_backfill_native_enrichment.py tests/test_provider_batches.py
           tests/test_backfill_direct_enrichment.py
           tests/test_backfill_enrichment_control.py tests/test_backfill_account_merge_migration.py

@@ -124,6 +124,7 @@ class BackfillContext:
     author_contexts: dict[str, Any] | None = None
     match_scheduled_policy: bool = False
     rare_page_writer: Callable[..., Any] | None = None
+    captured_pages: Any = None
 
 
 def bounded_backfill_config(cfg: Any, *, enrichment_limit: int, collection_policy: bool = False) -> Any:

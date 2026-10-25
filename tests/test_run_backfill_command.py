@@ -158,7 +158,8 @@ def test_invalid_bounds_fail_before_any_job_or_provider(planned, since, until):
     )
 
 
-def test_pending_rare_decisions_do_not_block_stored_post_enrichment(planned, monkeypatch):
+@pytest.mark.parametrize("phase", ["legacy", "collect"])
+def test_pending_rare_decisions_retain_legacy_deferral_but_block_collection_acceptance(planned, monkeypatch, phase):
     from datetime import timedelta
 
     from django.utils import timezone
@@ -192,8 +193,46 @@ def test_pending_rare_decisions_do_not_block_stored_post_enrichment(planned, mon
     monkeypatch.setattr(campaign, "policy_snapshot", lambda **kwargs: {})
     monkeypatch.setattr(campaign, "deferred_enrichment_work", lambda *args, **kwargs: {})
     monkeypatch.setattr(campaign, "advance_targeted", lambda *args, **kwargs: {"status": "completed"})
+    if phase == "collect":
+        with pytest.raises(RuntimeError, match="collection_rare_gate_pending"):
+            campaign.collect_window(frozen["windows"][0], frozen=frozen, cfg=cfg)
+        assert phases == ["collection"]
+        return
     result = campaign.execute_window(frozen["windows"][0], frozen=frozen, cfg=cfg, evaluate_at_end=True)
     assert phases == ["collection", "enrichment"]
     assert result["issues"] == [{"phase": "collection", "error_code": "rare_gate_pending"}]
     assert result["status"] == "attempted"
     assert CollectionJob.objects.get(pk=result["source_collection_job"]).state != "completed"
+
+
+def test_explicit_campaign_all_routes_whole_range_to_phase_runner(planned, monkeypatch):
+    import monitor.management.commands.run_backfill as command
+
+    seen = []
+    monkeypatch.setattr(command, "run_phases", lambda frozen, cfg, **kw: seen.append((frozen, kw)))
+    monkeypatch.setattr(command, "run", lambda *a, **kw: pytest.fail("legacy runner selected"))
+    call_command("run_backfill", since="2026-07-01", until="2026-07-03",
+        campaign_name="explicit-phases", phase="all", execute=True,
+        collection_concurrency=20, collection_starts_per_second=10, enrichment_concurrency=8)
+    assert len(seen) == 1
+    assert seen[0][0]["campaign"] == "explicit-phases"
+    assert seen[0][1] == {"phase": "all", "enrichment_concurrency": 8,
+        "collection_concurrency": 20, "collection_starts_per_second": 10, "evaluate_at_end": False}
+    assert not CollectionJob.objects.exists() and not OriginalContentCall.objects.exists()
+
+
+def test_phase_preferences_do_not_rewrite_saved_campaign(planned, tmp_path, monkeypatch):
+    import monitor.management.commands.run_backfill as command
+
+    output = StringIO()
+    call_command("run_backfill", since="2026-07-01", until="2026-07-02", stdout=output)
+    frozen = json.loads(output.getvalue())
+    saved = tmp_path / "saved.json"
+    saved.write_text(output.getvalue())
+    seen = []
+    monkeypatch.setattr(command, "run_phases", lambda value, cfg, **kw: seen.append((value, kw)))
+    call_command("run_backfill", manifest=saved, phase="collect", execute=True, collection_concurrency=4)
+    assert seen[0][0] == frozen
+    assert seen[0][1]["collection_concurrency"] == 4
+    assert json.loads(saved.read_text()) == frozen
+    assert not CollectionJob.objects.exists() and not OriginalContentCall.objects.exists()

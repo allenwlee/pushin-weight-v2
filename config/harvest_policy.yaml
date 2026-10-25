@@ -20,6 +20,9 @@ brands:
     - Hailuo
     - MiniMax
     - 海螺
+    alias_context:
+    - alias: 海螺
+      any_of: [AI, 模型, H3, 歌曲]
     notes: B1 bare-keyword fan-out (live wire path).
     handles:
     - MiniMaxAgent
@@ -199,6 +202,9 @@ brands:
     - Hunyuan
     - 混元
     - 腾讯混元
+    alias_context:
+    - alias: 混元
+      any_of: [AI, 模型, 3D, 腾讯]
     notes: B1 bare-keyword fan-out (live wire path).
     handles:
     - TencentHunyuan
@@ -241,13 +247,28 @@ brands:
     - Llama 4
     - Meta Llama
     - Code Llama
+    - Meta
+    - Muse
+    alias_context:
+    - alias: Meta
+      any_of: [AI, model, models, agent, agents, code, Wonder, Spark, Glimmer, research, release, 模型, 智能体, トークン]
+    - alias: Muse
+      any_of: [AI, model, models, agent, agents, code, Wonder, Spark, Glimmer, research, release, 模型, 智能体, トークン]
+    c_bare_aliases:
+    - '"Muse Wonder"'
+    - '"Muse Code"'
+    - '"Muse Spark"'
+    - '"Muse Glimmer"'
+    - '"Muse Image"'
+    - '"Muse Video"'
+    - '"Muse Voice"'
     co:
     - llm
     - model
     - api
     - agentic
     - huggingface
-    notes: 'Owning pack: C1.'
+    notes: 'Owning pack: C4; Llama, contextual Meta/Muse and strong Muse names.'
     not_include:
     - f1
     - antonelli
@@ -382,8 +403,7 @@ brands:
     - upstageai
     handle_tier: other
 co_packs:
-- - llama
-  - mimo
+- - mimo
   - mistral
   - moonshot_kimi
   - yi
@@ -393,3 +413,4 @@ co_packs:
   - kuaishou
   - sensechat
   - glm
+- - llama

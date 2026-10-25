@@ -4,6 +4,8 @@ import pytest
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 
+from tests.collection_fixtures import historical_fixture_models
+
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 OLD = [("core", "0082_collection_catalog_mappings")]
 X_DETAILS = [("core", "0083_account_extensions")]
@@ -158,13 +160,16 @@ def test_hf_retirement_preserves_linked_and_pending_publishers_and_products():
         assert candidate.account_kind == "unknown"
         assert candidate.created_at is None
         assert candidate.first_seen_at == stamp
-        from core.hf_catalog import resolve_scope
-        from core.models import Product as CurrentProduct
+        # Exercise the consumer with the schema this test has migrated to;
+        # unrelated Company/Product columns added later are not present here.
+        with historical_fixture_models(new):
+            from core.hf_catalog import resolve_scope
+            from core.models import Product as CurrentProduct
 
-        scope = resolve_scope(brands=[], companies=[company.pk], rules=[])
-        assert scope["namespaces"][0]["namespace"] == "LinkedLab"
-        assert scope["namespaces"][0]["ownership_evidence"] == "reviewed"
-        assert CurrentProduct.objects.get(pk=products[0].pk).hf_namespace == "LinkedLab"
+            scope = resolve_scope(brands=[], companies=[company.pk], rules=[])
+            assert scope["namespaces"][0]["namespace"] == "LinkedLab"
+            assert scope["namespaces"][0]["ownership_evidence"] == "reviewed"
+            assert CurrentProduct.objects.get(pk=products[0].pk).hf_namespace == "LinkedLab"
         for original, publisher, confirmed in zip(
             products, (existing, candidate), (True, False)
         ):

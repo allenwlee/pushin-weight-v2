@@ -36,10 +36,10 @@ in 4/5.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-import re
 from typing import Any, Literal
 
 import yaml
@@ -114,6 +114,33 @@ class VersionFamily:
             raise TypeError("version_family extra_suffixes must be list[str]")
 
 
+def normalize_policy_token(value: str) -> str:
+    """Normalize a literal policy token, removing surrounding search quotes."""
+    token = str(value).strip()
+    for quote in ('"', "'"):
+        if len(token) >= 2 and token.startswith(quote) and token.endswith(quote):
+            token = token[1:-1].strip()
+            break
+    return " ".join(token.split()).casefold()
+
+
+@dataclass(frozen=True)
+class AliasContext:
+    """One literal alias requires any of these literal terms in the same text."""
+    alias: str
+    any_of: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.any_of, tuple) or not self.any_of:
+            raise ValueError("alias_context any_of must be a nonempty tuple")
+        for value in (self.alias, *self.any_of):
+            if (not isinstance(value, str) or not value.strip()
+                    or value != value.strip()
+                    or not re.fullmatch(r"\w+(?:[.-]\w+)*(?: \w+(?:[.-]\w+)*)*", value)
+                    or any(word.upper() in {"AND", "OR", "NOT"} for word in value.split())):
+                raise ValueError("alias_context accepts literal terms only")
+
+
 @dataclass(frozen=True)
 class BrandPolicy:
     """Per-brand authoring block.
@@ -143,8 +170,18 @@ class BrandPolicy:
     notes: str = ""
     handle_tier: str = HANDLE_TIER_TOP
     version_family: VersionFamily | None = None
+    alias_context: tuple[AliasContext, ...] = ()
 
     def __post_init__(self) -> None:
+        known = {normalize_policy_token(t) for t in (*self.tokens, *self.versioned_tokens)}
+        seen = set()
+        for rule in self.alias_context:
+            if not isinstance(rule, AliasContext):
+                raise TypeError("alias_context entries must be AliasContext")
+            alias = normalize_policy_token(rule.alias)
+            if alias not in known or alias in seen:
+                raise ValueError(f"brand {self.nickname!r}: unknown or duplicate context alias {alias!r}")
+            seen.add(alias)
         if self.version_family is not None and not isinstance(
             self.version_family, VersionFamily
         ):
@@ -329,7 +366,21 @@ def _load_brand_policy(nickname: str, raw: dict[str, Any]) -> BrandPolicy:
         notes=str(raw.get("notes", "") or ""),
         handle_tier=str(raw.get("handle_tier", HANDLE_TIER_TOP) or HANDLE_TIER_TOP),
         version_family=version_family,
+        alias_context=_load_alias_context(raw.get("alias_context", [])),
     )
+
+
+def _load_alias_context(raw: Any) -> tuple[AliasContext, ...]:
+    if not isinstance(raw, list):
+        raise TypeError("alias_context must be a list")
+    result = []
+    for entry in raw:
+        if not isinstance(entry, dict) or set(entry) != {"alias", "any_of"}:
+            raise ValueError("alias_context entries require exactly alias and any_of")
+        if not isinstance(entry["any_of"], list):
+            raise TypeError("alias_context any_of must be a list")
+        result.append(AliasContext(alias=entry["alias"], any_of=tuple(entry["any_of"])))
+    return tuple(result)
 
 
 def _load_version_family(

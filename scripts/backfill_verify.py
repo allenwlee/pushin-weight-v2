@@ -20,6 +20,7 @@ from core.models import (
     CollectionJob,
     CollectionObservation,
     Post,
+    RareTypeSearchHit,
 )
 from monitor.backfill_enrichment import completion_facts
 from monitor.cycle import _parse_published_classifications
@@ -31,35 +32,32 @@ def _present(value):
     return isinstance(value, str) and bool(value.strip())
 
 
-def verify_posts(ids, *, cfg, since_epoch=None, until_epoch=None):
+def verify_posts(ids, *, cfg, since_epoch=None, until_epoch=None, collection_only=False):
     """Check a bounded page; return reasons rather than hide a failed row."""
     if not 0 < len(ids) <= 100 or len(set(ids)) != len(ids):
         raise ValueError("verification_requires_1_to_100_distinct_ids")
-    facts = completion_facts(ids)
-    posts = list(
+    facts = {} if collection_only else completion_facts(ids)
+    posts_query = (
         Post.objects.filter(pk__in=ids)
         .annotate(
             profile_snapshot_present=Exists(
                 AccountProfileSnapshot.objects.filter(account_id=OuterRef("author_id"))
             )
         )
-        .select_related(
-            "author",
-            "enrichment_state",
-        )
-        .prefetch_related(
-            "brands",
-            "mentions",
-            "signals",
-            "product_label_edges",
+        .select_related("author")
+        .prefetch_related("brands__brand", "mentions")
+    )
+    if not collection_only:
+        posts_query = posts_query.select_related("enrichment_state").prefetch_related(
+            "signals", "product_label_edges",
             "classification_states__selected_final_judgment",
-            "audience_topic_assignments__concept",
-            "geopolitical_mode_assignments",
+            "audience_topic_assignments__concept", "geopolitical_mode_assignments",
             "translation_artifacts__texts",
         )
-    )
-    projections = read_post_content_many(posts)
-    errors = {str(i): ["post_missing"] for i in ids if str(i) not in facts}
+    posts = list(posts_query)
+    projections = {} if collection_only else read_post_content_many(posts)
+    present_ids = {str(post.pk) for post in posts}
+    errors = {str(i): ["post_missing"] for i in ids if str(i) not in present_ids}
     for post in posts:
         reasons = []
         if not _present(post.text):
@@ -83,8 +81,15 @@ def verify_posts(ids, *, cfg, since_epoch=None, until_epoch=None):
         brands = {row.brand_id for row in post.brands.all()}
         if not brands:
             reasons.append("brand_attribution_missing")
-        if not brands <= {row.brand_id for row in post.mentions.all()}:
+        # Sentinel attribution records the absence of a matched brand; it is
+        # never a claim that the Post mentioned that sentinel's name.
+        evidence_brands = {row.brand_id for row in post.brands.all() if not row.brand.is_sentinel}
+        if not evidence_brands <= {row.brand_id for row in post.mentions.all()}:
             reasons.append("brand_mention_missing")
+        if collection_only:
+            if reasons:
+                errors[str(post.pk)] = sorted(set(reasons))
+            continue
         state = getattr(post, "enrichment_state", None)
         if (
             state is None
@@ -179,7 +184,12 @@ def verify_posts(ids, *, cfg, since_epoch=None, until_epoch=None):
     return {"checked": len(ids), "valid": len(ids) - len(errors), "errors": errors}
 
 
-def verify_window(job_id, *, cfg):
+def verify_collection_window(job_id, *, cfg):
+    """Accept durable collection without requiring later enrichment."""
+    return verify_window(job_id, cfg=cfg, collection_only=True)
+
+
+def verify_window(job_id, *, cfg, collection_only=False):
     """Verify every member, collection checkpoint and consumer output, read-only."""
     with transaction.atomic():
         with connection.cursor() as cursor:
@@ -194,21 +204,54 @@ def verify_window(job_id, *, cfg):
             raise ValueError("collection_not_successful")
         scopes = list(job.last_success.scopes.all())
         if (
-            len(scopes) != len(job.scope["units"])
+            {(s.scope_kind, s.scope_key) for s in scopes}
+            != {(u.get("scope_kind", "x_query"), u["scope_key"]) for u in job.scope["units"]}
+            or len(scopes) != len(job.scope["units"])
             or not scopes
             or any(
                 not s.enumeration_complete or s.outcome != "complete" for s in scopes
             )
         ):
             raise ValueError("collection_scope_not_drained")
+        for scope in scopes:
+            if not any(e.get("collection_drained") for e in scope.envelopes):
+                raise ValueError("collection_terminal_receipt_missing")
+            for envelope in scope.envelopes:
+                if "received_post_ids" not in envelope:
+                    continue  # Publication-only envelope; source page is separate.
+                received = envelope["received_post_ids"]
+                exclusions = envelope.get("exclusions", [])
+                excluded = {row["appearance"] for row in exclusions}
+                retained = set(envelope.get("post_ids", [])) | set(envelope.get("inbox_post_ids", []))
+                if (
+                    len(received) != envelope.get("raw_count")
+                    or len(excluded) != len(exclusions)
+                    or any(not isinstance(i, int) or not 0 <= i < len(received) for i in excluded)
+                    or any(not row.get("reason") or row.get("post_id") != received[row["appearance"]]
+                           for row in exclusions)
+                    or any(i not in excluded and identifier not in retained
+                           for i, identifier in enumerate(received))
+                ):
+                    raise ValueError("collection_page_accounting_mismatch")
         checkpoint_ids = {
             str(i) for s in scopes for e in s.envelopes for i in e.get("post_ids", [])
         }
+        # Gate outcomes are durable source facts, independent of model enrichment.
+        hit_ids = {hit for scope in scopes for envelope in scope.envelopes
+                   for hit in envelope.get("rare_hit_ids", [])}
+        hits = list(RareTypeSearchHit.objects.filter(pk__in=hit_ids)
+                    .values("pk", "gate_state", "post_id")) if hit_ids else []
+        if len(hits) != len(hit_ids) or any(
+            hit["gate_state"] not in {"junk", "review_needed"}
+            and not (hit["gate_state"] == "kept" and str(hit["post_id"]) in checkpoint_ids)
+            for hit in hits
+        ):
+            raise ValueError("collection_rare_gate_pending")
         observations = CollectionObservation.objects.filter(
             run__job=job, source_subject_kind="post"
         )
         count = observations.values("post_id").distinct().count()
-        if not count or count != len(checkpoint_ids):
+        if count != len(checkpoint_ids):
             raise ValueError("collection_membership_count_mismatch")
         after, checked, failures, samples = "", 0, Counter(), {}
         digest = hashlib.sha256()
@@ -230,6 +273,7 @@ def verify_window(job_id, *, cfg):
                 cfg=cfg,
                 since_epoch=bounds["since_epoch"],
                 until_epoch=bounds["until_epoch"],
+                collection_only=collection_only,
             )
             checked += result["checked"]
             for identifier in ids:
@@ -245,6 +289,8 @@ def verify_window(job_id, *, cfg):
             "status": "verified" if not failures else "failed",
             "source_collection_job": str(job.pk),
             "checked_posts": checked,
+            "zero_results": checked == 0,
+            "phase": "collection" if collection_only else "enrichment",
             "scopes_complete": len(scopes),
             "member_ids_sha256": digest.hexdigest(),
             "failure_counts": dict(failures),

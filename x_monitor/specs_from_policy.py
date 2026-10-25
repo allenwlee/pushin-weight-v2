@@ -60,6 +60,7 @@ from .harvest_policy import (
     BrandPolicy,
     HarvestPolicy,
     VersionFamily,
+    normalize_policy_token,
 )
 from .query_plan import XQuerySpec
 
@@ -136,22 +137,6 @@ def _dedupe_tokens(tokens: Iterable[str]) -> list[str]:
             result.append(token)
             seen.add(token)
     return result
-
-
-def normalize_policy_token(value: str) -> str:
-    """Normalize a policy/search token for DB coverage comparisons.
-
-    Quotes around a token are X query syntax (for example ``"Ox Alpha"``),
-    not part of the body token stored in ``BrandKeyword``.  Keep this helper
-    deliberately small and deterministic: trim, remove one matching pair of
-    surrounding query quotes, collapse internal whitespace, then casefold.
-    """
-    token = str(value).strip()
-    for quote in ('"', "'"):
-        if len(token) >= 2 and token.startswith(quote) and token.endswith(quote):
-            token = token[1:-1].strip()
-            break
-    return " ".join(token.split()).casefold()
 
 
 def active_policy_tokens(
@@ -291,6 +276,7 @@ def specs_from_policy(
         specs.append(XQuerySpec(
             call_id="B1",
             is_wide_net=True,
+            alias_context={b.nickname: b.alias_context for b in b1_brands if b.alias_context},
             wide_net_brands=tuple(sorted(b.nickname for b in b1_brands)),
             co_occurrence=[],
             min_faves=0,
@@ -333,6 +319,7 @@ def specs_from_policy(
         specs.append(XQuerySpec(
             call_id=f"C{idx}",
             brands=primary_brands,
+            alias_context={b.nickname: b.alias_context for b in pack_brands if b.alias_context},
             co_occurrence=co_terms,
             min_faves=0,
             not_include=not_include,

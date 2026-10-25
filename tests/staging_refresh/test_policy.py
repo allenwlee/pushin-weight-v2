@@ -414,6 +414,20 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
     policy = load_policy(POLICY_PATH)
 
     assert {
+        "currencies",
+        "salary_periods",
+        "job_functions",
+        "seniority_levels",
+        "employment_types",
+        "workplace_types",
+        "organization_ai_relationship_types",
+        "role_ai_relationship_types",
+        "job_function_assignments",
+        "job_seniority_assignments",
+        "job_employment_type_assignments",
+        "job_workplace_type_assignments",
+        "job_organization_ai_relationship_assignments",
+        "job_role_ai_relationship_assignments",
         "time_zones",
         "languages",
         "locales",

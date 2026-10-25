@@ -273,7 +273,7 @@ def test_live_policy_resolution_rejects_fourth_co_pack(tmp_path, monkeypatch):
     [
         ["B1", "B2", "B3", "C1", "C2"],
         ["B1", "B2", "B3", "C1", "C2", "C3", "C3"],
-        ["B1", "B2", "B3", "C1", "C2", "C3", "C4"],
+        ["B1", "B2", "B3", "C1", "C2", "C3", "C4", "C5"],
     ],
 )
 def test_derived_policy_call_ids_reject_omission_duplicate_or_unknown(call_ids):

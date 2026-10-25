@@ -89,6 +89,7 @@ def backfill_yield_requested(identity: tuple[str, int, int] | None = None) -> bo
                 SELECT 1 FROM pg_locks AS waiting
                 JOIN pg_stat_activity AS activity ON activity.pid = waiting.pid
                 WHERE waiting.locktype = 'advisory' AND NOT waiting.granted
+                  AND waiting.database = (SELECT oid FROM pg_database WHERE datname = current_database())
                   AND waiting.objsubid = 2 AND waiting.classid::bigint = %s
                   AND waiting.objid::bigint = %s
                   AND activity.application_name LIKE 'harvest:live:%%'
@@ -124,6 +125,7 @@ def _owner_context(cursor, class_id: int, object_id: int) -> tuple[int | None, s
           FROM pg_locks AS held
           JOIN pg_stat_activity AS activity ON activity.pid = held.pid
          WHERE held.locktype = 'advisory'
+           AND held.database = (SELECT oid FROM pg_database WHERE datname = current_database())
            AND held.granted
            AND held.objsubid = 2
            AND held.classid::bigint = %s

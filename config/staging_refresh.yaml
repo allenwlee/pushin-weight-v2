@@ -33,6 +33,7 @@ production_deny:
 
 relations:
   copied_tables:
+    # Shared job vocabulary and source-supported assignments (migration 0132).
     - currencies
     - salary_periods
     - job_functions
@@ -272,6 +273,7 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    # Pre-0132 snapshots lack the shared job vocabulary and assignments.
     - currencies
     - salary_periods
     - job_functions
@@ -460,6 +462,7 @@ relations:
     - editorial_pictures
     - trend_narrative_versions
   sequences:
+    # Currency codes are natural keys; the remaining 0132 tables use numeric IDs.
     - salary_periods_id_seq
     - job_functions_id_seq
     - seniority_levels_id_seq
@@ -592,6 +595,7 @@ relations:
     - twitter_list_memberships_id_seq
     - untracked_brand_promotion_evidence_id_seq
   optional_source_sequences:
+    # Pre-0132 snapshots lack these job-vocabulary sequences.
     - salary_periods_id_seq
     - job_functions_id_seq
     - seniority_levels_id_seq
@@ -778,6 +782,21 @@ validation:
     - geolocations
     - geolocation_alternate_names
     - geolocation_policies
+    # Retain catalogue identities and every source-supported job assignment.
+    - currencies
+    - salary_periods
+    - job_functions
+    - seniority_levels
+    - employment_types
+    - workplace_types
+    - organization_ai_relationship_types
+    - role_ai_relationship_types
+    - job_function_assignments
+    - job_seniority_assignments
+    - job_employment_type_assignments
+    - job_workplace_type_assignments
+    - job_organization_ai_relationship_assignments
+    - job_role_ai_relationship_assignments
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - taxonomy_versions
     - product_groups

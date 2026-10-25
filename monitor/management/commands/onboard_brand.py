@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -552,7 +553,12 @@ class Command(BaseCommand):
     help = "Atomically onboard tracked brands from an RFC4180 CSV file."
 
     def add_arguments(self, parser) -> None:
-        parser.add_argument("--csv", required=True, type=Path, dest="csv_path")
+        source = parser.add_mutually_exclusive_group(required=True)
+        source.add_argument("--csv", type=Path, dest="csv_path")
+        source.add_argument(
+            "--sync-policy-keywords", nargs="+", metavar="BRAND",
+            help="Add missing literal policy keywords to existing brands only; deploy the matching policy/code first.",
+        )
         parser.add_argument("--config", type=Path, default=Path("config.yaml"))
         parser.add_argument(
             "--policy", type=Path, default=Path("config/harvest_policy.yaml")
@@ -564,7 +570,43 @@ class Command(BaseCommand):
             help="Skip harvest-policy membership/coverage checks.",
         )
 
+    def _sync_policy_keywords(self, options) -> None:
+        """Narrow, idempotent activation; no company/account/schedule writes."""
+        selected = options["sync_policy_keywords"]
+        policy = load_policy(options["policy"])
+        tokens = active_policy_tokens(policy, brand_nicknames=selected)
+        changes = []
+        with transaction.atomic():
+            brands = {b.nickname: b for b in Brand.objects.select_for_update().filter(nickname__in=selected)}
+            if set(brands) != set(selected) or any(b.is_sentinel for b in brands.values()):
+                raise CommandError("Keyword reconciliation requires existing non-sentinel brands")
+            for nickname in sorted(tokens):
+                existing = {normalize_policy_token(t) for t in BrandKeyword.objects.filter(
+                    brand_id=nickname, is_regex=False,
+                ).values_list("pattern", flat=True)}
+                missing = sorted(tokens[nickname] - existing)
+                if len(missing) > 32:
+                    raise CommandError("Keyword reconciliation exceeds 32 additions per brand")
+                conflicts = BrandKeyword.objects.filter(
+                    brand_id=nickname, pattern__in=missing, is_regex=True,
+                ).values_list("pattern", flat=True)
+                if conflicts:
+                    raise CommandError(f"Existing regex conflicts with literals for {nickname}: {', '.join(conflicts)}")
+                for pattern in missing:
+                    if not options["dry_run"]:
+                        keyword, _created = BrandKeyword.objects.get_or_create(
+                            brand_id=nickname, pattern=pattern,
+                            defaults={"is_primary": False, "is_regex": False},
+                        )
+                        if keyword.is_regex:
+                            raise CommandError(f"Existing regex conflicts with literal {nickname}/{pattern}")
+                    changes.append({"brand": nickname, "pattern": pattern})
+        self.stdout.write(json.dumps({"dry_run": options["dry_run"], "additions": changes}, ensure_ascii=False))
+
     def handle(self, **options) -> None:
+        if options.get("sync_policy_keywords"):
+            self._sync_policy_keywords(options)
+            return
         try:
             rows = read_csv(options["csv_path"])
             warnings = _validate(
