@@ -11,6 +11,11 @@ from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from core.benchmark_metric_store import native_date
+from core.benchmark_serving import (
+    hydrate_observations,
+    observation_ids,
+    publication_runs,
+)
 from core.measurement_taxonomy import require, resolve_products
 from core.models import (
     CollectionObservation,
@@ -165,6 +170,11 @@ def _point(value, definition, day):
     observation = value.observation
     run = observation.run
     metadata = observation.source_metadata
+    basis = value.as_of_basis if definition.measurement_kind == "state" else value.window_end_basis
+    if basis:
+        metadata = {**metadata, "reported_time": {"metrics": {
+            definition.metric_key: {"basis": basis},
+        }}}
     return {
         "date": day,
         "raw_value": str(value.integer_value)
@@ -241,7 +251,7 @@ def metric_points(contract, line, days):
             len(mappings) == 1 and line.get("aggregation", "single") == "single",
             "OpenCode counts require a single reviewed model",
         )
-        rows = selected_rows(contract, [m.pk for m in mappings], days[0], days[-1])
+        rows = selected_rows(contract, [m.pk for m in mappings], days[0], days[-1], canonical=True)
         points = []
         for day in days:
             row = rows.get((mappings[0].external_identifier, day))
@@ -314,16 +324,9 @@ def metric_points(contract, line, days):
     )
     queryset = MetricValue.objects.all()
     if history_basis == "reconstructed_current_relationships":
-        queryset = queryset.filter(
-            observation__source_metadata__history_basis=history_basis
-        )
+        queryset = queryset.filter(observation_id__in=observation_ids("reconstructed IS TRUE"))
     else:
-        queryset = queryset.filter(
-            Q(observation__source_metadata__history_basis__isnull=True)
-            | ~Q(
-                observation__source_metadata__history_basis="reconstructed_current_relationships"
-            )
-        )
+        queryset = queryset.filter(observation_id__in=observation_ids("reconstructed IS NOT TRUE"))
     lower, upper = days[0], days[-1]
     if source == "arena":
         prior = CollectionObservation.objects.filter(
@@ -340,17 +343,12 @@ def metric_points(contract, line, days):
             native_date(upper) + timedelta(days=1), datetime.min.time(), UTC
         )
         queryset = queryset.filter(
-            Q(
-                observation__source_metadata__archive_snapshot_date__gte=lower,
-                observation__source_metadata__archive_snapshot_date__lte=upper,
-            )
+            Q(observation_id__in=observation_ids(
+                "archive_snapshot_date BETWEEN %s AND %s OR reconstruction_date BETWEEN %s AND %s",
+                [lower, upper, lower, upper],
+            ))
             | Q(
-                observation__source_metadata__reconstruction_date__gte=lower,
-                observation__source_metadata__reconstruction_date__lte=upper,
-            )
-            | Q(
-                observation__source_metadata__archive_snapshot_date__isnull=True,
-                observation__source_metadata__reconstruction_date__isnull=True,
+                observation_id__in=observation_ids("archive_snapshot_date IS NULL AND reconstruction_date IS NULL"),
                 observation__observed_at__gte=begin,
                 observation__observed_at__lt=stop,
             )
@@ -366,11 +364,13 @@ def metric_points(contract, line, days):
             observation__status="ok",
         )
         .select_related("observation__run")
-        .defer("observation__run__raw_payload", "observation__run__request_params")
+        .defer("observation__source_metadata", "observation__run__source_metadata",
+               "observation__run__report", "observation__run__raw_payload", "observation__run__request_params")
         .prefetch_related("observation__values__source_metric")
         .order_by("observation__run__completed_at", "id")[:100001]
     )
     require(len(values) <= 100000, "series row budget exceeded")
+    hydrate_observations([value.observation for value in values])
     groups = defaultdict(dict)
     revisions = {}
     for value in values:
@@ -487,35 +487,23 @@ def metric_points(contract, line, days):
     if source == "arena":
         # A scoped archive may contain no tracked models at a publication.
         # Keep that publication as absence evidence without inventing a row.
-        publication_runs = list(
-            CollectionRun.objects.filter(
-                job__contract=contract,
-                job__source_id=source,
-                status__in=["success", "partial"],
-                source_metadata__publication_end__gte=str(prior or lower),
-                source_metadata__publication_start__lte=upper,
-            ).only("source_metadata", "source_as_of", "completed_at")[:1001]
-        )
-        require(len(publication_runs) <= 1000, "publication run budget exceeded")
-        for run in publication_runs:
+        for day, run_id, source_as_of, completed_at in publication_runs(contract, str(prior or lower), upper):
             revision = (
                 0,
-                run.source_as_of or run.completed_at,
-                run.completed_at,
-                str(run.pk),
+                source_as_of or completed_at,
+                completed_at,
+                str(run_id),
             )
-            for day in run.source_metadata.get("publication_dates", []):
-                if str(
-                    prior or lower
-                ) <= day <= upper and revision > complete_publications.get(day, (0,)):
-                    complete_publications[day] = revision
+            day = day.isoformat()
+            if revision > complete_publications.get(day, (0,)):
+                complete_publications[day] = revision
         publications = (
             CollectionObservation.objects.filter(
                 run__job__contract=contract,
                 run__job__source_id=source,
                 run__status__in=["success", "partial"],
                 status="ok",
-                source_metadata__publication_complete=True,
+                id__in=observation_ids("publication_complete IS TRUE"),
                 published_date__gte=prior or lower,
                 published_date__lte=upper,
             )

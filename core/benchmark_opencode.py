@@ -39,7 +39,7 @@ def retained_checks(contract, *, cutoff=None):
     return result
 
 
-def selected_rows(contract, mapping_ids, start, end, *, cutoff=None):
+def selected_rows(contract, mapping_ids, start, end, *, cutoff=None, canonical=False):
     """Latest reported row per exact model/date, with a stable conflict order."""
     require(0 < len(mapping_ids) <= 100, "OpenCode mapping query budget")
     mappings = dict(
@@ -69,9 +69,14 @@ def selected_rows(contract, mapping_ids, start, end, *, cutoff=None):
         sql += " AND r.completed_at <= %s AND (check_row.value->>'updated_at')::timestamptz <= %s"
         params.extend([cutoff, cutoff])
     sql += " ORDER BY check_row.value->>'source_identifier', reference.key, (check_row.value->>'updated_at')::timestamptz DESC, check_row.value->>'body_sha256' DESC, r.completed_at DESC, r.id DESC LIMIT 36601"
-    with connection.cursor() as cursor:
-        cursor.execute(sql, params)
-        selected = cursor.fetchall()
+    if canonical:
+        from core.benchmark_serving import selected_endpoint_rows
+
+        selected = selected_endpoint_rows(contract, mapping_ids, start, end, cutoff)
+    else:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            selected = cursor.fetchall()
     chosen = {}
     for identifier, label, observation_id, run_id, check in selected:
         check = json.loads(check) if isinstance(check, str) else check
@@ -82,19 +87,23 @@ def selected_rows(contract, mapping_ids, start, end, *, cutoff=None):
             "check": check,
         }
     require(len(chosen) <= 36600, "OpenCode selected row budget")
+    queryset = CollectionObservation.objects.filter(
+        pk__in={row["observation_id"] for row in chosen.values()},
+        mapping_id__in=mapping_ids,
+        run__job__contract=contract,
+        run__job__source_id="opencode",
+        status="ok",
+    ).select_related("run").defer("run__raw_payload", "run__request_params")
+    if canonical:
+        queryset = queryset.defer("source_metadata", "run__source_metadata", "run__report")
     observations = {
         obj.pk: obj
-        for obj in CollectionObservation.objects.filter(
-            pk__in={row["observation_id"] for row in chosen.values()},
-            mapping_id__in=mapping_ids,
-            run__job__contract=contract,
-            run__job__source_id="opencode",
-            status="ok",
-        )
-        .select_related("run")
-        .defer("run__raw_payload", "run__request_params")
-        .prefetch_related("values__source_metric")
+        for obj in queryset.prefetch_related("values__source_metric")
     }
+    if canonical:
+        from core.benchmark_serving import hydrate_observations
+
+        hydrate_observations(observations.values())
     for (identifier, label), row in chosen.items():
         observation = observations.get(row["observation_id"])
         require(
@@ -111,14 +120,12 @@ def publication_times(contract):
     """Project one publication instant per model, without materializing hourly windows."""
     with connection.cursor() as cursor:
         cursor.execute(
-            """SELECT DISTINCT ON (c.value->>'source_identifier')
-            c.value->>'source_identifier', (c.value->>'updated_at')::timestamptz
-            FROM collection_runs r
-        JOIN collection_jobs j ON j.id = r.job_id
-            CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.source_metadata->'endpoint_checks', '[]'::jsonb)) c
-            WHERE j.contract_id=%s AND j.source_id='opencode' AND r.status IN ('success','partial')
-            AND c.value->>'status'='ok'
-            ORDER BY c.value->>'source_identifier', (c.value->>'updated_at')::timestamptz DESC
+            """SELECT DISTINCT ON (p.external_identifier)
+            p.external_identifier,p.updated_at
+            FROM benchmark_endpoint_revisions p JOIN collection_runs r ON r.id=p.run_id
+            JOIN collection_jobs j ON j.id=r.job_id
+            WHERE j.contract_id=%s
+            ORDER BY p.external_identifier,p.updated_at DESC
             LIMIT 101""",
             [contract.pk],
         )

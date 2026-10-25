@@ -310,6 +310,14 @@ GRANT SELECT ON
 TO staging_refresh_reader;
 ```
 
+RG5 migration0167 also creates three read-only views: `benchmark_observation_provenance`,
+`benchmark_publication_dates` and `benchmark_endpoint_revisions`. They expose scalar
+chart facts from existing records and are not copied as tables. Supported historical
+sources may predate all three; the fully migrated target requires all three. The web
+login receives only SELECT after exact-definition verification, while direct reads of
+the underlying source documents remain denied. RG6 must replace these view dependencies
+before retiring collection metadata.
+
 G1 migrations 0059–0064 add sourced names, name evidence and professional text.
 The refresh copies these with the existing people, account links and job claims,
 and checks their counts. Both selected-name foreign keys remain valid. All ten

@@ -7,6 +7,8 @@ prints credentials, grants owner membership, or adds a second web connection.
 from django.apps import apps
 from psycopg import sql
 
+from core.migrations._benchmark_serving_v1 import VIEWS as BENCHMARK_VIEWS, validate_view
+
 # Both names are denied during the rolling-image bridge. Old entries disappear
 # from the physical inventory after final deletion; they must never be granted.
 SOURCE_COLUMNS = {
@@ -117,7 +119,12 @@ def serving_grants_ready(connection, *, schema="public"):
             JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
             WHERE n.nspname=%s AND c.relkind IN ('r','p')
             AND has_column_privilege(current_user,c.oid,a.attname,'SELECT')""", [schema])
-        return expected.issubset(set(cursor.fetchall()))
+        columns_ready = expected.issubset(set(cursor.fetchall()))
+        cursor.execute("""SELECT count(*) FROM pg_class c
+            JOIN pg_namespace n ON n.oid=c.relnamespace
+            WHERE n.nspname=%s AND c.relkind='v' AND c.relname=ANY(%s)
+            AND has_table_privilege(current_user,c.oid,'SELECT')""", [schema, list(BENCHMARK_VIEWS)])
+        return columns_ready and cursor.fetchone()[0] == len(BENCHMARK_VIEWS)
 
 
 def apply_serving_grants(connection, role, *, schema="public"):
@@ -161,6 +168,10 @@ def apply_serving_grants(connection, role, *, schema="public"):
             for operation in ("SELECT", "INSERT", "UPDATE", "REFERENCES"):
                 cursor.execute(sql.SQL("REVOKE {} ({}) ON {} FROM {}").format(sql.SQL(operation), all_columns, relation, identifier))
             if kind in {"v", "m"}:
+                if table in BENCHMARK_VIEWS:
+                    validate_view(cursor, schema, table)
+                    cursor.execute(sql.SQL("GRANT SELECT ON {} TO {}").format(relation, identifier))
+                    continue
                 if table not in SERVING_VIEWS:
                     cursor.execute("SELECT has_table_privilege(%s,%s,'SELECT')", [role, f'{schema}.{table}'])
                     if cursor.fetchone()[0]:

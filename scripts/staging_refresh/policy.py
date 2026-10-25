@@ -823,6 +823,14 @@ def _guard_source_inspection(policy: RefreshPolicy, source: DatabaseInspection) 
     if unknown_views:
         raise PolicyError(f"source_unclassified_view:{min(unknown_views)}")
     required_views = policy.relations.views
+    # Supported historical sources predate these scalar-only serving views.
+    # The upgraded target still requires the complete current view inventory.
+    benchmark_views = frozenset({
+        "benchmark_observation_provenance", "benchmark_publication_dates",
+        "benchmark_endpoint_revisions",
+    })
+    if not source.views & benchmark_views:
+        required_views = required_views - benchmark_views
     if "collection_runs" not in source.base_tables:
         required_views = required_views - frozenset(LEGACY_COLLECTION_TABLES.values())
     if not required_views <= source.views:

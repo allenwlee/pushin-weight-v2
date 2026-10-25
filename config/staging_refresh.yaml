@@ -446,6 +446,9 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   views:
+    - benchmark_observation_provenance
+    - benchmark_publication_dates
+    - benchmark_endpoint_revisions
     - metric_collection_runs
     - metric_observations
     # Temporary writable aliases, excluded from table copies and truncation.

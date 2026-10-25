@@ -28,6 +28,9 @@ def serving_login():
             report = apply_serving_grants(connection, role)
         parameters = {key: value for key, value in connection.get_connection_params().items() if key not in {"user", "password"}}
         with psycopg.connect(**parameters, user=role, password=password, autocommit=True) as serving:
+            # Match Django's connection initialization before attaching this
+            # actual login to its backend (the server default may be Japan).
+            serving.execute("SET TIME ZONE 'UTC'")
             yield serving, role, owner, report
     finally:
         with connection.cursor() as cursor:
