@@ -12,7 +12,7 @@ to jump directly to any table. Every inventory entry has a full column reference
 
 The schema is defined by [core/models.py](../../core/models.py) and the
 [ordered Django migrations](../../core/migrations/). This snapshot describes
-that repository schema, checked against Django models, migration state and the isolated database. Production migration-ledger verification is scoped above; other deployments require their own migration verification. Django’s own
+the local repository schema, checked against Django models, migration state and the permanent shared local test database. Production migration-ledger verification is scoped above; other deployments require their own migration verification. Django’s own
 authentication, session, content-type, and migration-ledger tables are outside
 this **application-table** count. `DiscoveryRunBase` is an abstract model, not
 another table; its columns are included under both discovery-run tables.
