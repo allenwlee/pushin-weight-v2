@@ -585,11 +585,11 @@ def checkpoint_scope(
         "invalid raw count",
     )
     with fenced_run(claim) as (_, run):
-        target = (
-            run.job.targets.filter(target_key=scope_key).first()
-            if run.job.instruction_version == 2 and scope_kind == "product_match"
-            else None
-        )
+        target = None
+        if scope_kind == "product_match":
+            from core.collection_matching import ensure_product_match_target
+
+            target = ensure_product_match_target(run.job, scope_key, ownership)
         if scope_kind == "x_query":
             target = ensure_x_query_target(
                 run.job, scope_key, query_text=query_text, call_id=call_id,

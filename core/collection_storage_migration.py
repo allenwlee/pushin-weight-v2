@@ -68,6 +68,13 @@ class XQueryTargetBatch:
     updated: int
 
 
+@dataclass(frozen=True)
+class ProductTargetBatch:
+    last_id: int
+    scanned: int
+    updated: int
+
+
 PROVENANCE_EXPRESSIONS = {
     "archive_snapshot_date": (
         "CASE WHEN t.source_metadata->>'archive_snapshot_date' ~ "
@@ -227,6 +234,64 @@ def x_query_target_mismatch_counts() -> tuple[int, int]:
             "LEFT JOIN collection_job_targets jt ON jt.id=s.job_target_id "
             "LEFT JOIN search_queries q ON q.id=jt.search_query_id "
             "WHERE s.scope_kind='x_query'"
+        )
+        return tuple(cursor.fetchone())
+
+
+def project_product_match_targets_batch(
+    *, after_id: int = 0, batch_size: int = 200
+) -> ProductTargetBatch:
+    """Pin historical product scopes to their frozen selected subjects."""
+    from core.collection_matching import ensure_product_match_target
+
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative integer")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        scopes = list(
+            CollectionScopeRun.objects.select_for_update()
+            .filter(scope_kind="product_match", pk__gt=after_id)
+            .select_related("run__job")
+            .order_by("pk")[:batch_size]
+        )
+        if not scopes:
+            return ProductTargetBatch(after_id, 0, 0)
+        changed = []
+        for scope in scopes:
+            target = ensure_product_match_target(
+                scope.run.job, scope.scope_key, scope.ownership
+            )
+            if scope.job_target_id not in (None, target.pk):
+                raise ValueError("historical product scope target pin changed")
+            if scope.job_target_id is None:
+                scope.job_target = target
+                changed.append(scope)
+        if changed:
+            CollectionScopeRun.objects.bulk_update(changed, ["job_target"])
+        return ProductTargetBatch(scopes[-1].pk, len(scopes), len(changed))
+
+
+def product_match_target_mismatch_counts() -> tuple[int, int]:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT count(*) FILTER (WHERE jsonb_typeof(s.ownership) <> 'object' "
+            "OR jsonb_typeof(s.ownership->'product_key') <> 'string' "
+            "OR jsonb_typeof(s.ownership->'input_sha256') <> 'string' "
+            "OR s.ownership - 'product_key' - 'input_sha256' <> '{}'::jsonb), "
+            "count(*) FILTER (WHERE s.job_target_id IS NULL "
+            "OR jt.job_id <> r.job_id OR jt.target_key <> s.scope_key "
+            "OR jt.target_kind <> 'match_candidate' "
+            "OR jt.resolution_state <> 'resolved' "
+            "OR ms.product_key::text IS DISTINCT FROM s.ownership->>'product_key' "
+            "OR jt.selection_sha256 IS DISTINCT FROM s.ownership->>'input_sha256') "
+            "FROM collection_scope_runs s JOIN collection_runs r ON r.id=s.run_id "
+            "LEFT JOIN collection_job_targets jt ON jt.id=s.job_target_id "
+            "LEFT JOIN measurement_subjects ms ON ms.id=jt.subject_id "
+            "WHERE s.scope_kind='product_match'"
         )
         return tuple(cursor.fetchone())
 

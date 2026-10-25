@@ -7,8 +7,10 @@ import pytest
 from core.collection_capture import read_document
 from core.collection_storage_migration import (
     archive_legacy_batch,
+    product_match_target_mismatch_counts,
     project_arena_publication_batch,
     project_benchmark_provenance_batch,
+    project_product_match_targets_batch,
     project_run_ingestion_mode,
     project_scope_bounds_batch,
     project_x_query_targets_batch,
@@ -107,6 +109,53 @@ def test_x_query_target_copy_preserves_frozen_query_and_detects_pin_drift():
     assert x_query_target_mismatch_counts() == (0, 1)
     with pytest.raises(ValueError, match="differs from scope ownership"):
         project_x_query_targets_batch(after_id=scope.pk - 1)
+
+
+def test_legacy_product_match_scope_pins_existing_subject_and_input_digest():
+    from django.utils import timezone
+
+    from core.collection_jobs import register_job
+    from core.measurement_taxonomy import digest
+    from core.models import CollectionRun, CollectionScopeRun, DataSource
+    from tests.test_collection_matching import catalog_fixture, preview
+
+    brand, product, _ = catalog_fixture()
+    report = preview(brand)
+    choice = report["products"][0]["candidates"][0]
+    definition = {
+        "version": 1,
+        "schedule": {"kind": "manual", "driver": "manual"},
+        "budgets": {"requests": 1, "bytes": 32768, "seconds": 120, "items": 50},
+        "scope": {
+            "ruleset": "product-crosswalk-v1",
+            "preview_sha256": report["input_sha256"],
+            "cutoff": report["cutoff"], "brands": report["brands"],
+            "matches": [choice],
+            "review": {"reviewed_by": "owner", "basis": "exact match",
+                       "candidate_ids": [choice["candidate_id"]]},
+        },
+    }
+    job = register_job(
+        job_key="legacy-match:" + digest(choice), source=DataSource.objects.get(pk="arena"),
+        purpose="catalog", operation="match_crosswalk", mode="historical",
+        definition=definition,
+    )
+    run = CollectionRun.objects.create(
+        job=job, ingestion_key=digest("legacy-product-match"),
+        status="success", completed_at=timezone.now(),
+    )
+    scope = CollectionScopeRun.objects.create(
+        run=run, scope_kind="product_match", scope_key=choice["candidate_id"],
+        ownership={"product_key": str(product.product_key),
+                   "input_sha256": choice["input_sha256"]},
+    )
+    assert product_match_target_mismatch_counts() == (0, 1)
+    assert project_product_match_targets_batch(after_id=scope.pk - 1).updated == 1
+    scope.refresh_from_db()
+    assert scope.job_target.subject.product_id == product.product_key
+    assert scope.job_target.selection_sha256 == choice["input_sha256"]
+    assert product_match_target_mismatch_counts() == (0, 0)
+    assert project_product_match_targets_batch(after_id=scope.pk - 1).updated == 0
 
 
 def test_legacy_documents_are_archived_once_and_changed_rows_are_reconciled():

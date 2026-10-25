@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from collections import defaultdict
 from contextlib import contextmanager
 from datetime import datetime
@@ -60,6 +61,79 @@ def bounded_reads():
 def name_key(value):
     """Punctuation within versions and variant suffixes remains significant."""
     return re.sub(r"[\s_-]+", "", value.casefold())
+
+
+def ensure_product_match_target(job, scope_key, ownership):
+    """Link a product decision to its frozen target, including legacy v1 jobs."""
+    from core.identifier_namespaces import target_namespace_id
+    from core.measurement_taxonomy import resolve_subject_id
+    from core.models import CollectionJob, CollectionJobTarget, MeasurementSubject
+
+    require(
+        isinstance(ownership, dict)
+        and set(ownership) == {"product_key", "input_sha256"}
+        and isinstance(ownership["product_key"], str)
+        and isinstance(ownership["input_sha256"], str)
+        and re.fullmatch(r"[0-9a-f]{64}", ownership["input_sha256"]),
+        "product match requires frozen product and input digest",
+    )
+    product_key = uuid.UUID(ownership["product_key"])
+    target = job.targets.filter(target_key=scope_key).select_related("subject").first()
+    if target is None:
+        CollectionJob.objects.select_for_update().get(pk=job.pk)
+        target = job.targets.filter(target_key=scope_key).select_related("subject").first()
+    if target is None:
+        require(job.instruction_version == 1, "sealed match job requires a target")
+        matches = [
+            row for row in job.definition.get("scope", {}).get("matches", [])
+            if row.get("candidate_id") == scope_key
+        ]
+        require(len(matches) == 1, "frozen product match candidate is missing")
+        choice = matches[0]
+        require(
+            choice.get("product_key") == str(product_key)
+            and choice.get("input_sha256") == ownership["input_sha256"]
+            and len(choice.get("reasons", [])) == 1,
+            "product match differs from frozen instruction",
+        )
+        product = Product.objects.get(product_key=product_key)
+        subject, _ = MeasurementSubject.objects.get_or_create(
+            id=resolve_subject_id("product", str(product_key)),
+            defaults={"subject_kind": "product", "product": product},
+        )
+        require(
+            subject.subject_kind == "product" and subject.product_id == product_key,
+            "product match subject changed",
+        )
+        values = {
+            "target_kind": "match_candidate",
+            "evidence_observation_id": choice["evidence"]["observation_id"],
+            "identifier_scope": choice["identifier_scope"],
+        }
+        namespace = target_namespace_id(values)
+        maximum = job.targets.order_by("-ordinal").values_list("ordinal", flat=True).first()
+        target = CollectionJobTarget.objects.create(
+            job=job, target_key=scope_key,
+            ordinal=0 if maximum is None else maximum + 1,
+            subject=subject, target_kind="match_candidate",
+            target_role=choice["decision"], resolution_state="resolved",
+            native_identifier=choice["identifier"],
+            identifier_scope_id=namespace,
+            source_row_index=choice.get("publication_row_index"),
+            evidence_observation_id=choice["evidence"]["observation_id"],
+            selection_basis=choice["reasons"][0],
+            selection_sha256=ownership["input_sha256"],
+            review_confirmed=scope_key in job.definition["scope"]["review"]["candidate_ids"],
+        )
+    require(
+        target.target_kind == "match_candidate"
+        and target.subject_id is not None
+        and target.subject.subject_kind == "product"
+        and target.subject.product_id == product_key
+        and target.selection_sha256 == ownership["input_sha256"],
+        "product match target differs from scope ownership",
+    )
+    return target
 
 
 def ownership_pin(product, publisher):
