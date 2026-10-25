@@ -132,7 +132,7 @@ def test_endpoint_checks_have_typed_cross_run_ready_row_links():
     )
     assert marker.source_record_at == datetime(2026, 10, 7, 12, 44, 18, tzinfo=UTC)
     assert marker.payload_sha256 == run.source_metadata["endpoint_checks"][0]["body_sha256"]
-    assert marker.revision_conflict is False
+    assert marker.revision_conflict is None
     links = CollectionObservationInput.objects.filter(
         observation=marker, input_role="endpoint_revision_row"
     )
@@ -213,6 +213,7 @@ def test_hourly_replay_deduplicates_values_and_retains_corrected_partial_windows
 def test_endpoint_revision_orders_current_data_and_same_time_conflicts_are_flagged():
     from core.benchmark_metric_store import persist_source
     from core.benchmark_opencode import selected_rows
+    from core.models import CollectionObservation
 
     contract = configured()
     for key, value, stamp in [
@@ -241,6 +242,9 @@ def test_endpoint_revision_orders_current_data_and_same_time_conflicts_are_flagg
         conflict.source_metadata["endpoint_checks"][0]["revision_anomaly"]
         == "same_update_different_body"
     )
+    assert CollectionObservation.objects.get(
+        run=conflict, observation_kind="endpoint_check"
+    ).revision_conflict is True
 
 
 @pytest.mark.requires_postgres

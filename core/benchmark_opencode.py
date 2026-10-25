@@ -45,7 +45,10 @@ def record_endpoint_checks(run, checks, contract, *, verify_only=False):
             "observed_at": run.observed_at,
             "source_record_at": updated_at,
             "payload_sha256": body_hash,
-            "revision_conflict": check.get("revision_anomaly") == "same_update_different_body",
+            "revision_conflict": (
+                check.get("revision_anomaly") == "same_update_different_body"
+                if "revision_anomaly" in check else None
+            ),
             "observation_kind": "endpoint_check",
         }
         if verify_only:
