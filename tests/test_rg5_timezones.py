@@ -11,7 +11,21 @@ from core.measurement_taxonomy import digest
 from core.models import CollectionCorrection, MetricValue, TimeZone
 from tests.test_source_metric_projection import configured, evidence, project
 
-pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    pytest.mark.requires_postgres,
+    pytest.mark.parametrize(
+        "migration_rehearsal_schema",
+        [("core", "0166_rg5_reference_source_guards")],
+        indirect=True,
+    ),
+]
+
+
+@pytest.fixture(autouse=True)
+def pre_retirement_schema(migration_rehearsal_schema):
+    """Bridge behavior belongs to the historical cutover schema."""
+    return migration_rehearsal_schema
 
 
 def measurement():

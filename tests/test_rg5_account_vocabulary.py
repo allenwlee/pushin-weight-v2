@@ -34,11 +34,9 @@ def test_x_observation_creates_typed_reference_and_same_profile_code():
         profile_observation_from_account(account).profile_data["verified_type"]
         == "Business"
     )
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "UPDATE x_account_details SET verified_type='' WHERE account_key=%s",
-            [account.pk],
-        )
+    XAccountDetail.objects.filter(account=account).update(
+        verified_type_id=reference_id("account_verification_types", "x", "")
+    )
     account.refresh_from_db()
     assert account.verified_type_id is not None
     assert code_for(account, "verified_type") == ""
@@ -63,7 +61,8 @@ def test_post_profile_serializes_lookup_code_without_changing_source_shape():
     assert observation.raw_profile_payload["author_verified_type"] == "Business"
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT author_verified_type FROM posts WHERE tweet_id=%s", [post.pk]
+            "SELECT v.code FROM posts p JOIN account_verification_types v "
+            "ON v.id=p.author_verified_type_id WHERE p.tweet_id=%s", [post.pk]
         )
         assert cursor.fetchone() == ("Business",)
 

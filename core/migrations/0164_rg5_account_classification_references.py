@@ -5,7 +5,7 @@ from typing import ClassVar
 import django.db.models.deletion
 from django.db import migrations, models
 
-from ._rg5_reference_mapping_v1 import install_and_map
+from ._rg5_reference_mapping_v2 import install_and_map
 
 # Use the account pinned by the owning row, never the request-service vendor.
 ACCOUNT_SOURCE = "SELECT data_source_id FROM accounts WHERE account_key=NEW.account_key"
