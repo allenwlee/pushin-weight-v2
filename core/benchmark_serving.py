@@ -4,9 +4,20 @@ from django.db import connection
 from django.db.models.expressions import RawSQL
 
 
-def observation_ids(predicate, params=()):
+def observation_ids(predicate, params=(), *, mapping_ids, contract_id, source_id):
     # Predicates are internal constants, never user-provided SQL.
-    return RawSQL("SELECT id FROM benchmark_observation_provenance WHERE " + predicate, params)
+    # OFFSET 0 keeps each scalar projection tied to its already selected owner.
+    # Otherwise the planner can scan the entire evidence history for every OR
+    # subquery, despite a chart selecting only a few hundred observations.
+    mappings = list(mapping_ids) if mapping_ids is not None else None
+    return RawSQL(
+        "SELECT p.id FROM collection_observations o "
+        "JOIN collection_runs r ON r.id=o.run_id JOIN collection_jobs j ON j.id=r.job_id "
+        "CROSS JOIN LATERAL (SELECT * FROM benchmark_observation_provenance "
+        "WHERE id=o.id OFFSET 0) p WHERE j.contract_id=%s AND j.source_id=%s "
+        "AND (%s::uuid[] IS NULL OR o.mapping_id=ANY(%s::uuid[])) AND (" + predicate + ")",
+        [contract_id, source_id, mappings, mappings, *params],
+    )
 
 
 def hydrate_observations(observations):

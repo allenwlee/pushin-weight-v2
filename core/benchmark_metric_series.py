@@ -300,6 +300,7 @@ def metric_points(contract, line, days):
                 points.append(point)
         return points, definition, [str(m.pk) for m in mappings]
     mapping_ids = {m.pk for m in mappings}
+    provenance_scope = {"mapping_ids": mapping_ids, "contract_id": contract.pk, "source_id": source}
     aggregation = line.get("aggregation", "single")
     require(
         aggregation in {"single", "sum_fixed_cohort", "best_score"},
@@ -324,9 +325,9 @@ def metric_points(contract, line, days):
     )
     queryset = MetricValue.objects.all()
     if history_basis == "reconstructed_current_relationships":
-        queryset = queryset.filter(observation_id__in=observation_ids("reconstructed IS TRUE"))
+        queryset = queryset.filter(observation_id__in=observation_ids("reconstructed IS TRUE", **provenance_scope))
     else:
-        queryset = queryset.filter(observation_id__in=observation_ids("reconstructed IS NOT TRUE"))
+        queryset = queryset.filter(observation_id__in=observation_ids("reconstructed IS NOT TRUE", **provenance_scope))
     lower, upper = days[0], days[-1]
     if source == "arena":
         prior = CollectionObservation.objects.filter(
@@ -344,11 +345,11 @@ def metric_points(contract, line, days):
         )
         queryset = queryset.filter(
             Q(observation_id__in=observation_ids(
-                "archive_snapshot_date BETWEEN %s AND %s OR reconstruction_date BETWEEN %s AND %s",
-                [lower, upper, lower, upper],
+                "p.archive_snapshot_date BETWEEN %s AND %s OR p.reconstruction_date BETWEEN %s AND %s",
+                [lower, upper, lower, upper], **provenance_scope,
             ))
             | Q(
-                observation_id__in=observation_ids("archive_snapshot_date IS NULL AND reconstruction_date IS NULL"),
+                observation_id__in=observation_ids("p.archive_snapshot_date IS NULL AND p.reconstruction_date IS NULL", **provenance_scope),
                 observation__observed_at__gte=begin,
                 observation__observed_at__lt=stop,
             )
@@ -503,7 +504,8 @@ def metric_points(contract, line, days):
                 run__job__source_id=source,
                 run__status__in=["success", "partial"],
                 status="ok",
-                id__in=observation_ids("publication_complete IS TRUE"),
+                id__in=observation_ids("publication_complete IS TRUE", mapping_ids=None,
+                                     contract_id=contract.pk, source_id=source),
                 published_date__gte=prior or lower,
                 published_date__lte=upper,
             )
