@@ -545,6 +545,7 @@ def enqueue_projection(claim, *, contract, evidence_ids):
             scope_kind="numeric_projection",
             scope_key=key,
             ownership={"contract_id": key, "contract_hash": contract.contract_hash},
+            projection_contract=contract,
             envelopes=[{"observation_id": pk} for pk in references],
             outcome="pending",
             raw_count=len(references),
@@ -726,6 +727,7 @@ def _project_evidence(
             scope_kind="numeric_projection",
             scope_key="saved-evidence",
             ownership={"contract_hash": contract.contract_hash},
+            projection_contract=contract,
             cursor=cursor,
             enumeration_complete=complete,
             outcome="complete" if complete else "pending",
@@ -935,7 +937,7 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
         CollectionScopeRun.objects.filter(
             run__job=origin, scope_kind="numeric_projection", outcome="pending"
         )
-        .select_related("run")
+        .select_related("run", "projection_contract")
         .order_by("pk")
     )
     for scope in pending.iterator():
@@ -943,13 +945,20 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
             pass
         if selected_count >= limits["items"] or remaining_seconds() <= 0:
             break
-        contract = MetricCollectionContract.objects.get(
-            pk=scope.ownership["contract_id"]
-        )
-        require(
-            contract.contract_hash == scope.ownership["contract_hash"],
-            "projection contract pin changed",
-        )
+        if scope.projection_contract_id:
+            contract = scope.projection_contract
+            require(
+                str(contract.pk) == scope.scope_key,
+                "projection contract pin changed",
+            )
+        else:
+            contract = MetricCollectionContract.objects.get(
+                pk=scope.ownership["contract_id"]
+            )
+            require(
+                contract.contract_hash == scope.ownership["contract_hash"],
+                "projection contract pin changed",
+            )
         definition = {
             "version": 1,
             "scope": {

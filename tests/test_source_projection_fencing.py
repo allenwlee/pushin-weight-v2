@@ -8,12 +8,23 @@ from django.utils import timezone
 
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import StaleClaim, claim_job
-from core.models import CollectionJob, CollectionObservation, CollectionRun, MetricValue
+from core.models import (
+    CollectionJob,
+    CollectionObservation,
+    CollectionRun,
+    MetricValue,
+    TimeZone,
+)
 from core.source_metric_projection import drain_pending_projections, enqueue_projection
 from scripts.benchmark_download_collector.sources import Budget
 from tests.test_source_metric_projection import configured
 
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.requires_postgres]
+
+
+@pytest.fixture(autouse=True)
+def seed_utc_timezone():
+    TimeZone.objects.get_or_create(pk="UTC")
 
 
 def capture(operation="hf_catalog", *, queued=True):

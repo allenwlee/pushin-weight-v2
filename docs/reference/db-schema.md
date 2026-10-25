@@ -1,8 +1,8 @@
 # Database schema reference
 
-The repository and permanent local test database are at `0175_rg6_attempt_physical_bytes` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
+The repository and permanent local test database are at `0176_rg6_projection_contract_pin` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
 
-Local branch scope: **219 physical core application tables**, **2498 physical columns**, **219 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables. The deployed 0168 scope is 215 tables and 2476 columns.
+Local branch scope: **219 physical core application tables**, **2499 physical columns**, **219 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables. The deployed 0168 scope is 215 tables and 2476 columns.
 
 Canonical geography references use `geolocations.id`. Necessary source wording and existing payloads remain in restricted evidence columns on their existing owners. Ordinary models, webpages and APIs use canonical locations; unresolved claims return NULL without a raw-source fallback. Database guards re-resolve changed wording and preserve explicit canonical corrections when the wording is unchanged.
 
@@ -9481,6 +9481,7 @@ Model: [CollectionScopeRun](../../core/models.py#L3560).
 | `error_code` | `character varying(64)` | Yes | Error code. |
 | `execution_state` | `character varying(16)` | No | Django default: `pending` (not an assumed SQL default). |
 | `job_target_id` | `bigint` | Yes | FK → [`collection_job_targets`](#table-collection_job_targets) (`id`); Django deletion: `PROTECT`. Model field: `job_target`. |
+| `projection_contract_id` | `uuid` | Yes | FK → [`metric_collection_contracts`](#table-metric_collection_contracts) (`id`); Django deletion: `PROTECT`. Pins the contract for a numeric projection scope, including a catalog origin whose job has no metric contract. |
 | `legacy_archive_id` | `uuid` | Yes | FK → [`collection_evidence_archives`](#table-collection_evidence_archives) (`id`); Django deletion: `PROTECT`. Model field: `legacy_archive`. |
 | `parent_scope_id` | `bigint` | Yes | FK → [`collection_scope_runs`](#table-collection_scope_runs) (`id`); Django deletion: `PROTECT`. Model field: `parent_scope`. |
 | `phase` | `character varying(32)` | Yes | Phase. |
@@ -9510,6 +9511,7 @@ None beyond field/FK/constraint indexes.
 **Additional named indexes in the candidate schema at boundary `0114`:**
 
 - `collection_scope_runs_job_target_id_b8390640`: `CREATE INDEX collection_scope_runs_job_target_id_b8390640 ON public.collection_scope_runs USING btree (job_target_id)`.
+- `collection_scope_runs_projection_contract_id_afc6b4b5`: `CREATE INDEX collection_scope_runs_projection_contract_id_afc6b4b5 ON public.collection_scope_runs USING btree (projection_contract_id)`.
 - `collection_scope_runs_legacy_archive_id_514458e3`: `CREATE INDEX collection_scope_runs_legacy_archive_id_514458e3 ON public.collection_scope_runs USING btree (legacy_archive_id)`.
 - `collection_scope_runs_parent_scope_id_59e36b8f`: `CREATE INDEX collection_scope_runs_parent_scope_id_59e36b8f ON public.collection_scope_runs USING btree (parent_scope_id)`.
 - `collection_scope_runs_prerequisite_scope_id_e1ba7b4c`: `CREATE INDEX collection_scope_runs_prerequisite_scope_id_e1ba7b4c ON public.collection_scope_runs USING btree (prerequisite_scope_id)`.
@@ -9519,6 +9521,7 @@ None beyond field/FK/constraint indexes.
 **Additional named constraints in the candidate schema at boundary `0114`:**
 
 - `collection_scope_run_job_target_id_b8390640_fk_collectio`: `FOREIGN KEY (job_target_id) REFERENCES collection_job_targets(id) DEFERRABLE INITIALLY DEFERRED`.
+- `collection_scope_run_projection_contract__afc6b4b5_fk_metric_co`: `FOREIGN KEY (projection_contract_id) REFERENCES metric_collection_contracts(id) DEFERRABLE INITIALLY DEFERRED`.
 - `collection_scope_run_legacy_archive_id_514458e3_fk_collectio`: `FOREIGN KEY (legacy_archive_id) REFERENCES collection_evidence_archives(id) DEFERRABLE INITIALLY DEFERRED`.
 - `collection_scope_run_parent_scope_id_59e36b8f_fk_collectio`: `FOREIGN KEY (parent_scope_id) REFERENCES collection_scope_runs(id) DEFERRABLE INITIALLY DEFERRED`.
 - `collection_scope_run_prerequisite_scope_i_e1ba7b4c_fk_collectio`: `FOREIGN KEY (prerequisite_scope_id) REFERENCES collection_scope_runs(id) DEFERRABLE INITIALLY DEFERRED`.

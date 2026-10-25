@@ -643,6 +643,7 @@ def checkpoint_scope(
     raw_count=None,
     requested_start_at=None,
     requested_end_at=None,
+    projection_contract=None,
     write: Callable | None = None,
 ):
     require(
@@ -655,6 +656,16 @@ def checkpoint_scope(
     safe_payload(envelopes or [])
     safe_payload(cursor_history or [])
     require(isinstance(ownership, dict), "scope ownership object required")
+    if projection_contract is not None:
+        require(
+            scope_kind == "numeric_projection"
+            and ownership.get("contract_hash") == projection_contract.contract_hash
+            and (
+                "contract_id" not in ownership
+                or ownership["contract_id"] == str(projection_contract.pk)
+            ),
+            "numeric projection contract pin changed",
+        )
     if scope_kind == "x_query":
         query_text, call_id, lower_at, upper_at = x_query_instruction(ownership)
         require(
@@ -685,7 +696,10 @@ def checkpoint_scope(
             run=run,
             scope_kind=scope_kind,
             scope_key=scope_key,
-            defaults={"ownership": ownership, "job_target": target},
+            defaults={
+                "ownership": ownership, "job_target": target,
+                "projection_contract": projection_contract,
+            },
         )
         require(created or scope.ownership == ownership, "scope ownership pin changed")
         require(
@@ -694,6 +708,14 @@ def checkpoint_scope(
         )
         if target and scope.job_target_id is None:
             scope.job_target = target
+        require(
+            created or scope.projection_contract_id in (
+                None, projection_contract.pk if projection_contract else None
+            ),
+            "scope projection contract changed",
+        )
+        if projection_contract and scope.projection_contract_id is None:
+            scope.projection_contract = projection_contract
         for field, value in (
             ("requested_start_at", requested_start_at),
             ("requested_end_at", requested_end_at),

@@ -3589,6 +3589,7 @@ class CollectionScopeRun(models.Model):
     scope_kind = models.CharField(max_length=32, default="namespace")
     scope_key = models.CharField(max_length=256)
     job_target = models.ForeignKey("CollectionJobTarget", null=True, on_delete=models.PROTECT, related_name="scopes")
+    projection_contract = models.ForeignKey("MetricCollectionContract", null=True, on_delete=models.PROTECT, related_name="projection_scopes")
     parent_scope = models.ForeignKey("self", null=True, on_delete=models.PROTECT, related_name="child_scopes")
     prerequisite_scope = models.ForeignKey("self", null=True, on_delete=models.PROTECT, related_name="dependent_scopes")
     phase = models.CharField(max_length=32, null=True)

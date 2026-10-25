@@ -1,13 +1,15 @@
 """PostgreSQL proof for native-grain projection through the shared numeric writer."""
 
 import copy
+import importlib
 from datetime import UTC, datetime, timedelta
 from io import StringIO
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 from django.core.management import call_command
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 
 from core.collection_jobs import register_job, set_job_state
@@ -508,6 +510,12 @@ def test_pending_projection_reference_is_atomic_with_evidence_and_pause_fences_w
     pending = CollectionRun.objects.get(pk=claim.run_id).scopes.get(
         scope_kind="numeric_projection"
     )
+    assert pending.projection_contract_id == contract.pk
+    type(pending).objects.filter(pk=pending.pk).update(projection_contract=None)
+    migration = importlib.import_module("core.migrations.0176_rg6_projection_contract_pin")
+    migration.copy_projection_contracts(None, SimpleNamespace(connection=connection))
+    pending.refresh_from_db()
+    assert pending.projection_contract_id == contract.pk
     snapshot = CollectionObservation.objects.get()
     assert pending.envelopes == [{"observation_id": snapshot.pk}]
     selected = register_job(
@@ -530,6 +538,19 @@ def test_pending_projection_reference_is_atomic_with_evidence_and_pause_fences_w
     with pytest.raises(StaleClaim):
         project_evidence(metric_claim, [snapshot.pk])
     assert not MetricValue.objects.exists()
+
+
+def test_historical_metric_projection_scope_uses_owning_job_contract():
+    contract, raw, _, _ = configured()
+    snapshot = evidence("hf", raw)
+    run = project(contract, "hf", [snapshot], key="historical-metric-pin")
+    scope = run.scopes.get(scope_kind="numeric_projection")
+    assert scope.projection_contract_id == contract.pk
+    type(scope).objects.filter(pk=scope.pk).update(projection_contract=None)
+    migration = importlib.import_module("core.migrations.0176_rg6_projection_contract_pin")
+    migration.copy_projection_contracts(None, SimpleNamespace(connection=connection))
+    scope.refresh_from_db()
+    assert scope.projection_contract_id == contract.pk
 
 
 @pytest.mark.django_db(transaction=True)
