@@ -1,6 +1,6 @@
 # Database schema reference
 
-Repository candidate through `0168_rg5_remove_superseded_storage`, verified against models, migration state and the permanent shared local PostgreSQL schema at 2026-10-25 12:20 JST. Staging/production deployment is recorded separately in the global schema plan.
+Deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381`. Models, migration state and physical PostgreSQL inventories agree in the permanent local test database, staging and production as of 2026-10-25. Runtime and retained-history proof is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
 
 Scope: **215 physical core application tables**, **2476 physical columns**, **215 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables.
 

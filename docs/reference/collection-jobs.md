@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Shared-reference schema verified against the repository candidate through `0168_rg5_remove_superseded_storage` and the permanent local PostgreSQL test database on 2026-10-25. Staging/production revision and runtime verification are recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
+Shared-reference schema through `0168_rg5_remove_superseded_storage` is live in staging and production on `3d4d341daa52ed3d184184d5b35f27717813d381`. The permanent local PostgreSQL test database matches that physical schema. Runtime and retained-history verification is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
