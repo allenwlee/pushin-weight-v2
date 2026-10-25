@@ -241,8 +241,7 @@ def test_arena_failure_is_atomic_and_publication_date_is_not_midnight():
 def test_fourth_benchmark_needs_only_its_own_score_definition():
     from core.benchmark_metric_identity import configure_collection
     from core.benchmark_metric_store import persist_source
-    from core.models import DataSource, SourceMetric
-    from core.models import MeasurementUnit
+    from core.models import DataSource, MeasurementUnit, SourceMetric
 
     _, spec = setup_spec()
     DataSource.objects.create(

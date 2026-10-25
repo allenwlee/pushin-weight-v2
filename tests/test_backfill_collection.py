@@ -150,6 +150,7 @@ def test_campaign_waits_without_attempt_and_keeps_deadline(pipeline, live_writer
     now = timezone.now()
     clock = [now]
     frozen = {"campaign": "wait-test", "instruction_format": "x-backfill-campaign/v2",
+              "direct_concurrency": 32,
               "deadline": (now + timedelta(hours=1)).isoformat()}
     window = {"index": 1, "maximum_api_requests": 20, "collection_definition": template.definition}
     monkeypatch.setenv("DEEPINFRA_ON_DEMAND", "fake-on-demand")
@@ -441,7 +442,7 @@ def test_current_policy_job_command_plans_all_routes_without_provider(pipeline, 
     definition = json.loads(output.getvalue())["definition"]
     scope = definition["scope"]
     assert {unit["ownership"]["call_id"] for unit in scope["units"]} == {
-        "A", "B1", "B2", "B3", "C1", "C2", "C3", "RARE_EXTRA",
+        "A", "B1", "B2", "B3", "C1", "C2", "C3", "C4", "RARE_EXTRA",
     }
     assert scope["author_scope"]["historical_membership_reconstructed"] is False
     assert scope["maximum_model_requests"] > 0
@@ -757,7 +758,10 @@ def test_terminal_rare_review_finishes_collection_and_verifies_saved_posts(pipel
     from x_monitor.deepinfra import DeepInfraChatCompletionsClient
     from x_monitor.jev_decisions import QUESTION_SET, JevDecisionsClient, JevResponse
 
-    job = policy_job(monkeypatch, tmp_path, calls={"RARE_EXTRA"}, rare=True)
+    job = policy_job(
+        monkeypatch, tmp_path, calls={"RARE_EXTRA"}, rare=True,
+        selected_calls=["RARE_EXTRA"],
+    )
     monkeypatch.setenv("TYPESAFE_API_KEY", "test-typesafe")
     outcomes = iter(["kept", "review", "junk"])
     gate_calls = []

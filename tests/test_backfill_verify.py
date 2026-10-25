@@ -179,3 +179,51 @@ def test_verifier_rejects_broken_persisted_data(accepted, mutation, expected):
         )
     result = verify_posts(ids, cfg=cfg, since_epoch=1786233600, until_epoch=1786234500)
     assert expected in result["errors"][target]
+
+
+def test_collection_accepts_source_before_ordinary_enrichment(native):
+    _job, cfg, _, _ = native
+    CollectionObservation.objects.all().delete()
+    Post.objects.all().delete()
+    ids = ["collected-only"]
+    ingest(cfg, ids)
+    assert verify_posts(ids, cfg=cfg, collection_only=True)["errors"] == {}
+    assert "durable_enrichment_incomplete" in verify_posts(ids, cfg=cfg)["errors"][ids[0]]
+
+
+@pytest.mark.parametrize("broken", [None, "cursor", "membership", "rare"])
+def test_collection_window_accepts_only_complete_durable_zero_results(native, broken):
+    from django.utils import timezone
+
+    from core.models import CollectionScopeRun
+    from scripts.backfill_verify import verify_collection_window
+
+    job, cfg, _, _ = native
+    run = CollectionRun.objects.get(job=job)
+    CollectionObservation.objects.all().delete()
+    run.status = "success"
+    run.completed_at = timezone.now()
+    run.execution_state, run.coverage_state = "completed", "complete"
+    run.save(update_fields=["status", "completed_at", "execution_state", "coverage_state"])
+    job.state, job.last_success = "completed", run
+    job.save(update_fields=["state", "last_success"])
+    unit = job.scope["units"][0]
+    envelope = {"collection_drained": True, "post_ids": [], "received_post_ids": [], "raw_count": 0}
+    if broken == "membership":
+        envelope["post_ids"] = ["missing-member"]
+    if broken == "rare":
+        envelope["rare_hit_ids"] = [999999999]
+    CollectionScopeRun.objects.create(
+        run=run, scope_kind=unit["scope_kind"], scope_key=unit["scope_key"],
+        ownership=unit["ownership"], enumeration_complete=broken != "cursor",
+        outcome="pending" if broken == "cursor" else "complete", envelopes=[envelope],
+        execution_state="yielded" if broken == "cursor" else "completed",
+        coverage_state="partial" if broken == "cursor" else "complete",
+    )
+    if broken:
+        with pytest.raises(ValueError, match="collection_"):
+            verify_collection_window(job.pk, cfg=cfg)
+    else:
+        result = verify_collection_window(job.pk, cfg=cfg)
+        assert result["status"] == "verified"
+        assert result["checked_posts"] == 0 and result["zero_results"]

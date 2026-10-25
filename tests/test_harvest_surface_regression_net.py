@@ -63,7 +63,7 @@ POLICY_PATH = REPO_ROOT / "config" / "harvest_policy.yaml"
 # --- pinned baseline, measured 2026-07-27 ----------------------------------
 
 # The 7 logical calls fired per cycle: Call A (list-based fan-in) + 6 B/C specs.
-EXPECTED_CALL_IDS = {"A", "C1", "C2", "C3", "B1", "B2", "B3"}
+EXPECTED_CALL_IDS = {"A", "C1", "C2", "C3", "C4", "B1", "B2", "B3"}
 
 # Call A is the list fan-in; every B/C spec is a paren-grouped token query.
 EXPECTED_CALL_KINDS = {
@@ -71,6 +71,7 @@ EXPECTED_CALL_KINDS = {
     "C1": "brand_wide",
     "C2": "brand_wide",
     "C3": "brand_wide",
+    "C4": "brand_wide",
     "B1": "brand_wide",
     "B2": "brand_wide",
     "B3": "brand_wide",
@@ -86,6 +87,7 @@ EXPECTED_WIDE_NET = {
     "C1": False,
     "C2": False,
     "C3": False,
+    "C4": False,
 }
 
 # Per-call ceiling is max_pages * max_per_page = 2,000 tweets. Lowering any of
@@ -118,7 +120,7 @@ EXPECTED_TIME_OPERATOR_OVERHEAD = 44
 
 # B1 is the longest query in the current tracked production policy.
 TIGHTEST_CALL_ID = "B1"
-EXPECTED_TIGHTEST_HEADROOM = 86
+EXPECTED_TIGHTEST_HEADROOM = 36
 
 
 @pytest.fixture(scope="module")
@@ -158,7 +160,7 @@ def planned_calls(cfg, policy, policy_specs):
 # --- call set ------------------------------------------------------------
 
 
-def test_call_set_is_exactly_seven(planned_calls):
+def test_call_set_is_exactly_eight(planned_calls):
     """Adding or dropping a call changes collection volume directly.
 
     If this fails, a call was added or removed from the cycle. Update

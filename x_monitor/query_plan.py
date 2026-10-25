@@ -71,10 +71,11 @@ Tests assert their absence (see test_query_plan_uniform.py).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import re
+from dataclasses import dataclass, field
 from typing import Literal
 
+from .harvest_policy import AliasContext, normalize_policy_token
 from .queries import assert_under_length_cap
 
 # Centralized min_faves floor for Call A (the curated-handles list call).
@@ -220,6 +221,7 @@ class XQuerySpec:
     handles: list[str] = field(default_factory=list)
     c_bare_aliases: list[str] = field(default_factory=list)
     not_include: list[str] = field(default_factory=list)
+    alias_context: dict[str, tuple[AliasContext, ...]] = field(default_factory=dict)
 
 
 # Backwards-compat alias for any external imports still using the
@@ -272,7 +274,7 @@ def _build_query(
     # `is_wide_net=True` branch handles the wide-net path below; this
     # branch stays for the Call A degenerate (empty brands, empty
     # co_occurrence, list_id supplied).
-    if not spec.is_wide_net and not spec.brands:
+    if not spec.is_wide_net and not spec.brands and not spec.alias_context:
         if x_monitor_list_id is None:
             raise ValueError(
                 "_build_query: Call A spec (empty brands) requires "
@@ -285,6 +287,27 @@ def _build_query(
     # spec.brands. The renderer iterates spec.wide_net_brands (so the
     # brand order is operator-controlled via config.yaml, not
     # database iteration order).
+    contextual: dict[tuple[str, ...], list[str]] = {}
+
+    def context_group(terms: tuple[str, ...]) -> str:
+        # Context declarations are literal terms, including multiword phrases.
+        return " OR ".join(f'"{term}"' if " " in term else term for term in terms)
+
+    def token_group(brand_id: str, tokens: list[str]) -> str | None:
+        rules = {normalize_policy_token(r.alias): r.any_of for r in spec.alias_context.get(brand_id, ())}
+        parts = []
+        for token in tokens:
+            context = rules.get(normalize_policy_token(token))
+            if context is None:
+                parts.append(token)
+            elif spec.is_wide_net:
+                parts.append(f"({token} ({context_group(context)}))")
+            else:
+                # Explicit alias context replaces, rather than compounds with,
+                # the pack's default co group. Share identical context clauses.
+                contextual.setdefault(context, []).append(token)
+        return f"({' OR '.join(parts)})" if parts else None
+
     if spec.is_wide_net:
         if primary_keywords is None:
             raise ValueError(
@@ -297,13 +320,17 @@ def _build_query(
             toks = primary_keywords.get(brand_id, [])
             if not toks:
                 continue
-            parts.append(f"({' OR '.join(toks)})")
+            group = token_group(brand_id, toks)
+            if group:
+                parts.append(group)
     else:
         parts = []
-        for toks in spec.brands.values():
+        for brand_id, toks in spec.brands.items():
             if not toks:
                 continue
-            parts.append(f"({' OR '.join(toks)})")
+            group = token_group(brand_id, toks)
+            if group:
+                parts.append(group)
 
     if not parts:
         # Defensive — should not happen at the operator baseline, but
@@ -323,6 +350,13 @@ def _build_query(
     if spec.co_occurrence:
         secondary = f"({' OR '.join(spec.co_occurrence)})"
         constrained = f"{primary} {secondary}"
+    if contextual:
+        alternatives = [constrained] if parts else []
+        alternatives.extend(
+            f"({' OR '.join(tokens)}) ({context_group(context)})"
+            for context, tokens in contextual.items()
+        )
+        constrained = f"({' OR '.join(alternatives)})"
     if spec.c_bare_aliases:
         bare_aliases = f"({' OR '.join(spec.c_bare_aliases)})"
         constrained = f"({constrained} OR {bare_aliases})"

@@ -6,7 +6,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def test_scheduled_author_exclusion_reaches_all_seven_provider_requests(monkeypatch):
+def test_scheduled_author_exclusion_reaches_all_eight_provider_requests(monkeypatch):
     """Policy → scheduled runner → concrete client → captured HTTP request."""
     from monitor.cycle import CycleRunner
     from x_monitor import apify
@@ -38,8 +38,8 @@ def test_scheduled_author_exclusion_reaches_all_seven_provider_requests(monkeypa
         assert outcome == "ok"
 
     assert purposes == [TwitterApiCredentialPurpose.SCHEDULED]
-    assert [call.call_id for call in calls] == ["A", "B1", "C1", "C2", "C3", "B2", "B3"]
-    assert len(requests) == 7
+    assert [call.call_id for call in calls] == ["A", "B1", "C1", "C2", "C3", "C4", "B2", "B3"]
+    assert len(requests) == 8
     for path, params in requests:
         assert path == apify.SEARCH_PATH
         assert params["queryType"] == "Latest"
@@ -64,7 +64,7 @@ def test_exclusion_growth_over_final_cap_sends_no_provider_request(monkeypatch):
     from x_monitor.specs_from_policy import primary_keywords_from_policy, specs_from_policy
 
     policy = load_policy(REPO_ROOT / "config/harvest_policy.yaml")
-    handles = tuple(f"spam_author_{index}" for index in range(5))
+    handles = tuple(f"spam_author_{index}" for index in range(3))
     calls = plan_calls(
         2067062923525275922,
         specs_from_policy(policy),

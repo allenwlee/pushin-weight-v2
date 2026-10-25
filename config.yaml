@@ -449,6 +449,7 @@ degraded_skip_order:
   - B3
   - B2
   - B1
+  - C4
   - C3
   - C2
   - C1

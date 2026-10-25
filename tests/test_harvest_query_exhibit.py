@@ -30,7 +30,7 @@ SMOKE_SUMMARY_PATH = REPO_ROOT / "tests" / "harvester_costs" / "_smoke" / "ae1.j
 # This is intentionally the planner's order, not the historical Appendix
 # presentation order.  Call order is stable because specs_from_policy emits
 # B1, C packs, then handle tiers.
-EXPECTED_PLANNER_CALL_ORDER = ("A", "B1", "C1", "C2", "C3", "B2", "B3")
+EXPECTED_PLANNER_CALL_ORDER = ("A", "B1", "C1", "C2", "C3", "C4", "B2", "B3")
 
 EXPECTED_QUERY_EXHIBIT = {
     "A": "(list:2067062923525275922) min_faves:0",
@@ -39,13 +39,12 @@ EXPECTED_QUERY_EXHIBIT = {
         "OR \"dots-3-note\" OR \"dots.3-note\" OR \"dots3 note\" OR "
         "\"dots-studio\" OR dots.ocr OR dots.tts OR dots.llm1 OR dots.vlm OR "
         "dots.mocr OR dots3 OR dots4) "
-        "OR (Hunyuan OR 混元 OR 腾讯混元 OR Hy3 OR Hy4 OR Hy5 OR Hy4-preview "
-        "OR Hy5-preview) OR (Hailuo OR MiniMax OR 海螺) OR (Qwen OR Qwen3 OR "
+        "OR (Hunyuan OR (混元 (AI OR 模型 OR 3D OR 腾讯)) OR 腾讯混元 OR Hy3 OR Hy4 OR Hy5 OR Hy4-preview "
+        "OR Hy5-preview) OR (Hailuo OR MiniMax OR (海螺 (AI OR 模型 OR H3 OR 歌曲))) OR (Qwen OR Qwen3 OR "
         "通义千问) OR (StepFun OR 阶跃星辰)) min_faves:0"
     ),
     "C1": (
-        "((Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama) OR "
-        "(MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Mistral OR Mixtral) OR "
+        "((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Mistral OR Mixtral) OR "
         "(Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR "
         "(Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder)) "
         "(llm OR model OR api OR agentic OR huggingface) min_faves:0"
@@ -60,6 +59,14 @@ EXPECTED_QUERY_EXHIBIT = {
         '(SenseChat OR SenseTime) OR (glm OR ChatGLM OR Zhipu OR 智谱 OR Z.ai '
         'OR GLM-4 OR GLM-5 OR GLM-6)) (llm OR model OR api OR agentic OR huggingface) '
         'OR ("Ox Alpha" OR OxAlpha OR ox-alpha)) min_faves:0'
+    ),
+    "C4": (
+        '(((Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama) '
+        '(llm OR model OR api OR agentic OR huggingface) OR '
+        '(Meta OR Muse) (AI OR model OR models OR agent OR agents OR code OR Wonder '
+        'OR Spark OR Glimmer OR research OR release OR 模型 OR 智能体 OR トークン)) OR '
+        '("Muse Wonder" OR "Muse Code" OR "Muse Spark" OR "Muse Glimmer" OR '
+        '"Muse Image" OR "Muse Video" OR "Muse Voice")) min_faves:0'
     ),
     "B2": (
         "(@MiniMaxAgent OR @MiniMax_AI OR @hailuo_ai OR @Ali_TongyiLab OR "
@@ -145,11 +152,11 @@ def test_dots_family_tokens_are_on_b1_and_in_onboard_csv() -> None:
     assert "dots" != dots_row["keyword_primary"]
 
 
-def test_exhibit_keeps_the_seven_logical_call_contract() -> None:
+def test_exhibit_keeps_the_eight_logical_call_contract() -> None:
     calls = _planned_calls()
-    assert len(calls) == 7
+    assert len(calls) == 8
     assert {call.call_id for call in calls} == {
-        "A", "B1", "B2", "B3", "C1", "C2", "C3"
+        "A", "B1", "B2", "B3", "C1", "C2", "C3", "C4"
     }
     assert all(call.query_length < 512 for call in calls)
 

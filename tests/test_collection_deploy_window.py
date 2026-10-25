@@ -1,5 +1,6 @@
 """The deployed0092 ORM and dispatcher remain usable during additive rollout."""
 
+import hashlib
 import sys
 from contextlib import contextmanager
 from importlib import import_module
@@ -13,6 +14,7 @@ from django.db.migrations.loader import MigrationLoader
 from core.collection_jobs import register_job, set_job_state
 from core.collection_scheduling import collection_authority, take_collection_authority
 from core.models import DataSource
+from tests.collection_bridge_fixture import HASHES
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
@@ -29,7 +31,9 @@ def previous(monkeypatch):
         )
         module = ModuleType("previous_" + name)
         monkeypatch.setitem(sys.modules, module.__name__, module)
-        exec(compile(path.read_bytes(), str(path), "exec"), module.__dict__)
+        source = path.read_bytes()
+        assert hashlib.sha256(source).hexdigest() == HASHES[name]
+        exec(compile(source, str(path), "exec"), module.__dict__)  # noqa: S102 - hash-pinned deployed fixture
         module.CollectionJob = historical.get_model("core", "CollectionJob")
         module.CollectionRun = historical.get_model("core", "CollectionRun")
         module.DataSource = historical.get_model("core", "DataSource")
