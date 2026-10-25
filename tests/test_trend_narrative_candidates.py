@@ -24,9 +24,11 @@ from core.models import (
     PostEnrichmentState,
     PostTypeKey,
     PostUnsanctionedFlag,
+    PostUnsanctionedFlagAssignment,
     ProductLabelKey,
     Role,
     SentimentKey,
+    UnsanctionedFlagKey,
 )
 from monitor.trend_narrative_candidates import (
     MAX_PROVIDER_PACKET_BYTES,
@@ -1204,11 +1206,16 @@ def test_u1_stable_family_bases_are_not_multiplied_by_multiple_flags():
         translation_status=PostEnrichmentState.Status.SUCCEEDED,
         classification_status=PostEnrichmentState.Status.SUCCEEDED,
     )
-    PostUnsanctionedFlag.objects.create(
+    assessment = PostUnsanctionedFlag.objects.create(
         post=post,
         flags='["flag_a", "flag_b"]',
         flag_set=["flag_a", "flag_b"],
     )
+    for key in ("flag_a", "flag_b"):
+        UnsanctionedFlagKey.objects.get_or_create(key=key)
+        PostUnsanctionedFlagAssignment.objects.create(
+            post_flag=assessment, flag_id=key
+        )
 
     facts = trend_candidates._fetch_stable_family_facts(
         [
@@ -1371,7 +1378,8 @@ def test_snapshot_build_is_repeatable_read_bounded_and_redacted(caplog, monkeypa
     pool_position = normalized_evidence_sql.index("CANDIDATE_POOL AS")
     official_position = normalized_evidence_sql.index("OFFICIAL_STREAM AS")
     assert "GENERATE_SERIES(0, 3)" in normalized_evidence_sql
-    assert normalized_evidence_sql.count("CROSS JOIN LATERAL") == 8
+    assert normalized_evidence_sql.count("CROSS JOIN LATERAL") == 7
+    assert "JOIN POST_UNSANCTIONED_FLAG_ASSIGNMENTS FLAG" in normalized_evidence_sql
     assert normalized_evidence_sql.count("LIMIT BUCKET.RANK_LIMIT") == 1
     assert pool_position < official_position
     stream_bounds = (

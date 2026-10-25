@@ -39,9 +39,11 @@ from core.models import (
     PostEnrichmentState,
     PostTypeKey,
     PostUnsanctionedFlag,
+    PostUnsanctionedFlagAssignment,
     ProductLabelKey,
     Role,
     SentimentKey,
+    UnsanctionedFlagKey,
 )
 from tests.mockup_spec import build_fixture
 
@@ -434,7 +436,13 @@ def seed_v22_metadata_regression_orm() -> dict[str, object]:
                     provider_role="classifier",
                 )
         if index == 1:
-            PostUnsanctionedFlag.objects.create(post=post, flags="marketing_spam")
+            UnsanctionedFlagKey.objects.get_or_create(key="marketing_spam")
+            assessment = PostUnsanctionedFlag.objects.create(
+                post=post, flags='["marketing_spam"]', flag_set=["marketing_spam"]
+            )
+            PostUnsanctionedFlagAssignment.objects.create(
+                post_flag=assessment, flag_id="marketing_spam"
+            )
 
     # Pulse-only rows are flagged so the ordinary feed remains the same 52-row
     # metadata fixture while the market-wide pulse sees the exact AE11 matrix.

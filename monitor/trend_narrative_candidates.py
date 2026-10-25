@@ -2223,10 +2223,8 @@ def _fetch_stable_family_facts(
             UNION ALL
             SELECT e.brand_key, e.period, 'unsanctioned_flags', flag.flag_key
             FROM edges e
-            JOIN posts_unsanctioned_flags u ON u.post_id = e.tweet_id
-            CROSS JOIN LATERAL jsonb_array_elements_text(
-                coalesce(u.flag_set, '[]'::jsonb)
-            ) flag(flag_key)
+            JOIN post_unsanctioned_flag_assignments flag
+              ON flag.post_id = e.tweet_id
             WHERE e.classification_status = 'succeeded'
         ),
         label_counts AS (
@@ -3153,8 +3151,8 @@ def _fetch_evidence_rows(
                 array_agg(DISTINCT flag.flag_key ORDER BY flag.flag_key)
                     AS unsanctioned_flag_keys
             FROM base_posts base
-            JOIN posts_unsanctioned_flags u ON u.post_id = base.tweet_id
-            CROSS JOIN LATERAL jsonb_array_elements_text(u.flag_set) flag(flag_key)
+            JOIN post_unsanctioned_flag_assignments flag
+              ON flag.post_id = base.tweet_id
             GROUP BY base.candidate_id, base.brand_key, base.tweet_id
         ),
         candidate_posts AS (
