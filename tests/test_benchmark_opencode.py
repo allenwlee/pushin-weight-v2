@@ -120,9 +120,43 @@ def configured():
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db
+def test_endpoint_checks_have_typed_cross_run_ready_row_links():
+    from core.benchmark_metric_store import persist_source
+    from core.collection_storage_migration import project_opencode_endpoint_batch
+    from core.models import CollectionObservation, CollectionObservationInput
+
+    contract = configured()
+    run = persist_source(contract, "opencode", "f" * 64, read(endpoint()))
+    marker = CollectionObservation.objects.get(
+        run=run, observation_kind="endpoint_check"
+    )
+    assert marker.source_record_at == datetime(2026, 10, 7, 12, 44, 18, tzinfo=UTC)
+    assert marker.payload_sha256 == run.source_metadata["endpoint_checks"][0]["body_sha256"]
+    assert marker.revision_conflict is False
+    links = CollectionObservationInput.objects.filter(
+        observation=marker, input_role="endpoint_revision_row"
+    )
+    assert set(links.values_list("row_locator", flat=True)) == {
+        "2026-10-06", "2026-10-07"
+    }
+    assert all(link.input_observation.source_record_date for link in links)
+    assert project_opencode_endpoint_batch(verify_only=True).scanned == 1
+    links.delete()
+    with pytest.raises(ValueError, match="row link is missing"):
+        project_opencode_endpoint_batch(verify_only=True)
+    assert project_opencode_endpoint_batch().inserted == 0
+    assert project_opencode_endpoint_batch(verify_only=True).scanned == 1
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
 def test_hourly_replay_deduplicates_values_and_retains_corrected_partial_windows():
     from core.benchmark_metric_store import persist_source
-    from core.models import MetricValue
+    from core.models import (
+        CollectionObservation,
+        CollectionObservationInput,
+        MetricValue,
+    )
 
     contract = configured()
     first = persist_source(contract, "opencode", "1" * 64, read(endpoint()))
@@ -150,6 +184,12 @@ def test_hourly_replay_deduplicates_values_and_retains_corrected_partial_windows
         second.source_metadata["endpoint_checks"][0]["row_references"]
         == first.source_metadata["endpoint_checks"][0]["row_references"]
     )
+    second_marker = CollectionObservation.objects.get(
+        run=second, observation_kind="endpoint_check"
+    )
+    assert set(CollectionObservationInput.objects.filter(
+        observation=second_marker, input_role="endpoint_revision_row"
+    ).values_list("input_observation__run_id", flat=True)) == {first.pk}
     correction = persist_source(
         contract,
         "opencode",

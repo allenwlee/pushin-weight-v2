@@ -12,8 +12,95 @@ import re
 from django.db import connection
 
 from core.benchmark_metric_store import aware_instant
-from core.measurement_taxonomy import require
-from core.models import CollectionObservation, CollectionRun
+from core.benchmark_metric_timing import native_date
+from core.measurement_taxonomy import digest, require
+from core.models import CollectionObservation, CollectionObservationInput, CollectionRun
+
+
+def record_endpoint_checks(run, checks, contract, *, verify_only=False):
+    """Keep successful endpoint revisions and cross-run row references typed."""
+    require(run.observed_at is not None, "endpoint observation time required")
+    mappings = {
+        row.external_identifier: row
+        for row in contract.mappings.filter(purpose="metric", source_id="opencode")
+    }
+    inserted = 0
+    for check in checks:
+        if check.get("status") != "ok":
+            continue
+        identifier = check["source_identifier"]
+        mapping = mappings.get(identifier)
+        require(mapping is not None, "endpoint mapping is missing")
+        updated_at = aware_instant(check["updated_at"])
+        body_hash = check["body_sha256"]
+        require(
+            isinstance(body_hash, str) and re.fullmatch(r"[0-9a-f]{64}", body_hash),
+            "endpoint body hash is invalid",
+        )
+        key = digest(["opencode-endpoint-check-v1", str(run.pk), identifier])
+        defaults = {
+            "mapping": mapping,
+            "source_identifier": identifier,
+            "source_subject_kind": "model",
+            "observed_at": run.observed_at,
+            "source_record_at": updated_at,
+            "payload_sha256": body_hash,
+            "revision_conflict": check.get("revision_anomaly") == "same_update_different_body",
+            "observation_kind": "endpoint_check",
+        }
+        if verify_only:
+            marker = CollectionObservation.objects.filter(
+                run=run, observation_key=key
+            ).first()
+            require(marker is not None, "endpoint check marker is missing")
+        else:
+            marker, created = CollectionObservation.objects.get_or_create(
+                run=run, observation_key=key, defaults=defaults
+            )
+            inserted += int(created)
+        require(
+            all(getattr(marker, field + "_id" if field == "mapping" else field)
+                == (value.pk if field == "mapping" else value)
+                for field, value in defaults.items()),
+            "endpoint check marker conflicts with source evidence",
+        )
+        for label, observation_id in check.get("row_references", {}).items():
+            referenced = CollectionObservation.objects.select_related(
+                "run__job"
+            ).get(pk=observation_id)
+            day = native_date(label)
+            require(
+                referenced.source_identifier == identifier
+                and referenced.run.job.contract_id == contract.pk
+                and referenced.run.job.source_id == "opencode"
+                and referenced.status == "ok"
+                and referenced.mapping_id == mapping.pk
+                and referenced.dimensions.get("date") == label,
+                "endpoint row reference conflicts with source evidence",
+            )
+            if referenced.source_record_date is None and not verify_only:
+                referenced.source_record_date = day
+                referenced.save(update_fields=["source_record_date"])
+            require(
+                referenced.source_record_date == day,
+                "endpoint row date is not typed",
+            )
+            if verify_only:
+                link = CollectionObservationInput.objects.filter(
+                    observation=marker,
+                    input_observation=referenced,
+                    input_role="endpoint_revision_row",
+                ).first()
+                require(link is not None, "endpoint row link is missing")
+            else:
+                link, _ = CollectionObservationInput.objects.get_or_create(
+                    observation=marker,
+                    input_observation=referenced,
+                    input_role="endpoint_revision_row",
+                    defaults={"row_locator": label},
+                )
+            require(link.row_locator == label, "endpoint row label conflicts")
+    return inserted
 
 
 def retained_checks(contract, *, cutoff=None):

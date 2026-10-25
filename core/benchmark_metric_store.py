@@ -994,6 +994,12 @@ def persist_source(
                     check["row_references"][observation.dimensions["date"]] = (
                         observation.pk
                     )
+            if source == "opencode":
+                from core.benchmark_opencode import record_endpoint_checks
+
+                record_endpoint_checks(
+                    run, run.source_metadata["endpoint_checks"], contract
+                )
             run.success_count = len(successful)
             run.status = (
                 "success"

@@ -1,8 +1,8 @@
 # Database schema reference
 
-The repository and permanent local test database are at `0171_rg6_benchmark_provenance_fields` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
+The repository and permanent local test database are at `0172_rg6_endpoint_revision_conflict` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
 
-Local branch scope: **217 physical core application tables**, **2490 physical columns**, **217 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables. The deployed 0168 scope is 215 tables and 2476 columns.
+Local branch scope: **217 physical core application tables**, **2491 physical columns**, **217 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables. The deployed 0168 scope is 215 tables and 2476 columns.
 
 Canonical geography references use `geolocations.id`. Necessary source wording and existing payloads remain in restricted evidence columns on their existing owners. Ordinary models, webpages and APIs use canonical locations; unresolved claims return NULL without a raw-source fallback. Database guards re-resolve changed wording and preserve explicit canonical corrections when the wording is unchanged.
 
@@ -9632,7 +9632,7 @@ The `collection_run_job_instructions` trigger validates lifecycle against the li
 
 ### `collection_observations` — CollectionObservation
 
-One sourced evidence record: numeric rows are immutable evidence, catalog rows retain repository enrichment progress, typed Post rows prove collection membership, and an Arena `aggregate` row with `observation_kind='publication_marker'` records a publication date even when no selected model has a metric row. The marker uses `published_date`, date precision and `publication_complete`; it does not invent a model measurement.
+One sourced evidence record: numeric rows are immutable evidence, catalog rows retain repository enrichment progress, typed Post rows prove collection membership, and an Arena `aggregate` row with `observation_kind='publication_marker'` records a publication date even when no selected model has a metric row. The marker uses `published_date`, date precision and `publication_complete`; it does not invent a model measurement. An OpenCode `endpoint_check` observation records a provider update instant, endpoint body hash and conflict result, with `collection_observation_inputs` linking its dated rows. A later check can reference an observation from an earlier run without copying its metric values.
 
 Model: [CollectionObservation](../../core/models.py#L8929).
 
@@ -9679,6 +9679,7 @@ Model: [CollectionObservation](../../core/models.py#L8929).
 | `period_status` | `character varying(16)` | Yes | Period status. |
 | `projection_kind` | `character varying(64)` | Yes | Projection kind. |
 | `provider_revision` | `text` | Yes | Provider revision. |
+| `revision_conflict` | `boolean` | Yes | Whether an endpoint check observed a different body at the same provider update instant; NULL means not assessed. |
 | `source_record_date` | `date` | Yes | Source record date. |
 | `supersedes_observation_id` | `bigint` | Yes | FK → [`collection_observations`](#table-collection_observations) (`id`); Django deletion: `PROTECT`. Model field: `supersedes_observation`. |
 | `source_record_at` | `timestamp with time zone` | Yes | Source record at. |

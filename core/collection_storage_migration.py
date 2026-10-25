@@ -47,6 +47,13 @@ class PublicationBatch:
     inserted: int
 
 
+@dataclass(frozen=True)
+class EndpointBatch:
+    last_id: UUID | None
+    scanned: int
+    inserted: int
+
+
 PROVENANCE_EXPRESSIONS = {
     "archive_snapshot_date": (
         "CASE WHEN t.source_metadata->>'archive_snapshot_date' ~ "
@@ -155,7 +162,7 @@ def project_arena_publication_batch(
         if after_id is not None:
             runs = runs.filter(pk__gt=after_id)
         if not verify_only:
-            runs = runs.select_for_update()
+            runs = runs.select_for_update(of=("self",))
         selected = list(runs.order_by("pk")[:batch_size])
         inserted = 0
         for run in selected:
@@ -199,6 +206,46 @@ def project_arena_publication_batch(
             else:
                 inserted += record_arena_publications(run, dates)
         return PublicationBatch(
+            selected[-1].pk if selected else after_id,
+            len(selected), inserted,
+        )
+
+
+def project_opencode_endpoint_batch(
+    *, after_id: UUID | None = None, batch_size: int = 10,
+    verify_only: bool = False,
+) -> EndpointBatch:
+    """Copy successful endpoint checks and their exact historical row links."""
+    if after_id is not None and not isinstance(after_id, UUID):
+        raise ValueError("after_id must be a UUID or None")
+    if type(batch_size) is not int or not 1 <= batch_size <= 50:
+        raise ValueError("batch_size must be an integer from 1 to 50")
+    from core.benchmark_opencode import record_endpoint_checks
+
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        runs = CollectionRun.objects.filter(
+            job__source_id="opencode",
+            job__purpose="metric",
+            status__in=["success", "partial"],
+            source_metadata__has_key="endpoint_checks",
+        ).select_related("job__contract")
+        if after_id is not None:
+            runs = runs.filter(pk__gt=after_id)
+        if not verify_only:
+            runs = runs.select_for_update(of=("self",))
+        selected = list(runs.order_by("pk")[:batch_size])
+        inserted = 0
+        for run in selected:
+            checks = run.source_metadata["endpoint_checks"]
+            if not isinstance(checks, list) or len(checks) > 100:
+                raise ValueError("invalid OpenCode endpoint check evidence")
+            inserted += record_endpoint_checks(
+                run, checks, run.job.contract, verify_only=verify_only
+            )
+        return EndpointBatch(
             selected[-1].pk if selected else after_id,
             len(selected), inserted,
         )

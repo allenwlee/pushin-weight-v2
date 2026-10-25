@@ -200,6 +200,10 @@ def observation_fact_values(observation):
                 values["source_record_at"] = instant
             elif day is not None:
                 values[field] = day
+    if "endpoint_body_sha256" in metadata:
+        # OpenCode's date is a row coordinate, separate from the endpoint's
+        # update instant and from each metric value's measurement window.
+        values["source_record_date"] = native_date(dimensions["date"])
     if metadata.get("original_retrieved_at"):
         values["original_retrieved_at"] = aware_instant(
             metadata["original_retrieved_at"]

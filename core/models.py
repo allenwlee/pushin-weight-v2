@@ -8993,6 +8993,7 @@ class CollectionObservation(models.Model):
     observation_kind = models.CharField(max_length=32, null=True)
     projection_kind = models.CharField(max_length=64, null=True)
     provider_revision = models.TextField(null=True)
+    revision_conflict = models.BooleanField(null=True)
     config_key = models.CharField(max_length=128, null=True)
     category_key = models.CharField(max_length=128, null=True)
     coordinate_key = models.TextField(null=True)
