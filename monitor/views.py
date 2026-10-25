@@ -105,7 +105,6 @@ from core.models import (
     PostSynthesisRateLimitBucket,
     PostTypeLabel,
     PostUnsanctionedFlag,
-    PostUnsanctionedFlagAssignment,
     PostUntrackedBrandPromotion,
     ProductLabelLabel,
     ProductVerificationProposal,
@@ -2102,17 +2101,9 @@ def _enrich_posts_with_classifications(
         )
     )
     legacy_flag_by_tweet = {
-        item["post_id"]: False
+        item["post_id"]: True
         for item in legacy_flag_rows
     }
-    legacy_flag_by_tweet.update(
-        dict.fromkeys(
-            PostUnsanctionedFlagAssignment.objects.filter(
-                post_flag_id__in=tweet_ids
-            ).values_list("post_flag_id", flat=True),
-            True,
-        )
-    )
 
     enrichment_rows = list(
         PostEnrichmentState.objects.filter(post_id__in=tweet_ids).values(

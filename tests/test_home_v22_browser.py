@@ -28,7 +28,7 @@ from django.test import Client, override_settings
 from django.test.utils import CaptureQueriesContext
 from playwright.sync_api import BrowserContext, Page, sync_playwright
 
-from core.models import Brand, Post, PostBrand
+from core.models import Brand, Post, PostBrand, PostUnsanctionedFlag
 from monitor.views import _build_brand_chart_payload, _clear_home_pulse_cache
 from tests.mockup_spec import DEFAULT_SOURCE, MockupSpec, load_spec
 from tests.shell_diff import AUTHORED_REGIONS, parse_rendered_html, select_one
@@ -6548,6 +6548,18 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         )
         self.assertFalse(flagged["unsanctioned"])
         self.assertTrue(flagged["legacy_unsanctioned"])
+
+        # A saved empty assessment still has the historical parent-presence
+        # meaning used by the feed filter and count view.
+        PostUnsanctionedFlag.objects.create(
+            post_id=self.fixture["replacement_id"], flags="[]", flag_set=[]
+        )
+        assessed_empty = next(
+            row for row in self._feed_payload(
+                limit=50, filters=json.dumps({"unsanctioned": "only"})
+            )["rows"] if row["tweet_id"] == self.fixture["replacement_id"]
+        )
+        self.assertTrue(assessed_empty["legacy_unsanctioned"])
 
     def test_follower_lead_keeps_feed_bodies_aligned_across_all_bins(self) -> None:
         with sync_playwright() as playwright:
