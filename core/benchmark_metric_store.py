@@ -881,6 +881,10 @@ def persist_source(
             run.observed_at = now
             run.request_params = request_params or {}
             run.source_metadata = source_metadata or {}
+            run.direct_ingestion = (
+                run.source_metadata.get("ingestion_mode") == "direct"
+                if "ingestion_mode" in run.source_metadata else None
+            )
             if source == "arena" and run.source_metadata.get("publication_dates"):
                 dates = run.source_metadata["publication_dates"]
                 require(

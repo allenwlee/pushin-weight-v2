@@ -1,6 +1,7 @@
 """Typed nonnumeric source facts and per-measurement timing explanations."""
 
-from datetime import UTC, datetime
+import re
+from datetime import UTC, date, datetime
 
 from core.benchmark_metric_timing import aware_instant, native_date
 from core.measurement_taxonomy import digest
@@ -153,6 +154,10 @@ def _snapshot_publisher(observation, raw):
 
 def observation_fact_values(observation):
     metadata, dimensions = observation.source_metadata, observation.dimensions
+    reconstructed = metadata.get("history_basis")
+    secondary = metadata.get("secondary_source")
+    publication = metadata.get("publication_complete")
+    reconstructed_date = metadata.get("reconstruction_date")
     values = {
         "observation_kind": dimensions.get("kind"),
         "projection_kind": metadata.get("projection_kind"),
@@ -165,6 +170,21 @@ def observation_fact_values(observation):
         "payload_sha256": digest(observation.listing),
         "historical_visibility_proven": metadata.get(
             "historical_public_visibility_proven"
+        ),
+        "history_reconstructed": (
+            reconstructed == "reconstructed_current_relationships"
+            if "history_basis" in metadata else None
+        ),
+        "secondary_source": secondary is True if "secondary_source" in metadata else None,
+        "publication_complete": (
+            publication is True if "publication_complete" in metadata else None
+        ),
+        "reconstruction_date": (
+            date.fromisoformat(reconstructed_date)
+            if isinstance(reconstructed_date, str)
+            and re.fullmatch(r"\d{4}-\d{2}-\d{2}", reconstructed_date)
+            and _clock(reconstructed_date)[1] is not None
+            else None
         ),
     }
     for field in ("source_record_date", "archive_snapshot_date"):
