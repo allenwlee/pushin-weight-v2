@@ -12,23 +12,30 @@ class Command(BaseCommand):
         parser.add_argument("--after-id", type=int, default=0)
         parser.add_argument("--batch-size", type=int, default=100)
         parser.add_argument("--max-batches", type=int, default=1)
+        parser.add_argument("--verify-only", action="store_true")
 
     def handle(self, *args, **options):
         if options["max_batches"] < 1:
             raise CommandError("max-batches must be positive")
         last_id = options["after_id"]
         scanned = selected = inserted = 0
+        exhausted = False
         for _ in range(options["max_batches"]):
             result = import_legacy_timing_batch(
-                after_id=last_id, batch_size=options["batch_size"]
+                after_id=last_id,
+                batch_size=options["batch_size"],
+                verify_only=options["verify_only"],
             )
             last_id = result.last_observation_id
             scanned += result.scanned_observations
             selected += result.selected_corrections
             inserted += result.inserted_corrections
             if not result.scanned_observations:
+                exhausted = True
                 break
         self.stdout.write(
+            f"mode={'verify' if options['verify_only'] else 'import'} "
             f"scanned_observations={scanned} selected_corrections={selected} "
-            f"inserted_corrections={inserted} next_after_id={last_id}"
+            f"inserted_corrections={inserted} next_after_id={last_id} "
+            f"exhausted={str(exhausted).lower()}"
         )

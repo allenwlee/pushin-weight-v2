@@ -81,7 +81,7 @@ def _current_time_state(value):
 
 
 def import_legacy_timing_batch(
-    *, after_id: int = 0, batch_size: int = 100
+    *, after_id: int = 0, batch_size: int = 100, verify_only: bool = False
 ) -> CorrectionImportBatch:
     """Read one bounded owner page and preserve each verified before/after image.
 
@@ -130,16 +130,21 @@ def import_legacy_timing_batch(
         }
         if set(TimeZone.objects.filter(pk__in=zones).values_list("pk", flat=True)) != zones:
             raise ValueError("historical timing correction has an unknown time zone")
-        actor, _ = Actor.objects.get_or_create(
+        actor = Actor.objects.filter(
             actor_kind=Actor.Kind.SYSTEM,
             actor_key="benchmark_metric_timing_repair",
-            defaults={
-                "id": uuid.uuid5(
-                    uuid.NAMESPACE_URL,
-                    "pushinweight:actor:system:benchmark_metric_timing_repair",
-                )
-            },
-        )
+        ).first()
+        if actor is None and not verify_only:
+            actor, _ = Actor.objects.get_or_create(
+                actor_kind=Actor.Kind.SYSTEM,
+                actor_key="benchmark_metric_timing_repair",
+                defaults={
+                    "id": uuid.uuid5(
+                        uuid.NAMESPACE_URL,
+                        "pushinweight:actor:system:benchmark_metric_timing_repair",
+                    )
+                },
+            )
         existing = {
             row.metric_value_id: row
             for row in CollectionCorrection.objects.filter(
@@ -164,11 +169,6 @@ def import_legacy_timing_batch(
                 uuid.NAMESPACE_URL,
                 f"pushinweight:rg6:historical-timing:{value_id}:{digest(marker)}",
             )
-            prior = existing.get(value_id)
-            if prior is not None:
-                if prior.pk != identity or prior.observation_id != observation_id:
-                    raise ValueError("typed timing correction conflicts with historical root")
-                continue
             fields = {}
             for side, state in (("before", before), ("after", after)):
                 fields.update({
@@ -180,6 +180,23 @@ def import_legacy_timing_batch(
                     None if zone in {None, "unknown"} else zone
                 )
                 fields.update(_basis_fields(marker.get(side + "_basis"), state, side))
+            prior = existing.get(value_id)
+            if prior is not None:
+                if (
+                    prior.pk != identity
+                    or prior.observation_id != observation_id
+                    or actor is None
+                    or prior.actor_id != actor.pk
+                    or prior.policy_version != policy
+                    or prior.reason_code != "historical_reported_time_repair"
+                    or prior.recorded_at is not None
+                    or prior.recorded_at_precision != "unknown"
+                    or any(getattr(prior, key) != expected for key, expected in fields.items())
+                ):
+                    raise ValueError("typed timing correction conflicts with historical root")
+                continue
+            if verify_only:
+                raise ValueError("historical timing correction has no typed root")
             pending.append(CollectionCorrection(
                 id=identity,
                 observation_id=observation_id,
@@ -193,7 +210,8 @@ def import_legacy_timing_batch(
                 imported_at=imported_at,
                 **fields,
             ))
-        CollectionCorrection.objects.bulk_create(pending, batch_size=500)
+        if pending:
+            CollectionCorrection.objects.bulk_create(pending, batch_size=500)
         return CorrectionImportBatch(
             observations[-1].pk, len(observations), len(selected), len(pending)
         )

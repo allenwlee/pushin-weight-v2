@@ -41,6 +41,10 @@ def test_historical_timing_import_is_idempotent_and_refuses_changed_value():
     }
     observation.save(update_fields=["source_metadata"])
 
+    with pytest.raises(ValueError, match="no typed root"):
+        import_legacy_timing_batch(
+            after_id=observation.pk - 1, batch_size=1, verify_only=True
+        )
     first = import_legacy_timing_batch(
         after_id=observation.pk - 1, batch_size=1
     )
@@ -55,6 +59,24 @@ def test_historical_timing_import_is_idempotent_and_refuses_changed_value():
     assert correction.imported_at is not None
     assert correction.before_temporal_status == "unknown"
     assert correction.after_temporal_status == value.temporal_status
+    verified = import_legacy_timing_batch(
+        after_id=observation.pk - 1, batch_size=1, verify_only=True
+    )
+    assert verified.selected_corrections == 1
+    assert verified.inserted_corrections == 0
+
+    observation.source_metadata["timing_correction_v1"][str(value.pk)][
+        "policy"
+    ] = "reported-time-v2"
+    observation.save(update_fields=["source_metadata"])
+    with pytest.raises(ValueError, match="conflicts with historical root"):
+        import_legacy_timing_batch(
+            after_id=observation.pk - 1, batch_size=1, verify_only=True
+        )
+    observation.source_metadata["timing_correction_v1"][str(value.pk)][
+        "policy"
+    ] = "reported-time-v1"
+    observation.save(update_fields=["source_metadata"])
 
     MetricValue.objects.filter(pk=value.pk).update(temporal_status="unknown")
     with pytest.raises(ValueError, match="after-image differs"):
