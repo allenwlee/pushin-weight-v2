@@ -390,6 +390,9 @@ def test_unknown_flow_can_be_absent_while_likes_survive_and_optional_versions_ar
 
 
 def test_asset_dimensions_sizes_and_counter_do_not_become_repo_totals():
+    from core.collection_reports import resource_statistics
+    from core.collection_resources import snapshot_resource
+    from core.models import CollectionObservationInput
     from core.source_metric_projection import configure_source_statistics
 
     contract, raw, _, spec = configured("github")
@@ -400,6 +403,12 @@ def test_asset_dimensions_sizes_and_counter_do_not_become_repo_totals():
     contract = configure_source_statistics(spec)
     raw["size"] = 10
     repo = evidence("github", raw)
+    release = CollectionObservation.objects.create(
+        run=repo.run, source_identifier="123", source_subject_kind="repository",
+        observation_key="b" * 64, observed_at=CAPTURED,
+        listing={"id": 8}, dimensions={"kind": "releases"},
+        observation_kind="releases", source_metadata={"owner_id": 42},
+    )
     asset = CollectionObservation.objects.create(
         run=repo.run,
         source_identifier="123",
@@ -410,6 +419,13 @@ def test_asset_dimensions_sizes_and_counter_do_not_become_repo_totals():
         dimensions={"kind": "release_asset", "release_id": 8, "asset_id": 7},
         source_metadata={"owner_id": 42},
     )
+    CollectionObservationInput.objects.create(
+        observation=asset, input_observation=release,
+        input_role="release_asset_parent", row_locator="8",
+        input_sha256=release.observation_key,
+    )
+    snapshot_resource(release)
+    snapshot_resource(asset)
     run = project(contract, "github", [repo, asset])
     values = {
         v.source_metric.metric_key: v
@@ -425,6 +441,24 @@ def test_asset_dimensions_sizes_and_counter_do_not_become_repo_totals():
         "asset_id": 7,
     }
     assert values["stars"].observation.dimensions == {}
+    CollectionObservation.objects.filter(pk__in=[
+        release.pk, asset.pk, values["asset_downloads"].observation_id,
+    ]).update(dimensions={}, source_metadata={}, listing={})
+    report = resource_statistics(
+        contract_id=contract.pk, source="github", identifier="123",
+    )
+    assert {
+        row["metric"]: row["dimensions"] for row in report["values"]
+        if row["metric"] in {"asset_downloads", "asset_size_bytes"}
+    } == {
+        "asset_downloads": {"release_id": 8, "asset_id": 7},
+        "asset_size_bytes": {"release_id": 8, "asset_id": 7},
+    }
+    CollectionObservationInput.objects.filter(
+        observation=asset, input_role="release_asset_parent",
+    ).delete()
+    with pytest.raises(ValueError, match="GitHub asset coordinates are not retained"):
+        resource_statistics(contract_id=contract.pk, source="github", identifier="123")
 
 
 @pytest.mark.parametrize("publication_day", ["2026-10-01", None])
