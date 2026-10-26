@@ -271,7 +271,7 @@ def _hf(claim, job, budget):
                                 run__job=job,
                                 run__status="success",
                                 source_identifier=row["id"],
-                                dimensions__kind="creation_inventory",
+                                observation_kind="creation_inventory",
                             )
                             .exclude(run=run)
                             .exists()
@@ -534,14 +534,18 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                 # Listing owns rolling counters. An optional fresh field uses the
                 # first detail/expanded response actually supplying it, never an
                 # old listing clock or a duplicate complete model-number set.
-                supplied = set(listing.listing)
+                from core.collection_capture import observation_object_documents
+
+                supplied = set(observation_object_documents(listing)[0])
                 prior = CollectionObservation.objects.filter(
                     run=run,
                     source_identifier=listing.source_identifier,
-                    dimensions__kind="hf_metadata",
+                    observation_kind="hf_metadata",
                 ).exclude(pk=observation.pk)
                 for captured in prior:
-                    supplied.update(captured.source_metadata.get("numeric_fields", []))
+                    supplied.update(
+                        observation_object_documents(captured)[2].get("numeric_fields", [])
+                    )
                 selected_metrics = (
                     contract.source_configuration["hf"]["metrics"] if contract else []
                 )

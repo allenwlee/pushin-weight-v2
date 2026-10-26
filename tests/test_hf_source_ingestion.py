@@ -270,6 +270,7 @@ def test_fresh_run_refreshes_unchanged_sha_and_observes_old_created_new_repo():
 
 
 def test_detail_partial_resumes_and_unsupported_expansion_is_terminal_gap():
+    from core.collection_capture import archive_legacy
     from core.model_inventory import execute_model_inventory
 
     contract, raw, _, _ = configured()
@@ -297,6 +298,18 @@ def test_detail_partial_resumes_and_unsupported_expansion_is_terminal_gap():
     )
     assert first.status == "partial"
     assert MetricValue.objects.count() == 2
+    for listing in first.observations.filter(scope_run__scope_kind="namespace"):
+        listing.legacy_archive = archive_legacy({
+            "listing": listing.listing,
+            "dimensions": listing.dimensions,
+            "source_metadata": listing.source_metadata,
+        })
+        listing.listing = {}
+        listing.dimensions = {}
+        listing.source_metadata = {}
+        listing.save(update_fields=[
+            "legacy_archive", "listing", "dimensions", "source_metadata",
+        ])
     broken = False
     attempts.clear()
     resumed = execute_model_inventory(
