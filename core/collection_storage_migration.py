@@ -1121,18 +1121,45 @@ def archive_legacy_batch(
         return ArchiveBatch(len(ids), archived, cursor.fetchone()[0])
 
 
-def stale_legacy_archive_count(table: str) -> int:
-    """Compare all copied documents with current JSON before final cutover."""
+def stale_legacy_archive_count(table: str, *, batch_size: int = 1000) -> int:
+    """Compare archived documents in bounded primary-key batches.
+
+    A full-table archive join spills gigabytes of temporary files on staging.
+    Each batch instead probes archive primary keys for only its selected rows.
+    """
     if table not in LEGACY_FIELDS:
         raise ValueError("unsupported collection owner")
+    if type(batch_size) is not int or not 1 <= batch_size <= 1000:
+        raise ValueError("batch_size must be an integer from 1 to 1000")
     body = _document_expression(LEGACY_FIELDS[table])
-    with connection.cursor() as cursor:
-        cursor.execute(
-            f"""
-            SELECT count(*) FROM {table} t
-            LEFT JOIN collection_evidence_archives a ON a.id=t.legacy_archive_id
-            WHERE a.id IS NULL OR a.encoding <> %s OR a.body <> {body}
-            """,
-            [ENCODING],
-        )
-        return cursor.fetchone()[0]
+    after_id = None
+    stale_total = 0
+    while True:
+        with transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute("SET LOCAL enable_hashjoin = off")
+            cursor.execute("SET LOCAL enable_mergejoin = off")
+            cursor.execute("SET LOCAL max_parallel_workers_per_gather = 0")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+            where = "WHERE id > %s" if after_id is not None else ""
+            params = ([after_id] if after_id is not None else []) + [batch_size, ENCODING]
+            cursor.execute(
+                f"""
+                WITH selected AS MATERIALIZED (
+                    SELECT id FROM {table} {where} ORDER BY id LIMIT %s
+                )
+                SELECT
+                    (SELECT id FROM selected ORDER BY id DESC LIMIT 1),
+                    (SELECT count(*) FROM selected),
+                    (SELECT count(*) FROM selected s
+                     JOIN {table} t ON t.id = s.id
+                     LEFT JOIN collection_evidence_archives a
+                       ON a.id = t.legacy_archive_id
+                     WHERE a.id IS NULL OR a.encoding <> %s
+                        OR a.body <> {body})
+                """,
+                params,
+            )
+            after_id, selected, stale = cursor.fetchone()
+            stale_total += stale
+            if selected < batch_size:
+                return stale_total

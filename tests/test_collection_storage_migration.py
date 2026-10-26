@@ -601,6 +601,14 @@ def test_legacy_documents_are_archived_once_and_changed_rows_are_reconciled():
         assert archive_legacy_batch(table).archived == 0
         assert stale_legacy_archive_count(table) == 0
 
+    CollectionObservation.objects.create(
+        run=run, scope_run=scope, source_identifier="two",
+        source_subject_kind="model", observation_key="b" * 64,
+    )
+    assert stale_legacy_archive_count("collection_observations", batch_size=1) == 1
+    assert archive_legacy_batch("collection_observations").archived == 1
+    assert stale_legacy_archive_count("collection_observations", batch_size=1) == 0
+
     run.refresh_from_db()
     scope.refresh_from_db()
     observation.refresh_from_db()
