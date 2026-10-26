@@ -66,10 +66,13 @@ def record_observation_group(observation, group, outcome):
     ).get(pk=observation.pk)
     if (owner.run_id, owner.scope_run_id) != (observation.run_id, observation.scope_run_id):
         raise ValueError("resource group owner changed")
+    compatibility = {"ownership": {}} if any(
+        field.name == "ownership" for field in CollectionScopeRun._meta.fields
+    ) else {}
     scope, created = CollectionScopeRun.objects.get_or_create(
         run_id=observation.run_id, scope_kind=GROUP_SCOPE_KIND,
         scope_key=f"{observation.pk}:{group}",
-        defaults={"ownership": {}, **values},
+        defaults={**compatibility, **values},
     )
     if not created:
         if (

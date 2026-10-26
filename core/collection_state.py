@@ -231,7 +231,13 @@ def claim_direct_run(run, *, driver, seconds, limits, now=None):
     run.execution_state = "running"
     run.lease_token = uuid.uuid4()
     run.lease_expires_at = now + timedelta(seconds=seconds)
-    run.save()
+    if run._state.adding:
+        run.save(force_insert=True)
+    else:
+        run.save(update_fields=[
+            "status", "completed_at", "execution_state", "lease_token",
+            "lease_expires_at", "updated_at",
+        ])
     attempt = _begin_attempt(
         run,
         attempt_key=digest([str(run.pk), str(run.lease_token)]),

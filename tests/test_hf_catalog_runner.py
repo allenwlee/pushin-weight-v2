@@ -177,7 +177,9 @@ def test_slow_http_response_records_partial_time_cap_with_finalization_lease(
     run = CollectionRun.objects.get(pk=report["run_id"])
     attempt = run.attempts.get()
     assert run.status == attempt.outcome == "partial"
-    assert run.report == report
+    from core.collection_capture import run_report_document
+
+    assert run_report_document(run) == report
     assert run.scopes.get().outcome == "time_cap"
     assert run.request_count == 1
     assert run.lease_expires_at == started + timedelta(seconds=120)

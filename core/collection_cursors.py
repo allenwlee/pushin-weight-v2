@@ -28,7 +28,7 @@ def scope_cursor_history(scope):
 def replace_scope_cursor_history(scope, cursors):
     """Caller holds its run fence; a deliberate cursor restart may reset state."""
     validate_cursor_history(cursors)
-    CollectionScopeRun.objects.select_for_update().get(pk=scope.pk)
+    CollectionScopeRun.objects.select_for_update().only("pk").get(pk=scope.pk)
     rows = list(scope.cursor_receipts.order_by("position").values_list(
         "position", "cursor",
     ))
