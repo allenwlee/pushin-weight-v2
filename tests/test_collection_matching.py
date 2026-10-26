@@ -74,6 +74,7 @@ def catalog_fixture(name="Model-7B-Instruct", source="arena", native=None):
         source_identifier=native,
         source_subject_kind="model",
         observation_key=digest([str(product.pk), native]),
+        observation_kind="publication_row",
         dimensions={"kind": "publication_row"},
         listing={"rows": [{"model": native}]},
     )
@@ -141,6 +142,7 @@ def test_openrouter_catalog_does_not_prove_usage_scope():
         source="openrouter", native="fixture/model-7b-instruct"
     )
     observation.dimensions = {"kind": "model_catalog"}
+    observation.observation_kind = "model_catalog"
     observation.listing = {
         "id": observation.source_identifier,
         "canonical_slug": "different-slug",
@@ -383,13 +385,27 @@ def test_product_reference_change_invalidates_automatic_match():
 
 
 def test_embedded_publication_identity_is_present_without_metric_rows():
+    from core.collection_capture import archive_legacy
+
     brand, _, observation = catalog_fixture()
     identifier = observation.source_identifier
     observation.source_identifier = "publication:2026-10-17"
     observation.source_subject_kind = "aggregate"
     observation.dimensions = {"kind": "publication_window"}
+    observation.observation_kind = "publication_window"
     observation.listing = {"rows": [{"model_name": identifier}]}
     observation.save()
+    observation.legacy_archive = archive_legacy({
+        "listing": observation.listing,
+        "dimensions": observation.dimensions,
+        "source_metadata": observation.source_metadata,
+    })
+    observation.listing = {}
+    observation.dimensions = {}
+    observation.source_metadata = {}
+    observation.save(update_fields=[
+        "legacy_archive", "listing", "dimensions", "source_metadata",
+    ])
     report = preview(brand)
     assert report["products"][0]["candidates"][0]["identifier"] == identifier
     apply_reviewed(report)
@@ -554,6 +570,7 @@ def test_review_capped_publication_search_preserves_unknown_presence():
     observation.source_identifier = "publication:oldest"
     observation.source_subject_kind = "aggregate"
     observation.dimensions = {"kind": "publication_window"}
+    observation.observation_kind = "publication_window"
     observation.listing = {"rows": [{"model_name": identity}]}
     observation.save()
     CollectionObservation.objects.bulk_create(
@@ -563,6 +580,7 @@ def test_review_capped_publication_search_preserves_unknown_presence():
                 source_identifier=f"publication:{i}",
                 source_subject_kind="aggregate",
                 observation_key=digest(["cap", i]),
+                observation_kind="publication_window",
                 listing={"rows": [{"model_name": f"unrelated-{i}"}]},
                 dimensions={"kind": "publication_window"},
             )
@@ -612,6 +630,7 @@ def test_review_explicit_first_party_reference_qualifies_without_candidate_appro
     product.save()
     observation.source_subject_kind = "repository"
     observation.dimensions = {"kind": "repository"}
+    observation.observation_kind = "repository"
     observation.listing = {
         "id": 123,
         "full_name": "publisher/Model-7B-Instruct",

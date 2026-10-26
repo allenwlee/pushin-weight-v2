@@ -15,7 +15,7 @@ from datetime import datetime
 from time import monotonic
 
 from django.db import connection, transaction
-from django.db.models import Q, TextField
+from django.db.models import BigIntegerField, Case, F, Q, TextField, When
 from django.db.models.functions import Cast, Length
 from django.utils import timezone
 
@@ -186,8 +186,8 @@ def _pages(query, *, size=500):
         offset += size
 
 
-def _evidence_pin(observation):
-    listing, dimensions, source_metadata = observation_object_documents(observation)
+def _evidence_pin(observation, documents=None):
+    listing, dimensions, source_metadata = documents or observation_object_documents(observation)
     return {
         "observation_id": observation.pk,
         "observation_key": observation.observation_key,
@@ -200,9 +200,10 @@ def _evidence_pin(observation):
     }
 
 
-def _native(observation, scope, row_index=None):
+def _native(observation, scope, row_index=None, documents=None):
     source, identifier = observation.run.job.source_id, observation.source_identifier
-    listing, _, _ = observation_object_documents(observation)
+    documents = documents or observation_object_documents(observation)
+    listing, _, _ = documents
     if not isinstance(listing, dict):
         return None
     if row_index is not None:
@@ -251,7 +252,7 @@ def _native(observation, scope, row_index=None):
         "source_subject_kind": "repository" if source == "github" else "model",
         "observed_label": label,
         "db_presence": "present",
-        "evidence": _evidence_pin(observation),
+        "evidence": _evidence_pin(observation, documents),
         "publisher_account_key": str(publisher.pk) if publisher else None,
         "repo": repo_pin,
         "publication_row_index": row_index,
@@ -268,7 +269,7 @@ def _native_inventory(sources, cutoff):
                 observed_at__lte=cutoff,
                 run__status__in=["success", "partial"],
             )
-            .select_related("run__job")
+            .select_related("run__job", "legacy_archive")
             .only(
                 "id",
                 "run_id",
@@ -276,6 +277,10 @@ def _native_inventory(sources, cutoff):
                 "source_subject_kind",
                 "observed_at",
                 "observation_key",
+                "observation_kind",
+                "legacy_archive_id",
+                "legacy_archive__body",
+                "legacy_archive__content_sha256",
                 "listing",
                 "dimensions",
                 "source_metadata",
@@ -288,7 +293,7 @@ def _native_inventory(sources, cutoff):
                     "repository_id",
                     base.filter(
                         source_subject_kind="repository",
-                        dimensions__kind__in=["repository", "repository_access"],
+                        observation_kind__in=["repository", "repository_access"],
                     ),
                 )
             ]
@@ -297,14 +302,14 @@ def _native_inventory(sources, cutoff):
                 (
                     "catalog_id",
                     base.filter(
-                        source_subject_kind="model", dimensions__kind="model_catalog"
+                        source_subject_kind="model", observation_kind="model_catalog"
                     ),
                 ),
                 (
                     "rankings_permaslug",
                     base.filter(source_subject_kind="model").filter(
                         Q(run__job__purpose="metric")
-                        | Q(dimensions__kind="publication_row")
+                        | Q(observation_kind="publication_row")
                     ),
                 ),
             ]
@@ -316,7 +321,11 @@ def _native_inventory(sources, cutoff):
                 )
             ]
         for scope, query in scopes:
-            query = query.annotate(payload_length=Length(Cast("listing", TextField())))
+            query = query.annotate(payload_length=Case(
+                When(legacy_archive__isnull=False, then=F("legacy_archive__byte_count")),
+                default=Length(Cast("listing", TextField())),
+                output_field=BigIntegerField(),
+            ))
             if query.filter(payload_length__gt=MAX_ENVELOPE_BYTES).exists():
                 partial.append(
                     {"source": source, "scope": scope, "reason": "oversized_evidence"}
@@ -336,8 +345,12 @@ def _native_inventory(sources, cutoff):
                 )
         if source in {"arena", "openrouter"}:
             windows = base.filter(
-                source_subject_kind="aggregate", dimensions__kind="publication_window"
-            ).annotate(payload_length=Length(Cast("listing", TextField())))
+                source_subject_kind="aggregate", observation_kind="publication_window"
+            ).annotate(payload_length=Case(
+                When(legacy_archive__isnull=False, then=F("legacy_archive__byte_count")),
+                default=Length(Cast("listing", TextField())),
+                output_field=BigIntegerField(),
+            ))
             if windows.filter(payload_length__gt=MAX_ENVELOPE_BYTES).exists():
                 partial.append(
                     {"source": source, "reason": "oversized_embedded_publication"}
@@ -357,16 +370,14 @@ def _native_inventory(sources, cutoff):
                         {"source": source, "reason": "embedded_publication_cap"}
                     )
                     break
-                rows = (
-                    observation.listing.get("rows", [])
-                    if isinstance(observation.listing, dict)
-                    else []
-                )
+                documents = observation_object_documents(observation)
+                listing = documents[0]
+                rows = listing.get("rows", []) if isinstance(listing, dict) else []
                 if not isinstance(rows, list) or len(rows) > 500:
                     partial.append({"source": source, "reason": "embedded_row_cap"})
                     continue
                 for row_index in range(len(rows)):
-                    row = _native(observation, scope, row_index)
+                    row = _native(observation, scope, row_index, documents)
                     if row:
                         records.setdefault((source, scope, row["identifier"]), row)
     return records, partial
