@@ -72,6 +72,8 @@ def test_full_walk_enrichment_refresh_identity_and_ambiguous_brand():
     assert saved.job.source_id == saved.source_id == "hf"
     assert saved.job.definition["scope"] == saved.scope == manifest
     assert saved.request_count == 6
+    assert saved.invocations == []
+    assert saved.attempts.get().response_byte_limit is not None
     requests = CollectionRequest.objects.filter(attempt__run=saved)
     assert requests.count() == saved.attempts.get().actual_requests == 6
     assert requests.filter(transport_outcome="received", archive__isnull=False).count() == 6
@@ -164,13 +166,16 @@ def test_slow_http_response_records_partial_time_cap_with_finalization_lease(
     report = execute_catalog(scope=scope(), hf=hf)
     assert report["stop_reason"] == "time_cap"
     run = CollectionRun.objects.get(pk=report["run_id"])
-    assert run.status == run.invocations[-1]["outcome"] == "partial"
+    attempt = run.attempts.get()
+    assert run.status == attempt.outcome == "partial"
     assert run.report == report
     assert run.scopes.get().outcome == "time_cap"
     assert run.request_count == 1
     assert run.lease_expires_at == started + timedelta(seconds=120)
     assert run.job.definition["budgets"]["seconds"] == 60
-    assert run.invocations[-1]["max_seconds"] == 60
+    assert attempt.effective_seconds == 60
+    assert attempt.response_byte_limit == hf.max_bytes
+    assert run.invocations == []
 
 
 @pytest.mark.usefixtures("isolated_migration_database")
@@ -216,8 +221,9 @@ def test_archived_partial_catalog_reuses_pages_without_rewriting_unknown_budgets
     assert run.job.definition == definition
     assert list(run.scopes.order_by("pk").values_list("pk", flat=True)) == scopes
     assert list(run.observations.order_by("pk").values_list("pk", flat=True)) == observations
-    assert run.invocations[-1]["max_requests"] == 7
-    assert run.invocations[-1]["max_seconds"] == 60
+    latest_attempt = run.attempts.order_by("-ordinal").first()
+    assert latest_attempt.reserved_requests == 7
+    assert latest_attempt.effective_seconds == 60
 
 
 def test_short_page_next_link_is_followed_and_repeated_cursor_is_partial():

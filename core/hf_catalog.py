@@ -607,32 +607,18 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                         scope_key=entry["namespace"],
                         ownership=entry,
                     )
-        invocation = {
-            "started_at": timezone.now().isoformat(),
-            "requests": 0,
-            "retries": 0,
-            "max_requests": hf.max_requests,
-            "max_models": max_models,
-            "max_seconds": hf.max_seconds,
-            "max_response_bytes": hf.max_bytes,
-            "max_total_bytes": hf.max_total_bytes,
-            "outcome": "running",
-        }
-        run.invocations.append(invocation)
         run.status = "running"
         run.completed_at = None
         with fenced_run(claim):
             run.save()
 
-        def record_request(envelope):
-            invocation["requests"] = hf.requests
-            invocation["retries"] = hf.retries
-            invocation["last_request"] = {
-                key: envelope[key] for key in ("endpoint", "attempted_at")
-            }
+        def record_request(_envelope):
             run.request_count = prior_requests + hf.requests
             with fenced_run(claim):
-                run.save(update_fields=["invocations", "request_count", "updated_at"])
+                attempt = run.attempts.get(pk=claim.attempt_id)
+                attempt.retry_count = hf.retries
+                attempt.save(update_fields=["retry_count"])
+                run.save(update_fields=["request_count", "updated_at"])
 
         hf.on_attempt = record_request
         from core.collection_capture import RequestCapture
@@ -683,12 +669,6 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
             }
             raise
         finally:
-            invocation.update(
-                requests=hf.requests,
-                retries=hf.retries,
-                outcome="complete" if run.status == "success" else run.status,
-                ended_at=timezone.now().isoformat(),
-            )
             run.request_count = prior_requests + hf.requests
             try:
                 with fenced_run(claim):

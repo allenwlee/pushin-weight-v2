@@ -200,6 +200,7 @@ def test_archived_catalog_invocations_keep_known_usage_and_finish_clocks():
                 "ended_at": "2026-10-20T10:30:00+00:00",
                 "outcome": "partial", "requests": 4, "retries": 1,
                 "max_requests": 10, "max_models": None,
+                "max_response_bytes": 1024, "max_total_bytes": 2048,
                 "last_request": {"endpoint": "models"},
             },
             {
@@ -217,13 +218,17 @@ def test_archived_catalog_invocations_keep_known_usage_and_finish_clocks():
         finished_at=datetime(2026, 10, 20, 10, 30, tzinfo=UTC),
         outcome="partial", actual_requests=4, reserved_requests=10,
     )
-    with pytest.raises(ValueError, match="missing historical attempt"):
+    with pytest.raises(ValueError, match="not projected"):
         project_run_invocations_batch(verify_only=True)
-    assert project_run_invocations_batch().inserted == 1
+    copied = project_run_invocations_batch()
+    assert (copied.inserted, copied.updated) == (1, 1)
     first, second = run.attempts.order_by("ordinal")
     assert [first.outcome, second.outcome] == ["partial", "success"]
     assert [first.actual_requests, second.actual_requests] == [4, 5]
     assert [first.reserved_requests, second.reserved_requests] == [10, None]
+    assert first.retry_count == 1
+    assert first.response_byte_limit == 1024
+    assert first.reserved_bytes == 2048
     assert [first.effective_items, second.effective_items] == [None, 20]
     assert first.finished_at == datetime(2026, 10, 20, 10, 30, tzinfo=UTC)
     assert project_run_invocations_batch(verify_only=True).inserted == 0

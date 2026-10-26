@@ -18,7 +18,7 @@ class Command(BaseCommand):
         if maximum < 1:
             raise CommandError("max-batches must be positive")
         after_id = None
-        scanned = inserted = 0
+        scanned = inserted = updated = 0
         for _ in range(maximum):
             try:
                 batch = project_run_invocations_batch(
@@ -30,13 +30,15 @@ class Command(BaseCommand):
                 raise CommandError(str(exc)) from exc
             if not batch.scanned:
                 self.stdout.write(
-                    f"shared invocation copy complete: scanned={scanned} inserted={inserted}"
+                    f"shared invocation copy complete: scanned={scanned} "
+                    f"inserted={inserted} updated={updated}"
                 )
                 return
             scanned += batch.scanned
             inserted += batch.inserted
+            updated += batch.updated
             after_id = batch.last_id
         raise CommandError(
             f"invocation scan incomplete after {maximum} batches; "
-            f"scanned={scanned} inserted={inserted}; rerun from the beginning"
+            f"scanned={scanned} inserted={inserted} updated={updated}; rerun from the beginning"
         )

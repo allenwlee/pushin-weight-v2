@@ -64,9 +64,10 @@ def _begin_attempt(run, *, attempt_key, limits, now):
         started_at=now,
         outcome="running",
         reserved_requests=limits.get("requests"),
-        reserved_bytes=limits.get("bytes"),
+        reserved_bytes=limits.get("bytes", limits.get("total_bytes")),
+        response_byte_limit=limits.get("response_bytes"),
         effective_seconds=limits.get("seconds"),
-        effective_items=limits.get("items"),
+        effective_items=limits.get("items", limits.get("models")),
     )
 
 

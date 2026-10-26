@@ -103,6 +103,7 @@ class InvocationBatch:
     last_id: UUID | None
     scanned: int
     inserted: int
+    updated: int
 
 
 @dataclass(frozen=True)
@@ -239,13 +240,14 @@ def project_run_invocations_batch(
             .order_by("pk")[:batch_size]
         )
         if not runs:
-            return InvocationBatch(after_id, 0, 0)
+            return InvocationBatch(after_id, 0, 0, 0)
         existing = {}
         for attempt in CollectionAttempt.objects.select_for_update().filter(
             run_id__in=[run.pk for run in runs]
         ):
             existing[(attempt.run_id, attempt.ordinal)] = attempt
         missing = []
+        updated = 0
         for run in runs:
             for ordinal, receipt in enumerate(run.invocations, start=1):
                 attempt = existing.pop((run.pk, ordinal), None)
@@ -259,6 +261,34 @@ def project_run_invocations_batch(
                             or attempt.actual_requests != values["actual_requests"]
                         ):
                             raise ValueError("historical attempt differs from invocation receipt")
+                        changed = []
+                        for field in (
+                            "reserved_requests", "reserved_bytes",
+                            "response_byte_limit", "effective_seconds",
+                            "effective_items", "retry_count",
+                        ):
+                            saved, expected = getattr(attempt, field), values[field]
+                            if saved == expected:
+                                continue
+                            if not (
+                                saved is None
+                                or field == "retry_count" and saved == 0
+                            ):
+                                raise ValueError("historical attempt limit differs from invocation receipt")
+                            if verify_only:
+                                raise ValueError("historical attempt limit is not projected")
+                            setattr(attempt, field, expected)
+                            changed.append(field)
+                        # An existing attempt can have its own actual finish
+                        # clock; the archived receipt retains the older one.
+                        if attempt.finished_at is None and values["finished_at"]:
+                            if verify_only:
+                                raise ValueError("historical attempt finish is not projected")
+                            attempt.finished_at = values["finished_at"]
+                            changed.append("finished_at")
+                        if changed:
+                            attempt.save(update_fields=changed)
+                            updated += 1
                         continue
                     if verify_only:
                         raise ValueError("missing historical attempt")
@@ -291,7 +321,7 @@ def project_run_invocations_batch(
         if any(operation_by_run[run_id] != "archived_run" for run_id, _ in existing):
             raise ValueError("typed attempt has no historical invocation receipt")
         CollectionAttempt.objects.bulk_create(missing, batch_size=500)
-        return InvocationBatch(runs[-1].pk, len(runs), len(missing))
+        return InvocationBatch(runs[-1].pk, len(runs), len(missing), updated)
 
 
 def _historical_timestamp(value):
@@ -317,6 +347,8 @@ def _archived_invocation_values(receipt):
     items = receipt["max_models"]
     seconds = receipt.get("max_seconds")
     total_bytes = receipt.get("max_total_bytes")
+    response_byte_limit = receipt.get("max_response_bytes")
+    retry_count = receipt.get("retries", 0)
     if (
         type(requests) is not int or requests < 0
         or type(maximum) is not int or maximum <= 0
@@ -324,6 +356,8 @@ def _archived_invocation_values(receipt):
         or (items is not None and (type(items) is not int or items <= 0))
         or (seconds is not None and (type(seconds) is not int or seconds <= 0))
         or (total_bytes is not None and (type(total_bytes) is not int or total_bytes <= 0))
+        or (response_byte_limit is not None and (type(response_byte_limit) is not int or response_byte_limit <= 0))
+        or type(retry_count) is not int or retry_count < 0 or retry_count > requests
     ):
         raise ValueError("invalid archived invocation accounting")
     outcome = receipt["outcome"]
@@ -349,6 +383,8 @@ def _archived_invocation_values(receipt):
         "effective_items": items,
         "effective_seconds": seconds,
         "reserved_bytes": total_bytes,
+        "response_byte_limit": response_byte_limit,
+        "retry_count": retry_count,
         "accounting_complete": False,
     }
 
