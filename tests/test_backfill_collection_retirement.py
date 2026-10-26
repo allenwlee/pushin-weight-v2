@@ -93,13 +93,15 @@ def test_unknown_model_outcome_and_historical_reservation_never_get_reissued(pip
     job = policy_job(monkeypatch, tmp_path, calls={"A"})
     cfg = load_config(Path("config.yaml"))
     identity = hashlib.sha256(json.dumps([cfg.llm.model_dump(mode="json"), "system", "user"], sort_keys=True).encode()).hexdigest()
-    first = claim_job(job.pk, invocation_id="historical", manual_authorized=True)
-    original = CollectionRun.objects.get(pk=first.run_id)
+    first = claim_job(job.pk, invocation_id="historical", manual_authorized=True, typed=True)
+    original = finish_run(first, status="failed", typed=True, request_count=0,
+                          physical_accounting_complete=False)
     old = {"model_requests": job.scope["maximum_model_requests"], "response_bytes": 123,
            "staff_relevance": {identity: {"status": "sent", "model": cfg.llm.relevancy_model}}}
     original.legacy_archive = archive_legacy({"report": old})
-    original.save(update_fields=["legacy_archive"])
-    finish_run(first, status="failed", report=old)
+    original.physical_bytes_received = None
+    original.save(update_fields=["legacy_archive", "physical_bytes_received"])
+    original.scopes.filter(scope_kind="x_backfill_execution").delete()
     with denied_retirement_columns():
         claim = claim_job(job.pk, invocation_id="resume", manual_authorized=True,
                           continue_from=first.run_id, typed=True)
@@ -114,9 +116,11 @@ def test_unknown_model_outcome_and_historical_reservation_never_get_reissued(pip
 
 def test_zero_http_history_without_model_budget_evidence_refuses_before_transport(pipeline):
     job = ready_job()
-    claim = claim_job(job.pk, invocation_id="unarchived", manual_authorized=True)
-    finish_run(claim, status="failed", report={"model_requests": 1})
-    assert CollectionRun.objects.get(pk=claim.run_id).request_count == 0
+    claim = claim_job(job.pk, invocation_id="unarchived", manual_authorized=True, typed=True)
+    original = finish_run(claim, status="failed", typed=True, request_count=0,
+                          physical_accounting_complete=False)
+    original.scopes.filter(scope_kind="x_backfill_execution").delete()
+    assert original.request_count == 0 and original.legacy_archive_id is None
     with denied_retirement_columns(), pytest.raises(ValueError, match="legacy backfill budget evidence"):
         execute_job(job.pk)
     assert pipeline.requests == []
@@ -154,10 +158,9 @@ def test_archived_prefetch_capture_accounting_crash_replays_once(pipeline, monke
 
 def _historical_result(job, report):
     run = CollectionRun.objects.get(pk=report["run_id"])
-    run.scopes.filter(scope_kind="x_backfill_result").delete()
-    run.report = report
+    run.scopes.filter(scope_kind__in=["x_backfill_result", "x_backfill_execution", "x_model_usage"]).delete()
     run.legacy_archive = archive_legacy({"report": report})
-    run.save(update_fields=["report", "legacy_archive"])
+    run.save(update_fields=["legacy_archive"])
     return run
 
 

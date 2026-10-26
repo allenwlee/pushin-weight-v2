@@ -25,9 +25,17 @@ def clock(monkeypatch):
     monkeypatch.setattr("django.utils.timezone.now", lambda: NOW)
 
 
+def archive_run_document(run, report):
+    """Construct the retained historical shape after the old ORM fields retire."""
+    run.legacy_archive = archive_legacy({"report": report, "invocations": [],
+                                       "request_params": {}, "source_metadata": {}, "raw_payload": None})
+    run.save(update_fields=["legacy_archive"])
+    run.scopes.filter(scope_kind="x_cycle_execution").delete()
+
+
 def legacy_partial():
     job = set_job_state(register_scheduled_cycle([CALL], limits=LIMITS).pk, "ready")
-    claim = claim_job(job.pk, invocation_id="old", manual_authorized=True)
+    claim = claim_job(job.pk, invocation_id="old", manual_authorized=True, typed=True)
     lineage = ScheduledCycleLineage(claim)
     scope_id = lineage.begin_call(CALL, since_epoch=1783809000, until_epoch=1783809300)
     request = lineage.begin_exchange(scope_id, endpoint_url="https://api.twitterapi.io/twitter/tweet/advanced_search",
@@ -37,12 +45,10 @@ def legacy_partial():
     post = Post.objects.create(tweet_id="saved", text="product release")
     lineage.finish_call(scope_id, post_ids=[post.pk], page_by_post={str(post.pk): 1},
                         raw_count=1, outcome="truncated", complete=False)
-    run = finish_run(claim, status="partial", request_count=1,
-                     report={"physical_accounting_complete": True})
-    run.legacy_archive = archive_legacy({"report": run.report, "invocations": [],
-                                       "request_params": {}, "source_metadata": {}, "raw_payload": None})
-    run.save(update_fields=["legacy_archive"])
-    scope = run.scopes.get()
+    run = finish_run(claim, status="partial", request_count=1, typed=True,
+                     physical_accounting_complete=True)
+    archive_run_document(run, {"physical_accounting_complete": True})
+    scope = run.scopes.get(scope_kind="x_query")
     scope.phase = None
     scope.legacy_archive = archive_legacy({"ownership": {}, "cursor_history": [], "envelopes": []})
     scope.save(update_fields=["phase", "legacy_archive"])
@@ -109,23 +115,29 @@ def test_new_slot_does_not_require_adopting_prior_run(clock, monkeypatch):
 
 def test_running_legacy_cycle_remains_busy_without_adoption(clock):
     job = set_job_state(register_scheduled_cycle([CALL], limits=LIMITS).pk, "ready")
-    claim = claim_job(job.pk, invocation_id="still-running", manual_authorized=True)
+    claim = claim_job(job.pk, invocation_id="still-running", manual_authorized=True, typed=True)
+    original = CollectionRun.objects.get(pk=claim.run_id)
+    original.scopes.filter(scope_kind="x_cycle_execution").delete()
     with denied_retirement_columns(), pytest.raises(BusyJob, match="lease is active"):
         ScheduledCycleLineage.start([CALL], limits=LIMITS, invocation_id="too-soon")
-    original = CollectionRun.objects.get(pk=claim.run_id)
     assert original.attempts.count() == 1 and not original.scopes.exists()
 
 
 def test_pending_legacy_transport_cannot_be_adopted_as_settled(clock):
     job = set_job_state(register_scheduled_cycle([CALL], limits=LIMITS).pk, "ready")
-    claim = claim_job(job.pk, invocation_id="unsettled", manual_authorized=True)
+    claim = claim_job(job.pk, invocation_id="unsettled", manual_authorized=True, typed=True)
     lineage = ScheduledCycleLineage(claim)
     scope_id = lineage.begin_call(CALL, since_epoch=1783809000, until_epoch=1783809300)
     lineage.begin_exchange(scope_id, endpoint_url="https://api.twitterapi.io/twitter/tweet/advanced_search",
                            params={"query": CALL.query_string})
-    original = finish_run(claim, status="partial", request_count=0,
-                          report={"physical_accounting_complete": True})
-    with pytest.raises(ValueError, match="request owner or outcome"):
+    original = finish_run(claim, status="partial", request_count=0, typed=True,
+                          physical_accounting_complete=False)
+    archive_run_document(original, {"physical_accounting_complete": False})
+    scope = original.scopes.get(scope_kind="x_query")
+    scope.phase = None
+    scope.legacy_archive = archive_legacy({"ownership": {}, "cursor_history": [], "envelopes": []})
+    scope.save(update_fields=["phase", "legacy_archive"])
+    with denied_retirement_columns(), pytest.raises(ValueError, match="request owner or outcome"):
         ScheduledCycleLineage.start([CALL], limits=LIMITS, invocation_id="refused")
     assert original.attempts.count() == 1
     assert not original.scopes.filter(scope_kind="x_cycle_execution").exists()
