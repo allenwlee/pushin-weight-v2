@@ -466,7 +466,7 @@ def test_archive_acquisition_to_numeric_writer_keeps_zero_and_missing_distinct()
     assert value.period_label_date.isoformat() == "2026-09-10"
     assert value.window_end_at == datetime(2026, 9, 11, tzinfo=UTC)
     assert value.window_start_at == value.window_end_at - timedelta(days=30)
-    assert value.observation.source_metadata["archive_snapshot_date"] == "2026-09-10"
+    assert value.observation.archive_snapshot_date.isoformat() == "2026-09-10"
     count = len(calls)
     saved = CollectionObservation.objects.get(
         run_id=claim.run_id, scope_run__scope_kind="archive_snapshot"
@@ -584,7 +584,7 @@ def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time
     assert imported.purpose == "metric" and imported.contract_id == contract.pk
     assert imported.observations.count() == 2 and MetricValue.objects.count() == 4
     for value in MetricValue.objects.select_related("observation", "source_metric"):
-        day = value.observation.source_metadata["archive_snapshot_date"]
+        day = value.observation.archive_snapshot_date.isoformat()
         assert value.temporal_status == "date_only"
         assert value.period_label_date.isoformat() == day
         assert value.window_end_at == datetime.fromisoformat(day).replace(
@@ -851,7 +851,7 @@ def test_openrouter_publication_acquisition_admits_reviewed_numeric_history():
     assert run.scopes.filter(
         scope_kind="archive_import", result_run_id=value.observation.run_id,
     ).exists()
-    assert value.observation.source_metadata["archive_snapshot_date"] == "2026-09-01"
+    assert value.observation.archive_snapshot_date.isoformat() == "2026-09-01"
 
 
 @pytest.mark.parametrize("resume", [False, True])
