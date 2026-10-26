@@ -25,14 +25,24 @@ def test_operational_cutoff_excludes_late_import_and_later_revision():
     assert all(r["first_local_observed_at"] for r in rows["values"])
 
 
-def test_contract_review_after_cutoff_and_reconstruction_are_not_past_knowledge():
+@pytest.mark.parametrize(
+    ("metadata", "reconstructed"),
+    [
+        ({"history_basis": "reconstructed_current_relationships"}, None),
+        ({}, True),
+    ],
+    ids=["legacy-history", "typed-only-history"],
+)
+def test_contract_review_after_cutoff_and_reconstruction_are_not_past_knowledge(
+    metadata, reconstructed
+):
     from core.benchmark_forecast_inputs import forecast_inputs
     from core.models import CollectionObservation
 
     contract = configured()
     run = persist_source(contract, "hf", "3" * 64, payload())
     CollectionObservation.objects.filter(run=run).update(
-        source_metadata={"history_basis": "reconstructed_current_relationships"}
+        source_metadata=metadata, history_reconstructed=reconstructed
     )
     assert (
         forecast_inputs(

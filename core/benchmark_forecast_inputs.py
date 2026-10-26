@@ -117,6 +117,9 @@ def forecast_inputs(
                 Q(observation__run__source_as_of__isnull=True)
                 | Q(observation__run__source_as_of__lte=cutoff)
             )
+            # Typed-only writers must retain the same historical-knowledge
+            # boundary while older rows are still being copied on production.
+            .exclude(observation__history_reconstructed=True)
             .filter(
                 Q(observation__source_metadata__history_basis__isnull=True)
                 | ~Q(
