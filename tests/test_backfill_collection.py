@@ -695,13 +695,23 @@ def test_historical_rare_inbox_precedes_gate_and_never_uses_live_slot(pipeline, 
     assert list(scoped.rare_hit_memberships.values_list("rare_hit_id", flat=True)) == evidence["rare_hit_ids"]
     assert scope_rare_hit_mismatch_counts() == (0, 0)
     CollectionScopeRareHit.objects.filter(scope_run=scoped).delete()
+    empty_window = CollectionScopeRun.objects.create(
+        run=scoped.run, scope_kind="x_query", scope_key="rare-empty-window",
+        ownership=scoped.ownership, envelopes=[],
+    )
     replay = CollectionScopeRun.objects.create(
         run=scoped.run, scope_kind="x_query", scope_key="rare-replay",
         ownership=scoped.ownership,
         envelopes=[{"rare_hit_ids": evidence["rare_hit_ids"]}],
     )
     assert scope_rare_hit_mismatch_counts() == (2, 0)
-    assert project_scope_rare_hits_batch(after_id=scoped.pk - 1).inserted == 2
+    first = project_scope_rare_hits_batch(after_id=scoped.pk - 1, batch_size=1)
+    assert first.last_id == scoped.pk and first.scanned == first.inserted == 1
+    assert not CollectionScopeRareHit.objects.filter(scope_run=empty_window).exists()
+    middle = project_scope_rare_hits_batch(after_id=empty_window.pk - 1, batch_size=1)
+    assert middle.last_id == empty_window.pk and middle.scanned == 1 and middle.inserted == 0
+    last = project_scope_rare_hits_batch(after_id=middle.last_id, batch_size=1)
+    assert last.last_id == replay.pk and last.scanned == last.inserted == 1
     assert set(CollectionScopeRareHit.objects.filter(
         rare_hit_id=evidence["rare_hit_ids"][0], scope_run__scope_kind="x_query",
     ).values_list("scope_run_id", flat=True)) == {scoped.pk, replay.pk}

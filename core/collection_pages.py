@@ -90,14 +90,17 @@ def append_page_receipt(scope, envelope, *, cursor=None, legacy_archive=None):
                             "retained_inbox" if identifier in inbox else "unaccounted"),
     ) for position, identifier in enumerate(received)]
     CollectionObservation.objects.bulk_create(appearances)
-    # Membership remains on its original query/run. This link records which
-    # existing membership this checkpoint committed, including a continuation.
+    # Membership remains on its original query/run. Historical deduplication
+    # can credit a post to another query in the same job; prefer this run when
+    # choosing the existing membership that this checkpoint used.
     members = {}
     for observation in CollectionObservation.objects.filter(
         run__job_id=scope.run.job_id, scope_run__scope_kind="x_query",
-        scope_run__scope_key=scope.scope_key, source_subject_kind="post", post_id__in=retained,
+        source_subject_kind="post", post_id__in=retained,
     ).order_by("pk"):
-        members[str(observation.post_id)] = observation
+        identifier = str(observation.post_id)
+        if identifier not in members or observation.run_id == scope.run_id:
+            members[identifier] = observation
     require(set(members) == retained, "page stored Post membership is missing")
     CollectionObservationInput.objects.bulk_create([
         CollectionObservationInput(observation=marker, input_observation=member, input_role="retained_post")

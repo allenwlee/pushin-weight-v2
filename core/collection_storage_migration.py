@@ -1226,10 +1226,11 @@ def project_scope_rare_hits_batch(
     with transaction.atomic(), connection.cursor() as cursor:
         cursor.execute("SET LOCAL lock_timeout = '5s'")
         cursor.execute("SET LOCAL statement_timeout = '30s'")
+        # Advance over a bounded ID window even when none of its scopes has
+        # rare hits. Searching for the next N JSON matches can scan the whole
+        # historical table in one statement and exceed the timeout.
         cursor.execute(
             "SELECT id FROM collection_scope_runs WHERE id>%s "
-            "AND EXISTS (SELECT 1 FROM jsonb_array_elements(envelopes) e "
-            "WHERE e ? 'rare_hit_ids') "
             "ORDER BY id LIMIT %s FOR UPDATE",
             [after_id, batch_size],
         )
@@ -1237,15 +1238,17 @@ def project_scope_rare_hits_batch(
         if not ids:
             return RareHitMembershipBatch(after_id, 0, 0)
         scopes = list(
-            CollectionScopeRun.objects.filter(pk__in=ids).select_related("run")
+            CollectionScopeRun.objects.filter(pk__in=ids)
+            .extra(where=["jsonb_path_exists(envelopes, '$[*].rare_hit_ids')"])
+            .select_related("run")
         )
         expected = set()
         for scope in scopes:
-            if scope.scope_kind != "x_query":
-                raise ValueError("rare hit belongs to a non-X scope")
             for envelope in scope.envelopes:
                 if "rare_hit_ids" not in envelope:
                     continue
+                if scope.scope_kind != "x_query":
+                    raise ValueError("rare hit belongs to a non-X scope")
                 hits = envelope["rare_hit_ids"]
                 if not isinstance(hits, list) or any(type(hit) is not int or hit <= 0 for hit in hits):
                     raise ValueError("invalid historical rare hit IDs")
@@ -1265,7 +1268,7 @@ def project_scope_rare_hits_batch(
         ):
             raise ValueError("historical rare hit belongs to another job")
         existing = set(
-            CollectionScopeRareHit.objects.filter(scope_run_id__in=ids)
+            CollectionScopeRareHit.objects.filter(scope_run_id__in=[scope.pk for scope in scopes])
             .values_list("scope_run_id", "rare_hit_id")
         )
         if existing - expected:

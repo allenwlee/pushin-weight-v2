@@ -111,6 +111,25 @@ def test_unresolved_legacy_membership_fails_before_replacing_old_envelopes(scope
     assert not scope.child_scopes.exists()
 
 
+def test_historical_page_can_reference_post_credited_to_another_query(scope):
+    Post.objects.create(tweet_id="shared-query-post", text="captured")
+    other = CollectionScopeRun.objects.create(
+        run=scope.run, scope_kind="x_query", scope_key="other-query",
+        ownership=scope.ownership,
+    )
+    with transaction.atomic():
+        record_post_membership(scope.run, other, ["shared-query-post"])
+    scope.envelopes = [{"post_ids": ["shared-query-post"], "collection_drained": True}]
+    scope.save(update_fields=["envelopes"])
+    result = project_page_receipts_batch(after_id=scope.pk - 1, batch_size=1)
+    assert result.scanned == result.inserted == 1
+    assert page_receipt_parity_batch(after_id=scope.pk - 1, batch_size=1).mismatched == 0
+    marker = scope.child_scopes.get(scope_kind="x_page_checkpoint").observations.get(
+        observation_kind="x_page_checkpoint",
+    )
+    assert marker.inputs.get(input_role="retained_post").input_observation.scope_run_id == other.pk
+
+
 def test_first_writer_rejects_changed_or_extra_typed_receipts_but_allows_cleared_json(scope):
     envelope = {"post_ids": [], "received_post_ids": [], "raw_count": 0, "collection_drained": False}
     child = append_page_receipt(scope, envelope)
