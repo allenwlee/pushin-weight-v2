@@ -56,8 +56,8 @@ def _clock(value):
         return None, None, "unknown"
 
 
-def snapshot_resource(observation):
-    """Project current supported facts; retain unused provider fields in capture."""
+def resource_snapshot_values(observation):
+    """Parse supported nonnumeric facts without writing the snapshot."""
     raw = observation.listing
     if not isinstance(raw, dict) or observation.post_id:
         return None
@@ -119,12 +119,20 @@ def snapshot_resource(observation):
         "file_change_kind": change.get("kind"),
         "file_comparison_basis": change.get("comparison_basis"),
     }
+    return metadata_references(values, source_id=observation.run.job.source_id)
+
+
+def snapshot_resource(observation):
+    """Project current supported facts; retain unused provider fields in capture."""
+    values = resource_snapshot_values(observation)
+    if values is None:
+        return None
     snapshot, _ = CollectionResourceSnapshot.objects.get_or_create(
         observation=observation,
-        defaults=metadata_references(values, source_id=observation.run.job.source_id),
+        defaults=values,
     )
-    if kind == "hf_commits" and "id" in raw:
-        revision = raw["id"]
+    if values["resource_kind"] == "hf_commits" and values["revision"] is not None:
+        revision = values["revision"]
         if snapshot.revision not in (None, revision):
             raise ValueError("HF commit revision conflicts with captured evidence")
         if snapshot.revision is None:
