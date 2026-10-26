@@ -469,6 +469,9 @@ def test_x_scope_bounds_copy_rechecks_older_rows_and_rejects_invalid_epochs():
 
 
 def test_x_query_target_copy_preserves_frozen_query_and_detects_pin_drift():
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
     _, _, scope = execution()
     scope.scope_kind = "x_query"
     scope.ownership = {
@@ -477,7 +480,14 @@ def test_x_query_target_copy_preserves_frozen_query_and_detects_pin_drift():
     }
     scope.save(update_fields=["scope_kind", "ownership"])
     assert x_query_target_mismatch_counts() == (0, 1)
-    result = project_x_query_targets_batch(after_id=scope.pk - 1)
+    with CaptureQueriesContext(connection) as queries:
+        result = project_x_query_targets_batch(after_id=scope.pk - 1)
+    owner_selects = [
+        query["sql"] for query in queries
+        if 'FROM "collection_scope_runs"' in query["sql"]
+        and 'JOIN "collection_jobs"' in query["sql"]
+    ]
+    assert owner_selects and all('"definition"' not in sql for sql in owner_selects)
     assert result.scanned == result.updated == 1
     scope.refresh_from_db()
     assert scope.job_target.search_query.query_text == "exact source query"

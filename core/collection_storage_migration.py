@@ -915,6 +915,12 @@ def project_x_query_targets_batch(
             CollectionScopeRun.objects.select_for_update()
             .filter(scope_kind="x_query", pk__gt=after_id)
             .select_related("run__job")
+            .only(
+                "pk", "scope_key", "ownership", "job_target_id",
+                "requested_start_at", "requested_end_at", "run_id",
+                "run__job_id", "run__job__operation",
+                "run__job__instruction_version",
+            )
             .order_by("pk")[:batch_size]
         )
         if not scopes:
