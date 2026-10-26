@@ -48,6 +48,44 @@ def test_typed_dataset_still_enforces_archive_restrictions_without_legacy_metada
     )["values"]
 
 
+@pytest.mark.parametrize("source", ["openrouter", "arena"])
+def test_forecast_coordinates_survive_retired_observation_documents(source):
+    from core.benchmark_forecast_inputs import forecast_inputs
+    from core.measurement_taxonomy import digest
+    from core.models import CollectionObservation
+    from tests.test_benchmark_download_persistence import provider_contract
+
+    if source == "openrouter":
+        contract = provider_contract(source, ["total_tokens"])
+        payload = {
+            "status": "ok", "meta": {"version": "v1"},
+            "as_of": "2026-10-06T00:30:00Z",
+            "rows": [{"date": "2026-10-05", "model_permaslug": "lab/model", "total_tokens": "100"}],
+        }
+        coordinates = {"date": "2026-10-05"}
+    else:
+        contract = provider_contract(source, ["rating", "rating_lower", "rating_upper", "rank"])
+        payload = {
+            "status": "ok", "config": "text_style_control",
+            "coverage": "latest_publication_only",
+            "rows": [{"model_name": "lab/model", "category": "overall",
+                      "leaderboard_publish_date": "2026-09-25", "rating": 1400.0,
+                      "rating_lower": 1390.0, "rating_upper": 1410.0, "rank": 10.0}],
+        }
+        coordinates = {"config": "text_style_control", "category": "overall"}
+    run = persist_source(contract, source, digest([source, "forecast"]), payload)
+    cutoff = timezone.now()
+    before = forecast_inputs(contract, cutoff, use="isolated_review", isolated_review=True)
+    assert before["values"] and all(row["dimensions"] == coordinates for row in before["values"])
+    CollectionObservation.objects.filter(run=run).update(
+        dimensions={}, source_metadata={}, listing={},
+    )
+    after = forecast_inputs(contract, cutoff, use="isolated_review", isolated_review=True)
+    assert [row["dimensions"] for row in after["values"]] == [
+        row["dimensions"] for row in before["values"]
+    ]
+
+
 @pytest.mark.parametrize(
     ("metadata", "reconstructed"),
     [

@@ -153,10 +153,22 @@ def forecast_inputs(
     for value in selected:
         observation, definition = value.observation, value.source_metric
         run = observation.run
-        # OpenCode's forecast coordinates are retained as typed publication
-        # facts; its observation documents can be retired independently.
-        if run.job.source_id == "opencode":
-            metadata = {"period_status": observation.period_status}
+        # These providers' forecast coordinates are retained as typed
+        # publication facts; their observation documents are not read here.
+        if run.job.source_id in {"arena", "openrouter", "opencode"}:
+            metadata = {}
+            if observation.period_status is not None:
+                metadata["period_status"] = observation.period_status
+            if observation.history_reconstructed is True:
+                metadata["history_basis"] = "reconstructed_current_relationships"
+            if observation.secondary_source is not None:
+                metadata["secondary_source"] = observation.secondary_source
+            if observation.publication_complete is not None:
+                metadata["publication_complete"] = observation.publication_complete
+            if observation.archive_snapshot_date is not None:
+                metadata["archive_snapshot_date"] = observation.archive_snapshot_date.isoformat()
+            if observation.reconstruction_date is not None:
+                metadata["reconstruction_date"] = observation.reconstruction_date.isoformat()
             dimensions = observation_dimensions(observation)
         else:
             metadata = observation.source_metadata
