@@ -511,9 +511,14 @@ def x_query_instruction(ownership):
 def x_scope_ownership(scope):
     """Read a pinned X query from typed owners, with legacy rollout fallback."""
     if getattr(scope, "job_target_id", None) is None:
+        require(
+            scope.run.job.instruction_version == 1,
+            "sealed X scope requires a typed query target",
+        )
         x_query_instruction(scope.ownership)
         return scope.ownership
     target = scope.job_target
+    recurring_cycle = scope.run.job.operation == "x_cycle" and scope.run.job.instruction_version == 2
     require(
         scope.scope_kind == "x_query"
         and target.job_id == scope.run.job_id
@@ -521,8 +526,16 @@ def x_scope_ownership(scope):
         and target.target_kind == "query"
         and target.resolution_state == "resolved"
         and target.search_query_id is not None
-        and scope.requested_start_at == target.requested_start_at
-        and scope.requested_end_at == target.requested_end_at,
+        and (
+            target.requested_start_at is None and target.requested_end_at is None
+            if recurring_cycle
+            else (
+                scope.requested_start_at == target.requested_start_at
+                and scope.requested_end_at == target.requested_end_at
+            )
+        )
+        and scope.requested_start_at is not None
+        and scope.requested_end_at is not None,
         "X scope typed query pin differs from its run",
     )
     start = scope.requested_start_at.timestamp()
@@ -540,7 +553,11 @@ def x_scope_ownership(scope):
 
 def ensure_x_query_target(job, scope_key, *, query_text, call_id, start_at, end_at):
     """Pin one query and call role per job scope; never modify a sealed target."""
-    query_id = "x-backfill:" + hashlib.sha256(query_text.encode()).hexdigest()
+    recurring_cycle = job.operation == "x_cycle" and job.instruction_version == 2
+    query_id = (
+        ("x-cycle:" if recurring_cycle else "x-backfill:")
+        + hashlib.sha256(query_text.encode()).hexdigest()
+    )
     search_query, _ = SearchQuery.objects.get_or_create(
         query_id=query_id, defaults={"query_text": query_text}
     )
@@ -562,12 +579,13 @@ def ensure_x_query_target(job, scope_key, *, query_text, call_id, start_at, end_
             resolution_state="resolved", search_query=search_query,
             requested_start_at=start_at, requested_end_at=end_at,
         )
+    target_start, target_end = (None, None) if recurring_cycle else (start_at, end_at)
     require(
         target.target_kind == "query"
         and target.target_role == call_id
         and target.search_query_id == search_query.pk
-        and target.requested_start_at == start_at
-        and target.requested_end_at == end_at,
+        and target.requested_start_at == target_start
+        and target.requested_end_at == target_end,
         "frozen X query target differs from scope ownership",
     )
     return target

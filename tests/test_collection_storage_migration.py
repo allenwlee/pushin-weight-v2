@@ -1,5 +1,6 @@
 """The collection archive copy is exact, repeatable, and detects live changes."""
 
+import hashlib
 from datetime import UTC, datetime
 
 import pytest
@@ -242,6 +243,76 @@ def test_x_prefetch_reads_pinned_query_when_legacy_ownership_is_stale():
     assert "original query" in _params(scope)["query"]
     assert "stale query" not in _params(scope)["query"]
     assert x_query_target_mismatch_counts() == (0, 1)
+
+
+def test_recurring_x_query_target_keeps_query_fixed_and_window_on_scope():
+    from core.collection_jobs import register_job
+    from core.collection_state import ensure_x_query_target, x_scope_ownership
+    from core.models import CollectionRun, CollectionScopeRun, SearchQuery
+    from tests.test_collection_jobs import ready
+
+    source = ready(purpose="content").source
+    query = SearchQuery.objects.create(
+        query_id="x-cycle:" + hashlib.sha256(b"fixed query").hexdigest(),
+        query_text="fixed query",
+    )
+    job = register_job(
+        job_key="rg6-scheduled-query-pin",
+        source=source, purpose="content", operation="x_cycle", mode="recurring",
+        definition={"version": 2, "options": {"adapter": "twitterapi"}},
+        settings={
+            "owner_kind": "source", "schedule_kind": "interval",
+            "schedule_driver": "external_render_cron", "interval_seconds": 900,
+            "max_requests": 100, "max_bytes": 1000000,
+            "max_seconds": 300, "max_items": 2000,
+        },
+        targets=[{
+            "target_key": "B1", "target_kind": "query", "target_role": "B1",
+            "resolution_state": "resolved", "search_query_id": query.pk,
+        }],
+    )
+    run = CollectionRun.objects.create(
+        job=job, ingestion_key="b" * 64, status="success",
+        completed_at=datetime(2026, 10, 25, 12, tzinfo=UTC),
+    )
+    lower = datetime(2026, 10, 25, 10, tzinfo=UTC)
+    upper = datetime(2026, 10, 25, 11, tzinfo=UTC)
+    target = ensure_x_query_target(
+        job, "B1", query_text="fixed query", call_id="B1",
+        start_at=lower, end_at=upper,
+    )
+    scope = CollectionScopeRun.objects.create(
+        run=run, scope_kind="x_query", scope_key="B1", job_target=target,
+        ownership={}, requested_start_at=lower, requested_end_at=upper,
+    )
+    assert target.requested_start_at is None and target.requested_end_at is None
+    assert x_scope_ownership(scope) == {
+        "call_id": "B1", "query": "fixed query",
+        "since_epoch": int(lower.timestamp()), "until_epoch": int(upper.timestamp()),
+    }
+    next_lower = datetime(2026, 10, 25, 11, tzinfo=UTC)
+    next_upper = datetime(2026, 10, 25, 12, tzinfo=UTC)
+    next_run = CollectionRun.objects.create(
+        job=job, ingestion_key="c" * 64, status="success",
+        completed_at=datetime(2026, 10, 25, 13, tzinfo=UTC),
+    )
+    next_scope = CollectionScopeRun.objects.create(
+        run=next_run, scope_kind="x_query", scope_key="B1", job_target=target,
+        ownership={}, requested_start_at=next_lower, requested_end_at=next_upper,
+    )
+    assert ensure_x_query_target(
+        job, "B1", query_text="fixed query", call_id="B1",
+        start_at=next_lower, end_at=next_upper,
+    ).pk == target.pk
+    assert x_scope_ownership(next_scope)["since_epoch"] == int(next_lower.timestamp())
+    with pytest.raises(ValueError, match="frozen X query target differs"):
+        ensure_x_query_target(
+            job, "B1", query_text="changed query", call_id="B1",
+            start_at=lower, end_at=upper,
+        )
+    next_scope.job_target = None
+    with pytest.raises(ValueError, match="requires a typed query target"):
+        x_scope_ownership(next_scope)
 
 
 def test_legacy_product_match_scope_pins_existing_subject_and_input_digest():
