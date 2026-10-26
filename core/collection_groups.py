@@ -17,9 +17,8 @@ def validate_group_outcomes(groups):
 
 
 def observation_group_outcomes(observation):
-    """Typed outcomes win; retain additive-rollout fallback for uncopied groups."""
-    validate_group_outcomes(observation.groups)
-    groups = dict(observation.groups)
+    """Read the current outcomes from their typed resource scopes."""
+    groups = {}
     for scope in observation.resource_scopes.all():
         if scope.scope_kind != GROUP_SCOPE_KIND:
             continue
@@ -85,6 +84,4 @@ def record_observation_group(observation, group, outcome):
             scope.save(update_fields=list(values))
     if hasattr(observation, "_prefetched_objects_cache"):
         observation._prefetched_objects_cache.pop("resource_scopes", None)
-    # Temporary dual write while older binaries/archives still consume groups.
-    observation.groups[group] = outcome
     return scope

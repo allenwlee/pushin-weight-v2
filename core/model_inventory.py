@@ -499,7 +499,6 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                     observed_at=observed_at,
                     observation_key=digest([str(run.pk), listing.pk, group]),
                     envelopes=_envelopes(result, group),
-                    groups={group: result.outcome},
                     dimensions={"kind": "hf_metadata", "group": group},
                     source_metadata={"historical_public_visibility_proven": False},
                 )
