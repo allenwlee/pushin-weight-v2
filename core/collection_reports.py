@@ -70,6 +70,8 @@ def _github_asset_coordinates(observation_ids):
                 ON metric.id=metric_input.observation_id
             JOIN collection_observations asset_observation
                 ON asset_observation.id=metric_input.input_observation_id
+            JOIN collection_runs asset_run ON asset_run.id=asset_observation.run_id
+            JOIN collection_jobs asset_job ON asset_job.id=asset_run.job_id
             JOIN collection_resource_snapshots asset
                 ON asset.observation_id=asset_observation.id
             JOIN collection_observation_inputs parent
@@ -77,12 +79,16 @@ def _github_asset_coordinates(observation_ids):
                 AND parent.input_role='release_asset_parent'
             JOIN collection_observations release_observation
                 ON release_observation.id=parent.input_observation_id
+            JOIN collection_runs release_run ON release_run.id=release_observation.run_id
+            JOIN collection_jobs release_job ON release_job.id=release_run.job_id
             JOIN collection_resource_snapshots release
                 ON release.observation_id=release_observation.id
             WHERE metric_input.observation_id=ANY(%s)
                 AND metric_input.input_role='numeric_projection'
                 AND asset.resource_kind='release_asset'
                 AND release.resource_kind='releases'
+                AND asset_job.source_id='github' AND asset_job.purpose='catalog'
+                AND release_job.source_id='github' AND release_job.purpose='catalog'
                 AND asset_observation.source_identifier=metric.source_identifier
                 AND release_observation.source_identifier=metric.source_identifier
                 AND metric_input.input_sha256=asset_observation.observation_key
