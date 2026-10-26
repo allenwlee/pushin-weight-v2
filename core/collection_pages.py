@@ -317,7 +317,8 @@ def copy_continuation_scopes(previous, run):
     for original in previous.scopes.exclude(scope_kind__in=[
         "resource_group", PAGE_KIND, "x_model_call", "x_model_usage",
         "x_backfill_result", "x_checkpoint_import", "x_backfill_execution",
-        "x_cycle_execution",
+        "x_cycle_execution", "history_execution", "catalog_execution",
+        "inventory_execution", "metric_execution", "match_execution",
     ]).order_by("pk"):
         identifier = original.pk
         cursors = original.recorded_cursors
