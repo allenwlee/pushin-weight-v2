@@ -5,11 +5,13 @@ import uuid
 
 import pytest
 from django.db import IntegrityError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
+from django.utils import timezone
 
-from core.collection_corrections import record_timing_correction
 from core.measurement_taxonomy import digest
-from core.models import CollectionCorrection, MetricValue, TimeZone
-from tests.test_source_metric_projection import configured, evidence, project
+from core.models import Actor, CollectionCorrection, MetricValue, TimeZone
+from tests.collection_fixtures import evidence_job
+from tests.test_source_metric_projection import configured
 
 pytestmark = [
     pytest.mark.django_db(transaction=True),
@@ -30,9 +32,24 @@ def pre_retirement_schema(migration_rehearsal_schema):
 
 def measurement():
     TimeZone.objects.get_or_create(pk="UTC")
-    contract, raw, _, _ = configured()
-    run = project(contract, "hf", [evidence("hf", raw)])
-    return run.observations.get().values.order_by("pk").first()
+    contract, _, _, _ = configured()
+    historical = MigrationExecutor(connection).loader.project_state(
+        [("core", "0166_rg5_reference_source_guards")]
+    ).apps
+    job = evidence_job(source_id="hf", purpose="metric", contract_id=contract.pk)
+    run = historical.get_model("core", "CollectionRun").objects.create(
+        job_id=job.pk, ingestion_key=digest("rg5-timezone-fixture"),
+        status="success", completed_at=timezone.now(), lease_expires_at=timezone.now(),
+    )
+    observation = historical.get_model("core", "CollectionObservation").objects.create(
+        run_id=run.pk, source_identifier="lab/Model", source_subject_kind="repository",
+        observation_key=digest("rg5-timezone-measurement"),
+    )
+    return MetricValue.objects.create(
+        observation_id=observation.pk,
+        source_metric_id=contract.source_configuration["hf"]["definitions"][0]["id"],
+        integer_value=1,
+    )
 
 
 def remap():
@@ -93,9 +110,6 @@ def test_correction_keeps_original_fingerprint_and_guard_after_timezone_mapping(
     value = measurement()
     before = {"temporal_status": "unknown", "source_timezone": "unknown"}
     after = {"temporal_status": "unknown", "source_timezone": "UTC"}
-    correction = record_timing_correction(
-        value, before=before, after=after, policy="fixture-v1", reason="fixture"
-    )
     from core.collection_corrections import TIME_BASIS_FIELDS, TIME_STATE_FIELDS
 
     serialized = {
@@ -112,8 +126,21 @@ def test_correction_keeps_original_fingerprint_and_guard_after_timezone_mapping(
             "fields": serialized,
         }
     )
-    assert correction.pk == uuid.uuid5(
+    identity = uuid.uuid5(
         uuid.NAMESPACE_URL, "pushinweight:timing-correction:" + key
+    )
+    # Seed the exact pre-RG6 owner shape. Current application writers are tested
+    # on the current schema; this fixture tests the old migration and guard.
+    actor = Actor.objects.create(actor_kind="system", actor_key="rg5-timezone-fixture")
+    fields = dict(serialized)
+    for side in ("before", "after"):
+        zone = fields.pop(side + "_source_timezone")
+        fields[side + "_source_timezone_reference_id"] = None if zone == "unknown" else zone
+    correction = CollectionCorrection.objects.create(
+        id=identity, observation_id=value.observation_id, metric_value=value,
+        correction_kind="timing", policy_version="fixture-v1", actor=actor,
+        reason_code="fixture", recorded_at=timezone.now(), recorded_at_precision="instant",
+        **fields,
     )
     assert correction.before_source_timezone_reference_id is None
     assert correction.after_source_timezone_reference_id == "UTC"
@@ -137,6 +164,7 @@ def test_correction_keeps_original_fingerprint_and_guard_after_timezone_mapping(
         )
     remap()
     correction.refresh_from_db()
+    assert correction.pk == identity
     assert correction.after_source_timezone_reference_id == "UTC"
     with pytest.raises(IntegrityError), transaction.atomic():
         CollectionCorrection.objects.filter(pk=correction.pk).update(
