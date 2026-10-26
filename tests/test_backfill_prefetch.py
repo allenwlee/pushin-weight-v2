@@ -11,15 +11,13 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 import requests
 from django.core.management.base import CommandError
-from django.db import connection
+from django.db import connection, transaction
 from django.test.utils import CaptureQueriesContext
 
+from core.collection_capture import archive_legacy, read_document, run_report_document
 from core.collection_jobs import register_job, set_job_state
 from core.collection_pages import page_receipts
-from core.collection_storage_migration import (
-    project_scope_request_uses_batch,
-    scope_request_use_mismatch_counts,
-)
+from core.collection_state import record_scope_request_uses
 from core.models import (
     CollectionObservation,
     CollectionRequest,
@@ -133,29 +131,29 @@ def test_twenty_fetches_use_exact_page_counts_and_shared_storage(http_pages):
         i = int(row.scope_key.split(":")[1])
         assert row.raw_count == 1 + (i % 2)
         receipts = page_receipts(row)
-        assert row.envelopes == []
+        assert not hasattr(row, "envelopes")
         assert receipts[-1]["raw_count"] == row.raw_count
         assert receipts[-1]["prefetch_request_id"]
         assert str(row.request_uses.get().request_id) == receipts[-1]["prefetch_request_id"]
-        # Explicit legacy fixture for the migration-only request-use copier.
-        row.envelopes = receipts
-        row.save(update_fields=["envelopes"])
-    assert scope_request_use_mismatch_counts() == (0, 0)
     first = rows.first()
+    original_use = first.request_uses.values("request_id", "ordinal", "observed_at").get()
     CollectionScopeRequestUse.objects.filter(scope_run=first).delete()
-    assert scope_request_use_mismatch_counts() == (1, 0)
-    with CaptureQueriesContext(connection) as copied_queries:
-        assert project_scope_request_uses_batch(after_id=first.pk - 1).inserted == 1
+    assert not first.request_uses.exists()
+    # The live request-use writer can reconstruct a missing link from typed
+    # checkpoint receipts without reading the retired migration documents.
+    with transaction.atomic(), CaptureQueriesContext(connection) as copied_queries:
+        assert record_scope_request_uses(first, page_receipts(first)) == 1
+        assert record_scope_request_uses(first, page_receipts(first)) == 0
     assert '"collection_runs"."report"' not in "\n".join(
         query["sql"] for query in copied_queries
     )
-    assert scope_request_use_mismatch_counts() == (0, 0)
+    assert first.request_uses.values("request_id", "ordinal", "observed_at").get() == original_use
     empty_window = CollectionScopeRun.objects.create(
         run=first.run, scope_kind="x_query", scope_key="empty-prefetch-window",
-        ownership={}, envelopes=[],
     )
-    empty = project_scope_request_uses_batch(after_id=empty_window.pk - 1, batch_size=1)
-    assert empty.last_id == empty_window.pk and empty.scanned == 1 and empty.inserted == 0
+    assert page_receipts(empty_window) == []
+    assert record_scope_request_uses(empty_window, []) == 0
+    assert not empty_window.request_uses.exists()
     assert Post.objects.count() == 30
     assert CollectionObservation.objects.filter(run_id=result["run_id"], source_subject_kind="post").count() == 30
     assert CollectionRequest.objects.filter(transport_outcome="received", archive__isnull=False).count() == 20
@@ -451,7 +449,7 @@ def test_parallel_rare_capture_keeps_its_own_raw_count_and_shared_gate(http_page
     scopes = CollectionScopeRun.objects.filter(run_id=report["run_id"])
     for call, expected in (("RARE_EXTRA", 1), ("B1", 2)):
         scope = scopes.get(scope_key=call)
-        assert scope.envelopes == []
+        assert not hasattr(scope, "envelopes")
         pages = [entry for entry in page_receipts(scope) if entry.get("prefetch_request_id")]
         assert len(pages) == 1 and pages[0]["raw_count"] == expected
         assert scope.raw_count == expected
@@ -483,8 +481,9 @@ def test_expired_interrupted_run_resumes_committed_cursor_without_recollection(h
         assert old.status == "running" and old.scopes.get(scope_kind="x_query").cursor == "next"
         saved = old.scopes.get(scope_kind="x_query")
         assert saved.request_uses.count() == 1
-        saved.envelopes = [{"deliberately": "unusable retired receipt"}]
-        saved.save(update_fields=["envelopes"])
+        retired = [{"deliberately": "unusable retired receipt"}]
+        saved.legacy_archive = archive_legacy({"envelopes": retired})
+        saved.save(update_fields=["legacy_archive"])
         with pytest.raises(RuntimeError, match="historical_run_active"):
             month._check_saved_jobs({"campaign": "parallel-test"})
         CollectionRun.objects.filter(pk=old.pk).update(lease_expires_at=timezone.now() - timedelta(seconds=1))
@@ -498,6 +497,8 @@ def test_expired_interrupted_run_resumes_committed_cursor_without_recollection(h
     assert result["collection_drained"] and result["cumulative_api_requests"] == 2
     assert set(Post.objects.values_list("pk", flat=True)) == {"1", "2"}
     assert CollectionRequest.objects.count() == 2
+    saved.refresh_from_db()
+    assert read_document(saved.legacy_archive) == {"envelopes": retired}
 
 
 @pytest.mark.parametrize("held_lock", ["month", "campaign"])
@@ -554,15 +555,19 @@ def test_public_collection_phase_recovers_missing_summary_without_searching_agai
         call_command("run_backfill", manifest=path, phase="collect", collection_concurrency=20, execute=True)
         job = CollectionJob.objects.get(job_key="phase-summary-recovery/1")
         run = CollectionRun.objects.get(job=job)
-        receipt = run.report["backfill_campaign"]["collection"]
+        receipt = run_report_document(run)["backfill_campaign"]["collection"]
         assert receipt["status"] == "verified" and receipt["checked_posts"] == 0
         assert receipt["phase_usage"]["twitterapi_requests"] == len(frozen["windows"][0]["collection_definition"]["scope"]["units"])
         paid = len(state["requests"])
-        run.report.pop("backfill_campaign")
-        run.save(update_fields=["report"])
+        source = run.scopes.get(scope_kind="x_backfill_result").legacy_archive
+        original_source = (source.pk, bytes(source.body))
+        run.scopes.filter(scope_kind="x_campaign_receipt", phase="campaign_receipt_v1").delete()
+        assert "backfill_campaign" not in run_report_document(run)
         call_command("run_backfill", manifest=path, phase="collect", collection_concurrency=20, execute=True)
         assert len(state["requests"]) == paid
     run.refresh_from_db()
-    assert run.report["backfill_campaign"]["collection"]["status"] == "verified"
+    assert run_report_document(run)["backfill_campaign"]["collection"]["status"] == "verified"
+    source = run.scopes.get(scope_kind="x_backfill_result").legacy_archive
+    assert (source.pk, bytes(source.body)) == original_source
     assert CollectionRun.objects.filter(job=job).count() == 1
     assert not OriginalContentCall.objects.exists()

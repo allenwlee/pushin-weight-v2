@@ -696,12 +696,19 @@ def test_aggregate_deferral_never_resends_an_unknown_paid_request(native):
 
 
 def test_final_assessment_records_incomplete_without_changing_source_receipt(native):
+    from core.collection_capture import (
+        archive_legacy,
+        read_document,
+        run_report_document,
+    )
     from scripts.backfill_campaign import assess_campaign
 
     job, cfg, _, _ = native
     run = job.runs.get()
-    run.report = {"preserve": "source receipt"}
-    run.save(update_fields=["report"])
+    source = {"report": {"preserve": "source receipt"}}
+    run.legacy_archive = archive_legacy(source)
+    run.save(update_fields=["legacy_archive"])
+    original = (run.legacy_archive_id, bytes(run.legacy_archive.body))
     job.last_attempt = run
     job.save(update_fields=["last_attempt"])
     window = {"index": 1}
@@ -712,8 +719,11 @@ def test_final_assessment_records_incomplete_without_changing_source_receipt(nat
     assert result["status"] == "incomplete"
     assert result["windows_attempted"] == 1 and result["windows_verified"] == 0
     run.refresh_from_db()
-    assert run.report["preserve"] == "source receipt"
-    assert run.report["backfill_campaign"]["latest"]["status"] == "failed"
+    assert (run.legacy_archive_id, bytes(run.legacy_archive.body)) == original
+    assert read_document(run.legacy_archive) == source
+    report = run_report_document(run)
+    assert report["preserve"] == "source receipt"
+    assert report["backfill_campaign"]["latest"]["status"] == "failed"
 
 
 def test_saved_packet_replays_exact_submitted_catalog_after_catalog_changes(native):
