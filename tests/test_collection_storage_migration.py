@@ -25,7 +25,7 @@ from core.collection_storage_migration import (
     stale_legacy_archive_count,
     x_query_target_mismatch_counts,
 )
-from core.models import CollectionObservation
+from core.models import CollectionObservation, CollectionScopeRun
 from tests.test_collection_relational_storage import execution
 
 
@@ -816,6 +816,34 @@ def test_legacy_documents_are_archived_once_and_changed_rows_are_reconciled():
     run.refresh_from_db()
     assert read_document(run.legacy_archive)["report"] == {"retry": 2}
     assert stale_legacy_archive_count("collection_runs") == 0
+
+
+def test_legacy_archive_sweep_excludes_typed_only_group_and_queue_scopes():
+    run, _, parent = execution()
+    observation = CollectionObservation.objects.create(
+        run=run, scope_run=parent, source_identifier="captured",
+        source_subject_kind="model", observation_key="c" * 64,
+    )
+    children = [
+        CollectionScopeRun.objects.create(
+            run=run, parent_scope=parent, scope_kind="resource_group",
+            scope_key="typed-group", ownership={},
+        ),
+        CollectionScopeRun.objects.create(
+            run=run, parent_scope=parent, scope_kind="numeric_projection_item",
+            scope_key="typed-pending", ownership={},
+            resource_observation=observation,
+        ),
+    ]
+
+    assert archive_legacy_batch("collection_scope_runs").archived == 1
+    assert archive_legacy_batch("collection_scope_runs", repair_stale=True).archived == 0
+    assert stale_legacy_archive_count("collection_scope_runs", batch_size=1) == 0
+    parent.refresh_from_db()
+    assert parent.legacy_archive_id is not None
+    for child in children:
+        child.refresh_from_db()
+        assert child.legacy_archive_id is None
 
 
 def test_benchmark_provenance_copy_is_bounded_and_repeatable():

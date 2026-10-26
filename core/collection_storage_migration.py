@@ -1716,7 +1716,7 @@ def _legacy_owner_predicate(table: str) -> str:
     # These new typed records never owned the retired collection JSON. Their
     # archive pointer retains source checkpoint evidence, not their empty fields.
     if table == "collection_scope_runs":
-        return "t.scope_kind <> 'x_page_checkpoint'"
+        return "t.scope_kind NOT IN ('resource_group','numeric_projection_item','x_page_checkpoint')"
     if table == "collection_observations":
         return "(t.observation_kind IS NULL OR t.observation_kind NOT IN ('x_page_checkpoint','x_page_appearance','x_page_diagnostic'))"
     return "TRUE"
