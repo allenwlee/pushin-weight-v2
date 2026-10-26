@@ -12,6 +12,7 @@ from django.db import connection
 
 from core.benchmark_metric_store import aware_instant
 from core.benchmark_metric_timing import native_date
+from core.benchmark_serving import observation_read_fields
 from core.measurement_taxonomy import digest, require
 from core.models import CollectionObservation, CollectionObservationInput, CollectionRun
 
@@ -114,7 +115,7 @@ def retained_checks(contract, *, cutoff=None):
         )
         rows = cursor.fetchall()
     require(len(rows) <= 10000, "OpenCode revision query budget exceeded")
-    runs = CollectionRun.objects.in_bulk({row[0] for row in rows})
+    runs = CollectionRun.objects.only("completed_at").in_bulk({row[0] for row in rows})
     grouped = {}
     for run_id, identifier, day, observation_id, updated, body_hash, conflict in rows:
         key = (run_id, identifier, updated, body_hash)
@@ -155,9 +156,7 @@ def selected_rows(contract, mapping_ids, start, end, *, cutoff=None, canonical=F
         run__job__contract=contract,
         run__job__source_id="opencode",
         status="ok",
-    ).select_related("run").defer("run__raw_payload", "run__request_params")
-    if canonical:
-        queryset = queryset.defer("source_metadata", "run__source_metadata", "run__report")
+    ).select_related("run__job").only(*observation_read_fields())
     observations = {
         obj.pk: obj
         for obj in queryset.prefetch_related("values__source_metric")

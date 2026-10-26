@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from core.benchmark_metric_store import native_date
 from core.benchmark_serving import (
+    metric_value_read_fields,
     observation_dimensions,
     observation_ids,
     observation_provenance_metadata,
@@ -364,11 +365,7 @@ def metric_points(contract, line, days):
             observation__status="ok",
         )
         .select_related("observation__run__job")
-        .defer(
-            "observation__source_metadata", "observation__run__source_metadata",
-            "observation__run__report", "observation__run__raw_payload",
-            "observation__run__request_params",
-        )
+        .only(*metric_value_read_fields())
         .prefetch_related("observation__values__source_metric")
         .order_by("observation__run__completed_at", "id")[:100001]
     )

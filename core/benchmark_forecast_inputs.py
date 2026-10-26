@@ -9,6 +9,7 @@ from core.benchmark_metric_store import aware_instant
 from core.benchmark_serving import (
     github_asset_coordinates,
     github_asset_metric,
+    metric_value_read_fields,
     observation_dimensions,
     observation_provenance_metadata,
 )
@@ -123,15 +124,8 @@ def forecast_inputs(
                 Q(observation__run__source_as_of__isnull=True)
                 | Q(observation__run__source_as_of__lte=cutoff)
             )
-            # Typed-only writers must retain the same historical-knowledge
-            # boundary while older rows are still being copied on production.
+            # Reconstructed history was not known at the historical cutoff.
             .exclude(observation__history_reconstructed=True)
-            .filter(
-                Q(observation__source_metadata__history_basis__isnull=True)
-                | ~Q(
-                    observation__source_metadata__history_basis="reconstructed_current_relationships"
-                )
-            )
         )
     if mode == "operational":
         for field in ("as_of_at", "window_end_at"):
@@ -147,7 +141,10 @@ def forecast_inputs(
             "observation__run__job", "observation__mapping", "source_metric",
             "observation__source_dataset",
         )
-        .defer("observation__run__raw_payload", "observation__run__job__definition")
+        .only(
+            *metric_value_read_fields(), "observation__mapping__subject_id",
+            "observation__mapping__reviewed_at", "observation__source_dataset__code",
+        )
         .order_by("id")[: limit + 1]
     )
     require(

@@ -6,6 +6,27 @@ from django.db.models.expressions import RawSQL
 from core.measurement_taxonomy import require
 
 
+def observation_read_fields(prefix=""):
+    """Select the typed facts used by chart and forecast readers during cutover."""
+    return tuple(prefix + field for field in (
+        "id", "mapping_id", "source_identifier", "observed_at",
+        "config_key", "category_key", "source_record_date", "period_status",
+        "history_reconstructed", "secondary_source", "publication_complete",
+        "archive_snapshot_date", "reconstruction_date", "row_semantic_digest",
+        "source_dataset_id", "run__id", "run__completed_at", "run__source_as_of",
+        "run__payload_sha256", "run__direct_ingestion", "run__job__source_id",
+    ))
+
+
+def metric_value_read_fields():
+    return (
+        "id", "source_metric", "integer_value", "float_value", "temporal_status",
+        "source_timezone_reference_id", "as_of_at", "as_of_date", "window_start_at",
+        "window_end_at", "period_label_date", "as_of_basis", "window_end_basis",
+        *observation_read_fields("observation__"),
+    )
+
+
 def observation_ids(predicate, params=(), *, mapping_ids, contract_id, source_id):
     # Predicates are internal constants, never user-provided SQL.
     # OFFSET 0 keeps each scalar projection tied to its already selected owner.

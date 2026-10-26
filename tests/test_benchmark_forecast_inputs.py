@@ -89,10 +89,10 @@ def test_forecast_coordinates_survive_retired_observation_documents(source):
 @pytest.mark.parametrize(
     ("metadata", "reconstructed"),
     [
-        ({"history_basis": "reconstructed_current_relationships"}, None),
+        ({"history_basis": "reconstructed_current_relationships"}, True),
         ({}, True),
     ],
-    ids=["legacy-history", "typed-only-history"],
+    ids=["projected-history", "typed-only-history"],
 )
 def test_contract_review_after_cutoff_and_reconstruction_are_not_past_knowledge(
     metadata, reconstructed
@@ -134,3 +134,22 @@ def test_contract_review_after_cutoff_and_reconstruction_are_not_past_knowledge(
             == "reconstructed_current_relationships"
             for row in research["values"]
         )
+
+
+@pytest.mark.parametrize("reconstructed", [None, False, True])
+def test_operational_hf_history_uses_typed_provenance(reconstructed):
+    from core.benchmark_forecast_inputs import forecast_inputs
+
+    contract = configured()
+    run = persist_source(contract, "hf", "8" * 64, payload())
+    # The copied typed field owns the decision even if the retired document
+    # disagrees. Unknown is not evidence of a reconstructed history.
+    run.observations.update(
+        history_reconstructed=reconstructed,
+        source_metadata={} if reconstructed else {"history_basis": "reconstructed_current_relationships"},
+    )
+    rows = forecast_inputs(
+        contract, timezone.now(), use="isolated_review", isolated_review=True,
+    )["values"]
+    assert bool(rows) is (reconstructed is not True)
+    assert all(row["run_id"] == str(run.pk) for row in rows)

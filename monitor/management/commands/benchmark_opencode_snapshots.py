@@ -54,7 +54,7 @@ class Command(BaseCommand):
                     pk__in={r[3] for r in references},
                     run__job__contract=contract,
                     run__job__source_id="opencode",
-                ).prefetch_related("values__source_metric")
+                ).only("observed_at", "period_status").prefetch_related("values__source_metric")
             }
             rows = []
             for run, check, label, pk in references:
