@@ -351,3 +351,16 @@ def collection_instruction_bridge(collection_history_schema, monkeypatch):
 
     with bridge_runtime(historical):
         yield historical
+
+
+@pytest.fixture
+def provider_tweet_entities():
+    """Provider-shaped evidence; the HF destination exists only in entities."""
+    return {
+        "urls": [{"url": "https://t.co/example",
+                  "expanded_url": "https://huggingface.co/Qwen/Qwen3-4B",
+                  "display_url": "huggingface.co/Qwen/Qwen3-4B", "indices": [20, 40]}],
+        "hashtags": [{"text": "Qwen", "indices": [14, 19]}],
+        "user_mentions": [{"id_str": "1001", "screen_name": "Alibaba_Qwen",
+                           "name": "Qwen", "indices": [0, 13]}],
+    }

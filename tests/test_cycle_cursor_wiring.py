@@ -741,3 +741,136 @@ def test_non_truncated_full_cap_advances_cursor(wired, monkeypatch):
     assert CallState.objects.filter(**_cursor_key(call)).exists(), (
         "the cap was hit but the window was exhausted -- advance is safe"
     )
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_scheduled_provider_entities_reach_post_and_consumers(
+    monkeypatch, seeded_policy_keywords, provider_tweet_entities, legacy,
+):
+    from core.models import Post
+    from core.product_verification import source_repo_evidence
+    from x_monitor.attribution import attribute_to_brands
+
+    entities = provider_tweet_entities
+    if legacy:
+        entities["hashtags"][0]["tag"] = entities["hashtags"][0].pop("text")
+        entities["user_mentions"][0]["id"] = entities["user_mentions"][0].pop("id_str")
+        entities["user_mentions"][0]["username"] = entities["user_mentions"][0].pop("screen_name")
+    body = {"tweets": [{"id": "99112233", "text": "@Alibaba_Qwen #Qwen https://t.co/example",
+                        "createdAt": datetime.now(UTC).isoformat(), "entities": entities,
+                        "author": {"id": "1002", "userName": "entity_test_author"}}],
+            "has_next_page": False, "next_cursor": ""}
+    monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "test-scheduled-key")
+    monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda *a, **kw: [_planned("B1", "qwen")])
+    import json
+    from types import SimpleNamespace
+    response = SimpleNamespace(status_code=200, content=json.dumps(body).encode(),
+                               text=json.dumps(body), json=lambda: body)
+    requests = []
+    def get(url, **kwargs):
+        requests.append(url)
+        return response
+    monkeypatch.setattr("x_monitor.apify.requests.get", get)
+    monkeypatch.setattr(CycleRunner, "_run_post_fetch", lambda *a, **kw: {})
+    stats = CycleRunner(cycle_kind="scheduled").run()
+    assert stats["totals"]["n_inserted"] == 1
+    assert requests.count("https://api.twitterapi.io/twitter/tweet/advanced_search") == 1
+    assert set(requests) <= {"https://api.twitterapi.io/twitter/tweet/advanced_search",
+                             "https://api.twitterapi.io/twitter/list/members"}
+    post = Post.objects.get(pk="99112233")
+    assert post.entities == entities
+    assert source_repo_evidence(post, "Qwen/Qwen3-4B")["exact_hf_repo_link"]
+    mentions = attribute_to_brands(
+        {"tweet_id": post.pk, "created_at": post.created_at.isoformat(), "entities": post.entities},
+        brands_accounts={"1001": "qwen"}, brand_hashtags={"qwen": "qwen"},
+        compiled_keyword_index=(None, {}), search_query=[], brand_search_terms={},
+    )
+    assert {(m.brand_id, m.source) for m in mentions} == {("qwen", "user_mention"), ("qwen", "hashtag")}
+
+
+@pytest.mark.parametrize("incomplete", [None, {}, "null", "[]", "bad json",
+    {"urls": None}, {"urls": []}, {"urls": "broken"}, {"urls": [None, "broken", {}]},
+    {"hashtags": [{"text": "newtag"}]},
+    {"urls": [{"url": "https://t.co/example", "expanded_url": None}]},
+])
+def test_post_update_keeps_existing_entity_evidence(provider_tweet_entities, incomplete):
+    from core.models import Post
+    from monitor.cycle import _upsert_post
+    post = Post.objects.create(tweet_id="entity-update", entities=provider_tweet_entities)
+    _upsert_post({"id": post.pk, "entities": incomplete})
+    post.refresh_from_db()
+    assert provider_tweet_entities["urls"][0] in post.entities["urls"]
+    assert provider_tweet_entities["hashtags"][0] in post.entities["hashtags"]
+    assert provider_tweet_entities["user_mentions"][0] in post.entities["user_mentions"]
+
+
+def test_post_update_adds_expansion_without_losing_positions():
+    from core.models import Post
+    from monitor.cycle import _upsert_post
+    post = Post.objects.create(tweet_id="entity-expansion", entities={"urls": [
+        {"url": "https://t.co/example", "indices": [0, 20]}]})
+    incoming = {"urls": [{"url": "https://t.co/example", "expanded_url": "https://huggingface.co/Qwen/Qwen3-4B"}]}
+    _upsert_post({"id": post.pk, "entities": incoming})
+    _upsert_post({"id": post.pk, "entities": incoming})
+    post.refresh_from_db()
+    assert post.entities == {"urls": [{**incoming["urls"][0], "indices": [0, 20]}]}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_post_entity_updates_keep_both_observations(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    from django.db import connections
+
+    from core.models import Post
+    from monitor import cycle
+
+    Post.objects.create(tweet_id="entity-concurrent", entities={"urls": [{"url": "https://t.co/first"}]})
+    merging, release, second_started, second_finished = Event(), Event(), Event(), Event()
+    real_merge = cycle.merge_entities
+    def merge(existing, incoming):
+        result = real_merge(existing, incoming)
+        if existing and "hashtags" in incoming:
+            merging.set()
+            assert release.wait(5), "test did not release first writer"
+        return result
+    monkeypatch.setattr(cycle, "merge_entities", merge)
+    def write(entities, second=False):
+        try:
+            if second:
+                second_started.set()
+            cycle._upsert_post({"id": "entity-concurrent", "entities": entities})
+            if second:
+                second_finished.set()
+        finally:
+            connections.close_all()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(write, {"hashtags": [{"text": "Qwen"}]})
+        try:
+            assert merging.wait(5)
+            second = pool.submit(write, {"user_mentions": [{"id_str": "1001", "screen_name": "Qwen"}]}, True)
+            assert second_started.wait(5)
+            assert not second_finished.wait(0.2), "Post row lock ended before entity merge"
+        finally:
+            release.set()
+        first.result(timeout=5)
+        second.result(timeout=5)
+    entities = Post.objects.get(pk="entity-concurrent").entities
+    assert entities == {"urls": [{"url": "https://t.co/first"}],
+                        "hashtags": [{"text": "Qwen"}],
+                        "user_mentions": [{"id_str": "1001", "screen_name": "Qwen"}]}
+
+
+def test_entity_update_preserves_repeated_url_positions_and_source_aliases():
+    from monitor.cycle import _upsert_post
+    first = {"url": "https://t.co/example", "indices": [0, 20]}
+    second = {"url": "https://t.co/example", "indices": [25, 45]}
+    post, created = _upsert_post({"id": "repeated-entities", "entities": {"urls": [first, second],
+        "user_mentions": [{"id_str": "1001", "id": 1001, "screen_name": "Qwen"}]}})
+    assert created
+    assert post.entities["urls"] == [first, second]
+    assert post.entities["user_mentions"][0] == {"id_str": "1001", "id": 1001, "screen_name": "Qwen"}
+    _upsert_post({"id": post.pk, "entities": {"urls": [{**second, "expanded_url": "https://example.com"}]}})
+    post.refresh_from_db()
+    assert post.entities["urls"] == [first, {**second, "expanded_url": "https://example.com"}]
