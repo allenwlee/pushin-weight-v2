@@ -27,6 +27,7 @@ from core.model_history_statistics import history_statistics_contract
 from core.models import (
     CollectionJob,
     CollectionObservation,
+    CollectionObservationInput,
     CollectionScopeRun,
     DataSource,
     MetricValue,
@@ -440,6 +441,19 @@ def _queue_publication(claim, job, publication, contract, start, end):
             require(
                 evidence.listing["rows"] == payload["rows"],
                 "immutable selected publication conflict",
+            )
+            require(
+                publication.run.job.source_id == source,
+                "selected publication belongs to another measurement source",
+            )
+            edge, _ = CollectionObservationInput.objects.get_or_create(
+                observation=evidence, input_observation=publication,
+                input_role="publication_row_origin",
+                defaults={"input_sha256": publication.observation_key},
+            )
+            require(
+                edge.input_sha256 == publication.observation_key,
+                "selected publication origin evidence changed",
             )
             selected_ids.append(evidence.pk)
         if selected_ids:

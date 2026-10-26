@@ -145,8 +145,14 @@ def _snapshot_publisher(observation, raw):
 
     job = observation.run.job
     native = None
-    if job.source_id == "github" and isinstance(raw.get("owner"), dict):
-        native = raw["owner"].get("id")
+    if job.source_id == "github":
+        if isinstance(raw.get("owner"), dict):
+            native = raw["owner"].get("id")
+        inherited_owner = observation.source_metadata.get("owner_id")
+        if inherited_owner is not None:
+            if native is not None and str(native) != str(inherited_owner):
+                raise ValueError("resource publisher conflicts with captured owner")
+            native = inherited_owner
     elif job.source_id == "hf":
         native = raw.get("author")
         identifier = raw.get("id")

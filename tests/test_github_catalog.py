@@ -149,6 +149,56 @@ def reader(handler, requests):
     )
 
 
+def test_release_assets_keep_typed_publisher_and_distinct_release_parents():
+    from copy import deepcopy
+
+    from core.models import Account
+
+    base, repo = configured()
+    definition = deepcopy(base.definition)
+    definition["scope"]["include_release_assets"] = True
+    job = register_job(
+        job_key="asset-parent-proof", source=base.source, purpose="catalog",
+        operation="github_catalog", mode="manual", definition=definition,
+    )
+    set_job_state(job.pk, "ready")
+    seen = []
+    original = responses(repo, seen)
+
+    def respond(request):
+        if request.url.path.endswith("/assets"):
+            seen.append(str(request.url))
+            release_id = int(request.url.path.split("/")[-2])
+            return httpx.Response(200, json=[{
+                "id": 70 + release_id, "name": "weights.bin", "size": 1024,
+                "download_count": release_id * 10,
+            }])
+        return original(request)
+
+    run = execute_github_catalog(job.pk, client=reader(respond, 30))
+    assert run.status == "success"
+    assets = list(run.observations.filter(observation_kind="release_asset").order_by("pk"))
+    assert len(assets) == 2
+    publisher = Account.objects.get(data_source_id="github", normalized_identifier="42")
+    expected_parents = {}
+    for asset in assets:
+        edge = asset.inputs.get(input_role="release_asset_parent")
+        release = edge.input_observation
+        release_id = asset.dimensions["release_id"]
+        assert release.observation_kind == "releases"
+        assert release.resource_snapshot.native_stable_id == str(release_id)
+        assert release.source_identifier == asset.source_identifier == str(repo["id"])
+        assert edge.input_sha256 == release.observation_key
+        assert asset.resource_snapshot.native_stable_id == str(70 + release_id)
+        assert asset.resource_snapshot.publisher_account_id == publisher.pk
+        expected_parents[asset.pk] = release.pk
+    assert len(set(expected_parents.values())) == 2
+    run.observations.update(listing={}, source_metadata={}, dimensions={})
+    for asset in run.observations.filter(observation_kind="release_asset"):
+        assert asset.inputs.get(input_role="release_asset_parent").input_observation_id == expected_parents[asset.pk]
+        assert asset.resource_snapshot.publisher_account_id == publisher.pk
+
+
 def test_two_page_inventory_resumes_and_distinct_events_keep_native_clocks():
     obj, repo = configured()
     seen = []

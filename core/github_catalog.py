@@ -14,6 +14,7 @@ from core.models import (
     Account,
     CollectionJob,
     CollectionObservation,
+    CollectionObservationInput,
     CollectionRun,
     CollectionScopeRun,
     DataSource,
@@ -582,7 +583,7 @@ def _release_assets(claim, client, repository, releases, items, limit):
             )
 
             def write_assets(
-                run, scope, rows=rows, result=result, release_id=release_id
+                run, scope, rows=rows, result=result, release_id=release_id, release=release
             ):
                 captured = [
                     _record(
@@ -601,6 +602,21 @@ def _release_assets(claim, client, repository, releases, items, limit):
                     )
                     for row in rows
                 ]
+                for observation in captured:
+                    require(
+                        observation.source_identifier == release.source_identifier,
+                        "release asset repository differs from its parent",
+                    )
+                    edge, _ = CollectionObservationInput.objects.get_or_create(
+                        observation=observation, input_observation=release,
+                        input_role="release_asset_parent",
+                        defaults={"row_locator": str(release_id), "input_sha256": release.observation_key},
+                    )
+                    require(
+                        edge.row_locator == str(release_id)
+                        and edge.input_sha256 == release.observation_key,
+                        "release asset parent evidence changed",
+                    )
                 _queue_numeric(claim, run, captured)
 
             scoped = checkpoint_scope(
