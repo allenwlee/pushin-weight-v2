@@ -280,6 +280,20 @@ harvest:
     reconcile_interval_hours: 6
     request_timeout_seconds: 30
   enrichment:
+    mode: inline
+    provider_calls_active: false
+    batch_size: 100
+    fresh_batch_size: 80
+    fresh_minutes: 30
+    translation_concurrency: 3
+    classification_concurrency: 3
+    max_worker_processes: 1
+    poll_seconds: 5
+    max_calls_per_batch: 600
+    classifier_reserved_calls: 120
+    gemma_concurrency_limit: 20
+    other_gemma_concurrency: 7
+    budget_window_id: ""
     claim_per_cycle: 100
     current_cycle_claim_per_cycle: 50
     carryover_claim_per_cycle: 50
@@ -410,6 +424,8 @@ synthesis:
   provider_calls_enabled: null
   control_revision: null
   batch_size: 5
+  # Independent per-post model calls; keep batch_size at least concurrency.
+  concurrency: 2
   poll_seconds: 2
   lease_seconds: 600
   timeout_seconds: 300

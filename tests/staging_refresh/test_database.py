@@ -1436,6 +1436,40 @@ def test_synthesis_coordination_refusal_precedes_snapshot_work(
     assert not list(tmp_path.glob("*.dump"))
 
 
+@pytest.mark.parametrize("action", ["preflight", "refresh"])
+def test_enrichment_coordination_refusal_precedes_snapshot_work(
+    tmp_path: Path, action: str
+) -> None:
+    engine, adapter, runner, events = _engine(
+        tmp_path, adapter_class=FakeLifecycleAdapter
+    )
+
+    @contextmanager
+    def refusing_enrichment_lock(_url: str, **_options: object) -> Iterator[None]:
+        events.append("lock:enrichment:refused")
+        raise DatabaseLockError("enrichment_lock_unavailable")
+        yield
+
+    runtime = PostgresRuntime(
+        engine.policy,
+        source_url=engine.source_url,
+        target_url=engine.target_url,
+        adapter=adapter,
+        engine=engine,
+        runner=runner,
+        now=engine.now,
+        harvest_lock_factory=_available_harvest_lock,
+        enrichment_lock_factory=refusing_enrichment_lock,
+        quiescence_guard=lambda: QuiescenceInspection((), 0, 0),
+    )
+
+    with pytest.raises(DatabaseLockError, match="^enrichment_lock_unavailable$"):
+        runtime.execute(action)
+
+    assert events == ["lock:enrichment:refused"]
+    assert not list(tmp_path.glob("*.dump"))
+
+
 @pytest.mark.parametrize(
     (
         "workers",

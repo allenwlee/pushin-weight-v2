@@ -135,7 +135,7 @@ def _translate_one(
     model, thinking = _translation_request_defaults(cfg)
     row = _row(tweet, lang_detected=None, failed=False)
     source_language = _declared_source_language(tweet)
-    if getattr(client, "deferred_requests", False):
+    if getattr(client, "deferred_requests", False) or getattr(client, "requires_request_context", False):
         telemetry_context = {**(telemetry_context or {}), "batch_request_context": {
             "post_ids": [row["tweet_id"]], "stage": "translation",
             "source_fingerprint": hashlib.sha256(source.encode()).hexdigest(),

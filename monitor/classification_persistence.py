@@ -195,6 +195,67 @@ def _subject_is_tracked(subject: dict[str, Any], tracked_catalog: Iterable[Any])
     return False
 
 
+def discard_tracked_promotion_subjects(
+    result: dict[str, Any], tracked_catalog: Iterable[Any]
+) -> dict[str, Any]:
+    """Keep valid brand judgments when a model also promotes a tracked subject.
+
+    The strict publication boundary still rejects tracked subjects from direct
+    callers. Only the scheduled model result is normalized before publication.
+    """
+    subjects = result.get("promoted_subjects")
+    promotions = result.get("untracked_brand_promotions")
+    if (
+        not isinstance(subjects, list) or not subjects
+        or not isinstance(promotions, list) or not promotions
+        or any(
+            not isinstance(key, str) or key not in UNTRACKED_BRAND_PROMOTION_KEYS
+            for key in promotions
+        )
+        or len(set(promotions)) != len(promotions)
+        or ("general" in promotions and promotions != ["general"])
+    ):
+        return result
+    expected = {"name", "handle", "domain", "account_handle", "evidence"}
+    if any(
+        not isinstance(subject, dict) or set(subject) != expected
+        or any(
+            not isinstance(subject[key], str) or not subject[key].strip()
+            for key in ("name", "evidence")
+        )
+        or any(
+            subject[key] is not None
+            and (not isinstance(subject[key], str) or not subject[key].strip())
+            for key in ("handle", "domain", "account_handle")
+        )
+        for subject in subjects
+    ):
+        return result
+    catalog = list(tracked_catalog)
+    retained = []
+    for subject in subjects:
+        # A keyword can be a search term rather than a product identity. Only
+        # reviewed names/products and exact official handles/domains qualify.
+        owners = {
+            row.get("brand_id") for row in catalog if isinstance(row, dict)
+            and _subject_is_tracked(subject, [{**row, "keywords": []}])
+        }
+        owners.discard(None)
+        if len(owners) > 1:
+            raise ValueError("classification_promotion_identity_ambiguous")
+        if not owners:
+            retained.append(subject)
+    if len(retained) == len(subjects):
+        return result
+    return {
+        **result,
+        "promoted_subjects": retained,
+        "untracked_brand_promotions": (
+            result.get("untracked_brand_promotions") if retained else []
+        ),
+    }
+
+
 def _merge_candidate(
     *,
     identity: str,

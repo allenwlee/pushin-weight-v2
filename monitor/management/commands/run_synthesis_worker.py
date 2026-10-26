@@ -66,6 +66,7 @@ class Command(BaseCommand):
                         )
                     if options["once"]:
                         return
-                    time.sleep(config.poll_seconds)
+                    if not result["claimed"]:
+                        time.sleep(config.poll_seconds)
         except DatabaseLockError as exc:
             raise CommandError(str(exc)) from exc

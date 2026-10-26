@@ -2156,6 +2156,36 @@ class PostEnrichmentState(models.Model):
         ]
 
 
+class EnrichmentBudgetWindow(models.Model):
+    """One explicitly provisioned spending allowance shared by enrichment writers."""
+
+    class Scope(models.TextChoices):
+        PILOT = "pilot", "Pilot"
+        SCHEDULED = "scheduled", "Scheduled"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    scope = models.CharField(max_length=16, choices=Scope.choices)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    request_limit = models.PositiveIntegerField()
+    usd_limit = models.DecimalField(max_digits=12, decimal_places=6)
+    reserved_requests = models.PositiveIntegerField(default=0)
+    reserved_usd = models.DecimalField(max_digits=12, decimal_places=6, default=0)
+    config_fingerprint = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "enrichment_budget_windows"
+        constraints = [
+            models.UniqueConstraint(fields=["scope", "starts_at"], name="uq_enrich_budget_start"),
+            models.CheckConstraint(condition=models.Q(scope__in=["pilot", "scheduled"]), name="ck_enrich_budget_scope"),
+            models.CheckConstraint(condition=models.Q(ends_at__gt=models.F("starts_at")), name="ck_enrich_budget_interval"),
+            models.CheckConstraint(condition=models.Q(request_limit__gt=0, usd_limit__gt=0), name="ck_enrich_budget_positive"),
+            models.CheckConstraint(condition=models.Q(reserved_requests__lte=models.F("request_limit")), name="ck_enrich_budget_requests"),
+            models.CheckConstraint(condition=models.Q(reserved_usd__gte=0, reserved_usd__lte=models.F("usd_limit")), name="ck_enrich_budget_usd"),
+        ]
+
+
 class PostTranslationArtifact(models.Model):
     """One versioned literal-translation lifecycle for a post body."""
 

@@ -111,8 +111,8 @@ def test_claims_are_bounded_and_active_claims_are_not_double_owned():
     assert len(second.states) == 1
     assert {state.claim_run_id for state in first.states} == {"run-1"}
     assert {state.claim_run_id for state in second.states} == {"run-2"}
-    assert all(state.translation_attempts == 1 for state in first.states)
-    assert all(state.classification_attempts == 1 for state in first.states)
+    assert all(state.translation_attempts == 0 for state in first.states)
+    assert all(state.classification_attempts == 0 for state in first.states)
 
 
 def test_two_lane_claim_rolls_back_all_ownership_and_attempts_on_failure(
@@ -177,7 +177,7 @@ def test_expired_claim_is_recoverable_by_the_next_cycle():
     assert batch.states[0].claim_run_id == "replacement-run"
 
 
-def test_attempt_and_age_exhaustion_transition_to_failed_without_claiming():
+def test_only_attempt_exhaustion_is_terminal_while_old_waiting_work_is_claimed():
     from core.models import PostEnrichmentState
     from monitor.cycle import _claim_enrichment_states
 
@@ -195,14 +195,15 @@ def test_attempt_and_age_exhaustion_transition_to_failed_without_claiming():
         run_id="run-quarantine",
     )
 
-    assert batch.states == ()
-    assert batch.quarantined == 2
+    assert [state.pk for state in batch.states] == [aged.pk]
+    assert batch.quarantined == 1
     exhausted.refresh_from_db()
     aged.refresh_from_db()
     assert exhausted.translation_status == PostEnrichmentState.Status.FAILED
     assert exhausted.classification_status == PostEnrichmentState.Status.FAILED
     assert exhausted.translation_error_code == "attempts_exhausted"
-    assert aged.classification_error_code == "age_exhausted"
+    assert aged.classification_status == "pending"
+    assert aged.classification_attempts == 0
 
 
 def test_post_fetch_reaches_classifier_when_expired_debt_fills_claim_window(
@@ -259,14 +260,14 @@ def test_post_fetch_reaches_classifier_when_expired_debt_fills_claim_window(
 
     counters = CycleRunner(cfg=_cfg())._run_post_fetch(
         [],
-        run_id="run-after-expired-debt",
+        run_id="run-after-expired-debt", fair_queue=True,
     )
 
     fresh.refresh_from_db()
     assert fresh.pk in classified_ids
-    assert len(classified_ids) == 50
-    assert counters["n_enrichment_claimed"] == 50
-    assert counters["n_enrichment_quarantined"] == 25
+    assert len(classified_ids) == 76
+    assert counters["n_enrichment_claimed"] == 76
+    assert counters["n_enrichment_quarantined"] == 0
     assert fresh.translation_status == PostEnrichmentState.Status.SUCCEEDED
     assert fresh.classification_status == PostEnrichmentState.Status.SUCCEEDED
 
@@ -536,13 +537,14 @@ def test_claim_preserves_fresh_pre_cycle_cohort_ahead_of_older_retries():
 
     batch = _claim_enrichment_states(
         cfg=_cfg().harvest.enrichment,
-        run_id="fresh-before-retry-debt",
+        run_id="fresh-before-retry-debt", fair_queue=True,
         now=cutoff + timedelta(minutes=1),
         prefer_created_before=cutoff,
     )
 
-    assert len(batch.states) == 50
-    assert {state.pk for state in batch.states} == {state.pk for state in retained}
+    assert len(batch.states) == 100
+    assert set(batch.current_cycle_post_ids) == {state.pk for state in retained}
+    assert set(batch.carryover_post_ids) == {state.pk for state in retries}
 
 
 def test_translation_timeout_does_not_consume_classifier_stage_budget(monkeypatch):

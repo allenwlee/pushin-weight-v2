@@ -156,6 +156,54 @@ services:
       - key: X_MONITOR_SYNTHESIS_CONTROL_REVISION
         value: staging-v2-demand-ja-output1024-20260921
 
+  - type: worker
+    name: pushinweight-staging-enrichment
+    repo: https://github.com/allenwlee/pushin-weight-v2
+    branch: staging
+    autoDeployTrigger: commit
+    runtime: python
+    region: oregon
+    plan: starter
+    numInstances: 1
+    maxShutdownDelaySeconds: 120
+    buildCommand: ./build.sh
+    startCommand: python manage.py run_enrichment_worker --json
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: staging
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-staging-db
+          property: connectionString
+      - key: PW_SERVING_DATABASE_ROLE
+        value: pushinweight_web_serving
+      - key: DEEPINFRA_ON_DEMAND
+        sync: false
+      - key: X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED
+        value: "True"
+      - key: X_MONITOR_RARE_TYPES_ENABLED
+        value: "True"
+      - key: X_MONITOR_RARE_TYPES_ASSESSMENT_PATH
+        value: docs/analysis/harvester/2026-09-24-172323-rare-type-archived-live56-assessment.json
+      - key: X_MONITOR_RARE_TYPES_ASSESSMENT_DIGEST
+        value: 03165d5084fb8605e5eaa115f5dd98274bb5e7a0a2bfa334e5200bc8776a726a
+      - key: X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED
+        value: "True"
+      - key: X_MONITOR_RARE_TYPES_HF_VERIFICATION_ENABLED
+        value: "True"
+      - key: X_MONITOR_ENRICHMENT_MODE
+        value: worker
+      - key: X_MONITOR_ENRICHMENT_PROVIDER_CALLS_ACTIVE
+        value: "False"
+      - key: X_MONITOR_ENRICHMENT_BUDGET_WINDOW_ID
+        sync: false
+
   - type: cron
     name: pushinweight-staging-harvest
     repo: https://github.com/allenwlee/pushin-weight-v2
