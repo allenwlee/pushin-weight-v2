@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from django.utils import timezone
 
 from core.benchmark_metric_store import aware_instant
+from core.collection_capture import scope_object_documents
 from core.collection_state import (
     BusyJob,
     checkpoint_scope,
@@ -213,8 +214,9 @@ def _runtime_publication_window(claim, job):
     elif old and job.instruction_version == 1:
         # Expansion adapter for preexisting frozen windows. No new execution
         # uses this representation once the typed bounds have been populated.
-        start_at = aware_instant(old.envelopes[0]["publication_start_at"])
-        cutoff = aware_instant(old.envelopes[0]["cutoff"])
+        saved_window = scope_object_documents(old)[2][0]
+        start_at = aware_instant(saved_window["publication_start_at"])
+        cutoff = aware_instant(saved_window["cutoff"])
     else:
         require(old is None, "saved publication window lacks typed bounds")
         cutoff = (
@@ -305,7 +307,7 @@ def _execute_models(claim, job, budget, *, key, before):
             .first()
         )
         if old:
-            coverage.extend(old.envelopes)
+            coverage.extend(scope_object_documents(old)[2])
             continue
         source_pins = [
             p for p in model.get("provider_pins", []) if p["source"] == job.source_id

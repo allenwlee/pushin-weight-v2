@@ -97,6 +97,26 @@ def observation_object_documents(observation):
     return document["listing"], document["dimensions"], document["source_metadata"]
 
 
+def scope_object_documents(scope):
+    """Return checkpoint wording from its preserved document after retirement."""
+    # Live additive writers may still advance a copied scope. The final frozen
+    # delta repairs its archive before old columns are removed.
+    if scope.legacy_archive_id is None or any((
+        scope.ownership, scope.cursor_history, scope.envelopes,
+    )):
+        return scope.ownership, scope.cursor_history, scope.envelopes
+    document = read_document(scope.legacy_archive)
+    require(
+        isinstance(document, dict)
+        and isinstance(document.get("ownership"), dict)
+        and all(isinstance(document.get(key), list) for key in (
+            "cursor_history", "envelopes",
+        )),
+        "invalid archived scope document",
+    )
+    return document["ownership"], document["cursor_history"], document["envelopes"]
+
+
 def checked_endpoint(url):
     require(isinstance(url, str), "request URL required")
     parsed = urlsplit(url)

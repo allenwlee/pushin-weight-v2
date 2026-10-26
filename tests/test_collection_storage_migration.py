@@ -792,6 +792,14 @@ def test_legacy_documents_are_archived_once_and_changed_rows_are_reconciled():
         "items": [{"id": "one"}]
     }
     assert read_document(scope.legacy_archive)["ownership"] == {"query": "example"}
+    from core.collection_capture import scope_object_documents
+
+    scope.envelopes = [{"state": "newer_live_checkpoint"}]
+    scope.save(update_fields=["envelopes"])
+    assert scope_object_documents(scope)[2] == [{"state": "newer_live_checkpoint"}]
+    scope.ownership, scope.cursor_history, scope.envelopes = {}, [], []
+    scope.save(update_fields=["ownership", "cursor_history", "envelopes"])
+    assert scope_object_documents(scope) == ({"query": "example"}, [], [])
     assert read_document(observation.legacy_archive)["dimensions"] == {
         "config": "text"
     }
