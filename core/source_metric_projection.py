@@ -33,10 +33,180 @@ from core.models import (
     CollectionObservation,
     CollectionScopeRun,
     CompanyAccount,
+    MetricValue,
 )
 
 PROJECTION_ITEM_KIND = "numeric_projection_item"
 PROJECTION_QUEUE_PHASE = "projection_queue"
+PROJECTION_RESULT_KIND = "numeric_projection_result"
+PROJECTION_OUTPUT_KIND = "numeric_projection_output"
+PROJECTION_RESULT_PHASE = "projection_results_v1"
+
+
+def _empty_scope_compatibility():
+    return {"ownership": {}} if any(
+        field.name == "ownership" for field in CollectionScopeRun._meta.fields
+    ) else {}
+
+
+def _result_parent(claim, run, contract):
+    previous = run.scopes.filter(scope_kind="numeric_projection", scope_key="saved-evidence").first()
+    require(previous is None or previous.phase == PROJECTION_RESULT_PHASE,
+            "historical projection summary requires explicit adoption before continuation")
+    scope = previous or checkpoint_scope(
+        claim, scope_kind="numeric_projection", scope_key="saved-evidence", typed=True,
+        ownership={"contract_hash": contract.contract_hash}, projection_contract=contract,
+    )
+    if previous is None:
+        scope.phase = PROJECTION_RESULT_PHASE
+        scope.save(update_fields=["phase"])
+    return scope
+
+
+def _retain_results(scope, selected, prepared, observations, accounting, before_values, rejections, terminal_ids):
+    """One source evaluation and its actual outputs; reused rows keep their run."""
+    from core.collection_capture import archive_document
+
+    outputs = {}
+    for observation, (data, values) in zip(observations, prepared, strict=True):
+        outputs.setdefault(data["source_metadata"]["origin_observation_id"], []).append((observation, values))
+    retained = {key: set(values) for key, values in before_values.items()}
+    terminal_ids = set(terminal_ids)
+    written = created = 0
+    for evidence in selected:
+        require(evidence.run.job.source_id == scope.run.job.source_id
+                and evidence.run.job.purpose == "catalog", "projection source owner changed")
+        rows = outputs.get(evidence.pk, [])
+        require(len(rows) <= 1, "one projection output per source capture required")
+        diagnostics = [row for row in rejections if row["observation_id"] == evidence.pk]
+        outcome = ("admitted_with_gaps" if diagnostics else "admitted") if rows else (
+            "terminal_invalid" if any(row.get("outcome") == "invalid" for row in diagnostics)
+            else "terminal_missing"
+        ) if evidence.pk in terminal_ids else "rejected"
+        diagnostic_archive = None
+        if diagnostics:
+            diagnostic_archive = archive_document(
+                json.dumps({"version": 1, "source_observation_id": evidence.pk, "rejections": diagnostics},
+                           sort_keys=True, separators=(",", ":"), allow_nan=False).encode(),
+                encoding="selected-json-canonical-v1", capture_kind="numeric_projection_evidence",
+            )
+        # Re-evaluating a source in one logical run would destroy the original
+        # accounting. New attempts/runs or an advancing cursor own new work.
+        item = CollectionScopeRun.objects.create(
+            run=scope.run, scope_kind=PROJECTION_RESULT_KIND, scope_key=str(evidence.pk),
+            parent_scope=scope, resource_observation=evidence,
+            projection_contract=scope.projection_contract, phase=PROJECTION_RESULT_PHASE,
+            outcome=outcome, enumeration_complete=outcome != "rejected", raw_count=1,
+            execution_state="yielded" if outcome == "rejected" else "completed",
+            coverage_state="complete" if outcome == "admitted" else "partial",
+            legacy_archive=diagnostic_archive, **_empty_scope_compatibility(),
+        )
+        for observation, values in rows:
+            require(observation.run.job.contract_id == scope.projection_contract_id
+                    and observation.run.job.source_id == scope.run.job.source_id
+                    and observation.projection_kind == SOURCE_STATISTICS_POLICY,
+                    "projection output contract or source changed")
+            reused = observation.observation_key in retained
+            previous = retained.setdefault(observation.observation_key, set())
+            supplied = {value["source_metric"].pk for value in values}
+            count = len(supplied - previous)
+            previous.update(supplied)
+            written += count
+            created += not reused
+            CollectionScopeRun.objects.create(
+                run=scope.run, scope_kind=PROJECTION_OUTPUT_KIND,
+                scope_key=f"{evidence.pk}:{observation.pk}", parent_scope=item,
+                resource_observation=observation, projection_contract=scope.projection_contract,
+                phase="reused" if reused else "written",
+                admission_outcome="mapped" if observation.product_id is not None else "native_only",
+                outcome="complete", enumeration_complete=True, raw_count=count,
+                execution_state="completed", coverage_state="complete",
+                **_empty_scope_compatibility(),
+            )
+    require(written == accounting["written_values"], "projection value accounting differs from committed rows")
+    require(created == accounting["written_observations"], "projection observation accounting differs from committed rows")
+
+
+def projection_report(run):
+    """Operational status from typed results; exact diagnostics remain evidence."""
+    from core.benchmark_serving import github_asset_coordinates, observation_dimensions
+
+    scope = run.scopes.only("pk", "phase", "projection_contract_id").get(scope_kind="numeric_projection", scope_key="saved-evidence")
+    require(scope.phase == PROJECTION_RESULT_PHASE and scope.projection_contract_id == run.job.contract_id,
+            "projection results are not typed or have a different contract")
+    items = list(scope.child_scopes.filter(scope_kind=PROJECTION_RESULT_KIND).select_related("resource_observation__run__job").only(
+        "pk", "run_id", "scope_key", "phase", "outcome", "enumeration_complete", "raw_count",
+        "projection_contract_id", "resource_observation_id", "resource_observation__run_id",
+        "resource_observation__run__job_id", "resource_observation__run__job__purpose",
+        "resource_observation__run__job__source_id",
+    ))
+    output_rows = list(CollectionScopeRun.objects.filter(
+        parent_scope__in=items, scope_kind=PROJECTION_OUTPUT_KIND,
+    ).select_related("resource_observation__run__job", "parent_scope").only(
+        "pk", "run_id", "scope_key", "phase", "outcome", "enumeration_complete", "raw_count",
+        "admission_outcome", "projection_contract_id", "parent_scope_id", "parent_scope__resource_observation_id",
+        "resource_observation_id", "resource_observation__source_identifier", "resource_observation__projection_kind",
+        "resource_observation__config_key", "resource_observation__category_key", "resource_observation__source_record_date",
+        "resource_observation__run_id", "resource_observation__run__job_id",
+        "resource_observation__run__job__source_id", "resource_observation__run__job__contract_id",
+    ))
+    asset_coordinates = github_asset_coordinates(
+        [row.resource_observation_id for row in output_rows],
+    ) if run.job.source_id == "github" else {}
+    by_source = {}
+    for output in output_rows:
+        observation = output.resource_observation
+        require(output.run_id == run.pk and output.projection_contract_id == run.job.contract_id
+                and output.phase in {"written", "reused"} and output.outcome == "complete"
+                and output.admission_outcome in {"mapped", "native_only"}
+                and output.enumeration_complete and output.raw_count >= 0 and observation is not None
+                and observation.run.job.contract_id == run.job.contract_id
+                and observation.run.job.source_id == run.job.source_id
+                and observation.projection_kind == SOURCE_STATISTICS_POLICY
+                and output.scope_key == f"{output.parent_scope.resource_observation_id}:{observation.pk}",
+                "projection output identity changed")
+        by_source.setdefault(output.parent_scope_id, []).append(output)
+    rejections, coverage = [], []
+    for item in items:
+        evidence = item.resource_observation
+        require(item.run_id == run.pk and item.projection_contract_id == run.job.contract_id
+                and evidence is not None and evidence.run.job.purpose == "catalog"
+                and evidence.run.job.source_id == run.job.source_id
+                and item.scope_key == str(evidence.pk) and item.phase == PROJECTION_RESULT_PHASE
+                and item.raw_count == 1
+                and item.outcome in {"admitted", "admitted_with_gaps", "terminal_invalid", "terminal_missing", "rejected"}
+                and item.enumeration_complete == (item.outcome != "rejected"),
+                "projection result identity changed")
+        require(len(by_source.get(item.pk, [])) == (1 if item.outcome.startswith("admitted") else 0),
+                "projection result output count changed")
+        if item.outcome != "admitted":
+            rejection = {
+                "observation_id": evidence.pk, "outcome": item.outcome,
+                "reason": item.outcome.replace("_", " "),
+                "diagnostic_scope_id": item.pk,
+            }
+            if item.outcome.startswith("terminal"):
+                rejection["terminal"] = True
+            rejections.append(rejection)
+            coverage.append({"source": run.job.source_id, "origin_observation_id": evidence.pk, **rejection})
+    for output in output_rows:
+        observation = output.resource_observation
+        coverage.append({"source": run.job.source_id, "observation_id": observation.pk,
+                         "source_identifier": observation.source_identifier,
+                         "dimensions": asset_coordinates.get(observation.pk, observation_dimensions(observation)),
+                         "outcome": "native_only" if output.admission_outcome == "native_only" else output.phase})
+    return {
+        "selected_resources": len(items), "admitted_resources": len(output_rows),
+        "terminal_resources": sum(item.outcome.startswith("terminal") for item in items),
+        "mapped_resources": sum(row.admission_outcome == "mapped" for row in output_rows),
+        "native_only_resources": sum(row.admission_outcome == "native_only" for row in output_rows),
+        "written_values": sum(row.raw_count for row in output_rows),
+        "written_observations": sum(row.phase == "written" for row in output_rows),
+        "reused_observation_ids": [row.resource_observation_id for row in output_rows if row.phase == "reused"],
+        "observation_ids": [row.resource_observation_id for row in output_rows],
+        "source_observation_ids": [item.resource_observation_id for item in items],
+        "rejections": rejections, "coverage": coverage,
+    }
 
 
 def _ownership_pin(account):
@@ -546,7 +716,7 @@ def _retain_projection_items(scope, evidence_ids):
         CollectionScopeRun(
             run_id=scope.run_id, scope_kind=PROJECTION_ITEM_KIND,
             scope_key=f"{scope.projection_contract_id}:{observation_id}",
-            ownership={}, parent_scope=scope, resource_observation_id=observation_id,
+            **_empty_scope_compatibility(), parent_scope=scope, resource_observation_id=observation_id,
             projection_contract_id=scope.projection_contract_id,
         )
         for observation_id in ids
@@ -651,7 +821,7 @@ def enqueue_projection(claim, *, contract, evidence_ids):
         scope = existing or checkpoint_scope(
             claim, scope_kind="numeric_projection", scope_key=key,
             ownership={"contract_id": key, "contract_hash": contract.contract_hash},
-            projection_contract=contract,
+            projection_contract=contract, typed=True,
         )
         if existing is None:
             scope.phase = PROJECTION_QUEUE_PHASE
@@ -774,100 +944,29 @@ def _project_evidence(
         except (ValueError, KeyError, TypeError) as exc:
             rejections.append({"observation_id": evidence.pk, "reason": str(exc)})
     with collection_lock(contract, source), fenced_run(claim) as (_, run):
-        observations, accounting = commit_prepared_rows(
-            run, prepared, reuse_snapshots=True
-        )
-        previous = run.scopes.filter(
-            scope_kind="numeric_projection", scope_key="saved-evidence"
-        ).first()
-        prior = previous.envelopes[0] if previous and previous.envelopes else {}
-        mapped = sum(observation.product_id is not None for observation in observations)
-        projection = {
-            **accounting,
-            "selected_resources": len(selected),
-            "admitted_resources": len(observations),
-            "terminal_resources": len(set(terminal_ids)),
-            "mapped_resources": mapped,
-            "native_only_resources": len(observations) - mapped,
-            "rejections": rejections,
-            "observation_ids": [observation.pk for observation in observations],
-            "source_observation_ids": [evidence.pk for evidence in selected],
-        }
-        for counter in (
-            "selected_resources",
-            "admitted_resources",
-            "terminal_resources",
-            "mapped_resources",
-            "native_only_resources",
-            "written_values",
-            "written_observations",
-        ):
-            projection[counter] += prior.get(counter, 0)
-        for references in (
-            "observation_ids",
-            "source_observation_ids",
-            "reused_observation_ids",
-            "rejections",
-        ):
-            projection[references] = prior.get(references, []) + projection[references]
-        coverage = [
-            {
-                "source": source,
-                "observation_id": observation.pk,
-                "source_identifier": observation.source_identifier,
-                "dimensions": observation_object_documents(observation)[1],
-                "outcome": "native_only"
-                if observation.product_id is None
-                else "reused"
-                if observation.pk in accounting["reused_observation_ids"]
-                else "written",
-            }
-            for observation in observations
-        ]
-        coverage += [
-            {
-                "source": source,
-                "origin_observation_id": rejection["observation_id"],
-                "outcome": rejection.get(
-                    "outcome", "not_returned" if "metric" in rejection else "unmapped"
-                ),
-                "reason": rejection["reason"],
-                **({"metric": rejection["metric"]} if "metric" in rejection else {}),
-            }
-            for rejection in rejections
-        ]
-        coverage = (
-            run.report.get("coverage", []) if not prior else prior.get("coverage", [])
-        ) + coverage
-        projection["coverage"] = coverage
+        scope = _result_parent(claim, run, contract)
+        existing_outputs = dict(CollectionObservation.objects.filter(
+            observation_key__in=[data["observation_key"] for data, _ in prepared],
+            run__job__contract_id=contract.pk, run__job__source_id=source,
+            run__job__purpose="metric",
+        ).values_list("pk", "observation_key"))
+        before_values = {key: set() for key in existing_outputs.values()}
+        for observation_id, metric_id in MetricValue.objects.filter(observation_id__in=existing_outputs).values_list("observation_id", "source_metric_id"):
+            before_values[existing_outputs[observation_id]].add(metric_id)
+        observations, accounting = commit_prepared_rows(run, prepared, reuse_snapshots=True)
+        _retain_results(scope, selected, prepared, observations, accounting, before_values, rejections, terminal_ids)
+        projection = projection_report(run)
         checkpoint_scope(
-            claim,
-            scope_kind="numeric_projection",
-            scope_key="saved-evidence",
-            ownership={"contract_hash": contract.contract_hash},
-            projection_contract=contract,
-            cursor=cursor,
-            enumeration_complete=complete,
-            outcome="complete" if complete else "pending",
-            raw_count=projection["selected_resources"],
-            envelopes=[projection],
+            claim, scope_kind="numeric_projection", scope_key="saved-evidence", typed=True,
+            ownership={"contract_hash": contract.contract_hash}, projection_contract=contract,
+            cursor=cursor, enumeration_complete=complete,
+            outcome="complete" if complete else "pending", raw_count=projection["selected_resources"],
         )
-        # Rejections of malformed optional fields do not invalidate admitted resources.
-        missing = (
-            projection["admitted_resources"] + projection["terminal_resources"]
-            != projection["selected_resources"]
-        )
+        missing = projection["admitted_resources"] + projection["terminal_resources"] != projection["selected_resources"]
         return finish_run(
-            claim,
-            status="success" if complete and not missing else "partial",
-            selected_count=projection["selected_resources"],
-            success_count=projection["admitted_resources"],
-            request_count=0,
-            report={
-                "projection": projection,
-                "coverage": coverage,
-                "physical_accounting_complete": True,
-            },
+            claim, status="success" if complete and not missing else "partial", typed=True,
+            physical_accounting_complete=True, selected_count=projection["selected_resources"],
+            success_count=projection["admitted_resources"], request_count=0,
         )
 
 
@@ -899,12 +998,24 @@ def project_evidence(claim, evidence_ids, *, cursor=None, complete=True, deadlin
         # Source lock contention is retryable within the same still-live claim.
         if str(exc) == "metric collection is already running":
             raise
+        from core.collection_capture import archive_document
+
+        with fenced_run(claim) as (job, failed_run):
+            scope = _result_parent(claim, failed_run, job.contract)
+            scope.legacy_archive = archive_document(
+                json.dumps({"version": 1, "projection_error": str(exc)},
+                           sort_keys=True, separators=(",", ":"), allow_nan=False).encode(),
+                encoding="selected-json-canonical-v1", capture_kind="numeric_projection_evidence",
+            )
+            scope.outcome = "failed"
+            scope.execution_state = "failed"
+            scope.coverage_state = "unavailable"
+            scope.save(update_fields=["legacy_archive", "outcome", "execution_state", "coverage_state"])
         finish_run(
             claim,
             status="failed",
             error_code="invalid_numeric_projection",
-            report={"projection_error": str(exc)},
-            request_count=0,
+            typed=True, physical_accounting_complete=True, request_count=0,
         )
         raise
 
@@ -957,7 +1068,7 @@ def replay_saved_evidence(job_id):
     evidence_rows = selected.select_related("legacy_archive").prefetch_related(
         "run__job__numeric_contract", "numeric_selections",
     ).only(
-        "id", "listing", "source_metadata", "dimensions", "run_id", "numeric_fields_explicit",
+        "id", "run_id", "numeric_fields_explicit",
         "legacy_archive__body", "legacy_archive__content_sha256",
     ).iterator(chunk_size=100)
     for evidence in evidence_rows:
@@ -1119,12 +1230,10 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
             pass
         claim = claim_job(job.pk)
         run = project_evidence(claim, ids, deadline=monotonic() + remaining_seconds())
-        projection = run.report["projection"]
-        rejected = {
-            row["observation_id"]
-            for row in projection["rejections"]
-            if "metric" not in row and not row.get("terminal")
-        }
+        projection = projection_report(run)
+        rejected = set(run.scopes.filter(
+            scope_kind=PROJECTION_RESULT_KIND, outcome="rejected",
+        ).values_list("resource_observation_id", flat=True))
         committed = set(ids) - rejected
         # Fence the acquisition before locking its queue row, matching enqueue's
         # job/run/scope order. An independent numeric commit remains valid when

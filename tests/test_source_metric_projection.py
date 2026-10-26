@@ -12,6 +12,8 @@ from django.core.management import call_command
 from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 
+from core.benchmark_serving import github_asset_coordinates, observation_dimensions
+from core.collection_capture import read_document, run_report_document
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import StaleClaim, claim_job
 from core.measurement_taxonomy import configure_taxonomy, digest, subject_id
@@ -251,7 +253,6 @@ def test_saved_native_counters_write_and_cross_job_replay_reuses_original_clock(
     assert MetricValue.objects.count() == count
     observation = CollectionObservation.objects.exclude(pk=snapshot.pk).get()
     assert observation.mapping_id is None and observation.product_id is None
-    assert observation.source_metadata["native_only"] is True
     assert observation.observed_at == CAPTURED
     for value in observation.values.all():
         if value.source_metric.measurement_kind == "state":
@@ -261,7 +262,6 @@ def test_saved_native_counters_write_and_cross_job_replay_reuses_original_clock(
             assert value.window_end_at == CAPTURED
             assert value.window_start_at == CAPTURED - timedelta(days=30)
         assert value.temporal_status == "exact"
-    assert observation.source_metadata["reported_time"]["policy"] == "reported-time-v1"
     assert all(value.reported_time_policy == "reported-time-v1" for value in observation.values.all())
     assert any(v.integer_value == 0 for v in observation.values.all())
     # Replaying a retained numeric projection must use its typed identity and
@@ -271,7 +271,7 @@ def test_saved_native_counters_write_and_cross_job_replay_reuses_original_clock(
     )
     second = project(contract, source, [snapshot], key="second")
     assert second.status == "success" and MetricValue.objects.count() == count
-    assert second.report["projection"]["reused_observation_ids"] == [observation.pk]
+    assert run_report_document(second)["projection"]["reused_observation_ids"] == [observation.pk]
     observation.refresh_from_db()
     assert observation.run_id == first.pk
     assert (
@@ -299,7 +299,7 @@ def test_bad_optional_fields_do_not_drop_other_numbers_and_new_capture_is_distin
     first = project(contract, "hf", [evidence("hf", raw)])
     assert first.status == "success"
     assert MetricValue.objects.get().integer_value == 0
-    assert first.report["projection"]["rejections"]
+    assert run_report_document(first)["projection"]["rejections"]
     newer = evidence("hf", raw, observed_at=CAPTURED + timedelta(days=1))
     project(contract, "hf", [newer], key="new-capture")
     assert MetricValue.objects.count() == 2
@@ -377,7 +377,7 @@ def test_family_repo_stays_native_only_instead_of_copying_models():
     run = project(contract, "github", [evidence("github", raw)])
     assert run.observations.get().mapping_id is None
     assert MetricValue.objects.count() == 3
-    assert run.report["projection"]["mapped_resources"] == 0
+    assert run_report_document(run)["projection"]["mapped_resources"] == 0
 
 
 def test_unreviewed_owner_cannot_be_admitted():
@@ -385,7 +385,7 @@ def test_unreviewed_owner_cannot_be_admitted():
     raw["owner"]["id"] = 999
     run = project(contract, "github", [evidence("github", raw)])
     assert run.status == "partial"
-    assert run.report["projection"]["rejections"][0]["reason"]
+    assert run_report_document(run)["projection"]["rejections"][0]["reason"]
     assert not MetricValue.objects.exists()
 
 
@@ -406,11 +406,6 @@ def test_projection_constraint_is_cross_run_and_only_for_selected_marker():
         lease_expires_at=timezone.now() + timedelta(seconds=60),
         lease_token=uuid4(),
     )
-    with pytest.raises(IntegrityError), transaction.atomic():
-        CollectionObservation.objects.create(
-            **{**fields, "run": other},
-            source_metadata={"projection_kind": "source-statistics-v1"},
-        )
     # The replacement invariant must also protect writers that no longer
     # duplicate the projection kind in legacy JSON.
     with pytest.raises(IntegrityError), transaction.atomic():
@@ -485,7 +480,7 @@ def test_replay_command_default_hook_is_bounded_resumable_and_has_no_http(monkey
     assert MetricValue.objects.count() == 4
     selected.refresh_from_db()
     assert selected.state == "completed"
-    assert selected.last_success.report["physical_accounting_complete"] is True
+    assert run_report_document(selected.last_success)["physical_accounting_complete"] is True
 
 
 def test_unknown_flow_can_be_absent_while_likes_survive_and_optional_versions_are_pinned():
@@ -555,16 +550,16 @@ def test_asset_dimensions_sizes_and_counter_do_not_become_repo_totals():
     assert values["repository_size_kb"].source_metric.unit_reference_id == "kilobytes"
     assert values["asset_size_bytes"].integer_value == 1024
     assert values["asset_size_bytes"].source_metric.unit_reference_id == "bytes"
-    assert values["asset_downloads"].observation.dimensions == {
+    assert github_asset_coordinates([values["asset_downloads"].observation_id])[values["asset_downloads"].observation_id] == {
         "release_id": 8,
         "asset_id": 7,
     }
-    assert values["stars"].observation.dimensions == {}
+    assert observation_dimensions(values["stars"].observation) == {}
     CollectionObservation.objects.filter(
         pk=values["asset_downloads"].observation_id,
     ).update(dimensions={}, source_metadata={})
     replay = project(contract, "github", [repo, asset], key="typed-asset-replay")
-    assert replay.report["projection"]["reused_observation_ids"]
+    assert run_report_document(replay)["projection"]["reused_observation_ids"]
     CollectionObservation.objects.filter(pk__in=[
         release.pk, asset.pk, values["asset_downloads"].observation_id,
     ]).update(dimensions={}, source_metadata={}, listing={})
@@ -604,7 +599,7 @@ def test_published_revision_reuses_identity_and_conflicting_number_fails_visibly
     second.save()
     repeated = project(contract, "hf", [second], key="publication-again")
     assert MetricValue.objects.count() == 2
-    assert repeated.report["projection"]["reused_observation_ids"] == [
+    assert run_report_document(repeated)["projection"]["reused_observation_ids"] == [
         run.observations.get().pk
     ]
     assert (
@@ -618,7 +613,9 @@ def test_published_revision_reuses_identity_and_conflicting_number_fails_visibly
     with pytest.raises(ValueError, match="immutable numeric snapshot conflict"):
         project(contract, "hf", [second], key="conflict")
     assert MetricValue.objects.get(source_metric__metric_key="likes").integer_value == 4
-    assert not CollectionRun.objects.get(job__job_key="conflict").scopes.exists()
+    failed = CollectionRun.objects.get(job__job_key="conflict")
+    assert failed.scopes.get(scope_kind="numeric_projection").outcome == "failed"
+    assert not failed.scopes.filter(scope_kind__in=["numeric_projection_result", "numeric_projection_output"]).exists()
 
 
 def test_pending_projection_reference_is_atomic_with_evidence_and_pause_fences_writer():
@@ -676,7 +673,11 @@ def test_pending_projection_reference_is_atomic_with_evidence_and_pause_fences_w
         scope_kind="numeric_projection"
     )
     assert pending.projection_contract_id == contract.pk
-    type(pending).objects.filter(pk=pending.pk).update(projection_contract=None)
+    # Rehearse the historical migration with the historical writer's shape.
+    type(pending).objects.filter(pk=pending.pk).update(
+        projection_contract=None,
+        ownership={"contract_id": str(contract.pk), "contract_hash": contract.contract_hash},
+    )
     migration = importlib.import_module("core.migrations.0176_rg6_projection_contract_pin")
     migration.copy_projection_contracts(None, SimpleNamespace(connection=connection))
     pending.refresh_from_db()
@@ -715,7 +716,9 @@ def test_historical_metric_projection_scope_uses_owning_job_contract():
     run = project(contract, "hf", [snapshot], key="historical-metric-pin")
     scope = run.scopes.get(scope_kind="numeric_projection")
     assert scope.projection_contract_id == contract.pk
-    type(scope).objects.filter(pk=scope.pk).update(projection_contract=None)
+    type(scope).objects.filter(pk=scope.pk).update(
+        projection_contract=None, ownership={"contract_hash": contract.contract_hash},
+    )
     migration = importlib.import_module("core.migrations.0176_rg6_projection_contract_pin")
     migration.copy_projection_contracts(None, SimpleNamespace(connection=connection))
     scope.refresh_from_db()
@@ -857,7 +860,7 @@ def test_concurrent_different_jobs_replay_one_snapshot_without_reparenting():
     )
     assert (
         sum(
-            r.report["projection"]["written_values"]
+            run_report_document(r)["projection"]["written_values"]
             for r in CollectionRun.objects.filter(job__purpose="metric")
         )
         == 2
@@ -963,8 +966,8 @@ def test_supplied_account_followers_keep_native_account_grain(source):
     assert run.status == "success"
     assert value.source_metric.metric_key == "followers" and value.integer_value == 10
     assert value.observation.source_subject_kind == "account"
-    assert value.observation.source_metadata["native_only"] is True
-    assert run.report["projection"]["mapped_resources"] == 0
+    assert value.observation.mapping_id == publisher.pk and value.observation.product_id is None
+    assert run_report_document(run)["projection"]["mapped_resources"] == 0
 
 
 def test_replay_refuses_publisher_ownership_drift_since_contract_review():
@@ -978,7 +981,7 @@ def test_replay_refuses_publisher_ownership_drift_since_contract_review():
     run = project(contract, "hf", [evidence("hf", raw)])
     assert run.status == "partial" and not MetricValue.objects.exists()
     assert (
-        "ownership pin changed" in run.report["projection"]["rejections"][0]["reason"]
+        "ownership pin changed" in read_document(run.scopes.get(scope_kind="numeric_projection_result").legacy_archive)["rejections"][0]["reason"]
     )
 
 
@@ -995,8 +998,8 @@ def test_new_optional_number_attaches_to_existing_publication_with_provenance():
     second.save()
     additional = project(contract, "hf", [second], key="additional-counter")
     assert additional.status == "success"
-    assert additional.report["projection"]["written_values"] == 1
-    assert additional.report["projection"]["source_observation_ids"] == [second.pk]
+    assert run_report_document(additional)["projection"]["written_values"] == 1
+    assert run_report_document(additional)["projection"]["source_observation_ids"] == [second.pk]
     assert MetricValue.objects.count() == 2
     assert initial.observations.get().values.count() == 2
     numeric = initial.observations.get()
@@ -1045,15 +1048,12 @@ def test_reported_cumulative_origins_keep_original_capture_and_replay(origin_cas
     assert value.window_end_at == datetime(2026, 10, 2, tzinfo=UTC)
     assert value.period_label_date.isoformat() == "2026-10-01"
     assert value.temporal_status == "date_only"
-    basis = value.observation.source_metadata["reported_time"]["metrics"][
-        "downloads_all_time"
-    ]
     if origin_case in {"native", "catalog"}:
         assert value.window_start_at == origin
         assert value.window_range.lower == origin
     else:
         assert value.window_start_at is None
-        assert basis["unknowns"]["start"]
+        assert value.window_start_unknown_reason
     assert value.observation.observed_at == CAPTURED
     assert project(contract, "hf", [snapshot], key="repeat-origin").status == "success"
     assert MetricValue.objects.count() == 3

@@ -6,6 +6,7 @@ import httpx
 import pytest
 from django.utils import timezone
 
+from core.collection_capture import run_report_document
 from core.collection_jobs import register_job
 from core.collection_numeric_selection import (
     hf_numeric_selection_integrity_counts,
@@ -127,14 +128,14 @@ def test_archived_replay_uses_typed_selection_with_identical_projection_identity
     assert list(evidence_rows(contract, "hf", selected)) == before
     monkeypatch.setattr(httpx, "Client", lambda *a, **kw: pytest.fail("provider called during replay"))
     first = project(contract, "hf", [selected], key="typed-field-replay")
-    assert first.status == "success", first.report
+    assert first.status == "success", run_report_document(first)
     numeric = first.observations.get()
     assert list(numeric.values.values_list("source_metric__metric_key", "float_value")) == [("trending_score", 1.5)]
     assert list(numeric.metric_gaps.values_list("source_metric__metric_key", "reason_code")) == [
         ("downloads_all_time", "invalid_metric_value"),
     ]
     repeated = project(contract, "hf", [selected], key="typed-field-repeat")
-    assert repeated.report["projection"]["written_values"] == 0
+    assert run_report_document(repeated)["projection"]["written_values"] == 0
 
 
 def test_saved_replay_skips_typed_empty_selection_after_old_metadata_clear(monkeypatch):
@@ -157,7 +158,7 @@ def test_saved_replay_skips_typed_empty_selection_after_old_metadata_clear(monke
     set_job_state(job.pk, "ready")
     monkeypatch.setattr(httpx, "Client", lambda *a, **kw: pytest.fail("provider called during replay"))
     result = replay_saved_evidence(job.pk)
-    assert result.status == "success", result.report
+    assert result.status == "success", run_report_document(result)
     assert result.selected_count == 2
     assert MetricValue.objects.count() == 4
 
@@ -248,7 +249,7 @@ def test_real_hf_resume_keeps_first_invalid_optional_field_after_json_clear(monk
     interrupted = False
     seen.clear()
     resumed = execute_model_inventory(job.pk, budget=Budget(httpx.Client(transport=httpx.MockTransport(respond))))
-    assert resumed.status == "success", resumed.report
+    assert resumed.status == "success", run_report_document(resumed)
     assert len(seen) == 2 and not any("blobs=true" in url for url in seen)
     captures = list(resumed.observations.filter(observation_kind="hf_metadata").order_by("pk"))
     assert [numeric_fields(row) for row in captures] == [["downloadsAllTime"], ["trendingScore"]]
