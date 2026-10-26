@@ -1,73 +1,53 @@
-"""The collection archive copy is exact, repeatable, and detects live changes."""
+"""Current typed records and retained evidence after RG6 ORM detachment.
+
+The 17 one-time copier test functions (21 cases) live in immutable pre-detachment
+commit 8785ea769c14b19e574f8197499e34f6bdf8850f, where their historical-schema
+checks were run before detachment. They cover the retired conversion, not the
+current runtime. Keep that evidence scoped to its revision; tests here require
+the detached ORM and do not restore the removed fields or run historical copiers.
+"""
 
 import hashlib
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 
 import pytest
+from django.db import transaction
 
-from core.collection_capture import archive_document, read_document
-from core.collection_storage_migration import (
-    archive_legacy_batch,
-    archive_metric_payload_batch,
-    product_match_target_mismatch_counts,
-    project_arena_publication_batch,
-    project_benchmark_provenance_batch,
-    project_metric_request_coordinates_batch,
-    project_product_match_targets_batch,
-    project_run_continuations_batch,
-    project_run_ingestion_mode,
-    project_run_invocations_batch,
-    project_scope_bounds_batch,
-    project_x_query_targets_batch,
-    provenance_mismatch_counts,
-    scope_bounds_mismatch_counts,
-    stale_legacy_archive_count,
-    x_query_target_mismatch_counts,
+from core.collection_capture import (
+    archive_legacy,
+    observation_object_documents,
+    read_document,
+    run_report_document,
+    scope_object_documents,
 )
-from core.models import CollectionObservation, CollectionScopeRun
-from tests.test_collection_relational_storage import execution
+from core.collection_state import claim_job
+from core.models import CollectionObservation, CollectionRun, CollectionScopeRun
+from tests.test_collection_jobs import ready
+from tests.test_hf_catalog_retirement import RETIRED, denied_retirement_columns
+
+pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
-def test_arena_publication_copy_rebuilds_an_empty_cohort_without_duplicate_rows():
-    from core.benchmark_metric_store import persist_source
-    from core.measurement_taxonomy import digest
-    from tests.test_benchmark_download_persistence import provider_contract
-
-    contract = provider_contract(
-        "arena", ["rating", "rating_lower", "rating_upper", "rank"]
-    )
-    run = persist_source(
-        contract,
-        "arena",
-        digest("rg6-empty-arena-publication"),
-        {
-            "status": "ok",
-            "config": "text_style_control",
-            "coverage": "publication_window",
-            "rows": [],
-        },
-        source_metadata={"publication_dates": ["2026-09-27"]},
-    )
-    markers = CollectionObservation.objects.filter(
-        run=run, observation_kind="publication_marker"
-    )
-    assert markers.count() == 1
-    assert project_arena_publication_batch(verify_only=True).inserted == 0
-    markers.delete()
-    with pytest.raises(ValueError, match="incomplete"):
-        project_arena_publication_batch(verify_only=True)
-    assert project_arena_publication_batch().inserted == 1
-    assert project_arena_publication_batch().inserted == 0
-    assert project_arena_publication_batch(verify_only=True).scanned == 1
+@pytest.fixture(autouse=True)
+def detached_collection_models():
+    # The denied-column helper must not hide an accidentally restored ORM field.
+    for model, retired in RETIRED.items():
+        assert retired.isdisjoint(field.name for field in model._meta.fields)
 
 
-@pytest.mark.django_db(transaction=True)
+def execution(*, purpose="catalog"):
+    job = ready(purpose=purpose)
+    claim = claim_job(job.pk, typed=True, manual_authorized=purpose == "content")
+    run = CollectionRun.objects.get(pk=claim.run_id)
+    scope = CollectionScopeRun.objects.create(run=run, scope_key="publisher")
+    return run, run.attempts.get(), scope
+
+
 def test_new_arena_publication_marker_needs_no_retiring_json_columns():
     from core.benchmark_metric_store import persist_source, record_arena_publications
     from core.measurement_taxonomy import digest
     from tests.test_benchmark_download_persistence import provider_contract
-    from tests.test_hf_catalog_retirement import denied_retirement_columns
 
     contract = provider_contract(
         "arena", ["rating", "rating_lower", "rating_upper", "rank"]
@@ -79,6 +59,7 @@ def test_new_arena_publication_marker_needs_no_retiring_json_columns():
     )
     with denied_retirement_columns():
         assert record_arena_publications(run, ["2026-09-29"]) == 1
+        assert record_arena_publications(run, ["2026-09-29"]) == 0
         marker = CollectionObservation.objects.get(
             run=run, observation_kind="publication_marker",
             published_date=datetime(2026, 9, 29, tzinfo=UTC).date(),
@@ -86,486 +67,75 @@ def test_new_arena_publication_marker_needs_no_retiring_json_columns():
         assert marker.publication_complete is True
 
 
-def test_metric_time_provenance_copy_is_bounded_and_preserves_typed_only_values():
-    from core.benchmark_metric_store import persist_source
-    from core.collection_corrections import TIME_BASIS_FIELDS
-    from core.collection_storage_migration import project_metric_time_provenance_batch
-    from core.models import MetricValue
-    from tests.test_benchmark_download_persistence import configured, payload
+def test_typed_resume_preserves_original_non_uuid_invocation_and_attempt():
+    from core.collection_state import finish_run
 
-    contract = configured()
-    legacy = persist_source(contract, "hf", "7" * 64, payload())
-    typed = persist_source(contract, "hf", "8" * 64, payload())
-    rows = MetricValue.objects.filter(observation__run__in=[legacy, typed]).order_by("pk")
-    before = list(rows.values())
-    first_id = before[0]["id"]
-    MetricValue.objects.filter(observation__run=legacy).update(
-        **{field: None for field in TIME_BASIS_FIELDS}
-    )
-    typed.observations.update(source_metadata={})
-    with pytest.raises(ValueError, match="not projected"):
-        project_metric_time_provenance_batch(
-            after_id=first_id - 1, batch_size=1, verify_only=True
+    job = ready()
+    with denied_retirement_columns():
+        first = claim_job(job.pk, invocation_id="operator-run-1", typed=True)
+        run = finish_run(
+            first, status="partial", typed=True, request_count=0,
+            physical_accounting_complete=True,
         )
-    first = project_metric_time_provenance_batch(after_id=first_id - 1, batch_size=1)
-    assert (first.last_id, first.scanned, first.updated) == (first_id, 1, 1)
-    assert project_metric_time_provenance_batch(
-        after_id=first_id - 1, batch_size=1
-    ).updated == 0
-    rest = project_metric_time_provenance_batch(after_id=first_id, batch_size=10)
-    assert rest.scanned == len(before) - 1
-    assert list(rows.values()) == before
-    assert project_metric_time_provenance_batch(
-        after_id=first_id - 1, batch_size=10, verify_only=True
-    ).updated == 0
+        original = run.attempts.values().get()
+        assert original["source_invocation_id"] == "operator-run-1"
+        assert original["outcome"] == "partial" and original["finished_at"]
+        second = claim_job(job.pk, invocation_id="operator-run-2", typed=True)
+        assert second.run_id == first.run_id
+        assert second.attempt_id != first.attempt_id
+        assert run.attempts.filter(pk=first.attempt_id).values().get() == original
+        resumed = run.attempts.get(pk=second.attempt_id)
+        assert resumed.source_invocation_id == "operator-run-2"
+        assert resumed.ordinal == 2 and resumed.outcome == "running"
+        assert resumed.finished_at is None and not resumed.requests.exists()
 
 
-def test_metric_time_provenance_copy_uses_latest_correction_and_refuses_drift():
-    from datetime import timedelta
-
-    from core.benchmark_metric_store import persist_source
-    from core.collection_corrections import (
-        TIME_BASIS_FIELDS,
-        TIME_STATE_FIELDS,
-        record_timing_correction,
-    )
-    from core.collection_storage_migration import project_metric_time_provenance_batch
-    from core.models import MetricValue
-    from tests.test_benchmark_download_persistence import configured, payload
-
-    run = persist_source(configured(), "hf", "9" * 64, payload())
-    value = MetricValue.objects.filter(observation__run=run).order_by("pk").first()
-    state = {
-        field: (value.source_timezone_reference_id or "unknown")
-        if field == "source_timezone" else getattr(value, field)
-        for field in (*TIME_STATE_FIELDS, *TIME_BASIS_FIELDS)
-    }
-    revised = {**state, "window_end_basis": "later_review"}
-    correction = record_timing_correction(
-        value, before=state, after=revised, policy="fixture-review-v1", reason="review",
-    )
-    MetricValue.objects.filter(pk=value.pk).update(
-        **{field: None for field in TIME_BASIS_FIELDS}
-    )
-    assert project_metric_time_provenance_batch(
-        after_id=value.pk - 1, batch_size=1
-    ).updated == 1
-    value.refresh_from_db()
-    assert value.window_end_basis == "later_review"
-    assert value.corrections.get().pk == correction.pk
-    MetricValue.objects.filter(pk=value.pk).update(window_end_basis="conflicting_review")
-    with pytest.raises(ValueError, match="conflicts"):
-        project_metric_time_provenance_batch(after_id=value.pk - 1, batch_size=1)
-    value.refresh_from_db()
-    assert value.window_end_basis == "conflicting_review"
-    MetricValue.objects.filter(pk=value.pk).update(
-        window_end_basis="later_review",
-        window_end_at=value.window_end_at + timedelta(seconds=1),
-    )
-    with pytest.raises(ValueError, match="after-image conflicts"):
-        project_metric_time_provenance_batch(after_id=value.pk - 1, batch_size=1)
-
-
-@pytest.mark.parametrize("basis", [[], {"unknowns": []}, {"basis": "x" * 129}])
-def test_metric_time_provenance_copy_refuses_invalid_retained_explanations(basis):
-    from core.benchmark_metric_store import persist_source
-    from core.collection_corrections import TIME_BASIS_FIELDS
-    from core.collection_storage_migration import project_metric_time_provenance_batch
-    from core.models import MetricValue
-    from tests.test_benchmark_download_persistence import configured, payload
-
-    run = persist_source(configured(), "hf", "b" * 64, payload())
-    value = MetricValue.objects.filter(observation__run=run).order_by("pk").first()
-    observation = value.observation
-    observation.source_metadata["reported_time"]["metrics"][value.source_metric.metric_key] = basis
-    observation.save(update_fields=["source_metadata"])
-    MetricValue.objects.filter(pk=value.pk).update(**dict.fromkeys(TIME_BASIS_FIELDS))
-    before = MetricValue.objects.filter(pk=value.pk).values().get()
-    with pytest.raises(ValueError, match="(must be an object|is invalid)"):
-        project_metric_time_provenance_batch(after_id=value.pk - 1, batch_size=1)
-    assert MetricValue.objects.filter(pk=value.pk).values().get() == before
-
-
-def test_metric_payload_archive_copy_preserves_legacy_payload_and_detects_drift():
-    from core.benchmark_metric_store import persist_source
-    from core.measurement_taxonomy import digest
-    from tests.test_benchmark_download_persistence import provider_contract
-
-    contract = provider_contract("arena", ["rating"])
-    run = persist_source(
-        contract, "arena", digest("rg6-archive-payload"),
-        {"status": "ok", "config": "text_style_control", "rows": [],
-         "coverage": "publication_window"},
-    )
-    assert run.raw_payload is None
-    assert read_document(run.payload_archive)["coverage"] == "publication_window"
-    run.raw_payload = read_document(run.payload_archive)
-    run.payload_archive = None
-    run.save(update_fields=["raw_payload", "payload_archive"])
-    with pytest.raises(ValueError, match="missing"):
-        archive_metric_payload_batch(verify_only=True)
-    assert archive_metric_payload_batch().archived == 1
-    assert archive_metric_payload_batch().archived == 0
-    assert archive_metric_payload_batch(verify_only=True).scanned == 1
-    run.refresh_from_db()
-    assert read_document(run.payload_archive) == run.raw_payload
-    run.raw_payload = {**run.raw_payload, "status": "changed"}
-    run.save(update_fields=["raw_payload"])
-    with pytest.raises(ValueError, match="digest differs"):
-        archive_metric_payload_batch(verify_only=True)
-
-
-def test_historical_run_continuation_copy_is_repeatable_and_rejects_changed_owner():
-    from core.measurement_taxonomy import digest
-    from core.models import CollectionRun
-
-    previous, _, _ = execution()
-    successor = CollectionRun.objects.create(
-        job=previous.job,
-        ingestion_key=digest("rg6-historical-continuation"),
-        status="success",
-        completed_at=datetime(2026, 10, 26, 3, tzinfo=UTC),
-        report={"continued_from": str(previous.pk)},
-    )
-    with pytest.raises(ValueError, match="not projected"):
-        project_run_continuations_batch(verify_only=True)
-    assert project_run_continuations_batch().updated == 1
-    assert project_run_continuations_batch().updated == 0
-    assert project_run_continuations_batch(verify_only=True).scanned == 1
-    successor.refresh_from_db()
-    assert successor.continuation_of_id == previous.pk
-    previous.continuation_of = successor
-    previous.save(update_fields=["continuation_of"])
-    with pytest.raises(ValueError, match="forms a cycle"):
-        project_run_continuations_batch(verify_only=True)
-    previous.continuation_of = None
-    previous.save(update_fields=["continuation_of"])
-    successor.report = {"continued_from": str(successor.pk)}
-    successor.save(update_fields=["report"])
-    with pytest.raises(ValueError, match="different run owner"):
-        project_run_continuations_batch(verify_only=True)
-
-
-def test_metric_request_dates_copy_into_existing_scope_fields():
-    from core.benchmark_metric_store import persist_source
-    from core.measurement_taxonomy import digest
-    from tests.test_benchmark_download_persistence import provider_contract
-
-    contract = provider_contract(
-        "arena", ["rating", "rating_lower", "rating_upper", "rank"]
-    )
-    run = persist_source(
-        contract, "arena", digest("rg6-metric-request-window"),
-        {
-            "status": "ok", "config": "text_style_control",
-            "coverage": "publication_window", "rows": [],
-        },
-        source_metadata={"publication_dates": ["2026-09-27"]},
-        request_params={"start_date": "2026-09-27", "end_date": "2026-09-28"},
-    )
-    scope = run.scopes.get(scope_kind="metric_fetch", scope_key="source")
-    scope.delete()
-    run.request_params = {"start_date": "2026-09-27", "end_date": "2026-09-28"}
-    run.save(update_fields=["request_params", "updated_at"])
-    with pytest.raises(ValueError, match="not fully projected"):
-        project_metric_request_coordinates_batch(verify_only=True)
-    assert project_metric_request_coordinates_batch().updated == 1
-    scope = run.scopes.get(scope_kind="metric_fetch", scope_key="source")
-    assert scope.requested_start_date.isoformat() == "2026-09-27"
-    assert scope.requested_end_date.isoformat() == "2026-09-28"
-    assert project_metric_request_coordinates_batch().updated == 0
-    assert project_metric_request_coordinates_batch(verify_only=True).scanned == 1
-    scope.requested_end_date = datetime(2026, 9, 29, tzinfo=UTC).date()
-    scope.save(update_fields=["requested_end_date"])
-    with pytest.raises(ValueError, match="option changed"):
-        project_metric_request_coordinates_batch()
-
-pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
-
-
-def test_historical_invocations_get_distinct_attempts_without_invented_outcomes():
-    from django.db import connection
-    from django.test.utils import CaptureQueriesContext
-
-    from core.measurement_taxonomy import digest
-    from core.models import CollectionRun
-    from tests.test_collection_jobs import ready
-
-    job = ready()
-    run = CollectionRun.objects.create(
-        job=job,
-        ingestion_key=digest("rg6-invocation-copy"),
-        status="success",
-        completed_at=datetime(2026, 10, 20, 12, tzinfo=UTC),
-        invocations=[
-            {"invocation_id": "first", "started_at": "2026-10-20T10:00:00+00:00"},
-            {"invocation_id": "second", "started_at": "2026-10-20T11:00:00+00:00"},
-        ],
-    )
-    with pytest.raises(ValueError, match="missing historical attempt"):
-        project_run_invocations_batch(verify_only=True)
-
-    with CaptureQueriesContext(connection) as queries:
-        result = project_run_invocations_batch()
-    assert all('"raw_payload"' not in query["sql"] for query in queries)
-    assert all('"definition"' not in query["sql"] for query in queries)
-    assert result.inserted == 2
-    attempts = list(run.attempts.order_by("ordinal"))
-    assert [attempt.ordinal for attempt in attempts] == [1, 2]
-    assert [attempt.outcome for attempt in attempts] == ["legacy_unknown"] * 2
-    assert all(attempt.finished_at is None and not attempt.accounting_complete for attempt in attempts)
-    assert attempts[0].attempt_key == digest({"job": str(job.pk), "invocation": "first"})
-    assert [attempt.source_invocation_id for attempt in attempts] == ["first", "second"]
-    assert project_run_invocations_batch().inserted == 0
-    assert project_run_invocations_batch(verify_only=True).inserted == 0
-
-    attempts[0].source_invocation_id = None
-    attempts[0].save(update_fields=["source_invocation_id"])
-    with pytest.raises(ValueError, match="invocation identity is not projected"):
-        project_run_invocations_batch(verify_only=True)
-    assert project_run_invocations_batch().updated == 1
-    attempts[0].refresh_from_db()
-    assert attempts[0].source_invocation_id == "first"
-    attempts[0].source_invocation_id = "different"
-    attempts[0].save(update_fields=["source_invocation_id"])
-    with pytest.raises(ValueError, match="invocation identity differs"):
-        project_run_invocations_batch()
-    attempts[0].source_invocation_id = "first"
-    attempts[0].save(update_fields=["source_invocation_id"])
-
-    attempts[0].started_at = datetime(2026, 10, 20, 9, tzinfo=UTC)
-    attempts[0].save(update_fields=["started_at"])
-    with pytest.raises(ValueError, match="historical attempt differs"):
-        project_run_invocations_batch(verify_only=True)
-
-
-def test_scope_cursor_copy_preserves_order_duplicates_and_refuses_conflicts():
-    from django.db import connection
-    from django.test.utils import CaptureQueriesContext
-
-    from core.collection_storage_migration import project_scope_cursors_batch
-    from core.models import CollectionScopeCursorReceipt, CollectionScopeRun
-
-    _, _, scope = execution()
-    CollectionScopeRun.objects.filter(pk=scope.pk).update(
-        cursor_history=["first", "same", "same", "next"],
-    )
-    with pytest.raises(ValueError, match="not projected"):
-        project_scope_cursors_batch(after_id=scope.pk - 1, batch_size=1, verify_only=True)
-    with CaptureQueriesContext(connection) as queries:
-        result = project_scope_cursors_batch(after_id=scope.pk - 1, batch_size=1)
-    assert all('"envelopes"' not in query["sql"] for query in queries)
-    assert (result.last_id, result.scanned, result.updated) == (scope.pk, 1, 1)
-    assert list(scope.cursor_receipts.order_by("position").values_list(
-        "position", "cursor"
-    )) == [(1, "first"), (2, "same"), (3, "same"), (4, "next")]
-    assert project_scope_cursors_batch().updated == 0
-    assert project_scope_cursors_batch(verify_only=True).scanned == 1
-    assert project_scope_cursors_batch(after_id=scope.pk).scanned == 0
-    assert not scope.requests.exists()
-    CollectionScopeCursorReceipt.objects.filter(scope_run=scope, position=2).update(
-        cursor="conflict",
-    )
-    with pytest.raises(ValueError, match="differs"):
-        project_scope_cursors_batch()
-
-
-@pytest.mark.parametrize("history", [[{"page": 1}], [None], "cursor"])
-def test_scope_cursor_copy_rejects_unsupported_legacy_evidence(history):
-    from core.collection_storage_migration import project_scope_cursors_batch
-    from core.models import CollectionScopeRun
-
-    _, _, scope = execution()
-    CollectionScopeRun.objects.filter(pk=scope.pk).update(cursor_history=history)
-    with pytest.raises(ValueError, match="cursor history"):
-        project_scope_cursors_batch()
-    assert not scope.cursor_receipts.exists()
-
-
-def test_invocation_copy_accepts_existing_attempt_with_non_uuid_identity():
-    from core.collection_state import claim_job
-    from tests.test_collection_jobs import ready
-
-    job = ready()
-    claim = claim_job(job.pk, invocation_id="operator-run-1")
-    assert job.runs.get(pk=claim.run_id).attempts.get().source_invocation_id == "operator-run-1"
-    assert project_run_invocations_batch(verify_only=True).inserted == 0
-    assert project_run_invocations_batch().inserted == 0
-    assert job.runs.get(pk=claim.run_id).attempts.get().outcome == "running"
-
-
-def test_archived_catalog_invocations_keep_known_usage_and_finish_clocks():
-    from core.measurement_taxonomy import digest
-    from core.models import CollectionAttempt, CollectionJob, CollectionRun
-    from tests.test_collection_jobs import ready
-
-    source = ready().source
-    definition = {
-        "version": 1, "scope": {},
-        "execution": {"executable": False},
-    }
-    job = CollectionJob.objects.create(
-        job_key="rg6-archived-invocations", source=source,
-        purpose="catalog", operation="archived_run", mode="manual",
-        definition=definition, definition_sha256=digest(definition),
-        state="completed",
-    )
-    run = CollectionRun.objects.create(
-        job=job,
-        ingestion_key=digest("rg6-archived-invocations"),
-        status="success",
-        completed_at=datetime(2026, 10, 20, 12, tzinfo=UTC),
-        invocations=[
-            {
-                "started_at": "2026-10-20T10:00:00+00:00",
-                "ended_at": "2026-10-20T10:30:00+00:00",
-                "outcome": "partial", "requests": 4, "retries": 1,
-                "max_requests": 10, "max_models": None,
-                "max_response_bytes": 1024, "max_total_bytes": 2048,
-                "last_request": {"endpoint": "models"},
-            },
-            {
-                "started_at": "2026-10-20T11:00:00+00:00",
-                "ended_at": "2026-10-20T12:00:00+00:00",
-                "outcome": "complete", "requests": 5, "retries": 0,
-                "max_requests": 2**63 - 1, "max_models": 20,
-                "last_request": {"endpoint": "models"},
-            },
-        ],
-    )
-    CollectionAttempt.objects.create(
-        run=run, attempt_key=digest([str(run.pk), "lease-token"]),
-        ordinal=1, started_at=datetime(2026, 10, 20, 10, tzinfo=UTC),
-        finished_at=datetime(2026, 10, 20, 10, 30, tzinfo=UTC),
-        outcome="partial", actual_requests=4, reserved_requests=10,
-    )
-    with pytest.raises(ValueError, match="not projected"):
-        project_run_invocations_batch(verify_only=True)
-    copied = project_run_invocations_batch()
-    assert (copied.inserted, copied.updated) == (1, 1)
-    first, second = run.attempts.order_by("ordinal")
-    assert first.source_invocation_id is None and second.source_invocation_id is None
-    assert [first.outcome, second.outcome] == ["partial", "success"]
-    assert [first.actual_requests, second.actual_requests] == [4, 5]
-    assert [first.reserved_requests, second.reserved_requests] == [10, None]
-    assert first.retry_count == 1
-    assert first.response_byte_limit == 1024
-    assert first.reserved_bytes == 2048
-    assert [first.effective_items, second.effective_items] == [None, 20]
-    assert first.finished_at == datetime(2026, 10, 20, 10, 30, tzinfo=UTC)
-    assert project_run_invocations_batch(verify_only=True).inserted == 0
-    CollectionAttempt.objects.create(
-        run=run, attempt_key=digest([str(run.pk), "pre-receipt-crash"]),
-        ordinal=3, outcome="interrupted",
-    )
-    assert project_run_invocations_batch(verify_only=True).inserted == 0
-    assert archive_legacy_batch("collection_runs").archived == 1
-    run.refresh_from_db()
-    assert read_document(run.legacy_archive)["invocations"][1]["max_requests"] == 2**63 - 1
-
-
-def test_x_scope_bounds_copy_rechecks_older_rows_and_rejects_invalid_epochs():
-    _, _, scope = execution()
-    scope.scope_kind = "x_query"
-    scope.ownership = {
-        "call_id": "B1", "query": "test query",
-        "since_epoch": 1783809000, "until_epoch": 1783809300,
-    }
-    scope.save(update_fields=["scope_kind", "ownership"])
-    assert scope_bounds_mismatch_counts() == (0, 1)
-    assert project_scope_bounds_batch(after_id=scope.pk - 1).updated == 1
-    scope.refresh_from_db()
-    assert scope.requested_start_at == datetime.fromtimestamp(1783809000, UTC)
-    assert scope.requested_end_at == datetime.fromtimestamp(1783809300, UTC)
-    assert scope_bounds_mismatch_counts() == (0, 0)
-
-    scope.ownership["until_epoch"] = 1783809600
-    scope.save(update_fields=["ownership"])
-    assert scope_bounds_mismatch_counts() == (0, 1)
-    assert project_scope_bounds_batch(after_id=scope.pk - 1).updated == 1
-    assert scope_bounds_mismatch_counts() == (0, 0)
-
-    scope.ownership["since_epoch"] = "bad"
-    scope.save(update_fields=["ownership"])
-    assert scope_bounds_mismatch_counts() == (1, 0)
-    with pytest.raises(ValueError, match="invalid historical request bounds"):
-        project_scope_bounds_batch(after_id=scope.pk - 1)
-
-
-def test_x_query_target_copy_preserves_frozen_query_and_detects_pin_drift():
-    from django.db import connection
-    from django.test.utils import CaptureQueriesContext
-
-    _, _, scope = execution()
-    scope.scope_kind = "x_query"
-    scope.ownership = {
-        "call_id": "B1", "query": "exact source query",
-        "since_epoch": 1783809000, "until_epoch": 1783809300,
-    }
-    scope.save(update_fields=["scope_kind", "ownership"])
-    assert x_query_target_mismatch_counts() == (0, 1)
-    with CaptureQueriesContext(connection) as queries:
-        result = project_x_query_targets_batch(after_id=scope.pk - 1)
-    owner_selects = [
-        query["sql"] for query in queries
-        if 'FROM "collection_scope_runs"' in query["sql"]
-        and 'JOIN "collection_jobs"' in query["sql"]
-    ]
-    assert owner_selects and all('"definition"' not in sql for sql in owner_selects)
-    assert result.scanned == result.updated == 1
-    scope.refresh_from_db()
-    assert scope.job_target.search_query.query_text == "exact source query"
-    assert scope.job_target.target_role == "B1"
-    assert scope.job_target.requested_start_at == datetime.fromtimestamp(1783809000, UTC)
-    assert x_query_target_mismatch_counts() == (0, 0)
-    assert project_x_query_targets_batch(after_id=scope.pk - 1).updated == 0
-
-    scope.job_target.target_role = "A"
-    scope.job_target.save(update_fields=["target_role"])
-    assert x_query_target_mismatch_counts() == (0, 1)
-    with pytest.raises(ValueError, match="differs from scope ownership"):
-        project_x_query_targets_batch(after_id=scope.pk - 1)
-
-
-def test_x_prefetch_reads_pinned_query_when_legacy_ownership_is_stale():
-    from core.collection_state import x_scope_ownership
+def test_x_prefetch_reads_pinned_query_when_archived_ownership_is_stale():
+    from core.collection_state import ensure_x_query_target, x_scope_ownership
     from monitor.backfill_prefetch import _params
 
-    _, _, scope = execution()
+    run, _, scope = execution(purpose="content")
     scope.scope_kind = "x_query"
-    scope.ownership = {
-        "call_id": "B1", "query": "original query",
+    scope.requested_start_at = datetime.fromtimestamp(1783809000, UTC)
+    scope.requested_end_at = datetime.fromtimestamp(1783809300, UTC)
+    with transaction.atomic():
+        scope.job_target = ensure_x_query_target(
+            run.job, scope.scope_key, query_text="original query", call_id="B1",
+            start_at=scope.requested_start_at, end_at=scope.requested_end_at,
+        )
+    stale = {
+        "call_id": "B1", "query": "stale query",
         "since_epoch": 1783809000, "until_epoch": 1783809300,
     }
-    scope.save(update_fields=["scope_kind", "ownership"])
-    project_x_query_targets_batch(after_id=scope.pk - 1)
-    scope.refresh_from_db()
-    scope.ownership = {**scope.ownership, "query": "stale query"}
-    scope.save(update_fields=["ownership"])
+    scope.legacy_archive = archive_legacy({
+        "ownership": stale, "cursor_history": [], "envelopes": [],
+    })
+    scope.save(update_fields=[
+        "scope_kind", "requested_start_at", "requested_end_at", "job_target",
+        "legacy_archive",
+    ])
 
-    assert x_scope_ownership(scope)["query"] == "original query"
-    assert "original query" in _params(scope)["query"]
-    assert "stale query" not in _params(scope)["query"]
-    assert x_query_target_mismatch_counts() == (0, 1)
+    with denied_retirement_columns():
+        scope.refresh_from_db()
+        assert x_scope_ownership(scope)["query"] == "original query"
+        assert "original query" in _params(scope)["query"]
+        assert "stale query" not in _params(scope)["query"]
+        assert read_document(scope.legacy_archive)["ownership"] == stale
 
 
-@pytest.mark.django_db(transaction=True)
 def test_unmapped_legacy_x_scope_reads_immutable_archive_after_ownership_retirement():
-    from core.collection_capture import archive_legacy
     from core.collection_state import x_scope_ownership
-    from tests.test_hf_catalog_retirement import denied_retirement_columns
 
-    _, _, scope = execution()
+    _, _, scope = execution(purpose="content")
     ownership = {
         "call_id": "B1", "query": "archived query",
         "since_epoch": 1783809000, "until_epoch": 1783809300,
     }
     scope.scope_kind = "x_query"
-    scope.ownership = {}
     scope.legacy_archive = archive_legacy({
         "ownership": ownership, "cursor_history": [], "envelopes": [],
     })
-    scope.save(update_fields=["scope_kind", "ownership", "legacy_archive"])
+    scope.save(update_fields=["scope_kind", "legacy_archive"])
 
     with denied_retirement_columns():
         scope.refresh_from_db()
@@ -610,12 +180,8 @@ def test_recurring_x_query_target_keeps_query_fixed_and_window_on_scope():
     )
     scope = CollectionScopeRun.objects.create(
         run=run, scope_kind="x_query", scope_key="B1", job_target=target,
-        ownership={}, requested_start_at=lower, requested_end_at=upper,
+        requested_start_at=lower, requested_end_at=upper,
     )
-    assert scope_bounds_mismatch_counts() == (0, 0)
-    assert project_scope_bounds_batch(after_id=scope.pk - 1).updated == 0
-    assert project_x_query_targets_batch(after_id=scope.pk - 1).updated == 0
-    assert x_query_target_mismatch_counts() == (0, 0)
     assert target.requested_start_at is None and target.requested_end_at is None
     assert x_scope_ownership(scope) == {
         "call_id": "B1", "query": "fixed query",
@@ -629,10 +195,8 @@ def test_recurring_x_query_target_keeps_query_fixed_and_window_on_scope():
     )
     next_scope = CollectionScopeRun.objects.create(
         run=next_run, scope_kind="x_query", scope_key="B1", job_target=target,
-        ownership={}, requested_start_at=next_lower, requested_end_at=next_upper,
+        requested_start_at=next_lower, requested_end_at=next_upper,
     )
-    assert scope_bounds_mismatch_counts() == (0, 0)
-    assert x_query_target_mismatch_counts() == (0, 0)
     assert ensure_x_query_target(
         job, "B1", query_text="fixed query", call_id="B1",
         start_at=next_lower, end_at=next_upper,
@@ -759,328 +323,104 @@ def test_scheduled_request_crash_cannot_be_reported_as_complete():
     assert run.attempts.get().unknown_sent_requests == 1
 
 
-def test_legacy_product_match_scope_pins_existing_subject_and_input_digest():
-    from django.utils import timezone
-
-    from core.collection_jobs import register_job
+def test_archived_documents_reconstruct_exact_content_without_retired_columns():
     from core.measurement_taxonomy import digest
-    from core.models import CollectionRun, CollectionScopeRun, DataSource
-    from tests.test_collection_matching import catalog_fixture, preview
 
-    brand, product, _ = catalog_fixture()
-    report = preview(brand)
-    choice = report["products"][0]["candidates"][0]
-    definition = {
-        "version": 1,
-        "schedule": {"kind": "manual", "driver": "manual"},
-        "budgets": {"requests": 1, "bytes": 32768, "seconds": 120, "items": 50},
-        "scope": {
-            "ruleset": "product-crosswalk-v1",
-            "preview_sha256": report["input_sha256"],
-            "cutoff": report["cutoff"], "brands": report["brands"],
-            "matches": [choice],
-            "review": {"reviewed_by": "owner", "basis": "exact match",
-                       "candidate_ids": [choice["candidate_id"]]},
+    documents = (
+        {
+            "request_params": {"cursor": "opaque"},
+            "source_metadata": {"original_clock": None},
+            "raw_payload": {"items": ["first", "first"]},
+            "invocations": [{"invocation_id": "operator-retry", "finished_at": None}],
+            "report": {"requests": 2, "retry": {"unknown": True}},
         },
-    }
-    job = register_job(
-        job_key="legacy-match:" + digest(choice), source=DataSource.objects.get(pk="arena"),
-        purpose="catalog", operation="match_crosswalk", mode="historical",
-        definition=definition,
+        {
+            "ownership": {"query": "exact query"},
+            "cursor_history": ["first", "same", "same"],
+            "envelopes": [{"ids": []}, {"ids": None}],
+        },
+        {
+            "listing": {"id": "publisher/repository", "counter": 0},
+            "dimensions": {"config": "text", "category": None},
+            "source_metadata": {"history_basis": "reported"},
+            "envelopes": [{"status": "partial", "body": None}],
+            "groups": {"detail": {"outcome": "failed"}},
+        },
     )
-    run = CollectionRun.objects.create(
-        job=job, ingestion_key=digest("legacy-product-match"),
-        status="success", completed_at=timezone.now(),
-    )
-    scope = CollectionScopeRun.objects.create(
-        run=run, scope_kind="product_match", scope_key=choice["candidate_id"],
-        ownership={"product_key": str(product.product_key),
-                   "input_sha256": choice["input_sha256"]},
-    )
-    assert product_match_target_mismatch_counts() == (0, 1)
-    assert project_product_match_targets_batch(after_id=scope.pk - 1).updated == 1
-    scope.refresh_from_db()
-    assert scope.job_target.subject.product_id == product.product_key
-    assert scope.job_target.selection_sha256 == choice["input_sha256"]
-    assert product_match_target_mismatch_counts() == (0, 0)
-    assert project_product_match_targets_batch(after_id=scope.pk - 1).updated == 0
-
-
-def test_legacy_documents_are_archived_once_and_changed_rows_are_reconciled():
-    run, _, scope = execution()
-    run.source_metadata = {"ingestion_mode": "direct"}
-    run.raw_payload = {"items": [{"id": "one"}]}
-    run.save(update_fields=["source_metadata", "raw_payload"])
-    scope.ownership = {"query": "example"}
-    scope.save(update_fields=["ownership"])
-    observation = CollectionObservation.objects.create(
-        run=run,
-        scope_run=scope,
-        source_identifier="one",
-        source_subject_kind="model",
-        observation_key="a" * 64,
-        dimensions={"config": "text"},
-        source_metadata={"history_basis": "reported"},
-    )
-
-    for table in (
-        "collection_runs", "collection_scope_runs", "collection_observations"
-    ):
-        assert archive_legacy_batch(table).archived == 1
-        assert archive_legacy_batch(table).archived == 0
-        assert stale_legacy_archive_count(table) == 0
-
-    CollectionObservation.objects.create(
-        run=run, scope_run=scope, source_identifier="two",
-        source_subject_kind="model", observation_key="b" * 64,
-    )
-    assert stale_legacy_archive_count("collection_observations", batch_size=1) == 1
-    assert archive_legacy_batch("collection_observations").archived == 1
-    assert stale_legacy_archive_count("collection_observations", batch_size=1) == 0
-
-    run.refresh_from_db()
-    scope.refresh_from_db()
-    observation.refresh_from_db()
-    assert read_document(run.legacy_archive)["raw_payload"] == {
-        "items": [{"id": "one"}]
-    }
-    assert read_document(scope.legacy_archive)["ownership"] == {"query": "example"}
-    from core.collection_capture import scope_object_documents
-
-    scope.envelopes = [{"state": "newer_live_checkpoint"}]
-    scope.save(update_fields=["envelopes"])
-    assert scope_object_documents(scope)[2] == [{"state": "newer_live_checkpoint"}]
-    scope.ownership, scope.cursor_history, scope.envelopes = {}, [], []
-    scope.save(update_fields=["ownership", "cursor_history", "envelopes"])
-    assert scope_object_documents(scope) == ({"query": "example"}, [], [])
-    assert read_document(observation.legacy_archive)["dimensions"] == {
-        "config": "text"
-    }
-    run.report = {"retry": 2}
-    run.save(update_fields=["report"])
-    assert stale_legacy_archive_count("collection_runs") == 1
-    assert archive_legacy_batch("collection_runs", repair_stale=True).archived == 1
-    run.refresh_from_db()
-    assert read_document(run.legacy_archive)["report"] == {"retry": 2}
-    assert stale_legacy_archive_count("collection_runs") == 0
-
-
-def test_legacy_archive_sweep_excludes_typed_only_group_and_queue_scopes():
-    run, _, parent = execution()
-    diagnostic = archive_document(
-        b'{"version":1,"projection_error":"invalid source"}',
-        encoding="selected-json-canonical-v1",
-        capture_kind="numeric_projection_evidence",
-    )
-    projection = CollectionScopeRun.objects.create(
-        run=run, scope_kind="numeric_projection", scope_key="saved-evidence",
-        phase="projection_results_v1", ownership={}, legacy_archive=diagnostic,
-    )
-    observation = CollectionObservation.objects.create(
-        run=run, scope_run=parent, source_identifier="captured",
-        source_subject_kind="model", observation_key="c" * 64,
-    )
-    children = [
-        CollectionScopeRun.objects.create(
-            run=run, parent_scope=parent, scope_kind="resource_group",
-            scope_key="typed-group", ownership={},
-        ),
-        CollectionScopeRun.objects.create(
-            run=run, parent_scope=parent, scope_kind="numeric_projection_item",
-            scope_key="typed-pending", ownership={},
-            resource_observation=observation,
-        ),
-        CollectionScopeRun.objects.create(
-            run=run, parent_scope=parent, scope_kind="numeric_projection_result",
-            scope_key="typed-source-result", ownership={},
-            resource_observation=observation,
-        ),
-        CollectionScopeRun.objects.create(
-            run=run, parent_scope=parent, scope_kind="numeric_projection_output",
-            scope_key="typed-output-result", ownership={},
-            resource_observation=observation,
-        ),
-        CollectionScopeRun.objects.create(
-            run=run, scope_kind="history_execution", scope_key="execution",
-            phase="typed-history-v1", ownership={},
-        ),
-        CollectionScopeRun.objects.create(
-            run=run, scope_kind="catalog_execution", scope_key="execution",
-            phase="typed-github-catalog-v1", ownership={},
-        ),
-        CollectionScopeRun.objects.create(
-            run=run, scope_kind="x_model_call", scope_key="typed-model",
-            phase="staff_relevance_v1", ownership={},
-        ),
-        CollectionScopeRun.objects.create(
-            run=run, scope_kind="x_model_usage", scope_key="legacy",
-            phase="backfill_model_v1", ownership={},
-        ),
-        CollectionScopeRun.objects.create(
-            run=run, scope_kind="x_backfill_result", scope_key="result",
-            phase="backfill_result_v1", ownership={},
-        ),
-        CollectionScopeRun.objects.create(
-            run=run, scope_kind="x_checkpoint_import", scope_key="typed-import",
-            phase="typed-import-v1", ownership={},
-        ),
-    ]
-    children.extend(
-        CollectionScopeRun.objects.create(
-            run=run, scope_kind=kind, scope_key=f"typed-{kind}",
-            phase=phase, ownership={},
+    with denied_retirement_columns():
+        archives = [archive_legacy(document) for document in documents]
+        evidence = [(archive.pk, bytes(archive.body)) for archive in archives]
+        run = CollectionRun.objects.create(
+            job=ready(), ingestion_key=digest("retained historical documents"),
+            status="pending", legacy_archive=archives[0],
         )
-        for kind, phase in (
-            ("inventory_execution", "typed-inventory-v1"),
-            ("metric_execution", "typed-metric-v1"),
-            ("match_execution", "typed-product-match-v1"),
-            ("x_backfill_execution", "typed-backfill-v1"),
-            ("x_cycle_execution", "typed-x-cycle-v1"),
-            ("archive_import", "typed-archive-import-v1"),
-            ("publication_window", "typed-publication-v1"),
-            ("publication_selection", "typed-publication-v1"),
-            ("model_catalog", "typed-openrouter-catalog-v1"),
-            ("metric_fetch", "typed-metric-fetch-v1"),
-            ("product_match", "typed-product-match-v1"),
-            ("staged_post_copy", "typed-x-promotion-v1"),
-            ("quote_repair", "typed-x-promotion-quotes-v1"),
-            ("archive_snapshot", "typed-hf-archive-v1"),
-            ("archive_projection", "typed-hf-archive-v1"),
+        scope = CollectionScopeRun.objects.create(
+            run=run, scope_key="saved", legacy_archive=archives[1],
         )
-    )
-
-    assert archive_legacy_batch("collection_runs").archived == 0
-
-    assert archive_legacy_batch("collection_scope_runs").archived == 1
-    assert archive_legacy_batch("collection_scope_runs", repair_stale=True).archived == 0
-    assert stale_legacy_archive_count("collection_scope_runs", batch_size=1) == 0
-    parent.refresh_from_db()
-    assert parent.legacy_archive_id is not None
-    for child in children:
-        child.refresh_from_db()
-        assert child.legacy_archive_id is None
-    projection.refresh_from_db()
-    assert projection.legacy_archive_id == diagnostic.pk
-
-    coverage = CollectionObservation.objects.create(
-        run=run, scope_run=parent, source_identifier="typed-coverage",
-        source_subject_kind="model", observation_kind="coverage",
-        observation_key="d" * 64,
-    )
-    from core.models import Post
-
-    post = Post.objects.create(tweet_id="rg6-archive-sweep-post", text="source", lang="en")
-    typed_observations = [CollectionObservation.objects.create(
-        run=run, scope_run=parent,
-        source_identifier=post.pk if kind == "post" else f"typed-{index}",
-        source_subject_kind="post" if kind == "post" else "model",
-        post=post if kind == "post" else None,
-        observation_kind=kind, projection_kind=projection_kind,
-        observation_key=f"{index + 1:064x}",
-    ) for index, (kind, projection_kind) in enumerate((
-        ("product_match_decision", None),
-        ("repository", "github-catalog-object-v1"),
-        ("hf_history_head", "hf-native-history-v1"),
-        ("model_catalog", "openrouter-catalog-object-v1"),
-        ("publication_window", "publication-window-v1"),
-        ("publication_row", "publication-row-v1"),
-        ("post", "x-staging-promotion-v1"),
-        ("post", "typed-x-membership-v1"),
-        ("archive_snapshot", "hf-archive-snapshot-v1"),
-        ("archive_metadata", "hf-archive-row-v1"),
-    ))]
-    assert archive_legacy_batch("collection_observations").archived == 1
-    assert stale_legacy_archive_count("collection_observations") == 0
-    observation.refresh_from_db()
-    coverage.refresh_from_db()
-    assert observation.legacy_archive_id is not None
-    assert coverage.legacy_archive_id is None
-    for typed_observation in typed_observations:
-        typed_observation.refresh_from_db()
-        assert typed_observation.legacy_archive_id is None
+        observation = CollectionObservation.objects.create(
+            run=run, scope_run=scope, source_identifier="publisher/repository",
+            source_subject_kind="repository", observation_key=digest("saved object"),
+            legacy_archive=archives[2],
+        )
+        assert run_report_document(run) == documents[0]["report"]
+        assert scope_object_documents(scope) == tuple(
+            documents[1][key] for key in ("ownership", "cursor_history", "envelopes")
+        )
+        assert observation_object_documents(observation) == tuple(
+            documents[2][key] for key in ("listing", "dimensions", "source_metadata")
+        )
+        for archive, document, original in zip(archives, documents, evidence, strict=True):
+            archive.refresh_from_db()
+            assert read_document(archive) == document
+            assert (archive.pk, bytes(archive.body)) == original
+        assert not run.attempts.exists() and not scope.requests.exists()
+        assert not observation.inputs.exists()
 
 
-def test_benchmark_provenance_copy_is_bounded_and_repeatable():
-    run, _, scope = execution()
-    run.source_metadata = {"ingestion_mode": "direct"}
-    run.save(update_fields=["source_metadata"])
-    observation = CollectionObservation.objects.create(
-        run=run,
-        scope_run=scope,
-        source_identifier="historical",
-        source_subject_kind="model",
-        observation_key="b" * 64,
-        source_metadata={
+def test_typed_provenance_distinguishes_absent_evidence_from_explicit_unknown():
+    from core.collection_resources import project_observation_facts
+    from core.measurement_taxonomy import digest
+
+    with denied_retirement_columns():
+        run, _, scope = execution()
+        document = {"listing": {}, "dimensions": {}, "source_metadata": {}}
+        original_archive = archive_legacy(document)
+        facts = {
+            "observation_kind": "repository",
             "projection_kind": "source-statistics-v1",
-            "history_basis": "reconstructed_current_relationships",
+            "config_key": "text",
+            "provider_revision": "original-revision",
+            "payload_sha256": "a" * 64,
+            "row_semantic_digest": bytes.fromhex("b" * 64),
+            "history_reconstructed": True,
             "secondary_source": True,
             "publication_complete": False,
-            "reconstruction_date": "2026-10-24",
-            "archive_snapshot_date": "2026-10-23",
             "period_status": "partial",
-        },
-    )
-    assert provenance_mismatch_counts() == (1, 1)
-    assert project_run_ingestion_mode() == 1
-    first = project_benchmark_provenance_batch(
-        after_id=observation.pk - 1, batch_size=1
-    )
-    assert (first.last_id, first.scanned, first.updated) == (observation.pk, 1, 1)
-    assert project_benchmark_provenance_batch(
-        after_id=observation.pk - 1, batch_size=1
-    ).updated == 0
-    run.refresh_from_db()
-    observation.refresh_from_db()
-    assert run.direct_ingestion is True
-    assert observation.projection_kind == "source-statistics-v1"
-    assert observation.history_reconstructed is True
-    assert observation.secondary_source is True
-    assert observation.publication_complete is False
-    assert observation.reconstruction_date.isoformat() == "2026-10-24"
-    assert observation.archive_snapshot_date.isoformat() == "2026-10-23"
-    assert observation.period_status == "partial"
-    assert provenance_mismatch_counts() == (0, 0)
-
-    observation.source_metadata["reconstruction_date"] = "2026-10-23"
-    observation.save(update_fields=["source_metadata"])
-    assert provenance_mismatch_counts() == (0, 1)
-    assert project_benchmark_provenance_batch(
-        after_id=observation.pk - 1, batch_size=1
-    ).updated == 1
-    observation.refresh_from_db()
-    assert observation.reconstruction_date.isoformat() == "2026-10-23"
-    assert provenance_mismatch_counts() == (0, 0)
-
-    # Later writers can omit legacy copies. A final reconciliation must not
-    # interpret absent JSON keys as instructions to clear canonical facts.
-    observation.row_semantic_digest = bytes.fromhex("c" * 64)
-    observation.source_metadata = {}
-    observation.save(update_fields=["row_semantic_digest", "source_metadata"])
-    canonical = {
-        field: getattr(observation, field)
-        for field in (
-            "projection_kind", "row_semantic_digest", "archive_snapshot_date",
-            "period_status", "history_reconstructed", "secondary_source",
-            "publication_complete", "reconstruction_date",
+            "archive_snapshot_date": date(2026, 10, 23),
+            "reconstruction_date": date(2026, 10, 24),
+        }
+        observation = CollectionObservation.objects.create(
+            run=run, scope_run=scope, source_identifier="publisher/repository",
+            source_subject_kind="repository", observation_key=digest("typed provenance"),
+            legacy_archive=original_archive, **facts,
         )
-    }
-    assert provenance_mismatch_counts() == (0, 0)
-    assert project_benchmark_provenance_batch(
-        after_id=observation.pk - 1, batch_size=1
-    ).updated == 0
-    observation.refresh_from_db()
-    assert {field: getattr(observation, field) for field in canonical} == canonical
+        project_observation_facts(observation)
+        observation.refresh_from_db()
+        assert {field: getattr(observation, field) for field in facts} == facts
 
-    # A present, explicit unknown is still historical evidence to reconcile.
-    observation.source_metadata = {"projection_kind": None}
-    observation.save(update_fields=["source_metadata"])
-    assert provenance_mismatch_counts() == (0, 1)
-    assert project_benchmark_provenance_batch(
-        after_id=observation.pk - 1, batch_size=1
-    ).updated == 1
-    observation.refresh_from_db()
-    assert observation.projection_kind is None
-    assert {
-        field: getattr(observation, field)
-        for field in canonical if field != "projection_kind"
-    } == {field: value for field, value in canonical.items() if field != "projection_kind"}
+        # A distinct retained source document explicitly marks only these two
+        # coordinates unknown; it does not erase the omitted canonical facts.
+        explicit_unknown = {
+            **document, "dimensions": {"config": None},
+            "source_metadata": {"projection_kind": None},
+        }
+        observation.legacy_archive = archive_legacy(explicit_unknown)
+        observation.save(update_fields=["legacy_archive"])
+        project_observation_facts(observation)
+        observation.refresh_from_db()
+        assert {field: getattr(observation, field) for field in facts} == {
+            **facts, "config_key": None, "projection_kind": None,
+        }
+        original_archive.refresh_from_db()
+        assert read_document(original_archive) == document
+        assert read_document(observation.legacy_archive) == explicit_unknown
