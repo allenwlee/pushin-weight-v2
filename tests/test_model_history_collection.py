@@ -1,7 +1,6 @@
 """Historical windows, source gaps and reviewed numbers remain attributable."""
 
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
 
 import pytest
 from django.utils import timezone
@@ -10,10 +9,11 @@ from core.collection_jobs import register_job, set_job_state
 from core.collection_state import claim_job
 from core.model_history_collection import (
     execute_model_history,
+    history_report,
     history_windows,
     import_selected_history,
 )
-from core.models import CollectionRun, DataSource, MetricValue
+from core.models import CollectionRun, CollectionScopeRun, DataSource, MetricValue
 from tests.product_factory import product_type_fields
 from tests.test_benchmark_download_history import manifest
 from tests.test_benchmark_download_persistence import configured
@@ -144,12 +144,12 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download(
     if not reachable:
         assert (
             first.status == "success"
-            and first.report["coverage"][0]["outcome"] == "inaccessible"
+            and history_report(first)["coverage"][0]["outcome"] == "inaccessible"
         )
         assert first.request_count == 1 and len(seen) == 1
         return
     assert first.status == "partial"
-    prior = list(first.observations.order_by("pk").values())
+    prior = list(first.observations.exclude(observation_kind="coverage").order_by("pk").values())
     assert len(prior) == 2
     if pagination == "legacy":
         checkpoint = first.scopes.get(scope_kind="hf_repository_history")
@@ -158,7 +158,7 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download(
     if typed_only_resume:
         first.observations.update(listing={}, source_metadata={}, dimensions={})
         first.scopes.update(envelopes=[])
-        prior = list(first.observations.order_by("pk").values())
+        prior = list(first.observations.exclude(observation_kind="coverage").order_by("pk").values())
     second = execute_model_history(job.pk, budget=budget(8))
     assert second.pk == first.pk and second.status == "success"
     assert second.request_count == len(seen) == (5 if pagination == "legacy" else 4)
@@ -263,11 +263,11 @@ def test_hf_history_access_failure_keeps_evidence_and_transient_resume(
 
     first = execute_model_history(job.pk, budget=budget())
     assert first.request_count == len(calls) == (3 if terminal else 5)
-    assert first.report["physical_requests_this_invocation"] == len(calls)
-    assert first.report["physical_accounting_complete"] is True
-    evidence = list(first.observations.order_by("pk").values())
+    assert history_report(first)["physical_requests_this_invocation"] == len(calls)
+    assert history_report(first)["physical_accounting_complete"] is (failure != "timeout")
+    evidence = list(first.observations.exclude(observation_kind="coverage").order_by("pk").values())
     assert len(evidence) == 2
-    coverage = first.report["coverage"][0]
+    coverage = history_report(first)["coverage"][0]
     assert {item["observation_id"] for item in coverage["evidence"]} == {
         row["id"] for row in evidence
     }
@@ -287,9 +287,9 @@ def test_hf_history_access_failure_keeps_evidence_and_transient_resume(
         resumed = execute_model_history(job.pk, budget=budget())
         assert resumed.pk == first.pk and resumed.status == "success"
         assert resumed.request_count == len(calls) == 7
-        assert resumed.report["physical_requests_this_invocation"] == 2
-        assert resumed.report["coverage"][0]["outcome"] == "observed"
-        assert list(resumed.observations.order_by("pk").values()) == evidence
+        assert history_report(resumed)["physical_requests_this_invocation"] == 2
+        assert history_report(resumed)["coverage"][0]["outcome"] == "observed"
+        assert list(resumed.observations.exclude(observation_kind="coverage").order_by("pk").values()) == evidence
         assert sum(cursor is None and "/commits/" in path for path, cursor in calls) == 1
         assert sum(path == "/api/models/lab/model" for path, _ in calls) == 1
     assert MetricValue.objects.count() == 0
@@ -343,7 +343,7 @@ def test_github_history_uses_reviewed_native_repo_and_pinned_tree():
     )
     assert (
         run.status == "success"
-        and run.observations.filter(dimensions__kind="releases").count() == 2
+        and run.observations.filter(observation_kind="releases").count() == 2
     )
     assert all("c" * 40 in url for url in seen if "/git/trees/" in url)
     assert run.attempts.get().requests.count() == len(seen)
@@ -376,7 +376,7 @@ def test_github_history_uses_reviewed_native_repo_and_pinned_tree():
     assert head.observation_key == expected
     frozen = _existing_evidence(job, {"product_key": str(subject.product_id)}, [pin])
     archived_commit = next(row for row in frozen if row["observation_id"] == head.pk)
-    assert archived_commit["source_metadata"]["clocks"]["committer_at"] == "2026-09-03T00:00:00Z"
+    assert datetime.fromisoformat(archived_commit["source_metadata"]["clocks"]["committer_at"]) == datetime(2026, 9, 3, tzinfo=UTC)
     assert archived_commit["source_time_precision"] == "instant"
 
 
@@ -541,7 +541,7 @@ def test_each_selected_model_has_a_durable_source_gap_without_synthetic_values()
         run = execute_model_history(obj.pk)
         cell = run.scopes.get(scope_kind="model_coverage")
         assert cell.outcome == "unmapped" and cell.enumeration_complete
-        assert run.report["coverage"][0]["product_key"] == str(subject.product_id)
+        assert history_report(run)["coverage"][0]["product_key"] == str(subject.product_id)
     assert MetricValue.objects.count() == 0
 
 
@@ -594,9 +594,11 @@ def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time
             assert value.window_start_at == value.window_end_at - timedelta(days=30)
     assert import_selected_history(claim, manifest(contract)).pk == imported.pk
     assert MetricValue.objects.count() == 4
-    assert CollectionRun.objects.get(pk=claim.run_id).report["numeric_run_ids"] == [
-        str(imported.pk)
-    ]
+    imported_scope = CollectionScopeRun.objects.get(
+        run_id=claim.run_id, scope_kind="archive_import"
+    )
+    assert imported_scope.result_run_id == imported.pk
+    assert imported_scope.phase == "typed-archive-import-v1"
 
 
 def test_shared_openrouter_window_is_fetched_once_and_other_never_fills_missing_model():
@@ -713,9 +715,11 @@ def test_shared_openrouter_window_is_fetched_once_and_other_never_fills_missing_
     second = execute_model_history(jobs[1].pk, budget=budget, key="test-project")
     assert len(calls) == 1
     assert sum(CollectionRun.objects.values_list("request_count", flat=True)) == 1
-    assert first.report["coverage"][0]["outcome"] == "observed"
-    assert second.report["coverage"][0]["outcome"] == "history_unavailable"
-    assert second.report["coverage"][0]["evidence"][0]["matched_rows"] == []
+    assert history_report(first)["coverage"][0]["outcome"] == "observed"
+    second_cell = history_report(second)["coverage"][0]
+    assert second_cell["outcome"] == "history_unavailable"
+    assert second_cell["evidence"][0]["observation_id"]
+    assert "matched_rows" not in second_cell["evidence"][0]
     assert MetricValue.objects.count() == 0
 
 
@@ -813,7 +817,9 @@ def test_openrouter_publication_acquisition_admits_reviewed_numeric_history():
         value.integer_value == 42
         and value.window_start_at.isoformat() == "2026-09-01T00:00:00+00:00"
     )
-    assert value.observation.run_id in [UUID(r) for r in run.report["numeric_run_ids"]]
+    assert run.scopes.filter(
+        scope_kind="archive_import", result_run_id=value.observation.run_id,
+    ).exists()
     assert value.observation.source_metadata["archive_snapshot_date"] == "2026-09-01"
 
 
@@ -874,7 +880,7 @@ def test_github_uses_current_reviewed_alias_and_rechecks_public_visibility(resum
         assert first.status == "partial"
         private[0] = True
         run = execute_model_history(job.pk, budget=budget(10))
-        assert run.report["coverage"][0]["outcome"] == "inaccessible"
+        assert history_report(run)["coverage"][0]["outcome"] == "inaccessible"
         assert len(calls) == 2
     else:
         run = execute_model_history(job.pk, budget=budget(30))
