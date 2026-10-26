@@ -161,8 +161,8 @@ def digest(value: Any) -> str:
     ).hexdigest()
 
 
-def record_post_membership(run, scope, post_ids, *, observed_at=None):
-    """Call inside the fenced page transaction, after Post writes succeeded."""
+def save_post_membership(run, scope, post_ids, *, observed_at=None):
+    """Save committed Post lineage without assigning enrichment ownership."""
     if not transaction.get_connection().in_atomic_block:
         raise BatchAdmissionError("membership_requires_fenced_page_transaction")
     if not run.job_id or run.job.purpose != "content" or run.job.source_id != "x":
@@ -187,6 +187,14 @@ def record_post_membership(run, scope, post_ids, *, observed_at=None):
         ],
         ignore_conflicts=True,
     )
+    return ids
+
+
+def record_post_membership(run, scope, post_ids, *, observed_at=None):
+    """Historical backfill membership plus its existing enrichment policy."""
+    if run.job.operation != "x_backfill":
+        raise BatchAdmissionError("historical_membership_requires_x_backfill")
+    ids = save_post_membership(run, scope, post_ids, observed_at=observed_at)
     now = timezone.now()
     PostEnrichmentState.objects.filter(
         Q(translation_status="pending") | Q(classification_status="pending"),

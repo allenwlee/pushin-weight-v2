@@ -54,6 +54,54 @@ def call_values(batch):
     }
 
 
+def test_post_membership_can_be_saved_without_historical_enrichment_ownership(batch):
+    from core.collection_jobs import register_job
+    from core.provider_batches import (
+        BatchAdmissionError,
+        record_post_membership,
+        save_post_membership,
+    )
+
+    post = Post.objects.create(tweet_id="scheduled-member", text="Qwen", lang="en")
+    PostEnrichmentState.objects.create(post=post)
+    scheduled_job = register_job(
+        job_key="scheduled-lineage-test",
+        source=batch.source_collection_job.source,
+        purpose="content", operation="x_cycle", mode="recurring",
+        definition={
+            "version": 1, "scope": {},
+            "schedule": {"kind": "interval", "driver": "external_render_cron", "seconds": 900},
+            "budgets": {"requests": 10, "bytes": 100000, "seconds": 120, "items": 100},
+        },
+    )
+    scheduled_run = CollectionRun.objects.create(
+        job=scheduled_job,
+        ingestion_key="f" * 64,
+        lease_token=uuid4(),
+        lease_expires_at=timezone.now() + timedelta(minutes=5),
+    )
+    run = CollectionRun.objects.create(
+        job=batch.source_collection_job,
+        ingestion_key="e" * 64,
+        lease_token=uuid4(),
+        lease_expires_at=timezone.now() + timedelta(minutes=5),
+    )
+    with transaction.atomic():
+        save_post_membership(scheduled_run, None, [post.pk])
+    assert CollectionObservation.objects.filter(run=scheduled_run, post=post).count() == 1
+    assert PostEnrichmentState.objects.get(post=post).source_collection_job_id is None
+    with (
+        pytest.raises(BatchAdmissionError, match="historical_membership_requires_x_backfill"),
+        transaction.atomic(),
+    ):
+        record_post_membership(scheduled_run, None, [post.pk])
+
+    with transaction.atomic():
+        record_post_membership(run, None, [post.pk])
+    assert CollectionObservation.objects.filter(run=run, post=post).count() == 1
+    assert PostEnrichmentState.objects.get(post=post).source_collection_job_id == run.job_id
+
+
 def test_call_requires_exactly_one_real_owner_and_bounded_members(batch):
     for change in (
         {"provider_batch": None},
