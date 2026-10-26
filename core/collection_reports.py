@@ -11,6 +11,7 @@ from core.benchmark_serving import (
     observation_dimensions,
     observation_provenance_metadata,
 )
+from core.collection_capture import run_report_document
 from core.measurement_taxonomy import require
 from core.models import (
     CollectionCorrection,
@@ -228,7 +229,8 @@ def _job_status(job_id, *, now=None):
         if job.next_retry_at and job.next_retry_at > now
         else job.state
     )
-    coverage = attempt.report.get("coverage", []) if attempt else []
+    attempt_report = run_report_document(attempt) if attempt else {}
+    coverage = attempt_report.get("coverage", [])
     matching_progress = None
     if job.operation == "match_crosswalk":
         completed = list(attempt.scopes.filter(
@@ -262,11 +264,9 @@ def _job_status(job_id, *, now=None):
         "coverage": coverage,
         "coverage_evaluations": len(coverage),
         "unevaluated_cells": max(0, len(scope.get("models", [])) - len(coverage)),
-        "all_requested_history_available": attempt.report.get(
+        "all_requested_history_available": attempt_report.get(
             "all_requested_history_available", False
-        )
-        if attempt
-        else False,
+        ),
         "last_attempt": _run(attempt),
         "last_success": _run(job.last_success),
         "active_claim": {

@@ -32,6 +32,17 @@ def test_report_uses_attempt_and_success_clocks_and_locates_failed_scopes():
     run = CollectionRun.objects.get(pk=second.run_id)
     run.report["coverage"][0]["token"] = "never-display"
     run.save()
+    from core.collection_capture import archive_legacy
+
+    run.legacy_archive = archive_legacy({
+        "request_params": run.request_params,
+        "source_metadata": run.source_metadata,
+        "raw_payload": run.raw_payload,
+        "invocations": run.invocations,
+        "report": run.report,
+    })
+    run.report = {}
+    run.save(update_fields=["legacy_archive", "report"])
     report = job_status(job.pk)
     assert report["last_attempt"]["run_id"] == str(second.run_id)
     assert report["last_success"]["run_id"] == str(first.run_id)

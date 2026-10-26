@@ -97,6 +97,18 @@ def observation_object_documents(observation):
     return document["listing"], document["dimensions"], document["source_metadata"]
 
 
+def run_report_document(run):
+    """Read a completed run's report after its old JSON column is cleared."""
+    if run.legacy_archive_id is None or run.report:
+        return run.report
+    document = read_document(run.legacy_archive)
+    require(
+        isinstance(document, dict) and isinstance(document.get("report"), dict),
+        "invalid archived run report",
+    )
+    return document["report"]
+
+
 def scope_object_documents(scope):
     """Return checkpoint wording from its preserved document after retirement."""
     # Live additive writers may still advance a copied scope. The final frozen
