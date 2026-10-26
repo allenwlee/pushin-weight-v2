@@ -21,7 +21,7 @@ APPEARANCE_KIND = "x_request_appearance"
 
 def _legacy_report(run):
     """Explicit write-boundary adoption only; operational readers are typed."""
-    if run.report:
+    if any(field.name == "report" for field in type(run)._meta.fields) and run.report:
         return run.report
     if run.legacy_archive_id:
         document = read_document(run.legacy_archive)

@@ -186,6 +186,7 @@ def save_post_membership(run, scope, post_ids, *, observed_at=None):
                 post_id=post_id,
                 source_identifier=post_id,
                 source_subject_kind="post",
+                projection_kind="typed-x-membership-v1",
                 observation_key=(
                     digest({"scope": scope.pk, "post": post_id})
                     if scope is not None else digest({"post": post_id})

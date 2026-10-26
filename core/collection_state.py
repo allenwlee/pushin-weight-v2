@@ -299,6 +299,12 @@ def claim_job(
                     "hf_catalog", "match_crosswalk",
                 }
                 or job.purpose == "metric" and job.operation == "collect_metrics"
+                or job.source_id == "x" and job.purpose == "content"
+                and job.operation == "x_backfill" and job.mode == "historical"
+                and manual_authorized
+                or job.source_id == "x" and job.purpose == "content"
+                and job.operation == "x_cycle" and job.mode == "recurring"
+                and manual_authorized
             )
             and (not bounded_campaign or job.campaign_id is not None),
             "typed claim requires a supported sealed campaign and operation",
@@ -382,6 +388,7 @@ def claim_job(
             active is None or active.pk == run.pk or active.completed_at is not None,
             "another unfinished collection owns the active slot",
         )
+    new_run = run is None
     token = uuid.uuid4()
     lease = now + timedelta(seconds=job.budgets["seconds"] + 60)
     if run is None:
@@ -391,6 +398,8 @@ def claim_job(
             started_at=now,
             scheduled_slot_at=slot,
         )
+        if typed and job.source_id == "x" and job.operation == "x_backfill":
+            run.physical_bytes_received = 0
     if bounded_campaign and job.campaign_id is None:
         prior_usage = run.report.get("campaign_usage", {})
         run.report = {
@@ -442,6 +451,10 @@ def claim_job(
             marker_kind, marker_phase = "metric_execution", "typed-metric-v1"
         elif job.operation == "match_crosswalk":
             marker_kind, marker_phase = "match_execution", "typed-product-match-v1"
+        elif job.source_id == "x" and job.operation == "x_backfill":
+            marker_kind, marker_phase = "x_backfill_execution", "typed-backfill-v1"
+        elif job.source_id == "x" and job.operation == "x_cycle":
+            marker_kind, marker_phase = "x_cycle_execution", "typed-x-cycle-v1"
         else:
             raise ValueError("typed collection claim has no execution marker")
         if (
@@ -449,12 +462,15 @@ def claim_job(
             or job.operation == "model_inventory" and job.source_id == "openrouter"
             or job.operation == "collect_metrics"
             or job.operation == "match_crosswalk"
+            or job.source_id == "x" and job.operation == "x_backfill"
+            or job.source_id == "x" and job.operation == "x_cycle"
         ) and not run.scopes.filter(
             scope_kind=marker_kind, scope_key="execution", phase=marker_phase,
         ).exists():
             retained_fields = {field.name for field in CollectionRun._meta.fields}
             require(
-                not run.scopes.exists()
+                (new_run or not (job.source_id == "x" and job.operation in {"x_backfill", "x_cycle"}))
+                and not run.scopes.exists()
                 and ("report" not in retained_fields or not run.report)
                 and ("invocations" not in retained_fields or not run.invocations)
                 and run.legacy_archive_id is None,
@@ -910,8 +926,14 @@ def checkpoint_scope(
         )
     if projection_contract is not None:
         require(
-            scope_kind in {"numeric_projection", "publication_selection", "metric_fetch"}
-            and (scope_kind == "metric_fetch" or ownership.get("contract_hash") == projection_contract.contract_hash)
+            scope_kind in {
+                "numeric_projection", "publication_selection", "metric_fetch",
+                "archive_projection",
+            }
+            and (
+                scope_kind == "metric_fetch"
+                or ownership.get("contract_hash") == projection_contract.contract_hash
+            )
             and (
                 "contract_id" not in ownership
                 or ownership["contract_id"] == str(projection_contract.pk)
@@ -970,6 +992,13 @@ def checkpoint_scope(
                     run.job, run, scope_kind, scope_key, ownership,
                     projection_contract, resource_observation,
                 )
+            elif scope_kind in {"archive_snapshot", "archive_projection"}:
+                from core.model_history_archives import validate_typed_scope
+
+                validate_typed_scope(
+                    run.job, run, scope_kind, scope_key, ownership,
+                    projection_contract, resource_observation,
+                )
             elif scope_kind == "model_catalog" and run.job.source_id == "openrouter":
                 require(projection_contract is None, "unexpected inventory contract")
                 from core.model_inventory import validate_typed_scope
@@ -994,6 +1023,14 @@ def checkpoint_scope(
                         "input_sha256": matches[0]["input_sha256"],
                     },
                     "typed product match differs from frozen candidate",
+                )
+            elif scope_kind == "staged_post_copy":
+                require(projection_contract is None, "unexpected promotion contract")
+                from monitor.backfill_promotion import validate_typed_scope
+
+                validate_typed_scope(
+                    run.job, run, scope_kind, scope_key, ownership,
+                    resource_observation,
                 )
             elif scope_kind == "numeric_projection":
                 _validate_typed_projection_scope(
@@ -1314,6 +1351,10 @@ def finish_run(
                 job.source_id == "x" and job.purpose == "content"
                 and job.operation == "x_backfill" and request_count is not None
             )
+            x_cycle = (
+                job.source_id == "x" and job.purpose == "content"
+                and job.operation == "x_cycle" and request_count is not None
+            )
             product_match = (
                 job.purpose == "catalog" and job.operation == "match_crosswalk"
                 and request_count == 0
@@ -1324,6 +1365,7 @@ def finish_run(
                     or job.source_id == "openrouter" and job.operation == "model_inventory"
                 ))
                 or metric_collection or model_history or github_catalog or x_backfill
+                or x_cycle
                 or product_match,
                 "typed completion needs a supported collection operation",
             )

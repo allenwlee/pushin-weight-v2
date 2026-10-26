@@ -1795,20 +1795,55 @@ def _document_expression(fields: tuple[str, ...]) -> str:
 def _legacy_owner_predicate(table: str) -> str:
     # These new typed records never owned the retired collection JSON. Their
     # archive pointer retains source checkpoint evidence, not their empty fields.
+    if table == "collection_runs":
+        return (
+            "NOT (t.request_params='{}'::jsonb AND t.source_metadata='{}'::jsonb "
+            "AND t.raw_payload IS NULL AND t.invocations='[]'::jsonb "
+            "AND t.report='{}'::jsonb AND EXISTS ("
+            "SELECT 1 FROM collection_scope_runs marker WHERE marker.run_id=t.id "
+            "AND marker.scope_kind IN ('history_execution','catalog_execution',"
+            "'inventory_execution','metric_execution','match_execution',"
+            "'x_backfill_execution','x_cycle_execution') "
+            "AND marker.scope_key='execution' OFFSET 0))"
+        )
     if table == "collection_scope_runs":
         return (
             "t.scope_kind NOT IN ('resource_group','numeric_projection_item',"
             "'numeric_projection_result','numeric_projection_output',"
-            "'history_execution','catalog_execution','x_page_checkpoint',"
+            "'history_execution','catalog_execution','inventory_execution',"
+            "'metric_execution','match_execution','x_backfill_execution',"
+            "'x_cycle_execution',"
+            "'x_page_checkpoint',"
             "'x_model_call','x_model_usage','x_backfill_result',"
             "'x_checkpoint_import') "
             "AND NOT (t.scope_kind='numeric_projection' "
-            "AND t.phase='projection_results_v1')"
+            "AND t.phase='projection_results_v1') "
+            "AND NOT (t.scope_kind='archive_import' "
+            "AND t.phase='typed-archive-import-v1') "
+            "AND NOT (t.scope_kind IN ('publication_window','publication_selection') "
+            "AND t.phase='typed-publication-v1') "
+            "AND NOT (t.scope_kind='model_catalog' "
+            "AND t.phase='typed-openrouter-catalog-v1') "
+            "AND NOT (t.scope_kind='metric_fetch' "
+            "AND t.phase='typed-metric-fetch-v1') "
+            "AND NOT (t.scope_kind='product_match' "
+            "AND t.phase='typed-product-match-v1') "
+            "AND NOT (t.scope_kind='staged_post_copy' "
+            "AND t.phase IN ('typed-x-promotion-v1','typed-x-promotion-quotes-v1')) "
+            "AND NOT (t.scope_kind='quote_repair' "
+            "AND t.phase='typed-x-promotion-quotes-v1') "
+            "AND NOT (t.scope_kind IN ('archive_snapshot','archive_projection') "
+            "AND t.phase='typed-hf-archive-v1')"
         )
     if table == "collection_observations":
         return (
             "(t.observation_kind IS NULL OR t.observation_kind NOT IN "
-            "('x_page_checkpoint','x_page_appearance','x_page_diagnostic','x_request_appearance','hf_catalog_listing','coverage')) "
+            "('x_page_checkpoint','x_page_appearance','x_page_diagnostic','x_request_appearance','hf_catalog_listing','coverage','product_match_decision')) "
+            "AND (t.projection_kind IS NULL OR t.projection_kind NOT IN "
+            "('github-catalog-object-v1','hf-native-history-v1',"
+            "'hf-archive-snapshot-v1','hf-archive-row-v1',"
+            "'openrouter-catalog-object-v1','publication-window-v1','publication-row-v1',"
+            "'x-staging-promotion-v1','typed-x-membership-v1')) "
             "AND NOT EXISTS (SELECT 1 FROM collection_evidence_archives hf_capture "
             "WHERE hf_capture.id=t.legacy_archive_id "
             "AND hf_capture.capture_kind='hf_inventory_evidence' OFFSET 0)"

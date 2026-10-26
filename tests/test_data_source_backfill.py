@@ -109,6 +109,38 @@ def test_imported_campaign_reservation_is_preserved_without_guessing_attempts():
     assert project_legacy_campaigns(verify_only=True)["imported_reserved_requests"] == 30
 
 
+@pytest.mark.django_db(transaction=True)
+def test_legacy_campaign_import_reads_archived_reservations_after_json_retirement():
+    from core.collection_storage_migration import archive_legacy_batch
+    from core.data_source_backfill import campaign_usage, project_legacy_campaigns
+    from tests.test_hf_catalog_retirement import denied_retirement_columns
+
+    job = legacy_campaign_job()
+    now = timezone.now()
+    run = CollectionRun.objects.create(
+        job=job, ingestion_key="d" * 64, status="success", completed_at=now,
+        request_count=7,
+        report={"campaign_usage": {
+            "invocations": 1, "reserved_requests": 13, "recorded_requests": 7,
+        }},
+    )
+    CollectionAttempt.objects.create(
+        run=run, attempt_key="archived-campaign-1", ordinal=1,
+        imported_at=now, outcome="success",
+    )
+    assert archive_legacy_batch("collection_runs").archived == 1
+    CollectionRun.objects.filter(pk=run.pk).update(report={})
+
+    with denied_retirement_columns():
+        assert campaign_usage(job) == {
+            "invocations": 1, "reserved_requests": 13, "recorded_requests": 7,
+        }
+        assert project_legacy_campaigns()["imported_reserved_requests"] == 13
+        job.refresh_from_db()
+        assert job.campaign.imported_reserved_requests == 13
+        assert project_legacy_campaigns(verify_only=True)["legacy_runs"] == 1
+
+
 def test_imported_campaign_rejects_receipt_attempt_disagreement():
     from core.data_source_backfill import project_legacy_campaigns
 

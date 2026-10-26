@@ -97,6 +97,10 @@ def observation_object_documents(observation):
         from core.model_native_history import observation_documents
 
         return observation_documents(observation)
+    if observation.projection_kind in {"hf-archive-snapshot-v1", "hf-archive-row-v1"}:
+        from core.model_history_archives import observation_documents
+
+        return observation_documents(observation)
     if observation.projection_kind in {"publication-window-v1", "publication-row-v1"}:
         from core.model_history_publications import observation_documents
 
@@ -180,12 +184,35 @@ def observation_object_documents(observation):
 def run_report_document(run):
     """Read a completed run's report after its old JSON column is cleared."""
     job = run.job
+    if (
+        job.source_id == "x" and job.purpose == "content"
+        and job.operation == "x_cycle"
+        and run.scopes.filter(
+            scope_kind="x_cycle_execution", scope_key="execution",
+            phase="typed-x-cycle-v1",
+        ).exists()
+    ):
+        from core.x_cycle_lineage import scheduled_cycle_report
+
+        return scheduled_cycle_report(run)
     metric_reportable = job.purpose == "metric" and (
         job.operation == "collect_metrics"
         or job.operation == "legacy_direct"
         and job.definition.get("execution", {}).get("driver") == "persist_source"
         and job.contract_id is not None
     )
+    if (
+        job.source_id == "x" and job.purpose == "content"
+        and job.operation == "x_backfill"
+        and job.scope.get("adapter") == "x-staging-promotion/v1"
+        and run.scopes.filter(
+            scope_kind="staged_post_copy", scope_key="staging-posts",
+            phase__in=["typed-x-promotion-v1", "typed-x-promotion-quotes-v1"],
+        ).exists()
+    ):
+        from monitor.backfill_promotion import promotion_report
+
+        return promotion_report(run)
     if (
         job.source_id == "x" and job.purpose == "content"
         and job.operation == "x_backfill"

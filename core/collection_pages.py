@@ -316,7 +316,8 @@ def copy_continuation_scopes(previous, run):
     copies, originals = {}, {}
     for original in previous.scopes.exclude(scope_kind__in=[
         "resource_group", PAGE_KIND, "x_model_call", "x_model_usage",
-        "x_backfill_result", "x_checkpoint_import",
+        "x_backfill_result", "x_checkpoint_import", "x_backfill_execution",
+        "x_cycle_execution",
     ]).order_by("pk"):
         identifier = original.pk
         cursors = original.recorded_cursors
@@ -324,7 +325,9 @@ def copy_continuation_scopes(previous, run):
         # A new instance keeps the original identity available for page inputs.
         copy = CollectionScopeRun.objects.get(pk=identifier)
         copy.pk, copy.run = None, run
-        if copy.scope_kind == "x_query":
+        if copy.scope_kind == "x_query" and any(
+            field.name == "envelopes" for field in CollectionScopeRun._meta.fields
+        ):
             copy.envelopes = []
         copy.save(force_insert=True)
         replace_scope_cursor_history(copy, cursors)

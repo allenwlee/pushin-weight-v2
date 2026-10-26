@@ -902,6 +902,31 @@ def test_legacy_archive_sweep_excludes_typed_only_group_and_queue_scopes():
             phase="typed-import-v1", ownership={},
         ),
     ]
+    children.extend(
+        CollectionScopeRun.objects.create(
+            run=run, scope_kind=kind, scope_key=f"typed-{kind}",
+            phase=phase, ownership={},
+        )
+        for kind, phase in (
+            ("inventory_execution", "typed-inventory-v1"),
+            ("metric_execution", "typed-metric-v1"),
+            ("match_execution", "typed-product-match-v1"),
+            ("x_backfill_execution", "typed-backfill-v1"),
+            ("x_cycle_execution", "typed-x-cycle-v1"),
+            ("archive_import", "typed-archive-import-v1"),
+            ("publication_window", "typed-publication-v1"),
+            ("publication_selection", "typed-publication-v1"),
+            ("model_catalog", "typed-openrouter-catalog-v1"),
+            ("metric_fetch", "typed-metric-fetch-v1"),
+            ("product_match", "typed-product-match-v1"),
+            ("staged_post_copy", "typed-x-promotion-v1"),
+            ("quote_repair", "typed-x-promotion-quotes-v1"),
+            ("archive_snapshot", "typed-hf-archive-v1"),
+            ("archive_projection", "typed-hf-archive-v1"),
+        )
+    )
+
+    assert archive_legacy_batch("collection_runs").archived == 0
 
     assert archive_legacy_batch("collection_scope_runs").archived == 1
     assert archive_legacy_batch("collection_scope_runs", repair_stale=True).archived == 0
@@ -919,12 +944,37 @@ def test_legacy_archive_sweep_excludes_typed_only_group_and_queue_scopes():
         source_subject_kind="model", observation_kind="coverage",
         observation_key="d" * 64,
     )
+    from core.models import Post
+
+    post = Post.objects.create(tweet_id="rg6-archive-sweep-post", text="source", lang="en")
+    typed_observations = [CollectionObservation.objects.create(
+        run=run, scope_run=parent,
+        source_identifier=post.pk if kind == "post" else f"typed-{index}",
+        source_subject_kind="post" if kind == "post" else "model",
+        post=post if kind == "post" else None,
+        observation_kind=kind, projection_kind=projection_kind,
+        observation_key=f"{index + 1:064x}",
+    ) for index, (kind, projection_kind) in enumerate((
+        ("product_match_decision", None),
+        ("repository", "github-catalog-object-v1"),
+        ("hf_history_head", "hf-native-history-v1"),
+        ("model_catalog", "openrouter-catalog-object-v1"),
+        ("publication_window", "publication-window-v1"),
+        ("publication_row", "publication-row-v1"),
+        ("post", "x-staging-promotion-v1"),
+        ("post", "typed-x-membership-v1"),
+        ("archive_snapshot", "hf-archive-snapshot-v1"),
+        ("archive_metadata", "hf-archive-row-v1"),
+    ))]
     assert archive_legacy_batch("collection_observations").archived == 1
     assert stale_legacy_archive_count("collection_observations") == 0
     observation.refresh_from_db()
     coverage.refresh_from_db()
     assert observation.legacy_archive_id is not None
     assert coverage.legacy_archive_id is None
+    for typed_observation in typed_observations:
+        typed_observation.refresh_from_db()
+        assert typed_observation.legacy_archive_id is None
 
 
 def test_benchmark_provenance_copy_is_bounded_and_repeatable():

@@ -246,12 +246,14 @@ def campaign_usage(job):
             or 0,
         }
     # Transition only: legacy campaigns are materialized before JSON retirement.
+    from core.collection_capture import run_report_document
+
     usage = {"invocations": 0, "reserved_requests": 0, "recorded_requests": 0}
-    for run in CollectionRun.objects.filter(
+    for run in CollectionRun.objects.select_related("job", "legacy_archive").filter(
         job__definition__campaign__kind="backfiller-data-source-v1",
         job__definition__campaign__key=job.campaign_settings["key"],
     ):
-        reservation = run.report.get("campaign_usage", {})
+        reservation = run_report_document(run).get("campaign_usage", {})
         usage["invocations"] += reservation.get("invocations", 0)
         usage["reserved_requests"] += reservation.get("reserved_requests", 0)
         usage["recorded_requests"] += run.request_count
@@ -290,11 +292,13 @@ def project_legacy_campaigns(*, verify_only=False):
 
     # The campaign instruction row is sealed against UPDATE/DELETE. Derive the
     # baseline before creating it, then recheck the locked source rows below.
+    from core.collection_capture import run_report_document
+
     initial_reserved = dict.fromkeys(grouped, 0)
-    for job_id, report in CollectionRun.objects.filter(
+    for run in CollectionRun.objects.select_related("job", "legacy_archive").filter(
         job_id__in=job_keys,
-    ).values_list("job_id", "report"):
-        usage = report.get("campaign_usage")
+    ):
+        usage = run_report_document(run).get("campaign_usage")
         if usage is not None:
             require(
                 isinstance(usage, dict)
@@ -302,7 +306,7 @@ def project_legacy_campaigns(*, verify_only=False):
                 and usage["reserved_requests"] >= 0,
                 "legacy campaign reservation receipt is invalid",
             )
-            initial_reserved[job_keys[job_id]] += usage["reserved_requests"]
+            initial_reserved[job_keys[run.job_id]] += usage["reserved_requests"]
 
     campaigns = {}
     for key, group in sorted(grouped.items()):
@@ -340,7 +344,9 @@ def project_legacy_campaigns(*, verify_only=False):
         "legacy campaign job cohort changed",
     )
     job_ids = [job.pk for job in locked]
-    runs = list(CollectionRun.objects.select_for_update().filter(
+    runs = list(CollectionRun.objects.select_for_update(of=("self",)).select_related(
+        "job", "legacy_archive",
+    ).filter(
         job_id__in=job_ids,
     ).order_by("pk")[:10001])
     require(len(runs) <= 10000, "legacy campaign run cohort needs batching")
@@ -352,7 +358,7 @@ def project_legacy_campaigns(*, verify_only=False):
     reserved_by_key = dict.fromkeys(grouped, 0)
     imported_count = 0
     for run in runs:
-        usage = run.report.get("campaign_usage")
+        usage = run_report_document(run).get("campaign_usage")
         related = attempts.get(run.pk, [])
         if usage is None:
             require(
@@ -417,7 +423,9 @@ def project_legacy_campaigns(*, verify_only=False):
     return {
         "campaigns": len(campaigns),
         "jobs": len(locked),
-        "legacy_runs": sum(run.report.get("campaign_usage") is not None for run in runs),
+        "legacy_runs": sum(
+            run_report_document(run).get("campaign_usage") is not None for run in runs
+        ),
         "imported_attempts": imported_count,
         "imported_reserved_requests": sum(reserved_by_key.values()),
     }
