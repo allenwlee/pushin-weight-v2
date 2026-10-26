@@ -838,7 +838,6 @@ def checkpoint_scope(
         )
         if cursor_history is not None:
             replace_scope_cursor_history(scope, cursor_history)
-            scope.cursor_history = cursor_history
         if envelopes is not None:
             scope.envelopes = envelopes
         if raw_count is not None:

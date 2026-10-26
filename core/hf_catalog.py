@@ -354,7 +354,6 @@ def _persist_page(ns, result, rules):
         if result.next_cursor:
             cursors.append(result.next_cursor)
     replace_scope_cursor_history(ns, cursors)
-    ns.cursor_history = cursors
     ns.save()
 
 
@@ -457,7 +456,6 @@ def _walk_namespace(ns, hf, rules, visited, max_models, claim):
                 and result.outcome in {"http_400", "http_422"}
             ):
                 ns.cursor = None
-                ns.cursor_history = []
                 ns.outcome = "cursor_restart"
                 restarted = True
                 _save_scope(ns, claim)

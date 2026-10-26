@@ -17,15 +17,11 @@ def scope_cursor_history(scope):
     rows = list(scope.cursor_receipts.order_by("position").values_list(
         "position", "cursor",
     ))
-    if rows:
-        require(
-            [position for position, _ in rows] == list(range(1, len(rows) + 1)),
-            "cursor history positions must be contiguous",
-        )
-        return [cursor for _, cursor in rows]
-    # Additive rollout: old images still write the original checkpoint list.
-    validate_cursor_history(scope.cursor_history)
-    return list(scope.cursor_history)
+    require(
+        [position for position, _ in rows] == list(range(1, len(rows) + 1)),
+        "cursor history positions must be contiguous",
+    )
+    return [cursor for _, cursor in rows]
 
 
 @transaction.atomic
