@@ -24,6 +24,7 @@ from core.benchmark_metric_store import (
     native_rows,
     prepare_rows,
 )
+from core.collection_capture import observation_object_documents
 from core.collection_state import checkpoint_scope, claim_job, fenced_run, finish_run
 from core.measurement_taxonomy import digest, require
 from core.models import (
@@ -295,23 +296,6 @@ def _publisher(contract, source, identifier):
     return mapping
 
 
-def _captured_documents(evidence):
-    """Recover immutable historical evidence from its archive after JSON retirement."""
-    if evidence.legacy_archive_id is None:
-        return evidence.listing, evidence.dimensions, evidence.source_metadata
-    from core.collection_capture import read_document
-
-    document = read_document(evidence.legacy_archive)
-    require(
-        isinstance(document, dict)
-        and isinstance(document.get("listing"), dict)
-        and isinstance(document.get("dimensions"), dict)
-        and isinstance(document.get("source_metadata"), dict),
-        "invalid archived source evidence",
-    )
-    return document["listing"], document["dimensions"], document["source_metadata"]
-
-
 def evidence_rows(contract, source, evidence):
     """Yield supported native rows; preserve snapshot and effective clocks separately."""
     require(
@@ -319,7 +303,7 @@ def evidence_rows(contract, source, evidence):
         "catalog evidence source mismatch",
     )
     require(evidence.status == "ok", "source evidence is an error")
-    raw, captured_dimensions, captured_metadata = _captured_documents(evidence)
+    raw, captured_dimensions, captured_metadata = observation_object_documents(evidence)
     require(isinstance(raw, dict), "native object evidence required")
     if source in {"openrouter", "arena"}:
         yield from _publication_rows(
@@ -770,7 +754,7 @@ def _project_evidence(
 
 
 def _evidence_bytes(evidence):
-    listing, metadata, dimensions = _captured_documents(evidence)
+    listing, dimensions, metadata = observation_object_documents(evidence)
     return len(
         json.dumps(
             [listing, metadata, dimensions],
@@ -860,7 +844,7 @@ def replay_saved_evidence(job_id):
         if monotonic() >= deadline:
             complete = False
             break
-        if job.source_id == "hf" and _captured_documents(evidence)[2].get("numeric_fields") == []:
+        if job.source_id == "hf" and observation_object_documents(evidence)[2].get("numeric_fields") == []:
             last_processed = evidence.pk
             continue
         size = _evidence_bytes(evidence)

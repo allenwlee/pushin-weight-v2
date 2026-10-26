@@ -82,6 +82,21 @@ def read_document(archive):
     return json.loads(body)
 
 
+def observation_object_documents(observation):
+    """Return a catalog object's captured fields, preferring frozen legacy evidence."""
+    if observation.legacy_archive_id is None:
+        return observation.listing, observation.dimensions, observation.source_metadata
+    document = read_document(observation.legacy_archive)
+    require(
+        isinstance(document, dict)
+        and all(isinstance(document.get(key), dict) for key in (
+            "listing", "dimensions", "source_metadata",
+        )),
+        "invalid archived observation object",
+    )
+    return document["listing"], document["dimensions"], document["source_metadata"]
+
+
 def checked_endpoint(url):
     require(isinstance(url, str), "request URL required")
     parsed = urlsplit(url)

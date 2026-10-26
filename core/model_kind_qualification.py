@@ -1,27 +1,11 @@
 """Opt-in model-kind qualification from a pinned first-party HF registry capture."""
 
+from core.collection_capture import observation_object_documents
 from core.collection_groups import observation_group_outcomes
 from core.measurement_taxonomy import digest, require
 from core.models import BrandCompany, CollectionObservation
 
 MODEL_KIND_POLICY = "hf-public-model-registry-v1"
-
-
-def _captured_fields(observation):
-    """Read frozen historical evidence when its retired columns have been cleared."""
-    if observation.legacy_archive_id is None:
-        return observation.listing, observation.dimensions, observation.source_metadata
-    from core.collection_capture import read_document
-
-    document = read_document(observation.legacy_archive)
-    require(
-        isinstance(document, dict)
-        and all(isinstance(document.get(key), dict) for key in (
-            "listing", "dimensions", "source_metadata",
-        )),
-        "invalid archived model-registry evidence",
-    )
-    return document["listing"], document["dimensions"], document["source_metadata"]
 
 
 def _qualification(product, observation):
@@ -41,7 +25,7 @@ def _qualification(product, observation):
         ).exists(),
         "public model publisher/brand identity is unqualified",
     )
-    raw, dimensions, source_metadata = _captured_fields(observation)
+    raw, dimensions, source_metadata = observation_object_documents(observation)
     require(
         observation.run.job.source_id == "hf"
         and observation.run.job.purpose == "catalog"
