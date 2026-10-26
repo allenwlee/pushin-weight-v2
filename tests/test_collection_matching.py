@@ -250,6 +250,30 @@ def test_changed_evidence_rolls_back_mapping_and_checkpoint():
     assert not CollectionScopeRun.objects.exists()
 
 
+def test_match_evidence_pin_survives_retired_observation_documents():
+    from core.collection_capture import archive_legacy
+
+    brand, _, observation = catalog_fixture()
+    cutoff = timezone.now()
+    expected = preview(brand, cutoff=cutoff)
+    observation.legacy_archive = archive_legacy(
+        {
+            "listing": observation.listing,
+            "dimensions": observation.dimensions,
+            "source_metadata": observation.source_metadata,
+        }
+    )
+    observation.listing = {}
+    observation.dimensions = {}
+    observation.source_metadata = {}
+    observation.save(
+        update_fields=["legacy_archive", "listing", "dimensions", "source_metadata"]
+    )
+    assert preview(brand, cutoff=cutoff) == expected
+    apply_reviewed(expected)
+    assert SourceSubjectMapping.objects.get().external_identifier == observation.source_identifier
+
+
 def test_null_brand_review_does_not_change_metric_ownership_qualification():
     from core.collection_identity import qualified_ownership
 

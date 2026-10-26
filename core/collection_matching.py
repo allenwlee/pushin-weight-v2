@@ -20,6 +20,7 @@ from django.db.models.functions import Cast, Length
 from django.utils import timezone
 
 from core.benchmark_metric_store import aware_instant
+from core.collection_capture import observation_object_documents
 from core.measurement_taxonomy import digest, require
 from core.models import (
     Account,
@@ -186,6 +187,7 @@ def _pages(query, *, size=500):
 
 
 def _evidence_pin(observation):
+    listing, dimensions, source_metadata = observation_object_documents(observation)
     return {
         "observation_id": observation.pk,
         "observation_key": observation.observation_key,
@@ -194,18 +196,17 @@ def _evidence_pin(observation):
         "source_identifier": observation.source_identifier,
         "source_subject_kind": observation.source_subject_kind,
         "observed_at": observation.observed_at.isoformat(),
-        "payload_hash": digest(
-            [observation.listing, observation.dimensions, observation.source_metadata]
-        ),
+        "payload_hash": digest([listing, dimensions, source_metadata]),
     }
 
 
 def _native(observation, scope, row_index=None):
     source, identifier = observation.run.job.source_id, observation.source_identifier
-    if not isinstance(observation.listing, dict):
+    listing, _, _ = observation_object_documents(observation)
+    if not isinstance(listing, dict):
         return None
     if row_index is not None:
-        rows = observation.listing.get("rows", [])
+        rows = listing.get("rows", [])
         if not (
             source in {"arena", "openrouter"}
             and isinstance(rows, list)
@@ -221,7 +222,7 @@ def _native(observation, scope, row_index=None):
             return None
     if not identifier or identifier == "other":
         return None
-    repo = observation.listing
+    repo = listing
     label, publisher, repo_pin = identifier, None, None
     if source == "github":
         owner = repo.get("owner", {})
