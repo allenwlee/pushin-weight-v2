@@ -674,6 +674,29 @@ def _scope(claim, kind, key):
 def _prepare_capture(
     claim, client, kind, key, ownership, scoped=None, *, resource_observation=None
 ):
+    if scoped is not None:
+        require(
+            scoped.run_id == claim.run_id
+            and scoped.scope_kind == kind
+            and scoped.scope_key == key
+            and scoped.phase == SCOPE_PHASE,
+            "GitHub scope requires typed adoption before acquisition",
+        )
+        require(
+            scoped.resource_observation_id
+            == (resource_observation.pk if resource_observation is not None else None),
+            "GitHub scope parent changed before acquisition",
+        )
+        if kind in {"repository_tree", "repository_file"}:
+            require(
+                scoped.requested_revision == ownership["revision"],
+                "GitHub pinned revision changed before acquisition",
+            )
+            if kind == "repository_file":
+                require(
+                    scoped.resource_path == key.split(":", 2)[2],
+                    "GitHub metadata path changed before acquisition",
+                )
     scoped = scoped or checkpoint_scope(
         claim,
         scope_kind=kind,

@@ -66,6 +66,36 @@ def test_command_and_operator_status_return_typed_catalog_report(monkeypatch):
         assert status["last_success"]["selected_count"] == run.selected_count
 
 
+@pytest.mark.parametrize("missing", ["phase", "resource_observation"])
+def test_copied_child_requires_typed_owner_before_provider_dispatch(missing):
+    job, repo = configured()
+    seen = []
+    with denied_retirement_columns():
+        first = execute_github_catalog(job.pk, client=reader(responses(repo, seen), 5))
+        assert first.status == "partial" and first.error_code == "request_cap"
+        child = first.scopes.get(scope_kind="repository_events", scope_key="123:tags")
+        assert (
+            child.phase == "typed-github-catalog-v1" and child.resource_observation_id
+        )
+        type(child).objects.filter(pk=child.pk).update(**{missing: None})
+        seen.clear()
+        resumed = execute_github_catalog(
+            job.pk, client=reader(responses(repo, seen), 20)
+        )
+        assert resumed.pk == first.pk and resumed.status == "partial"
+        assert resumed.error_code == "invalid_or_unqualified_source_data"
+        # Current public access is rechecked, but no unadopted child dispatches.
+        assert seen == ["https://api.github.com/repos/publisher/family"]
+        child.refresh_from_db()
+        assert (
+            getattr(
+                child, missing + "_id" if missing == "resource_observation" else missing
+            )
+            is None
+        )
+        assert not child.observations.exists()
+
+
 def test_full_catalog_resume_pins_metadata_and_reports_without_retiring_columns():
     job, repo = configured()
     seen = []
