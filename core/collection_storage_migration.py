@@ -514,7 +514,7 @@ def project_resource_snapshots_batch(
         for observation in observations:
             if observation.run_id != owners[observation.pk]:
                 raise ValueError("resource owner moved while locking")
-            expected = resource_snapshot_values(observation)
+            expected = resource_snapshot_values(observation, create_references=not verify_only)
             if expected is None:
                 continue
             snapshot = getattr(observation, "resource_snapshot", None)

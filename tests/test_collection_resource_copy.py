@@ -66,3 +66,22 @@ def test_resource_copy_refuses_malformed_native_commit_identity_before_creation(
     with pytest.raises(ValueError, match="commit revision is missing"):
         project_resource_snapshots_batch()
     assert not CollectionResourceSnapshot.objects.exists()
+
+
+def test_verification_does_not_register_missing_vocabulary():
+    from core.models import ModelTask
+
+    row = captured_commit()
+    CollectionObservation.objects.filter(pk=row.pk).update(
+        listing={"id": "selected-commit", "pipeline_tag": "rg6-copy-fixture"},
+    )
+    with CaptureQueriesContext(connection) as queries, pytest.raises(
+        ValueError, match="unregistered source vocabulary code",
+    ):
+        project_resource_snapshots_batch(verify_only=True)
+    assert not any("INSERT INTO" in query["sql"] for query in queries)
+    assert not ModelTask.objects.filter(code="rg6-copy-fixture").exists()
+    assert not CollectionResourceSnapshot.objects.exists()
+    assert project_resource_snapshots_batch().updated == 1
+    assert ModelTask.objects.filter(code="rg6-copy-fixture", data_source_id="hf").count() == 1
+    assert project_resource_snapshots_batch(verify_only=True).updated == 0
