@@ -1,5 +1,7 @@
 """Stable read-only reports of jobs, scopes, provenance and qualified coverage."""
 
+from collections import Counter
+
 from django.db.models import Prefetch, Q
 from django.utils import timezone
 
@@ -227,6 +229,20 @@ def _job_status(job_id, *, now=None):
         else job.state
     )
     coverage = attempt.report.get("coverage", []) if attempt else []
+    matching_progress = None
+    if job.operation == "match_crosswalk":
+        completed = list(attempt.scopes.filter(
+            scope_kind="product_match", enumeration_complete=True,
+        ).values_list("outcome", flat=True)) if attempt else []
+        matching_progress = {
+            "ruleset": scope["ruleset"],
+            "preview_sha256": scope["preview_sha256"],
+            "candidate_count": len(scope["matches"]),
+            "reviewed_by": scope["review"]["reviewed_by"],
+            "reviewed_candidate_count": len(scope["review"]["candidate_ids"]),
+            "decisions": dict(Counter(completed)),
+            "remaining": max(0, len(scope["matches"]) - len(completed)),
+        }
     return {
         "schema_version": 1,
         "job_id": str(job.pk),
@@ -287,19 +303,7 @@ def _job_status(job_id, *, now=None):
         if job.state in {"completed", "cancelled"}
         else "execute_bounded_continuation",
         "release_date_inferred": False,
-        "matching": {
-            "ruleset": scope["ruleset"],
-            "preview_sha256": scope["preview_sha256"],
-            "candidate_count": len(scope["matches"]),
-            "reviewed_by": scope["review"]["reviewed_by"],
-            "reviewed_candidate_count": len(scope["review"]["candidate_ids"]),
-            "decisions": attempt.report.get("decisions", {}) if attempt else {},
-            "remaining": attempt.report.get("remaining", len(scope["matches"]))
-            if attempt
-            else len(scope["matches"]),
-        }
-        if job.operation == "match_crosswalk"
-        else None,
+        "matching": matching_progress,
     }
 
 

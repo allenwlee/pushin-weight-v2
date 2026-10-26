@@ -185,6 +185,7 @@ def apply_reviewed(report, **kwargs):
 
 def test_reviewed_apply_is_idempotent_and_durable_without_metric_writes():
     from core.collection_matching import apply_matches
+    from core.collection_reports import job_status
     from core.models import CollectionScopeRun, MetricValue
 
     brand, product, _ = catalog_fixture()
@@ -216,6 +217,10 @@ def test_reviewed_apply_is_idempotent_and_durable_without_metric_writes():
     assert target.review_confirmed is True
     assert job.last_success.scopes.get().job_target_id == target.pk
     assert job.last_success.request_count == 0
+    job.last_success.report = {}
+    job.last_success.save(update_fields=["report"])
+    assert job_status(job.pk)["matching"]["decisions"] == {"admitted": 1}
+    assert job_status(job.pk)["matching"]["remaining"] == 0
     again = apply_matches(resume_job_id=job.pk)
     assert again["status"] == "success"
     assert SourceSubjectMapping.objects.count() == 1
