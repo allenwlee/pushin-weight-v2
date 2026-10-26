@@ -9436,6 +9436,7 @@ class CollectionCampaign(models.Model):
     policy_version = models.CharField(max_length=64)
     max_attempts = models.PositiveIntegerField()
     max_requests = models.PositiveIntegerField()
+    imported_reserved_requests = models.PositiveBigIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -9443,6 +9444,7 @@ class CollectionCampaign(models.Model):
         constraints: ClassVar[list] = [
             models.CheckConstraint(condition=models.Q(max_attempts__gt=0, max_requests__gt=0), name="ck_campaign_positive_limits"),
             models.CheckConstraint(condition=models.Q(cohort_hash__regex=r"^[0-9a-f]{64}$"), name="ck_campaign_cohort_hash"),
+            models.CheckConstraint(condition=models.Q(imported_reserved_requests__lte=models.F("max_requests")), name="ck_campaign_imported_reservation_cap"),
         ]
 
 

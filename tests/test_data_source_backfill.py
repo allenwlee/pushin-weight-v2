@@ -15,7 +15,7 @@ from core.collection_state import (
     claim_job,
     finish_run,
 )
-from core.models import CollectionJob, CollectionRun
+from core.models import CollectionAttempt, CollectionJob, CollectionRun
 from tests.test_collection_jobs import job as base_job
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
@@ -37,6 +37,92 @@ def specification():
 def registered():
     from core.data_source_backfill import register_campaign
     return register_campaign([specification()])[0]
+
+
+def legacy_campaign_job():
+    from core.collection_jobs import validate_definition
+
+    spec = specification()
+    definition = spec["definition"]
+    return CollectionJob.objects.create(
+        job_key="legacy:campaign:github:history", source_id="github",
+        purpose="catalog", operation="github_catalog", mode="historical",
+        definition=definition,
+        definition_sha256=validate_definition(
+            source_id="github", purpose="catalog", operation="github_catalog",
+            mode="historical", contract_id=None, definition=definition,
+        ),
+    )
+
+
+def test_imported_campaign_reservation_is_preserved_without_guessing_attempts():
+    from core.data_source_backfill import campaign_usage, project_legacy_campaigns
+
+    job = legacy_campaign_job()
+    now = timezone.now()
+    run = CollectionRun.objects.create(
+        job=job, ingestion_key="a" * 64, status="success",
+        completed_at=now, request_count=10,
+        report={"campaign_usage": {
+            "invocations": 2, "reserved_requests": 30,
+            "recorded_requests": 10,
+        }},
+    )
+    for ordinal in (1, 2):
+        CollectionAttempt.objects.create(
+            run=run, attempt_key=f"legacy-campaign-{ordinal}", ordinal=ordinal,
+            imported_at=now, outcome="success",
+        )
+    assert campaign_usage(job) == {
+        "invocations": 2, "reserved_requests": 30, "recorded_requests": 10,
+    }
+    assert project_legacy_campaigns() == {
+        "campaigns": 1, "jobs": 1, "legacy_runs": 1,
+        "imported_attempts": 2, "imported_reserved_requests": 30,
+    }
+    job.refresh_from_db()
+    assert job.campaign.imported_reserved_requests == 30
+    assert job.campaign_role == "history" and job.campaign_phase == "acquire"
+    assert campaign_usage(job) == {
+        "invocations": 2, "reserved_requests": 30, "recorded_requests": 10,
+    }
+    assert project_legacy_campaigns(verify_only=True)["imported_reserved_requests"] == 30
+    assert project_legacy_campaigns()["imported_reserved_requests"] == 30
+    assert not CollectionAttempt.objects.filter(
+        run=run, reserved_requests__isnull=False,
+    ).exists()
+    set_job_state(job.pk, "ready")
+    with pytest.raises(ValueError, match="limit"):
+        claim_job(job.pk)
+
+    next_run = CollectionRun.objects.create(
+        job=job, ingestion_key="b" * 64, status="success",
+        completed_at=now, request_count=3,
+    )
+    CollectionAttempt.objects.create(
+        run=next_run, attempt_key="typed-campaign-1", ordinal=1,
+        reserved_requests=5, actual_requests=3, outcome="success",
+    )
+    assert campaign_usage(job) == {
+        "invocations": 3, "reserved_requests": 35, "recorded_requests": 13,
+    }
+    assert project_legacy_campaigns(verify_only=True)["imported_reserved_requests"] == 30
+
+
+def test_imported_campaign_rejects_receipt_attempt_disagreement():
+    from core.data_source_backfill import project_legacy_campaigns
+
+    job = legacy_campaign_job()
+    CollectionRun.objects.create(
+        job=job, ingestion_key="c" * 64, status="success",
+        completed_at=timezone.now(), report={"campaign_usage": {
+            "invocations": 1, "reserved_requests": 8, "recorded_requests": 0,
+        }},
+    )
+    with pytest.raises(ValueError, match="aggregate does not match"):
+        project_legacy_campaigns()
+    job.refresh_from_db()
+    assert job.campaign_id is None
 
 
 def command(**kwargs):

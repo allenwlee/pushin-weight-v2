@@ -195,7 +195,7 @@ def campaign_jobs(*, campaign_key=None, job_id=None):
         )
     if job_id:
         jobs = jobs.filter(pk=job_id)
-    return jobs.select_related("source", "contract").order_by("created_at", "job_key")
+    return jobs.select_related("source", "contract", "campaign").order_by("created_at", "job_key")
 
 
 def report_campaign(*, campaign_key=None, job_id=None):
@@ -219,9 +219,10 @@ def campaign_usage(job):
     """Reservations bound crash exposure; request_count remains actual usage."""
     if job.campaign_id:
         attempts = CollectionAttempt.objects.filter(
-            run__job__campaign_id=job.campaign_id
+            run__job__campaign_id=job.campaign_id,
+            imported_at__isnull=True,
         )
-        reserved = (
+        newly_reserved = (
             attempts.aggregate(
                 total=Sum(
                     Case(
@@ -233,8 +234,12 @@ def campaign_usage(job):
             or 0
         )
         return {
-            "invocations": attempts.count(),
-            "reserved_requests": reserved,
+            "invocations": CollectionAttempt.objects.filter(
+                run__job__campaign_id=job.campaign_id,
+            ).count(),
+            "reserved_requests": (
+                job.campaign.imported_reserved_requests + newly_reserved
+            ),
             "recorded_requests": CollectionRun.objects.filter(
                 job__campaign_id=job.campaign_id
             ).aggregate(total=Sum("request_count"))["total"]
@@ -251,6 +256,171 @@ def campaign_usage(job):
         usage["reserved_requests"] += reservation.get("reserved_requests", 0)
         usage["recorded_requests"] += run.request_count
     return usage
+
+
+@transaction.atomic
+def project_legacy_campaigns(*, verify_only=False):
+    """Adopt known campaign ceilings without inventing attempt reservations.
+
+    The old run report knows the reservation total, while its imported attempts
+    know only their order and start time. A campaign-owned baseline preserves
+    that total; later physical attempts are counted separately.
+    """
+    candidates = list(CollectionJob.objects.filter(
+        instruction_version=1,
+        definition__campaign__kind="backfiller-data-source-v1",
+    ).order_by("pk")[:1001])
+    require(len(candidates) <= 1000, "legacy campaign adoption needs a smaller cohort")
+    grouped = {}
+    job_keys = {}
+    for job in candidates:
+        specification = validate_campaign(
+            job.definition, contract_id=job.contract_id,
+        )
+        key = specification["key"]
+        job_keys[job.pk] = key
+        prior = grouped.setdefault(key, {"specification": specification, "jobs": []})
+        require(
+            all(prior["specification"][field] == specification[field] for field in (
+                "kind", "cohort_hash", "max_invocations", "max_requests",
+            )),
+            "campaign identity differs among frozen jobs",
+        )
+        prior["jobs"].append(job)
+
+    # The campaign instruction row is sealed against UPDATE/DELETE. Derive the
+    # baseline before creating it, then recheck the locked source rows below.
+    initial_reserved = dict.fromkeys(grouped, 0)
+    for job_id, report in CollectionRun.objects.filter(
+        job_id__in=job_keys,
+    ).values_list("job_id", "report"):
+        usage = report.get("campaign_usage")
+        if usage is not None:
+            require(
+                isinstance(usage, dict)
+                and type(usage.get("reserved_requests")) is int
+                and usage["reserved_requests"] >= 0,
+                "legacy campaign reservation receipt is invalid",
+            )
+            initial_reserved[job_keys[job_id]] += usage["reserved_requests"]
+
+    campaigns = {}
+    for key, group in sorted(grouped.items()):
+        specification = group["specification"]
+        require(
+            initial_reserved[key] <= specification["max_requests"],
+            "historical reservation exceeds campaign cap",
+        )
+        fields = {
+            "cohort_hash": specification["cohort_hash"],
+            "policy_version": specification["kind"],
+            "max_attempts": specification["max_invocations"],
+            "max_requests": specification["max_requests"],
+        }
+        if verify_only:
+            campaign = CollectionCampaign.objects.filter(campaign_key=key).first()
+            require(campaign is not None, "legacy campaign has no typed owner")
+        else:
+            campaign, _ = CollectionCampaign.objects.get_or_create(
+                campaign_key=key,
+                defaults={**fields, "imported_reserved_requests": initial_reserved[key]},
+            )
+        campaign = CollectionCampaign.objects.select_for_update().get(pk=campaign.pk)
+        require(
+            all(getattr(campaign, field) == value for field, value in fields.items()),
+            "typed campaign identity differs from frozen instructions",
+        )
+        campaigns[key] = campaign
+
+    locked = list(CollectionJob.objects.select_for_update().filter(
+        pk__in=[job.pk for job in candidates],
+    ).order_by("pk"))
+    require(
+        [job.pk for job in locked] == [job.pk for job in candidates],
+        "legacy campaign job cohort changed",
+    )
+    job_ids = [job.pk for job in locked]
+    runs = list(CollectionRun.objects.select_for_update().filter(
+        job_id__in=job_ids,
+    ).order_by("pk")[:10001])
+    require(len(runs) <= 10000, "legacy campaign run cohort needs batching")
+    attempts = {}
+    for attempt in CollectionAttempt.objects.filter(run__job_id__in=job_ids).only(
+        "run_id", "imported_at",
+    ):
+        attempts.setdefault(attempt.run_id, []).append(attempt)
+    reserved_by_key = dict.fromkeys(grouped, 0)
+    imported_count = 0
+    for run in runs:
+        usage = run.report.get("campaign_usage")
+        related = attempts.get(run.pk, [])
+        if usage is None:
+            require(
+                not any(attempt.imported_at is not None for attempt in related),
+                "imported campaign attempt lacks its aggregate receipt",
+            )
+            continue
+        require(
+            run.status != "running" and run.completed_at is not None
+            and isinstance(usage, dict)
+            and type(usage.get("invocations")) is int
+            and usage["invocations"] == len(related)
+            and type(usage.get("reserved_requests")) is int
+            and usage["reserved_requests"] >= 0
+            and type(usage.get("recorded_requests")) is int
+            and usage["recorded_requests"] == run.request_count
+            and all(attempt.imported_at is not None for attempt in related),
+            "legacy campaign aggregate does not match imported attempts",
+        )
+        reserved_by_key[job_keys[run.job_id]] += usage["reserved_requests"]
+        imported_count += len(related)
+
+    for key, group in sorted(grouped.items()):
+        campaign = campaigns[key]
+        baseline = reserved_by_key[key]
+        member_ids = {job.pk for job in group["jobs"]}
+        require(baseline <= campaign.max_requests, "historical reservation exceeds campaign cap")
+        require(
+            campaign.imported_reserved_requests == baseline,
+            "typed campaign baseline differs from frozen receipts",
+        )
+        for job in locked:
+            if job.pk not in member_ids:
+                continue
+            specification = validate_campaign(
+                job.definition, contract_id=job.contract_id,
+            )
+            require(
+                job.campaign_id in (None, campaign.pk)
+                and job.campaign_role in (None, specification["role"])
+                and job.campaign_phase in (None, specification["phase"]),
+                "legacy job campaign attribution differs",
+            )
+            if verify_only:
+                require(
+                    job.campaign_id == campaign.pk
+                    and job.campaign_role == specification["role"]
+                    and job.campaign_phase == specification["phase"],
+                    "legacy job campaign attribution has not been adopted",
+                )
+            elif job.campaign_id is None:
+                job.campaign = campaign
+                job.campaign_role = specification["role"]
+                job.campaign_phase = specification["phase"]
+                job.save(update_fields=["campaign", "campaign_role", "campaign_phase"])
+        representative = next(job for job in locked if job.pk in member_ids)
+        representative.campaign = campaign
+        require(
+            campaign_usage(representative)["reserved_requests"] <= campaign.max_requests,
+            "adopted campaign exceeds request cap",
+        )
+    return {
+        "campaigns": len(campaigns),
+        "jobs": len(locked),
+        "legacy_runs": sum(run.report.get("campaign_usage") is not None for run in runs),
+        "imported_attempts": imported_count,
+        "imported_reserved_requests": sum(reserved_by_key.values()),
+    }
 
 
 def execute_phase(job_id, *, budget=None, executor=None, replay=False, projector=None):
