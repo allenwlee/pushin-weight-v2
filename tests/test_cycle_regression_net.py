@@ -70,7 +70,7 @@ def test_plan_calls_for_cycle_uses_enabled_models_as_query_allowlist():
     calls = plan_calls_for_cycle(cfg=cfg)
 
     assert {call.call_id for call in calls} == {
-        "A", "B1", "B2", "B3", "C1", "C2", "C3"
+        "A", "B1", "B2", "B3", "C1", "C2", "C3", "C4"
     }
     assert all("dots3-note" not in call.query_string for call in calls)
 
@@ -125,8 +125,9 @@ def test_cycle_runner_plan_calls_does_not_abort_with_self_undefined():
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db
+@pytest.mark.parametrize("cycle_kind", ["manual", "scheduled"])
 def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
-    monkeypatch, seeded_policy_keywords
+    monkeypatch, seeded_policy_keywords, cycle_kind
 ):
     """The live caller sends the policy exhibit and persists aliases.
 
@@ -151,6 +152,7 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
     class FakeApi:
         timeout_s = 60
         max_retries = 0
+        base_url = "https://api.twitterapi.io"
 
         def __init__(self):
             self.calls: list[tuple[str, dict]] = []
@@ -158,6 +160,14 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
 
         def run_search(self, query, **kwargs):
             self.calls.append((query, kwargs))
+            if getattr(self, "on_exchange_start", None) is not None:
+                receipt = self.on_exchange_start(
+                    "/twitter/tweet/advanced_search", {"query": query},
+                )
+                self.on_exchange_finish(receipt, {
+                    "outcome": "received", "status_code": 200,
+                    "body": b'{"tweets":[]}', "error_type": None,
+                })
             return [
                 {
                     "id": "u5-dots",
@@ -228,11 +238,36 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
         X_MONITOR_CYCLE_SKIP_FETCH=False,
         X_MONITOR_LLM_PAUSE_SECONDS=0,
     ):
-        stats = CycleRunner(cfg=cfg, cycle_kind="manual").run()
+        stats = CycleRunner(cfg=cfg, cycle_kind=cycle_kind).run()
+
+    if cycle_kind == "scheduled":
+        from core.models import (
+            CollectionObservation,
+            CollectionObservationInput,
+            CollectionRun,
+            PostEnrichmentState,
+        )
+
+        collection = CollectionRun.objects.get(job__operation="x_cycle")
+        assert collection.request_count == len(api.calls)
+        assert collection.scopes.filter(scope_kind="x_query").count() >= len(api.calls)
+        assert CollectionObservation.objects.filter(
+            run=collection, post_id="u5-dots",
+        ).count() == len(api.calls)
+        assert CollectionObservationInput.objects.filter(
+            observation__run=collection,
+            observation__post_id="u5-dots",
+        ).count() == len(api.calls)
+        assert PostEnrichmentState.objects.get(
+            post_id="u5-dots",
+        ).source_collection_job_id is None
 
     assert tuple(row["call_id"] for row in stats["planned_calls"]) == EXPECTED_PLANNER_CALL_ORDER
     captured_queries = tuple(query for query, _kwargs in api.calls)
-    assert captured_queries == tuple(EXPECTED_QUERY_EXHIBIT.values())
+    assert captured_queries == tuple(
+        f"{query} -from:xxyweb3" if cycle_kind == "scheduled" else query
+        for query in EXPECTED_QUERY_EXHIBIT.values()
+    )
     assert all(
         kwargs["max_results"] == 2000
         and kwargs["max_pages"] == 100
@@ -241,7 +276,7 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
         and kwargs["until_time"] == 1_785_067_260
         for _query, kwargs in api.calls
     )
-    assert stats["totals"]["n_calls_planned"] == 7
+    assert stats["totals"]["n_calls_planned"] == len(EXPECTED_PLANNER_CALL_ORDER)
     assert PostBrand.objects.filter(post_id="u5-dots", brand_id="dots").exists()
     assert PostBrand.objects.filter(post_id="u5-hy", brand_id="hunyuan").exists()
     assert PostBrand.objects.filter(post_id="u5-ox", brand_id="glm").exists()
@@ -254,3 +289,63 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
         ("u5-ox", "u5-ox", True),
         ("2094999721551225267", "2094999721551225267", True),
     ]
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+@pytest.mark.parametrize("transport_ok", [True, False])
+def test_scheduled_empty_and_failed_search_keep_distinct_scope_coverage(
+    monkeypatch, seeded_policy_keywords, transport_ok,
+):
+    from django.test import override_settings
+
+    from core.models import CollectionRun
+    from monitor import cycle as cycle_mod
+    from monitor.cycle import CycleRunner
+    from scripts.harvest_cost import emit as cost_emit
+    from x_monitor.apify import TwitterApiServerError
+    from x_monitor.config import load_config
+
+    class FakeApi:
+        base_url = "https://api.twitterapi.io"
+        timeout_s = 60
+        max_retries = 0
+
+        def run_search(self, query, **kwargs):
+            request = self.on_exchange_start(
+                "/twitter/tweet/advanced_search", {"query": query},
+            )
+            self.on_exchange_finish(request, {
+                "outcome": "received", "status_code": 200 if transport_ok else 503,
+                "body": b'{"tweets":[]}' if transport_ok else b"busy",
+                "error_type": None,
+            })
+            if not transport_ok:
+                raise TwitterApiServerError("provider busy")
+            return [], False
+
+    cfg = load_config(CONFIG_PATH)
+    original_plan = CycleRunner._plan_calls
+    monkeypatch.setattr(
+        CycleRunner, "_plan_calls", lambda runner: original_plan(runner)[:1],
+    )
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient, "from_env",
+        classmethod(lambda cls, _purpose: FakeApi()),
+    )
+    monkeypatch.setattr(CycleRunner, "_run_post_fetch", lambda *a, **k: {})
+    monkeypatch.setattr(cost_emit, "finalize_and_persist", lambda *a, **k: None)
+    monkeypatch.setattr("monitor.metrics_refresh.run_metrics_refresh", lambda *a, **k: {})
+    with override_settings(
+        X_MONITOR_CYCLE_SINCE_TIME=1_785_067_200,
+        X_MONITOR_CYCLE_UNTIL_TIME=1_785_067_260,
+        X_MONITOR_CYCLE_SKIP_FETCH=False,
+    ):
+        stats = CycleRunner(cfg=cfg, cycle_kind="scheduled").run()
+    run = CollectionRun.objects.get(job__operation="x_cycle")
+    scope = run.scopes.get(scope_key="A")
+    assert run.request_count == 1
+    assert scope.raw_count == 0
+    assert scope.coverage_state == ("complete" if transport_ok else "unavailable")
+    assert scope.enumeration_complete is transport_ok
+    assert stats["calls"][0]["cursor_advanced"] is False

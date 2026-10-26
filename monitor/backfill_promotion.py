@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import checkpoint_scope, claim_job, finish_run
-from core.measurement_taxonomy import digest, require
+from core.measurement_taxonomy import require
 from core.models import (
     Account,
     AccountProfileSnapshot,
@@ -30,7 +30,7 @@ from core.models import (
     PostEnrichmentState,
     XAccountDetail,
 )
-from core.provider_batches import record_post_membership
+from core.provider_batches import record_post_membership, save_post_membership
 from monitor.backfill_staging import validate_staging
 from monitor.run_lock import backfill_yield_requested, harvest_writer_lock
 
@@ -261,9 +261,7 @@ def _copy(package, run, scope):
     record_post_membership(run, scope, new)
     # Recording an already-live Post must not assign its enrichment queue to the
     # backfiller. The shared helper assigns ownership for new pending members.
-    CollectionObservation.objects.bulk_create([CollectionObservation(run=run, scope_run=scope, post_id=i,
-        source_identifier=i, source_subject_kind="post", observation_key=digest({"post": i}), observed_at=timezone.now())
-        for i in sorted(existing)], ignore_conflicts=True)
+    save_post_membership(run, scope, existing)
     require(set(CollectionObservation.objects.filter(run=run).values_list("post_id", flat=True)) == set(package["ids"]),
             "promotion membership reconciliation failed")
     connection.check_constraints()

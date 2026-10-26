@@ -172,6 +172,12 @@ def save_post_membership(run, scope, post_ids, *, observed_at=None):
     ids = sorted({str(value) for value in post_ids})
     if len(ids) > 10000 or Post.objects.filter(pk__in=ids).count() != len(ids):
         raise BatchAdmissionError("membership_posts_missing_or_page_too_large")
+    # The same Post may arrive under several queries in one run. Serialize
+    # membership writes on the run and keep historical observation keys intact.
+    type(run).objects.select_for_update().get(pk=run.pk)
+    existing = set(CollectionObservation.objects.filter(
+        run=run, scope_run=scope, post_id__in=ids,
+    ).values_list("post_id", flat=True))
     CollectionObservation.objects.bulk_create(
         [
             CollectionObservation(
@@ -180,13 +186,21 @@ def save_post_membership(run, scope, post_ids, *, observed_at=None):
                 post_id=post_id,
                 source_identifier=post_id,
                 source_subject_kind="post",
-                observation_key=digest({"post": post_id}),
+                observation_key=(
+                    digest({"scope": scope.pk, "post": post_id})
+                    if scope is not None else digest({"post": post_id})
+                ),
                 observed_at=observed_at or timezone.now(),
             )
-            for post_id in ids
+            for post_id in ids if post_id not in existing
         ],
         ignore_conflicts=True,
     )
+    saved = set(CollectionObservation.objects.filter(
+        run=run, scope_run=scope, post_id__in=ids,
+    ).values_list("post_id", flat=True))
+    if saved != set(ids):
+        raise BatchAdmissionError("membership_scope_conflict")
     return ids
 
 

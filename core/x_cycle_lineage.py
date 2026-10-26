@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 
 from django.db import transaction
 from django.utils import timezone
 
-from core.collection_capture import begin_request, finish_request
+from core.collection_capture import begin_request, finish_request, link_request
 from core.collection_jobs import register_job
 from core.collection_state import claim_job, fenced_run, finish_run
 from core.measurement_taxonomy import digest, require
@@ -137,25 +138,77 @@ class ScheduledCycleLineage:
             receipt.get("outcome") in {"received", "transport_error"},
             "scheduled exchange outcome is invalid",
         )
+        cursor_after = None
+        body = receipt.get("body")
+        if isinstance(body, bytes) and receipt.get("status_code") == 200:
+            try:
+                parsed = json.loads(body)
+            except (ValueError, UnicodeDecodeError):
+                parsed = None
+            if isinstance(parsed, dict) and isinstance(parsed.get("next_cursor"), str):
+                cursor_after = parsed["next_cursor"] or None
         return finish_request(
             request,
             outcome=receipt["outcome"],
-            body=receipt.get("body"),
+            body=body,
             http_status=receipt.get("status_code"),
+            cursor=cursor_after,
             error_code=receipt.get("error_type"),
             response_bytes=(
-                len(receipt["body"]) if receipt.get("body") is not None else None
+                len(body) if body is not None else None
             ),
         )
 
-    def finish_call(self, scope_id, *, post_ids, raw_count, outcome, complete):
+    def bind_api(self, api, scope_id):
+        require(
+            getattr(api, "on_exchange_start", None) is None
+            and getattr(api, "on_exchange_finish", None) is None,
+            "scheduled provider already has an exchange owner",
+        )
+        api.on_exchange_start = lambda path, params: self.begin_exchange(
+            scope_id, endpoint_url=f"{api.base_url}{path}", params=params,
+        )
+        api.on_exchange_finish = self.finish_exchange
+
+    @staticmethod
+    def unbind_api(api):
+        api.on_exchange_start = None
+        api.on_exchange_finish = None
+
+    def finish_call(
+        self, scope_id, *, post_ids, raw_count, outcome, complete,
+        page_by_post=None,
+    ):
         require(type(raw_count) is int and raw_count >= 0,
                 "scheduled raw count must be nonnegative")
+        page_by_post = page_by_post or {}
         with fenced_run(self.claim) as (_, run):
             scope = CollectionScopeRun.objects.select_for_update().get(
                 pk=scope_id, run=run,
             )
             saved = save_post_membership(run, scope, post_ids)
+            require(set(page_by_post) <= set(saved),
+                    "request page refers to an unsaved Post")
+            if page_by_post:
+                replies = list(scope.requests.filter(
+                    transport_outcome="received", http_status=200,
+                ).order_by("ordinal"))
+                observations = {
+                    str(row.post_id): row for row in scope.observations.filter(
+                        post_id__in=page_by_post,
+                    )
+                }
+                for post_id, page_number in page_by_post.items():
+                    require(
+                        type(page_number) is int
+                        and 1 <= page_number <= len(replies)
+                        and post_id in observations,
+                        "scheduled Post has no captured response page",
+                    )
+                    link_request(
+                        observations[post_id], replies[page_number - 1],
+                        row_locator=post_id,
+                    )
             scope.raw_count = raw_count
             scope.outcome = outcome
             scope.enumeration_complete = complete

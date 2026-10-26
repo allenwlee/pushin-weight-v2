@@ -343,6 +343,7 @@ def test_scheduled_cycle_registration_reuses_plan_and_rotates_changed_query():
 def test_scheduled_scope_records_post_without_claiming_backfill_enrichment():
     from core.models import (
         CollectionObservation,
+        CollectionObservationInput,
         CollectionScopeRun,
         Post,
         PostEnrichmentState,
@@ -355,29 +356,41 @@ def test_scheduled_scope_records_post_without_claiming_backfill_enrichment():
         [call], limits=limits, invocation_id="scheduled-lineage-test",
     )
     scope_id = lineage.begin_call(call, since_epoch=1783809000, until_epoch=1783809300)
-    request = lineage.begin_exchange(
-        scope_id, endpoint_url="https://api.twitterapi.io/twitter/tweet/advanced_search",
-        params={"query": "product release", "cursor": "page-2"},
+    api = SimpleNamespace(
+        base_url="https://api.twitterapi.io", on_exchange_start=None,
+        on_exchange_finish=None,
     )
-    lineage.finish_exchange(request, {
+    lineage.bind_api(api, scope_id)
+    request = api.on_exchange_start(
+        "/twitter/tweet/advanced_search",
+        {"query": "product release", "cursor": "page-2"},
+    )
+    api.on_exchange_finish(request, {
         "outcome": "received", "status_code": 200,
-        "body": b'{"tweets":[]}', "error_type": None,
+        "body": b'{"tweets":[],"next_cursor":"page-3"}', "error_type": None,
     })
+    lineage.unbind_api(api)
     post = Post.objects.create(tweet_id="scheduled-lineage-post", text="Qwen", lang="en")
     PostEnrichmentState.objects.create(post=post)
     assert lineage.finish_call(
-        scope_id, post_ids=[post.pk], raw_count=2, outcome="ok", complete=True,
+        scope_id, post_ids=[post.pk], page_by_post={str(post.pk): 1},
+        raw_count=2, outcome="ok", complete=True,
     ) == 1
     scope = CollectionScopeRun.objects.get(pk=scope_id)
     assert scope.raw_count == 2 and scope.coverage_state == "complete"
     assert CollectionObservation.objects.filter(
         run_id=lineage.claim.run_id, scope_run=scope, post=post,
     ).exists()
+    assert CollectionObservationInput.objects.filter(
+        observation__scope_run=scope, observation__post=post,
+        input_request=request,
+    ).exists()
     assert PostEnrichmentState.objects.get(post=post).source_collection_job_id is None
     assert request.cursor_before == "page-2"
     request.refresh_from_db()
     assert request.transport_outcome == "received"
-    assert bytes(request.archive.body) == b'{"tweets":[]}'
+    assert request.cursor_after == "page-3"
+    assert bytes(request.archive.body) == b'{"tweets":[],"next_cursor":"page-3"}'
     run = lineage.finish(success=True)
     assert run.request_count == 1
     assert run.attempts.get().accounting_complete

@@ -2564,6 +2564,7 @@ class CycleRunner:
         # Used by the backfill command to limit API spend on large windows.
         self._max_llm_calls = _max_llm_calls
         self._backfill_context = _backfill_context
+        self._scheduled_lineage = None
         if _backfill_context is not None and cycle_kind != "backfill":
             raise ValueError("historical context requires cycle_kind=backfill")
         self._backfill_fetch_receipt: dict[str, Any] = {}
@@ -2687,6 +2688,16 @@ class CycleRunner:
 
         if summary["status"] == "running":
             summary["status"] = "completed" if not self._errors else "degraded"
+        if self._scheduled_lineage is not None:
+            lineage = self._scheduled_lineage
+            self._scheduled_lineage = None
+            try:
+                lineage.finish(success=summary["status"] == "completed")
+            except Exception as exc:  # noqa: BLE001 - record failed lineage as cycle degradation
+                logger.exception("scheduled collection lineage could not finish")
+                self._errors.append(f"scheduled_lineage_finish:{type(exc).__name__}")
+                summary["degraded"]["scheduled_lineage"] = type(exc).__name__
+                summary["status"] = "degraded"
         summary["finished_at"] = self._now_iso()
         summary["wall_clock_sec"] = round(self._monotonic() - started_monotonic, 3)
         summary["errors"] = list(self._errors)
@@ -5282,6 +5293,39 @@ class CycleRunner:
             summary["degraded"]["api_client"] = str(exc)
             return self._finish_summary(summary, started_monotonic=t0)
 
+        if self.cycle_kind == "scheduled":
+            from core.x_cycle_lineage import ScheduledCycleLineage
+
+            # The separately reserved rare-type lane has its own durable
+            # search run and hit records; this job owns the regular A/B/C calls.
+            lineage_calls = [
+                call for call in calls if call.call_id != RARE_EXTRA_CALL_ID
+            ]
+            limits = {
+                "requests": sum(
+                    min(call.max_pages or self.cfg.search.max_pages,
+                        self.cfg.search.max_pages) * (api.max_retries + 1)
+                    for call in lineage_calls
+                ),
+                "bytes": 32 * 1024 * 1024,
+                "seconds": self.cfg.harvest.run_deadline_seconds,
+                "items": sum(
+                    min(call.max_results or self.cfg.search.max_results,
+                        self.cfg.search.max_results)
+                    for call in lineage_calls
+                ),
+            }
+            try:
+                self._scheduled_lineage = ScheduledCycleLineage.start(
+                    lineage_calls, limits=limits, invocation_id=run_id,
+                )
+            except Exception as exc:
+                logger.exception("scheduled collection lineage could not start")
+                summary["status"] = "aborted"
+                summary["degraded"]["scheduled_lineage"] = type(exc).__name__
+                self._errors.append(f"scheduled_lineage_start:{type(exc).__name__}")
+                return self._finish_summary(summary, started_monotonic=t0)
+
         if self._backfill_context is not None:
             context = self._backfill_context
             api.timeout_s = context.api_timeout_seconds
@@ -5366,16 +5410,26 @@ class CycleRunner:
             call_entry["window_until"] = until_epoch
 
             # Fetch
-            items, outcome = self._fetch_tweets(
-                call,
-                api,
-                window=(since_epoch, until_epoch),
-                # Scheduled A/B/C searches drain provider cursors through the
-                # shared page iterator before enrichment. Backlog is recovery
-                # for actual interruptions, not the normal continuation path.
-                deadline=(deadline if self._backfill_context is not None
-                          or self.cycle_kind == "scheduled" else None),
-            )
+            lineage_scope_id = None
+            if self._scheduled_lineage is not None:
+                lineage_scope_id = self._scheduled_lineage.begin_call(
+                    call, since_epoch=since_epoch, until_epoch=until_epoch,
+                )
+                self._scheduled_lineage.bind_api(api, lineage_scope_id)
+            try:
+                items, outcome = self._fetch_tweets(
+                    call,
+                    api,
+                    window=(since_epoch, until_epoch),
+                    # Scheduled A/B/C searches drain provider cursors through the
+                    # shared page iterator before enrichment. Backlog is recovery
+                    # for actual interruptions, not the normal continuation path.
+                    deadline=(deadline if self._backfill_context is not None
+                              or self.cycle_kind == "scheduled" else None),
+                )
+            finally:
+                if lineage_scope_id is not None:
+                    self._scheduled_lineage.unbind_api(api)
             if self._backfill_context is not None:
                 call_entry["backfill_progress"] = dict(self._backfill_fetch_receipt)
             discovery_window = (since_epoch, until_epoch)
@@ -5442,6 +5496,11 @@ class CycleRunner:
                 "length_cap_exceeded",
                 "daily_credit_ceiling",
             ):
+                if lineage_scope_id is not None:
+                    self._scheduled_lineage.finish_call(
+                        lineage_scope_id, post_ids=[], raw_count=len(items),
+                        outcome=outcome, complete=False,
+                    )
                 logger.warning(
                     "run: call_id=%s outcome=%s -- holding cursor, no persist",
                     call.call_id,
@@ -5456,6 +5515,11 @@ class CycleRunner:
                 continue
 
             if not items:
+                if lineage_scope_id is not None:
+                    self._scheduled_lineage.finish_call(
+                        lineage_scope_id, post_ids=[], raw_count=0,
+                        outcome=outcome, complete=outcome == "ok",
+                    )
                 if outcome == "ok":
                     # Empty but successful sweep: advance (KTD5), else a quiet
                     # brand would re-request the same window forever.
@@ -5591,6 +5655,20 @@ class CycleRunner:
             call_entry["n_updated"] = n_updated
             call_entry["n_persist_failed"] = n_persist_failed
             call_entry["n_attributed"] = _n_attributed
+            if lineage_scope_id is not None:
+                self._scheduled_lineage.finish_call(
+                    lineage_scope_id,
+                    post_ids=[
+                        item["_persisted_post_id"] for item in kept
+                        if item.get("_persisted_post_id")
+                    ],
+                    page_by_post={
+                        str(item["_persisted_post_id"]): int(item.get("_api_page_number") or 1)
+                        for item in kept if item.get("_persisted_post_id")
+                    },
+                    raw_count=len(items), outcome=outcome,
+                    complete=outcome == "ok" and n_persist_failed == 0,
+                )
             self._record_discovery_run_safe(
                 call=call,
                 run_id=run_id,

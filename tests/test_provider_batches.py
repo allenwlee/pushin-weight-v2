@@ -11,6 +11,7 @@ from django.utils import timezone
 from core.models import (
     CollectionObservation,
     CollectionRun,
+    CollectionScopeRun,
     OriginalContentCall,
     OriginalContentRun,
     Post,
@@ -89,6 +90,20 @@ def test_post_membership_can_be_saved_without_historical_enrichment_ownership(ba
     with transaction.atomic():
         save_post_membership(scheduled_run, None, [post.pk])
     assert CollectionObservation.objects.filter(run=scheduled_run, post=post).count() == 1
+    first_scope = CollectionScopeRun.objects.create(
+        run=scheduled_run, scope_kind="x_query", scope_key="A", ownership={},
+    )
+    second_scope = CollectionScopeRun.objects.create(
+        run=scheduled_run, scope_kind="x_query", scope_key="B1", ownership={},
+    )
+    with transaction.atomic():
+        save_post_membership(scheduled_run, first_scope, [post.pk])
+        save_post_membership(scheduled_run, second_scope, [post.pk])
+        save_post_membership(scheduled_run, first_scope, [post.pk])
+    assert CollectionObservation.objects.filter(run=scheduled_run, post=post).count() == 3
+    assert set(CollectionObservation.objects.filter(
+        run=scheduled_run, post=post,
+    ).values_list("scope_run_id", flat=True)) == {None, first_scope.pk, second_scope.pk}
     assert PostEnrichmentState.objects.get(post=post).source_collection_job_id is None
     with (
         pytest.raises(BatchAdmissionError, match="historical_membership_requires_x_backfill"),
