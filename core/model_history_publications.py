@@ -453,6 +453,8 @@ def _queue_publication(claim, job, publication, contract, start, end):
             "publication_observation_id": publication.pk,
             "contract_hash": contract.contract_hash,
         },
+        resource_observation=publication,
+        projection_contract=contract,
         enumeration_complete=True,
         outcome="observed",
         write=write,

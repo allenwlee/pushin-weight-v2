@@ -676,6 +676,72 @@ def product_match_target_mismatch_counts() -> tuple[int, int]:
         return tuple(cursor.fetchone())
 
 
+def project_publication_scope_references_batch(
+    *, after_id: int = 0, batch_size: int = 100, verify_only: bool = False
+) -> ProvenanceBatch:
+    """Retain the exact publication and contract behind each selected cohort."""
+    from core.measurement_taxonomy import digest
+    from core.models import MetricCollectionContract
+
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative integer")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        query = CollectionScopeRun.objects.filter(
+            scope_kind="publication_selection", pk__gt=after_id,
+        ).only("id", "scope_key", "ownership", "resource_observation", "projection_contract")
+        if not verify_only:
+            query = query.select_for_update()
+        scopes = list(query.order_by("pk")[:batch_size])
+        if not scopes:
+            return ProvenanceBatch(after_id, 0, 0)
+        for scope in scopes:
+            owner = scope.ownership
+            if (
+                not isinstance(owner, dict)
+                or set(owner) != {"contract_hash", "publication_observation_id"}
+                or type(owner["publication_observation_id"]) is not int
+                or not isinstance(owner["contract_hash"], str)
+            ):
+                raise ValueError("invalid historical publication selection identity")
+        contracts = MetricCollectionContract.objects.only("id", "contract_hash").in_bulk(
+            {s.ownership["contract_hash"] for s in scopes}, field_name="contract_hash",
+        )
+        publication_ids = set(CollectionObservation.objects.filter(
+            pk__in=[s.ownership["publication_observation_id"] for s in scopes],
+        ).values_list("pk", flat=True))
+        changed = []
+        for scope in scopes:
+            contract_hash = scope.ownership["contract_hash"]
+            publication_id = scope.ownership["publication_observation_id"]
+            contract = contracts.get(contract_hash)
+            if (
+                contract is None or publication_id not in publication_ids
+                or scope.scope_key != digest([publication_id, contract_hash])
+            ):
+                raise ValueError("historical publication selection reference differs")
+            if (
+                scope.resource_observation_id not in (None, publication_id)
+                or scope.projection_contract_id not in (None, contract.pk)
+            ):
+                raise ValueError("historical publication selection pin changed")
+            if scope.resource_observation_id is None or scope.projection_contract_id is None:
+                if verify_only:
+                    raise ValueError("historical publication selection has missing typed references")
+                scope.resource_observation_id = publication_id
+                scope.projection_contract_id = contract.pk
+                changed.append(scope)
+        if changed:
+            CollectionScopeRun.objects.bulk_update(
+                changed, ["resource_observation", "projection_contract"],
+            )
+        return ProvenanceBatch(scopes[-1].pk, len(scopes), len(changed))
+
+
 def project_scope_rare_hits_batch(
     *, after_id: int = 0, batch_size: int = 200
 ) -> RareHitMembershipBatch:

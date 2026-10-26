@@ -204,6 +204,11 @@ def test_actual_history_dispatch_writes_numeric_and_reuses_saved_publication(
     budget, _requests = transport(source, config=config)
     run = execute_due_job(job, {"slot": None}, budget)
     assert run.status == "success", run.report
+    selection_scopes = list(run.scopes.filter(scope_kind="publication_selection"))
+    assert selection_scopes
+    for selected_scope in selection_scopes:
+        assert selected_scope.resource_observation_id == selected_scope.ownership["publication_observation_id"]
+        assert selected_scope.projection_contract.contract_hash == selected_scope.ownership["contract_hash"]
     assert MetricValue.objects.exists()
     assert MetricValue.objects.filter(observation__product=product).exists()
     assert all(v.observation.run.purpose == "metric" for v in MetricValue.objects.all())
@@ -240,6 +245,40 @@ def test_actual_history_dispatch_writes_numeric_and_reuses_saved_publication(
         assert not MetricValue.objects.filter(
             source_metric__metric_key="vote_count"
         ).exists()
+
+
+def test_publication_scope_copy_preserves_exact_refs_and_refuses_identity_drift():
+    from core.collection_storage_migration import (
+        project_publication_scope_references_batch,
+    )
+    from core.models import CollectionScopeRun
+
+    provider, _product, scope = publication_scope()
+    run = execute_model_history(register(provider, scope).pk, budget=transport()[0], key="fixture")
+    assert run.status == "success", run.report
+    selected = run.scopes.get(scope_kind="publication_selection")
+    expected = (selected.resource_observation_id, selected.projection_contract_id)
+    CollectionScopeRun.objects.filter(pk=selected.pk).update(
+        resource_observation=None, projection_contract=None,
+    )
+    with pytest.raises(ValueError, match="missing typed references"):
+        project_publication_scope_references_batch(verify_only=True)
+    assert project_publication_scope_references_batch().updated == 1
+    selected.refresh_from_db()
+    assert (selected.resource_observation_id, selected.projection_contract_id) == expected
+    assert project_publication_scope_references_batch().updated == 0
+    assert project_publication_scope_references_batch(verify_only=True).scanned == 1
+    CollectionScopeRun.objects.filter(pk=selected.pk).update(scope_key="changed")
+    with pytest.raises(ValueError, match="reference differs"):
+        project_publication_scope_references_batch(verify_only=True)
+    other_observation = CollectionObservation.objects.exclude(pk=expected[0]).first()
+    CollectionScopeRun.objects.filter(pk=selected.pk).update(
+        scope_key=selected.scope_key, resource_observation=other_observation,
+    )
+    with pytest.raises(ValueError, match="pin changed"):
+        project_publication_scope_references_batch()
+    selected.refresh_from_db()
+    assert selected.resource_observation_id == other_observation.pk
 
 
 def test_arena_revised_publication_keeps_both_snapshots():

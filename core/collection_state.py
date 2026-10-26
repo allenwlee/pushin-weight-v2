@@ -652,6 +652,7 @@ def checkpoint_scope(
     requested_start_at=None,
     requested_end_at=None,
     projection_contract=None,
+    resource_observation=None,
     write: Callable | None = None,
 ):
     require(
@@ -666,13 +667,24 @@ def checkpoint_scope(
     require(isinstance(ownership, dict), "scope ownership object required")
     if projection_contract is not None:
         require(
-            scope_kind == "numeric_projection"
+            scope_kind in {"numeric_projection", "publication_selection"}
             and ownership.get("contract_hash") == projection_contract.contract_hash
             and (
                 "contract_id" not in ownership
                 or ownership["contract_id"] == str(projection_contract.pk)
             ),
-            "numeric projection contract pin changed",
+            "projection contract pin changed",
+        )
+    if scope_kind == "publication_selection":
+        require(
+            projection_contract is not None
+            and resource_observation is not None
+            and set(ownership) == {"contract_hash", "publication_observation_id"}
+            and ownership["publication_observation_id"] == resource_observation.pk
+            and scope_key == digest([
+                resource_observation.pk, projection_contract.contract_hash,
+            ]),
+            "publication selection identity changed",
         )
     if scope_kind == "x_query":
         query_text, call_id, lower_at, upper_at = x_query_instruction(ownership)
@@ -707,6 +719,7 @@ def checkpoint_scope(
             defaults={
                 "ownership": ownership, "job_target": target,
                 "projection_contract": projection_contract,
+                "resource_observation": resource_observation,
             },
         )
         require(created or scope.ownership == ownership, "scope ownership pin changed")
@@ -724,6 +737,12 @@ def checkpoint_scope(
         )
         if projection_contract and scope.projection_contract_id is None:
             scope.projection_contract = projection_contract
+        if resource_observation is not None:
+            require(
+                scope.resource_observation_id in (None, resource_observation.pk),
+                "scope source observation changed",
+            )
+            scope.resource_observation = resource_observation
         for field, value in (
             ("requested_start_at", requested_start_at),
             ("requested_end_at", requested_end_at),
