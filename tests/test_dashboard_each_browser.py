@@ -9,6 +9,7 @@ from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from django.test import override_settings
 from playwright.sync_api import sync_playwright
 
+from core.models import Brand
 from monitor.views import _clear_home_pulse_cache
 from tests.ui_assurance.local_preview import load_pinned_assets
 from tests.v22_support import fixture_from_oracle, seed_real_home_orm
@@ -21,6 +22,7 @@ class DashboardEachBrowserTests(StaticLiveServerTestCase):
     def setUp(self):
         super().setUp()
         seed_real_home_orm(fixture_from_oracle())
+        Brand.objects.create(nickname="untracked-demo", display_name="Untracked Demo")
         _clear_home_pulse_cache()
 
     def test_tabs_and_pulse_keep_one_brand_with_visible_stacked_chart(self):
@@ -49,12 +51,19 @@ class DashboardEachBrowserTests(StaticLiveServerTestCase):
                 )
                 page = context.new_page()
                 errors = []
+                initial_chart_requests = []
                 page.on("pageerror", lambda error: errors.append(str(error)))
+                page.on("request", lambda request: initial_chart_requests.append(request.url)
+                        if "/dashboard/each/chart/" in request.url else None)
                 response = page.goto(
                     f"{self.live_server_url}/dashboard/each?brand=minimax&locale=en",
                     wait_until="networkidle",
                 )
                 self.assertEqual(response.status, 200)
+                self.assertEqual(len(initial_chart_requests), 1)
+                self.assertEqual(
+                    page.locator('[data-pw-pulse-entry="untracked-demo"]').count(), 0
+                )
                 self.assertEqual(
                     page.locator('[data-pw-pulse-entry][aria-pressed="true"]').count(),
                     1,

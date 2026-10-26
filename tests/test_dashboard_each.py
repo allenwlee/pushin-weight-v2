@@ -37,6 +37,15 @@ NOW = datetime(2026, 9, 29, 12, tzinfo=UTC)
 
 @override_settings(SECURE_SSL_REDIRECT=False)
 class DashboardEachTests(PostgreSQLV22TestCase):
+    def setUp(self):
+        super().setUp()
+        tracked = patch(
+            "monitor.views._tracked_home_brand_nicknames",
+            return_value=("each-minimax", "deepseek"),
+        )
+        tracked.start()
+        self.addCleanup(tracked.stop)
+
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
@@ -154,6 +163,42 @@ class DashboardEachTests(PostgreSQLV22TestCase):
                 with connection.cursor() as cursor:
                     cursor.execute("SHOW cursor_tuple_fraction")
                     self.assertEqual(float(cursor.fetchone()[0]), 0.35)
+
+    def test_language_and_role_routes_plan_for_full_result(self):
+        original_iterator = QuerySet.iterator
+        observed = []
+
+        def inspect_iterator(queryset, *args, **kwargs):
+            if queryset.model is PostBrand:
+                with connection.cursor() as cursor:
+                    cursor.execute("SHOW cursor_tuple_fraction")
+                    fraction = float(cursor.fetchone()[0])
+                    cursor.execute("SHOW enable_nestloop")
+                    observed.append((fraction, cursor.fetchone()[0]))
+            yield from original_iterator(queryset, *args, **kwargs)
+
+        for tab in ("lang", "role"):
+            with self.subTest(tab=tab), transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT set_config('cursor_tuple_fraction', '0.35', true)")
+                observed.clear()
+                with patch.object(QuerySet, "iterator", inspect_iterator), patch(
+                    "monitor.views._dashboard_now", return_value=NOW
+                ):
+                    response = self.client.get(
+                        "/dashboard/each/chart/",
+                        {"brand": self.minimax.nickname, "tab": tab,
+                         "window": 30, "locale": "en", "tz": "Asia/Tokyo"},
+                    )
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(sum(response.json()["totals"]), 3)
+                self.assertTrue(observed)
+                self.assertTrue(all(value == (1.0, "off") for value in observed), observed)
+                with connection.cursor() as cursor:
+                    cursor.execute("SHOW cursor_tuple_fraction")
+                    self.assertEqual(float(cursor.fetchone()[0]), 0.35)
+                    cursor.execute("SHOW enable_nestloop")
+                    self.assertEqual(cursor.fetchone()[0], "on")
 
     def test_failed_post_type_route_restores_its_previous_cursor_plan(self):
         observed = []
@@ -325,14 +370,57 @@ class DashboardEachTests(PostgreSQLV22TestCase):
         ]
         self.assertEqual(len(classification_reads), 1)
 
+        PostBrandClassificationState.objects.bulk_create([
+            PostBrandClassificationState(
+                post=post,
+                brand=self.minimax,
+                contract_version=CONTRACT_VERSION,
+                taxonomy_version=TAXONOMY_VERSION,
+                prompt_version=PROMPT_VERSION,
+                model="test",
+                input_context_fingerprint="5" * 64,
+                outcome="classified",
+            )
+            for post in posts
+        ])
+        PostBrandSignal.objects.bulk_create([
+            PostBrandSignal(
+                post=post, brand=self.minimax, post_type_id="other",
+                sentiment_id="neutral",
+            )
+            for post in posts
+        ])
+        with CaptureQueriesContext(connection) as queries:
+            types = _each_chart_payload(
+                self.minimax.nickname, "post_types", 1, "en", now=NOW, _rank=False
+            )
+        self.assertEqual(sum(types["totals"]), 1008)
+        self.assertEqual(sum(types["series"]["other"]), 1007)
+        edge_reads = [
+            query["sql"] for query in queries.captured_queries
+            if 'FROM "posts_brands_signals"' in query["sql"]
+        ]
+        self.assertEqual(len(edge_reads), 1)
+
     def test_public_route_and_endpoint_keep_home_intact(self):
         client = Client(HTTP_HOST="127.0.0.1")
         self.assertEqual(client.get("/").status_code, 200)
-        page = client.get(
-            "/dashboard/each", {"locale": "en", "brand": self.minimax.nickname}
-        )
+        with patch("monitor.views._build_home_chart_payload", side_effect=AssertionError(
+            "single-brand page must not calculate an unused multi-brand chart"
+        )), patch("monitor.views._each_chart_payload", side_effect=AssertionError(
+            "initial page must leave chart calculation to its endpoint"
+        )):
+            page = client.get(
+                "/dashboard/each", {"locale": "en", "brand": self.minimax.nickname}
+            )
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, 'data-pw-page="each"')
+        self.assertContains(page, 'data-pw-pulse')
+        self.assertContains(page, 'data-pw-pulse-entry="each-minimax"')
+        self.assertNotContains(page, 'data-pw-pulse-entry="each-qwen"')
+        self.assertContains(page, 'data-selected-brand="each-minimax"')
+        self.assertContains(page, 'data-selected-tab="sentiment"')
+        self.assertNotContains(page, 'id="each-initial-chart"')
         self.assertContains(page, 'data-pw-brand-scope="each-minimax"')
         self.assertContains(page, 'role="tablist"')
         self.assertContains(page, 'name="each-chart-mode" value="percent" data-each-mode="percent" checked')
@@ -350,6 +438,16 @@ class DashboardEachTests(PostgreSQLV22TestCase):
         self.assertEqual(data.status_code, 200)
         self.assertEqual(data.json()["brand"], self.minimax.nickname)
         self.assertEqual(data.json()["tab"], "sentiment")
+        untracked_page = client.get(
+            "/dashboard/each", {"locale": "en", "brand": self.qwen.nickname}
+        )
+        self.assertEqual(untracked_page.status_code, 200)
+        self.assertNotContains(untracked_page, 'data-pw-pulse-entry="each-qwen"')
+        self.assertNotContains(untracked_page, 'data-selected-brand="each-qwen"')
+        self.assertEqual(
+            client.get("/dashboard/each/chart/", {"brand": self.qwen.nickname}).status_code,
+            400,
+        )
         self.assertEqual(
             client.get("/dashboard/each/chart/", {"brand": "invalid"}).status_code, 400
         )
