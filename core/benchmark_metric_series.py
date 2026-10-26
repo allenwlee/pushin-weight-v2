@@ -12,9 +12,9 @@ from django.utils import timezone
 
 from core.benchmark_metric_store import native_date
 from core.benchmark_serving import (
-    hydrate_observations,
     observation_dimensions,
     observation_ids,
+    observation_provenance_metadata,
     publication_runs,
 )
 from core.measurement_taxonomy import require, resolve_products
@@ -170,7 +170,7 @@ def mapping_scope(contract, line):
 def _point(value, definition, day):
     observation = value.observation
     run = observation.run
-    metadata = observation.source_metadata
+    metadata = observation_provenance_metadata(observation)
     basis = value.as_of_basis if definition.measurement_kind == "state" else value.window_end_basis
     if basis:
         metadata = {**metadata, "reported_time": {"metrics": {
@@ -268,9 +268,7 @@ def metric_points(contract, line, days):
                 if row
                 else None
             )
-            partial = (
-                row and row["observation"].source_metadata["period_status"] == "partial"
-            )
+            partial = row and row["observation"].period_status == "partial"
             if value is None or (partial and not line.get("include_partial", False)):
                 points.append(
                     {
@@ -366,13 +364,15 @@ def metric_points(contract, line, days):
             observation__status="ok",
         )
         .select_related("observation__run__job")
-        .defer("observation__source_metadata", "observation__run__source_metadata",
-               "observation__run__report", "observation__run__raw_payload", "observation__run__request_params")
+        .defer(
+            "observation__source_metadata", "observation__run__source_metadata",
+            "observation__run__report", "observation__run__raw_payload",
+            "observation__run__request_params",
+        )
         .prefetch_related("observation__values__source_metric")
         .order_by("observation__run__completed_at", "id")[:100001]
     )
     require(len(values) <= 100000, "series row budget exceeded")
-    hydrate_observations([value.observation for value in values])
     groups = defaultdict(dict)
     revisions = {}
     for value in values:
@@ -389,10 +389,12 @@ def metric_points(contract, line, days):
         )
         if source == "hf":
             day = (
-                observation.source_metadata.get("archive_snapshot_date")
-                or observation.source_metadata.get("reconstruction_date")
-                or observation.observed_at.astimezone(UTC).date().isoformat()
-            )
+                observation.archive_snapshot_date.isoformat()
+                if observation.archive_snapshot_date else None
+            ) or (
+                observation.reconstruction_date.isoformat()
+                if observation.reconstruction_date else None
+            ) or observation.observed_at.astimezone(UTC).date().isoformat()
         elif definition.measurement_kind == "state":
             day = (
                 value.as_of_date.isoformat()
@@ -415,11 +417,7 @@ def metric_points(contract, line, days):
             "multiple measurements for a subject/date in one run",
         )
         groups[key][observation.mapping_id] = value
-        direct = (
-            run.direct_ingestion
-            if run.direct_ingestion is not None
-            else run.source_metadata.get("ingestion_mode") == "direct"
-        )
+        direct = run.direct_ingestion is True
         revisions[key] = (
             1 if source == "hf" and direct else 0,
             run.source_as_of or run.completed_at,
