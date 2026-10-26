@@ -412,6 +412,9 @@ def test_operational_cutoff_and_raw_snapshot_export_never_include_later_poll():
         and v["window_end_at"] == "2026-10-07T12:44:18+00:00"
         for v in result["values"]
     )
+    from core.models import CollectionObservation
+
+    CollectionObservation.objects.filter(run=first).update(period_status=None)
     output = StringIO()
     call_command(
         "benchmark_opencode_snapshots",
