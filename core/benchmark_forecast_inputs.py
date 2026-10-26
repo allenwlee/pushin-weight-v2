@@ -154,6 +154,11 @@ def forecast_inputs(
         len(selected) <= limit,
         "forecast input budget exceeded; select a smaller mapping cohort",
     )
+    require(
+        all(value.observation.run.job.source_id in
+            {"arena", "openrouter", "opencode", "hf", "github"} for value in selected),
+        "unsupported forecast metric source",
+    )
     github_assets = github_asset_coordinates({
         value.observation_id for value in selected
         if value.observation.run.job.source_id == "github"
@@ -165,18 +170,14 @@ def forecast_inputs(
         run = observation.run
         # Every supported measurement source keeps its forecast coordinates
         # and provenance outside the retired observation documents.
-        if run.job.source_id in {"arena", "openrouter", "opencode", "hf", "github"}:
-            metadata = observation_provenance_metadata(observation)
-            dimensions = observation_dimensions(observation)
-            if run.job.source_id == "github" and github_asset_metric(definition):
-                require(
-                    observation.pk in github_assets,
-                    "GitHub asset coordinates are not retained",
-                )
-                dimensions = github_assets[observation.pk]
-        else:
-            metadata = observation.source_metadata
-            dimensions = observation.dimensions
+        metadata = observation_provenance_metadata(observation)
+        dimensions = observation_dimensions(observation)
+        if run.job.source_id == "github" and github_asset_metric(definition):
+            require(
+                observation.pk in github_assets,
+                "GitHub asset coordinates are not retained",
+            )
+            dimensions = github_assets[observation.pk]
         rows.append(
             {
                 "value_id": value.pk,

@@ -69,6 +69,8 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at
     require(type(limit) is int and 0 < limit <= 1000, "invalid numeric report limit")
     contract = MetricCollectionContract.objects.get(pk=contract_id)
     require(source in contract.source_configuration, "source outside contract")
+    require(source in {"arena", "openrouter", "opencode", "hf", "github"},
+            "unsupported metric source")
     query = (
         MetricValue.objects.filter(
             observation__run__job__contract=contract,
@@ -121,9 +123,6 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at
             else:
                 dimensions = {}
             source_evidence = _metric_evidence(value, observation, definition)
-        else:
-            dimensions = observation.dimensions
-            source_evidence = observation.source_metadata
         rows.append(
             {
                 "value_id": value.pk,
