@@ -148,6 +148,8 @@ class TwitterApiClient:
     max_response_bytes: int | None = None
     before_request: Callable[[float], None] | None = None
     after_response: Callable[[dict[str, Any]], None] | None = None
+    on_exchange_start: Callable[[str, dict[str, Any]], Any] | None = None
+    on_exchange_finish: Callable[[Any, dict[str, Any]], None] | None = None
     # Per-instance request log. Each entry is one logical HTTP exchange
     # (one URL + params + retries collapsed into a single record). The list
     # is mutated as requests complete; copied into run.summary["http_log"]
@@ -186,6 +188,10 @@ class TwitterApiClient:
             n_attempts = attempt + 1
             if self.before_request is not None:
                 self.before_request(timeout_s or self.timeout_s)
+            exchange = (
+                self.on_exchange_start(path, dict(params))
+                if self.on_exchange_start is not None else None
+            )
             try:
                 if self.max_response_bytes is None:
                     r = requests.get(url, params=params, headers=self._headers(),
@@ -193,11 +199,28 @@ class TwitterApiClient:
                 else:
                     r = self._get_bounded(url, params, timeout_s or self.timeout_s)
             except requests.RequestException as e:
+                if self.on_exchange_finish is not None:
+                    self.on_exchange_finish(exchange, {
+                        "outcome": "transport_error", "status_code": None,
+                        "body": None, "error_type": type(e).__name__,
+                    })
                 last_exc = e
                 if attempt < self.max_retries:
                     time.sleep(2 ** attempt)
                     continue
                 raise
+            except Exception as e:
+                if self.on_exchange_finish is not None:
+                    self.on_exchange_finish(exchange, {
+                        "outcome": "transport_error", "status_code": None,
+                        "body": None, "error_type": type(e).__name__,
+                    })
+                raise
+            if self.on_exchange_finish is not None:
+                self.on_exchange_finish(exchange, {
+                    "outcome": "received", "status_code": r.status_code,
+                    "body": r.content, "error_type": None,
+                })
             if raw_sink is not None:
                 raw_sink(r.content)
             if self.after_response is not None:

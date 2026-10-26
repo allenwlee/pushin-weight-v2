@@ -7,6 +7,7 @@ import hashlib
 from django.db import transaction
 from django.utils import timezone
 
+from core.collection_capture import begin_request, finish_request
 from core.collection_jobs import register_job
 from core.collection_state import claim_job, fenced_run, finish_run
 from core.measurement_taxonomy import digest, require
@@ -117,6 +118,36 @@ class ScheduledCycleLineage:
             )
             return scope.pk
 
+    def begin_exchange(self, scope_id, *, endpoint_url, params):
+        """Reserve one physical HTTP attempt before transport starts."""
+        require(self.claim.attempt_id is not None, "scheduled attempt is missing")
+        with fenced_run(self.claim) as (_, run):
+            scope = CollectionScopeRun.objects.get(pk=scope_id, run=run)
+            attempt = run.attempts.get(pk=self.claim.attempt_id)
+            return begin_request(
+                attempt, scope, endpoint_url=endpoint_url,
+                cursor=params.get("cursor"),
+                requested_start_at=scope.requested_start_at,
+                requested_end_at=scope.requested_end_at,
+            )
+
+    def finish_exchange(self, request, receipt):
+        """Keep the exact response bytes even when the provider rejects it."""
+        require(
+            receipt.get("outcome") in {"received", "transport_error"},
+            "scheduled exchange outcome is invalid",
+        )
+        return finish_request(
+            request,
+            outcome=receipt["outcome"],
+            body=receipt.get("body"),
+            http_status=receipt.get("status_code"),
+            error_code=receipt.get("error_type"),
+            response_bytes=(
+                len(receipt["body"]) if receipt.get("body") is not None else None
+            ),
+        )
+
     def finish_call(self, scope_id, *, post_ids, raw_count, outcome, complete):
         require(type(raw_count) is int and raw_count >= 0,
                 "scheduled raw count must be nonnegative")
@@ -139,7 +170,16 @@ class ScheduledCycleLineage:
             return len(saved)
 
     def finish(self, *, success):
+        with fenced_run(self.claim) as (_, run):
+            require(
+                not run.attempts.filter(pk=self.claim.attempt_id, requests__transport_outcome="pending").exists(),
+                "scheduled request receipt is unfinished",
+            )
+            requests = sum(run.attempts.values_list("actual_requests", flat=True))
+            unknown = sum(run.attempts.values_list("unknown_sent_requests", flat=True))
         return finish_run(
             self.claim, status="success" if success else "partial",
+            request_count=requests,
+            report={"physical_accounting_complete": unknown == 0},
             now=timezone.now(),
         )

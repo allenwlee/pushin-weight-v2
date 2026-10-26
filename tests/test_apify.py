@@ -44,6 +44,42 @@ def test_run_search_raises_auth_error_on_401():
             client.run_search("from:x")
 
 
+def test_exchange_receipts_include_each_physical_retry_and_response_body(monkeypatch):
+    client = TwitterApiClient(api_key="x", max_retries=1)
+    first = _mock_response(503, "busy")
+    first.content = b"busy"
+    second = _mock_response(200, {"tweets": []})
+    second.content = b'{"tweets":[]}'
+    monkeypatch.setattr(requests, "get", MagicMock(side_effect=[first, second]))
+    monkeypatch.setattr("x_monitor.apify.time.sleep", lambda _: None)
+    starts, finishes = [], []
+    client.on_exchange_start = lambda path, params: starts.append((path, params)) or len(starts)
+    client.on_exchange_finish = lambda token, result: finishes.append((token, result))
+
+    assert client._get("/twitter/tweet/advanced_search", {"query": "Qwen"}) == {"tweets": []}
+    assert len(starts) == 2
+    assert [token for token, _ in finishes] == [1, 2]
+    assert [receipt["status_code"] for _, receipt in finishes] == [503, 200]
+    assert [receipt["body"] for _, receipt in finishes] == [b"busy", b'{"tweets":[]}']
+
+
+def test_exchange_receipt_marks_transport_failure_as_unknown_response(monkeypatch):
+    client = TwitterApiClient(api_key="x", max_retries=0)
+    monkeypatch.setattr(
+        requests, "get", MagicMock(side_effect=requests.Timeout("sent but no reply")),
+    )
+    receipts = []
+    client.on_exchange_start = lambda path, params: "reserved"
+    client.on_exchange_finish = lambda token, result: receipts.append((token, result))
+
+    with pytest.raises(requests.Timeout):
+        client._get("/twitter/tweet/advanced_search", {"query": "Qwen"})
+    assert receipts == [("reserved", {
+        "outcome": "transport_error", "status_code": None,
+        "body": None, "error_type": "Timeout",
+    })]
+
+
 def test_raw_search_receipt_is_saved_before_normalization(monkeypatch):
     client = TwitterApiClient(api_key="x", max_retries=0)
     raw_body = b'{"tweets":[{"malformed":true}]}'

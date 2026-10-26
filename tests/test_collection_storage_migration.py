@@ -355,6 +355,14 @@ def test_scheduled_scope_records_post_without_claiming_backfill_enrichment():
         [call], limits=limits, invocation_id="scheduled-lineage-test",
     )
     scope_id = lineage.begin_call(call, since_epoch=1783809000, until_epoch=1783809300)
+    request = lineage.begin_exchange(
+        scope_id, endpoint_url="https://api.twitterapi.io/twitter/tweet/advanced_search",
+        params={"query": "product release", "cursor": "page-2"},
+    )
+    lineage.finish_exchange(request, {
+        "outcome": "received", "status_code": 200,
+        "body": b'{"tweets":[]}', "error_type": None,
+    })
     post = Post.objects.create(tweet_id="scheduled-lineage-post", text="Qwen", lang="en")
     PostEnrichmentState.objects.create(post=post)
     assert lineage.finish_call(
@@ -366,7 +374,13 @@ def test_scheduled_scope_records_post_without_claiming_backfill_enrichment():
         run_id=lineage.claim.run_id, scope_run=scope, post=post,
     ).exists()
     assert PostEnrichmentState.objects.get(post=post).source_collection_job_id is None
-    lineage.finish(success=True)
+    assert request.cursor_before == "page-2"
+    request.refresh_from_db()
+    assert request.transport_outcome == "received"
+    assert bytes(request.archive.body) == b'{"tweets":[]}'
+    run = lineage.finish(success=True)
+    assert run.request_count == 1
+    assert run.attempts.get().accounting_complete
 
 
 def test_legacy_product_match_scope_pins_existing_subject_and_input_digest():
