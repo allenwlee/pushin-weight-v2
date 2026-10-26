@@ -408,6 +408,64 @@ def _historical_timestamp(value):
     return parsed
 
 
+def project_publication_coordinates_batch(
+    *, after_id: int = 0, batch_size: int = 200, verify_only: bool = False,
+) -> ProvenanceBatch:
+    """Fill exact publication coordinates; refuse to replace already known facts."""
+    from core.collection_resources import publication_coordinate_values
+
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative integer")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        query = CollectionObservation.objects.filter(pk__gt=after_id).filter(
+            Q(dimensions__has_any_keys=["date", "period", "revision", "config", "category"])
+            | Q(source_metadata__has_any_keys=["revision", "immutable_revision", "numeric_snapshot_identity", "snapshot_identity"])
+        )
+        owners = dict(query.order_by("pk").values_list("pk", "run_id")[:batch_size])
+        if not verify_only:
+            list(CollectionRun.objects.select_for_update().filter(
+                pk__in=set(owners.values()),
+            ).order_by("pk").values_list("pk", flat=True))
+        query = query.filter(pk__in=owners).select_related("run__job").only(
+            "pk", "run_id", "run__job_id", "run__job__source_id",
+            "source_identifier", "source_metadata", "dimensions",
+            "provider_revision", "config_key", "category_key", "source_record_date",
+        )
+        if not verify_only:
+            query = query.select_for_update(of=("self",))
+        observations = list(query.order_by("pk"))
+        changed, fields = [], set()
+        for observation in observations:
+            if observation.run_id != owners[observation.pk]:
+                raise ValueError("publication coordinate owner moved while locking")
+            expected = publication_coordinate_values(observation)
+            differences = {}
+            for field, value in expected.items():
+                current = getattr(observation, field)
+                if current == value:
+                    continue
+                if current is not None:
+                    raise ValueError("typed publication coordinate conflicts: " + field)
+                if verify_only:
+                    raise ValueError("publication coordinate is not projected: " + field)
+                differences[field] = value
+            if differences:
+                for field, value in differences.items():
+                    setattr(observation, field, value)
+                fields.update(differences)
+                changed.append(observation)
+        if changed:
+            CollectionObservation.objects.bulk_update(changed, sorted(fields), batch_size=500)
+        return ProvenanceBatch(
+            observations[-1].pk if observations else after_id, len(observations), len(changed),
+        )
+
+
 def project_scope_cursors_batch(
     *, after_id: int = 0, batch_size: int = 200, verify_only: bool = False,
 ) -> ProvenanceBatch:
