@@ -479,6 +479,20 @@ PROVENANCE_EXPRESSIONS = {
         "THEN (t.source_metadata->>'reconstruction_date')::date END"
     ),
 }
+# During cutover, writers can supply only typed facts. Missing legacy keys are
+# not deletion instructions; present keys (including explicit unknowns) still
+# participate in both the historical copy and its final mismatch check.
+PROVENANCE_SOURCE_KEYS = {
+    "row_semantic_digest": "row_semantic_hash",
+    "history_reconstructed": "history_basis",
+}
+PROVENANCE_EXPRESSIONS = {
+    name: (
+        f"CASE WHEN t.source_metadata ? '{PROVENANCE_SOURCE_KEYS.get(name, name)}' "
+        f"THEN ({expression}) ELSE t.{name} END"
+    )
+    for name, expression in PROVENANCE_EXPRESSIONS.items()
+}
 INVALID_ROW_SEMANTIC_HASH = (
     "t.source_metadata ? 'row_semantic_hash' AND NOT "
     "COALESCE(t.source_metadata->>'row_semantic_hash' ~ '^[0-9a-f]{64}$', FALSE)"

@@ -678,3 +678,37 @@ def test_benchmark_provenance_copy_is_bounded_and_repeatable():
     observation.refresh_from_db()
     assert observation.reconstruction_date.isoformat() == "2026-10-23"
     assert provenance_mismatch_counts() == (0, 0)
+
+    # Later writers can omit legacy copies. A final reconciliation must not
+    # interpret absent JSON keys as instructions to clear canonical facts.
+    observation.row_semantic_digest = bytes.fromhex("c" * 64)
+    observation.source_metadata = {}
+    observation.save(update_fields=["row_semantic_digest", "source_metadata"])
+    canonical = {
+        field: getattr(observation, field)
+        for field in (
+            "projection_kind", "row_semantic_digest", "archive_snapshot_date",
+            "period_status", "history_reconstructed", "secondary_source",
+            "publication_complete", "reconstruction_date",
+        )
+    }
+    assert provenance_mismatch_counts() == (0, 0)
+    assert project_benchmark_provenance_batch(
+        after_id=observation.pk - 1, batch_size=1
+    ).updated == 0
+    observation.refresh_from_db()
+    assert {field: getattr(observation, field) for field in canonical} == canonical
+
+    # A present, explicit unknown is still historical evidence to reconcile.
+    observation.source_metadata = {"projection_kind": None}
+    observation.save(update_fields=["source_metadata"])
+    assert provenance_mismatch_counts() == (0, 1)
+    assert project_benchmark_provenance_batch(
+        after_id=observation.pk - 1, batch_size=1
+    ).updated == 1
+    observation.refresh_from_db()
+    assert observation.projection_kind is None
+    assert {
+        field: getattr(observation, field)
+        for field in canonical if field != "projection_kind"
+    } == {field: value for field, value in canonical.items() if field != "projection_kind"}
