@@ -19,7 +19,12 @@ from django.db.models import Sum
 from core.collection_capture import begin_request, finish_request, read_document
 from core.collection_state import fenced_run, x_scope_ownership
 from core.measurement_taxonomy import require
-from core.models import CollectionAttempt, CollectionRequest, CollectionScopeRun
+from core.models import (
+    CollectionAttempt,
+    CollectionRequest,
+    CollectionScopeRequestUse,
+    CollectionScopeRun,
+)
 from monitor.backfill_resources import BackfillBudgetExhausted
 from monitor.run_lock import backfill_yield_requested, harvest_writer_lock
 from x_monitor.apify import (
@@ -129,9 +134,14 @@ class Prefetcher:
                         "replayed_pages": 0, "http_seconds_sum": 0.0, "max_outstanding": 0}
 
     def _pending(self, scope):
-        consumed = {str(e["prefetch_request_id"]) for e in scope.envelopes if e.get("prefetch_request_id")}
-        # Legacy continuation copies scopes/envelopes into a new run. Keep each
-        # request on the original run; validate exact immutable job/scope ancestry.
+        consumed = set(CollectionScopeRequestUse.objects.filter(
+            scope_run__run__job_id=self.claim.job_id,
+            scope_run__scope_kind="x_query",
+            scope_run__scope_key=scope.scope_key,
+        ).values_list("request_id", flat=True))
+        # A continuation keeps the physical request on its original run. Uses
+        # across the job's scopes distinguish an already-committed page from
+        # a captured response that still needs replay.
         requests = CollectionRequest.objects.filter(
             attempt__run__job_id=self.claim.job_id, scope_run__scope_key=scope.scope_key,
             request_category="x_backfill_prefetch",

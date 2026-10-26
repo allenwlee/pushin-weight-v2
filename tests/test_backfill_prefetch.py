@@ -461,6 +461,10 @@ def test_expired_interrupted_run_resumes_committed_cursor_without_recollection(h
             execute_job(job.pk, collection_options={"concurrency": 20})
         old = CollectionRun.objects.get(job=job)
         assert old.status == "running" and old.scopes.get().cursor == "next"
+        saved = old.scopes.get()
+        assert saved.request_uses.count() == 1
+        saved.envelopes = []
+        saved.save(update_fields=["envelopes"])
         with pytest.raises(RuntimeError, match="historical_run_active"):
             month._check_saved_jobs({"campaign": "parallel-test"})
         CollectionRun.objects.filter(pk=old.pk).update(lease_expires_at=timezone.now() - timedelta(seconds=1))
