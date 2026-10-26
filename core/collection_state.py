@@ -564,7 +564,7 @@ def ensure_x_query_target(job, scope_key, *, query_text, call_id, start_at, end_
     require(search_query.query_text == query_text, "X query identity changed")
     target = job.targets.filter(target_key=scope_key).first()
     if target is None:
-        CollectionJob.objects.select_for_update().get(pk=job.pk)
+        CollectionJob.objects.select_for_update().only("pk").get(pk=job.pk)
         target = job.targets.filter(target_key=scope_key).first()
     if target is None:
         require(
