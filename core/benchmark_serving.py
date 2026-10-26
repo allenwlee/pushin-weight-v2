@@ -60,10 +60,11 @@ def observation_dimensions(observation):
     """Render source coordinates from the retained typed observation facts."""
     source = observation.run.job.source_id
     dimensions = {}
-    if observation.config_key is not None:
-        dimensions["config"] = observation.config_key
-    if observation.category_key is not None:
-        dimensions["category"] = observation.category_key
+    if source == "arena":
+        if observation.config_key is not None:
+            dimensions["config"] = observation.config_key
+        if observation.category_key is not None:
+            dimensions["category"] = observation.category_key
     if source in {"openrouter", "opencode"} and observation.source_record_date:
         dimensions["date"] = observation.source_record_date.isoformat()
     return dimensions
