@@ -81,3 +81,51 @@ def test_historical_timing_import_is_idempotent_and_refuses_changed_value():
     MetricValue.objects.filter(pk=value.pk).update(temporal_status="unknown")
     with pytest.raises(ValueError, match="after-image differs"):
         import_legacy_timing_batch(after_id=observation.pk - 1, batch_size=1)
+
+
+def test_import_advances_over_an_unmarked_page_without_skipping_later_corrections():
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from core.benchmark_metric_store import persist_source
+
+    contract = configured()
+    first_run = persist_source(contract, "hf", "d" * 64, payload())
+    second_run = persist_source(contract, "hf", "e" * 64, payload())
+    first = CollectionObservation.objects.get(run=first_run)
+    second = CollectionObservation.objects.get(run=second_run)
+    value = MetricValue.objects.filter(observation=second).order_by("pk").first()
+    before = {field: None for field in TIME_FIELDS}
+    before.update(temporal_status="unknown", source_timezone="unknown")
+    second.source_metadata["timing_correction_v1"] = {
+        str(value.pk): {
+            "policy": "reported-time-v1", "before": before,
+            "after": _state(value), "before_basis": None,
+            "after_basis": {"policy": "reported-time-v1", "precision": "date"},
+        },
+    }
+    second.save(update_fields=["source_metadata"])
+
+    first_page = import_legacy_timing_batch(after_id=first.pk - 1, batch_size=1)
+    assert first_page.last_observation_id == first.pk
+    assert first_page.scanned_observations == 1
+    assert first_page.selected_corrections == first_page.inserted_corrections == 0
+    assert not CollectionCorrection.objects.exists()
+
+    output = StringIO()
+    call_command(
+        "import_collection_timing_corrections", after_id=first.pk - 1,
+        batch_size=1, max_batches=3, stdout=output,
+    )
+    assert "scanned_observations=2 selected_corrections=1 inserted_corrections=1" in output.getvalue()
+    assert "exhausted=true" in output.getvalue()
+    assert CollectionCorrection.objects.get().metric_value_id == value.pk
+
+    output = StringIO()
+    call_command(
+        "import_collection_timing_corrections", after_id=first.pk - 1,
+        batch_size=1, max_batches=3, verify_only=True, stdout=output,
+    )
+    assert "mode=verify scanned_observations=2 selected_corrections=1 inserted_corrections=0" in output.getvalue()
+    assert "exhausted=true" in output.getvalue()

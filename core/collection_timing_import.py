@@ -97,17 +97,26 @@ def import_legacy_timing_batch(
         with connection.cursor() as cursor:
             cursor.execute("SET LOCAL lock_timeout = '5s'")
             cursor.execute("SET LOCAL statement_timeout = '30s'")
+        # Bound the primary-key page before inspecting JSON. Filtering the full
+        # table first can choose a full scan/sort for every small batch when
+        # PostgreSQL underestimates the historical marker's frequency.
+        owner_ids = list(
+            CollectionObservation.objects.filter(pk__gt=after_id)
+            .order_by("pk").values_list("pk", flat=True)[:batch_size]
+        )
+        if not owner_ids:
+            return CorrectionImportBatch(after_id, 0, 0, 0)
         observations_query = CollectionObservation.objects.filter(
-            pk__gt=after_id,
+            pk__in=owner_ids,
             source_metadata__has_key="timing_correction_v1",
         )
         if not verify_only:
             observations_query = observations_query.select_for_update()
         observations = list(
-            observations_query.only("id", "source_metadata").order_by("pk")[:batch_size]
+            observations_query.only("id", "source_metadata").order_by("pk")
         )
         if not observations:
-            return CorrectionImportBatch(after_id, 0, 0, 0)
+            return CorrectionImportBatch(owner_ids[-1], len(owner_ids), 0, 0)
         selected = []
         for observation in observations:
             markers = observation.source_metadata["timing_correction_v1"]
@@ -216,5 +225,5 @@ def import_legacy_timing_batch(
         if pending:
             CollectionCorrection.objects.bulk_create(pending, batch_size=500)
         return CorrectionImportBatch(
-            observations[-1].pk, len(observations), len(selected), len(pending)
+            owner_ids[-1], len(owner_ids), len(selected), len(pending)
         )
