@@ -1,9 +1,12 @@
+from uuid import uuid4
+
 import httpx
 import pytest
 from django.db import connection
 
-from core.hf_catalog import execute_catalog, resolve_scope
+from core.hf_catalog import execute_catalog, resolve_catalog_run, resolve_scope
 from core.hf_metadata_client import HFMetadataClient
+from core.measurement_taxonomy import digest
 from core.models import (
     Brand,
     BrandCompany,
@@ -68,6 +71,12 @@ def test_full_walk_enrichment_refresh_identity_and_ambiguous_brand():
     assert result["unique_models"] == result["imported"] == 2
     assert result["requests"] == 6
     saved = CollectionRun.objects.get(pk=result["run_id"])
+    legacy_id = uuid4()
+    saved.ingestion_key = digest(["catalog", "hf", str(legacy_id)])
+    saved.source_metadata = {}
+    saved.save(update_fields=["ingestion_key", "source_metadata"])
+    assert resolve_catalog_run(legacy_id).pk == saved.pk
+    assert resolve_catalog_run(saved.pk).pk == saved.pk
     assert saved.job_id is not None
     assert saved.job.source_id == saved.source_id == "hf"
     assert saved.job.definition["scope"] == saved.scope == manifest

@@ -552,7 +552,7 @@ def catalog_report(run, *, requests=0, cumulative_requests=0, stop_reason=None):
 def resolve_catalog_run(run_id):
     """Accept saved pre-merge UUIDs while isolating the HF catalog purpose."""
     return CollectionRun.objects.get(
-        Q(pk=run_id) | Q(source_metadata__legacy_catalog__run_id=str(run_id)),
+        Q(pk=run_id) | Q(ingestion_key=digest(["catalog", "hf", str(run_id)])),
         job__source_id="hf",
         job__purpose="catalog",
     )
