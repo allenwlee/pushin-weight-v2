@@ -1405,7 +1405,7 @@ def load_config(path: Path) -> Config:
         target[path_parts[-1]] = os.environ[env_name]
 
     # Rare-type collection has its own reviewed runtime activation tuple.  It
-    # may run in either deployed environment, but never in an unlabelled/local
+    # may run in a deployed or dedicated backfill environment, never unlabelled/local
     # process.  The rare-scoped extraction switch intentionally supersedes the
     # old broad temporary enable flag without changing the configured cap.
     rare_activation_env_paths = {
@@ -1447,10 +1447,10 @@ def load_config(path: Path) -> Config:
         deployment_environment = os.environ.get(
             "X_MONITOR_DEPLOYMENT_ENVIRONMENT", ""
         ).strip()
-        if deployment_environment not in {"staging", "production"}:
+        if deployment_environment not in {"staging", "production", "backfill"}:
             raise ValueError(
                 "rare-types activation requires "
-                "X_MONITOR_DEPLOYMENT_ENVIRONMENT=staging or production"
+                "X_MONITOR_DEPLOYMENT_ENVIRONMENT=staging or production or backfill"
             )
         if not rare_targeted_extraction_enabled:
             raise ValueError(
