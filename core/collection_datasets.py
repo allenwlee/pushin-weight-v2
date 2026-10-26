@@ -35,7 +35,4 @@ def resolve_dataset(source_id, metadata, *, cache=None):
 
 
 def observation_dataset_code(observation):
-    if observation.source_dataset_id is not None:
-        return observation.source_dataset.code
-    # Additive rollout only: uncopied observations still declare their source.
-    return dataset_code(observation.source_metadata)
+    return observation.source_dataset.code if observation.source_dataset_id is not None else None
