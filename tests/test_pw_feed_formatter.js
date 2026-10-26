@@ -279,7 +279,7 @@ if (typeof renderRowHtml === 'function') {
       role: 'staff',
       role_label: 'Staff',
       geography: {
-        kind: 'taiwan',
+        kind: 'labelled_parent',
         label: 'Taiwan',
         accessible_label: 'X reports this account is based in Taiwan',
         flags: [{ code: 'CN', symbol_id: 'flag-cn', label: 'China' }],
