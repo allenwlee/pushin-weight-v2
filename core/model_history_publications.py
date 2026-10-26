@@ -442,7 +442,7 @@ def _queue_publication(claim, job, publication, contract, start, end):
                 },
             )
             require(
-                evidence.listing["rows"] == payload["rows"],
+                observation_object_documents(evidence)[0]["rows"] == payload["rows"],
                 "immutable selected publication conflict",
             )
             require(
