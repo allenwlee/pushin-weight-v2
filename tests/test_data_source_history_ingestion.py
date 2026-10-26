@@ -1008,6 +1008,7 @@ def test_sparse_hf_archive_acquisition_automatically_projects_without_interpolat
 def test_existing_completed_or_day_reuses_original_contract_and_only_acquires_gap():
     from core.benchmark_metric_identity import configure_collection
     from core.benchmark_metric_store import persist_source
+    from core.collection_capture import archive_legacy
     from core.models import MetricCollectionContract
 
     source, product, scope = publication_scope()
@@ -1046,6 +1047,16 @@ def test_existing_completed_or_day_reuses_original_contract_and_only_acquires_ga
         },
     )
     value = MetricValue.objects.get(observation__run=original)
+    saved = value.observation
+    saved.legacy_archive = archive_legacy({
+        "listing": saved.listing,
+        "dimensions": saved.dimensions,
+        "source_metadata": saved.source_metadata,
+    })
+    saved.listing, saved.dimensions, saved.source_metadata = {}, {}, {}
+    saved.save(update_fields=[
+        "legacy_archive", "listing", "dimensions", "source_metadata",
+    ])
     budget, requests = transport()
     run = execute_model_history(
         register(source, scope).pk, budget=budget, key="fixture"

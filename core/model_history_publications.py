@@ -624,7 +624,7 @@ def _reuse_openrouter_days(job, model, identifiers, start, end):
     selected = {}
     for value in values[: job.budgets["items"]].iterator(chunk_size=100):
         observation = value.observation
-        metadata = observation.source_metadata
+        _, _, metadata = observation_object_documents(observation)
         revision = metadata.get("immutable_revision") or metadata.get(
             "snapshot_identity", {}
         ).get("revision")
@@ -660,7 +660,7 @@ def _reuse_openrouter_days(job, model, identifiers, start, end):
                         "value_id": value.pk,
                         "source_metric_id": value.source_metric_id,
                         "original_observed_at": observation.observed_at.isoformat(),
-                        "source_metadata": observation.source_metadata,
+                        "source_metadata": observation_object_documents(observation)[2],
                         "mapping_id": str(observation.mapping_id)
                         if observation.mapping_id
                         else None,
