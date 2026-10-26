@@ -292,6 +292,13 @@ def test_projection_constraint_is_cross_run_and_only_for_selected_marker():
             **{**fields, "run": other},
             source_metadata={"projection_kind": "source-statistics-v1"},
         )
+    # The replacement invariant must also protect writers that no longer
+    # duplicate the projection kind in legacy JSON.
+    with pytest.raises(IntegrityError), transaction.atomic():
+        CollectionObservation.objects.create(
+            **{**fields, "run": other},
+            projection_kind="source-statistics-v1",
+        )
     CollectionObservation.objects.create(**{**fields, "run": other})
 
 

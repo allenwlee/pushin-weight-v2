@@ -9109,6 +9109,11 @@ class CollectionObservation(models.Model):
                 condition=models.Q(source_metadata__projection_kind="source-statistics-v1"),
                 name="uq_source_statistics_snapshot",
             ),
+            models.UniqueConstraint(
+                fields=["observation_key"],
+                condition=models.Q(projection_kind="source-statistics-v1"),
+                name="uq_source_statistics_typed",
+            ),
             models.CheckConstraint(
                 condition=models.Q(observation_key__regex=r"^[0-9a-f]{64}$"),
                 name="ck_observation_key",
