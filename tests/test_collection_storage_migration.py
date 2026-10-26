@@ -594,6 +594,7 @@ def test_benchmark_provenance_copy_is_bounded_and_repeatable():
         source_subject_kind="model",
         observation_key="b" * 64,
         source_metadata={
+            "projection_kind": "source-statistics-v1",
             "history_basis": "reconstructed_current_relationships",
             "secondary_source": True,
             "publication_complete": False,
@@ -614,6 +615,7 @@ def test_benchmark_provenance_copy_is_bounded_and_repeatable():
     run.refresh_from_db()
     observation.refresh_from_db()
     assert run.direct_ingestion is True
+    assert observation.projection_kind == "source-statistics-v1"
     assert observation.history_reconstructed is True
     assert observation.secondary_source is True
     assert observation.publication_complete is False

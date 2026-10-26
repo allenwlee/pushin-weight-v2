@@ -354,6 +354,7 @@ def _archived_invocation_values(receipt):
 
 
 PROVENANCE_EXPRESSIONS = {
+    "projection_kind": "t.source_metadata->>'projection_kind'",
     "archive_snapshot_date": (
         "CASE WHEN t.source_metadata->>'archive_snapshot_date' ~ "
         "'^[0-9]{4}-[0-9]{2}-[0-9]{2}$' "
