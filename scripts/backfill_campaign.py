@@ -371,7 +371,7 @@ def _collection_model_usage(job):
             continue
         usage["requests_started"] += scope.raw_count
         document = read_document(scope.legacy_archive) if scope.legacy_archive_id else {}
-        responses = (document.get("model_responses", []) if scope.scope_kind == "x_model_usage"
+        responses = ((document.get("model_responses") or []) if scope.scope_kind == "x_model_usage"
                      else [document] if document.get("status") in {"returned", "failed"} else [])
         for response in responses:
             usage["responses_recorded"] += 1

@@ -384,6 +384,36 @@ def test_collection_model_usage_requires_every_backfill_run_to_have_a_typed_mark
         campaign._collection_model_usage(job)
 
 
+def test_collection_model_usage_preserves_missing_legacy_response(monkeypatch):
+    from types import SimpleNamespace
+
+    from scripts import backfill_campaign as campaign
+
+    scope = SimpleNamespace(scope_kind="x_model_usage", raw_count=1,
+                            legacy_archive_id=1, legacy_archive={"model_responses": None})
+
+    class ScopeQuery:
+        def filter(self, **kwargs):
+            return self
+
+        def select_related(self, *args):
+            return self
+
+        def iterator(self):
+            return iter((scope,))
+
+        def count(self):
+            return 1
+
+    monkeypatch.setattr(campaign, "CollectionScopeRun", SimpleNamespace(objects=ScopeQuery()))
+    monkeypatch.setattr(campaign, "read_document", lambda document: document)
+    job = SimpleNamespace(runs=SimpleNamespace(count=lambda: 1))
+    usage = campaign._collection_model_usage(job)
+    assert usage["requests_started"] == 1
+    assert usage["responses_recorded"] == 0
+    assert usage["outcomes_unrecorded"] == 1
+
+
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
 def test_phase_receipt_keeps_unknown_enrichment_cost_visible(monkeypatch):
