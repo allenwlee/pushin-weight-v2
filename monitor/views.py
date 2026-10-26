@@ -3382,6 +3382,52 @@ def _filter_home_posts_queryset(
 # ============================================================================
 
 
+def _home_chart_sidecars(
+    window_days: int,
+    normalized_filters: dict[str, Any],
+    brand_nicknames: list[str],
+    locale: str,
+    now: datetime,
+    computed_at: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Read the headline and compatibility voice projection without chart series."""
+    from monitor.trend_narrative_projection import project_trend_narrative
+
+    selected_narrative_brands = normalized_filters.get("brands")
+    if selected_narrative_brands in (None, "__all__"):
+        selected_narrative_brands = None
+    try:
+        from pathlib import Path
+
+        from monitor.trend_narrative_demand import record_trend_narrative_demand
+        from x_monitor.config import load_config
+
+        headline_config = load_config(Path("config.yaml")).headline_narrative
+        if headline_config.demand_shaping_enabled:
+            record_trend_narrative_demand(
+                brand_keys=selected_narrative_brands or brand_nicknames,
+                window_days=window_days,
+                reason="visible",
+                config=headline_config,
+                now=now,
+            )
+    except Exception:
+        log.exception("unable to record trend narrative demand")
+    trend_narrative = project_trend_narrative(
+        window_days,
+        locale=locale,
+        selected_brand_keys=selected_narrative_brands,
+        now=now,
+        computed_at=computed_at,
+    )
+    top_voices = {
+        "window_days": window_days,
+        "computed_at": computed_at,
+        "entries": [],
+    }
+    return trend_narrative, top_voices
+
+
 def _build_home_chart_payload(
     window_days: int,
     filters: dict[str, Any],
@@ -3645,41 +3691,9 @@ def _build_home_chart_payload(
                     totals[brand] += row["count"]
 
     computed_at = pulse["computed_at"]
-    from monitor.trend_narrative_projection import project_trend_narrative
-
-    selected_narrative_brands = normalized_filters.get("brands")
-    if selected_narrative_brands in (None, "__all__"):
-        selected_narrative_brands = None
-    try:
-        from pathlib import Path
-
-        from monitor.trend_narrative_demand import record_trend_narrative_demand
-        from x_monitor.config import load_config
-
-        headline_config = load_config(Path("config.yaml")).headline_narrative
-        if headline_config.demand_shaping_enabled:
-            record_trend_narrative_demand(
-                brand_keys=selected_narrative_brands or brand_nicknames,
-                window_days=window_days,
-                reason="visible",
-                config=headline_config,
-                now=now,
-            )
-    except Exception:
-        log.exception("unable to record trend narrative demand")
-    trend_narrative = project_trend_narrative(
-        window_days,
-        locale=locale,
-        selected_brand_keys=selected_narrative_brands,
-        now=now,
-        computed_at=computed_at,
+    trend_narrative, top_voices = _home_chart_sidecars(
+        window_days, normalized_filters, brand_nicknames, locale, now, computed_at,
     )
-    top_voices = {
-        "window_days": window_days,
-        "computed_at": computed_at,
-        # Empty compatibility projection for already-open chart clients.
-        "entries": [],
-    }
     payload = {
         "days": days,
         "series": series,
@@ -4092,27 +4106,37 @@ def _each_tab_entries(locale: str) -> dict[str, list[dict[str, Any]]]:
     }
 
 
-def _each_post_type_plan(build_payload):
-    """Scope full-result planning to the complete Post Type calculation."""
+def _each_full_result_plan(build_payload):
+    """Plan every chart tab for all matching posts, not the first cursor rows."""
     @wraps(build_payload)
     def planned(brand, tab, window_days, locale, **options):
-        if tab != "post_types" or connection.vendor != "postgresql":
+        if tab == "sentiment" or connection.vendor != "postgresql":
             return build_payload(brand, tab, window_days, locale, **options)
         with transaction.atomic():
             with connection.cursor() as cursor:
                 cursor.execute("SHOW cursor_tuple_fraction")
-                previous = cursor.fetchone()[0]
+                previous_fraction = cursor.fetchone()[0]
                 cursor.execute("SELECT set_config('cursor_tuple_fraction', '1.0', true)")
+                if window_days > 1:
+                    cursor.execute("SHOW enable_nestloop")
+                    previous_nestloop = cursor.fetchone()[0]
+                    cursor.execute("SELECT set_config('enable_nestloop', 'off', true)")
             payload = build_payload(brand, tab, window_days, locale, **options)
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "SELECT set_config('cursor_tuple_fraction', %s, true)", [previous]
+                    "SELECT set_config('cursor_tuple_fraction', %s, true)",
+                    [previous_fraction],
                 )
+                if window_days > 1:
+                    cursor.execute(
+                        "SELECT set_config('enable_nestloop', %s, true)",
+                        [previous_nestloop],
+                    )
             return payload
     return planned
 
 
-@_each_post_type_plan
+@_each_full_result_plan
 def _each_chart_payload(
     brand: str, tab: str, window_days: int, locale: str,
     *, now: datetime | None = None, bucket_timezone: str = "UTC", _rank: bool = True,
@@ -4161,16 +4185,16 @@ def _each_chart_payload(
 
     rows = PostBrand.objects.filter(
         brand_id=brand, post__created_at__gte=start, post__created_at__lt=at,
-    ).order_by("post_id").values_list(
+    ).order_by().values_list(
         "post_id", "post__created_at", "post__lang_detected", "post__author_id",
-    ).iterator(chunk_size=1000) if sentiment_counts is None else iter(())
+    ).iterator(chunk_size=5000) if sentiment_counts is None else iter(())
     audience_revision = None
     if tab == "audience_topics":
         audience_revision = AudienceTopicScheme.objects.filter(
             key="ai_audience_topics/v1"
         ).values_list("revision", flat=True).first()
 
-    while batch := list(islice(rows, 1000)):
+    while batch := list(islice(rows, 5000)):
         post_ids = [row[0] for row in batch]
         assigned: dict[str, set[str]] = {post_id: set() for post_id in post_ids}
         state: dict[str, tuple[str, str, str]] = {}
@@ -4289,7 +4313,7 @@ def _each_chart_payload(
 def dashboard_each(request: HttpRequest) -> HttpResponse:
     locale = _resolve_locale(request)
     window_days = _resolve_home_window(request)
-    brands = _build_brands_context(locale)
+    brands = _build_brands_context(locale, tracked_only=True)
     brand_keys = [item["nickname"] for item in brands]
     selected = request.GET.get("brand")
     if selected not in brand_keys:
@@ -4299,14 +4323,18 @@ def dashboard_each(request: HttpRequest) -> HttpResponse:
         locale=locale, window_days=window_days, filters=filters,
         brand_nickname=selected, include_geography=True,
     )
-    home_payload = _build_home_chart_payload(
-        window_days, filters, locale=locale, brand_projection=brands,
+    summary_now = _dashboard_now()
+    pulse = _build_home_pulse_payload(
+        window_days, now=summary_now, brand_nicknames=tuple(brand_keys),
+    )
+    trend_narrative, top_voices = _home_chart_sidecars(
+        window_days, _normalize_home_filters(filters), [selected] if selected else [],
+        locale, summary_now, pulse["computed_at"],
     )
     tabs = _each_tab_entries(locale)
     selected_tab = request.GET.get("tab", "sentiment")
     if selected_tab not in tabs:
         selected_tab = next(iter(tabs), "sentiment")
-    chart = _each_chart_payload(selected, selected_tab, window_days, locale) if selected and tabs else None
     context = {
         "active_locale": locale, "is_zh_chrome": _is_zh_locale(locale),
         "is_ja_chrome": _is_ja_locale(locale), "app_name_zh": APP_DISPLAY_NAME_ZH,
@@ -4315,12 +4343,12 @@ def dashboard_each(request: HttpRequest) -> HttpResponse:
         "home_preferences_namespace": _home_preferences_namespace(request),
         "brand_nicknames_json": json.dumps(brand_keys), "applied_filters_json": json.dumps(filters),
         "country_flag_codes_json": json.dumps(sorted(COUNTRY_FLAG_CODES)),
-        "feed_now_iso": home_payload["computed_at"],
+        "feed_now_iso": pulse["computed_at"],
         "feed": {"rows": feed_rows, "next_cursor": cursor, "has_more": has_more},
-        "pulse": home_payload["pulse"], "top_voices": home_payload["top_voices"]["entries"],
-        "trend_narrative": home_payload["trend_narrative"],
+        "pulse": pulse, "top_voices": top_voices["entries"],
+        "trend_narrative": trend_narrative,
         "selected_brand": selected, "selected_tab": selected_tab,
-        "each_tabs": tabs, "each_chart_payload": chart,
+        "each_tabs": tabs,
     }
     return render(request, "monitor/dashboard_each.html", context)
 
@@ -4329,7 +4357,9 @@ def dashboard_each_chart_json(request: HttpRequest) -> JsonResponse:
     locale = _resolve_locale(request)
     brand = request.GET.get("brand", "")
     tab = request.GET.get("tab", "sentiment")
-    if brand not in {item["nickname"] for item in _build_brands_context(locale)}:
+    if brand not in {
+        item["nickname"] for item in _build_brands_context(locale, tracked_only=True)
+    }:
         return JsonResponse({"error": "invalid brand"}, status=400)
     if tab not in _each_tab_entries(locale):
         return JsonResponse({"error": "invalid tab"}, status=400)

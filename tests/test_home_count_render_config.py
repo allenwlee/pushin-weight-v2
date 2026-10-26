@@ -20,8 +20,10 @@ def test_count_maintenance_has_only_owned_database_configuration():
         "DEBUG",
         "X_MONITOR_DEPLOYMENT_ENVIRONMENT",
         "DATABASE_URL",
+        "PW_SERVING_DATABASE_ROLE",
     }
     assert environment["DATABASE_URL"]["fromDatabase"]["name"] == "pushinweight-db-shadow"
+    assert environment["PW_SERVING_DATABASE_ROLE"]["value"] == "pushinweight_web_serving"
 
 
 def test_schema_integration_does_not_provision_staging_count_maintenance():

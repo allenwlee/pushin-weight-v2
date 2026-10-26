@@ -1018,3 +1018,22 @@ def test_provider_safety_response_stops_all_scopes_and_preserves_cursor(pipeline
         with pytest.raises(CommandError):
             run(job)
         assert len(requests) == CollectionRun.objects.filter(job=job).count() == 1
+
+
+def test_backfill_provider_entities_reach_shared_post_writer(pipeline, provider_tweet_entities):
+    from core.product_verification import source_repo_evidence
+    from x_monitor.attribution import attribute_to_brands
+    body = page("99112234")
+    body["tweets"][0]["entities"] = provider_tweet_entities
+    pipeline.responses.append(body)
+    report = run(ready_job())
+    assert report["collection_drained"]
+    post = Post.objects.get(pk="99112234")
+    assert post.entities == provider_tweet_entities
+    assert source_repo_evidence(post, "Qwen/Qwen3-4B")["exact_hf_repo_link"]
+    mentions = attribute_to_brands(
+        {"tweet_id": post.pk, "created_at": post.created_at.isoformat(), "entities": post.entities},
+        brands_accounts={"1001": "qwen"}, brand_hashtags={"qwen": "qwen"},
+        compiled_keyword_index=(None, {}), search_query=[], brand_search_terms={},
+    )
+    assert {(m.brand_id, m.source) for m in mentions} == {("qwen", "user_mention"), ("qwen", "hashtag")}
