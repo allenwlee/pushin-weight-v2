@@ -301,11 +301,26 @@ def _envelopes(result, group):
     ]
 
 
+def _accepted_request(result):
+    """The accepted response, excluding failed retries and rejected payloads."""
+    from core.models import CollectionRequest
+
+    if result.outcome not in {"ok", "partial_expansion"}:
+        return None
+    for attempt in reversed(result.attempts):
+        if attempt.get("outcome") == "ok" and attempt.get("collection_request_id"):
+            return CollectionRequest.objects.get(pk=attempt["collection_request_id"])
+    return None
+
+
 @transaction.atomic
 def _persist_page(ns, result, rules):
+    from core.collection_capture import link_request
+
     ns.envelopes += _envelopes(result, "listing")
     ns.raw_count += len(result.payload)
-    for item in result.payload:
+    request = _accepted_request(result)
+    for ordinal, item in enumerate(result.payload):
         repo = item.get("id") or item["modelId"]
         observation, _ = ns.observations.get_or_create(
             resource_key=repo.casefold(),
@@ -322,6 +337,8 @@ def _persist_page(ns, result, rules):
         observation.listing = item
         observation.save(update_fields=["listing", "updated_at"])
         persist_product(observation, ns.ownership, rules, item, "listing")
+        if request is not None:
+            link_request(observation, request, role="listing", row_locator=str(ordinal))
     if result.next_cursor and result.next_cursor in ns.cursor_history:
         ns.outcome = "repeated_cursor"
     elif result.next_cursor and not result.payload:
@@ -341,6 +358,8 @@ def _save_scope(ns, claim, **kwargs):
 
 
 def _enrich(ns, hf, rules, visited, max_models, attempted, claim):
+    from core.collection_capture import link_request
+
     for observation in (
         ns.observations.exclude(processing_outcome__in=["owner_conflict", "complete"])
         .select_related("run__job")
@@ -373,6 +392,9 @@ def _enrich(ns, hf, rules, visited, max_models, attempted, claim):
                     persist_product(
                         observation, ns.ownership, rules, result.payload, group
                     )
+                    request = _accepted_request(result)
+                    if request is not None:
+                        link_request(observation, request, role=group)
                 if observation.processing_outcome not in {
                     "owner_conflict",
                     "projection_error",

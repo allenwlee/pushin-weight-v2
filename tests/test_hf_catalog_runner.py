@@ -7,6 +7,7 @@ from core.hf_metadata_client import HFMetadataClient
 from core.models import (
     Brand,
     BrandCompany,
+    CollectionObservationInput,
     CollectionRequest,
     CollectionRun,
     Company,
@@ -75,6 +76,9 @@ def test_full_walk_enrichment_refresh_identity_and_ambiguous_brand():
     assert requests.count() == saved.attempts.get().actual_requests == 6
     assert requests.filter(transport_outcome="received", archive__isnull=False).count() == 6
     assert not requests.exclude(scope_run__run=saved).exists()
+    assert CollectionObservationInput.objects.filter(
+        observation__run=saved, input_request__in=requests,
+    ).count() == 6
     assert saved.selected_count == saved.success_count == 2
     assert Product.objects.filter(brand__isnull=True).count() == 2
     identities = list(Product.objects.values_list("id", "repo_id"))
