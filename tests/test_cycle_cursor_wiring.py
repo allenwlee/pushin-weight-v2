@@ -19,6 +19,8 @@ a successful sweep (KTD5) while a failure must not advance.
 
 from __future__ import annotations
 
+import json
+from copy import deepcopy
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
@@ -44,7 +46,25 @@ def _planned(call_id: str = "B1", brand_id: str = "minimax") -> PlannedCall:
     )
 
 
-class FakeApi:
+class CapturingApi:
+    """Model the real client's exchange hooks for scheduled source evidence."""
+
+    base_url = "https://api.twitterapi.io"
+    max_retries = 2
+    on_exchange_start = None
+    on_exchange_finish = None
+
+    def capture(self, items, kwargs):
+        if self.on_exchange_start is None:
+            return
+        request = self.on_exchange_start("/twitter/tweet/advanced_search", kwargs)
+        self.on_exchange_finish(request, {
+            "outcome": "received", "status_code": 200,
+            "body": json.dumps({"tweets": items}).encode(),
+        })
+
+
+class FakeApi(CapturingApi):
     """Records the window each call received; returns scripted results."""
 
     def __init__(self, results=None, raise_exc=None):
@@ -57,7 +77,9 @@ class FakeApi:
         self.calls.append({"query": query, **kwargs})
         if self._raise is not None:
             raise self._raise
-        return list(self._results), False  # (items, truncated)
+        items = deepcopy(self._results)
+        self.capture(items, kwargs)
+        return items, False  # (items, truncated)
 
 
 def _tweet(tid: str = "1", handle: str | None = None):
@@ -542,7 +564,7 @@ def test_truncated_window_transfers_residual_then_advances_cursor(wired, monkeyp
     Brand.objects.get_or_create(nickname="deepseek")
     call = _planned()
 
-    class TruncatingApi:
+    class TruncatingApi(CapturingApi):
         def __init__(self):
             self.calls = []
 
@@ -551,7 +573,7 @@ def test_truncated_window_transfers_residual_then_advances_cursor(wired, monkeyp
             n = min(int(kwargs.get("max_results") or 50), 5)
             until = int(kwargs.get("until_time") or 0)
             base = until - 3600 if until else 1_753_430_400
-            return [
+            items = [
                 {
                     **_tweet(f"id-{until}-{i}"),
                     "text": "DeepSeek does things",
@@ -559,7 +581,9 @@ def test_truncated_window_transfers_residual_then_advances_cursor(wired, monkeyp
                     "created_at_epoch": base - i,
                 }
                 for i in range(n)
-            ], True
+            ]
+            self.capture(items, kwargs)
+            return items, True
 
     api = TruncatingApi()
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [call])
@@ -594,7 +618,7 @@ def test_truncated_window_still_persists_attributable_items(wired, monkeypatch):
     Brand.objects.get_or_create(nickname="deepseek")
     call = _planned()
 
-    class TruncatingApi:
+    class TruncatingApi(CapturingApi):
         def __init__(self):
             self.calls = []
 
@@ -605,7 +629,7 @@ def test_truncated_window_still_persists_attributable_items(wired, monkeypatch):
             # truncated so the call stays status=truncated after budget.
             until = int(kwargs.get("until_time") or 1_753_434_000)
             n = 5
-            return [
+            items = [
                 {
                     **_tweet(f"keep-{until}-{i}"),
                     "text": "DeepSeek just shipped a new model",
@@ -613,7 +637,9 @@ def test_truncated_window_still_persists_attributable_items(wired, monkeypatch):
                     "created_at_epoch": until - 10 - i,
                 }
                 for i in range(n)
-            ], True
+            ]
+            self.capture(items, kwargs)
+            return items, True
 
     api = TruncatingApi()
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [call])
@@ -644,10 +670,11 @@ def test_c1_uses_shared_config_ceiling(wired, monkeypatch):
     call = _planned(call_id="C1", brand_id="mimo")
     seen = {}
 
-    class CaptureApi:
+    class CaptureApi(CapturingApi):
         def run_search(self, query, **kwargs):
             seen["max_results"] = kwargs.get("max_results")
             seen["max_pages"] = kwargs.get("max_pages")
+            self.capture([], kwargs)
             return [], False
 
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [call])
@@ -679,12 +706,13 @@ def test_truncated_empty_result_transfers_full_interval(wired, monkeypatch):
 
     call = _planned()
 
-    class TruncatedEmpty:
+    class TruncatedEmpty(CapturingApi):
         def __init__(self):
             self.calls = []
 
         def run_search(self, query, **kwargs):
             self.calls.append({"query": query, **kwargs})
+            self.capture([], kwargs)
             return [], True  # 0 items, truncated=True
 
     api = TruncatedEmpty()
@@ -718,13 +746,15 @@ def test_non_truncated_full_cap_advances_cursor(wired, monkeypatch):
     Brand.objects.get_or_create(nickname="deepseek")
     call = _planned()
 
-    class CappedButExhausted:
+    class CappedButExhausted(CapturingApi):
         def run_search(self, query, **kwargs):
-            return [
+            items = [
                 {**_tweet(f"x-{i}"), "text": "DeepSeek does things",
                  "created_at": "Sat Jul 25 12:00:00 +0000 2026"}
                 for i in range(50)
-            ], False  # 50 items, truncated=False (window exhausted)
+            ]
+            self.capture(items, kwargs)
+            return items, False  # 50 items, truncated=False (window exhausted)
 
     api = CappedButExhausted()
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [call])

@@ -5312,7 +5312,8 @@ class CycleRunner:
             limits = {
                 "requests": sum(
                     min(call.max_pages or self.cfg.search.max_pages,
-                        self.cfg.search.max_pages) * (api.max_retries + 1)
+                        self.cfg.search.max_pages)
+                    * (int(getattr(api, "max_retries", 2)) + 1)
                     for call in lineage_calls
                 ),
                 "bytes": 32 * 1024 * 1024,
@@ -5323,16 +5324,17 @@ class CycleRunner:
                     for call in lineage_calls
                 ),
             }
-            try:
-                self._scheduled_lineage = ScheduledCycleLineage.start(
-                    lineage_calls, limits=limits, invocation_id=run_id,
-                )
-            except Exception as exc:
-                logger.exception("scheduled collection lineage could not start")
-                summary["status"] = "aborted"
-                summary["degraded"]["scheduled_lineage"] = type(exc).__name__
-                self._errors.append(f"scheduled_lineage_start:{type(exc).__name__}")
-                return self._finish_summary(summary, started_monotonic=t0)
+            if lineage_calls:
+                try:
+                    self._scheduled_lineage = ScheduledCycleLineage.start(
+                        lineage_calls, limits=limits, invocation_id=run_id,
+                    )
+                except Exception as exc:
+                    logger.exception("scheduled collection lineage could not start")
+                    summary["status"] = "aborted"
+                    summary["degraded"]["scheduled_lineage"] = type(exc).__name__
+                    self._errors.append(f"scheduled_lineage_start:{type(exc).__name__}")
+                    return self._finish_summary(summary, started_monotonic=t0)
 
         if self._backfill_context is not None:
             context = self._backfill_context
