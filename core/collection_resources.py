@@ -220,6 +220,31 @@ def observation_fact_values(observation):
         values["coordinate_key"] = (
             coordinate if isinstance(coordinate, str) else digest(coordinate)
         )
+    # During additive rollout an absent old key is not a deletion instruction.
+    # Present keys, including explicit unknowns, keep their existing semantics.
+    metadata_keys = {
+        "projection_kind": ("projection_kind",),
+        "definition_sha256": ("definitions_sha256",),
+        "mapping_sha256": ("publisher_mapping_hash",),
+        "provider_revision": ("immutable_revision", "revision"),
+        "period_status": ("period_status",),
+        "row_semantic_digest": ("row_semantic_hash",),
+        "historical_visibility_proven": ("historical_public_visibility_proven",),
+        "history_reconstructed": ("history_basis",),
+        "secondary_source": ("secondary_source",),
+        "publication_complete": ("publication_complete",),
+        "reconstruction_date": ("reconstruction_date",),
+    }
+    for field, keys in metadata_keys.items():
+        if not any(key in metadata for key in keys):
+            values.pop(field, None)
+    for field, key in (
+        ("observation_kind", "kind"), ("config_key", "config"), ("category_key", "category"),
+    ):
+        if key not in dimensions:
+            values.pop(field, None)
+    if not artifact_sha256 and not observation.listing and observation.payload_sha256:
+        values.pop("payload_sha256", None)
     return values
 
 
