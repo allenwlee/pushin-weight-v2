@@ -367,6 +367,10 @@ def project_observation_facts(observation):
     for field, value in values.items():
         setattr(observation, field, value)
     observation.save(update_fields=list(values))
+    if observation.run.job.source_id == "hf" and observation.run.job.purpose == "catalog":
+        from core.collection_numeric_selection import adopt_numeric_selection
+
+        adopt_numeric_selection(observation)
     return snapshot_resource(observation)
 
 
@@ -476,10 +480,9 @@ def attach_numeric_evidence(
                 and definition.metric_key not in {"likes", "followers"}
             ):
                 continue
-            selected_fields = (
-                observation_object_documents(origin)[2].get("numeric_fields")
-                if origin else None
-            )
+            from core.collection_numeric_selection import numeric_fields
+
+            selected_fields = numeric_fields(origin) if origin else None
             if (
                 selected_fields is not None
                 and definition.definition_metadata.get("wire_field")

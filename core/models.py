@@ -9065,6 +9065,7 @@ class CollectionRun(models.Model):
 
 
 class CollectionObservation(models.Model):
+    numeric_fields_explicit = models.BooleanField(null=True)
     receipt_ordinal = models.PositiveIntegerField(null=True)
     source_identifier_is_null = models.BooleanField(null=True)
     source_dataset = models.ForeignKey(SourceDataset, null=True, on_delete=models.PROTECT)
@@ -9243,6 +9244,19 @@ class CollectionObservation(models.Model):
                 name="ck_observation_publication",
             ),
         ]
+
+
+class CollectionObservationMetricSelection(models.Model):
+    """A catalog capture selected this exact metric definition before projection."""
+
+    pk = models.CompositePrimaryKey("observation", "source_metric")
+    observation = models.ForeignKey(
+        CollectionObservation, on_delete=models.PROTECT, related_name="numeric_selections",
+    )
+    source_metric = models.ForeignKey(SourceMetric, on_delete=models.PROTECT)
+
+    class Meta:
+        db_table = "collection_observation_metric_selections"
 
 
 class MetricValue(models.Model):

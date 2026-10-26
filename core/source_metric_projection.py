@@ -301,6 +301,7 @@ def _publisher(contract, source, identifier):
 
 
 def _evidence_documents(evidence):
+    from core.collection_numeric_selection import numeric_fields
     from core.github_resource_evidence import asset_documents
 
     if evidence.observation_kind == "release_asset":
@@ -308,6 +309,14 @@ def _evidence_documents(evidence):
     documents = observation_object_documents(evidence)
     if documents[1].get("kind") == "release_asset":
         return asset_documents(evidence, legacy_documents=documents)
+    if evidence.run.job.source_id == "hf":
+        fields = numeric_fields(evidence, legacy_metadata=documents[2])
+        metadata = {**documents[2]}
+        if fields is None:
+            metadata.pop("numeric_fields", None)
+        else:
+            metadata["numeric_fields"] = fields
+        return documents[0], documents[1], metadata
     return documents
 
 
@@ -696,7 +705,7 @@ def _project_evidence(
     enforce_source_collection(contract, source)
     selected = list(
         CollectionObservation.objects.select_related("run", "source_dataset", "legacy_archive")
-        .prefetch_related("run__job")
+        .prefetch_related("run__job__numeric_contract", "numeric_selections")
         .filter(pk__in=evidence_ids)
         .order_by("pk")
     )
@@ -945,15 +954,19 @@ def replay_saved_evidence(job_id):
         selected = selected.filter(observation_kind="publication_row")
     ids, consumed, complete = [], 0, True
     last_processed = cursor
-    evidence_rows = selected.select_related("legacy_archive").only(
-        "id", "listing", "source_metadata", "dimensions",
+    evidence_rows = selected.select_related("legacy_archive").prefetch_related(
+        "run__job__numeric_contract", "numeric_selections",
+    ).only(
+        "id", "listing", "source_metadata", "dimensions", "run_id", "numeric_fields_explicit",
         "legacy_archive__body", "legacy_archive__content_sha256",
     ).iterator(chunk_size=100)
     for evidence in evidence_rows:
         if monotonic() >= deadline:
             complete = False
             break
-        if job.source_id == "hf" and observation_object_documents(evidence)[2].get("numeric_fields") == []:
+        from core.collection_numeric_selection import numeric_fields
+
+        if job.source_id == "hf" and numeric_fields(evidence) == []:
             last_processed = evidence.pk
             continue
         size = _evidence_bytes(evidence)

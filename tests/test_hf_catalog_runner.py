@@ -320,6 +320,8 @@ def test_lock_contention_sends_no_http_or_writes():
 
 
 def test_failed_detail_does_not_hide_terminal_listing_or_erase_product():
+    from core.collection_groups import observation_group_outcomes
+
     def fail_detail(request):
         if request.url.params.get("blobs"):
             return httpx.Response(403)
@@ -328,7 +330,8 @@ def test_failed_detail_does_not_hide_terminal_listing_or_erase_product():
     assert result["enumeration_complete"] and not result["enrichment_complete"]
     assert Product.objects.count() == 2
     run = CollectionRun.objects.get()
-    assert run.scopes.get(scope_kind="namespace").observations.first().groups == {
+    listing = run.scopes.get(scope_kind="namespace").observations.first()
+    assert observation_group_outcomes(listing) == {
         "listing": "ok",
         "detail": "forbidden",
         "expanded": "ok",

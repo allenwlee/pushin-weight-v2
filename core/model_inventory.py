@@ -535,6 +535,7 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                 # first detail/expanded response actually supplying it, never an
                 # old listing clock or a duplicate complete model-number set.
                 from core.collection_capture import observation_object_documents
+                from core.collection_numeric_selection import numeric_fields
 
                 supplied = set(observation_object_documents(listing)[0])
                 prior = CollectionObservation.objects.filter(
@@ -544,7 +545,7 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                 ).exclude(pk=observation.pk)
                 for captured in prior:
                     supplied.update(
-                        observation_object_documents(captured)[2].get("numeric_fields", [])
+                        numeric_fields(captured) or []
                     )
                 selected_metrics = (
                     contract.source_configuration["hf"]["metrics"] if contract else []
