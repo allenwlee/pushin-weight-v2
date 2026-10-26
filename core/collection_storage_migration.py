@@ -956,6 +956,8 @@ def project_x_query_targets_batch(
                 from core.collection_state import x_scope_ownership
 
                 x_scope_ownership(scope)
+                if scope.job_target.target_role != scope.scope_key:
+                    raise ValueError("scheduled X scope target role differs from scope key")
                 continue
             query, call_id, start, end = x_query_instruction(scope.ownership)
             key = (scope.run.job_id, scope.scope_key)
