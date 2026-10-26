@@ -138,7 +138,8 @@ def forecast_inputs(
             )
     selected = list(
         values.select_related(
-            "observation__run__job", "observation__mapping", "source_metric"
+            "observation__run__job", "observation__mapping", "source_metric",
+            "observation__source_dataset",
         )
         .defer("observation__run__raw_payload", "observation__run__job__definition")
         .order_by("id")[: limit + 1]
@@ -195,7 +196,9 @@ def forecast_inputs(
                 },
             }
         )
-        datasets.add((run.job.source_id, metadata.get("dataset_id")))
+        from core.collection_datasets import observation_dataset_code
+
+        datasets.add((run.job.source_id, observation_dataset_code(observation)))
     enforce_use(
         contract,
         {

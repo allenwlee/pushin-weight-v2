@@ -584,7 +584,7 @@ def _project_evidence(
 
     enforce_source_collection(contract, source)
     selected = list(
-        CollectionObservation.objects.select_related("run")
+        CollectionObservation.objects.select_related("run", "source_dataset")
         .prefetch_related("run__job")
         .filter(pk__in=evidence_ids)
         .order_by("pk")
@@ -603,11 +603,9 @@ def _project_evidence(
             "projection time budget exceeded",
         )
         try:
-            dataset = evidence.source_metadata.get(
-                "dataset_id"
-            ) or evidence.source_metadata.get("publication_provenance", {}).get(
-                "dataset_id"
-            )
+            from core.collection_datasets import observation_dataset_code
+
+            dataset = observation_dataset_code(evidence)
             if dataset:
                 enforce_source_collection(contract, source, dataset=dataset)
             rows = list(evidence_rows(contract, source, evidence))

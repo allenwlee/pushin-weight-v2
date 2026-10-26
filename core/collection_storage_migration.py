@@ -51,6 +51,13 @@ class ProvenanceBatch:
 
 
 @dataclass(frozen=True)
+class DatasetBatch:
+    last_id: UUID | int | None
+    scanned: int
+    updated: int
+
+
+@dataclass(frozen=True)
 class PublicationBatch:
     last_id: UUID | None
     scanned: int
@@ -444,6 +451,88 @@ def project_scope_cursors_batch(
             )
         CollectionScopeCursorReceipt.objects.bulk_create(missing, batch_size=500)
         return ProvenanceBatch(scopes[-1].pk if scopes else after_id, len(scopes), updated)
+
+
+def project_source_datasets_batch(
+    owner_kind: str, *, after_id=None, batch_size: int = 200, verify_only: bool = False,
+) -> DatasetBatch:
+    """Preserve each declared dataset at its run, scope or observation owner."""
+    from core.collection_capture import read_document
+    from core.collection_datasets import dataset_code
+    from core.models import SourceDataset
+
+    owners = {
+        "run": (CollectionRun, "source_metadata", "job"),
+        "scope": (CollectionScopeRun, "ownership", "run__job"),
+        "observation": (CollectionObservation, "source_metadata", "run__job"),
+    }
+    if owner_kind not in owners:
+        raise ValueError("unsupported dataset owner")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    if after_id is not None and not (
+        isinstance(after_id, UUID) if owner_kind == "run"
+        else type(after_id) is int and after_id >= 0
+    ):
+        raise ValueError("invalid dataset owner cursor")
+    model, metadata_field, job_path = owners[owner_kind]
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        query = model.objects.select_related(job_path)
+        fields = ["pk", "source_dataset", metadata_field, job_path + "__source_id"]
+        query = query.filter(pk__gt=after_id or (UUID(int=0) if owner_kind == "run" else 0))
+        if owner_kind != "run":
+            query = query.filter(
+                Q(**{metadata_field + "__has_key": "dataset_id"})
+                | Q(**{metadata_field + "__publication_provenance__has_key": "dataset_id"})
+            )
+        else:
+            query = query.select_related("source_metadata_archive")
+            fields += ["source_metadata_archive__body", "source_metadata_archive__content_sha256"]
+        query = query.only(*fields)
+        if owner_kind != "run":
+            # Match live writers' run-before-scope/observation lock order.
+            parents = dict(query.order_by("pk").values_list("pk", "run_id")[:batch_size])
+            list(CollectionRun.objects.select_for_update().filter(
+                pk__in=set(parents.values()),
+            ).order_by("pk").values_list("pk", flat=True))
+            query = query.filter(pk__in=parents)
+        rows = list(query.select_for_update(of=("self",)).order_by("pk")[:batch_size])
+        datasets, changed = {}, []
+        for owner in rows:
+            if owner_kind != "run" and owner.run_id != parents[owner.pk]:
+                raise ValueError("dataset owner moved while acquiring its run lock")
+            metadata = getattr(owner, metadata_field)
+            code = dataset_code(metadata)
+            if owner_kind == "run" and owner.source_metadata_archive_id:
+                archived_code = dataset_code(read_document(owner.source_metadata_archive))
+                if code is not None and archived_code is not None and code != archived_code:
+                    raise ValueError("run dataset differs from its retained source metadata")
+                code = code or archived_code
+            if code is None:
+                continue
+            source_id = owner.job.source_id if owner_kind == "run" else owner.run.job.source_id
+            key = (source_id, code)
+            if key not in datasets:
+                dataset = SourceDataset.objects.filter(source_id=source_id, code=code).first()
+                if dataset is None:
+                    if verify_only:
+                        raise ValueError("source dataset identity is not projected")
+                    dataset, _ = SourceDataset.objects.get_or_create(source_id=source_id, code=code)
+                datasets[key] = dataset
+            dataset = datasets[key]
+            if owner.source_dataset_id == dataset.pk:
+                continue
+            if owner.source_dataset_id is not None:
+                raise ValueError("typed dataset differs from legacy owner")
+            if verify_only:
+                raise ValueError("source dataset owner is not projected")
+            owner.source_dataset = dataset
+            changed.append(owner)
+        model.objects.bulk_update(changed, ["source_dataset"], batch_size=500)
+        return DatasetBatch(rows[-1].pk if rows else after_id, len(rows), len(changed))
 
 
 def _archived_invocation_values(receipt):

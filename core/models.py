@@ -3588,6 +3588,7 @@ class CollectionScopeRun(models.Model):
     )
     scope_kind = models.CharField(max_length=32, default="namespace")
     scope_key = models.CharField(max_length=256)
+    source_dataset = models.ForeignKey("SourceDataset", null=True, on_delete=models.PROTECT)
     job_target = models.ForeignKey("CollectionJobTarget", null=True, on_delete=models.PROTECT, related_name="scopes")
     projection_contract = models.ForeignKey("MetricCollectionContract", null=True, on_delete=models.PROTECT, related_name="projection_scopes")
     parent_scope = models.ForeignKey("self", null=True, on_delete=models.PROTECT, related_name="child_scopes")
@@ -8443,6 +8444,20 @@ class DataSource(models.Model):
         ]
 
 
+class SourceDataset(models.Model):
+    """A feed/archive qualified by measurement source, not publisher or host."""
+
+    source = models.ForeignKey(DataSource, on_delete=models.PROTECT, related_name="datasets")
+    code = models.CharField(max_length=256)
+
+    class Meta:
+        db_table = "source_datasets"
+        constraints = [
+            models.UniqueConstraint(fields=["source", "code"], name="uq_source_dataset_code"),
+            models.CheckConstraint(condition=~models.Q(code=""), name="ck_source_dataset_code"),
+        ]
+
+
 class TaxonomyVersion(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     version_hash = models.CharField(max_length=64, unique=True)
@@ -8928,6 +8943,7 @@ class CollectionJob(models.Model):
 
 
 class CollectionRun(models.Model):
+    source_dataset = models.ForeignKey(SourceDataset, null=True, on_delete=models.PROTECT)
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     batch_id = models.UUIDField(default=uuid.uuid4)
     job = models.ForeignKey(CollectionJob, on_delete=models.PROTECT, related_name="runs")
@@ -9022,6 +9038,7 @@ class CollectionRun(models.Model):
 
 
 class CollectionObservation(models.Model):
+    source_dataset = models.ForeignKey(SourceDataset, null=True, on_delete=models.PROTECT)
     input_set_sha256 = models.CharField(max_length=64, null=True)
     observation_kind = models.CharField(max_length=32, null=True)
     projection_kind = models.CharField(max_length=64, null=True)

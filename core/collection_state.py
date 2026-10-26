@@ -713,6 +713,9 @@ def checkpoint_scope(
         "invalid raw count",
     )
     with fenced_run(claim) as (_, run):
+        from core.collection_datasets import resolve_dataset
+
+        dataset = resolve_dataset(run.job.source_id, ownership)
         target = None
         if scope_kind == "product_match":
             from core.collection_matching import ensure_product_match_target
@@ -734,6 +737,9 @@ def checkpoint_scope(
             },
         )
         require(created or scope.ownership == ownership, "scope ownership pin changed")
+        if dataset is not None:
+            require(scope.source_dataset_id in (None, dataset.pk), "scope dataset pin changed")
+            scope.source_dataset = dataset
         require(
             created or scope.job_target_id in (None, target.pk if target else None),
             "scope target pin changed",
@@ -772,6 +778,10 @@ def checkpoint_scope(
         )
         if write is not None:
             write(run, scope)
+        if scope.source_dataset_id is not None:
+            scope.observations.filter(
+                pk__gt=last_observation, source_dataset__isnull=True,
+            ).update(source_dataset=scope.source_dataset)
         if envelopes is not None:
             record_scope_request_uses(scope, envelopes)
         if envelopes or scope.requests.exists():

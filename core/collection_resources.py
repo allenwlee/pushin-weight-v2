@@ -224,7 +224,14 @@ def observation_fact_values(observation):
 
 
 def project_observation_facts(observation):
+    from core.collection_datasets import resolve_dataset
+
     values = observation_fact_values(observation)
+    dataset = resolve_dataset(observation.run.job.source_id, observation.source_metadata)
+    if dataset is not None:
+        if observation.source_dataset_id not in (None, dataset.pk):
+            raise ValueError("observation dataset identity changed")
+        values["source_dataset"] = dataset
     inputs = list(
         observation.inputs.order_by(
             "input_role",
@@ -288,6 +295,9 @@ def attach_numeric_evidence(
         )
     )
     inputs, gaps, changed, fields = [], [], [], set()
+    from core.collection_datasets import resolve_dataset
+
+    dataset_cache = {}
     for observation, (data, values) in pairs:
         metadata = data["source_metadata"]
         origin_id = metadata.get("origin_observation_id")
@@ -314,6 +324,11 @@ def attach_numeric_evidence(
             ).delete()
             continue
         facts = observation_fact_values(observation)
+        dataset = resolve_dataset(run.job.source_id, metadata, cache=dataset_cache)
+        if dataset is not None:
+            if observation.source_dataset_id not in (None, dataset.pk):
+                raise ValueError("observation dataset identity changed")
+            facts["source_dataset"] = dataset
         if origin:
             facts["payload_sha256"] = (
                 metadata.get("source_payload_sha256") or origin.payload_sha256

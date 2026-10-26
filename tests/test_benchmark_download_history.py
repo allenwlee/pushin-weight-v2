@@ -50,8 +50,13 @@ def test_history_replay_keeps_snapshot_dates_separate_from_import_time():
     contract = configured()
     data = manifest(contract)
     run = import_history(data, apply=True)
+    assert run.source_dataset.source_id == "hf"
+    assert run.source_dataset.code == "cfahlgren1/hub-stats"
     assert import_history(copy.deepcopy(data), apply=True).pk == run.pk
     assert run.observations.count() == 2
+    assert set(run.observations.values_list("source_dataset_id", flat=True)) == {
+        run.source_dataset_id,
+    }
     assert {
         o.source_metadata["archive_snapshot_date"] for o in run.observations.all()
     } == {"2026-09-10", "2026-09-11"}
@@ -112,6 +117,8 @@ def test_arena_history_keeps_publication_when_selected_cohort_is_empty():
         snapshot.update(payload=payload, raw_artifact_sha256=digest(payload))
     run = import_history(data, apply=True)
     assert run.status == "partial"
+    assert run.source_dataset.source_id == "arena"
+    assert run.source_dataset.code == "lmarena-ai/leaderboard-dataset"
     from core.collection_capture import read_document
 
     assert run.raw_payload is None

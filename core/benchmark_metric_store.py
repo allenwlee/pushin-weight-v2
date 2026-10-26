@@ -770,6 +770,7 @@ def record_arena_publications(run, dates):
                 "published_date": published_date,
                 "publication_precision": "date",
                 "observation_kind": "publication_marker",
+                "source_dataset": run.source_dataset,
                 "publication_complete": True,
                 "dimensions": {"kind": "publication_marker"},
                 "source_metadata": {"publication_complete": True},
@@ -971,6 +972,9 @@ def persist_source(
             safe_payload(source_metadata or {})
             require(isinstance(source_metadata or {}, dict), "source metadata must be an object")
             source_details = dict(source_metadata or {})
+            from core.collection_datasets import resolve_dataset
+
+            run.source_dataset = resolve_dataset(source, source_details)
             raw_hash = digest(payload)
             require(
                 len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
