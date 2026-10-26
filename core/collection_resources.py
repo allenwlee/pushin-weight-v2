@@ -189,7 +189,7 @@ def _snapshot_publisher(observation, raw, metadata):
 
 
 def observation_fact_values(observation):
-    metadata, dimensions = observation.source_metadata, observation.dimensions
+    listing, dimensions, metadata = observation_object_documents(observation)
     artifact_sha256 = metadata.get("raw_artifact_sha256")
     if artifact_sha256 is not None and not (
         isinstance(artifact_sha256, str)
@@ -215,7 +215,7 @@ def observation_fact_values(observation):
         "category_key": dimensions.get("category"),
         "provider_revision": metadata.get("immutable_revision") or metadata.get("revision"),
         "period_status": metadata.get("period_status"),
-        "payload_sha256": artifact_sha256 or digest(observation.listing),
+        "payload_sha256": artifact_sha256 or digest(listing),
         "row_semantic_digest": bytes.fromhex(row_semantic_hash) if row_semantic_hash else None,
         "historical_visibility_proven": metadata.get(
             "historical_public_visibility_proven"
@@ -279,15 +279,14 @@ def observation_fact_values(observation):
     ):
         if key not in dimensions:
             values.pop(field, None)
-    if not artifact_sha256 and not observation.listing and observation.payload_sha256:
+    if not artifact_sha256 and not listing and observation.payload_sha256:
         values.pop("payload_sha256", None)
-    _publication_fact_values(observation, values)
+    _publication_fact_values(observation, values, metadata, dimensions)
     return values
 
 
-def _publication_fact_values(observation, values):
+def _publication_fact_values(observation, values, metadata, dimensions):
     """Keep publication coordinates distinct from publication/collection clocks."""
-    metadata, dimensions = observation.source_metadata, observation.dimensions
 
     def merge(field, value):
         previous = values.get(field)
@@ -324,14 +323,14 @@ def _publication_fact_values(observation, values):
 
 def publication_coordinate_values(observation):
     """Project publication identity without loading resource bodies or timing history."""
-    metadata, dimensions = observation.source_metadata, observation.dimensions
+    _, dimensions, metadata = observation_object_documents(observation)
     values = {}
     for key, field in (("config", "config_key"), ("category", "category_key")):
         if key in dimensions:
             values[field] = dimensions[key]
     if "immutable_revision" in metadata or "revision" in metadata:
         values["provider_revision"] = metadata.get("immutable_revision") or metadata.get("revision")
-    _publication_fact_values(observation, values)
+    _publication_fact_values(observation, values, metadata, dimensions)
     return values
 
 
@@ -339,7 +338,9 @@ def project_observation_facts(observation):
     from core.collection_datasets import resolve_dataset
 
     values = observation_fact_values(observation)
-    dataset = resolve_dataset(observation.run.job.source_id, observation.source_metadata)
+    dataset = resolve_dataset(
+        observation.run.job.source_id, observation_object_documents(observation)[2]
+    )
     if dataset is not None:
         if observation.source_dataset_id not in (None, dataset.pk):
             raise ValueError("observation dataset identity changed")

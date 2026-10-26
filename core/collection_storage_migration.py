@@ -563,15 +563,17 @@ def project_publication_coordinates_batch(
         query = CollectionObservation.objects.filter(pk__gt=after_id).filter(
             Q(dimensions__has_any_keys=["date", "period", "revision", "config", "category"])
             | Q(source_metadata__has_any_keys=["revision", "immutable_revision", "numeric_snapshot_identity", "snapshot_identity"])
+            | Q(legacy_archive__isnull=False)
         )
         owners = dict(query.order_by("pk").values_list("pk", "run_id")[:batch_size])
         if not verify_only:
             list(CollectionRun.objects.select_for_update().filter(
                 pk__in=set(owners.values()),
             ).order_by("pk").values_list("pk", flat=True))
-        query = query.filter(pk__in=owners).select_related("run__job").only(
+        query = query.filter(pk__in=owners).select_related("run__job", "legacy_archive").only(
             "pk", "run_id", "run__job_id", "run__job__source_id",
             "source_identifier", "source_metadata", "dimensions",
+            "legacy_archive__body", "legacy_archive__content_sha256",
             "provider_revision", "config_key", "category_key", "source_record_date",
         )
         if not verify_only:

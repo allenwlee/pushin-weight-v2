@@ -2,7 +2,11 @@
 
 import pytest
 
-from core.collection_resources import observation_fact_values, project_observation_facts
+from core.collection_resources import (
+    observation_fact_values,
+    project_observation_facts,
+    publication_coordinate_values,
+)
 from core.models import CollectionObservation
 from tests.test_collection_relational_storage import execution
 
@@ -57,6 +61,40 @@ def test_replaying_typed_observation_does_not_erase_facts_when_old_json_is_absen
     project_observation_facts(observation)
     assert observation.config_key is None
     assert observation.provider_revision == "original-revision"
+
+
+def test_archived_publication_coordinates_survive_cleared_observation_documents():
+    from datetime import date
+
+    from core.collection_capture import archive_legacy
+    from core.collection_storage_migration import project_publication_coordinates_batch
+
+    observation = publication_observation(
+        metadata={"revision": "r1"},
+        dimensions={"kind": "publication_row", "date": "2026-09-03", "config": "daily"},
+    )
+    observation.listing = {"id": "vendor/model"}
+    observation.save(update_fields=["listing"])
+    facts = observation_fact_values(observation)
+    coordinates = publication_coordinate_values(observation)
+    observation.legacy_archive = archive_legacy({
+        "listing": observation.listing,
+        "dimensions": observation.dimensions,
+        "source_metadata": observation.source_metadata,
+    })
+    observation.listing, observation.dimensions, observation.source_metadata = {}, {}, {}
+    observation.save(update_fields=[
+        "legacy_archive", "listing", "dimensions", "source_metadata",
+    ])
+    assert observation_fact_values(observation) == facts
+    assert publication_coordinate_values(observation) == coordinates
+    with pytest.raises(ValueError, match="publication coordinate is not projected"):
+        project_publication_coordinates_batch(verify_only=True)
+    assert project_publication_coordinates_batch().updated == 1
+    project_observation_facts(observation)
+    assert observation.provider_revision == "r1"
+    assert observation.config_key == "daily"
+    assert observation.source_record_date == date(2026, 9, 3)
 
 
 def test_hf_commit_projection_repairs_only_missing_revision_and_refuses_conflicts():
