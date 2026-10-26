@@ -389,7 +389,6 @@ def test_archive_acquisition_to_numeric_writer_keeps_zero_and_missing_distinct()
     import pyarrow.parquet as pq
 
     from core.benchmark_metric_identity import configure_collection
-    from core.collection_capture import archive_legacy
     from core.model_history_collection import acquire_hf_archives
     from core.models import CollectionObservation
     from scripts.benchmark_download_collector.sources import Budget
@@ -471,16 +470,12 @@ def test_archive_acquisition_to_numeric_writer_keeps_zero_and_missing_distinct()
     saved = CollectionObservation.objects.get(
         run_id=claim.run_id, scope_run__scope_kind="archive_snapshot"
     )
-    saved.legacy_archive = archive_legacy({
-        "listing": saved.listing,
-        "dimensions": saved.dimensions,
-        "source_metadata": saved.source_metadata,
-    })
-    saved.listing, saved.dimensions, saved.source_metadata = {}, {}, {}
-    saved.save(update_fields=[
-        "legacy_archive", "listing", "dimensions", "source_metadata",
-    ])
+    assert saved.projection_kind == "hf-archive-snapshot-v1"
+    assert saved.legacy_archive.capture_kind == "hf_archive_snapshot"
+    archived_id, archived_bytes = saved.legacy_archive_id, bytes(saved.legacy_archive.body)
     acquire_hf_archives(claim, job, budget)
+    saved.refresh_from_db()
+    assert (saved.legacy_archive_id, bytes(saved.legacy_archive.body)) == (archived_id, archived_bytes)
     assert len(calls) == count and MetricValue.objects.count() == 1
 
 

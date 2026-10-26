@@ -958,12 +958,13 @@ def test_sparse_hf_archive_acquisition_automatically_projects_without_interpolat
     )
     with patch(
         "scripts.benchmark_download_collector.hf_archive.select_snapshot",
-        return_value={
+        side_effect=lambda reader, revision, selected: {
             "rows": [
                 {"id": repo, "downloads": 5, "likes": 2}
                 for repo in (product.repo_id, "lab/Second")
             ],
-            "file_path": "saved.parquet",
+            "revision": revision["id"], "retrieved_at": "2026-09-12T01:02:03Z",
+            "file_path": "models.parquet", "identical_duplicates_collapsed": 0,
         },
     ):
         job = register(source, scope, items=items)

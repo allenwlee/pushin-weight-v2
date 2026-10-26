@@ -171,6 +171,7 @@ def _repair_evidence(observation, archived, payload_rows):
                 in {
                     "github-catalog-object-v1",
                     "hf-native-history-v1",
+                    "hf-archive-row-v1",
                 }
                 or origin.legacy_archive_id is not None
                 or origin.observation_kind == "hf_catalog_listing",
