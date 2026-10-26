@@ -293,9 +293,9 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db
-@pytest.mark.parametrize("transport_ok", [True, False])
+@pytest.mark.parametrize("search_outcome", ["empty", "server_error", "parse_error"])
 def test_scheduled_empty_and_failed_search_keep_distinct_scope_coverage(
-    monkeypatch, seeded_policy_keywords, transport_ok,
+    monkeypatch, seeded_policy_keywords, search_outcome,
 ):
     from django.test import override_settings
 
@@ -316,12 +316,19 @@ def test_scheduled_empty_and_failed_search_keep_distinct_scope_coverage(
                 "/twitter/tweet/advanced_search", {"query": query},
             )
             self.on_exchange_finish(request, {
-                "outcome": "received", "status_code": 200 if transport_ok else 503,
-                "body": b'{"tweets":[]}' if transport_ok else b"busy",
+                "outcome": "received",
+                "status_code": 503 if search_outcome == "server_error" else 200,
+                "body": (
+                    b"busy" if search_outcome == "server_error"
+                    else b"not json" if search_outcome == "parse_error"
+                    else b'{"tweets":[]}'
+                ),
                 "error_type": None,
             })
-            if not transport_ok:
+            if search_outcome == "server_error":
                 raise TwitterApiServerError("provider busy")
+            if search_outcome == "parse_error":
+                raise ValueError("malformed provider response")
             return [], False
 
     cfg = load_config(CONFIG_PATH)
@@ -346,6 +353,131 @@ def test_scheduled_empty_and_failed_search_keep_distinct_scope_coverage(
     scope = run.scopes.get(scope_key="A")
     assert run.request_count == 1
     assert scope.raw_count == 0
-    assert scope.coverage_state == ("complete" if transport_ok else "unavailable")
-    assert scope.enumeration_complete is transport_ok
+    assert scope.coverage_state == (
+        "complete" if search_outcome == "empty" else "unavailable"
+    )
+    assert scope.enumeration_complete is (search_outcome == "empty")
+    assert bytes(scope.requests.get().archive.body) == (
+        b"busy" if search_outcome == "server_error"
+        else b"not json" if search_outcome == "parse_error"
+        else b'{"tweets":[]}'
+    )
+    assert stats["calls"][0]["cursor_advanced"] is False
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_scheduled_lineage_failure_holds_cursor_after_post_commit(
+    monkeypatch, seeded_policy_keywords,
+):
+    from core.models import Post
+    from monitor import cycle as cycle_mod
+    from monitor.cycle import CycleRunner
+    from x_monitor.config import load_config
+
+    class FakeApi:
+        base_url = "https://api.twitterapi.io"
+        timeout_s = 60
+        max_retries = 0
+
+        def run_search(self, query, **kwargs):
+            request = self.on_exchange_start(
+                "/twitter/tweet/advanced_search", {"query": query},
+            )
+            self.on_exchange_finish(request, {
+                "outcome": "received", "status_code": 200,
+                "body": b'{"tweets":[{"id":"lineage-commit"}]}',
+                "error_type": None,
+            })
+            return [{
+                "id": "lineage-commit", "author_id": "lineage-author",
+                "author_handle": "lineage_author", "text": "Qwen3 released",
+                "lang": "en", "created_at": "Sat Jul 25 12:00:00 +0000 2026",
+            }], False
+
+    cfg = load_config(CONFIG_PATH)
+    original_plan = CycleRunner._plan_calls
+    monkeypatch.setattr(
+        CycleRunner, "_plan_calls", lambda runner: original_plan(runner)[1:2],
+    )
+    monkeypatch.setattr(
+        CycleRunner, "_resolve_window",
+        lambda *a, **k: (1_785_067_200, 1_785_067_260, True),
+    )
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient, "from_env",
+        classmethod(lambda cls, _purpose: FakeApi()),
+    )
+    advances = []
+    monkeypatch.setattr(cycle_mod, "_advance_cursor", lambda *a, **k: advances.append(1))
+    monkeypatch.setattr(
+        "core.x_cycle_lineage.save_post_membership",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("lineage refusal")),
+    )
+    with pytest.raises(RuntimeError, match="lineage refusal"):
+        CycleRunner(cfg=cfg, cycle_kind="scheduled").run()
+    assert Post.objects.filter(pk="lineage-commit").exists()
+    assert advances == []
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_scheduled_truncated_search_keeps_saved_post_and_partial_coverage(
+    monkeypatch, seeded_policy_keywords,
+):
+    from django.test import override_settings
+
+    from core.models import CollectionObservationInput, CollectionRun
+    from monitor import cycle as cycle_mod
+    from monitor.cycle import CycleRunner
+    from scripts.harvest_cost import emit as cost_emit
+    from x_monitor.config import load_config
+
+    class FakeApi:
+        base_url = "https://api.twitterapi.io"
+        timeout_s = 60
+        max_retries = 0
+
+        def run_search(self, query, **kwargs):
+            request = self.on_exchange_start(
+                "/twitter/tweet/advanced_search", {"query": query},
+            )
+            self.on_exchange_finish(request, {
+                "outcome": "received", "status_code": 200,
+                "body": b'{"tweets":[{"id":"partial-lineage-post"}],"has_next_page":true}',
+                "error_type": None,
+            })
+            return [{
+                "id": "partial-lineage-post", "author_id": "partial-author",
+                "author_handle": "partial_author", "text": "Qwen3 released",
+                "lang": "en", "created_at": "Sat Jul 25 12:00:00 +0000 2026",
+            }], True
+
+    cfg = load_config(CONFIG_PATH)
+    original_plan = CycleRunner._plan_calls
+    monkeypatch.setattr(
+        CycleRunner, "_plan_calls", lambda runner: original_plan(runner)[1:2],
+    )
+    monkeypatch.setattr(
+        cycle_mod.TwitterApiClient, "from_env",
+        classmethod(lambda cls, _purpose: FakeApi()),
+    )
+    monkeypatch.setattr(CycleRunner, "_run_post_fetch", lambda *a, **k: {})
+    monkeypatch.setattr(cost_emit, "finalize_and_persist", lambda *a, **k: None)
+    monkeypatch.setattr("monitor.metrics_refresh.run_metrics_refresh", lambda *a, **k: {})
+    with override_settings(
+        X_MONITOR_CYCLE_SINCE_TIME=1_785_067_200,
+        X_MONITOR_CYCLE_UNTIL_TIME=1_785_067_260,
+        X_MONITOR_CYCLE_SKIP_FETCH=False,
+    ):
+        stats = CycleRunner(cfg=cfg, cycle_kind="scheduled").run()
+    run = CollectionRun.objects.get(job__operation="x_cycle")
+    scope = run.scopes.get(scope_key="B1")
+    assert scope.coverage_state == "partial"
+    assert not scope.enumeration_complete
+    assert scope.observations.filter(post_id="partial-lineage-post").count() == 1
+    assert CollectionObservationInput.objects.filter(
+        observation__scope_run=scope,
+        observation__post_id="partial-lineage-post",
+    ).exists()
     assert stats["calls"][0]["cursor_advanced"] is False

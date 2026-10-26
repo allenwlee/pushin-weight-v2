@@ -396,6 +396,37 @@ def test_scheduled_scope_records_post_without_claiming_backfill_enrichment():
     assert run.attempts.get().accounting_complete
 
 
+def test_scheduled_request_crash_cannot_be_reported_as_complete():
+    from core.models import CollectionRequest
+    from core.x_cycle_lineage import ScheduledCycleLineage
+
+    call = SimpleNamespace(call_id="A", query_string="from:publisher")
+    lineage = ScheduledCycleLineage.start(
+        [call],
+        limits={"requests": 10, "bytes": 100000, "seconds": 300, "items": 100},
+        invocation_id="scheduled-crash-test",
+    )
+    scope_id = lineage.begin_call(call, since_epoch=1783809000, until_epoch=1783809300)
+    request = lineage.begin_exchange(
+        scope_id, endpoint_url="https://api.twitterapi.io/twitter/tweet/advanced_search",
+        params={"query": "from:publisher"},
+    )
+    with pytest.raises(ValueError, match="receipt is unfinished"):
+        lineage.finish(success=True)
+    assert CollectionRequest.objects.get(pk=request.pk).transport_outcome == "pending"
+    lineage.finish_exchange(request, {
+        "outcome": "transport_error", "status_code": None,
+        "body": None, "error_type": "Timeout",
+    })
+    lineage.finish_call(
+        scope_id, post_ids=[], raw_count=0, outcome="error", complete=False,
+    )
+    run = lineage.finish(success=False)
+    assert run.request_count == 1
+    assert not run.attempts.get().accounting_complete
+    assert run.attempts.get().unknown_sent_requests == 1
+
+
 def test_legacy_product_match_scope_pins_existing_subject_and_input_digest():
     from django.utils import timezone
 
