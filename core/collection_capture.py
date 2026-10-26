@@ -84,6 +84,11 @@ def read_document(archive):
 
 def observation_object_documents(observation):
     """Return a catalog object's captured fields, preferring frozen legacy evidence."""
+    if (observation.legacy_archive_id is not None
+            and observation.legacy_archive.capture_kind == "hf_inventory_evidence"):
+        from core.hf_inventory_capture import inventory_documents
+
+        return inventory_documents(observation)
     if observation.observation_kind == "hf_catalog_listing":
         require(
             observation.run.job.source_id == "hf" and observation.scope_run_id is not None,
@@ -148,6 +153,10 @@ def observation_object_documents(observation):
 def run_report_document(run):
     """Read a completed run's report after its old JSON column is cleared."""
     job = run.job
+    if job.source_id == "hf" and job.purpose == "catalog" and job.operation in {"hf_catalog", "model_inventory"}:
+        from core.model_inventory import inventory_report
+
+        return inventory_report(run)
     direct_hf_catalog = job.job_key.startswith("direct:execute_catalog:")
     archived_hf_catalog = (
         job.operation == "archived_run"

@@ -5,6 +5,11 @@ from datetime import timedelta
 import httpx
 import pytest
 
+from core.collection_capture import (
+    observation_object_documents,
+    read_document,
+    run_report_document,
+)
 from core.collection_jobs import register_job, set_job_state
 from core.hf_catalog import resolve_scope
 from core.models import (
@@ -106,7 +111,7 @@ def test_facade_acquires_metadata_and_projects_without_importer():
     run = execute_due_job(
         job, {}, Budget(httpx.Client(transport=httpx.MockTransport(respond)))
     )
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     assert run.selected_count == run.success_count == 1
     assert MetricValue.objects.count() >= 3
     assert not run.observations.filter(values__isnull=False).exists()
@@ -160,7 +165,7 @@ def test_595_saved_native_snapshots_replay_twice_without_http(monkeypatch):
             .exclude(observed_at=CAPTURED)
             .exists()
         )
-    assert run.report["projection"]["written_values"] == 0
+    assert run_report_document(run)["projection"]["written_values"] == 0
 
 
 @pytest.mark.parametrize("committed", [False, True])
@@ -232,9 +237,9 @@ def test_projection_recovers_after_crash_before_ack_without_refetch(
     recovered = execute_model_inventory(
         job.pk, budget=Budget(httpx.Client(transport=httpx.MockTransport(forbidden)))
     )
-    assert recovered.status == "success", recovered.report
+    assert recovered.status == "success", run_report_document(recovered)
     assert MetricValue.objects.count() == 2
-    assert recovered.report["numeric_projection"]["pending"] is False
+    assert run_report_document(recovered)["numeric_projection"]["pending"] is False
     pending_item.refresh_from_db()
     assert pending_item.outcome == "complete" and pending_item.enumeration_complete
     assert not recovered.scopes.filter(
@@ -277,10 +282,10 @@ def test_fresh_run_refreshes_unchanged_sha_and_observes_old_created_new_repo():
     )
     assert first.status == second.status == "success"
     current = second.observations.get(
-        dimensions__kind="creation_inventory", source_identifier="lab/OldNewlyPublic"
+        observation_kind="creation_inventory", source_identifier="lab/OldNewlyPublic"
     )
-    assert current.source_metadata["inventory_event"] == "newly_observed"
-    assert current.listing["createdAt"].startswith("2020")
+    assert read_document(current.legacy_archive)["metadata"]["inventory_event"] == "newly_observed"
+    assert observation_object_documents(current)[0]["createdAt"].startswith("2020")
     downloads = MetricValue.objects.filter(
         source_metric__metric_key="downloads"
     ).order_by("observation__observed_at")
@@ -325,11 +330,8 @@ def test_detail_partial_resumes_and_unsupported_expansion_is_terminal_gap():
     missing_before_archive = _hf_missing_fields(first, job)
     assert missing_before_archive
     for listing in first.observations.filter(scope_run__scope_kind="namespace"):
-        listing.legacy_archive = archive_legacy({
-            "listing": listing.listing,
-            "dimensions": listing.dimensions,
-            "source_metadata": listing.source_metadata,
-        })
+        documents = observation_object_documents(listing)
+        listing.legacy_archive = archive_legacy(dict(zip(("listing", "dimensions", "source_metadata"), documents)))
         listing.listing = {}
         listing.dimensions = {}
         listing.source_metadata = {}
@@ -344,7 +346,7 @@ def test_detail_partial_resumes_and_unsupported_expansion_is_terminal_gap():
     resumed = execute_model_inventory(
         job.pk, budget=Budget(httpx.Client(transport=httpx.MockTransport(respond)))
     )
-    assert resumed.status == "success", resumed.report
+    assert resumed.status == "success", run_report_document(resumed)
     assert len(attempts) == 1 and "blobs=true" in attempts[0]
     assert (
         resumed.scopes.get(
@@ -409,7 +411,7 @@ def test_supported_optional_account_counts_and_trending_share_writer_and_profile
     run = execute_model_inventory(
         job.pk, budget=Budget(httpx.Client(transport=httpx.MockTransport(respond)))
     )
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     assert sum("/overview" in url for url in calls) == 1
     values = MetricValue.objects.filter(observation__source_subject_kind="account")
     assert {v.source_metric.metric_key: int(v.integer_value) for v in values} == {

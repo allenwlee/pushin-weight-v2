@@ -1724,7 +1724,13 @@ def _legacy_owner_predicate(table: str) -> str:
     if table == "collection_scope_runs":
         return "t.scope_kind NOT IN ('resource_group','numeric_projection_item','x_page_checkpoint')"
     if table == "collection_observations":
-        return "(t.observation_kind IS NULL OR t.observation_kind NOT IN ('x_page_checkpoint','x_page_appearance','x_page_diagnostic','x_request_appearance','hf_catalog_listing'))"
+        return (
+            "(t.observation_kind IS NULL OR t.observation_kind NOT IN "
+            "('x_page_checkpoint','x_page_appearance','x_page_diagnostic','x_request_appearance','hf_catalog_listing')) "
+            "AND NOT EXISTS (SELECT 1 FROM collection_evidence_archives hf_capture "
+            "WHERE hf_capture.id=t.legacy_archive_id "
+            "AND hf_capture.capture_kind='hf_inventory_evidence' OFFSET 0)"
+        )
     return "TRUE"
 
 

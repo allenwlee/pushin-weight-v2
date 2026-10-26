@@ -142,6 +142,19 @@ def _apply_selection(observation, fields, contract, *, verify_only=False):
 
 
 @transaction.atomic
+def record_numeric_selection(observation, fields):
+    """Pin a fresh capture's selection without going through retired metadata."""
+    fields = _legacy_fields(observation, {} if fields is None else {"numeric_fields": fields})
+    job = CollectionJob.objects.select_for_update().get(pk=observation.run.job_id)
+    CollectionRun.objects.select_for_update().only("pk").get(pk=observation.run_id)
+    owner = CollectionObservation.objects.select_for_update().get(pk=observation.pk)
+    require(owner.run_id == observation.run_id, "capture owner changed")
+    contract, _ = _job_contract(job, write=True)
+    _apply_selection(owner, fields, contract)
+    observation.numeric_fields_explicit = owner.numeric_fields_explicit
+
+
+@transaction.atomic
 def adopt_numeric_selection(observation):
     """Called in the capture transaction before its checkpoint is published."""
     if observation.numeric_fields_explicit is not None:
@@ -203,12 +216,12 @@ def project_hf_numeric_job_pins_batch(*, after_id=None, batch_size=100, verify_o
 
 @transaction.atomic
 def project_hf_numeric_selections_batch(*, after_id=0, batch_size=100, verify_only=False):
-    """Copy/compare every HF catalog capture, including implicit and empty states."""
+    """Copy/compare historical HF captures; fresh typed selections need no copy."""
     _batch_limits(batch_size)
     require(type(after_id) is int and after_id >= 0, "invalid selection cursor")
     query = CollectionObservation.objects.filter(
         pk__gt=after_id, run__job__source_id="hf", run__job__purpose="catalog",
-    ).order_by("pk")
+    ).exclude(legacy_archive__capture_kind="hf_inventory_evidence").order_by("pk")
     owners = list(query.values_list("pk", "run_id", "run__job_id")[:batch_size])
     jobs = CollectionJob.objects.filter(pk__in={row[2] for row in owners}).order_by("pk")
     if not verify_only:

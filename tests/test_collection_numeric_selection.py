@@ -212,7 +212,7 @@ def test_copy_refuses_changed_frozen_identity_or_typed_selection(conflict):
 
 
 def test_real_hf_resume_keeps_first_invalid_optional_field_after_json_clear(monkeypatch):
-    from core.collection_capture import archive_legacy
+    from core.collection_capture import archive_legacy, observation_object_documents
     from core.model_inventory import execute_model_inventory
     from scripts.benchmark_download_collector.sources import Budget
     from tests.test_hf_source_ingestion import ingestion_job
@@ -238,10 +238,8 @@ def test_real_hf_resume_keeps_first_invalid_optional_field_after_json_clear(monk
         execute_model_inventory(job.pk, budget=Budget(httpx.Client(transport=httpx.MockTransport(respond))))
     detail = CollectionObservation.objects.get(observation_kind="hf_metadata")
     assert numeric_fields(detail) == ["downloadsAllTime"]
-    detail.legacy_archive = archive_legacy({
-        "listing": detail.listing, "dimensions": detail.dimensions,
-        "source_metadata": {key: value for key, value in detail.source_metadata.items() if key != "numeric_fields"},
-    })
+    documents = observation_object_documents(detail)
+    detail.legacy_archive = archive_legacy(dict(zip(("listing", "dimensions", "source_metadata"), documents)))
     detail.source_metadata = {}
     detail.save(update_fields=["legacy_archive", "source_metadata"])
     CollectionRun.objects.filter(job=job, status="running").update(

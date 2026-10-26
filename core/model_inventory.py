@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from core.collection_groups import record_observation_group
 from core.collection_state import checkpoint_scope, claim_job, fenced_run, finish_run
-from core.hf_catalog import _envelopes, persist_product
+from core.hf_catalog import _record_result, persist_product
 from core.hf_metadata_client import HFMetadataClient
 from core.measurement_taxonomy import digest, require
 from core.models import (
@@ -130,16 +130,7 @@ def _hf(claim, job, budget):
             )
             envelope["collection_request_id"] = str(request.pk)
             run.request_count += 1
-            run.report = {
-                **run.report,
-                "physical_accounting_complete": False,
-                "last_physical_attempt": {
-                    "endpoint": envelope["endpoint"],
-                    "attempted_at": envelope["attempted_at"],
-                    "outcome": "reserved_before_dispatch",
-                },
-            }
-            run.save(update_fields=["request_count", "report", "updated_at"])
+            run.save(update_fields=["request_count", "updated_at"])
 
     client.on_attempt = record_attempt
 
@@ -172,7 +163,7 @@ def _hf(claim, job, budget):
             ).first()
             while scoped is None or not scoped.enumeration_complete:
                 if scoped is None:
-                    scoped = checkpoint_scope(claim, scope_key=namespace, ownership=entry)
+                    scoped = checkpoint_scope(claim, scope_key=namespace, ownership=entry, typed=True)
                 client.collection_scope = scoped
                 remaining = job.budgets["items"] - count
                 watch_exception = job.scope.get(
@@ -185,7 +176,8 @@ def _hf(claim, job, budget):
                         CollectionScopeRun.objects.filter(
                             run_id=claim.run_id,
                             scope_kind="namespace",
-                            ownership__company=entry["company"],
+                            scope_key__in=[row["namespace"] for row in frozen["namespaces"]
+                                           if row["company"] == entry["company"]],
                         ).aggregate(total=Sum("raw_count"))["total"]
                         or 0
                     )
@@ -198,7 +190,7 @@ def _hf(claim, job, budget):
                             ownership=entry,
                             enumeration_complete=True,
                             outcome="watch_limit",
-                            envelopes=scoped.envelopes if scoped else [],
+                            typed=True,
                         )
                         break
                 if remaining <= 0:
@@ -209,10 +201,7 @@ def _hf(claim, job, budget):
                     limit=min(100, remaining),
                     sort="lastModified" if watch_exception else "createdAt",
                 )
-                envelopes = [
-                    *(scoped.envelopes if scoped else []),
-                    *_envelopes(result, "listing"),
-                ]
+                _record_result(claim, scoped, result, "listing")
                 if result.outcome != "ok":
                     checkpoint_scope(
                         claim,
@@ -220,7 +209,7 @@ def _hf(claim, job, budget):
                         scope_key=namespace,
                         ownership=entry,
                         cursor=scoped.cursor if scoped else None,
-                        envelopes=envelopes,
+                        typed=True,
                         outcome=result.outcome,
                     )
                     raise SourceError(result.outcome)
@@ -251,9 +240,9 @@ def _hf(claim, job, budget):
                         .exclude(pk=run.pk)
                         .exists()
                     )
-                    for row in result.payload:
+                    for position, row in enumerate(result.payload):
                         key = digest({"resource_key": row["id"].casefold()})
-                        observation, _ = CollectionObservation.objects.get_or_create(
+                        observation, created = CollectionObservation.objects.get_or_create(
                             run=run,
                             observation_key=key,
                             defaults={
@@ -261,9 +250,9 @@ def _hf(claim, job, budget):
                                 "resource_key": row["id"].casefold(),
                                 "source_identifier": row["id"],
                                 "source_subject_kind": "repository",
-                                "listing": row,
                                 "observed_at": observed_at,
-                                "dimensions": {"kind": "creation_inventory"},
+                                "observation_kind": "creation_inventory",
+                                "historical_visibility_proven": False,
                             },
                         )
                         previous = not baseline and (
@@ -276,18 +265,13 @@ def _hf(claim, job, budget):
                             .exclude(run=run)
                             .exists()
                         )
-                        observation.source_metadata = {
-                            **observation.source_metadata,
-                            "inventory_event": "baseline"
-                            if baseline
-                            else "known"
-                            if previous
-                            else "newly_observed",
-                            "historical_public_visibility_proven": False,
-                        }
-                        observation.save(
-                            update_fields=["source_metadata", "updated_at"]
-                        )
+                        if created:
+                            from core.hf_inventory_capture import capture_object
+
+                            capture_object(
+                                observation, result, raw=row, position=position,
+                                metadata={"inventory_event": "baseline" if baseline else "known" if previous else "newly_observed"},
+                            )
                         persist_product(observation, entry, rules, row, "listing")
                         if contract and any(
                             wire in row
@@ -300,6 +284,11 @@ def _hf(claim, job, budget):
                             )
                         ):
                             numeric_ids.append(observation.pk)
+                    from core.models import CollectionAttempt
+
+                    attempt = CollectionAttempt.objects.select_for_update().get(pk=claim.attempt_id)
+                    attempt.actual_items += len(result.payload)
+                    attempt.save(update_fields=["actual_items"])
                     if numeric_ids:
                         from core.source_metric_projection import enqueue_projection
 
@@ -314,7 +303,7 @@ def _hf(claim, job, budget):
                     ownership=entry,
                     cursor=result.next_cursor,
                     cursor_history=history,
-                    envelopes=envelopes,
+                    typed=True,
                     enumeration_complete=result.next_cursor is None,
                     outcome="complete" if result.next_cursor is None else "pending",
                     raw_count=(scoped.raw_count if scoped else 0) + len(result.payload),
@@ -375,9 +364,10 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
         reason = str(exc)
     except (KeyError, ValueError, TypeError) as exc:
         reason = "invalid_or_unqualified_catalog"
-        with fenced_run(claim) as (_, failed_run):
-            failed_run.report = {**failed_run.report, "catalog_error": str(exc)}
-            failed_run.save(update_fields=["report", "updated_at"])
+        if job.source_id != "hf":
+            with fenced_run(claim) as (_, failed_run):
+                failed_run.report = {**failed_run.report, "catalog_error": str(exc)}
+                failed_run.save(update_fields=["report", "updated_at"])
     finally:
         if owned:
             owned.close()
@@ -401,6 +391,17 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
     from django.db.models import Sum
 
     total_items = scopes.aggregate(items=Sum("raw_count"))["items"] or 0
+    if job.source_id == "hf":
+        if (job.scope.get("hf_scope", {}).get("gaps") and reason is None
+                and not job.scope.get("numeric_contract_id")):
+            reason = "inventory_scope_incomplete"
+        return finish_run(
+            claim, status="partial" if reason else "success", typed=True,
+            physical_accounting_complete=True, request_count=run.request_count,
+            selected_count=scopes.count(),
+            success_count=scopes.filter(enumeration_complete=True).count(),
+            error_code=reason,
+        )
     prior_items = run.report.get("total_committed_items", 0)
     items = total_items - prior_items
     if (
@@ -444,6 +445,35 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
     )
 
 
+def inventory_report(run):
+    """Current inventory status from typed checkpoints and physical attempts."""
+    from django.db.models import Sum
+
+    job = run.job
+    require(job.source_id == "hf" and job.purpose == "catalog"
+            and job.operation in {"hf_catalog", "model_inventory"},
+            "HF inventory report owner required")
+    attempt = run.attempts.order_by("-ordinal").first()
+    queues = run.scopes.filter(scope_kind="numeric_projection")
+    projection = {"pending": queues.exclude(outcome="complete").exists()} if job.scope.get("numeric_contract_id") else None
+    return {
+        "stop_reason": run.error_code,
+        "numeric_projection": projection,
+        "scope_coverage": [{**gap, "outcome": "unavailable"}
+                           for gap in job.scope.get("hf_scope", {}).get("gaps", [])],
+        "metadata_coverage": list(run.scopes.filter(scope_kind__in=["hf_metadata", "hf_profile"]).values(
+            "scope_kind", "scope_key", "outcome", "enumeration_complete",
+        )),
+        "physical_accounting_complete": attempt.accounting_complete if attempt else False,
+        "missing_numeric_fields": _hf_missing_fields(run, job),
+        "items_this_invocation": attempt.actual_items if attempt else None,
+        "total_committed_items": run.scopes.filter(scope_kind="namespace").aggregate(total=Sum("raw_count"))["total"] or 0,
+        "bytes_this_invocation": attempt.actual_response_bytes if attempt else None,
+        "catalog_is_release_adjudication": False,
+        "usage_mapping_inferred": False,
+    }
+
+
 def _hf_metadata(claim, job, client, entry, rules, contract):
     """Enrich each saved listing once per run; counters keep their fetch clocks."""
     from core.models import Account, Product
@@ -468,8 +498,10 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                 claim, scope_kind="hf_metadata",
                 scope_key=listing.source_identifier + ":" + group,
                 ownership={"namespace": entry["namespace"], "repository": listing.source_identifier},
+                resource_observation=listing, typed=True,
             )
             result = client.model_group(listing.source_identifier, group)
+            _record_result(claim, client.collection_scope, result, group)
             observed_at = timezone.now()
             accepted = result.outcome in {"ok", "partial_expansion"}
 
@@ -489,20 +521,22 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                     if listing.product_id
                     else None
                 )
+                scope.phase = group
+                scope.resource_observation = listing
+                scope.save(update_fields=["phase", "resource_observation"])
                 observation = CollectionObservation.objects.create(
                     run=run,
                     scope_run=scope,
                     resource_key=listing.resource_key,
                     source_identifier=listing.source_identifier,
                     source_subject_kind="repository",
-                    listing=result.payload,
                     observed_at=observed_at,
                     observation_key=digest([str(run.pk), listing.pk, group]),
-                    envelopes=_envelopes(result, group),
-                    dimensions={"kind": "hf_metadata", "group": group},
-                    source_metadata={"historical_public_visibility_proven": False},
+                    observation_kind="hf_metadata",
+                    historical_visibility_proven=False,
                 )
                 record_observation_group(observation, group, result.outcome)
+                metadata = {}
                 if group == "detail" and "siblings" in result.payload:
                     paths = lambda rows: {
                         r.get("rfilename"): r.get("blobId")
@@ -516,7 +550,7 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                         for path in set(old) | set(new)
                         if path not in old or path not in new or old[path] != new[path]
                     )
-                    observation.source_metadata["file_changes"] = {
+                    metadata["file_changes"] = {
                         "changed_paths": changed,
                         "kind": "baseline"
                         if previous is None
@@ -562,8 +596,9 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                     and wire not in supplied
                     and metric in selected_metrics
                 ]
-                observation.source_metadata["numeric_fields"] = optional
-                observation.save(update_fields=["source_metadata", "updated_at"])
+                from core.hf_inventory_capture import capture_object
+
+                capture_object(observation, result, raw=result.payload, fields=optional, metadata=metadata)
                 persist_product(observation, entry, rules, result.payload, group)
                 if contract and optional:
                     enqueue_projection(
@@ -580,7 +615,7 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                 },
                 enumeration_complete=accepted,
                 outcome=result.outcome,
-                envelopes=_envelopes(result, group),
+                resource_observation=listing, typed=True,
                 write=write,
             )
             if not accepted:
@@ -596,13 +631,14 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
         )
         client.collection_scope = profile or checkpoint_scope(
             claim, scope_kind="hf_profile", scope_key=entry["namespace"],
-            ownership={"account_id": str(account.pk)},
+            ownership={"account_id": str(account.pk)}, typed=True,
         )
         response = (
             client.account_counts(entry["namespace"], account.account_kind)
             if account.account_kind in {"organization", "individual"}
             else client.namespace_info(entry["namespace"])
         )
+        _record_result(claim, client.collection_scope, response, "profile")
         observed_at = timezone.now()
 
         def profile_write(run, scope):
@@ -614,11 +650,13 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                 resource_key=entry["namespace"].casefold(),
                 source_subject_kind="account",
                 source_identifier=entry["namespace"],
-                listing=response.payload,
+                observation_kind="hf_profile",
                 observed_at=observed_at,
                 observation_key=digest([str(run.pk), "profile", entry["namespace"]]),
-                envelopes=_envelopes(response, "profile"),
             )
+            from core.hf_inventory_capture import capture_object
+
+            capture_object(observation, response, raw=response.payload)
             from core.account_identity import upsert_account
 
             current = Account.objects.select_for_update().get(pk=account.pk)
@@ -659,7 +697,7 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
             ownership={"account_id": str(account.pk)},
             enumeration_complete=response.outcome == "ok",
             outcome=response.outcome,
-            envelopes=_envelopes(response, "profile"),
+            typed=True,
             write=profile_write,
         )
         partial |= response.outcome != "ok"
