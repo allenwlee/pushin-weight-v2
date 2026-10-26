@@ -791,7 +791,11 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
     )
     from core.collection_capture import attach_metric_requests
 
-    attach_metric_requests(run, observations)
+    attach_metric_requests(
+        run, observations,
+        endpoint_paths=[data["source_metadata"].get("endpoint_path") for data, _ in prepared]
+        if run.job.source_id == "opencode" else None,
+    )
     return observations, {
         "reused_observation_ids": reused,
         "written_values": len(pending_values),

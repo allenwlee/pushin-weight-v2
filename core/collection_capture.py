@@ -84,6 +84,54 @@ def read_document(archive):
 
 def observation_object_documents(observation):
     """Return a catalog object's captured fields, preferring frozen legacy evidence."""
+    if observation.observation_kind == "hf_catalog_listing":
+        require(
+            observation.run.job.source_id == "hf" and observation.scope_run_id is not None,
+            "HF listing has no namespace owner",
+        )
+        links = list(
+            observation.inputs.filter(input_role="listing")
+            .select_related("input_request__archive", "input_request__scope_run")
+        )
+        require(links, "HF listing needs captured page input")
+        matching = []
+        for link in links:
+            request = link.input_request
+            require(
+                request is not None and request.scope_run_id == observation.scope_run_id
+                and request.scope_run.run_id == observation.run_id
+                and request.transport_outcome == "received" and request.http_status == 200
+                and request.archive_id is not None
+                and link.input_sha256 == request.archive.content_sha256,
+                "HF listing capture ownership or checksum changed",
+            )
+            locator = link.row_locator
+            require(
+                isinstance(locator, str) and locator.isascii() and locator.isdecimal()
+                and str(int(locator)) == locator,
+                "HF listing position is invalid",
+            )
+            page = read_document(request.archive)
+            position = int(locator)
+            require(
+                isinstance(page, list) and position < len(page)
+                and isinstance(page[position], dict),
+                "HF listing page or position is invalid",
+            )
+            listing = page[position]
+            native_id = listing.get("id") or listing.get("modelId")
+            require(
+                isinstance(native_id, str)
+                and native_id.casefold() == observation.source_identifier.casefold(),
+                "HF listing identity changed",
+            )
+            if digest(listing) == observation.payload_sha256:
+                matching.append(listing)
+        require(
+            matching and all(item == matching[0] for item in matching),
+            "HF selected listing is absent or conflicts with its capture",
+        )
+        return matching[0], {}, {}
     if observation.legacy_archive_id is None:
         return observation.listing, observation.dimensions, observation.source_metadata
     document = read_document(observation.legacy_archive)
@@ -99,6 +147,23 @@ def observation_object_documents(observation):
 
 def run_report_document(run):
     """Read a completed run's report after its old JSON column is cleared."""
+    job = run.job
+    direct_hf_catalog = job.job_key.startswith("direct:execute_catalog:")
+    archived_hf_catalog = (
+        job.operation == "archived_run"
+        and job.job_key == f"archive:run:{run.pk}"
+        and job.definition.get("execution") == {"driver": "none", "executable": False}
+        and isinstance(job.scope, dict)
+        and {"inventory_version", "namespaces", "rules", "gaps"} <= set(job.scope)
+    )
+    if (
+        job.source_id == "hf"
+        and job.purpose == "catalog"
+        and (direct_hf_catalog or archived_hf_catalog)
+    ):
+        from core.hf_catalog import catalog_report
+
+        return catalog_report(run)
     if run.legacy_archive_id is None or run.report:
         return run.report
     document = read_document(run.legacy_archive)
@@ -397,7 +462,7 @@ def capture_public_selection(request_id, payload):
     return archive
 
 
-def attach_metric_requests(run, observations):
+def attach_metric_requests(run, observations, *, endpoint_paths=None):
     """Connect directly collected metrics to their actual public replies."""
     from core.models import CollectionObservation
 
@@ -433,12 +498,15 @@ def attach_metric_requests(run, observations):
         else:
             coordinate = None
         indexed.setdefault(coordinate, []).append(request)
+    if source == "opencode":
+        require(endpoint_paths is not None and len(endpoint_paths) == len(observations),
+                "OpenCode request coordinates must come from the current capture")
     inputs, updated = [], []
-    for observation in observations:
+    for position, observation in enumerate(observations):
         coordinate = (
             observation.source_identifier.casefold()
             if source == "hf"
-            else observation_object_documents(observation)[2].get("endpoint_path")
+            else endpoint_paths[position]
             if source == "opencode"
             else None
         )

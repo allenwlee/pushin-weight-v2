@@ -160,6 +160,39 @@ def test_endpoint_checks_have_typed_cross_run_ready_row_links():
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db
+def test_live_opencode_capture_links_replies_without_retiring_observation_json(monkeypatch):
+    from core.benchmark_metric_store import persist_source
+    from core.models import CollectionObservationInput
+    from scripts.benchmark_download_collector.sources import opencode
+
+    def respond(request):
+        assert request.url.path == SELECTED[0]["endpoint_path"]
+        return httpx.Response(200, json=endpoint())
+
+    transport = budget(respond)
+    def forbid_retired_json(_):
+        raise AssertionError("retired JSON read")
+
+    monkeypatch.setattr(
+        "core.collection_capture.observation_object_documents",
+        forbid_retired_json,
+    )
+    run = persist_source(
+        configured(), "opencode", "0" * 64,
+        fetch=lambda: opencode(
+            transport, SELECTED, now=datetime(2026, 10, 7, 13, tzinfo=UTC),
+        ),
+        transport_budget=transport,
+    )
+    links = CollectionObservationInput.objects.filter(
+        observation__run=run, input_role="response",
+    )
+    assert links.count() == 2
+    assert set(links.values_list("input_request__scope_run__scope_kind", flat=True)) == {"metric_fetch"}
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
 def test_endpoint_references_and_export_use_typed_dates_and_unknown_period_status():
     import json
     from io import StringIO
