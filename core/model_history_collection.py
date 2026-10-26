@@ -69,6 +69,8 @@ COVERAGE_OUTCOMES = frozenset(
 def _existing_evidence(job, model, pins):
     from django.db.models import Q
 
+    from core.collection_capture import observation_object_documents
+
     selected = []
     rows = (
         CollectionObservation.objects.filter(
@@ -80,16 +82,20 @@ def _existing_evidence(job, model, pins):
             Q(mapping__isnull=True)
             | Q(mapping__subject__product_id=model["product_key"])
         )
-        .filter(Q(dimensions__kind__isnull=True) | ~Q(dimensions__kind="coverage"))
+        .exclude(observation_kind="coverage")
+        .select_related("legacy_archive", "resource_snapshot")
         .order_by("-observed_at", "-pk")[:1000]
     )
     for row in rows:
+        _listing, dimensions, metadata = observation_object_documents(row)
+        snapshot = row.resource_snapshot if hasattr(row, "resource_snapshot") else None
         native_time = (
             row.published_at
             or row.published_date
-            or row.source_metadata.get("source_record_date")
-            or row.source_metadata.get("clocks", {}).get("committer_at")
-            or row.source_metadata.get("archive_snapshot_date")
+            or row.source_record_at
+            or row.source_record_date
+            or (snapshot.committed_at if snapshot else None)
+            or row.archive_snapshot_date
         )
         precision = "unknown"
         if native_time:
@@ -126,8 +132,8 @@ def _existing_evidence(job, model, pins):
                 "published_date": row.published_date.isoformat()
                 if row.published_date
                 else None,
-                "source_metadata": row.source_metadata,
-                "dimensions": row.dimensions,
+                "source_metadata": metadata,
+                "dimensions": dimensions,
                 "source_time_precision": precision,
                 "source_time_before_cutoff": True if precision != "unknown" else None,
             }

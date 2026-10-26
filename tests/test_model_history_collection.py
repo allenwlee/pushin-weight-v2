@@ -350,10 +350,21 @@ def test_github_history_uses_reviewed_native_repo_and_pinned_tree():
     assert all(o.inputs.exists() for o in run.observations.all())
     assert MetricValue.objects.count() == 0
 
+    from core.collection_capture import archive_legacy
+    from core.model_history_collection import _existing_evidence
     from core.model_native_history import _latest_before_cutoff
 
     commits = run.observations.filter(observation_kind="commits")
     expected = max(commits.values_list("observation_key", flat=True))
+    for commit in commits:
+        archive = archive_legacy({
+            "listing": commit.listing,
+            "dimensions": commit.dimensions,
+            "source_metadata": commit.source_metadata,
+            "envelopes": commit.envelopes,
+            "groups": commit.groups,
+        })
+        commits.filter(pk=commit.pk).update(legacy_archive=archive)
     commits.update(listing={}, dimensions={}, source_metadata={})
     head = _latest_before_cutoff(
         commits.select_related("resource_snapshot").defer(
@@ -363,6 +374,10 @@ def test_github_history_uses_reviewed_native_repo_and_pinned_tree():
         datetime(2026, 9, 12, tzinfo=UTC),
     )
     assert head.observation_key == expected
+    frozen = _existing_evidence(job, {"product_key": str(subject.product_id)}, [pin])
+    archived_commit = next(row for row in frozen if row["observation_id"] == head.pk)
+    assert archived_commit["source_metadata"]["clocks"]["committer_at"] == "2026-09-03T00:00:00Z"
+    assert archived_commit["source_time_precision"] == "instant"
 
 
 def test_archive_acquisition_to_numeric_writer_keeps_zero_and_missing_distinct():
