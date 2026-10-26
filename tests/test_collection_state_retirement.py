@@ -21,9 +21,9 @@ def test_typed_checkpoint_import_is_idempotent_and_does_not_write_run_report():
             scopes=job.scope["units"], provenance=provenance, typed=True,
         )
     run = job.runs.get(pk=claim.run_id)
-    assert run.report == {}
+    assert not hasattr(run, "report")
     query = run.scopes.get(scope_kind="x_query")
-    assert query.job_target_id is not None and query.envelopes == []
+    assert query.job_target_id is not None and not hasattr(query, "envelopes")
     marker = run.scopes.get(scope_kind="x_checkpoint_import")
     assert marker.phase == "typed-import-v1"
     evidence = read_document(marker.legacy_archive)
@@ -38,7 +38,7 @@ def test_typed_rejection_keeps_original_invocation_without_mutable_report():
         job.pk, invocation_id="rejected-invocation", reason="live_lock_busy",
         report={"waited_seconds": 7}, typed=True,
     )
-    assert rejected.report == {}
+    assert not hasattr(rejected, "report")
     assert rejected.error_code == "live_lock_busy"
     attempt = rejected.attempts.get()
     assert attempt.source_invocation_id == "rejected-invocation"
