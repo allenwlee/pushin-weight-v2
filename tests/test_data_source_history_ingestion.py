@@ -578,7 +578,8 @@ def test_campaign_facade_accounts_publication_requests_on_shared_child(monkeypat
 
 def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benchmark():
     from core.benchmark_metric_identity import configure_collection
-    from core.model_kind_qualification import qualify_model_kind
+    from core.collection_storage_migration import project_observation_groups_batch
+    from core.model_kind_qualification import qualify_model_kind, validate_model_kind
     from tests.test_source_metric_projection import project
 
     product, _ = setup_spec()
@@ -598,10 +599,14 @@ def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benc
         observation_key="e" * 64,
         listing={"id": product.repo_id, "private": False, "downloads": 7, "likes": 2},
         dimensions={"kind": "creation_inventory"},
+        groups={"listing": "ok"},
     )
     call_command("normalize_collection_run_jobs", verbosity=0)
     qualification = qualify_model_kind(product)
     assert qualification
+    project_observation_groups_batch(after_id=observation.pk - 1, batch_size=1)
+    CollectionObservation.objects.filter(pk=observation.pk).update(groups={})
+    assert validate_model_kind(product, qualification) == qualification
     subject = MeasurementSubject.objects.get(
         pk=subject_id("product", product.product_key)
     )

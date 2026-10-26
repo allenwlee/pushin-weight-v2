@@ -17,6 +17,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from core.account_identity import publisher_discovery_label, publisher_identifier
+from core.collection_groups import observation_group_outcomes, record_observation_group
 from core.collection_state import claim_direct_run, fenced_run, register_direct_job
 from core.hf_metadata_client import INVENTORY_VERSION, NAMESPACE, REPO_ID
 from core.measurement_taxonomy import digest
@@ -247,7 +248,7 @@ def persist_product(observation, entry, rules, payload, group):
     observation.product = product
     observation.created_product = observation.created_product or created
     observation.processing_outcome = (
-        "complete" if groups_complete(observation.groups) else "pending"
+        "complete" if groups_complete(observation_group_outcomes(observation)) else "pending"
     )
     if not product.publisher_account_id:
         product.publisher_account = org.account
@@ -265,14 +266,15 @@ def persist_product(observation, entry, rules, payload, group):
                     "run_id": str(observation.run_id),
                 },
             )
-        if group == "listing":
-            observation.groups[group] = "ok"
-        observation.processing_outcome = (
-            "complete" if groups_complete(observation.groups) else "pending"
-        )
     except (ValidationError, DataError, ValueError, TypeError):
-        observation.groups[group] = "projection_error"
+        record_observation_group(observation, group, "projection_error")
         observation.processing_outcome = "projection_error"
+    else:
+        if group == "listing":
+            record_observation_group(observation, group, "ok")
+        observation.processing_outcome = (
+            "complete" if groups_complete(observation_group_outcomes(observation)) else "pending"
+        )
     observation.save(
         update_fields=[
             "product",
@@ -374,7 +376,7 @@ def _enrich(ns, hf, rules, visited, max_models, attempted, claim):
         .defer("run__raw_payload", "run__job__definition")
         .order_by("id")
     ):
-        if groups_complete(observation.groups):
+        if groups_complete(observation_group_outcomes(observation)):
             continue
         if (
             observation.resource_key not in visited
@@ -384,7 +386,7 @@ def _enrich(ns, hf, rules, visited, max_models, attempted, claim):
             return "model_cap"
         visited.add(observation.resource_key)
         for group in METADATA_GROUPS:
-            if observation.groups.get(group) == "ok":
+            if observation_group_outcomes(observation).get(group) == "ok":
                 continue
             key = (observation.pk, group)
             if key in attempted:
@@ -395,7 +397,7 @@ def _enrich(ns, hf, rules, visited, max_models, attempted, claim):
             result = hf.model_group(observation.source_identifier, group)
             with fenced_run(claim):
                 observation.envelopes += _envelopes(result, group)
-                observation.groups[group] = result.outcome
+                record_observation_group(observation, group, result.outcome)
                 if result.outcome in {"ok", "partial_expansion"}:
                     persist_product(
                         observation, ns.ownership, rules, result.payload, group
@@ -408,7 +410,7 @@ def _enrich(ns, hf, rules, visited, max_models, attempted, claim):
                     "projection_error",
                 }:
                     observation.processing_outcome = (
-                        "complete" if groups_complete(observation.groups) else "partial"
+                        "complete" if groups_complete(observation_group_outcomes(observation)) else "partial"
                     )
                 observation.save()
     return None
@@ -497,7 +499,7 @@ def catalog_report(run, *, requests=0, cumulative_requests=0, stop_reason=None):
             "next_cursor": ns.cursor,
             "unique_models": ns.observations.count(),
         }
-        for ns in run.scopes.order_by("scope_key")
+        for ns in run.scopes.filter(scope_kind="namespace").order_by("scope_key")
     ]
     enumeration_complete = bool(namespaces) and all(
         ns["enumeration_complete"] for ns in namespaces
@@ -506,7 +508,10 @@ def catalog_report(run, *, requests=0, cumulative_requests=0, stop_reason=None):
         not observations.exclude(processing_outcome="complete").exists()
         and not observations.filter(product__isnull=True).exists()
     )
-    stored_groups = list(observations.values_list("groups", flat=True))
+    stored_groups = [
+        observation_group_outcomes(observation)
+        for observation in observations.only("id", "run_id", "scope_run_id", "groups").prefetch_related("resource_scopes")
+    ]
     group_outcomes = {
         group: dict(Counter(row.get(group, "pending") for row in stored_groups))
         for group in METADATA_GROUPS
@@ -607,7 +612,7 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                 "actual_requests", flat=True
             )
         )
-        if run_id is not None and not run.scopes.exists():
+        if run_id is not None and not run.scopes.filter(scope_kind="namespace").exists():
             with fenced_run(claim):
                 for entry in run.job.scope["namespaces"]:
                     CollectionScopeRun.objects.create(
@@ -636,7 +641,7 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
         hf.capture = RequestCapture(claim)
         try:
             visited = set()
-            for ns in run.scopes.order_by("scope_key"):
+            for ns in run.scopes.filter(scope_kind="namespace").order_by("scope_key"):
                 if hf.stop_reason:
                     break
                 hf.collection_scope = ns

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from django.utils import timezone
 
+from core.collection_groups import record_observation_group
 from core.collection_state import checkpoint_scope, claim_job, fenced_run, finish_run
 from core.hf_catalog import _envelopes, persist_product
 from core.hf_metadata_client import HFMetadataClient
@@ -395,7 +396,7 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
             projection = {"pending": True, "error": str(exc)}
     run.refresh_from_db()
     scopes = run.scopes.exclude(
-        scope_kind__in=["numeric_projection", "hf_metadata", "hf_profile"]
+        scope_kind__in=["numeric_projection", "hf_metadata", "hf_profile", "resource_group"]
     )
     from django.db.models import Sum
 
@@ -502,6 +503,7 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                     dimensions={"kind": "hf_metadata", "group": group},
                     source_metadata={"historical_public_visibility_proven": False},
                 )
+                record_observation_group(observation, group, result.outcome)
                 if group == "detail" and "siblings" in result.payload:
                     paths = lambda rows: {
                         r.get("rfilename"): r.get("blobId")

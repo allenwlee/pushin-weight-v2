@@ -147,7 +147,8 @@ def test_hf_creation_inventory_uses_current_product_projection_under_shared_fenc
         obj.pk, budget=Budget(httpx.Client(transport=httpx.MockTransport(response)))
     )
     assert run.status == "success" and run.observations.count() == 2
-    assert run.scopes.filter(enumeration_complete=True).count() == 2
+    assert run.scopes.filter(scope_kind="namespace", enumeration_complete=True).count() == 2
+    assert (run.selected_count, run.success_count) == (2, 2)
     assert Product.objects.get(repo_id="Fixture0/NewModel").created_at.year == 2026
     assert CollectionRun.objects.count() == 1
     requests = run.attempts.get().requests.filter(transport_outcome="received")

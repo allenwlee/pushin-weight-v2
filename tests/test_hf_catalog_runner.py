@@ -243,7 +243,7 @@ def test_short_page_next_link_is_followed_and_repeated_cursor_is_partial():
     assert result["unique_models"] == 1
     assert result["namespaces"][0]["raw_count"] == 2
     run = CollectionRun.objects.get(pk=result["run_id"])
-    assert run.scopes.get().recorded_cursors == ["next"]
+    assert run.scopes.get(scope_kind="namespace").recorded_cursors == ["next"]
 
 
 def test_ownership_conflict_is_quarantined_without_reassignment():
@@ -319,12 +319,30 @@ def test_failed_detail_does_not_hide_terminal_listing_or_erase_product():
     assert result["enumeration_complete"] and not result["enrichment_complete"]
     assert Product.objects.count() == 2
     run = CollectionRun.objects.get()
-    assert run.scopes.get().observations.first().groups == {
+    assert run.scopes.get(scope_kind="namespace").observations.first().groups == {
         "listing": "ok",
         "detail": "forbidden",
         "expanded": "ok",
     }
     assert execute_catalog(run_id=run.pk, hf=api())["complete"]
+
+
+def test_typed_group_resume_preserves_report_and_does_not_repeat_successful_expansion():
+    from core.hf_catalog import catalog_report
+
+    def fail_detail(request):
+        if request.url.params.get("blobs"):
+            return httpx.Response(403)
+
+    result = execute_catalog(scope=scope(), hf=api(fail_detail))
+    run = CollectionRun.objects.get(pk=result["run_id"])
+    expected = catalog_report(run)["group_outcomes"]
+    run.observations.update(groups={})
+    assert catalog_report(run)["group_outcomes"] == expected
+    resumed = execute_catalog(run_id=run.pk, hf=api())
+    assert resumed["complete"]
+    assert resumed["requests"] == 2
+    assert len(resumed["namespaces"]) == 1
 
 
 def test_invalid_saved_cursor_restarts_namespace_and_deduplicates():
@@ -340,7 +358,7 @@ def test_invalid_saved_cursor_restarts_namespace_and_deduplicates():
 
     first = execute_catalog(scope=scope(), hf=api(first_page, budget=2))
     run = CollectionRun.objects.get(pk=first["run_id"])
-    assert run.scopes.get().recorded_cursors == ["expired"]
+    assert run.scopes.get(scope_kind="namespace").recorded_cursors == ["expired"]
     run.scopes.update(cursor_history=[])
 
     def expired(request):
@@ -351,7 +369,7 @@ def test_invalid_saved_cursor_restarts_namespace_and_deduplicates():
     assert resumed["complete"]
     assert Product.objects.count() == 2
     assert resumed["unique_models"] == 2
-    assert run.scopes.get().recorded_cursors == []
+    assert run.scopes.get(scope_kind="namespace").recorded_cursors == []
 
 
 def test_model_cap_leaves_exact_continuation_and_resumes_pending():

@@ -398,7 +398,7 @@ def claim_job(
     if bounded_campaign and job.purpose == "metric" and job.last_attempt_id:
         previous = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
         if previous.status == "partial" and previous.completed_at is not None:
-            for scope in previous.scopes.all():
+            for scope in previous.scopes.exclude(scope_kind="resource_group"):
                 cursors = scope.recorded_cursors
                 scope.pk = None
                 scope.run = run
@@ -425,7 +425,7 @@ def claim_job(
             previous.pk == job.last_attempt_id,
             "continuation must use the preceding attempt",
         )
-        for scope in previous.scopes.all():
+        for scope in previous.scopes.exclude(scope_kind="resource_group"):
             cursors = scope.recorded_cursors
             scope.pk = None
             scope.run = run

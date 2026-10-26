@@ -83,10 +83,16 @@ def test_backfill_continuation_copies_scopes_without_rewriting_old_attempt():
     )
     CollectionScopeRun.objects.filter(pk=old.pk).update(cursor_history=[])
     checkpoint_scope(first, scope_key="slice2", ownership={}, cursor="pending")
+    activity = CollectionScopeRun.objects.create(
+        run_id=first.run_id, scope_kind="resource_group", scope_key="saved:detail",
+        parent_scope=old, ownership={}, phase="detail", outcome="ok",
+    )
     finish_run(first, status="partial")
     second = claim_job(obj.pk, manual_authorized=True, continue_from=first.run_id)
     assert second.run_id != first.run_id
     assert CollectionScopeRun.objects.filter(run_id=second.run_id).count() == 2
+    activity.refresh_from_db()
+    assert activity.run_id == first.run_id and activity.parent_scope_id == old.pk
     old.refresh_from_db()
     assert old.run_id == first.run_id and old.cursor == "next"
     assert CollectionScopeRun.objects.get(

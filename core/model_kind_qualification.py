@@ -1,5 +1,6 @@
 """Opt-in model-kind qualification from a pinned first-party HF registry capture."""
 
+from core.collection_groups import observation_group_outcomes
 from core.measurement_taxonomy import digest, require
 from core.models import BrandCompany, CollectionObservation
 
@@ -42,7 +43,7 @@ def _qualification(product, observation):
     # These are the existing model-registry writers, not arbitrary HF datasets.
     require(
         observation.dimensions.get("kind") in {"creation_inventory", "hf_metadata"}
-        or observation.groups.get("listing") == "ok"
+        or observation_group_outcomes(observation).get("listing") == "ok"
         and observation.scope_run is not None
         and observation.scope_run.ownership.get("namespace", "").casefold()
         == product.hf_namespace.casefold(),
@@ -57,7 +58,7 @@ def _qualification(product, observation):
         "evidence_identity_sha256": digest(
             [
                 observation.dimensions,
-                observation.groups,
+                observation_group_outcomes(observation),
                 observation.source_metadata,
                 str(observation.run_id),
                 observation.source_identifier,

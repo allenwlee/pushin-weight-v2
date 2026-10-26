@@ -408,6 +408,73 @@ def _historical_timestamp(value):
     return parsed
 
 
+def project_observation_groups_batch(
+    *, after_id: int = 0, batch_size: int = 200, verify_only: bool = False,
+) -> ProvenanceBatch:
+    """Copy group outcomes without inferring response bodies or attempt clocks."""
+    from core.collection_groups import (
+        GROUP_SCOPE_KIND,
+        group_scope_values,
+        validate_group_outcomes,
+    )
+
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative integer")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        query = CollectionObservation.objects.filter(pk__gt=after_id).exclude(groups={})
+        owners = dict(query.order_by("pk").values_list("pk", "run_id")[:batch_size])
+        list(CollectionRun.objects.select_for_update().filter(
+            pk__in=set(owners.values()),
+        ).order_by("pk").values_list("pk", flat=True))
+        observations = list(query.filter(pk__in=owners).select_for_update().only(
+            "pk", "run_id", "scope_run_id", "groups",
+        ).order_by("pk"))
+        for observation in observations:
+            validate_group_outcomes(observation.groups)
+        existing = {
+            (scope.run_id, scope.scope_key): scope
+            for scope in CollectionScopeRun.objects.filter(
+                run_id__in=set(owners.values()), scope_kind=GROUP_SCOPE_KIND,
+                scope_key__in=[
+                    f"{observation.pk}:{group}"
+                    for observation in observations
+                    for group in observation.groups
+                ],
+            ).only(
+                "run_id", "scope_key", "resource_observation_id", "parent_scope_id",
+                "phase", "outcome", "execution_state", "coverage_state", "enumeration_complete",
+            )
+        }
+        missing, changed = [], set()
+        for observation in observations:
+            if observation.run_id != owners[observation.pk]:
+                raise ValueError("resource group owner moved while locking")
+            for group, outcome in observation.groups.items():
+                values = group_scope_values(observation, group, outcome)
+                key = f"{observation.pk}:{group}"
+                scope = existing.get((observation.run_id, key))
+                if scope is not None:
+                    if any(getattr(scope, field) != value for field, value in values.items()):
+                        raise ValueError("typed resource group differs from legacy outcome")
+                    continue
+                if verify_only:
+                    raise ValueError("resource group outcome is not projected")
+                missing.append(CollectionScopeRun(
+                    run_id=observation.run_id, scope_kind=GROUP_SCOPE_KIND,
+                    scope_key=key, ownership={}, **values,
+                ))
+                changed.add(observation.pk)
+        CollectionScopeRun.objects.bulk_create(missing, batch_size=500)
+        return ProvenanceBatch(
+            observations[-1].pk if observations else after_id, len(observations), len(changed),
+        )
+
+
 def project_scope_cursors_batch(
     *, after_id: int = 0, batch_size: int = 200, verify_only: bool = False,
 ) -> ProvenanceBatch:
