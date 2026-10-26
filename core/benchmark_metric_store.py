@@ -963,7 +963,16 @@ def persist_source(
                 <= 32 * 1024 * 1024,
                 "payload byte budget exceeded",
             )
-            run.raw_payload = payload
+            from core.collection_capture import archive_document
+
+            serialized_payload = json.dumps(
+                payload, sort_keys=True, separators=(",", ":"), allow_nan=False
+            ).encode()
+            run.payload_archive = archive_document(
+                serialized_payload,
+                encoding="selected-json-canonical-v1",
+                capture_kind="selected_payload",
+            )
             run.payload_sha256 = raw_hash
             run.observed_at = now
             run.source_metadata = source_metadata or {}

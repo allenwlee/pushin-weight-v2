@@ -147,7 +147,10 @@ def test_hf_bad_counts_retain_failed_envelope_without_values(bad):
 
     run = persist_source(configured(), "hf", "b" * 64, payload(bad))
     assert run.status == "failed"
-    assert run.raw_payload is not None
+    from core.collection_capture import read_document
+
+    assert run.raw_payload is None
+    assert read_document(run.payload_archive) == payload(bad)
     assert not MetricValue.objects.exists()
 
 

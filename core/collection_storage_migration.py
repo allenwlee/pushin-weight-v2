@@ -112,6 +112,53 @@ class MetricRequestBatch:
     updated: int
 
 
+@dataclass(frozen=True)
+class PayloadArchiveBatch:
+    last_id: UUID | None
+    scanned: int
+    archived: int
+
+
+def archive_metric_payload_batch(
+    *, after_id: UUID | None = None, batch_size: int = 50,
+    verify_only: bool = False,
+) -> PayloadArchiveBatch:
+    """Preserve old parsed metric payloads before retiring the run JSON column."""
+    from core.collection_capture import archive_legacy, read_document
+    from core.measurement_taxonomy import digest
+
+    if after_id is not None and not isinstance(after_id, UUID):
+        raise ValueError("after_id must be a UUID or None")
+    if type(batch_size) is not int or not 1 <= batch_size <= 50:
+        raise ValueError("batch_size must be an integer from 1 to 50")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        runs = CollectionRun.objects.filter(raw_payload__isnull=False)
+        if after_id is not None:
+            runs = runs.filter(pk__gt=after_id)
+        if not verify_only:
+            runs = runs.select_for_update(of=("self",))
+        selected = list(runs.order_by("pk")[:batch_size])
+        archived = 0
+        for run in selected:
+            if run.payload_sha256 is not None and digest(run.raw_payload) != run.payload_sha256:
+                raise ValueError("metric payload digest differs from saved run hash")
+            if run.payload_archive_id is not None:
+                if read_document(run.payload_archive) != run.raw_payload:
+                    raise ValueError("metric payload archive differs from legacy payload")
+            elif verify_only:
+                raise ValueError("metric payload archive is missing")
+            else:
+                run.payload_archive = archive_legacy(run.raw_payload)
+                run.save(update_fields=["payload_archive"])
+                archived += 1
+        return PayloadArchiveBatch(
+            selected[-1].pk if selected else after_id, len(selected), archived,
+        )
+
+
 def project_metric_request_coordinates_batch(
     *, after_id: UUID | None = None, batch_size: int = 200,
     verify_only: bool = False,
@@ -753,7 +800,12 @@ def project_arena_publication_batch(
             if not isinstance(native, list) or not 0 < len(native) <= 366:
                 raise ValueError("invalid Arena publication-date evidence")
             dates = sorted({native_date(day).isoformat() for day in native})
-            payload = run.raw_payload
+            from core.collection_capture import read_document
+
+            payload = (
+                read_document(run.payload_archive)
+                if run.payload_archive_id is not None else run.raw_payload
+            )
             if not isinstance(payload, dict) or payload.get("coverage") not in {
                 "publication_window", "latest_publication_only"
             }:

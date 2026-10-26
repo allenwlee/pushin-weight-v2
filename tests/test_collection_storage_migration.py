@@ -9,6 +9,7 @@ import pytest
 from core.collection_capture import read_document
 from core.collection_storage_migration import (
     archive_legacy_batch,
+    archive_metric_payload_batch,
     product_match_target_mismatch_counts,
     project_arena_publication_batch,
     project_benchmark_provenance_batch,
@@ -58,6 +59,35 @@ def test_arena_publication_copy_rebuilds_an_empty_cohort_without_duplicate_rows(
     assert project_arena_publication_batch().inserted == 1
     assert project_arena_publication_batch().inserted == 0
     assert project_arena_publication_batch(verify_only=True).scanned == 1
+
+
+def test_metric_payload_archive_copy_preserves_legacy_payload_and_detects_drift():
+    from core.benchmark_metric_store import persist_source
+    from core.measurement_taxonomy import digest
+    from tests.test_benchmark_download_persistence import provider_contract
+
+    contract = provider_contract("arena", ["rating"])
+    run = persist_source(
+        contract, "arena", digest("rg6-archive-payload"),
+        {"status": "ok", "config": "text_style_control", "rows": [],
+         "coverage": "publication_window"},
+    )
+    assert run.raw_payload is None
+    assert read_document(run.payload_archive)["coverage"] == "publication_window"
+    run.raw_payload = read_document(run.payload_archive)
+    run.payload_archive = None
+    run.save(update_fields=["raw_payload", "payload_archive"])
+    with pytest.raises(ValueError, match="missing"):
+        archive_metric_payload_batch(verify_only=True)
+    assert archive_metric_payload_batch().archived == 1
+    assert archive_metric_payload_batch().archived == 0
+    assert archive_metric_payload_batch(verify_only=True).scanned == 1
+    run.refresh_from_db()
+    assert read_document(run.payload_archive) == run.raw_payload
+    run.raw_payload = {**run.raw_payload, "status": "changed"}
+    run.save(update_fields=["raw_payload"])
+    with pytest.raises(ValueError, match="digest differs"):
+        archive_metric_payload_batch(verify_only=True)
 
 
 def test_metric_request_dates_copy_into_existing_scope_fields():

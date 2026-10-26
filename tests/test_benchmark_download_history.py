@@ -112,9 +112,14 @@ def test_arena_history_keeps_publication_when_selected_cohort_is_empty():
         snapshot.update(payload=payload, raw_artifact_sha256=digest(payload))
     run = import_history(data, apply=True)
     assert run.status == "partial"
-    assert run.raw_payload["coverage"] == "publication_window"
+    from core.collection_capture import read_document
+
+    assert run.raw_payload is None
+    assert read_document(run.payload_archive)["coverage"] == "publication_window"
     assert run.source_metadata["publication_dates"] == ["2026-09-10", "2026-09-11"]
-    assert not run.observations.exists()
+    assert set(run.observations.values_list("observation_kind", flat=True)) == {
+        "publication_marker"
+    }
 
 
 def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields():

@@ -8951,6 +8951,10 @@ class CollectionRun(models.Model):
     success_count = models.PositiveIntegerField(default=0)
     payload_sha256 = models.CharField(max_length=64, null=True)
     raw_payload = models.JSONField(null=True)
+    payload_archive = models.ForeignKey(
+        "CollectionEvidenceArchive", null=True, on_delete=models.PROTECT,
+        related_name="payload_runs",
+    )
     error_code = models.CharField(max_length=64, null=True)
 
     @property
