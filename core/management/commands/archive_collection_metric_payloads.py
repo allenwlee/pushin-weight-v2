@@ -10,7 +10,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--batch-size", type=int, default=50)
-        parser.add_argument("--max-batches", type=int, default=25)
+        parser.add_argument("--max-batches", type=int, default=100)
         parser.add_argument("--verify-only", action="store_true")
 
     def handle(self, *args, **options):

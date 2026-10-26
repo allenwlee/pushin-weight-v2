@@ -385,10 +385,6 @@ def claim_job(
     run.execution_state = "running"
     run.lease_token, run.lease_expires_at = token, lease
     run.error_code = None
-    run.invocations = [
-        *run.invocations,
-        {"invocation_id": invocation_id, "started_at": now.isoformat()},
-    ]
     run.save()
     attempt = _begin_attempt(
         run, attempt_key=ingestion_key, limits=job.budgets, now=now

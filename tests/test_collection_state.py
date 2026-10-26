@@ -85,6 +85,9 @@ def test_scheduled_invocations_never_copy_previous_scopes():
     finish_run(first, status="success")
     second = claim_job(obj.pk, manual_authorized=True)
     assert CollectionScopeRun.objects.filter(run_id=second.run_id).count() == 0
+    run = CollectionRun.objects.get(pk=second.run_id)
+    assert run.invocations == []
+    assert run.attempts.count() == 1
 
 
 def test_pilot_import_preserves_unknown_attempt_clocks_without_fabricating_runs():
