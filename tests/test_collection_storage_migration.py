@@ -260,6 +260,9 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
 def test_historical_invocations_get_distinct_attempts_without_invented_outcomes():
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
     from core.measurement_taxonomy import digest
     from core.models import CollectionRun
     from tests.test_collection_jobs import ready
@@ -278,7 +281,10 @@ def test_historical_invocations_get_distinct_attempts_without_invented_outcomes(
     with pytest.raises(ValueError, match="missing historical attempt"):
         project_run_invocations_batch(verify_only=True)
 
-    result = project_run_invocations_batch()
+    with CaptureQueriesContext(connection) as queries:
+        result = project_run_invocations_batch()
+    assert all('"raw_payload"' not in query["sql"] for query in queries)
+    assert all('"definition"' not in query["sql"] for query in queries)
     assert result.inserted == 2
     attempts = list(run.attempts.order_by("ordinal"))
     assert [attempt.ordinal for attempt in attempts] == [1, 2]
@@ -310,6 +316,9 @@ def test_historical_invocations_get_distinct_attempts_without_invented_outcomes(
 
 
 def test_scope_cursor_copy_preserves_order_duplicates_and_refuses_conflicts():
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
     from core.collection_storage_migration import project_scope_cursors_batch
     from core.models import CollectionScopeCursorReceipt, CollectionScopeRun
 
@@ -319,7 +328,9 @@ def test_scope_cursor_copy_preserves_order_duplicates_and_refuses_conflicts():
     )
     with pytest.raises(ValueError, match="not projected"):
         project_scope_cursors_batch(after_id=scope.pk - 1, batch_size=1, verify_only=True)
-    result = project_scope_cursors_batch(after_id=scope.pk - 1, batch_size=1)
+    with CaptureQueriesContext(connection) as queries:
+        result = project_scope_cursors_batch(after_id=scope.pk - 1, batch_size=1)
+    assert all('"envelopes"' not in query["sql"] for query in queries)
     assert (result.last_id, result.scanned, result.updated) == (scope.pk, 1, 1)
     assert list(scope.cursor_receipts.order_by("position").values_list(
         "position", "cursor"

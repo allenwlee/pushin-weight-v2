@@ -299,6 +299,7 @@ def project_run_invocations_batch(
         runs = list(
             CollectionRun.objects.select_for_update()
             .select_related("job")
+            .only("id", "job__operation", "invocations")
             .exclude(invocations=[])
             .filter(pk__gt=after_id or UUID(int=0))
             .order_by("pk")[:batch_size]
@@ -424,6 +425,7 @@ def project_scope_cursors_batch(
             cursor.execute("SET LOCAL statement_timeout = '30s'")
         scopes = list(
             CollectionScopeRun.objects.select_for_update()
+            .only("id", "cursor_history")
             .exclude(cursor_history=[]).filter(pk__gt=after_id)
             .order_by("pk")[:batch_size]
         )
