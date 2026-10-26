@@ -271,7 +271,7 @@ def test_fresh_run_refreshes_unchanged_sha_and_observes_old_created_new_repo():
 
 def test_detail_partial_resumes_and_unsupported_expansion_is_terminal_gap():
     from core.collection_capture import archive_legacy
-    from core.model_inventory import execute_model_inventory
+    from core.model_inventory import _hf_missing_fields, execute_model_inventory
 
     contract, raw, _, _ = configured()
     job = ingestion_job(contract)
@@ -298,6 +298,8 @@ def test_detail_partial_resumes_and_unsupported_expansion_is_terminal_gap():
     )
     assert first.status == "partial"
     assert MetricValue.objects.count() == 2
+    missing_before_archive = _hf_missing_fields(first, job)
+    assert missing_before_archive
     for listing in first.observations.filter(scope_run__scope_kind="namespace"):
         listing.legacy_archive = archive_legacy({
             "listing": listing.listing,
@@ -310,6 +312,9 @@ def test_detail_partial_resumes_and_unsupported_expansion_is_terminal_gap():
         listing.save(update_fields=[
             "legacy_archive", "listing", "dimensions", "source_metadata",
         ])
+    assert sorted(_hf_missing_fields(first, job), key=str) == sorted(
+        missing_before_archive, key=str
+    )
     broken = False
     attempts.clear()
     resumed = execute_model_inventory(

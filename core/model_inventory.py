@@ -668,6 +668,7 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
 
 def _hf_missing_fields(run, job):
     """Explicit terminal gaps for optional selected fields absent from all groups."""
+    from core.collection_capture import observation_object_documents
     from core.models import MetricCollectionContract
 
     contract_id = job.scope.get("numeric_contract_id")
@@ -688,9 +689,9 @@ def _hf_missing_fields(run, job):
         "spaces_count": "numSpaces",
     }
     groups = {}
-    for observation in run.observations.filter(status="ok"):
+    for observation in run.observations.filter(status="ok").select_related("legacy_archive"):
         key = (observation.source_subject_kind, observation.source_identifier)
-        groups.setdefault(key, set()).update(observation.listing)
+        groups.setdefault(key, set()).update(observation_object_documents(observation)[0])
     result = []
     for (kind, identity), returned in groups.items():
         for metric, wire in (
