@@ -70,6 +70,14 @@ def test_chart_dimensions_and_selection_survive_retired_observation_documents(so
     )
     after, _, _ = metric_points(contract, line, [day])
     assert after == before
+    from core.collection_reports import resource_statistics
+
+    report = resource_statistics(
+        contract_id=contract.pk, source=source, identifier="lab/model",
+    )
+    assert report["values"] and all(
+        row["dimensions"] == dimensions for row in report["values"]
+    )
 
 
 def test_percentage_is_change_from_fixed_baseline_with_missing_day_preserved():

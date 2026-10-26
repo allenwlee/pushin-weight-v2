@@ -70,6 +70,24 @@ def observation_dimensions(observation):
     return dimensions
 
 
+def observation_provenance_metadata(observation):
+    """Expose retained publication facts without reading retired documents."""
+    metadata = {}
+    if observation.period_status is not None:
+        metadata["period_status"] = observation.period_status
+    if observation.history_reconstructed is True:
+        metadata["history_basis"] = "reconstructed_current_relationships"
+    if observation.secondary_source is not None:
+        metadata["secondary_source"] = observation.secondary_source
+    if observation.publication_complete is not None:
+        metadata["publication_complete"] = observation.publication_complete
+    if observation.archive_snapshot_date is not None:
+        metadata["archive_snapshot_date"] = observation.archive_snapshot_date.isoformat()
+    if observation.reconstruction_date is not None:
+        metadata["reconstruction_date"] = observation.reconstruction_date.isoformat()
+    return metadata
+
+
 def publication_runs(contract, lower, upper):
     with connection.cursor() as cursor:
         cursor.execute(

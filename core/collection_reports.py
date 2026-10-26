@@ -3,6 +3,10 @@
 from django.db.models import Prefetch, Q
 from django.utils import timezone
 
+from core.benchmark_serving import (
+    observation_dimensions,
+    observation_provenance_metadata,
+)
 from core.measurement_taxonomy import require
 from core.models import (
     CollectionCorrection,
@@ -31,7 +35,7 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at
             observation__status="ok",
             observation__run__status__in=["success", "partial"],
         )
-        .select_related("observation__run", "source_metric")
+        .select_related("observation__run__job", "source_metric")
         .prefetch_related(
             Prefetch(
                 "observation__corrections",
@@ -48,6 +52,12 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at
     for value in values[:limit]:
         observation, definition = value.observation, value.source_metric
         assignment = attribution_at(observation, known_at=known_at)
+        if source in {"arena", "openrouter", "opencode"}:
+            dimensions = observation_dimensions(observation)
+            source_evidence = observation_provenance_metadata(observation)
+        else:
+            dimensions = observation.dimensions
+            source_evidence = observation.source_metadata
         rows.append(
             {
                 "value_id": value.pk,
@@ -84,8 +94,8 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at
                         "period_label_date",
                     )
                 },
-                "dimensions": observation.dimensions,
-                "source_evidence": observation.source_metadata,
+                "dimensions": dimensions,
+                "source_evidence": source_evidence,
             }
         )
     return _redact(
