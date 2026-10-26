@@ -92,6 +92,8 @@ def test_command_resume_reconstructs_committed_scope_without_files(monkeypatch, 
 
 
 def test_crashed_reservation_survives_reclaim_and_pause_fences_response():
+    from core.data_source_backfill import campaign_usage
+
     job = registered()
     set_job_state(job.pk, 'ready')
     first = claim_job(job.pk)
@@ -99,8 +101,7 @@ def test_crashed_reservation_survives_reclaim_and_pause_fences_response():
         claim_job(job.pk)
     CollectionRun.objects.filter(pk=first.run_id).update(lease_expires_at=timezone.now() - timedelta(seconds=1))
     second = claim_job(job.pk)
-    run = CollectionRun.objects.get(pk=second.run_id)
-    assert run.report['campaign_usage']['reserved_requests'] == 40
+    assert campaign_usage(job)['reserved_requests'] == 40
     set_job_state(job.pk, 'paused')
     with pytest.raises(StaleClaim):
         checkpoint_scope(second, scope_key='late', ownership={})
@@ -177,7 +178,7 @@ def test_terminal_metric_partial_copies_only_checkpoint_into_new_attempt(setting
     assert second.run_id != first.run_id
     resumed = CollectionRun.objects.get(pk=second.run_id)
     assert resumed.scopes.get().cursor == 'second'
-    assert resumed.report['continued_from'] == str(first.run_id)
+    assert resumed.continuation_of_id == first.run_id
     assert previous.scopes.get().cursor == 'second'
     previous.refresh_from_db()
     assert previous.status == 'partial' and previous.request_count == 1
@@ -202,7 +203,7 @@ def test_two_campaign_workers_cannot_own_one_phase():
         results = list(pool.map(lambda _: claim(), range(2)))
     assert len([result for result in results if result is not None]) == 1
     run = CollectionRun.objects.get(job=job)
-    assert run.report['campaign_usage']['invocations'] == 1
+    assert run.attempts.count() == 1
 
 
 def test_real_command_dispatches_existing_github_adapter_to_saved_evidence(monkeypatch):

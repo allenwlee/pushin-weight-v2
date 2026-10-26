@@ -15,6 +15,7 @@ from core.collection_storage_migration import (
     project_benchmark_provenance_batch,
     project_metric_request_coordinates_batch,
     project_product_match_targets_batch,
+    project_run_continuations_batch,
     project_run_ingestion_mode,
     project_run_invocations_batch,
     project_scope_bounds_batch,
@@ -88,6 +89,37 @@ def test_metric_payload_archive_copy_preserves_legacy_payload_and_detects_drift(
     run.save(update_fields=["raw_payload"])
     with pytest.raises(ValueError, match="digest differs"):
         archive_metric_payload_batch(verify_only=True)
+
+
+def test_historical_run_continuation_copy_is_repeatable_and_rejects_changed_owner():
+    from core.measurement_taxonomy import digest
+    from core.models import CollectionRun
+
+    previous, _, _ = execution()
+    successor = CollectionRun.objects.create(
+        job=previous.job,
+        ingestion_key=digest("rg6-historical-continuation"),
+        status="success",
+        completed_at=datetime(2026, 10, 26, 3, tzinfo=UTC),
+        report={"continued_from": str(previous.pk)},
+    )
+    with pytest.raises(ValueError, match="not projected"):
+        project_run_continuations_batch(verify_only=True)
+    assert project_run_continuations_batch().updated == 1
+    assert project_run_continuations_batch().updated == 0
+    assert project_run_continuations_batch(verify_only=True).scanned == 1
+    successor.refresh_from_db()
+    assert successor.continuation_of_id == previous.pk
+    previous.continuation_of = successor
+    previous.save(update_fields=["continuation_of"])
+    with pytest.raises(ValueError, match="forms a cycle"):
+        project_run_continuations_batch(verify_only=True)
+    previous.continuation_of = None
+    previous.save(update_fields=["continuation_of"])
+    successor.report = {"continued_from": str(successor.pk)}
+    successor.save(update_fields=["report"])
+    with pytest.raises(ValueError, match="different run owner"):
+        project_run_continuations_batch(verify_only=True)
 
 
 def test_metric_request_dates_copy_into_existing_scope_fields():

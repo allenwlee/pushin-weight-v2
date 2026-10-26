@@ -120,6 +120,62 @@ class PayloadArchiveBatch:
     archived: int
 
 
+@dataclass(frozen=True)
+class ContinuationBatch:
+    last_id: UUID | None
+    scanned: int
+    updated: int
+
+
+def project_run_continuations_batch(
+    *, after_id: UUID | None = None, batch_size: int = 200,
+    verify_only: bool = False,
+) -> ContinuationBatch:
+    """Copy historical predecessor links without changing the old report."""
+    if after_id is not None and not isinstance(after_id, UUID):
+        raise ValueError("after_id must be a UUID or None")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        runs = CollectionRun.objects.filter(report__has_key="continued_from")
+        if after_id is not None:
+            runs = runs.filter(pk__gt=after_id)
+        if not verify_only:
+            runs = runs.select_for_update(of=("self",))
+        selected = list(runs.order_by("pk")[:batch_size])
+        updated = 0
+        for run in selected:
+            try:
+                previous_id = UUID(run.report["continued_from"])
+            except (TypeError, ValueError, AttributeError):
+                raise ValueError("invalid historical predecessor ID") from None
+            previous = CollectionRun.objects.filter(pk=previous_id).first()
+            if previous is None or previous.pk == run.pk or previous.job_id != run.job_id:
+                raise ValueError("historical predecessor has a different run owner")
+            seen = {run.pk}
+            ancestor = previous
+            while ancestor is not None:
+                if ancestor.pk in seen:
+                    raise ValueError("historical predecessor forms a cycle")
+                seen.add(ancestor.pk)
+                ancestor = ancestor.continuation_of
+            if run.continuation_of_id == previous_id:
+                continue
+            if run.continuation_of_id is not None:
+                raise ValueError("typed predecessor differs from historical report")
+            if verify_only:
+                raise ValueError("historical predecessor is not projected")
+            run.continuation_of_id = previous_id
+            run.save(update_fields=["continuation_of"])
+            updated += 1
+        return ContinuationBatch(
+            selected[-1].pk if selected else after_id, len(selected), updated,
+        )
+
+
 def archive_metric_payload_batch(
     *, after_id: UUID | None = None, batch_size: int = 50,
     verify_only: bool = False,

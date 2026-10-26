@@ -368,7 +368,7 @@ def claim_job(
             scheduled_slot_at=slot,
             report={"definition_sha256": job.definition_sha256},
         )
-    if bounded_campaign:
+    if bounded_campaign and job.campaign_id is None:
         prior_usage = run.report.get("campaign_usage", {})
         run.report = {
             **run.report,
@@ -401,8 +401,8 @@ def claim_job(
                 scope.pk = None
                 scope.run = run
                 scope.save(force_insert=True)
-            run.report = {**run.report, "continued_from": str(previous.pk)}
-            run.save(update_fields=["report", "updated_at"])
+            run.continuation_of = previous
+            run.save(update_fields=["continuation_of", "updated_at"])
     if continue_from is not None and job.instruction_version == 2:
         require(
             str(continue_from) == str(run.pk),
@@ -428,8 +428,8 @@ def claim_job(
             scope.pk = None
             scope.run = run
             scope.save(force_insert=True)
-        run.report = {**run.report, "continued_from": str(previous.pk)}
-        run.save(update_fields=["report", "updated_at"])
+        run.continuation_of = previous
+        run.save(update_fields=["continuation_of", "updated_at"])
     job.active_run, job.last_attempt = run, run
     job.last_attempt_attempt = attempt
     job.next_retry_at = None
@@ -842,7 +842,7 @@ def finish_run(
         )
         # Only an adapter proving complete physical accounting may release unused
         # reservation. Interrupted/ambiguous attempts retain their conservative cap.
-        reservation = run.report.get("campaign_usage")
+        reservation = run.report.get("campaign_usage") if job.campaign_id is None else None
         campaign = job.campaign_settings
         if (
             isinstance(campaign, dict)
