@@ -1,4 +1,5 @@
 """Real command, shared runner and PostgreSQL: jobs never borrow scheduled keys."""
+import json
 from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
@@ -256,10 +257,13 @@ def test_database_job_resumes_exact_page_and_preserves_previous_attempt(pipeline
     old_scope = old.scopes.get(scope_kind="x_query")
     assert old.status == "partial" and old.request_count == 1
     assert old_scope.cursor == "second-page"
-    assert old_scope.envelopes == []
+    assert not hasattr(old_scope, "envelopes")
     assert page_receipts(old_scope)[-1]["post_ids"] == ["1"]
-    old_scope.envelopes = [{"deliberately": "unusable retired receipt"}]
-    old_scope.save(update_fields=["envelopes"])
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE collection_scope_runs SET envelopes=%s::jsonb WHERE id=%s",
+            ['[{"deliberately":"unusable retired receipt"}]', old_scope.pk],
+        )
     assert old_scope.raw_count == 1
     assert read_document(old.scopes.get(scope_kind="x_checkpoint_import").legacy_archive)["historical_attempt_timestamps"] is None
     pipeline.responses.append(page("2"))
@@ -271,9 +275,11 @@ def test_database_job_resumes_exact_page_and_preserves_previous_attempt(pipeline
     assert second["enrichment_pending_count"] == 2
     old_scope.refresh_from_db()
     assert old_scope.cursor == "second-page" and not old_scope.enumeration_complete
-    assert old_scope.envelopes == [{"deliberately": "unusable retired receipt"}]
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT envelopes FROM collection_scope_runs WHERE id=%s", [old_scope.pk])
+        assert json.loads(cursor.fetchone()[0]) == [{"deliberately": "unusable retired receipt"}]
     resumed = CollectionRun.objects.get(pk=second["run_id"]).scopes.get(scope_kind="x_query")
-    assert resumed.envelopes == [] and len(page_receipts(resumed)) == 2
+    assert not hasattr(resumed, "envelopes") and len(page_receipts(resumed)) == 2
     assert pipeline.requests[1]["cursor"] == "second-page"
     assert pipeline.requests[0]["query"] == pipeline.requests[1]["query"]
     assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
@@ -698,25 +704,30 @@ def test_historical_rare_inbox_precedes_gate_and_never_uses_live_slot(pipeline, 
     assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
     assert reopened == ["rare-kept"]
     scoped = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_key="RARE_EXTRA")
-    assert scoped.envelopes == []
+    assert not hasattr(scoped, "envelopes")
     evidence = page_receipts(scoped)[0]
     assert evidence["received_post_ids"] == evidence["inbox_post_ids"] == ["rare-kept"]
     assert evidence["raw_count"] == 1 and len(evidence["rare_hit_ids"]) == 1
     assert list(scoped.rare_hit_memberships.values_list("rare_hit_id", flat=True)) == evidence["rare_hit_ids"]
     # Explicit legacy fixture for the migration-only copier below.
-    scoped.envelopes = page_receipts(scoped)
-    scoped.save(update_fields=["envelopes"])
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE collection_scope_runs SET envelopes=%s::jsonb WHERE id=%s",
+            [json.dumps(page_receipts(scoped)), scoped.pk],
+        )
     assert scope_rare_hit_mismatch_counts() == (0, 0)
     CollectionScopeRareHit.objects.filter(scope_run=scoped).delete()
     empty_window = CollectionScopeRun.objects.create(
         run=scoped.run, scope_kind="x_query", scope_key="rare-empty-window",
-        ownership=scoped.ownership, envelopes=[],
     )
     replay = CollectionScopeRun.objects.create(
         run=scoped.run, scope_kind="x_query", scope_key="rare-replay",
-        ownership=scoped.ownership,
-        envelopes=[{"rare_hit_ids": evidence["rare_hit_ids"]}],
     )
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE collection_scope_runs SET envelopes=%s::jsonb WHERE id=%s",
+            [json.dumps([{"rare_hit_ids": evidence["rare_hit_ids"]}]), replay.pk],
+        )
     assert scope_rare_hit_mismatch_counts() == (2, 0)
     with CaptureQueriesContext(connection) as copied_queries:
         first = project_scope_rare_hits_batch(after_id=scoped.pk - 1, batch_size=1)
@@ -741,7 +752,7 @@ def test_historical_rare_resume_uses_saved_inbox_and_exact_cursor(pipeline, monk
 
     import requests
 
-    from core.models import CollectionScopeRun, RareTypeSearchHit
+    from core.models import RareTypeSearchHit
     from x_monitor.jev_decisions import QUESTION_SET, JevDecisionsClient, JevResponse
     job = policy_job(monkeypatch, tmp_path, calls={"RARE_EXTRA"}, rare=True)
     monkeypatch.setenv("TYPESAFE_API_KEY", "test-typesafe")
@@ -757,7 +768,12 @@ def test_historical_rare_resume_uses_saved_inbox_and_exact_cursor(pipeline, monk
     with pytest.raises(CommandError):
         run(job)
     assert RareTypeSearchHit.objects.count() == 1 and not model_calls and not Post.objects.exists()
-    CollectionScopeRun.objects.filter(run__job=job).update(envelopes=[{"deliberately": "unusable retired receipt"}])
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE collection_scope_runs SET envelopes=%s::jsonb "
+            "WHERE run_id IN (SELECT id FROM collection_runs WHERE job_id=%s)",
+            ['[{"deliberately":"unusable retired receipt"}]', job.pk],
+        )
     pipeline.responses.append(page("second"))
     report = run(job)
     assert report["collection_drained"] and report["rare_gate_pending"] == 0
@@ -933,7 +949,7 @@ def test_page_ledger_reconciles_duplicate_ids_and_every_deterministic_rejection(
     pipeline.responses.append(body)
     report = run(ready_job())
     row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_kind="x_query")
-    assert row.envelopes == []
+    assert not hasattr(row, "envelopes")
     evidence = page_receipts(row)[-1]
     assert row.raw_count == 6
     assert evidence["received_post_ids"] == ["kept", "kept", "unmatched", "excluded", "outside", "invalid"]
@@ -952,7 +968,7 @@ def test_all_rejected_page_retains_receipt_and_can_truthfully_drain(pipeline):
     pipeline.responses.append(body)
     report = run(ready_job())
     row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_kind="x_query")
-    assert row.envelopes == []
+    assert not hasattr(row, "envelopes")
     evidence = page_receipts(row)[-1]
     assert report["collection_drained"] and not report["recovered_post_ids"]
     assert row.raw_count == 1 and evidence["received_post_ids"] == ["rejected"]
@@ -997,7 +1013,7 @@ def test_clipped_page_records_received_tail_ids_without_advancing(pipeline):
     pipeline.responses.append(body)
     report = run(ready_job())
     row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_kind="x_query")
-    assert row.envelopes == []
+    assert not hasattr(row, "envelopes")
     evidence = page_receipts(row)[-1]
     assert not row.enumeration_complete and row.cursor is None
     assert row.raw_count == evidence["raw_count"] == 21
@@ -1040,7 +1056,7 @@ def test_provider_safety_response_stops_all_scopes_and_preserves_cursor(pipeline
     for row in attempt.scopes.filter(scope_kind="x_query"):
         assert row.cursor == "committed-cursor" and not row.enumeration_complete
     failed_scope = attempt.scopes.get(scope_key="B1:aug09")
-    assert failed_scope.envelopes == []
+    assert not hasattr(failed_scope, "envelopes")
     receipt = page_receipts(failed_scope)[-1]
     assert receipt["response_status_code"] == http_status and receipt["pages_received"] == 0
     assert secret_body not in str(run_report_document(attempt)) and secret_body not in str(receipt)

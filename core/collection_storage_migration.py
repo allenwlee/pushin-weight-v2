@@ -6,6 +6,7 @@ bytes. It is retained evidence; operational reads must use typed owners.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -1311,23 +1312,30 @@ def project_scope_rare_hits_batch(
         ids = [row[0] for row in cursor.fetchall()]
         if not ids:
             return RareHitMembershipBatch(after_id, 0, 0)
-        scopes = list(
-            CollectionScopeRun.objects.filter(pk__in=ids)
-            .extra(where=["jsonb_path_exists(envelopes, '$[*].rare_hit_ids')"])
-            .select_related("run")
-            .only("pk", "scope_kind", "envelopes", "run__job_id")
+        # The historical copier remains usable after the ORM detaches the
+        # legacy column and before the separate physical deletion.
+        cursor.execute(
+            "SELECT scope.id, scope.scope_kind, scope.envelopes, run.job_id "
+            "FROM collection_scope_runs scope "
+            "JOIN collection_runs run ON run.id=scope.run_id "
+            "WHERE scope.id=ANY(%s) "
+            "AND jsonb_path_exists(scope.envelopes, '$[*].rare_hit_ids')",
+            [ids],
         )
+        scopes = cursor.fetchall()
         expected = set()
-        for scope in scopes:
-            for envelope in scope.envelopes:
+        for scope_id, scope_kind, envelopes, _ in scopes:
+            if isinstance(envelopes, str):
+                envelopes = json.loads(envelopes)
+            for envelope in envelopes:
                 if "rare_hit_ids" not in envelope:
                     continue
-                if scope.scope_kind != "x_query":
+                if scope_kind != "x_query":
                     raise ValueError("rare hit belongs to a non-X scope")
                 hits = envelope["rare_hit_ids"]
                 if not isinstance(hits, list) or any(type(hit) is not int or hit <= 0 for hit in hits):
                     raise ValueError("invalid historical rare hit IDs")
-                expected.update((scope.pk, hit) for hit in hits)
+                expected.update((scope_id, hit) for hit in hits)
         hit_rows = {
             hit.pk: hit
             for hit in RareTypeSearchHit.objects.filter(
@@ -1336,14 +1344,14 @@ def project_scope_rare_hits_batch(
         }
         if len(hit_rows) != len({hit_id for _, hit_id in expected}):
             raise ValueError("historical rare hit is missing")
-        job_by_scope = {scope.pk: scope.run.job_id for scope in scopes}
+        job_by_scope = {scope_id: job_id for scope_id, _, _, job_id in scopes}
         if any(
             not hit_rows[hit_id].run.lane.startswith(f"bf:{job_by_scope[scope_id]}:")
             for scope_id, hit_id in expected
         ):
             raise ValueError("historical rare hit belongs to another job")
         existing = set(
-            CollectionScopeRareHit.objects.filter(scope_run_id__in=[scope.pk for scope in scopes])
+            CollectionScopeRareHit.objects.filter(scope_run_id__in=[scope_id for scope_id, _, _, _ in scopes])
             .values_list("scope_run_id", "rare_hit_id")
         )
         if existing - expected:
