@@ -14,8 +14,6 @@ from core.hf_catalog import catalog_report, execute_catalog
 from core.models import CollectionObservation, CollectionRun, CollectionScopeRun
 from tests.test_hf_catalog_runner import api, scope
 
-pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
-
 RETIRED = {
     CollectionRun: {"invocations", "report", "request_params", "source_metadata", "raw_payload"},
     CollectionObservation: {"listing", "dimensions", "source_metadata", "groups", "envelopes"},
@@ -37,12 +35,48 @@ def _defaults():
         return cursor.fetchall()
 
 
+def _retired_columns_present(retired, physical, orm):
+    """Accept the complete compatibility schema or the complete retirement."""
+    assert set(retired) <= set(physical), "collection tables missing from physical schema"
+    assert set(retired) <= set(orm), "collection models missing from ORM schema"
+    present = {table: set(physical[table]) & names for table, names in retired.items()}
+    if any(present.values()):
+        assert present == retired, "collection JSON columns are only partly retired"
+        return True
+    assert all(not set(orm[table]) & names for table, names in retired.items()), (
+        "retired collection columns remain in ORM metadata"
+    )
+    return False
+
+
+def test_retirement_schema_guard_rejects_partial_drop_and_stale_orm():
+    retired = {"runs": {"report", "invocations"}, "observations": {"listing"}, "scopes": {"ownership"}}
+    absent = {table: {"id"} for table in retired}
+    assert _retired_columns_present(retired, retired, retired) is True
+    assert _retired_columns_present(retired, retired, absent) is True
+    assert _retired_columns_present(retired, absent, absent) is False
+    with pytest.raises(AssertionError, match="partly retired"):
+        _retired_columns_present(retired, {**absent, "runs": {"report"}}, absent)
+    with pytest.raises(AssertionError, match="ORM metadata"):
+        _retired_columns_present(retired, absent, retired)
+    with pytest.raises(AssertionError, match="tables missing"):
+        _retired_columns_present(retired, {}, absent)
+
+
 @contextmanager
 def denied_retirement_columns():
     """No DROP or migration; role, grants and test defaults all roll back."""
     role = "pw_hf_retire_" + uuid4().hex[:16]
     before = _defaults()
     fields = {model: model._meta.local_fields for model in RETIRED}
+    retired_tables = {model._meta.db_table: retired for model, retired in RETIRED.items()}
+    physical = {}
+    for table, column, _ in before:
+        physical.setdefault(table, set()).add(column)
+    retained = _retired_columns_present(
+        retired_tables, physical,
+        {model._meta.db_table: {field.column for field in original} for model, original in fields.items()},
+    )
     try:
         with transaction.atomic():
             with connection.cursor() as cursor:
@@ -61,7 +95,7 @@ def denied_retirement_columns():
                     # The pre-retirement physical schema still has NOT NULL
                     # columns. Empty defaults let this fixture issue exactly the
                     # post-retirement INSERT column list; no source data moves.
-                    for name in retired:
+                    for name in retired if retained else ():
                         empty = "[]" if name in {"invocations", "envelopes", "cursor_history"} else "{}"
                         cursor.execute(sql.SQL("ALTER TABLE {} ALTER COLUMN {} SET DEFAULT {}::jsonb").format(
                             table, sql.Identifier(name), sql.Literal(empty),
@@ -73,17 +107,18 @@ def denied_retirement_columns():
                 model._meta.local_fields = [field for field in fields[model] if field.name not in retired]
                 model._meta.__dict__.pop("db_returning_fields", None)
             apps.clear_cache()
-            # Prove that the database actually rejects access, not just that
-            # this test's ORM omits the old attributes.
+            # Before DROP require privilege denial; afterward require physical
+            # absence. A stale ORM is rejected above, before masking fields.
             for model, retired in RETIRED.items():
                 for name in retired:
                     with (
-                        pytest.raises(ProgrammingError, match="permission denied"),
+                        pytest.raises(ProgrammingError, match="permission denied" if retained else "does not exist") as failure,
                         transaction.atomic(), connection.cursor() as cursor,
                     ):
                         cursor.execute(sql.SQL("SELECT {} FROM {} LIMIT 0").format(
                             sql.Identifier(name), sql.Identifier(model._meta.db_table),
                         ))
+                    assert failure.value.__cause__.sqlstate == ("42501" if retained else "42703")
             try:
                 yield
             finally:
@@ -99,6 +134,8 @@ def denied_retirement_columns():
             assert cursor.fetchone()[0] == 0
 
 
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
 def test_fresh_capture_resume_and_operator_report_need_no_retiring_columns():
     from core.collection_reports import job_status
 
@@ -125,6 +162,8 @@ def test_fresh_capture_resume_and_operator_report_need_no_retiring_columns():
 
 
 @pytest.mark.parametrize("across_pages", [False, True])
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
 def test_repeated_repository_keeps_exact_selected_object_and_original_page_evidence(across_pages):
     def pages(request):
         if request.url.path != "/api/models":
@@ -153,6 +192,8 @@ def test_repeated_repository_keeps_exact_selected_object_and_original_page_evide
 
 
 @pytest.mark.parametrize("tamper", ["locator", "checksum"])
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
 def test_listing_replay_rejects_changed_selected_input(tamper):
     manifest = scope()
     with denied_retirement_columns():
@@ -169,6 +210,8 @@ def test_listing_replay_rejects_changed_selected_input(tamper):
             observation_object_documents(observation)
 
 
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
 def test_failed_identity_validation_stays_queryable_after_successful_resume():
     from core.models import CollectionRequest
 
@@ -187,6 +230,8 @@ def test_failed_identity_validation_stays_queryable_after_successful_resume():
         assert CollectionRequest.objects.filter(request_group="identity", error_code__isnull=True).count() == 1
 
 
+@pytest.mark.requires_postgres
+@pytest.mark.django_db(transaction=True)
 def test_archived_catalog_resume_adopts_namespace_identity_without_refetch():
     from core.collection_capture import archive_legacy
     from core.measurement_taxonomy import digest
