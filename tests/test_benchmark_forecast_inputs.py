@@ -128,3 +128,9 @@ def test_contract_review_after_cutoff_and_reconstruction_are_not_past_knowledge(
         isolated_review=True,
     )
     assert research["values"] and research["not_past_known_evidence"]
+    if reconstructed:
+        assert all(
+            row["source_metadata"]["history_basis"]
+            == "reconstructed_current_relationships"
+            for row in research["values"]
+        )

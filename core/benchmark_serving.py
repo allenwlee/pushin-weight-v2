@@ -3,6 +3,8 @@
 from django.db import connection
 from django.db.models.expressions import RawSQL
 
+from core.measurement_taxonomy import require
+
 
 def observation_ids(predicate, params=(), *, mapping_ids, contract_id, source_id):
     # Predicates are internal constants, never user-provided SQL.
@@ -86,6 +88,65 @@ def observation_provenance_metadata(observation):
     if observation.reconstruction_date is not None:
         metadata["reconstruction_date"] = observation.reconstruction_date.isoformat()
     return metadata
+
+
+def github_asset_metric(definition):
+    return (
+        definition.definition_metadata.get("resource_grain") == "release_asset"
+        or definition.metric_key in {"asset_downloads", "asset_size_bytes"}
+    )
+
+
+def github_asset_coordinates(observation_ids):
+    """Follow exact numeric-input and release/asset-parent facts."""
+    if not observation_ids:
+        return {}
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT metric_input.observation_id, asset.native_stable_id,
+                release.native_stable_id
+            FROM collection_observation_inputs metric_input
+            JOIN collection_observations metric
+                ON metric.id=metric_input.observation_id
+            JOIN collection_observations asset_observation
+                ON asset_observation.id=metric_input.input_observation_id
+            JOIN collection_runs asset_run ON asset_run.id=asset_observation.run_id
+            JOIN collection_jobs asset_job ON asset_job.id=asset_run.job_id
+            JOIN collection_resource_snapshots asset
+                ON asset.observation_id=asset_observation.id
+            JOIN collection_observation_inputs parent
+                ON parent.observation_id=asset_observation.id
+                AND parent.input_role='release_asset_parent'
+            JOIN collection_observations release_observation
+                ON release_observation.id=parent.input_observation_id
+            JOIN collection_runs release_run ON release_run.id=release_observation.run_id
+            JOIN collection_jobs release_job ON release_job.id=release_run.job_id
+            JOIN collection_resource_snapshots release
+                ON release.observation_id=release_observation.id
+            WHERE metric_input.observation_id=ANY(%s)
+                AND metric_input.input_role='numeric_projection'
+                AND asset.resource_kind='release_asset'
+                AND release.resource_kind='releases'
+                AND asset_job.source_id='github' AND asset_job.purpose='catalog'
+                AND release_job.source_id='github' AND release_job.purpose='catalog'
+                AND asset_observation.source_identifier=metric.source_identifier
+                AND release_observation.source_identifier=metric.source_identifier
+                AND metric_input.input_sha256=asset_observation.observation_key
+                AND parent.input_sha256=release_observation.observation_key
+                AND parent.row_locator=release.native_stable_id
+        """, [list(observation_ids)])
+        rows = cursor.fetchall()
+    result = {}
+    for observation_id, asset_id, release_id in rows:
+        require(
+            all(isinstance(value, str) and value.isascii() and value.isdecimal()
+                and value.lstrip("0") == value for value in (asset_id, release_id)),
+            "GitHub asset identity is not numeric",
+        )
+        coordinates = {"release_id": int(release_id), "asset_id": int(asset_id)}
+        prior = result.setdefault(observation_id, coordinates)
+        require(prior == coordinates, "GitHub asset has conflicting parents")
+    return result
 
 
 def publication_runs(contract, lower, upper):

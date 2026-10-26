@@ -7,6 +7,8 @@ from django.db.models import Q
 from core.benchmark_attribution import enforce_use
 from core.benchmark_metric_store import aware_instant
 from core.benchmark_serving import (
+    github_asset_coordinates,
+    github_asset_metric,
     observation_dimensions,
     observation_provenance_metadata,
 )
@@ -152,15 +154,26 @@ def forecast_inputs(
         len(selected) <= limit,
         "forecast input budget exceeded; select a smaller mapping cohort",
     )
+    github_assets = github_asset_coordinates({
+        value.observation_id for value in selected
+        if value.observation.run.job.source_id == "github"
+        and github_asset_metric(value.source_metric)
+    })
     rows, datasets = [], set()
     for value in selected:
         observation, definition = value.observation, value.source_metric
         run = observation.run
-        # These providers' forecast coordinates are retained as typed
-        # publication facts; their observation documents are not read here.
-        if run.job.source_id in {"arena", "openrouter", "opencode"}:
+        # Every supported measurement source keeps its forecast coordinates
+        # and provenance outside the retired observation documents.
+        if run.job.source_id in {"arena", "openrouter", "opencode", "hf", "github"}:
             metadata = observation_provenance_metadata(observation)
             dimensions = observation_dimensions(observation)
+            if run.job.source_id == "github" and github_asset_metric(definition):
+                require(
+                    observation.pk in github_assets,
+                    "GitHub asset coordinates are not retained",
+                )
+                dimensions = github_assets[observation.pk]
         else:
             metadata = observation.source_metadata
             dimensions = observation.dimensions

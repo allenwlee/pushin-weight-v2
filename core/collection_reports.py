@@ -1,10 +1,11 @@
 """Stable read-only reports of jobs, scopes, provenance and qualified coverage."""
 
-from django.db import connection
 from django.db.models import Prefetch, Q
 from django.utils import timezone
 
 from core.benchmark_serving import (
+    github_asset_coordinates,
+    github_asset_metric,
     observation_dimensions,
     observation_provenance_metadata,
 )
@@ -57,65 +58,6 @@ def _metric_evidence(value, observation, definition):
     return result
 
 
-def _github_asset_coordinates(observation_ids):
-    """Follow the numeric input and the captured release/asset parent edge."""
-    if not observation_ids:
-        return {}
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT metric_input.observation_id, asset.native_stable_id,
-                release.native_stable_id
-            FROM collection_observation_inputs metric_input
-            JOIN collection_observations metric
-                ON metric.id=metric_input.observation_id
-            JOIN collection_observations asset_observation
-                ON asset_observation.id=metric_input.input_observation_id
-            JOIN collection_runs asset_run ON asset_run.id=asset_observation.run_id
-            JOIN collection_jobs asset_job ON asset_job.id=asset_run.job_id
-            JOIN collection_resource_snapshots asset
-                ON asset.observation_id=asset_observation.id
-            JOIN collection_observation_inputs parent
-                ON parent.observation_id=asset_observation.id
-                AND parent.input_role='release_asset_parent'
-            JOIN collection_observations release_observation
-                ON release_observation.id=parent.input_observation_id
-            JOIN collection_runs release_run ON release_run.id=release_observation.run_id
-            JOIN collection_jobs release_job ON release_job.id=release_run.job_id
-            JOIN collection_resource_snapshots release
-                ON release.observation_id=release_observation.id
-            WHERE metric_input.observation_id=ANY(%s)
-                AND metric_input.input_role='numeric_projection'
-                AND asset.resource_kind='release_asset'
-                AND release.resource_kind='releases'
-                AND asset_job.source_id='github' AND asset_job.purpose='catalog'
-                AND release_job.source_id='github' AND release_job.purpose='catalog'
-                AND asset_observation.source_identifier=metric.source_identifier
-                AND release_observation.source_identifier=metric.source_identifier
-                AND metric_input.input_sha256=asset_observation.observation_key
-                AND parent.input_sha256=release_observation.observation_key
-                AND parent.row_locator=release.native_stable_id
-        """, [list(observation_ids)])
-        rows = cursor.fetchall()
-    result = {}
-    for observation_id, asset_id, release_id in rows:
-        require(
-            all(isinstance(value, str) and value.isascii() and value.isdecimal()
-                and value.lstrip("0") == value for value in (asset_id, release_id)),
-            "GitHub asset identity is not numeric",
-        )
-        coordinates = {"release_id": int(release_id), "asset_id": int(asset_id)}
-        prior = result.setdefault(observation_id, coordinates)
-        require(prior == coordinates, "GitHub asset has conflicting parents")
-    return result
-
-
-def _github_asset_metric(definition):
-    return (
-        definition.definition_metadata.get("resource_grain") == "release_asset"
-        or definition.metric_key in {"asset_downloads", "asset_size_bytes"}
-    )
-
-
 def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at=None):
     """Read native snapshots, with current or time-qualified attribution.
 
@@ -155,9 +97,9 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at
         .order_by("-observation__observed_at", "pk")
     )
     values = list(query[: limit + 1])
-    github_assets = _github_asset_coordinates({
+    github_assets = github_asset_coordinates({
         value.observation_id for value in values[:limit]
-        if source == "github" and _github_asset_metric(value.source_metric)
+        if source == "github" and github_asset_metric(value.source_metric)
     })
     rows = []
     for value in values[:limit]:
@@ -170,7 +112,7 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at
             dimensions = observation_dimensions(observation)
             source_evidence = _metric_evidence(value, observation, definition)
         elif source == "github":
-            if _github_asset_metric(definition):
+            if github_asset_metric(definition):
                 require(
                     observation.pk in github_assets,
                     "GitHub asset coordinates are not retained",
