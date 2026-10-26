@@ -1068,7 +1068,7 @@ def persist_source(
                         for c in source_details["endpoint_checks"]
                         if c["source_identifier"] == observation.source_identifier
                     )
-                    check["row_references"][observation.dimensions["date"]] = (
+                    check["row_references"][observation.source_record_date.isoformat()] = (
                         observation.pk
                     )
             if source == "opencode":

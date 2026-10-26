@@ -68,8 +68,7 @@ class Command(BaseCommand):
                         "check_run_id": str(run.pk),
                         "observation_id": pk,
                         "first_observed_at": observation.observed_at.isoformat(),
-                        "period_status": observation.period_status
-                        or observation.source_metadata.get("period_status"),
+                        "period_status": observation.period_status,
                         "revision_anomaly": check.get("revision_anomaly"),
                         "traffic_scope": "opencode_go_and_free",
                         "values": [

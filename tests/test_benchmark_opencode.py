@@ -150,6 +150,46 @@ def test_endpoint_checks_have_typed_cross_run_ready_row_links():
         project_opencode_endpoint_batch(verify_only=True)
     assert project_opencode_endpoint_batch().inserted == 0
     assert project_opencode_endpoint_batch(verify_only=True).scanned == 1
+    # Old rows acquire their date only in the explicit historical copier.
+    CollectionObservation.objects.filter(pk__in=links.values("input_observation_id")).update(source_record_date=None)
+    with pytest.raises(ValueError, match="row date is not typed"):
+        project_opencode_endpoint_batch(verify_only=True)
+    assert project_opencode_endpoint_batch().scanned == 1
+    assert project_opencode_endpoint_batch(verify_only=True).scanned == 1
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
+def test_endpoint_references_and_export_use_typed_dates_and_unknown_period_status():
+    import json
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from core.benchmark_metric_store import persist_source
+    from core.benchmark_opencode import record_endpoint_checks
+    from core.models import CollectionObservation
+    from tests.test_rg6_benchmark_serving_views import _install_typed_views
+
+    contract = configured()
+    run = persist_source(contract, "opencode", "f" * 64, read(endpoint()))
+    checks = read_document(run.source_metadata_archive)["endpoint_checks"]
+    run.observations.update(dimensions={}, listing={})
+    assert record_endpoint_checks(run, checks, contract, verify_only=True) == 0
+    # A missing canonical status stays unknown; an old document must not supply it.
+    CollectionObservation.objects.filter(run=run, source_record_date="2026-10-07").update(
+        period_status=None, source_metadata={"period_status": "partial"},
+    )
+    _install_typed_views()
+    output = StringIO()
+    call_command(
+        "benchmark_opencode_snapshots", contract=str(contract.pk),
+        start_date="2026-10-06", end_date="2026-10-07", stdout=output,
+    )
+    rows = {row["date"]: row for row in json.loads(output.getvalue())["rows"]}
+    assert rows["2026-10-06"]["period_status"] == "completed"
+    assert rows["2026-10-07"]["period_status"] is None
+    assert next(v for v in rows["2026-10-06"]["values"] if v["metric"] == "tokens")["value"] == "9007199254740993123"
 
 
 @pytest.mark.requires_postgres

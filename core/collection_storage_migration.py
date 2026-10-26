@@ -1424,6 +1424,37 @@ def project_arena_publication_batch(
         )
 
 
+def _project_endpoint_row_dates(checks, *, verify_only):
+    """Read legacy date coordinates only at the historical conversion boundary."""
+    from core.benchmark_metric_timing import native_date
+
+    dates = {}
+    for check in checks:
+        if check.get("status") != "ok":
+            continue
+        for label, observation_id in check.get("row_references", {}).items():
+            day = native_date(label)
+            if observation_id in dates and dates[observation_id] != day:
+                raise ValueError("endpoint row has conflicting date references")
+            dates[observation_id] = day
+    for row in CollectionObservation.objects.filter(pk__in=dates).only(
+        "pk", "dimensions", "source_record_date",
+    ):
+        day = dates[row.pk]
+        legacy_day = row.dimensions.get("date")
+        if legacy_day is not None and native_date(legacy_day) != day:
+            raise ValueError("endpoint row date conflicts with captured evidence")
+        if row.source_record_date is None and not verify_only:
+            if legacy_day is None:
+                raise ValueError("endpoint row is missing its original date coordinate")
+            CollectionObservation.objects.filter(
+                pk=row.pk, source_record_date__isnull=True,
+            ).update(source_record_date=day)
+            row.refresh_from_db(fields=["source_record_date"])
+        if row.source_record_date != day:
+            raise ValueError("endpoint row date is not typed")
+
+
 def project_opencode_endpoint_batch(
     *, after_id: UUID | None = None, batch_size: int = 10,
     verify_only: bool = False,
@@ -1467,6 +1498,7 @@ def project_opencode_endpoint_batch(
             checks = metadata["endpoint_checks"]
             if not isinstance(checks, list) or len(checks) > 100:
                 raise ValueError("invalid OpenCode endpoint check evidence")
+            _project_endpoint_row_dates(checks, verify_only=verify_only)
             inserted += record_endpoint_checks(
                 run, checks, run.job.contract, verify_only=verify_only
             )

@@ -77,15 +77,8 @@ def record_endpoint_checks(run, checks, contract, *, verify_only=False):
                 and referenced.run.job.source_id == "opencode"
                 and referenced.status == "ok"
                 and referenced.mapping_id == mapping.pk
-                and referenced.dimensions.get("date") == label,
+                and referenced.source_record_date == day,
                 "endpoint row reference conflicts with source evidence",
-            )
-            if referenced.source_record_date is None and not verify_only:
-                referenced.source_record_date = day
-                referenced.save(update_fields=["source_record_date"])
-            require(
-                referenced.source_record_date == day,
-                "endpoint row date is not typed",
             )
             if verify_only:
                 link = CollectionObservationInput.objects.filter(
