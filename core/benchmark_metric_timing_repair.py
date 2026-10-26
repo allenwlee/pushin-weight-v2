@@ -65,6 +65,14 @@ def serial_fields(fields):
     }
 
 
+def _correction_state(correction, side):
+    return serial_fields({
+        field: (getattr(correction, side + "_source_timezone_reference_id") or "unknown")
+        if field == "source_timezone" else getattr(correction, side + "_" + field)
+        for field in FIELDS
+    })
+
+
 @contextmanager
 def repair_lock():
     with connection.cursor() as cursor:
@@ -192,30 +200,56 @@ def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False
                     previous != marker["after"]
                     or current_basis != marker["after_basis"]
                 )
-                if rollback:
-                    if not marker:
-                        continue
-                    if marker_conflict:
+                recorded = correction_head(observation, metric_value=value, kind="timing")
+                repaired = recorded and recorded.policy_version == POLICY and recorded.reason_code in {
+                    "reported_time_repair", "historical_reported_time_repair",
+                }
+                if repaired:
+                    # The current typed head owns both the time and its explanation.
+                    # A retired JSON marker must neither disable rollback nor hide
+                    # a later change to either part of the saved after-image.
+                    typed_conflict = previous != _correction_state(recorded, "after") or any(
+                        previous_basis_fields[name] != getattr(recorded, "after_" + name)
+                        for name in TIME_BASIS_FIELDS
+                    )
+                    if typed_conflict or marker_conflict:
                         result["conflicts"] += 1
                         reasons["timing_changed_after_correction"] += 1
                         continue
-                    point = {
+                    if not rollback:
+                        continue
+                elif rollback and recorded:
+                    if recorded.policy_version == POLICY and recorded.reason_code == "reported_time_rollback":
+                        continue
+                    result["conflicts"] += 1
+                    reasons["timing_changed_after_correction"] += 1
+                    continue
+                if rollback:
+                    if not repaired and not marker:
+                        continue
+                    if not repaired and marker_conflict:
+                        result["conflicts"] += 1
+                        reasons["timing_changed_after_correction"] += 1
+                        continue
+                    point = _correction_state(recorded, "before") if repaired else {
                         **marker["before"],
                         "_reported_time": marker.get("before_basis") or {},
                     }
-                    target = marker["before"]
-                    metric = value.source_metric.metric_key
-                    report = metadata.get("reported_time", {}).get("metrics", {})
-                    if marker.get("before_basis") is None:
-                        report.pop(metric, None)
-                    else:
-                        report[metric] = marker["before_basis"]
-                    if not report:
-                        metadata.pop("reported_time", None)
-                    del metadata[REPAIR_KEY][str(value.pk)]
-                    if not metadata[REPAIR_KEY]:
-                        del metadata[REPAIR_KEY]
-                    recorded = correction_head(observation, metric_value=value, kind="timing")
+                    target = _correction_state(recorded, "before") if repaired else marker["before"]
+                    # Maintain an existing old-image receipt during additive rollout;
+                    # never recreate legacy storage when only typed history exists.
+                    if marker:
+                        metric = value.source_metric.metric_key
+                        report = metadata.get("reported_time", {}).get("metrics", {})
+                        if marker.get("before_basis") is None:
+                            report.pop(metric, None)
+                        else:
+                            report[metric] = marker["before_basis"]
+                        if not report:
+                            metadata.pop("reported_time", None)
+                        del metadata[REPAIR_KEY][str(value.pk)]
+                        if not metadata[REPAIR_KEY]:
+                            del metadata[REPAIR_KEY]
                     target_basis_fields = {
                         name: getattr(recorded, "before_" + name) for name in TIME_BASIS_FIELDS
                     } if recorded else metric_time_provenance(value.source_metric, point, marker.get("before_basis"))

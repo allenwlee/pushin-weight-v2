@@ -122,7 +122,8 @@ def test_arena_history_keeps_publication_when_selected_cohort_is_empty():
     }
 
 
-def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields():
+@pytest.mark.parametrize("legacy_markers", [True, False], ids=["dual-write", "typed-only"])
+def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields(legacy_markers):
     from datetime import UTC, datetime
     from io import StringIO
 
@@ -205,6 +206,9 @@ def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields():
     assert summary["changed_values"] == summary["metadata_updates"] == 0
     assert CollectionCorrection.objects.count() == 4
     assert list(run.observations.order_by("id").values("source_metadata")) == saved
+    if not legacy_markers:
+        # Rollback must remain available after the legacy marker is retired.
+        run.observations.update(source_metadata={"unrelated": "preserve"})
     call_command(
         "repair_metric_timing",
         apply=True,
@@ -224,10 +228,24 @@ def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields():
         o.source_metadata["unrelated"] == "preserve" for o in run.observations.all()
     )
     assert CollectionCorrection.objects.count() == 8
+    rollback_ids = set(CollectionCorrection.objects.values_list("pk", flat=True))
+    call_command(
+        "repair_metric_timing", apply=True, rollback=True,
+        backup_id="verified-test-export", **kwargs,
+    )
+    assert set(CollectionCorrection.objects.values_list("pk", flat=True)) == rollback_ids
+    assert list(
+        MetricValue.objects.order_by("id").values(
+            "id", "integer_value", "window_end_at", "temporal_status"
+        )
+    ) == before
 
 
 @pytest.mark.parametrize(
-    "failure", ["later_timing", "transaction", "busy", "wrong_database"]
+    "failure", [
+        "later_timing", "later_typed_timing", "later_typed_basis",
+        "transaction", "busy", "wrong_database",
+    ]
 )
 def test_timing_correction_refuses_conflicts_and_rolls_back_failed_batches(
     failure, monkeypatch
@@ -299,10 +317,21 @@ def test_timing_correction_refuses_conflicts_and_rolls_back_failed_batches(
     else:
         call_command("repair_metric_timing", **kwargs)
         value = MetricValue.objects.order_by("pk").first()
-        MetricValue.objects.filter(pk=value.pk).update(window_end_at=None)
+        if failure.startswith("later_typed_"):
+            run.observations.update(source_metadata={})
+        if failure == "later_typed_basis":
+            MetricValue.objects.filter(pk=value.pk).update(window_end_basis="later_review")
+        else:
+            MetricValue.objects.filter(pk=value.pk).update(window_end_at=None)
         out = StringIO()
         call_command("repair_metric_timing", rollback=True, **{**kwargs, "stdout": out})
         value.refresh_from_db()
-        assert value.window_end_at is None
-        assert value.observation.source_metadata["timing_correction_v1"][str(value.pk)]
+        if failure == "later_typed_basis":
+            assert value.window_end_basis == "later_review"
+        else:
+            assert value.window_end_at is None
+        if failure == "later_timing":
+            assert value.observation.source_metadata["timing_correction_v1"][str(value.pk)]
+        else:
+            assert value.observation.source_metadata == {}
         assert '"conflicts": 1' in out.getvalue().splitlines()[-1]
