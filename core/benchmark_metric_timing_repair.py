@@ -231,11 +231,12 @@ def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False
                         result["conflicts"] += 1
                         reasons["timing_changed_after_correction"] += 1
                         continue
-                    point = _correction_state(recorded, "before") if repaired else {
-                        **marker["before"],
-                        "_reported_time": marker.get("before_basis") or {},
-                    }
-                    target = _correction_state(recorded, "before") if repaired else marker["before"]
+                    if repaired:
+                        target = _correction_state(recorded, "before")
+                        point = target
+                    else:
+                        target = marker["before"]
+                        point = {**target, "_reported_time": marker.get("before_basis") or {}}
                     # Maintain an existing old-image receipt during additive rollout;
                     # never recreate legacy storage when only typed history exists.
                     if marker:

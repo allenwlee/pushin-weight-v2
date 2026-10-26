@@ -1014,6 +1014,98 @@ def project_benchmark_provenance_batch(
         return ProvenanceBatch(ids[-1], len(ids), cursor.rowcount)
 
 
+def project_metric_time_provenance_batch(
+    *, after_id: int = 0, batch_size: int = 250, verify_only: bool = False,
+) -> ProvenanceBatch:
+    """Fill missing value-owned time explanations without changing measurements.
+
+    A later immutable correction takes precedence over the original JSON basis.
+    Missing legacy evidence never clears a typed value. Conflicting typed facts
+    or a correction whose after-image no longer matches must be resolved first.
+    """
+    from core.collection_corrections import TIME_BASIS_FIELDS, TIME_STATE_FIELDS
+    from core.collection_resources import metric_time_provenance
+    from core.models import CollectionCorrection, MetricValue
+
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative integer")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        ids = list(
+            MetricValue.objects.filter(pk__gt=after_id).order_by("pk")
+            .values_list("pk", flat=True)[:batch_size]
+        )
+        if not ids:
+            return ProvenanceBatch(after_id, 0, 0)
+        # Match the live correction writer's owner-before-value lock order.
+        owners = CollectionObservation.objects.filter(
+            pk__in=MetricValue.objects.filter(pk__in=ids).values("observation_id")
+        ).only("pk", "source_metadata").order_by("pk")
+        if not verify_only:
+            owners = owners.select_for_update(of=("self",))
+        observations = {row.pk: row for row in owners}
+        values = MetricValue.objects.filter(pk__in=ids).select_related("source_metric").order_by("pk")
+        if not verify_only:
+            values = values.select_for_update(of=("self",))
+        values = list(values)
+        history = CollectionCorrection.objects.filter(
+            metric_value_id__in=ids, correction_kind="timing",
+        )
+        predecessors = history.exclude(predecessor_id=None).values("predecessor_id")
+        heads = {}
+        for row in history.exclude(pk__in=predecessors):
+            if row.metric_value_id in heads:
+                raise ValueError("ambiguous timing correction history")
+            heads[row.metric_value_id] = row
+        changed = []
+        for value in values:
+            head = heads.get(value.pk)
+            if head is not None:
+                for field in TIME_STATE_FIELDS:
+                    current = value.source_timezone_reference_id if field == "source_timezone" else getattr(value, field)
+                    recorded = getattr(head, "after_source_timezone_reference_id" if field == "source_timezone" else "after_" + field)
+                    if current != recorded:
+                        raise ValueError("timing correction after-image conflicts with current value")
+                expected = {field: getattr(head, "after_" + field) for field in TIME_BASIS_FIELDS}
+            else:
+                report = observations[value.observation_id].source_metadata.get("reported_time", {})
+                if not isinstance(report, dict) or not isinstance(report.get("metrics", {}), dict):
+                    raise ValueError("historical reported timing must be an object")
+                basis = report.get("metrics", {}).get(value.source_metric.metric_key)
+                if basis is None:
+                    continue
+                if not isinstance(basis, dict) or not isinstance(basis.get("unknowns", {}), dict):
+                    raise ValueError("historical metric timing basis must be an object")
+                expected = dict.fromkeys(TIME_BASIS_FIELDS)
+                expected.update(metric_time_provenance(
+                    value.source_metric,
+                    {field: getattr(value, field) for field in TIME_STATE_FIELDS if field != "source_timezone"},
+                    basis,
+                ))
+            for field, proposed in expected.items():
+                if proposed is not None and (
+                    not isinstance(proposed, str)
+                    or len(proposed) > MetricValue._meta.get_field(field).max_length
+                ):
+                    raise ValueError("historical metric timing explanation is invalid")
+                current = getattr(value, field)
+                if current is not None and current != proposed:
+                    raise ValueError("typed metric timing explanation conflicts with retained evidence")
+            if any(getattr(value, field) != proposed for field, proposed in expected.items()):
+                if verify_only:
+                    raise ValueError("historical metric timing explanation is not projected")
+                for field, proposed in expected.items():
+                    setattr(value, field, proposed)
+                changed.append(value)
+        if changed:
+            MetricValue.objects.bulk_update(changed, TIME_BASIS_FIELDS, batch_size=250)
+        return ProvenanceBatch(ids[-1], len(ids), len(changed))
+
+
 def project_run_ingestion_mode() -> int:
     """Copy the small run-level scalar consumed by benchmark provenance."""
     expression = (

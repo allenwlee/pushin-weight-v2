@@ -62,6 +62,106 @@ def test_arena_publication_copy_rebuilds_an_empty_cohort_without_duplicate_rows(
     assert project_arena_publication_batch(verify_only=True).scanned == 1
 
 
+def test_metric_time_provenance_copy_is_bounded_and_preserves_typed_only_values():
+    from core.benchmark_metric_store import persist_source
+    from core.collection_corrections import TIME_BASIS_FIELDS
+    from core.collection_storage_migration import project_metric_time_provenance_batch
+    from core.models import MetricValue
+    from tests.test_benchmark_download_persistence import configured, payload
+
+    contract = configured()
+    legacy = persist_source(contract, "hf", "7" * 64, payload())
+    typed = persist_source(contract, "hf", "8" * 64, payload())
+    rows = MetricValue.objects.filter(observation__run__in=[legacy, typed]).order_by("pk")
+    before = list(rows.values())
+    first_id = before[0]["id"]
+    MetricValue.objects.filter(observation__run=legacy).update(
+        **{field: None for field in TIME_BASIS_FIELDS}
+    )
+    typed.observations.update(source_metadata={})
+    with pytest.raises(ValueError, match="not projected"):
+        project_metric_time_provenance_batch(
+            after_id=first_id - 1, batch_size=1, verify_only=True
+        )
+    first = project_metric_time_provenance_batch(after_id=first_id - 1, batch_size=1)
+    assert (first.last_id, first.scanned, first.updated) == (first_id, 1, 1)
+    assert project_metric_time_provenance_batch(
+        after_id=first_id - 1, batch_size=1
+    ).updated == 0
+    rest = project_metric_time_provenance_batch(after_id=first_id, batch_size=10)
+    assert rest.scanned == len(before) - 1
+    assert list(rows.values()) == before
+    assert project_metric_time_provenance_batch(
+        after_id=first_id - 1, batch_size=10, verify_only=True
+    ).updated == 0
+
+
+def test_metric_time_provenance_copy_uses_latest_correction_and_refuses_drift():
+    from datetime import timedelta
+
+    from core.benchmark_metric_store import persist_source
+    from core.collection_corrections import (
+        TIME_BASIS_FIELDS,
+        TIME_STATE_FIELDS,
+        record_timing_correction,
+    )
+    from core.collection_storage_migration import project_metric_time_provenance_batch
+    from core.models import MetricValue
+    from tests.test_benchmark_download_persistence import configured, payload
+
+    run = persist_source(configured(), "hf", "9" * 64, payload())
+    value = MetricValue.objects.filter(observation__run=run).order_by("pk").first()
+    state = {
+        field: (value.source_timezone_reference_id or "unknown")
+        if field == "source_timezone" else getattr(value, field)
+        for field in (*TIME_STATE_FIELDS, *TIME_BASIS_FIELDS)
+    }
+    revised = {**state, "window_end_basis": "later_review"}
+    correction = record_timing_correction(
+        value, before=state, after=revised, policy="fixture-review-v1", reason="review",
+    )
+    MetricValue.objects.filter(pk=value.pk).update(
+        **{field: None for field in TIME_BASIS_FIELDS}
+    )
+    assert project_metric_time_provenance_batch(
+        after_id=value.pk - 1, batch_size=1
+    ).updated == 1
+    value.refresh_from_db()
+    assert value.window_end_basis == "later_review"
+    assert value.corrections.get().pk == correction.pk
+    MetricValue.objects.filter(pk=value.pk).update(window_end_basis="conflicting_review")
+    with pytest.raises(ValueError, match="conflicts"):
+        project_metric_time_provenance_batch(after_id=value.pk - 1, batch_size=1)
+    value.refresh_from_db()
+    assert value.window_end_basis == "conflicting_review"
+    MetricValue.objects.filter(pk=value.pk).update(
+        window_end_basis="later_review",
+        window_end_at=value.window_end_at + timedelta(seconds=1),
+    )
+    with pytest.raises(ValueError, match="after-image conflicts"):
+        project_metric_time_provenance_batch(after_id=value.pk - 1, batch_size=1)
+
+
+@pytest.mark.parametrize("basis", [[], {"unknowns": []}, {"basis": "x" * 129}])
+def test_metric_time_provenance_copy_refuses_invalid_retained_explanations(basis):
+    from core.benchmark_metric_store import persist_source
+    from core.collection_corrections import TIME_BASIS_FIELDS
+    from core.collection_storage_migration import project_metric_time_provenance_batch
+    from core.models import MetricValue
+    from tests.test_benchmark_download_persistence import configured, payload
+
+    run = persist_source(configured(), "hf", "b" * 64, payload())
+    value = MetricValue.objects.filter(observation__run=run).order_by("pk").first()
+    observation = value.observation
+    observation.source_metadata["reported_time"]["metrics"][value.source_metric.metric_key] = basis
+    observation.save(update_fields=["source_metadata"])
+    MetricValue.objects.filter(pk=value.pk).update(**dict.fromkeys(TIME_BASIS_FIELDS))
+    before = MetricValue.objects.filter(pk=value.pk).values().get()
+    with pytest.raises(ValueError, match="(must be an object|is invalid)"):
+        project_metric_time_provenance_batch(after_id=value.pk - 1, batch_size=1)
+    assert MetricValue.objects.filter(pk=value.pk).values().get() == before
+
+
 def test_metric_payload_archive_copy_preserves_legacy_payload_and_detects_drift():
     from core.benchmark_metric_store import persist_source
     from core.measurement_taxonomy import digest
