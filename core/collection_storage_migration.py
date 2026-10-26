@@ -7,12 +7,15 @@ bytes. It is retained evidence; operational reads must use typed owners.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from django.db import connection, transaction
+from django.utils import timezone
 
 from core.benchmark_metric_timing import native_date
 from core.models import (
+    CollectionAttempt,
     CollectionObservation,
     CollectionRun,
     CollectionScopeRareHit,
@@ -93,6 +96,82 @@ class RequestUseBatch:
     last_id: int
     scanned: int
     inserted: int
+
+
+@dataclass(frozen=True)
+class InvocationBatch:
+    last_id: UUID | None
+    scanned: int
+    inserted: int
+
+
+def project_run_invocations_batch(
+    *, after_id: UUID | None = None, batch_size: int = 200,
+    verify_only: bool = False,
+) -> InvocationBatch:
+    """Recover shared-collector attempts from ordered legacy run receipts.
+
+    The original invocation string remains in the immutable run archive.
+    Its existing job-qualified digest is the operational idempotency key;
+    historical receipts without a finish clock retain an unknown outcome.
+    Direct archived-catalog runs have a different receipt format and are
+    reconciled separately.
+    """
+    from core.measurement_taxonomy import digest
+
+    if after_id is not None and not isinstance(after_id, UUID):
+        raise ValueError("after_id must be a UUID")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        runs = list(
+            CollectionRun.objects.select_for_update()
+            .select_related("job")
+            .exclude(job__operation="archived_run")
+            .exclude(invocations=[])
+            .filter(pk__gt=after_id or UUID(int=0))
+            .order_by("pk")[:batch_size]
+        )
+        if not runs:
+            return InvocationBatch(after_id, 0, 0)
+        existing = {}
+        for attempt in CollectionAttempt.objects.select_for_update().filter(
+            run_id__in=[run.pk for run in runs]
+        ):
+            existing[(attempt.run_id, attempt.ordinal)] = attempt
+        missing = []
+        for run in runs:
+            for ordinal, receipt in enumerate(run.invocations, start=1):
+                if type(receipt) is not dict or set(receipt) != {"invocation_id", "started_at"}:
+                    raise ValueError("unsupported historical invocation receipt")
+                identity = receipt["invocation_id"]
+                if type(identity) is not str or not 0 < len(identity) <= 256:
+                    raise ValueError("invalid historical invocation identity")
+                try:
+                    started_at = datetime.fromisoformat(receipt["started_at"])
+                except (TypeError, ValueError):
+                    raise ValueError("invalid historical invocation clock") from None
+                if timezone.is_naive(started_at):
+                    raise ValueError("invalid historical invocation clock")
+                attempt_key = digest({"job": str(run.job_id), "invocation": identity})
+                attempt = existing.pop((run.pk, ordinal), None)
+                if attempt is None:
+                    if verify_only:
+                        raise ValueError("missing historical attempt")
+                    missing.append(CollectionAttempt(
+                        run=run, attempt_key=attempt_key, ordinal=ordinal,
+                        started_at=started_at, outcome="legacy_unknown",
+                        imported_at=timezone.now(),
+                    ))
+                elif attempt.attempt_key != attempt_key or attempt.started_at != started_at:
+                    raise ValueError("historical attempt differs from invocation receipt")
+        if existing:
+            raise ValueError("typed attempt has no historical invocation receipt")
+        CollectionAttempt.objects.bulk_create(missing, batch_size=500)
+        return InvocationBatch(runs[-1].pk, len(runs), len(missing))
 
 
 PROVENANCE_EXPRESSIONS = {

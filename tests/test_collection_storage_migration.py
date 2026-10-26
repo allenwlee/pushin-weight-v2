@@ -12,6 +12,7 @@ from core.collection_storage_migration import (
     project_benchmark_provenance_batch,
     project_product_match_targets_batch,
     project_run_ingestion_mode,
+    project_run_invocations_batch,
     project_scope_bounds_batch,
     project_x_query_targets_batch,
     provenance_mismatch_counts,
@@ -56,6 +57,52 @@ def test_arena_publication_copy_rebuilds_an_empty_cohort_without_duplicate_rows(
     assert project_arena_publication_batch(verify_only=True).scanned == 1
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
+
+
+def test_historical_invocations_get_distinct_attempts_without_invented_outcomes():
+    from core.measurement_taxonomy import digest
+    from core.models import CollectionRun
+    from tests.test_collection_jobs import ready
+
+    job = ready()
+    run = CollectionRun.objects.create(
+        job=job,
+        ingestion_key=digest("rg6-invocation-copy"),
+        status="success",
+        completed_at=datetime(2026, 10, 20, 12, tzinfo=UTC),
+        invocations=[
+            {"invocation_id": "first", "started_at": "2026-10-20T10:00:00+00:00"},
+            {"invocation_id": "second", "started_at": "2026-10-20T11:00:00+00:00"},
+        ],
+    )
+    with pytest.raises(ValueError, match="missing historical attempt"):
+        project_run_invocations_batch(verify_only=True)
+
+    result = project_run_invocations_batch()
+    assert result.inserted == 2
+    attempts = list(run.attempts.order_by("ordinal"))
+    assert [attempt.ordinal for attempt in attempts] == [1, 2]
+    assert [attempt.outcome for attempt in attempts] == ["legacy_unknown"] * 2
+    assert all(attempt.finished_at is None and not attempt.accounting_complete for attempt in attempts)
+    assert attempts[0].attempt_key == digest({"job": str(job.pk), "invocation": "first"})
+    assert project_run_invocations_batch().inserted == 0
+    assert project_run_invocations_batch(verify_only=True).inserted == 0
+
+    attempts[0].started_at = datetime(2026, 10, 20, 9, tzinfo=UTC)
+    attempts[0].save(update_fields=["started_at"])
+    with pytest.raises(ValueError, match="historical attempt differs"):
+        project_run_invocations_batch(verify_only=True)
+
+
+def test_invocation_copy_accepts_existing_attempt_with_non_uuid_identity():
+    from core.collection_state import claim_job
+    from tests.test_collection_jobs import ready
+
+    job = ready()
+    claim = claim_job(job.pk, invocation_id="operator-run-1")
+    assert project_run_invocations_batch(verify_only=True).inserted == 0
+    assert project_run_invocations_batch().inserted == 0
+    assert job.runs.get(pk=claim.run_id).attempts.get().outcome == "running"
 
 
 def test_x_scope_bounds_copy_rechecks_older_rows_and_rejects_invalid_epochs():
