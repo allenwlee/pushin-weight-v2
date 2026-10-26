@@ -10,6 +10,7 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 from core.benchmark_metric_timing import TIME_FIELDS, aware_instant
+from core.collection_capture import observation_object_documents
 from core.measurement_taxonomy import digest
 from core.models import (
     Actor,
@@ -108,18 +109,24 @@ def import_legacy_timing_batch(
             return CorrectionImportBatch(after_id, 0, 0, 0)
         observations_query = CollectionObservation.objects.filter(
             pk__in=owner_ids,
-            source_metadata__has_key="timing_correction_v1",
-        )
+        ).select_related("legacy_archive")
         if not verify_only:
-            observations_query = observations_query.select_for_update()
+            observations_query = observations_query.select_for_update(of=("self",))
         observations = list(
-            observations_query.only("id", "source_metadata").order_by("pk")
+            observations_query.only(
+                "id", "source_metadata", "legacy_archive__body",
+                "legacy_archive__content_sha256",
+            ).order_by("pk")
         )
         if not observations:
             return CorrectionImportBatch(owner_ids[-1], len(owner_ids), 0, 0)
         selected = []
         for observation in observations:
-            markers = observation.source_metadata["timing_correction_v1"]
+            markers = observation_object_documents(observation)[2].get(
+                "timing_correction_v1"
+            )
+            if markers is None:
+                continue
             if not isinstance(markers, dict):
                 raise TypeError("historical timing corrections must be keyed by value")
             for value_id, marker in markers.items():

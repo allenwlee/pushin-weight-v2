@@ -122,6 +122,17 @@ def test_import_advances_over_an_unmarked_page_without_skipping_later_correction
     assert "exhausted=true" in output.getvalue()
     assert CollectionCorrection.objects.get().metric_value_id == value.pk
 
+    from core.collection_capture import archive_legacy
+
+    second.legacy_archive = archive_legacy({
+        "listing": second.listing,
+        "dimensions": second.dimensions,
+        "source_metadata": second.source_metadata,
+    })
+    second.listing, second.dimensions, second.source_metadata = {}, {}, {}
+    second.save(update_fields=[
+        "legacy_archive", "listing", "dimensions", "source_metadata",
+    ])
     output = StringIO()
     call_command(
         "import_collection_timing_corrections", after_id=first.pk - 1,
