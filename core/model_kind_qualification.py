@@ -42,10 +42,10 @@ def _qualification(product, observation):
     )
     # These are the existing model-registry writers, not arbitrary HF datasets.
     require(
-        observation.dimensions.get("kind") in {"creation_inventory", "hf_metadata"}
+        observation.observation_kind in {"creation_inventory", "hf_metadata"}
         or observation_group_outcomes(observation).get("listing") == "ok"
         and observation.scope_run is not None
-        and observation.scope_run.ownership.get("namespace", "").casefold()
+        and observation.scope_run.scope_key.casefold()
         == product.hf_namespace.casefold(),
         "model-registry capture required",
     )

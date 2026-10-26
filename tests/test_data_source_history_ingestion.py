@@ -428,6 +428,11 @@ def test_opt_in_model_kind_pins_native_evidence_without_changing_taxonomy_type(d
         dimensions={"kind": "creation_inventory"},
     )
     call_command("normalize_collection_run_jobs", verbosity=0)
+    from core.collection_resources import project_observation_facts
+
+    project_observation_facts(evidence)
+    CollectionObservation.objects.filter(pk=evidence.pk).update(dimensions={})
+    evidence.refresh_from_db()
     arguments = {"brand_ids": brands, "cutoff": "2026-09-12T00:00:00Z"}
     original = build_cohort(**arguments)
     assert not original["brands"][product.brand_id]["models"]
@@ -629,6 +634,9 @@ def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benc
         groups={"listing": "ok"},
     )
     call_command("normalize_collection_run_jobs", verbosity=0)
+    from core.collection_resources import project_observation_facts
+
+    project_observation_facts(observation)
     qualification = qualify_model_kind(product)
     assert qualification
     project_observation_groups_batch(after_id=observation.pk - 1, batch_size=1)
@@ -750,7 +758,7 @@ def test_history_statistics_reuses_existing_product_and_publisher_subjects():
         completed_at=timezone.now(),
         ingestion_key="1" * 64,
     )
-    CollectionObservation.objects.create(
+    evidence = CollectionObservation.objects.create(
         run=evidence_run,
         product=product,
         source_identifier=product.repo_id,
@@ -760,6 +768,9 @@ def test_history_statistics_reuses_existing_product_and_publisher_subjects():
         dimensions={"kind": "creation_inventory"},
     )
     call_command("normalize_collection_run_jobs", verbosity=0)
+    from core.collection_resources import project_observation_facts
+
+    project_observation_facts(evidence)
     qualification = qualify_model_kind(product)
     assert qualification
     draft = {
