@@ -37,19 +37,21 @@ def hydrate_observations(observations):
         )
         rows = cursor.fetchall()
     for key, reconstructed, secondary, archived, rebuilt, complete, partial, direct in rows:
-        metadata = {"secondary_source": bool(secondary)}
+        metadata = {"secondary_source": secondary, "publication_complete": complete}
         if reconstructed:
             metadata["history_basis"] = "reconstructed_current_relationships"
         if archived:
             metadata["archive_snapshot_date"] = archived.isoformat()
         if rebuilt:
             metadata["reconstruction_date"] = rebuilt.isoformat()
-        if complete:
-            metadata["publication_complete"] = True
-        metadata["period_status"] = "partial" if partial else "completed"
+        metadata["period_status"] = (
+            None if partial is None else "partial" if partial else "completed"
+        )
         for observation in by_id[key]:
             observation.source_metadata = metadata
-            observation.run.source_metadata = {"ingestion_mode": "direct" if direct else "historical_import"}
+            observation.run.source_metadata = {
+                "ingestion_mode": None if direct is None else "direct" if direct else "historical_import",
+            }
     if len(rows) != len(by_id):
         raise ValueError("Missing canonical benchmark provenance")
 

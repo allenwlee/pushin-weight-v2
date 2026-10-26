@@ -535,16 +535,17 @@ def metric_points(contract, line, days):
                 selected.pop(day, None)
     observed_dates = set()
     if source == "openrouter":
-        observed_dates = set(
+        observed_dates = {
+            day.isoformat() for day in
             CollectionObservation.objects.filter(
                 run__job__contract=contract,
                 run__job__source_id=source,
                 run__status__in=["success", "partial"],
                 status="ok",
-                dimensions__date__gte=lower,
-                dimensions__date__lte=upper,
-            ).values_list("dimensions__date", flat=True)
-        )
+                source_record_date__gte=lower,
+                source_record_date__lte=upper,
+            ).values_list("source_record_date", flat=True)
+        }
     points = []
     prior = max(
         (d for d in selected.keys() | complete_publications.keys() if d < days[0]),

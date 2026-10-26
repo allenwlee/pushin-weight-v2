@@ -10,6 +10,32 @@ from tests.test_benchmark_download_db_identity import setup_spec
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
+@pytest.mark.parametrize("identifier", ["other", "untracked/model"])
+def test_openrouter_absence_uses_typed_day_even_for_unmapped_or_aggregate_rows(identifier):
+    from core.benchmark_metric_series import metric_points
+    from core.benchmark_metric_store import persist_source
+    from tests.test_benchmark_download_persistence import provider_contract
+
+    contract = provider_contract("openrouter", ["total_tokens"])
+    run = persist_source(contract, "openrouter", digest(identifier), {
+        "status": "ok", "meta": {"version": "v1"},
+        "as_of": "2026-10-06T00:30:00Z",
+        "rows": [{"date": "2026-10-05", "model_permaslug": identifier, "total_tokens": "100"}],
+    })
+    assert run.status == "partial"
+    line = {
+        "source": "openrouter", "subject_id": str(contract.mappings.get().subject_id),
+        "metric_key": "total_tokens", "mapping_identifiers": ["lab/model"], "aggregation": "single",
+    }
+    days = ["2026-10-05", "2026-10-06"]
+    before, _, _ = metric_points(contract, line, days)
+    run.observations.update(dimensions={}, source_metadata={}, listing={})
+    after, _, _ = metric_points(contract, line, days)
+    assert [point["coverage"] for point in after] == ["not_reported_top50", "missing"]
+    assert after == before
+    assert all(point["raw_value"] is None for point in after)
+
+
 def test_percentage_is_change_from_fixed_baseline_with_missing_day_preserved():
     from core.benchmark_metric_series import build_comparison
 
