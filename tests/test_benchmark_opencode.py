@@ -128,6 +128,7 @@ def test_endpoint_checks_have_typed_cross_run_ready_row_links():
 
     contract = configured()
     run = persist_source(contract, "opencode", "f" * 64, read(endpoint()))
+    assert run.source_metadata == {}
     marker = CollectionObservation.objects.get(
         run=run, observation_kind="endpoint_check"
     )
