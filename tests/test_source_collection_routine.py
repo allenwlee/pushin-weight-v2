@@ -9,7 +9,7 @@ import pytest
 from django.core.management import call_command
 
 from core.collection_jobs import register_job, set_job_state
-from core.models import CollectionJob, MetricValue
+from core.models import CollectionJob, CollectionObservation, MetricValue
 from tests.test_hf_source_ingestion import ingestion_job
 from tests.test_source_metric_projection import configured
 
@@ -84,6 +84,9 @@ def test_real_hourly_entry_collects_reviewed_source_role_and_leaves_benchmark_fl
         stdout=StringIO(),
     )
     assert len(seen) == before
+    CollectionObservation.objects.filter(values__isnull=False).update(
+        source_metadata={}, dimensions={},
+    )
     report = StringIO()
     call_command(
         "collection_status",

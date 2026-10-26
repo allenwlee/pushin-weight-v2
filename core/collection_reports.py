@@ -11,9 +11,49 @@ from core.measurement_taxonomy import require
 from core.models import (
     CollectionCorrection,
     CollectionJob,
+    CollectionObservationInput,
     MetricCollectionContract,
     MetricValue,
 )
+
+
+def _metric_evidence(value, observation, definition):
+    """Describe one value using retained timing facts and exact input links."""
+    result = observation_provenance_metadata(observation)
+    if observation.projection_kind is not None:
+        result["projection_kind"] = observation.projection_kind
+    if observation.legacy_archive_id is not None:
+        result["legacy_archive_id"] = str(observation.legacy_archive_id)
+    origins = sorted({
+        row.input_observation_id for row in observation.numeric_evidence_inputs
+        if row.input_role == "numeric_projection"
+    })
+    if len(origins) == 1:
+        result["origin_observation_id"] = origins[0]
+    elif origins:
+        result["origin_observation_ids"] = origins
+    basis = value.as_of_basis or value.window_end_basis or value.window_start_basis
+    if basis or value.reported_time_policy or value.provenance_precision:
+        reported = {}
+        if basis:
+            reported["basis"] = basis
+        if value.reported_time_policy:
+            reported["policy"] = value.reported_time_policy
+        if value.provenance_precision:
+            reported["precision"] = value.provenance_precision
+        if value.window_start_basis:
+            reported["start_basis"] = value.window_start_basis
+        unknowns = {
+            key: reason for key, reason in (
+                ("as_of", value.as_of_unknown_reason),
+                ("start", value.window_start_unknown_reason),
+                ("end", value.window_end_unknown_reason),
+            ) if reason is not None
+        }
+        if unknowns:
+            reported["unknowns"] = unknowns
+        result["reported_time"] = {"metrics": {definition.metric_key: reported}}
+    return result
 
 
 def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at=None):
@@ -43,7 +83,14 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at
                     correction_kind="attribution"
                 ),
                 to_attr="attribution_history",
-            )
+            ),
+            Prefetch(
+                "observation__inputs",
+                queryset=CollectionObservationInput.objects.filter(
+                    input_role__in=["numeric_projection", "numeric_supplement"]
+                ),
+                to_attr="numeric_evidence_inputs",
+            ),
         )
         .order_by("-observation__observed_at", "pk")
     )
@@ -55,9 +102,12 @@ def resource_statistics(*, contract_id, source, identifier, limit=1000, known_at
         if source in {"arena", "openrouter", "opencode"}:
             dimensions = observation_dimensions(observation)
             source_evidence = observation_provenance_metadata(observation)
+        elif source == "hf":
+            dimensions = observation_dimensions(observation)
+            source_evidence = _metric_evidence(value, observation, definition)
         else:
             dimensions = observation.dimensions
-            source_evidence = observation.source_metadata
+            source_evidence = _metric_evidence(value, observation, definition)
         rows.append(
             {
                 "value_id": value.pk,
