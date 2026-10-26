@@ -599,8 +599,11 @@ def x_scope_ownership(scope):
             scope.run.job.instruction_version == 1,
             "sealed X scope requires a typed query target",
         )
-        x_query_instruction(scope.ownership)
-        return scope.ownership
+        from core.collection_capture import scope_object_documents
+
+        ownership, _, _ = scope_object_documents(scope)
+        x_query_instruction(ownership)
+        return ownership
     target = scope.job_target
     recurring_cycle = scope.run.job.operation == "x_cycle" and scope.run.job.instruction_version == 2
     require(

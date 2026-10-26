@@ -549,6 +549,29 @@ def test_x_prefetch_reads_pinned_query_when_legacy_ownership_is_stale():
     assert x_query_target_mismatch_counts() == (0, 1)
 
 
+@pytest.mark.django_db(transaction=True)
+def test_unmapped_legacy_x_scope_reads_immutable_archive_after_ownership_retirement():
+    from core.collection_capture import archive_legacy
+    from core.collection_state import x_scope_ownership
+    from tests.test_hf_catalog_retirement import denied_retirement_columns
+
+    _, _, scope = execution()
+    ownership = {
+        "call_id": "B1", "query": "archived query",
+        "since_epoch": 1783809000, "until_epoch": 1783809300,
+    }
+    scope.scope_kind = "x_query"
+    scope.ownership = {}
+    scope.legacy_archive = archive_legacy({
+        "ownership": ownership, "cursor_history": [], "envelopes": [],
+    })
+    scope.save(update_fields=["scope_kind", "ownership", "legacy_archive"])
+
+    with denied_retirement_columns():
+        scope.refresh_from_db()
+        assert x_scope_ownership(scope) == ownership
+
+
 def test_recurring_x_query_target_keeps_query_fixed_and_window_on_scope():
     from core.collection_jobs import register_job
     from core.collection_state import ensure_x_query_target, x_scope_ownership

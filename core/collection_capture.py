@@ -582,27 +582,16 @@ class RequestCapture:
 def capture_budget(claim, budget, *, scope_kind, scope_key, ownership, typed=False, **coordinates):
     """Bind existing public clients to a database scope for this execution only."""
     from core.collection_state import checkpoint_scope, fenced_run
-    from core.models import CollectionScopeRun
 
-    if typed:
-        require(scope_kind == "metric_fetch", "typed budget capture needs a metric fetch scope")
-        with fenced_run(claim) as (job, _):
-            require(job.contract_id is not None, "metric capture needs a contract")
-            contract = job.contract
-        scope = checkpoint_scope(
-            claim, scope_kind=scope_kind, scope_key=scope_key,
-            ownership=ownership, projection_contract=contract,
-            typed=True, **coordinates,
-        )
-    else:
-        with fenced_run(claim) as (_, run):
-            scope, _ = CollectionScopeRun.objects.get_or_create(
-                run=run,
-                scope_kind=scope_kind,
-                scope_key=scope_key,
-                defaults={"ownership": ownership, **coordinates},
-            )
-            require(scope.ownership == ownership, "request scope ownership changed")
+    require(typed and scope_kind == "metric_fetch", "typed budget capture needs a metric fetch scope")
+    with fenced_run(claim) as (job, _):
+        require(job.contract_id is not None, "metric capture needs a contract")
+        contract = job.contract
+    scope = checkpoint_scope(
+        claim, scope_kind=scope_kind, scope_key=scope_key,
+        ownership=ownership, projection_contract=contract,
+        typed=True, **coordinates,
+    )
     previous = (
         getattr(budget, "capture", None),
         getattr(budget, "collection_scope", None),

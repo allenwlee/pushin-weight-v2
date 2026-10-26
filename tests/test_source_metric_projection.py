@@ -158,11 +158,13 @@ def project(contract, source, snapshots, *, key="projection"):
     )
 
 
+@pytest.mark.django_db(transaction=True)
 def test_github_replay_selects_archived_capture_after_old_columns_clear():
     from core.collection_capture import archive_legacy
     from core.collection_resources import project_observation_facts
     from core.models import DataSource
     from core.source_metric_projection import replay_saved_evidence
+    from tests.test_hf_catalog_retirement import denied_retirement_columns
 
     contract, raw, _, _ = configured("github")
     captured = evidence("github", raw)
@@ -190,9 +192,10 @@ def test_github_replay_selects_archived_capture_after_old_columns_clear():
         },
     )
     set_job_state(job.pk, "ready")
-    run = replay_saved_evidence(job.pk)
-    assert run.status == "success" and run.selected_count == 1
-    assert MetricValue.objects.filter(observation__run=run).count() == 3
+    with denied_retirement_columns():
+        run = replay_saved_evidence(job.pk)
+        assert run.status == "success" and run.selected_count == 1
+        assert MetricValue.objects.filter(observation__run=run).count() == 3
 
 
 def test_hf_replay_skips_archived_evidence_without_selected_numbers():

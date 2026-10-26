@@ -1042,7 +1042,7 @@ def replay_saved_evidence(job_id):
         == SOURCE_STATISTICS_POLICY,
         "statistics replay contract required",
     )
-    claim = claim_job(job.pk)
+    claim = claim_job(job.pk, typed=True)
     with fenced_run(claim) as (_, run):
         previous = run.scopes.filter(
             scope_kind="numeric_projection", scope_key="saved-evidence"
@@ -1228,7 +1228,7 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
             break
         with _projection_origin(catalog_job_id, origin_claim):
             pass
-        claim = claim_job(job.pk)
+        claim = claim_job(job.pk, typed=True)
         run = project_evidence(claim, ids, deadline=monotonic() + remaining_seconds())
         projection = projection_report(run)
         rejected = set(run.scopes.filter(
