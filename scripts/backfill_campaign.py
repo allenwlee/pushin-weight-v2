@@ -22,11 +22,13 @@ from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
+from core.collection_capture import read_document
 from core.collection_jobs import register_job, set_job_state
 from core.models import (
     CollectionJob,
     CollectionObservation,
     CollectionRun,
+    CollectionScopeRun,
     DataSource,
     Event,
     Opportunity,
@@ -359,9 +361,19 @@ def _collection_model_usage(job):
     usage = {"requests_started": 0, "responses_recorded": 0, "known_input_tokens": 0,
              "known_output_tokens": 0, "responses_missing_usage": 0}
     cost = Decimal(0)
-    for starts, responses in job.runs.values_list("report__model_requests", "report__model_responses").iterator():
-        usage["requests_started"] += starts or 0
-        for response in responses or []:
+    scopes = CollectionScopeRun.objects.filter(
+        run__job=job, scope_kind__in=("x_model_usage", "x_model_call"),
+    ).select_related("legacy_archive").iterator()
+    for scope in scopes:
+        # Historical runs have a single adopted aggregate. New executions keep
+        # one reservation per call; their aggregate marker has raw_count=0.
+        if scope.scope_kind == "x_model_call" and scope.raw_count == 0:
+            continue
+        usage["requests_started"] += scope.raw_count
+        document = read_document(scope.legacy_archive) if scope.legacy_archive_id else {}
+        responses = (document.get("model_responses", []) if scope.scope_kind == "x_model_usage"
+                     else [document] if document.get("status") in {"returned", "failed"} else [])
+        for response in responses:
             usage["responses_recorded"] += 1
             reported = normalize_usage(response.get("usage"))
             for field in ("input_tokens", "output_tokens"):
@@ -371,6 +383,11 @@ def _collection_model_usage(job):
                 cost += amount
             if any(reported[field] is None for field in ("input_tokens", "output_tokens", "cost_usd")) or (amount is not None and not amount.is_finite()):
                 usage["responses_missing_usage"] += 1
+    adopted = CollectionScopeRun.objects.filter(
+        run__job=job, scope_kind="x_model_usage", scope_key="legacy",
+    ).count()
+    if adopted != job.runs.count():
+        raise RuntimeError("backfill_model_usage_scope_incomplete")
     usage["known_cost_usd"] = str(cost)
     usage["outcomes_unrecorded"] = max(0, usage["requests_started"] - usage["responses_recorded"])
     return usage

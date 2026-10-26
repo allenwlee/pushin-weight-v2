@@ -292,11 +292,30 @@ def test_phase_receipt_accounts_inline_models_separately_from_later_enrichment(m
 
     from scripts import backfill_campaign as campaign
 
-    reports = [(2, [{"status": "returned", "usage": {"input_tokens": 100, "output_tokens": 20, "cost_usd": ".01"}}]),
-               (1, [{"status": "failed", "usage": None}])]
-    runs = SimpleNamespace(aggregate=lambda **kw: {"n": 7},
-                           values_list=lambda *args: SimpleNamespace(iterator=lambda: iter(reports)))
+    scopes = [SimpleNamespace(scope_kind="x_model_usage", raw_count=2, legacy_archive_id=1,
+                              legacy_archive={"model_responses": [{"status": "returned", "usage": {"input_tokens": 100, "output_tokens": 20, "cost_usd": ".01"}}]}),
+              SimpleNamespace(scope_kind="x_model_usage", raw_count=0, legacy_archive_id=None),
+              SimpleNamespace(scope_kind="x_model_call", raw_count=1, legacy_archive_id=2,
+                              legacy_archive={"status": "failed", "usage": None}),
+              SimpleNamespace(scope_kind="x_model_call", raw_count=0, legacy_archive_id=3,
+                              legacy_archive={"status": "returned", "usage": None})]
+    runs = SimpleNamespace(aggregate=lambda **kw: {"n": 7}, count=lambda: 2)
     job = SimpleNamespace(pk="existing", runs=runs)
+    class ScopeQuery:
+        def filter(self, **kwargs):
+            return self
+
+        def select_related(self, *args):
+            return self
+
+        def iterator(self):
+            return iter(scopes)
+
+        def count(self):
+            return 2
+
+    monkeypatch.setattr(campaign, "CollectionScopeRun", SimpleNamespace(objects=ScopeQuery()))
+    monkeypatch.setattr(campaign, "read_document", lambda document: document)
     later = {"requests_sent": 3, "responses": 2, "input_tokens": 200, "output_tokens": 30,
              "reserved_usd": ".03", "provider_reported_usd": ".02"}
     monkeypatch.setattr(campaign, "OriginalContentCall", SimpleNamespace(objects=SimpleNamespace(
@@ -313,6 +332,30 @@ def test_phase_receipt_accounts_inline_models_separately_from_later_enrichment(m
         "known_input_tokens": 100, "known_output_tokens": 20, "known_cost_usd": "0.01",
         "responses_missing_usage": 1,
     }
+
+
+def test_collection_model_usage_requires_every_backfill_run_to_have_a_typed_marker(monkeypatch):
+    from types import SimpleNamespace
+
+    from scripts import backfill_campaign as campaign
+
+    class ScopeQuery:
+        def filter(self, **kwargs):
+            return self
+
+        def select_related(self, *args):
+            return self
+
+        def iterator(self):
+            return iter(())
+
+        def count(self):
+            return 0
+
+    monkeypatch.setattr(campaign, "CollectionScopeRun", SimpleNamespace(objects=ScopeQuery()))
+    job = SimpleNamespace(runs=SimpleNamespace(count=lambda: 1))
+    with pytest.raises(RuntimeError, match="backfill_model_usage_scope_incomplete"):
+        campaign._collection_model_usage(job)
 
 
 @pytest.mark.requires_postgres
