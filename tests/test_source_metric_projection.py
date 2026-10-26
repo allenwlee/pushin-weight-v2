@@ -2,6 +2,7 @@
 
 import copy
 import importlib
+import json
 from datetime import UTC, datetime, timedelta
 from io import StringIO
 from types import SimpleNamespace
@@ -13,7 +14,7 @@ from django.db import IntegrityError, connection, transaction
 from django.utils import timezone
 
 from core.benchmark_serving import github_asset_coordinates, observation_dimensions
-from core.collection_capture import read_document, run_report_document
+from core.collection_capture import archive_legacy, read_document, run_report_document
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import StaleClaim, claim_job
 from core.measurement_taxonomy import configure_taxonomy, digest, subject_id
@@ -127,11 +128,50 @@ def evidence(source, raw, *, observed_at=CAPTURED):
         run=run,
         source_subject_kind="repository",
         source_identifier=str(raw["id"]),
-        listing=raw,
+        legacy_archive=archive_legacy({
+            "listing": raw,
+            "dimensions": {"kind": "repository"} if source == "github" else {},
+            "source_metadata": {},
+            "groups": {},
+            "envelopes": [],
+        }),
         observed_at=observed_at,
         observation_key=digest(["evidence", str(run.pk)]),
-        dimensions={"kind": "repository"} if source == "github" else {},
     )
+
+
+def retained_document(raw, *, dimensions=None, metadata=None):
+    return archive_legacy({
+        "listing": raw, "dimensions": dimensions or {}, "source_metadata": metadata or {},
+        "envelopes": [], "groups": {},
+    })
+
+
+def replace_evidence_document(observation, **changes):
+    """Model a changed historical fixture by retaining a new immutable document."""
+    document = read_document(observation.legacy_archive)
+    document.update(changes)
+    observation.legacy_archive = archive_legacy(document)
+    observation.save(update_fields=["legacy_archive"])
+
+
+def historical_projection_contract(scope, ownership):
+    """Run the original SQL against its old table shape, independent of live DROP."""
+    migration = importlib.import_module("core.migrations.0176_rg6_projection_contract_pin")
+    with connection.cursor() as cursor:
+        cursor.execute("""CREATE TEMPORARY TABLE collection_scope_runs (
+            id bigint PRIMARY KEY, run_id uuid NOT NULL, scope_kind text NOT NULL,
+            scope_key text NOT NULL, ownership jsonb NOT NULL, projection_contract_id uuid
+        ) ON COMMIT DROP""")
+        try:
+            cursor.execute("""INSERT INTO pg_temp.collection_scope_runs
+                (id,run_id,scope_kind,scope_key,ownership) VALUES (%s,%s,%s,%s,%s::jsonb)""",
+                [scope.pk, scope.run_id, scope.scope_kind, scope.scope_key, json.dumps(ownership)])
+            migration.copy_projection_contracts(None, SimpleNamespace(connection=connection))
+            cursor.execute("SELECT projection_contract_id FROM pg_temp.collection_scope_runs WHERE id=%s", [scope.pk])
+            return cursor.fetchone()[0]
+        finally:
+            cursor.execute("DROP TABLE pg_temp.collection_scope_runs")
 
 
 def project(contract, source, snapshots, *, key="projection"):
@@ -160,7 +200,6 @@ def project(contract, source, snapshots, *, key="projection"):
 
 @pytest.mark.django_db(transaction=True)
 def test_github_replay_selects_archived_capture_after_old_columns_clear():
-    from core.collection_capture import archive_legacy
     from core.collection_resources import project_observation_facts
     from core.models import DataSource
     from core.source_metric_projection import replay_saved_evidence
@@ -169,16 +208,7 @@ def test_github_replay_selects_archived_capture_after_old_columns_clear():
     contract, raw, _, _ = configured("github")
     captured = evidence("github", raw)
     project_observation_facts(captured)
-    archive = archive_legacy({
-        "listing": captured.listing,
-        "dimensions": captured.dimensions,
-        "source_metadata": captured.source_metadata,
-        "envelopes": captured.envelopes,
-        "groups": captured.groups,
-    })
-    CollectionObservation.objects.filter(pk=captured.pk).update(
-        legacy_archive=archive, listing={}, dimensions={}, source_metadata={},
-    )
+    assert captured.legacy_archive_id is not None
     job = register_job(
         job_key="archived-github-replay",
         source=DataSource.objects.get(pk="github"),
@@ -199,26 +229,13 @@ def test_github_replay_selects_archived_capture_after_old_columns_clear():
 
 
 def test_hf_replay_skips_archived_evidence_without_selected_numbers():
-    from core.collection_capture import archive_legacy
     from core.models import DataSource
     from core.source_metric_projection import replay_saved_evidence
 
     contract, raw, _, _ = configured("hf")
     skipped = evidence("hf", raw)
-    skipped.source_metadata = {"numeric_fields": []}
-    skipped.save(update_fields=["source_metadata"])
+    replace_evidence_document(skipped, source_metadata={"numeric_fields": []})
     selected = evidence("hf", raw, observed_at=CAPTURED + timedelta(seconds=1))
-    for captured in (skipped, selected):
-        archive = archive_legacy({
-            "listing": captured.listing,
-            "dimensions": captured.dimensions,
-            "source_metadata": captured.source_metadata,
-            "envelopes": captured.envelopes,
-            "groups": captured.groups,
-        })
-        CollectionObservation.objects.filter(pk=captured.pk).update(
-            legacy_archive=archive, listing={}, dimensions={}, source_metadata={},
-        )
     job = register_job(
         job_key="archived-hf-replay",
         source=DataSource.objects.get(pk="hf"),
@@ -267,11 +284,10 @@ def test_saved_native_counters_write_and_cross_job_replay_reuses_original_clock(
         assert value.temporal_status == "exact"
     assert all(value.reported_time_policy == "reported-time-v1" for value in observation.values.all())
     assert any(v.integer_value == 0 for v in observation.values.all())
-    # Replaying a retained numeric projection must use its typed identity and
-    # timing facts after the superseded observation document is cleared.
-    CollectionObservation.objects.filter(pk=observation.pk).update(
-        source_metadata={}, dimensions={},
-    )
+    # Numeric identity and timing are typed; its source document has no live ORM fields.
+    assert not {"source_metadata", "dimensions"} & {
+        field.name for field in CollectionObservation._meta.fields
+    }
     second = project(contract, source, [snapshot], key="second")
     assert second.status == "success" and MetricValue.objects.count() == count
     assert run_report_document(second)["projection"]["reused_observation_ids"] == [observation.pk]
@@ -290,7 +306,7 @@ def test_replay_refuses_typed_retrieval_clock_drift_after_document_retirement():
     first = project(contract, "hf", [snapshot])
     numeric = first.observations.get()
     CollectionObservation.objects.filter(pk=numeric.pk).update(
-        source_metadata={}, original_retrieved_at=CAPTURED + timedelta(days=1),
+        original_retrieved_at=CAPTURED + timedelta(days=1),
     )
     with pytest.raises(ValueError, match="immutable snapshot clock conflict"):
         project(contract, "hf", [snapshot], key="drifted-typed-clock")
@@ -331,24 +347,12 @@ def test_projection_links_saved_input_and_records_absent_and_invalid_selected_me
 
 
 def test_archived_hf_field_selection_prevents_unselected_metric_gaps():
-    from core.collection_capture import archive_legacy
     from core.models import CollectionMetricGap
 
     contract, raw, _, _ = configured()
     raw["likes"] = "invalid"
     source = evidence("hf", raw)
-    source.source_metadata = {"numeric_fields": ["downloads", "likes"]}
-    archive = archive_legacy({
-        "listing": source.listing,
-        "dimensions": source.dimensions,
-        "source_metadata": source.source_metadata,
-        "envelopes": source.envelopes,
-        "groups": source.groups,
-    })
-    CollectionObservation.objects.filter(pk=source.pk).update(
-        legacy_archive=archive, listing={}, dimensions={}, source_metadata={},
-    )
-    source.refresh_from_db()
+    replace_evidence_document(source, source_metadata={"numeric_fields": ["downloads", "likes"]})
     run = project(contract, "hf", [source])
     numeric = run.observations.get()
     assert set(CollectionMetricGap.objects.filter(
@@ -523,8 +527,8 @@ def test_asset_dimensions_sizes_and_counter_do_not_become_repo_totals():
     release = CollectionObservation.objects.create(
         run=repo.run, source_identifier="123", source_subject_kind="repository",
         observation_key="b" * 64, observed_at=CAPTURED,
-        listing={"id": 8}, dimensions={"kind": "releases"},
-        observation_kind="releases", source_metadata={"owner_id": 42},
+        legacy_archive=retained_document({"id": 8}, dimensions={"kind": "releases"}, metadata={"owner_id": 42}),
+        observation_kind="releases",
     )
     asset = CollectionObservation.objects.create(
         run=repo.run,
@@ -532,9 +536,11 @@ def test_asset_dimensions_sizes_and_counter_do_not_become_repo_totals():
         source_subject_kind="repository",
         observation_key="a" * 64,
         observed_at=CAPTURED,
-        listing={"id": 7, "size": 1024, "download_count": 9},
-        dimensions={"kind": "release_asset", "release_id": 8, "asset_id": 7},
-        source_metadata={"owner_id": 42},
+        legacy_archive=retained_document(
+            {"id": 7, "size": 1024, "download_count": 9},
+            dimensions={"kind": "release_asset", "release_id": 8, "asset_id": 7},
+            metadata={"owner_id": 42},
+        ),
     )
     CollectionObservationInput.objects.create(
         observation=asset, input_observation=release,
@@ -558,14 +564,8 @@ def test_asset_dimensions_sizes_and_counter_do_not_become_repo_totals():
         "asset_id": 7,
     }
     assert observation_dimensions(values["stars"].observation) == {}
-    CollectionObservation.objects.filter(
-        pk=values["asset_downloads"].observation_id,
-    ).update(dimensions={}, source_metadata={})
     replay = project(contract, "github", [repo, asset], key="typed-asset-replay")
     assert run_report_document(replay)["projection"]["reused_observation_ids"]
-    CollectionObservation.objects.filter(pk__in=[
-        release.pk, asset.pk, values["asset_downloads"].observation_id,
-    ]).update(dimensions={}, source_metadata={}, listing={})
     report = resource_statistics(
         contract_id=contract.pk, source="github", identifier="123",
     )
@@ -589,17 +589,16 @@ def test_published_revision_reuses_identity_and_conflicting_number_fails_visibly
 ):
     contract, raw, _, _ = configured()
     first = evidence("hf", raw)
-    first.source_metadata = {
+    metadata = {
         "numeric_snapshot_identity": {"date": publication_day, "revision": "v1"},
         "metric_times": {
             "likes": {"temporal_status": "date_only", "as_of_date": "2026-10-01"}
         },
     }
-    first.save()
+    replace_evidence_document(first, source_metadata=metadata)
     run = project(contract, "hf", [first])
     second = evidence("hf", raw, observed_at=CAPTURED + timedelta(hours=1))
-    second.source_metadata = first.source_metadata
-    second.save()
+    replace_evidence_document(second, source_metadata=metadata)
     repeated = project(contract, "hf", [second], key="publication-again")
     assert MetricValue.objects.count() == 2
     assert run_report_document(repeated)["projection"]["reused_observation_ids"] == [
@@ -611,8 +610,7 @@ def test_published_revision_reuses_identity_and_conflicting_number_fails_visibly
         ).as_of_date.isoformat()
         == "2026-10-01"
     )
-    second.listing = {**raw, "likes": 100}
-    second.save()
+    replace_evidence_document(second, listing={**raw, "likes": 100})
     with pytest.raises(ValueError, match="immutable numeric snapshot conflict"):
         project(contract, "hf", [second], key="conflict")
     assert MetricValue.objects.get(source_metric__metric_key="likes").integer_value == 4
@@ -622,7 +620,7 @@ def test_published_revision_reuses_identity_and_conflicting_number_fails_visibly
 
 
 def test_pending_projection_reference_is_atomic_with_evidence_and_pause_fences_writer():
-    from core.collection_state import checkpoint_scope
+    from core.collection_state import fenced_run
     from core.models import DataSource
     from core.source_metric_projection import enqueue_projection, project_evidence
 
@@ -643,50 +641,29 @@ def test_pending_projection_reference_is_atomic_with_evidence_and_pause_fences_w
     set_job_state(capture.pk, "ready")
     claim = claim_job(capture.pk)
 
-    def write(run, scope):
-        snapshot = CollectionObservation.objects.create(
-            run=run,
-            scope_run=scope,
-            source_identifier="lab/Model",
-            source_subject_kind="repository",
-            listing=raw,
-            observation_key="b" * 64,
-        )
-        enqueue_projection(claim, contract=contract, evidence_ids=[snapshot.pk])
-        raise RuntimeError("after-enqueue")
+    def commit_capture(*, fail=False):
+        with fenced_run(claim) as (_, run):
+            snapshot = CollectionObservation.objects.create(
+                run=run, source_identifier="lab/Model", source_subject_kind="repository",
+                legacy_archive=retained_document(raw), observation_key="b" * 64,
+            )
+            enqueue_projection(claim, contract=contract, evidence_ids=[snapshot.pk])
+            if fail:
+                raise RuntimeError("after-enqueue")
 
-    with pytest.raises(RuntimeError):
-        checkpoint_scope(claim, scope_key="capture", ownership={}, write=write)
+    with pytest.raises(RuntimeError, match="after-enqueue"):
+        commit_capture(fail=True)
     assert not CollectionObservation.objects.exists()
     assert not CollectionRun.objects.get(pk=claim.run_id).scopes.exists()
-
-    def complete(run, scope):
-        snapshot = CollectionObservation.objects.create(
-            run=run,
-            scope_run=scope,
-            source_identifier="lab/Model",
-            source_subject_kind="repository",
-            listing=raw,
-            observation_key="b" * 64,
-        )
-        enqueue_projection(claim, contract=contract, evidence_ids=[snapshot.pk])
-
-    checkpoint_scope(claim, scope_key="capture", ownership={}, write=complete)
+    commit_capture()
     pending = CollectionRun.objects.get(pk=claim.run_id).scopes.get(
         scope_kind="numeric_projection"
     )
     assert pending.projection_contract_id == contract.pk
-    # Rehearse the historical migration with the historical writer's shape.
-    type(pending).objects.filter(pk=pending.pk).update(
-        projection_contract=None,
-        ownership={"contract_id": str(contract.pk), "contract_hash": contract.contract_hash},
-    )
-    migration = importlib.import_module("core.migrations.0176_rg6_projection_contract_pin")
-    migration.copy_projection_contracts(None, SimpleNamespace(connection=connection))
-    pending.refresh_from_db()
-    assert pending.projection_contract_id == contract.pk
+    assert historical_projection_contract(pending, {
+        "contract_id": str(contract.pk), "contract_hash": contract.contract_hash,
+    }) == contract.pk
     snapshot = CollectionObservation.objects.get()
-    assert pending.envelopes == []
     item = pending.child_scopes.get(scope_kind="numeric_projection_item")
     assert item.resource_observation_id == snapshot.pk
     assert item.projection_contract_id == contract.pk
@@ -719,17 +696,11 @@ def test_historical_metric_projection_scope_uses_owning_job_contract():
     run = project(contract, "hf", [snapshot], key="historical-metric-pin")
     scope = run.scopes.get(scope_kind="numeric_projection")
     assert scope.projection_contract_id == contract.pk
-    type(scope).objects.filter(pk=scope.pk).update(
-        projection_contract=None, ownership={"contract_hash": contract.contract_hash},
-    )
-    migration = importlib.import_module("core.migrations.0176_rg6_projection_contract_pin")
-    migration.copy_projection_contracts(None, SimpleNamespace(connection=connection))
-    scope.refresh_from_db()
-    assert scope.projection_contract_id == contract.pk
+    assert historical_projection_contract(scope, {"contract_hash": contract.contract_hash}) == contract.pk
 
 
-@pytest.mark.parametrize("archived", [False, True])
-def test_historical_projection_queue_adopts_exact_pending_inputs_once(archived, monkeypatch):
+@pytest.mark.parametrize("historical", [False, True], ids=["typed-queue", "archived-queue"])
+def test_historical_projection_queue_adopts_exact_pending_inputs_once(historical, monkeypatch):
     from core.collection_capture import archive_legacy
     from core.models import CollectionScopeRun
     from core.source_metric_projection import drain_pending_projections
@@ -738,16 +709,18 @@ def test_historical_projection_queue_adopts_exact_pending_inputs_once(archived, 
     captured = projection_queue_capture(contract, raw)
     queue = CollectionScopeRun.objects.create(
         run=captured.run, scope_kind="numeric_projection", scope_key=str(contract.pk),
-        projection_contract=contract,
-        ownership={"contract_id": str(contract.pk), "contract_hash": contract.contract_hash},
-        envelopes=[{"observation_id": captured.pk}],
+        projection_contract=contract, phase=None if historical else "projection_queue",
+        legacy_archive=archive_legacy({
+            "ownership": {"contract_id": str(contract.pk), "contract_hash": contract.contract_hash},
+            "cursor_history": [], "envelopes": [{"observation_id": captured.pk}],
+        }) if historical else None,
     )
-    if archived:
-        queue.legacy_archive = archive_legacy({
-            "ownership": queue.ownership, "cursor_history": [], "envelopes": queue.envelopes,
-        })
-        queue.ownership, queue.envelopes = {}, []
-        queue.save()
+    if not historical:
+        CollectionScopeRun.objects.create(
+            run=captured.run, scope_kind="numeric_projection_item",
+            scope_key=f"{contract.pk}:{captured.pk}", projection_contract=contract,
+            parent_scope=queue, resource_observation=captured,
+        )
     result = drain_pending_projections(captured.run.job_id)
     assert result["acknowledged"] == 1 and result["written_values"] == 2
     assert result["pending_resources"] == 0
@@ -774,8 +747,9 @@ def test_projection_queue_refuses_foreign_capture_job_before_writing_children():
     foreign = evidence("github", {"id": 123})
     queue = CollectionScopeRun.objects.create(
         run=captured.run, scope_kind="numeric_projection", scope_key=str(contract.pk),
-        projection_contract=contract, ownership={},
-        envelopes=[{"observation_id": foreign.pk}],
+        projection_contract=contract,
+        legacy_archive=archive_legacy({"ownership": {}, "cursor_history": [],
+                                       "envelopes": [{"observation_id": foreign.pk}]}),
     )
     with pytest.raises(ValueError, match="outside capture job"):
         drain_pending_projections(captured.run.job_id)
@@ -801,7 +775,7 @@ def projection_queue_capture(contract, raw):
     )
     return CollectionObservation.objects.create(
         run=run, source_subject_kind="repository", source_identifier=raw["id"],
-        listing=raw, observed_at=CAPTURED, observation_key=digest(["queued-evidence"]),
+        legacy_archive=retained_document(raw), observed_at=CAPTURED, observation_key=digest(["queued-evidence"]),
     )
 
 
@@ -957,13 +931,11 @@ def test_supplied_account_followers_keep_native_account_grain(source):
     snapshot = evidence(source, raw)
     snapshot.source_identifier = publisher.normalized_identifier
     snapshot.source_subject_kind = "account"
-    snapshot.listing = (
-        {"id": 42, "followers": 10}
-        if source == "github"
-        else {"name": "lab", "numFollowers": 10}
+    snapshot.save(update_fields=["source_identifier", "source_subject_kind"])
+    replace_evidence_document(
+        snapshot, listing={"id": 42, "followers": 10} if source == "github" else {"name": "lab", "numFollowers": 10},
+        dimensions={"kind": "publisher"},
     )
-    snapshot.dimensions = {"kind": "publisher"}
-    snapshot.save()
     run = project(contract, source, [snapshot])
     value = MetricValue.objects.get()
     assert run.status == "success"
@@ -991,14 +963,11 @@ def test_replay_refuses_publisher_ownership_drift_since_contract_review():
 def test_new_optional_number_attaches_to_existing_publication_with_provenance():
     contract, raw, _, _ = configured()
     first = evidence("hf", {"id": raw["id"], "downloads": 0})
-    first.source_metadata = {
-        "numeric_snapshot_identity": {"period": "2026-10-01", "revision": "v1"}
-    }
-    first.save()
+    metadata = {"numeric_snapshot_identity": {"period": "2026-10-01", "revision": "v1"}}
+    replace_evidence_document(first, source_metadata=metadata)
     initial = project(contract, "hf", [first])
     second = evidence("hf", raw, observed_at=CAPTURED + timedelta(hours=1))
-    second.source_metadata = first.source_metadata
-    second.save()
+    replace_evidence_document(second, source_metadata=metadata)
     additional = project(contract, "hf", [second], key="additional-counter")
     assert additional.status == "success"
     assert run_report_document(additional)["projection"]["written_values"] == 1
@@ -1040,11 +1009,10 @@ def test_reported_cumulative_origins_keep_original_capture_and_replay(origin_cas
         product.save(update_fields=["created_at"])
     raw["downloadsAllTime"] = 0
     snapshot = evidence("hf", raw)
-    snapshot.source_metadata = {
+    replace_evidence_document(snapshot, source_metadata={
         "archive_snapshot_date": "2026-10-01",
         "numeric_fields": ["downloads", "downloadsAllTime", "likes"],
-    }
-    snapshot.save()
+    })
     first = project(contract, "hf", [snapshot])
     value = MetricValue.objects.get(source_metric__metric_key="downloads_all_time")
     assert value.integer_value == 0
@@ -1073,12 +1041,11 @@ def test_reported_policy_preserves_a_retained_single_endpoint(metric, field):
         raw["downloadsAllTime"] = 10
     known = CAPTURED - timedelta(days=10)
     snapshot = evidence("hf", raw)
-    snapshot.source_metadata = {
+    replace_evidence_document(snapshot, source_metadata={
         "metric_times": {
             metric: {"temporal_status": "unknown", field: known.isoformat()}
         }
-    }
-    snapshot.save()
+    })
     assert project(contract, "hf", [snapshot]).status == "success"
     value = MetricValue.objects.get(source_metric__metric_key=metric)
     assert getattr(value, field) == known

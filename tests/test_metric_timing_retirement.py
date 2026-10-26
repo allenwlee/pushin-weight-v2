@@ -47,6 +47,11 @@ def _erase_timing():
 
 
 def test_hf_command_preserves_archive_day_native_creation_and_rollback_without_json():
+    # The production model itself is detached; the denied-column wrapper is no
+    # longer responsible for hiding legacy fields from this call chain.
+    assert not {"listing", "dimensions", "source_metadata", "envelopes", "groups"} & {
+        field.name for field in CollectionObservation._meta.fields
+    }
     contract = configured()
     data = manifest(contract)
     for snapshot in data["snapshots"]:
