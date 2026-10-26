@@ -79,6 +79,12 @@ from .provider_telemetry import (
     provider_host_class,
 )
 
+from .tweet_entities import (
+    entity_text,
+    mention_id,
+    normalize_entities as _normalize_entities,
+)
+
 if TYPE_CHECKING:
     from .config import Config
 
@@ -260,47 +266,6 @@ def _is_cjk(token: str) -> bool:
     return any("一" <= ch <= "鿿" for ch in token)
 
 
-def _normalize_entities(entities: Any) -> dict[str, Any]:
-    """Coerce `entities` to a dict, handling JSON strings and None.
-
-    TwitterAPI.io returns `entities` either as a parsed dict or as a
-    JSON-encoded string. The migrator occasionally stores the literal
-    string 'null' (which is valid JSON for None). All three cases are
-    handled here so the extractors can iterate without type checks.
-    """
-    if entities is None:
-        return {}
-    if isinstance(entities, dict):
-        return entities
-    if isinstance(entities, str):
-        if entities.strip().lower() in ("null", ""):
-            return {}
-        try:
-            parsed = json.loads(entities)
-        except (ValueError, TypeError):
-            logger.warning(
-                "attribution: entities is a non-JSON string; "
-                "treating as empty dict: %r",
-                entities[:120],
-            )
-            return {}
-        if parsed is None:
-            return {}
-        if isinstance(parsed, dict):
-            return parsed
-        logger.warning(
-            "attribution: entities JSON is not a dict (type=%s); "
-            "treating as empty",
-            type(parsed).__name__,
-        )
-        return {}
-    logger.warning(
-        "attribution: entities is unexpected type %s; treating as empty",
-        type(entities).__name__,
-    )
-    return {}
-
-
 # --- Extractor 1: user_mentions (R3) -------------------------------------
 
 
@@ -311,7 +276,7 @@ def extract_user_mentions(
 ) -> list[MentionRow]:
     """Emit one MentionRow per @handle in `entities.user_mentions[]`.
 
-    The numeric X user id (entities.user_mentions[].id) is the FK into
+    The provider id_str (falling back to legacy id) is the FK into
     `brands_accounts.author_id`. Unknown handles are preserved with
     brand_id=None so the raw `@handle` token survives for backfill.
 
@@ -339,15 +304,17 @@ def extract_user_mentions(
         return []
 
     out: list[MentionRow] = []
+    seen_ids: set[str] = set()
     for m in mentions:
         if not isinstance(m, dict):
             continue
-        author_id = m.get("id")
-        username = m.get("username") or m.get("screen_name")
-        if not author_id or not username:
+        author_id = mention_id(m)
+        # Preserve existing username precedence when both handle aliases occur.
+        username = entity_text(m, "username", "screen_name")
+        if not author_id or not username or author_id in seen_ids:
             continue
-        author_id_str = str(author_id)
-        brand_id = brands_accounts.get(author_id_str)
+        seen_ids.add(author_id)
+        brand_id = brands_accounts.get(author_id)
         raw_token = f"@{username}"
         out.append(MentionRow(
             post_id=post_id,
@@ -394,15 +361,15 @@ def extract_hashtag_mentions(
         return []
 
     out: list[MentionRow] = []
+    seen_tags: set[str] = set()
     for t in tags:
         if not isinstance(t, dict):
             continue
-        tag = t.get("tag")
-        if not tag:
+        # Provider text wins conflicting legacy tag, without rewriting evidence.
+        tag_lower = entity_text(t, "text", "tag").lower().lstrip("#")
+        if not tag_lower or tag_lower in seen_tags:
             continue
-        tag_lower = str(tag).lower().lstrip("#")
-        if not tag_lower:
-            continue
+        seen_tags.add(tag_lower)
         brand_id = brand_hashtags.get(tag_lower)
         if brand_id is None:
             # Unknown hashtag: silently dropped (R4: noise is not

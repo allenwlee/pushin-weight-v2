@@ -171,11 +171,15 @@ def test_new_migration_can_reverse_and_reapply_without_losing_source_data(
     target = ("core", "0094_shared_materialization_state")
     executor = MigrationExecutor(connection)
     executor.migrate([before])
-    brand = Brand.objects.create(nickname="migration-count-test")
-    post = Post.objects.create(
+    historical = executor.loader.project_state([before]).apps
+    brand_model = historical.get_model("core", "Brand")
+    post_model = historical.get_model("core", "Post")
+    post_brand_model = historical.get_model("core", "PostBrand")
+    brand = brand_model.objects.create(nickname="migration-count-test")
+    post = post_model.objects.create(
         tweet_id="migration-count-test", created_at=timezone.now()
     )
-    PostBrand.objects.create(post=post, brand=brand)
+    post_brand_model.objects.create(post=post, brand=brand)
     for destination in (target, before, target):
         executor = MigrationExecutor(connection)
         executor.migrate([destination])

@@ -13,8 +13,8 @@
   var pulses = Array.prototype.slice.call(document.querySelectorAll('[data-pw-pulse-entry]'));
   var initial = document.getElementById('each-initial-chart');
   var payload = initial ? JSON.parse(initial.textContent) : null;
-  var selected = payload && payload.brand || '';
-  var activeTab = payload && payload.tab || (tabs[0] && tabs[0].dataset.eachTab) || 'sentiment';
+  var selected = payload && payload.brand || root.dataset.selectedBrand || '';
+  var activeTab = payload && payload.tab || root.dataset.selectedTab || (tabs[0] && tabs[0].dataset.eachTab) || 'sentiment';
   var mode = (modes.find(function (input) { return input.checked; }) || {}).value || 'percent';
   var windowDays = Number(document.body.dataset.pwWindow || 7);
   var locale = document.body.dataset.pwLocale || 'en';
@@ -192,7 +192,7 @@
     if (controller) controller.abort();
     face.classList.remove('is-turning-out', 'is-turning-in');
     controller = new AbortController();
-    setStatus('');
+    setStatus(chart ? '' : root.dataset.chartLoading);
     panel.setAttribute('aria-busy', 'true');
     fetch(chartUrl(), { credentials: 'same-origin', signal: controller.signal })
       .then(function (response) { if (!response.ok) throw new Error('chart request'); return response.json(); })
@@ -297,6 +297,7 @@
 
   setTab(activeTab);
   if (payload) render(payload);
+  else if (selected) refresh(false);
   if (payload && windowDays > 1) {
     var localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     if (payload.bucket_timezone !== localTimezone) refresh(false);

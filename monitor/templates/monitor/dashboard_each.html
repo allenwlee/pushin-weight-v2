@@ -117,6 +117,8 @@
   <div class="desktop-grid">
     <div class="desktop-col-main">
       <section class="home-chart-wrap each-chart-wrap" data-pw-each-chart data-chart-url="{% url 'dashboard_each_chart' %}"
+               data-selected-brand="{{ selected_brand }}" data-selected-tab="{{ selected_tab }}"
+               data-chart-loading="{% if is_zh_chrome %}正在加载图表…{% elif is_ja_chrome %}グラフを読み込んでいます…{% else %}Loading chart…{% endif %}"
                data-chart-empty="{% if is_zh_chrome %}本窗口暂无图表数据{% elif is_ja_chrome %}この期間にはグラフデータがありません{% else %}No chart data in this window{% endif %}"
                data-chart-error="{% if is_zh_chrome %}图表刷新失败{% elif is_ja_chrome %}グラフの更新に失敗しました{% else %}Chart refresh failed{% endif %}">
         <div class="each-tabs" role="tablist" aria-label="{% if is_zh_chrome %}分类图表{% elif is_ja_chrome %}分類グラフ{% else %}Classification charts{% endif %}">
@@ -146,7 +148,6 @@
           </div>
           <p class="chart-state muted" data-each-status role="status" aria-live="polite" hidden></p>
         </div>
-        {{ each_chart_payload|json_script:"each-initial-chart" }}
       </section>
 
       <section class="headline-strip" role="region" aria-label="{% trans 'Trend summary' %}"

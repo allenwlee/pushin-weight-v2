@@ -21,6 +21,7 @@ from typing import Any
 
 import requests
 
+from x_monitor.tweet_entities import normalize_entities
 from x_monitor.twitterapi_credentials import (
     TwitterApiCredentialPurpose,
     require_twitterapi_api_key,
@@ -1017,6 +1018,7 @@ def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any]:
         "id": str(item.get("id") or ""),
         "text": item.get("text") or "",
         "lang": item.get("lang"),
+        "entities": normalize_entities(item.get("entities")),
         "created_at": item.get("createdAt") or item.get("created_at"),
         "like_count": int(item.get("likeCount") or 0),
         "retweet_count": int(item.get("retweetCount") or 0),
