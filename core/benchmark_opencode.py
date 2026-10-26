@@ -162,10 +162,6 @@ def selected_rows(contract, mapping_ids, start, end, *, cutoff=None, canonical=F
         obj.pk: obj
         for obj in queryset.prefetch_related("values__source_metric")
     }
-    if canonical:
-        from core.benchmark_serving import hydrate_observations
-
-        hydrate_observations(observations.values())
     for (identifier, label), row in chosen.items():
         observation = observations.get(row["observation_id"])
         require(
