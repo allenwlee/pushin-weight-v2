@@ -1824,7 +1824,7 @@ def _legacy_owner_predicate(table: str) -> str:
             "'metric_execution','match_execution','x_backfill_execution',"
             "'x_cycle_execution',"
             "'x_page_checkpoint',"
-            "'x_model_call','x_model_usage','x_backfill_result',"
+            "'x_model_call','x_model_usage','x_backfill_result','x_campaign_receipt',"
             "'x_checkpoint_import') "
             "AND ((t.scope_kind='numeric_projection' "
             "AND t.phase='projection_results_v1') IS NOT TRUE) "

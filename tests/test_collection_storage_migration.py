@@ -54,13 +54,19 @@ def test_archive_sweep_includes_null_phase_legacy_scope_beside_typed_scope():
         run=run, scope_kind="product_match", scope_key="typed",
         phase="typed-product-match-v1",
     )
+    campaign = CollectionScopeRun.objects.create(
+        run=run, scope_kind="x_campaign_receipt", scope_key="00000001",
+        phase="campaign_receipt_v1",
+    )
 
     batch = archive_legacy_batch("collection_scope_runs", batch_size=10)
     legacy.refresh_from_db()
     typed.refresh_from_db()
+    campaign.refresh_from_db()
     assert batch.archived >= 1
     assert legacy.legacy_archive_id is not None
     assert typed.legacy_archive_id is None
+    assert campaign.legacy_archive_id is None
 
 
 def test_new_arena_publication_marker_needs_no_retiring_json_columns():
