@@ -29,6 +29,33 @@ from tests.test_benchmark_download_db_identity import setup_spec
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 
+@pytest.mark.parametrize("source_id", ["arena", "openrouter"])
+def test_selected_publication_rows_keep_typed_origin_links_and_coordinates(source_id):
+    source, _product, scope = publication_scope(source_id)
+    budget, _requests = transport(source_id)
+    run = execute_model_history(register(source, scope).pk, budget=budget, key="fixture")
+    assert run.status == "success", run.report
+    selected = list(CollectionObservation.objects.filter(observation_kind="publication_row"))
+    assert selected
+    expected = {}
+    for observation in selected:
+        edge = observation.inputs.get(input_role="publication_row_origin")
+        original = edge.input_observation
+        assert original.pk == observation.source_metadata["origin_publication_observation_id"]
+        assert original.run.job.source_id == source_id
+        assert edge.input_sha256 == original.observation_key
+        snapshot = observation.source_metadata["numeric_snapshot_identity"]
+        assert observation.provider_revision == snapshot["revision"]
+        assert observation.source_record_date.isoformat() == snapshot["period"]
+        assert observation.category_key == snapshot["category"]
+        if source_id == "openrouter":
+            assert observation.published_date is None
+        expected[observation.pk] = original.pk
+    CollectionObservation.objects.filter(pk__in=expected).update(listing={}, source_metadata={}, dimensions={})
+    for observation in CollectionObservation.objects.filter(pk__in=expected):
+        assert observation.inputs.get(input_role="publication_row_origin").input_observation_id == expected[observation.pk]
+
+
 def publication_scope(source="openrouter", *, config="text", identifier_scope=None):
     product, _ = setup_spec()
     subject = MeasurementSubject.objects.get(

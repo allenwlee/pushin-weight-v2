@@ -155,3 +155,16 @@ def test_publication_snapshot_requires_an_object_before_any_fact_is_written():
         project_observation_facts(observation)
     observation.refresh_from_db()
     assert observation.source_record_date is None
+
+
+def test_resource_publisher_rejects_conflicting_native_and_inherited_owners():
+    from core.collection_resources import snapshot_resource
+    from core.models import CollectionResourceSnapshot
+
+    observation = publication_observation(
+        source="github", metadata={"owner_id": 43}, dimensions={"kind": "release_asset"},
+    )
+    observation.listing = {"id": 7, "owner": {"id": 42}}
+    with pytest.raises(ValueError, match="publisher conflicts with captured owner"):
+        snapshot_resource(observation)
+    assert not CollectionResourceSnapshot.objects.filter(observation=observation).exists()
