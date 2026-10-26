@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
 from core.benchmark_metric_store import aware_instant, safe_payload
+from core.collection_capture import observation_object_documents
 from core.collection_jobs import register_job
 from core.collection_state import checkpoint_scope, claim_job, finish_run
 from core.github_metadata_client import METADATA_FILES, GitHubMetadataClient
@@ -412,7 +413,10 @@ def _publisher_inventory(claim, client, pin, items):
                         observed_at=observation.observed_at,
                         payload_sha256=digest(row),
                     )
-                    require(prior.listing == row, "cached repository payload changed")
+                    require(
+                        observation_object_documents(prior)[0] == row,
+                        "cached repository payload changed",
+                    )
                     CollectionObservationInput.objects.get_or_create(
                         observation=observation,
                         input_observation=prior,
@@ -449,12 +453,14 @@ def _publisher_inventory(claim, client, pin, items):
             write=write,
         )
         items[0] += len(rows)
-    return scoped.observations.filter(dimensions__kind="repository").order_by("pk")
+    return scoped.observations.filter(observation_kind="repository").select_related(
+        "legacy_archive"
+    ).order_by("pk")
 
 
 def _repository_access(claim, client, repository):
     """Cached inventory cannot authorize today's public content acquisition."""
-    repo = repository.listing
+    repo = observation_object_documents(repository)[0]
     key = str(repo["id"])
     ownership = {"repository_id": key, "owner_id": str(repo["owner"]["id"])}
     _prepare_capture(
@@ -529,11 +535,13 @@ def _repository_access(claim, client, repository):
 
 
 def _release_assets(claim, client, repository, releases, items, limit):
-    repo = repository.listing
-    for release in releases.observations.filter(dimensions__kind="releases").order_by(
+    repo = observation_object_documents(repository)[0]
+    for release in releases.observations.filter(observation_kind="releases").select_related(
+        "legacy_archive"
+    ).order_by(
         "pk"
     ):
-        release_id = release.listing["id"]
+        release_id = observation_object_documents(release)[0]["id"]
         key = f"{repo['id']}:{release_id}"
         ownership = {
             "repository_id": repo["id"],
@@ -636,7 +644,7 @@ def _release_assets(claim, client, repository, releases, items, limit):
 
 
 def _events(claim, client, repository, kind, items, limit):
-    repo = repository.listing
+    repo = observation_object_documents(repository)[0]
     ownership = {"repository_id": repo["id"], "owner_id": repo["owner"]["id"]}
     key = str(repo["id"]) + ":" + kind
     scoped = _scope(claim, "repository_events", key)
@@ -736,8 +744,12 @@ def _pinned_metadata(claim, client, repository, commits, *, head=None):
     head = head or commits.observations.order_by("pk").first()
     if head is None:
         return
-    repo, revision = repository.listing, head.listing["sha"]
-    tree_revision = head.listing.get("commit", {}).get("tree", {}).get("sha")
+    repo, head_document = (
+        observation_object_documents(repository)[0],
+        observation_object_documents(head)[0],
+    )
+    revision = head_document["sha"]
+    tree_revision = head_document.get("commit", {}).get("tree", {}).get("sha")
     client.revision(tree_revision)
     ownership = {
         "repository_id": repo["id"],
@@ -783,7 +795,9 @@ def _pinned_metadata(claim, client, repository, commits, *, head=None):
                 observed_at=result.observed_at,
             ),
         )
-    files = scoped.observations.get(dimensions__kind="tree").listing["tree"]
+    files = observation_object_documents(
+        scoped.observations.select_related("legacy_archive").get(observation_kind="tree")
+    )[0]["tree"]
     for item in files:
         filename = item.get("path")
         if (
@@ -895,7 +909,7 @@ def execute_github_catalog(job_id, *, client=None, key=None):
             repositories = _publisher_inventory(claim, client, publisher, items)
             for repository in repositories:
                 prior_access = _scope(
-                    claim, "repository_access", str(repository.listing["id"])
+                    claim, "repository_access", str(observation_object_documents(repository)[0]["id"])
                 )
                 if (
                     role == "inventory"

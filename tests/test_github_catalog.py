@@ -384,6 +384,8 @@ def test_late_provider_response_cannot_write_after_reclaim():
 
 
 def test_catalog_resume_rechecks_access_before_using_cached_public_inventory():
+    from core.collection_capture import archive_legacy
+
     obj, repo = configured()
     seen = []
     private = [False]
@@ -398,6 +400,20 @@ def test_catalog_resume_rechecks_access_before_using_cached_public_inventory():
 
     first = execute_github_catalog(obj.pk, client=reader(response, 3))
     assert first.status == "partial"
+    repositories = list(first.observations.filter(observation_kind="repository"))
+    assert repositories
+    for observation in repositories:
+        observation.legacy_archive = archive_legacy({
+            "listing": observation.listing,
+            "dimensions": observation.dimensions,
+            "source_metadata": observation.source_metadata,
+        })
+        observation.listing = {}
+        observation.dimensions = {}
+        observation.source_metadata = {}
+        observation.save(update_fields=[
+            "legacy_archive", "listing", "dimensions", "source_metadata",
+        ])
     private[0] = True
     run = execute_github_catalog(obj.pk, client=reader(response, 20))
     assert (
