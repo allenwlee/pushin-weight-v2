@@ -613,11 +613,17 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                 run.save(update_fields=["invocations", "request_count", "updated_at"])
 
         hf.on_attempt = record_request
+        from core.collection_capture import RequestCapture
+
+        previous_capture = hf.capture
+        previous_scope = hf.collection_scope
+        hf.capture = RequestCapture(claim)
         try:
             visited = set()
             for ns in run.scopes.order_by("scope_key"):
                 if hf.stop_reason:
                     break
+                hf.collection_scope = ns
                 _walk_namespace(
                     ns,
                     hf,
@@ -673,3 +679,5 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                     )
             finally:
                 hf.on_attempt = None
+                hf.capture = previous_capture
+                hf.collection_scope = previous_scope

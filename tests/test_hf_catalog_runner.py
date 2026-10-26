@@ -4,7 +4,14 @@ from django.db import connection
 
 from core.hf_catalog import execute_catalog, resolve_scope
 from core.hf_metadata_client import HFMetadataClient
-from core.models import Brand, BrandCompany, CollectionRun, Company, Product
+from core.models import (
+    Brand,
+    BrandCompany,
+    CollectionRequest,
+    CollectionRun,
+    Company,
+    Product,
+)
 from core.publisher_accounts import publisher_links
 from tests.collection_fixtures import with_database_models
 from tests.publisher_fixtures import hf_publisher
@@ -64,6 +71,10 @@ def test_full_walk_enrichment_refresh_identity_and_ambiguous_brand():
     assert saved.job.source_id == saved.source_id == "hf"
     assert saved.job.definition["scope"] == saved.scope == manifest
     assert saved.request_count == 6
+    requests = CollectionRequest.objects.filter(attempt__run=saved)
+    assert requests.count() == saved.attempts.get().actual_requests == 6
+    assert requests.filter(transport_outcome="received", archive__isnull=False).count() == 6
+    assert not requests.exclude(scope_run__run=saved).exists()
     assert saved.selected_count == saved.success_count == 2
     assert Product.objects.filter(brand__isnull=True).count() == 2
     identities = list(Product.objects.values_list("id", "repo_id"))
