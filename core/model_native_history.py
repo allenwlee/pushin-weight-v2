@@ -355,7 +355,7 @@ def _hf_history(claim, job, pins, budget, items):
                         "HF history item budget exceeded",
                     )
                     history = [
-                        *(scoped.cursor_history if scoped else []),
+                        *(scoped.recorded_cursors if scoped else []),
                         scoped.cursor if scoped and scoped.cursor else "first",
                     ]
                     require(

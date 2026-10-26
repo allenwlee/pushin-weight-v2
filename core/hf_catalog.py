@@ -316,6 +316,7 @@ def _accepted_request(result):
 @transaction.atomic
 def _persist_page(ns, result, rules):
     from core.collection_capture import link_request
+    from core.collection_cursors import replace_scope_cursor_history
 
     ns.envelopes += _envelopes(result, "listing")
     ns.raw_count += len(result.payload)
@@ -339,7 +340,8 @@ def _persist_page(ns, result, rules):
         persist_product(observation, ns.ownership, rules, item, "listing")
         if request is not None:
             link_request(observation, request, role="listing", row_locator=str(ordinal))
-    if result.next_cursor and result.next_cursor in ns.cursor_history:
+    cursors = ns.recorded_cursors
+    if result.next_cursor and result.next_cursor in cursors:
         ns.outcome = "repeated_cursor"
     elif result.next_cursor and not result.payload:
         ns.outcome = "empty_page_with_cursor"
@@ -348,12 +350,18 @@ def _persist_page(ns, result, rules):
         ns.enumeration_complete = not bool(result.next_cursor)
         ns.outcome = "exhausted" if ns.enumeration_complete else "pending"
         if result.next_cursor:
-            ns.cursor_history.append(result.next_cursor)
+            cursors.append(result.next_cursor)
+    replace_scope_cursor_history(ns, cursors)
+    ns.cursor_history = cursors
     ns.save()
 
 
 def _save_scope(ns, claim, **kwargs):
+    from core.collection_cursors import replace_scope_cursor_history
+
     with fenced_run(claim):
+        if ns.outcome == "cursor_restart":
+            replace_scope_cursor_history(ns, [])
         ns.save(**kwargs)
 
 

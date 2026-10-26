@@ -3617,6 +3617,12 @@ class CollectionScopeRun(models.Model):
     envelopes = models.JSONField(default=list)
     raw_count = models.BigIntegerField(default=0)
 
+    @property
+    def recorded_cursors(self):
+        from core.collection_cursors import scope_cursor_history
+
+        return scope_cursor_history(self)
+
     class Meta:
         db_table = "collection_scope_runs"
         constraints = (
@@ -9461,6 +9467,25 @@ class CollectionScopeRequestUse(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["scope_run", "ordinal"], name="uq_scope_request_use_order"
+            ),
+        ]
+
+
+class CollectionScopeCursorReceipt(models.Model):
+    """One ordered cursor checkpoint; it does not establish an HTTP request."""
+
+    pk = models.CompositePrimaryKey("scope_run", "position")
+    scope_run = models.ForeignKey(
+        CollectionScopeRun, on_delete=models.CASCADE, related_name="cursor_receipts",
+    )
+    position = models.PositiveIntegerField()
+    cursor = models.TextField()
+
+    class Meta:
+        db_table = "collection_scope_cursor_receipts"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(position__gt=0), name="ck_scope_cursor_position",
             ),
         ]
 

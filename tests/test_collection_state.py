@@ -44,12 +44,44 @@ def test_checkpoint_rolls_back_evidence_and_cursor():
     assert CollectionObservation.objects.count() == 0
 
 
+def test_cursor_receipts_preserve_order_duplicates_and_reset_atomically():
+    from core.models import CollectionRequest, CollectionScopeCursorReceipt
+
+    obj = ready()
+    claim = claim_job(obj.pk)
+    scope = checkpoint_scope(
+        claim, scope_key="publisher", ownership={}, cursor="next",
+        cursor_history=["first", "duplicate", "duplicate"],
+    )
+    assert list(scope.cursor_receipts.order_by("position").values_list(
+        "position", "cursor"
+    )) == [(1, "first"), (2, "duplicate"), (3, "duplicate")]
+    assert CollectionRequest.objects.count() == 0
+    CollectionScopeRun.objects.filter(pk=scope.pk).update(cursor_history=[])
+    scope.refresh_from_db()
+    assert scope.recorded_cursors == ["first", "duplicate", "duplicate"]
+    with pytest.raises(ValueError, match="cursor history"):
+        checkpoint_scope(
+            claim, scope_key="publisher", ownership={}, cursor="bad",
+            cursor_history=[{"cursor": "unknown"}],
+        )
+    scope.refresh_from_db()
+    assert scope.cursor == "next"
+    assert scope.recorded_cursors == ["first", "duplicate", "duplicate"]
+    checkpoint_scope(claim, scope_key="publisher", ownership={}, cursor_history=[])
+    assert not CollectionScopeCursorReceipt.objects.filter(scope_run=scope).exists()
+    scope.refresh_from_db()
+    assert scope.recorded_cursors == []
+
+
 def test_backfill_continuation_copies_scopes_without_rewriting_old_attempt():
     obj = ready(purpose="content")
     first = claim_job(obj.pk, manual_authorized=True)
     old = checkpoint_scope(
-        first, scope_key="slice1", ownership={}, cursor="next", outcome="complete"
+        first, scope_key="slice1", ownership={}, cursor="next", outcome="complete",
+        cursor_history=["first", "previous"],
     )
+    CollectionScopeRun.objects.filter(pk=old.pk).update(cursor_history=[])
     checkpoint_scope(first, scope_key="slice2", ownership={}, cursor="pending")
     finish_run(first, status="partial")
     second = claim_job(obj.pk, manual_authorized=True, continue_from=first.run_id)
@@ -57,6 +89,9 @@ def test_backfill_continuation_copies_scopes_without_rewriting_old_attempt():
     assert CollectionScopeRun.objects.filter(run_id=second.run_id).count() == 2
     old.refresh_from_db()
     assert old.run_id == first.run_id and old.cursor == "next"
+    assert CollectionScopeRun.objects.get(
+        run_id=second.run_id, scope_key="slice1"
+    ).recorded_cursors == ["first", "previous"]
 
 
 def test_rejected_invocation_has_receipt_but_does_not_replace_claim():

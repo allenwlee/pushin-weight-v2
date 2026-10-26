@@ -242,6 +242,8 @@ def test_short_page_next_link_is_followed_and_repeated_cursor_is_partial():
     assert result["namespaces"][0]["outcome"] == "repeated_cursor"
     assert result["unique_models"] == 1
     assert result["namespaces"][0]["raw_count"] == 2
+    run = CollectionRun.objects.get(pk=result["run_id"])
+    assert run.scopes.get().recorded_cursors == ["next"]
 
 
 def test_ownership_conflict_is_quarantined_without_reassignment():
@@ -337,6 +339,9 @@ def test_invalid_saved_cursor_restarts_namespace_and_deduplicates():
             )
 
     first = execute_catalog(scope=scope(), hf=api(first_page, budget=2))
+    run = CollectionRun.objects.get(pk=first["run_id"])
+    assert run.scopes.get().recorded_cursors == ["expired"]
+    run.scopes.update(cursor_history=[])
 
     def expired(request):
         if request.url.params.get("cursor") == "expired":
@@ -346,6 +351,7 @@ def test_invalid_saved_cursor_restarts_namespace_and_deduplicates():
     assert resumed["complete"]
     assert Product.objects.count() == 2
     assert resumed["unique_models"] == 2
+    assert run.scopes.get().recorded_cursors == []
 
 
 def test_model_cap_leaves_exact_continuation_and_resumes_pending():

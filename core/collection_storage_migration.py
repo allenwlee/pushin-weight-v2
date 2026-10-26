@@ -400,6 +400,52 @@ def _historical_timestamp(value):
     return parsed
 
 
+def project_scope_cursors_batch(
+    *, after_id: int = 0, batch_size: int = 200, verify_only: bool = False,
+) -> ProvenanceBatch:
+    """Copy exact ordered checkpoints; they do not imply physical requests."""
+    from core.collection_cursors import validate_cursor_history
+    from core.models import CollectionScopeCursorReceipt
+
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative integer")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        scopes = list(
+            CollectionScopeRun.objects.select_for_update()
+            .exclude(cursor_history=[]).filter(pk__gt=after_id)
+            .order_by("pk")[:batch_size]
+        )
+        by_scope = {}
+        for row in CollectionScopeCursorReceipt.objects.filter(
+            scope_run_id__in=[scope.pk for scope in scopes]
+        ).order_by("scope_run_id", "position"):
+            by_scope.setdefault(row.scope_run_id, []).append((row.position, row.cursor))
+        missing = []
+        updated = 0
+        for scope in scopes:
+            validate_cursor_history(scope.cursor_history)
+            expected = list(enumerate(scope.cursor_history, start=1))
+            actual = by_scope.get(scope.pk, [])
+            if actual != expected[:len(actual)]:
+                raise ValueError("typed cursor history differs from legacy checkpoint")
+            if actual == expected:
+                continue
+            if verify_only:
+                raise ValueError("scope cursor history is not projected")
+            updated += 1
+            missing.extend(
+                CollectionScopeCursorReceipt(scope_run=scope, position=position, cursor=value)
+                for position, value in expected[len(actual):]
+            )
+        CollectionScopeCursorReceipt.objects.bulk_create(missing, batch_size=500)
+        return ProvenanceBatch(scopes[-1].pk if scopes else after_id, len(scopes), updated)
+
+
 def _archived_invocation_values(receipt):
     required = {"started_at", "requests", "max_requests", "max_models", "outcome"}
     allowed = required | {

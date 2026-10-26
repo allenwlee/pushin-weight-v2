@@ -220,7 +220,7 @@ def _checked_response(claim, result, *, kind, key, ownership, scope):
         scope_key=key,
         ownership=ownership,
         cursor=scope.cursor if scope else None,
-        cursor_history=scope.cursor_history if scope else [],
+        cursor_history=scope.recorded_cursors if scope else [],
         envelopes=[*(scope.envelopes if scope else []), _envelope(result)],
         outcome=f"http_{result.status}",
     )
@@ -381,7 +381,7 @@ def _publisher_inventory(claim, client, pin, items):
             "next_url": next_url,
         }
         envelopes = [*(scoped.envelopes if scoped else []), envelope]
-        history = [*(scoped.cursor_history if scoped else []), result.url]
+        history = [*(scoped.recorded_cursors if scoped else []), result.url]
         require(not next_url or next_url not in history, "pagination loop")
 
         def write(run, scope, rows=rows, result=result, reused=reused):
@@ -575,7 +575,7 @@ def _release_assets(claim, client, repository, releases, items, limit):
                 ),
                 "native asset ID required",
             )
-            history = [*(scoped.cursor_history if scoped else []), result.url]
+            history = [*(scoped.recorded_cursors if scoped else []), result.url]
             require(
                 not result.next_url or result.next_url not in history,
                 "asset pagination loop",
@@ -682,7 +682,7 @@ def _events(claim, client, repository, kind, items, limit):
             if kind == "tags":
                 client.revision(coordinate["sha"])
             coordinates.append(coordinate)
-        history = [*(scoped.cursor_history if scoped else []), result.url]
+        history = [*(scoped.recorded_cursors if scoped else []), result.url]
         require(
             not result.next_url or result.next_url not in history, "pagination loop"
         )

@@ -19,6 +19,10 @@ from django.db.models import Max
 from django.utils import timezone
 
 from core.benchmark_metric_store import safe_payload
+from core.collection_cursors import (
+    replace_scope_cursor_history,
+    validate_cursor_history,
+)
 from core.collection_jobs import validate_job
 from core.measurement_taxonomy import digest, require
 from core.models import (
@@ -395,9 +399,11 @@ def claim_job(
         previous = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
         if previous.status == "partial" and previous.completed_at is not None:
             for scope in previous.scopes.all():
+                cursors = scope.recorded_cursors
                 scope.pk = None
                 scope.run = run
                 scope.save(force_insert=True)
+                replace_scope_cursor_history(scope, cursors)
             run.continuation_of = previous
             run.save(update_fields=["continuation_of", "updated_at"])
     if continue_from is not None and job.instruction_version == 2:
@@ -420,9 +426,11 @@ def claim_job(
             "continuation must use the preceding attempt",
         )
         for scope in previous.scopes.all():
+            cursors = scope.recorded_cursors
             scope.pk = None
             scope.run = run
             scope.save(force_insert=True)
+            replace_scope_cursor_history(scope, cursors)
         run.continuation_of = previous
         run.save(update_fields=["continuation_of", "updated_at"])
     job.active_run, job.last_attempt = run, run
@@ -665,7 +673,8 @@ def checkpoint_scope(
     )
     safe_payload(ownership)
     safe_payload(envelopes or [])
-    safe_payload(cursor_history or [])
+    if cursor_history is not None:
+        validate_cursor_history(cursor_history)
     require(isinstance(ownership, dict), "scope ownership object required")
     if projection_contract is not None:
         require(
@@ -813,6 +822,7 @@ def checkpoint_scope(
             else "unavailable"
         )
         if cursor_history is not None:
+            replace_scope_cursor_history(scope, cursor_history)
             scope.cursor_history = cursor_history
         if envelopes is not None:
             scope.envelopes = envelopes

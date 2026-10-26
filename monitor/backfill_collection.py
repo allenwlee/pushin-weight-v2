@@ -413,7 +413,7 @@ class PageCheckpoint:
             self.claim, scope_key=self.scoped.scope_key, scope_kind="x_query",
             ownership=x_scope_ownership(self.scoped),
             cursor=progress.get("cursor") if advanced else self.scoped.cursor,
-            cursor_history=progress.get("seen_cursors", []) if advanced else self.scoped.cursor_history,
+            cursor_history=progress.get("seen_cursors", []) if advanced else self.scoped.recorded_cursors,
             outcome="blocked" if blocked else ("complete" if drained else "pending"),
             enumeration_complete=drained, envelopes=envelopes, write=write,
             raw_count=self.scoped.raw_count + (
@@ -475,7 +475,7 @@ class PageCheckpoint:
         self.scoped = checkpoint_scope(
             self.claim, scope_key=self.scoped.scope_key, scope_kind="x_query",
             ownership=x_scope_ownership(self.scoped), cursor=self.scoped.cursor,
-            cursor_history=self.scoped.cursor_history, outcome=self.scoped.outcome,
+            cursor_history=self.scoped.recorded_cursors, outcome=self.scoped.outcome,
             enumeration_complete=False, raw_count=self.scoped.raw_count,
             envelopes=[*self.scoped.envelopes, {
                 "observed_at": datetime.now(UTC).isoformat(), "pages_received": 0,
@@ -742,7 +742,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
                 settings.X_MONITOR_CYCLE_BRAND_FILTER = ",".join(scope["brands"]) or None
                 page = PageCheckpoint(claim, scoped, budget, capture=capture)
                 context = BackfillContext(
-                    budget=budget, cursor=scoped.cursor, seen_cursors=scoped.cursor_history,
+                    budget=budget, cursor=scoped.cursor, seen_cursors=scoped.recorded_cursors,
                     enrichment_limit=0, query_override=owner["query"], page_writer=page.persist,
                     match_scheduled_policy=current_policy,
                     author_contexts=scope.get("author_scope", {}).get("contexts") if current_policy else None,

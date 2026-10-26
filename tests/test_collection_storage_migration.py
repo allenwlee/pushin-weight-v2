@@ -309,6 +309,44 @@ def test_historical_invocations_get_distinct_attempts_without_invented_outcomes(
         project_run_invocations_batch(verify_only=True)
 
 
+def test_scope_cursor_copy_preserves_order_duplicates_and_refuses_conflicts():
+    from core.collection_storage_migration import project_scope_cursors_batch
+    from core.models import CollectionScopeCursorReceipt, CollectionScopeRun
+
+    _, _, scope = execution()
+    CollectionScopeRun.objects.filter(pk=scope.pk).update(
+        cursor_history=["first", "same", "same", "next"],
+    )
+    with pytest.raises(ValueError, match="not projected"):
+        project_scope_cursors_batch(after_id=scope.pk - 1, batch_size=1, verify_only=True)
+    result = project_scope_cursors_batch(after_id=scope.pk - 1, batch_size=1)
+    assert (result.last_id, result.scanned, result.updated) == (scope.pk, 1, 1)
+    assert list(scope.cursor_receipts.order_by("position").values_list(
+        "position", "cursor"
+    )) == [(1, "first"), (2, "same"), (3, "same"), (4, "next")]
+    assert project_scope_cursors_batch().updated == 0
+    assert project_scope_cursors_batch(verify_only=True).scanned == 1
+    assert project_scope_cursors_batch(after_id=scope.pk).scanned == 0
+    assert not scope.requests.exists()
+    CollectionScopeCursorReceipt.objects.filter(scope_run=scope, position=2).update(
+        cursor="conflict",
+    )
+    with pytest.raises(ValueError, match="differs"):
+        project_scope_cursors_batch()
+
+
+@pytest.mark.parametrize("history", [[{"page": 1}], [None], "cursor"])
+def test_scope_cursor_copy_rejects_unsupported_legacy_evidence(history):
+    from core.collection_storage_migration import project_scope_cursors_batch
+    from core.models import CollectionScopeRun
+
+    _, _, scope = execution()
+    CollectionScopeRun.objects.filter(pk=scope.pk).update(cursor_history=history)
+    with pytest.raises(ValueError, match="cursor history"):
+        project_scope_cursors_batch()
+    assert not scope.cursor_receipts.exists()
+
+
 def test_invocation_copy_accepts_existing_attempt_with_non_uuid_identity():
     from core.collection_state import claim_job
     from tests.test_collection_jobs import ready

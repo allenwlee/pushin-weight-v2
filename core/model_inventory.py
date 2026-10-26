@@ -75,7 +75,7 @@ def _openrouter_pages(claim, job, budget, key):
                     },
                 )
 
-        history = [*(scoped.cursor_history if scoped else []), str(offset)]
+        history = [*(scoped.recorded_cursors if scoped else []), str(offset)]
         require(
             result["next_offset"] is None or str(result["next_offset"]) not in history,
             "catalog pagination loop",
@@ -229,7 +229,7 @@ def _hf(claim, job, budget):
                 )
                 history = (
                     [
-                        *(scoped.cursor_history if scoped else []),
+                        *(scoped.recorded_cursors if scoped else []),
                         scoped.cursor or "first",
                     ]
                     if scoped
