@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import parse_qs, urlsplit
+
 from django.utils import timezone
 
 from core.collection_groups import record_observation_group
@@ -21,12 +23,167 @@ from scripts.benchmark_download_collector.sources import (
     openrouter_catalog_page,
 )
 
+OPENROUTER_CAPTURE = "openrouter-catalog-object-v1"
+OPENROUTER_PHASE = "typed-openrouter-catalog-v1"
+
+
+def validate_typed_scope(job, run, kind, key, ownership, observation):
+    """OpenRouter inventory enumerates the sealed author selection only."""
+    require(
+        job.source_id == "openrouter"
+        and job.purpose == "catalog"
+        and job.operation == "model_inventory"
+        and run.job_id == job.pk
+        and kind == "model_catalog"
+        and key == "models"
+        and observation is None
+        and ownership == {"authors": job.scope.get("authors", [])},
+        "OpenRouter catalog scope differs from frozen selection",
+    )
+
+
+def openrouter_observation_documents(observation):
+    """Select the native catalog object from its exact physical response."""
+    from core.collection_capture import read_document
+
+    scope = observation.scope_run
+    require(
+        observation.projection_kind == OPENROUTER_CAPTURE
+        and observation.observation_kind == "model_catalog"
+        and observation.source_subject_kind == "model"
+        and scope is not None
+        and scope.run_id == observation.run_id
+        and scope.phase == OPENROUTER_PHASE,
+        "typed OpenRouter catalog observation required",
+    )
+    job = observation.run.job
+    validate_typed_scope(
+        job,
+        observation.run,
+        scope.scope_kind,
+        scope.scope_key,
+        {"authors": job.scope.get("authors", [])},
+        scope.resource_observation,
+    )
+    links = list(
+        observation.inputs.filter(
+            input_role="openrouter_catalog_object"
+        ).select_related(
+            "input_request__archive",
+            "input_request__attempt",
+        )
+    )
+    require(len(links) == 1, "one selected OpenRouter catalog response required")
+    link = links[0]
+    request = link.input_request
+    require(
+        request is not None
+        and request.scope_run_id == scope.pk
+        and request.attempt.run_id == observation.run_id
+        and request.receipt_kind == "physical"
+        and request.http_method == "GET"
+        and request.transport_outcome == "received"
+        and request.http_status == 200
+        and request.error_code is None
+        and request.request_group == "catalog_listing"
+        and request.archive_id is not None
+        and link.input_sha256 == request.archive.content_sha256,
+        "OpenRouter catalog receipt ownership or checksum changed",
+    )
+    endpoint = urlsplit(request.endpoint_url)
+    query = parse_qs(endpoint.query, strict_parsing=True)
+    require(
+        endpoint.scheme == "https"
+        and endpoint.netloc == "openrouter.ai"
+        and endpoint.path == "/api/v1/models"
+        and not endpoint.fragment
+        and set(query) <= {"offset", "limit", "model_authors"}
+        and query.get("offset") == [request.cursor_before or "0"]
+        and len(query.get("limit", [])) == 1
+        and query["limit"][0].isascii()
+        and query["limit"][0].isdecimal()
+        and 1 <= int(query["limit"][0]) <= 500
+        and query.get("model_authors", [])
+        == ([",".join(job.scope["authors"])] if job.scope.get("authors") else []),
+        "OpenRouter catalog request differs from frozen selection",
+    )
+    document = read_document(request.archive)
+    rows = document.get("data") if isinstance(document, dict) else None
+    position = link.row_locator
+    require(
+        isinstance(rows, list)
+        and isinstance(position, str)
+        and position.isascii()
+        and position.isdecimal()
+        and str(int(position)) == position
+        and int(position) < len(rows),
+        "OpenRouter catalog selected position changed",
+    )
+    raw = rows[int(position)]
+    require(
+        isinstance(raw, dict)
+        and raw.get("id") == observation.source_identifier
+        and digest(raw) == observation.payload_sha256,
+        "OpenRouter catalog selected identity or payload changed",
+    )
+    return (
+        raw,
+        {"kind": "model_catalog"},
+        {
+            "listing_created_unix": raw.get("created"),
+            "catalog_id": raw["id"],
+            "canonical_slug": raw["canonical_slug"],
+            "usage_mapping_verified": False,
+            "projection_kind": OPENROUTER_CAPTURE,
+        },
+    )
+
+
+def _openrouter_scope(claim, job):
+    scoped = CollectionScopeRun.objects.filter(
+        run_id=claim.run_id,
+        scope_kind="model_catalog",
+        scope_key="models",
+    ).first()
+    if scoped is not None:
+        require(
+            scoped.phase == OPENROUTER_PHASE,
+            "OpenRouter catalog scope requires typed adoption before acquisition",
+        )
+        validate_typed_scope(
+            job,
+            scoped.run,
+            scoped.scope_kind,
+            scoped.scope_key,
+            {"authors": job.scope.get("authors", [])},
+            scoped.resource_observation,
+        )
+        return scoped
+
+    def prepare(run, scope):
+        scope.phase = OPENROUTER_PHASE
+        scope.save(update_fields=["phase"])
+
+    return checkpoint_scope(
+        claim,
+        scope_kind="model_catalog",
+        scope_key="models",
+        ownership={"authors": job.scope.get("authors", [])},
+        typed=True,
+        write=prepare,
+    )
+
 
 def _openrouter(claim, job, budget, key):
-    from core.collection_capture import capture_budget
+    from core.collection_capture import RequestCapture
 
-    with capture_budget(claim, budget, scope_kind="model_catalog", scope_key="models", ownership={"authors": job.scope.get("authors", [])}):
+    scoped = _openrouter_scope(claim, job)
+    previous = budget.capture, budget.collection_scope
+    budget.capture, budget.collection_scope = RequestCapture(claim), scoped
+    try:
         return _openrouter_pages(claim, job, budget, key)
+    finally:
+        budget.capture, budget.collection_scope = previous
 
 
 def _openrouter_pages(claim, job, budget, key):
@@ -40,6 +197,7 @@ def _openrouter_pages(claim, job, budget, key):
         if remaining <= 0:
             raise SourceError("item_cap")
         offset = int(scoped.cursor) if scoped and scoped.cursor else 0
+        budget.collection_scope = scoped
         result = openrouter_catalog_page(
             budget,
             key=key,
@@ -52,11 +210,43 @@ def _openrouter_pages(claim, job, budget, key):
         observed_at = timezone.now()
 
         def write(run, scope, result=result, observed_at=observed_at):
-            for row in result["rows"]:
+            from core.collection_capture import (
+                RequestCapture,
+                link_request,
+                read_document,
+            )
+            from core.collection_resources import project_observation_facts
+            from core.models import CollectionAttempt
+
+            request = (
+                scope.requests.filter(
+                    attempt_id=claim.attempt_id,
+                    transport_outcome="received",
+                    http_status=200,
+                )
+                .select_related("archive")
+                .order_by("-ordinal")
+                .first()
+            )
+            require(
+                request is not None
+                and request.archive_id is not None
+                and read_document(request.archive).get("data") == result["rows"],
+                "OpenRouter page has no matching captured response",
+            )
+            request.request_group = "catalog_listing"
+            request.save(update_fields=["request_group"])
+            RequestCapture.response_metadata(
+                request,
+                cursor=str(result["next_offset"])
+                if result["next_offset"] is not None
+                else None,
+            )
+            for position, row in enumerate(result["rows"]):
                 key = digest(
                     {"kind": "model_catalog", "native_id": row["id"], "payload": row}
                 )
-                CollectionObservation.objects.get_or_create(
+                observation, created = CollectionObservation.objects.get_or_create(
                     run=run,
                     observation_key=key,
                     defaults={
@@ -64,17 +254,30 @@ def _openrouter_pages(claim, job, budget, key):
                         "resource_key": key,
                         "source_identifier": row["id"],
                         "source_subject_kind": "model",
-                        "listing": row,
                         "observed_at": observed_at,
-                        "dimensions": {"kind": "model_catalog"},
-                        "source_metadata": {
-                            "listing_created_unix": row.get("created"),
-                            "catalog_id": row["id"],
-                            "canonical_slug": row["canonical_slug"],
-                            "usage_mapping_verified": False,
-                        },
+                        "observation_kind": "model_catalog",
+                        "projection_kind": OPENROUTER_CAPTURE,
+                        "payload_sha256": digest(row),
                     },
                 )
+                if created:
+                    link_request(
+                        observation,
+                        request,
+                        role="openrouter_catalog_object",
+                        row_locator=str(position),
+                    )
+                    project_observation_facts(observation)
+                else:
+                    require(
+                        openrouter_observation_documents(observation)[0] == row,
+                        "OpenRouter selected catalog object changed",
+                    )
+            attempt = CollectionAttempt.objects.select_for_update().get(
+                pk=claim.attempt_id
+            )
+            attempt.actual_items += len(result["rows"])
+            attempt.save(update_fields=["actual_items"])
 
         history = [*(scoped.recorded_cursors if scoped else []), str(offset)]
         require(
@@ -93,7 +296,7 @@ def _openrouter_pages(claim, job, budget, key):
             enumeration_complete=result["complete"],
             outcome="complete" if result["complete"] else "pending",
             write=write,
-            envelopes=[*(scoped.envelopes if scoped else []), result],
+            typed=True,
             raw_count=(scoped.raw_count if scoped else 0) + len(result["rows"]),
         )
         count += len(result["rows"])
@@ -124,8 +327,13 @@ def _hf(claim, job, budget):
 
         with fenced_run(claim) as (_, run):
             request = begin_request(
-                CollectionAttempt.objects.get(pk=claim.attempt_id), client.collection_scope,
-                endpoint_url=str(httpx.Request("GET", envelope["endpoint"], params=envelope["parameters"]).url),
+                CollectionAttempt.objects.get(pk=claim.attempt_id),
+                client.collection_scope,
+                endpoint_url=str(
+                    httpx.Request(
+                        "GET", envelope["endpoint"], params=envelope["parameters"]
+                    ).url
+                ),
                 cursor=client.collection_scope.cursor,
             )
             envelope["collection_request_id"] = str(request.pk)
@@ -140,8 +348,11 @@ def _hf(claim, job, budget):
 
         finish_request(
             CollectionRequest.objects.get(pk=envelope["collection_request_id"]),
-            outcome="received" if envelope["http_status"] is not None else "transport_error",
-            body=body, http_status=envelope["http_status"],
+            outcome="received"
+            if envelope["http_status"] is not None
+            else "transport_error",
+            body=body,
+            http_status=envelope["http_status"],
             error_code=None if envelope["outcome"] == "ok" else envelope["outcome"],
             response_bytes=response_bytes,
             body_encoding="decoded-body-v1",
@@ -162,13 +373,19 @@ def _hf(claim, job, budget):
                 run_id=claim.run_id, scope_kind="namespace", scope_key=namespace
             ).first()
             while scoped is None or not scoped.enumeration_complete:
-                if scoped is None:
-                    scoped = checkpoint_scope(claim, scope_key=namespace, ownership=entry, typed=True)
+                scoped = _prepare_hf_scope(
+                    claim,
+                    job,
+                    "namespace",
+                    namespace,
+                    entry,
+                    scoped=scoped,
+                )
                 client.collection_scope = scoped
                 remaining = job.budgets["items"] - count
-                watch_exception = job.scope.get(
-                    "watch_inventory"
-                ) and entry["company"].casefold() in {"google", "nvidia"}
+                watch_exception = job.scope.get("watch_inventory") and entry[
+                    "company"
+                ].casefold() in {"google", "nvidia"}
                 if watch_exception:
                     from django.db.models import Sum
 
@@ -176,8 +393,11 @@ def _hf(claim, job, budget):
                         CollectionScopeRun.objects.filter(
                             run_id=claim.run_id,
                             scope_kind="namespace",
-                            scope_key__in=[row["namespace"] for row in frozen["namespaces"]
-                                           if row["company"] == entry["company"]],
+                            scope_key__in=[
+                                row["namespace"]
+                                for row in frozen["namespaces"]
+                                if row["company"] == entry["company"]
+                            ],
                         ).aggregate(total=Sum("raw_count"))["total"]
                         or 0
                     )
@@ -242,18 +462,20 @@ def _hf(claim, job, budget):
                     )
                     for position, row in enumerate(result.payload):
                         key = digest({"resource_key": row["id"].casefold()})
-                        observation, created = CollectionObservation.objects.get_or_create(
-                            run=run,
-                            observation_key=key,
-                            defaults={
-                                "scope_run": scope,
-                                "resource_key": row["id"].casefold(),
-                                "source_identifier": row["id"],
-                                "source_subject_kind": "repository",
-                                "observed_at": observed_at,
-                                "observation_kind": "creation_inventory",
-                                "historical_visibility_proven": False,
-                            },
+                        observation, created = (
+                            CollectionObservation.objects.get_or_create(
+                                run=run,
+                                observation_key=key,
+                                defaults={
+                                    "scope_run": scope,
+                                    "resource_key": row["id"].casefold(),
+                                    "source_identifier": row["id"],
+                                    "source_subject_kind": "repository",
+                                    "observed_at": observed_at,
+                                    "observation_kind": "creation_inventory",
+                                    "historical_visibility_proven": False,
+                                },
+                            )
                         )
                         previous = not baseline and (
                             CollectionObservation.objects.filter(
@@ -269,8 +491,17 @@ def _hf(claim, job, budget):
                             from core.hf_inventory_capture import capture_object
 
                             capture_object(
-                                observation, result, raw=row, position=position,
-                                metadata={"inventory_event": "baseline" if baseline else "known" if previous else "newly_observed"},
+                                observation,
+                                result,
+                                raw=row,
+                                position=position,
+                                metadata={
+                                    "inventory_event": "baseline"
+                                    if baseline
+                                    else "known"
+                                    if previous
+                                    else "newly_observed"
+                                },
                             )
                         persist_product(observation, entry, rules, row, "listing")
                         if contract and any(
@@ -286,7 +517,9 @@ def _hf(claim, job, budget):
                             numeric_ids.append(observation.pk)
                     from core.models import CollectionAttempt
 
-                    attempt = CollectionAttempt.objects.select_for_update().get(pk=claim.attempt_id)
+                    attempt = CollectionAttempt.objects.select_for_update().get(
+                        pk=claim.attempt_id
+                    )
                     attempt.actual_items += len(result.payload)
                     attempt.save(update_fields=["actual_items"])
                     if numeric_ids:
@@ -325,7 +558,7 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
         or (job.operation == "hf_catalog" and job.source_id == "hf"),
         "supported catalog inventory job required",
     )
-    claim = claim_job(job_id)
+    claim = claim_job(job_id, typed=True)
     owned = None
     if budget is None:
         import httpx
@@ -344,7 +577,7 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
     budget.max_bytes = min(budget.max_bytes, limits["bytes"])
     budget.deadline = min(budget.deadline, budget.clock() + limits["seconds"])
     before = budget.remaining
-    reason, items = None, 0
+    reason = None
     projection = None
     try:
         if job.scope.get("numeric_contract_id"):
@@ -355,19 +588,22 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
             )
             if projection["pending"]:
                 raise SourceError("numeric_projection_pending")
-        items = (
+        if job.source_id == "hf":
             _hf(claim, job, budget)
-            if job.source_id == "hf"
-            else _openrouter(claim, job, budget, key)
-        )
+        else:
+            _openrouter(claim, job, budget, key)
     except SourceError as exc:
         reason = str(exc)
     except (KeyError, ValueError, TypeError) as exc:
         reason = "invalid_or_unqualified_catalog"
         if job.source_id != "hf":
             with fenced_run(claim) as (_, failed_run):
-                failed_run.report = {**failed_run.report, "catalog_error": str(exc)}
-                failed_run.save(update_fields=["report", "updated_at"])
+                marker = failed_run.scopes.get(
+                    scope_kind="inventory_execution", scope_key="execution"
+                )
+                diagnostic = str(exc)
+                marker.error_code = diagnostic if len(diagnostic) <= 64 else reason
+                marker.save(update_fields=["error_code"])
     finally:
         if owned:
             owned.close()
@@ -386,24 +622,15 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
             projection = {"pending": True, "error": str(exc)}
     run.refresh_from_db()
     scopes = run.scopes.exclude(
-        scope_kind__in=["numeric_projection", "numeric_projection_item", "hf_metadata", "hf_profile", "resource_group"]
+        scope_kind__in=[
+            "numeric_projection",
+            "numeric_projection_item",
+            "hf_metadata",
+            "hf_profile",
+            "resource_group",
+            "inventory_execution",
+        ]
     )
-    from django.db.models import Sum
-
-    total_items = scopes.aggregate(items=Sum("raw_count"))["items"] or 0
-    if job.source_id == "hf":
-        if (job.scope.get("hf_scope", {}).get("gaps") and reason is None
-                and not job.scope.get("numeric_contract_id")):
-            reason = "inventory_scope_incomplete"
-        return finish_run(
-            claim, status="partial" if reason else "success", typed=True,
-            physical_accounting_complete=True, request_count=run.request_count,
-            selected_count=scopes.count(),
-            success_count=scopes.filter(enumeration_complete=True).count(),
-            error_code=reason,
-        )
-    prior_items = run.report.get("total_committed_items", 0)
-    items = total_items - prior_items
     if (
         job.source_id == "hf"
         and job.scope.get("hf_scope", {}).get("gaps")
@@ -414,34 +641,14 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
     return finish_run(
         claim,
         status="partial" if reason else "success",
+        typed=True,
+        physical_accounting_complete=True,
         request_count=run.request_count
         if job.source_id == "hf"
         else run.request_count + before - budget.remaining,
         selected_count=scopes.count(),
         success_count=scopes.filter(enumeration_complete=True).count(),
         error_code=reason,
-        report={
-            "stop_reason": reason,
-            "numeric_projection": projection,
-            "scope_coverage": [
-                {**gap, "outcome": "unavailable"}
-                for gap in job.scope.get("hf_scope", {}).get("gaps", [])
-            ],
-            "metadata_coverage": list(
-                run.scopes.filter(scope_kind__in=["hf_metadata", "hf_profile"]).values(
-                    "scope_kind", "scope_key", "outcome", "enumeration_complete"
-                )
-            ),
-            "physical_accounting_complete": True,
-            "missing_numeric_fields": _hf_missing_fields(run, job)
-            if job.source_id == "hf"
-            else [],
-            "items_this_invocation": items,
-            "total_committed_items": total_items,
-            "bytes_this_invocation": budget.total_bytes_read,
-            "catalog_is_release_adjudication": False,
-            "usage_mapping_inferred": False,
-        },
     )
 
 
@@ -450,28 +657,99 @@ def inventory_report(run):
     from django.db.models import Sum
 
     job = run.job
-    require(job.source_id == "hf" and job.purpose == "catalog"
-            and job.operation in {"hf_catalog", "model_inventory"},
-            "HF inventory report owner required")
+    require(
+        job.purpose == "catalog"
+        and (
+            job.source_id == "hf"
+            and job.operation in {"hf_catalog", "model_inventory"}
+            or job.source_id == "openrouter"
+            and job.operation == "model_inventory"
+        ),
+        "inventory report owner required",
+    )
     attempt = run.attempts.order_by("-ordinal").first()
     queues = run.scopes.filter(scope_kind="numeric_projection")
-    projection = {"pending": queues.exclude(outcome="complete").exists()} if job.scope.get("numeric_contract_id") else None
-    return {
+    projection = (
+        {"pending": queues.exclude(outcome="complete").exists()}
+        if job.scope.get("numeric_contract_id")
+        else None
+    )
+    report = {
         "stop_reason": run.error_code,
         "numeric_projection": projection,
-        "scope_coverage": [{**gap, "outcome": "unavailable"}
-                           for gap in job.scope.get("hf_scope", {}).get("gaps", [])],
-        "metadata_coverage": list(run.scopes.filter(scope_kind__in=["hf_metadata", "hf_profile"]).values(
-            "scope_kind", "scope_key", "outcome", "enumeration_complete",
-        )),
-        "physical_accounting_complete": attempt.accounting_complete if attempt else False,
-        "missing_numeric_fields": _hf_missing_fields(run, job),
+        "scope_coverage": [
+            {**gap, "outcome": "unavailable"}
+            for gap in job.scope.get("hf_scope", {}).get("gaps", [])
+        ],
+        "metadata_coverage": list(
+            run.scopes.filter(scope_kind__in=["hf_metadata", "hf_profile"]).values(
+                "scope_kind",
+                "scope_key",
+                "outcome",
+                "enumeration_complete",
+            )
+        ),
+        "physical_accounting_complete": attempt.accounting_complete
+        if attempt
+        else False,
+        "missing_numeric_fields": _hf_missing_fields(run, job)
+        if job.source_id == "hf"
+        else [],
         "items_this_invocation": attempt.actual_items if attempt else None,
-        "total_committed_items": run.scopes.filter(scope_kind="namespace").aggregate(total=Sum("raw_count"))["total"] or 0,
+        "total_committed_items": run.scopes.filter(
+            scope_kind="namespace" if job.source_id == "hf" else "model_catalog"
+        ).aggregate(total=Sum("raw_count"))["total"]
+        or 0,
         "bytes_this_invocation": attempt.actual_response_bytes if attempt else None,
         "catalog_is_release_adjudication": False,
         "usage_mapping_inferred": False,
     }
+
+    if (
+        job.source_id == "openrouter"
+        and run.error_code == "invalid_or_unqualified_catalog"
+    ):
+        marker = run.scopes.filter(
+            scope_kind="inventory_execution", scope_key="execution"
+        ).first()
+        if marker and marker.error_code:
+            report["catalog_error"] = marker.error_code
+    return report
+
+
+def _prepare_hf_scope(
+    claim, job, kind, key, ownership, *, scoped=None, resource_observation=None
+):
+    """Validate an existing typed parent before issuing metadata requests."""
+    from core.collection_state import _validate_typed_hf_scope
+
+    run = (
+        scoped.run if scoped is not None else CollectionRun.objects.get(pk=claim.run_id)
+    )
+    _validate_typed_hf_scope(job, run, kind, key, ownership, resource_observation)
+    if scoped is not None:
+        require(
+            scoped.run_id == claim.run_id
+            and scoped.scope_kind == kind
+            and scoped.scope_key == key
+            and scoped.resource_observation_id
+            == (resource_observation.pk if resource_observation else None),
+            "HF inventory scope parent changed before acquisition",
+        )
+        if kind == "hf_metadata":
+            require(
+                scoped.phase in (None, key.rsplit(":", 1)[1]),
+                "HF metadata group changed before acquisition",
+            )
+        return scoped
+    return checkpoint_scope(
+        claim,
+        scope_kind=kind,
+        scope_key=key,
+        ownership=ownership,
+        resource_observation=resource_observation,
+        typed=True,
+    )
 
 
 def _hf_metadata(claim, job, client, entry, rules, contract):
@@ -494,11 +772,17 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
             ).first()
             if existing and existing.enumeration_complete:
                 continue
-            client.collection_scope = existing or checkpoint_scope(
-                claim, scope_kind="hf_metadata",
-                scope_key=listing.source_identifier + ":" + group,
-                ownership={"namespace": entry["namespace"], "repository": listing.source_identifier},
-                resource_observation=listing, typed=True,
+            client.collection_scope = _prepare_hf_scope(
+                claim,
+                job,
+                "hf_metadata",
+                listing.source_identifier + ":" + group,
+                {
+                    "namespace": entry["namespace"],
+                    "repository": listing.source_identifier,
+                },
+                scoped=existing,
+                resource_observation=listing,
             )
             result = client.model_group(listing.source_identifier, group)
             _record_result(claim, client.collection_scope, result, group)
@@ -578,9 +862,7 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                     observation_kind="hf_metadata",
                 ).exclude(pk=observation.pk)
                 for captured in prior:
-                    supplied.update(
-                        numeric_fields(captured) or []
-                    )
+                    supplied.update(numeric_fields(captured) or [])
                 selected_metrics = (
                     contract.source_configuration["hf"]["metrics"] if contract else []
                 )
@@ -598,7 +880,13 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                 ]
                 from core.hf_inventory_capture import capture_object
 
-                capture_object(observation, result, raw=result.payload, fields=optional, metadata=metadata)
+                capture_object(
+                    observation,
+                    result,
+                    raw=result.payload,
+                    fields=optional,
+                    metadata=metadata,
+                )
                 persist_product(observation, entry, rules, result.payload, group)
                 if contract and optional:
                     enqueue_projection(
@@ -615,7 +903,8 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
                 },
                 enumeration_complete=accepted,
                 outcome=result.outcome,
-                resource_observation=listing, typed=True,
+                resource_observation=listing,
+                typed=True,
                 write=write,
             )
             if not accepted:
@@ -629,9 +918,13 @@ def _hf_metadata(claim, job, client, entry, rules, contract):
         account = Account.objects.get(
             data_source_id="hf", normalized_identifier=entry["namespace"].casefold()
         )
-        client.collection_scope = profile or checkpoint_scope(
-            claim, scope_kind="hf_profile", scope_key=entry["namespace"],
-            ownership={"account_id": str(account.pk)}, typed=True,
+        client.collection_scope = _prepare_hf_scope(
+            claim,
+            job,
+            "hf_profile",
+            entry["namespace"],
+            {"account_id": str(account.pk)},
+            scoped=profile,
         )
         response = (
             client.account_counts(entry["namespace"], account.account_kind)
@@ -728,9 +1021,13 @@ def _hf_missing_fields(run, job):
         "spaces_count": "numSpaces",
     }
     groups = {}
-    for observation in run.observations.filter(status="ok").select_related("legacy_archive"):
+    for observation in run.observations.filter(status="ok").select_related(
+        "legacy_archive"
+    ):
         key = (observation.source_subject_kind, observation.source_identifier)
-        groups.setdefault(key, set()).update(observation_object_documents(observation)[0])
+        groups.setdefault(key, set()).update(
+            observation_object_documents(observation)[0]
+        )
     result = []
     for (kind, identity), returned in groups.items():
         for metric, wire in (

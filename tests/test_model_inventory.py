@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from core.account_identity import upsert_account
+from core.collection_capture import observation_object_documents
 from core.collection_identity import review_catalog_mapping
 from core.collection_jobs import register_job, set_job_state
 from core.hf_catalog import resolve_scope
@@ -103,16 +104,14 @@ def test_openrouter_model_catalog_correlates_api_only_creation_through_reviewed_
     observation = run.observations.get()
     assert (
         observation.source_identifier == "publisher/model"
-        and observation.listing["canonical_slug"] == "publisher/distinct"
+        and observation_object_documents(observation)[0]["canonical_slug"] == "publisher/distinct"
     )
     assert observation.values.count() == 0
     assert run.attempts.get().requests.get().archive_id
     assert observation.inputs.get().input_request_id
-    observation.legacy_archive = archive_legacy({
-        "listing": observation.listing,
-        "dimensions": observation.dimensions,
-        "source_metadata": observation.source_metadata,
-    })
+    observation.legacy_archive = archive_legacy(dict(zip(
+        ("listing", "dimensions", "source_metadata"), observation_object_documents(observation),
+    )))
     observation.listing, observation.dimensions, observation.source_metadata = {}, {}, {}
     observation.save(update_fields=[
         "legacy_archive", "listing", "dimensions", "source_metadata",
