@@ -311,6 +311,19 @@ def _publication_fact_values(observation, values):
             merge("source_record_date", native_date(snapshot["period"]))
 
 
+def publication_coordinate_values(observation):
+    """Project publication identity without loading resource bodies or timing history."""
+    metadata, dimensions = observation.source_metadata, observation.dimensions
+    values = {}
+    for key, field in (("config", "config_key"), ("category", "category_key")):
+        if key in dimensions:
+            values[field] = dimensions[key]
+    if "immutable_revision" in metadata or "revision" in metadata:
+        values["provider_revision"] = metadata.get("immutable_revision") or metadata.get("revision")
+    _publication_fact_values(observation, values)
+    return values
+
+
 def project_observation_facts(observation):
     from core.collection_datasets import resolve_dataset
 
