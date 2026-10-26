@@ -641,6 +641,46 @@ def prepare_rows(contract, source, payload, *, adapter=None):
     return result
 
 
+def _retained_statistics_coordinates(observation, dimensions):
+    """Compare saved typed coordinates to a repeated source statistics row."""
+    require(type(dimensions) is dict, "invalid statistics coordinates")
+    if "asset_id" in dimensions or "release_id" in dimensions:
+        from core.benchmark_serving import github_asset_coordinates
+
+        require(
+            observation.run.job.source_id == "github"
+            and set(dimensions) == {"asset_id", "release_id"},
+            "invalid GitHub asset coordinates",
+        )
+        return github_asset_coordinates({observation.pk}).get(observation.pk) == dimensions
+    names = {
+        "kind": "observation_kind",
+        "config": "config_key",
+        "category": "category_key",
+        "revision": "provider_revision",
+        "coordinate": "coordinate_key",
+    }
+    require(
+        set(dimensions) <= set(names) | {"date", "period"},
+        "unsupported statistics coordinates",
+    )
+    expected = {}
+    for key, field in names.items():
+        if key in dimensions:
+            value = dimensions[key]
+            expected[field] = (
+                value if isinstance(value, str) else digest(value)
+            ) if key == "coordinate" else value
+    for key in ("date", "period"):
+        if key in dimensions:
+            field = "source_record_date"
+            value = native_date(dimensions[key])
+            require(field not in expected or expected[field] == value,
+                    "conflicting statistics dates")
+            expected[field] = value
+    return all(getattr(observation, field) == value for field, value in expected.items())
+
+
 @transaction.atomic
 def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
     """Commit validated rows inside the caller's source lock and live claim fence.
@@ -687,7 +727,6 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
                     "product_id",
                     "source_identifier",
                     "source_subject_kind",
-                    "dimensions",
                     "published_at",
                     "published_date",
                     "publication_precision",
@@ -701,6 +740,10 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
                         getattr(observation, field) == expected,
                         "immutable snapshot conflict: " + field,
                     )
+                require(
+                    _retained_statistics_coordinates(observation, data["dimensions"]),
+                    "immutable snapshot coordinates conflict",
+                )
                 if data["source_metadata"].get("snapshot_kind") == "capture":
                     require(
                         observation.observed_at == data["observed_at"],

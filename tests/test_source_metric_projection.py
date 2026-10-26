@@ -190,7 +190,9 @@ def test_saved_native_counters_write_and_cross_job_replay_reuses_original_clock(
     assert any(v.integer_value == 0 for v in observation.values.all())
     # Replaying a retained numeric projection must use its typed identity and
     # timing facts after the superseded observation document is cleared.
-    CollectionObservation.objects.filter(pk=observation.pk).update(source_metadata={})
+    CollectionObservation.objects.filter(pk=observation.pk).update(
+        source_metadata={}, dimensions={},
+    )
     second = project(contract, source, [snapshot], key="second")
     assert second.status == "success" and MetricValue.objects.count() == count
     assert second.report["projection"]["reused_observation_ids"] == [observation.pk]
@@ -456,6 +458,11 @@ def test_asset_dimensions_sizes_and_counter_do_not_become_repo_totals():
         "asset_id": 7,
     }
     assert values["stars"].observation.dimensions == {}
+    CollectionObservation.objects.filter(
+        pk=values["asset_downloads"].observation_id,
+    ).update(dimensions={}, source_metadata={})
+    replay = project(contract, "github", [repo, asset], key="typed-asset-replay")
+    assert replay.report["projection"]["reused_observation_ids"]
     CollectionObservation.objects.filter(pk__in=[
         release.pk, asset.pk, values["asset_downloads"].observation_id,
     ]).update(dimensions={}, source_metadata={}, listing={})
