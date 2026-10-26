@@ -12,7 +12,8 @@ from django.core.management.base import BaseCommand, CommandError
 
 from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
 from core.benchmark_metric_store import collection_lock, persist_source
-from core.measurement_taxonomy import digest
+from core.benchmark_metric_timing import aware_instant
+from core.measurement_taxonomy import digest, require
 from core.models import MetricCollectionContract
 from scripts.benchmark_download_collector import sources
 from scripts.benchmark_download_collector.identity import days
@@ -127,10 +128,10 @@ class Command(BaseCommand):
                     ("max_bytes", "bytes"),
                 ):
                     options[flag] = min(options[flag], job.budgets[name])
-                claim = claim_job(job.pk)
+                claim = claim_job(job.pk, typed=True)
                 with fenced_run(claim) as (_, active):
-                    active.report = {**active.report, "schedule_slot": options["slot"]}
-                    active.save(update_fields=["report", "updated_at"])
+                    require(options["slot"] is None or active.scheduled_slot_at == aware_instant(options["slot"]),
+                            "metric schedule slot differs from claimed slot")
             batch = (
                 uuid.UUID(options["batch_id"]) if options["batch_id"] else uuid.uuid4()
             )
@@ -230,6 +231,7 @@ class Command(BaseCommand):
                         scope_kind="metric_fetch",
                         scope_key="source",
                         ownership={"contract_id": str(contract.pk)},
+                        typed=True,
                         requested_start_date=date.fromisoformat(params["start_date"]),
                         requested_end_date=date.fromisoformat(params["end_date"]),
                     ):
@@ -276,27 +278,17 @@ class Command(BaseCommand):
                 )
         except (ValueError, KeyError, ObjectDoesNotExist) as exc:
             if claim is not None:
-                from core.collection_state import StaleClaim, finish_run
+                from core.collection_state import StaleClaim, fenced_run, finish_run
 
                 try:
-                    finish_run(
-                        claim,
-                        status="failed",
-                        error_code="invalid_metric_execution",
-                        request_count=options["max_requests"] - budget.remaining
-                        if budget
-                        else 0,
-                        report={
-                            "physical_bytes_received": budget.total_bytes_read
-                            if budget
-                            else 0
-                        },
-                    )
-                    if budget is not None:
-                        from core.models import CollectionRun
-
-                        CollectionRun.objects.filter(pk=claim.run_id).update(
-                            physical_bytes_received=budget.total_bytes_read
+                    with fenced_run(claim) as (_, failed):
+                        failed.physical_bytes_received = budget.total_bytes_read if budget else 0
+                        failed.save(update_fields=["physical_bytes_received", "updated_at"])
+                        finish_run(
+                            claim, status="failed", typed=True,
+                            physical_accounting_complete=False,
+                            error_code="invalid_metric_execution",
+                            request_count=options["max_requests"] - budget.remaining if budget else 0,
                         )
                 except StaleClaim:
                     pass

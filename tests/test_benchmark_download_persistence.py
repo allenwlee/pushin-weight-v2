@@ -55,9 +55,7 @@ def test_hf_atomic_idempotent_values_do_not_invent_window_bounds():
     assert cumulative.window_end_at == cumulative.observation.observed_at
     assert cumulative.window_start_at is None
     assert (
-        cumulative.observation.source_metadata["reported_time"]["metrics"][
-            "downloads_all_time"
-        ]["unknowns"]["start"]
+        cumulative.window_start_unknown_reason
         == "missing_repository_creation"
     )
     assert all(v.observation.observed_at is not None for v in values)

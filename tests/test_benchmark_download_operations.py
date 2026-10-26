@@ -41,7 +41,7 @@ def test_health_separates_last_attempt_success_and_effective_time():
     observation = successful.observations.get()
     assert observation.observed_at == captured
     assert (
-        observation.source_metadata["reported_time"]["metrics"]["downloads"]["basis"]
+        observation.values.get(source_metric__metric_key="downloads").window_end_basis
         == "original_capture_proxy"
     )
     assert result["scheduling_enabled"] is False

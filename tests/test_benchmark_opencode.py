@@ -151,6 +151,10 @@ def test_endpoint_checks_have_typed_cross_run_ready_row_links():
     assert project_opencode_endpoint_batch().inserted == 0
     assert project_opencode_endpoint_batch(verify_only=True).scanned == 1
     # Old rows acquire their date only in the explicit historical copier.
+    for link in links:
+        CollectionObservation.objects.filter(pk=link.input_observation_id).update(
+            dimensions={"date": link.row_locator},
+        )
     CollectionObservation.objects.filter(pk__in=links.values("input_observation_id")).update(source_record_date=None)
     with pytest.raises(ValueError, match="row date is not typed"):
         project_opencode_endpoint_batch(verify_only=True)

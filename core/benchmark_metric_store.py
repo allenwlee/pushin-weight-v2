@@ -94,16 +94,21 @@ def metric_request_coordinates(params):
 def save_metric_request_coordinates(run, coordinates):
     if not coordinates:
         return
-    ownership = {"contract_id": str(run.job.contract_id)}
+    require(run.job.purpose == "metric" and run.job.contract_id is not None,
+            "metric request needs a pinned collection contract")
+    compatibility = {"ownership": {}} if any(
+        field.name == "ownership" for field in CollectionScopeRun._meta.fields
+    ) else {}
     scope, _ = CollectionScopeRun.objects.get_or_create(
         run=run, scope_kind="metric_fetch", scope_key="source",
-        defaults={"ownership": ownership},
+        defaults={**compatibility, "projection_contract_id": run.job.contract_id},
     )
-    require(scope.ownership == ownership, "metric request owner changed")
+    require(scope.projection_contract_id in (None, run.job.contract_id), "metric request owner changed")
+    scope.projection_contract_id = run.job.contract_id
     for field, value in coordinates.items():
         require(getattr(scope, field) in (None, value), "metric request option changed")
         setattr(scope, field, value)
-    scope.save(update_fields=list(coordinates))
+    scope.save(update_fields=["projection_contract", *coordinates])
 
 
 def numeric_value(definition, value):
@@ -697,7 +702,10 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
     observations, reused, created_ids, pending_by_key = [], [], set(), {}
     if not reuse_snapshots:
         observations = CollectionObservation.objects.bulk_create(
-            [CollectionObservation(run=run, **data) for data, _ in prepared],
+            [CollectionObservation(run=run, **{
+                key: value for key, value in data.items()
+                if key not in {"listing", "dimensions", "source_metadata", "envelopes", "groups"}
+            }) for data, _ in prepared],
             batch_size=1000,
         )
         created_ids = {observation.pk for observation in observations}
@@ -996,6 +1004,14 @@ def persist_source(
                 seconds=600,
                 limits=limits,
             )
+            with fenced_run(claim):
+                compatibility = {"ownership": {}} if any(
+                    field.name == "ownership" for field in CollectionScopeRun._meta.fields
+                ) else {}
+                CollectionScopeRun.objects.create(
+                    run=run, scope_kind="metric_execution", scope_key="execution",
+                    phase="typed-metric-v1", **compatibility,
+                )
         else:
             run.selected_count = contract.mappings.filter(
                 purpose="metric", source_id=source
@@ -1018,15 +1034,22 @@ def persist_source(
                 )
             if transport_budget is not None:
                 run.physical_bytes_received = transport_budget.total_bytes_read
+            retained_fields = [
+                "source_url", "batch_id", "selected_count", "source_metadata_archive",
+                "physical_bytes_received", "payload_archive", "payload_sha256",
+                "observed_at", "direct_ingestion", "source_dataset", "source_as_of",
+                "request_count", "success_count", "status", "error_code", "completed_at",
+                "updated_at",
+            ]
             if claim.direct_driver == "persist_source":
-                run.save()
+                run.save(update_fields=retained_fields)
                 save_metric_request_coordinates(run, request_coordinates)
                 return run
             from core.collection_state import finish_run
 
             status, error = run.status, run.error_code
             run.status, run.completed_at = "running", None
-            run.save()
+            run.save(update_fields=retained_fields)
             result = finish_run(
                 claim,
                 status=status,
@@ -1034,6 +1057,8 @@ def persist_source(
                 selected_count=run.selected_count,
                 success_count=run.success_count,
                 error_code=error,
+                typed=True,
+                physical_accounting_complete=False,
             )
             save_metric_request_coordinates(run, request_coordinates)
             return result
@@ -1054,6 +1079,7 @@ def persist_source(
                         scope_kind="metric_fetch",
                         scope_key="source",
                         ownership={"contract_id": str(contract.pk)},
+                        typed=True,
                     ):
                         payload = fetch()
             safe_payload(payload)

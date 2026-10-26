@@ -107,7 +107,7 @@ def test_metric_due_command_writes_values_to_claimed_run_once(settings, monkeypa
     assert run.purpose == "metric" and run.status == "success" and run.job_id == job.pk
     assert run.observations.count() == 1 and MetricValue.objects.count() == 2
     assert run.request_count == 1
-    assert run.report["schedule_slot"] == NOW.replace(hour=10).isoformat()
+    assert run.scheduled_slot_at == NOW.replace(hour=10)
     assert len(seen) == 1
     request = run.attempts.get().requests.get()
     assert request.archive_id and request.http_status == 200
