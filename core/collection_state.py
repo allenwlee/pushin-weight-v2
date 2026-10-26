@@ -292,10 +292,16 @@ def claim_job(
     validate_job(job)
     if typed:
         require(
-            job.purpose == "catalog"
-            and job.operation in {"model_history", "github_catalog"}
+            (
+                job.purpose == "catalog"
+                and job.operation in {
+                    "model_history", "github_catalog", "model_inventory",
+                    "hf_catalog", "match_crosswalk",
+                }
+                or job.purpose == "metric" and job.operation == "collect_metrics"
+            )
             and (not bounded_campaign or job.campaign_id is not None),
-            "typed catalog claim requires its sealed campaign and operation",
+            "typed claim requires a supported sealed campaign and operation",
         )
     require(
         job.state == "ready"
@@ -347,7 +353,10 @@ def claim_job(
         "invocation already recorded",
     )
     slot = None
-    if job.instruction_version == 2 and job.mode == "recurring":
+    if job.mode == "recurring" and (
+        job.instruction_version == 2
+        or typed and job.purpose == "metric" and job.operation == "collect_metrics"
+    ):
         from core.collection_scheduling import schedule_slot
 
         slot, _ = schedule_slot(job, now)
@@ -423,12 +432,24 @@ def claim_job(
         compatibility = {"ownership": {}} if any(
             field.name == "ownership" for field in CollectionScopeRun._meta.fields
         ) else {}
-        marker_kind, marker_phase = (
-            ("history_execution", "typed-history-v1")
-            if job.operation == "model_history" else
-            ("catalog_execution", "typed-github-catalog-v1")
-        )
-        if job.operation == "github_catalog" and not run.scopes.filter(
+        if job.operation == "model_history":
+            marker_kind, marker_phase = "history_execution", "typed-history-v1"
+        elif job.operation == "github_catalog":
+            marker_kind, marker_phase = "catalog_execution", "typed-github-catalog-v1"
+        elif job.operation in {"model_inventory", "hf_catalog"}:
+            marker_kind, marker_phase = "inventory_execution", "typed-inventory-v1"
+        elif job.operation == "collect_metrics":
+            marker_kind, marker_phase = "metric_execution", "typed-metric-v1"
+        elif job.operation == "match_crosswalk":
+            marker_kind, marker_phase = "match_execution", "typed-product-match-v1"
+        else:
+            raise ValueError("typed collection claim has no execution marker")
+        if (
+            job.operation == "github_catalog"
+            or job.operation == "model_inventory" and job.source_id == "openrouter"
+            or job.operation == "collect_metrics"
+            or job.operation == "match_crosswalk"
+        ) and not run.scopes.filter(
             scope_kind=marker_kind, scope_key="execution", phase=marker_phase,
         ).exists():
             retained_fields = {field.name for field in CollectionRun._meta.fields}
@@ -437,7 +458,7 @@ def claim_job(
                 and ("report" not in retained_fields or not run.report)
                 and ("invocations" not in retained_fields or not run.invocations)
                 and run.legacy_archive_id is None,
-                "historical GitHub catalog run requires typed adoption before resume",
+                "historical collection run requires typed adoption before resume",
             )
         marker, _ = CollectionScopeRun.objects.get_or_create(
             run=run, scope_kind=marker_kind, scope_key="execution",
@@ -446,7 +467,7 @@ def claim_job(
         require(
             marker.phase == marker_phase
             and marker.resource_observation_id is None,
-            "typed catalog execution marker changed",
+            "typed collection execution marker changed",
         )
     if bounded_campaign and job.purpose == "metric" and job.last_attempt_id:
         previous = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
@@ -864,6 +885,8 @@ def checkpoint_scope(
     raw_count=None,
     requested_start_at=None,
     requested_end_at=None,
+    requested_start_date=None,
+    requested_end_date=None,
     projection_contract=None,
     resource_observation=None,
     typed=False,
@@ -887,8 +910,8 @@ def checkpoint_scope(
         )
     if projection_contract is not None:
         require(
-            scope_kind in {"numeric_projection", "publication_selection"}
-            and ownership.get("contract_hash") == projection_contract.contract_hash
+            scope_kind in {"numeric_projection", "publication_selection", "metric_fetch"}
+            and (scope_kind == "metric_fetch" or ownership.get("contract_hash") == projection_contract.contract_hash)
             and (
                 "contract_id" not in ownership
                 or ownership["contract_id"] == str(projection_contract.pk)
@@ -925,7 +948,54 @@ def checkpoint_scope(
         from core.collection_datasets import resolve_dataset
 
         if typed:
-            if scope_kind == "numeric_projection":
+            if scope_kind == "metric_fetch":
+                require(
+                    run.job.purpose == "metric"
+                    and (
+                        run.job.operation == "collect_metrics"
+                        or run.job.operation == "legacy_direct"
+                        and run.job.definition.get("execution", {}).get("driver") == "persist_source"
+                    )
+                    and run.job.contract_id == projection_contract.pk
+                    and run.job.source_id in projection_contract.source_configuration
+                    and scope_key == "source"
+                    and ownership == {"contract_id": str(projection_contract.pk)}
+                    and resource_observation is None,
+                    "typed metric fetch differs from the frozen contract",
+                )
+            elif scope_kind in {"publication_window", "publication_selection"}:
+                from core.model_history_publications import validate_typed_scope
+
+                validate_typed_scope(
+                    run.job, run, scope_kind, scope_key, ownership,
+                    projection_contract, resource_observation,
+                )
+            elif scope_kind == "model_catalog" and run.job.source_id == "openrouter":
+                require(projection_contract is None, "unexpected inventory contract")
+                from core.model_inventory import validate_typed_scope
+
+                validate_typed_scope(
+                    run.job, run, scope_kind, scope_key, ownership,
+                    resource_observation,
+                )
+            elif scope_kind == "product_match":
+                matches = [
+                    choice for choice in run.job.scope.get("matches", [])
+                    if choice.get("candidate_id") == scope_key
+                ]
+                require(
+                    run.job.operation == "match_crosswalk"
+                    and run.job.purpose == "catalog"
+                    and projection_contract is None
+                    and resource_observation is None
+                    and len(matches) == 1
+                    and ownership == {
+                        "product_key": matches[0]["product_key"],
+                        "input_sha256": matches[0]["input_sha256"],
+                    },
+                    "typed product match differs from frozen candidate",
+                )
+            elif scope_kind == "numeric_projection":
                 _validate_typed_projection_scope(
                     run.job, scope_kind, scope_key, ownership,
                     projection_contract, resource_observation,
@@ -1024,6 +1094,18 @@ def checkpoint_scope(
         )
         if not typed:
             require(created or scope.ownership == ownership, "scope ownership pin changed")
+        elif scope_kind == "metric_fetch":
+            require(
+                created or scope.phase == "typed-metric-fetch-v1",
+                "historical metric fetch needs typed adoption before resume",
+            )
+            scope.phase = "typed-metric-fetch-v1"
+        elif typed and scope_kind == "product_match":
+            require(
+                created or scope.phase == "typed-product-match-v1",
+                "historical match scope needs typed adoption before resume",
+            )
+            scope.phase = "typed-product-match-v1"
         if dataset is not None:
             require(scope.source_dataset_id in (None, dataset.pk), "scope dataset pin changed")
             scope.source_dataset = dataset
@@ -1059,11 +1141,14 @@ def checkpoint_scope(
         for field, value in (
             ("requested_start_at", requested_start_at),
             ("requested_end_at", requested_end_at),
+            ("requested_start_date", requested_start_date),
+            ("requested_end_date", requested_end_date),
         ):
             if value is not None:
-                from core.benchmark_metric_store import aware_instant
+                if field.endswith("_at"):
+                    from core.benchmark_metric_store import aware_instant
 
-                value = aware_instant(value)
+                    value = aware_instant(value)
                 require(
                     getattr(scope, field) in (None, value),
                     "scope request bounds changed",
@@ -1166,7 +1251,9 @@ def checkpoint_scope(
             scope.save(update_fields=[
                 "source_dataset", "job_target", "projection_contract",
                 "resource_observation", "result_run", "phase",
+                "admission_outcome", "error_code",
                 "requested_start_at", "requested_end_at",
+                "requested_start_date", "requested_end_date",
                 "cursor", "outcome", "enumeration_complete", "execution_state",
                 "coverage_state", "raw_count",
             ])
@@ -1207,15 +1294,11 @@ def finish_run(
         safe_payload(report or {})
     with fenced_run(claim, now=now) as (job, run):
         if typed:
-            from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
-
-            metric_projection = (
+            metric_collection = (
                 job.purpose == "metric" and job.operation == "collect_metrics"
                 and job.contract_id is not None
-                and job.contract.source_configuration.get(job.source_id, {}).get(
-                    "eligibility_policy"
-                ) == SOURCE_STATISTICS_POLICY
-                and request_count == 0
+                and job.source_id in job.contract.source_configuration
+                and request_count is not None
             )
             model_history = (
                 job.purpose == "catalog" and job.operation == "model_history"
@@ -1231,10 +1314,17 @@ def finish_run(
                 job.source_id == "x" and job.purpose == "content"
                 and job.operation == "x_backfill" and request_count is not None
             )
+            product_match = (
+                job.purpose == "catalog" and job.operation == "match_crosswalk"
+                and request_count == 0
+            )
             require(
-                (job.source_id == "hf" and job.purpose == "catalog"
-                 and job.operation in {"model_inventory", "hf_catalog"})
-                or metric_projection or model_history or github_catalog or x_backfill,
+                (job.purpose == "catalog" and (
+                    job.source_id == "hf" and job.operation in {"model_inventory", "hf_catalog"}
+                    or job.source_id == "openrouter" and job.operation == "model_inventory"
+                ))
+                or metric_collection or model_history or github_catalog or x_backfill
+                or product_match,
                 "typed completion needs a supported collection operation",
             )
         now = now or timezone.now()

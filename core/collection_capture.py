@@ -97,6 +97,14 @@ def observation_object_documents(observation):
         from core.model_native_history import observation_documents
 
         return observation_documents(observation)
+    if observation.projection_kind in {"publication-window-v1", "publication-row-v1"}:
+        from core.model_history_publications import observation_documents
+
+        return observation_documents(observation)
+    if observation.projection_kind == "openrouter-catalog-object-v1":
+        from core.model_inventory import openrouter_observation_documents
+
+        return openrouter_observation_documents(observation)
     if (observation.legacy_archive_id is not None
             and observation.legacy_archive.capture_kind == "hf_inventory_evidence"):
         from core.hf_inventory_capture import inventory_documents
@@ -172,6 +180,12 @@ def observation_object_documents(observation):
 def run_report_document(run):
     """Read a completed run's report after its old JSON column is cleared."""
     job = run.job
+    metric_reportable = job.purpose == "metric" and (
+        job.operation == "collect_metrics"
+        or job.operation == "legacy_direct"
+        and job.definition.get("execution", {}).get("driver") == "persist_source"
+        and job.contract_id is not None
+    )
     if (
         job.source_id == "x" and job.purpose == "content"
         and job.operation == "x_backfill"
@@ -192,6 +206,16 @@ def run_report_document(run):
 
         return catalog_report(run)
     if (
+        job.purpose == "catalog" and job.operation == "match_crosswalk"
+        and run.scopes.filter(
+            scope_kind="match_execution", scope_key="execution",
+            phase="typed-product-match-v1",
+        ).exists()
+    ):
+        from core.collection_matching import match_report
+
+        return match_report(run)
+    if (
         job.purpose == "catalog" and job.operation == "model_history"
         and run.scopes.filter(
             scope_kind="history_execution", scope_key="execution",
@@ -202,8 +226,7 @@ def run_report_document(run):
 
         return history_report(run)
     if (
-        job.purpose == "metric" and job.operation == "collect_metrics"
-        and run.scopes.filter(
+        metric_reportable and run.scopes.filter(
             scope_kind="numeric_projection", scope_key="saved-evidence",
             phase="projection_results_v1",
         ).exists()
@@ -219,7 +242,29 @@ def run_report_document(run):
                 attempt.accounting_complete is True if attempt else False
             ),
         }
-    if job.source_id == "hf" and job.purpose == "catalog" and job.operation in {"hf_catalog", "model_inventory"}:
+    if (
+        metric_reportable and run.scopes.filter(
+            scope_kind="metric_execution", scope_key="execution",
+            phase="typed-metric-v1",
+        ).exists()
+    ):
+        attempt = run.attempts.order_by("-ordinal").only("accounting_complete").first()
+        return {
+            "schedule_slot": run.scheduled_slot_at.isoformat() if run.scheduled_slot_at else None,
+            "physical_bytes_received": run.physical_bytes_received,
+            "physical_accounting_complete": attempt.accounting_complete is True if attempt else False,
+        }
+    if (
+        job.purpose == "catalog"
+        and (
+            job.source_id == "hf" and job.operation in {"hf_catalog", "model_inventory"}
+            or job.source_id == "openrouter" and job.operation == "model_inventory"
+        )
+        and run.scopes.filter(
+            scope_kind="inventory_execution", scope_key="execution",
+            phase="typed-inventory-v1",
+        ).exists()
+    ):
         from core.model_inventory import inventory_report
 
         return inventory_report(run)
@@ -507,19 +552,30 @@ class RequestCapture:
 
 
 @contextmanager
-def capture_budget(claim, budget, *, scope_kind, scope_key, ownership, **coordinates):
+def capture_budget(claim, budget, *, scope_kind, scope_key, ownership, typed=False, **coordinates):
     """Bind existing public clients to a database scope for this execution only."""
-    from core.collection_state import fenced_run
+    from core.collection_state import checkpoint_scope, fenced_run
     from core.models import CollectionScopeRun
 
-    with fenced_run(claim) as (_, run):
-        scope, _ = CollectionScopeRun.objects.get_or_create(
-            run=run,
-            scope_kind=scope_kind,
-            scope_key=scope_key,
-            defaults={"ownership": ownership, **coordinates},
+    if typed:
+        require(scope_kind == "metric_fetch", "typed budget capture needs a metric fetch scope")
+        with fenced_run(claim) as (job, _):
+            require(job.contract_id is not None, "metric capture needs a contract")
+            contract = job.contract
+        scope = checkpoint_scope(
+            claim, scope_kind=scope_kind, scope_key=scope_key,
+            ownership=ownership, projection_contract=contract,
+            typed=True, **coordinates,
         )
-        require(scope.ownership == ownership, "request scope ownership changed")
+    else:
+        with fenced_run(claim) as (_, run):
+            scope, _ = CollectionScopeRun.objects.get_or_create(
+                run=run,
+                scope_kind=scope_kind,
+                scope_key=scope_key,
+                defaults={"ownership": ownership, **coordinates},
+            )
+            require(scope.ownership == ownership, "request scope ownership changed")
     previous = (
         getattr(budget, "capture", None),
         getattr(budget, "collection_scope", None),

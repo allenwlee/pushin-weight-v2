@@ -15,8 +15,7 @@ from datetime import datetime
 from time import monotonic
 
 from django.db import connection, transaction
-from django.db.models import BigIntegerField, Case, F, Q, TextField, When
-from django.db.models.functions import Cast, Length
+from django.db.models import Q
 from django.utils import timezone
 
 from core.benchmark_metric_store import aware_instant
@@ -281,9 +280,6 @@ def _native_inventory(sources, cutoff):
                 "legacy_archive_id",
                 "legacy_archive__body",
                 "legacy_archive__content_sha256",
-                "listing",
-                "dimensions",
-                "source_metadata",
                 "run__job__source_id",
             )
         )
@@ -321,22 +317,19 @@ def _native_inventory(sources, cutoff):
                 )
             ]
         for scope, query in scopes:
-            query = query.annotate(payload_length=Case(
-                When(legacy_archive__isnull=False, then=F("legacy_archive__byte_count")),
-                default=Length(Cast("listing", TextField())),
-                output_field=BigIntegerField(),
-            ))
-            if query.filter(payload_length__gt=MAX_ENVELOPE_BYTES).exists():
-                partial.append(
-                    {"source": source, "scope": scope, "reason": "oversized_evidence"}
-                )
             latest = (
-                query.filter(payload_length__lte=MAX_ENVELOPE_BYTES)
+                query
                 .order_by("source_identifier", "-observed_at", "-pk")
                 .distinct("source_identifier")
             )
             for observation in _pages(latest[:10001]):
-                row = _native(observation, scope)
+                documents = observation_object_documents(observation)
+                if len(json.dumps(documents, sort_keys=True, separators=(",", ":")).encode()) > MAX_ENVELOPE_BYTES:
+                    partial.append(
+                        {"source": source, "scope": scope, "reason": "oversized_evidence"}
+                    )
+                    continue
+                row = _native(observation, scope, documents=documents)
                 if row:
                     records[(source, scope, row["identifier"])] = row
             if len([k for k in records if k[0] == source]) > 10000:
@@ -346,21 +339,13 @@ def _native_inventory(sources, cutoff):
         if source in {"arena", "openrouter"}:
             windows = base.filter(
                 source_subject_kind="aggregate", observation_kind="publication_window"
-            ).annotate(payload_length=Case(
-                When(legacy_archive__isnull=False, then=F("legacy_archive__byte_count")),
-                default=Length(Cast("listing", TextField())),
-                output_field=BigIntegerField(),
-            ))
-            if windows.filter(payload_length__gt=MAX_ENVELOPE_BYTES).exists():
-                partial.append(
-                    {"source": source, "reason": "oversized_embedded_publication"}
-                )
+            )
             scope = (
                 "rankings_permaslug" if source == "openrouter" else "arena_model_name"
             )
             for position, observation in enumerate(
                 _pages(
-                    windows.filter(payload_length__lte=MAX_ENVELOPE_BYTES).order_by(
+                    windows.order_by(
                         "-observed_at", "-pk"
                     )[:501]
                 )
@@ -371,6 +356,11 @@ def _native_inventory(sources, cutoff):
                     )
                     break
                 documents = observation_object_documents(observation)
+                if len(json.dumps(documents, sort_keys=True, separators=(",", ":")).encode()) > MAX_ENVELOPE_BYTES:
+                    partial.append(
+                        {"source": source, "reason": "oversized_embedded_publication"}
+                    )
+                    continue
                 listing = documents[0]
                 rows = listing.get("rows", []) if isinstance(listing, dict) else []
                 if not isinstance(rows, list) or len(rows) > 500:
@@ -917,7 +907,12 @@ def execute_matches(job_id):
     from core.collection_identity import MappingBusy, MappingConflict
     from core.collection_jobs import set_job_state, validate_job
     from core.collection_state import checkpoint_scope, claim_job, finish_run
-    from core.models import CollectionJob, CollectionScopeRun
+    from core.models import (
+        CollectionJob,
+        CollectionObservation,
+        CollectionObservationInput,
+        CollectionScopeRun,
+    )
 
     job = CollectionJob.objects.get(pk=job_id)
     validate_job(job)
@@ -935,7 +930,7 @@ def execute_matches(job_id):
         }
     if job.state == "paused":
         set_job_state(job.pk, "ready")
-    claim = claim_job(job.pk)
+    claim = claim_job(job.pk, typed=True)
     completed = set(
         CollectionScopeRun.objects.filter(
             run_id=claim.run_id, enumeration_complete=True
@@ -947,15 +942,36 @@ def execute_matches(job_id):
         for choice in pending[:50]:
             if monotonic() >= deadline:
                 break
-            decisions = []
-
-            def write(run, scoped, choice=choice, decisions=decisions):
+            def write(run, scoped, choice=choice):
                 decision = _admit_choice(choice, scope["review"])
                 require(
                     len(json.dumps(decision).encode()) <= MAX_ENVELOPE_BYTES,
                     "decision byte cap",
                 )
-                decisions.append(decision)
+                require(
+                    decision["decision"] in {"admitted", "unmatched"},
+                    "unsupported product-match decision",
+                )
+                scoped.admission_outcome = decision["decision"]
+                result = CollectionObservation.objects.create(
+                    run=run, scope_run=scoped,
+                    observation_kind="product_match_decision",
+                    observation_key=digest(["product_match_decision", str(scoped.pk)]),
+                    source_identifier=choice["candidate_id"],
+                    source_subject_kind=choice["source_subject_kind"],
+                    product_id=scoped.job_target.subject.product.pk,
+                    mapping_id=(
+                        uuid.UUID(decision["mapping_id"])
+                        if decision["decision"] == "admitted" else None
+                    ),
+                    processing_outcome=decision["decision"],
+                )
+                CollectionObservationInput.objects.create(
+                    observation=result,
+                    input_observation_id=choice["evidence"]["observation_id"],
+                    input_role="match_candidate",
+                    input_sha256=choice["evidence"]["payload_hash"],
+                )
 
             admitted = choice["decision"] == "qualified" or (
                 choice["decision"] == "needs_review"
@@ -973,12 +989,33 @@ def execute_matches(job_id):
                         },
                         outcome="admitted" if admitted else "unmatched",
                         enumeration_complete=True,
-                        envelopes=decisions,
+                        typed=True,
                         write=write,
                     )
             except MappingBusy:
                 break
             except MappingConflict:
+                def record_conflict(run, scoped, choice=choice):
+                    scoped.admission_outcome = "conflict"
+                    scoped.error_code = "native_dedicated_identity_conflict"
+                    result = CollectionObservation.objects.create(
+                        run=run, scope_run=scoped,
+                        observation_kind="product_match_decision",
+                        observation_key=digest(["product_match_decision", str(scoped.pk)]),
+                        source_identifier=choice["candidate_id"],
+                        source_subject_kind=choice["source_subject_kind"],
+                        product_id=scoped.job_target.subject.product.pk,
+                        processing_outcome="conflict",
+                        status="error",
+                        error_code="native_dedicated_identity_conflict",
+                    )
+                    CollectionObservationInput.objects.create(
+                        observation=result,
+                        input_observation_id=choice["evidence"]["observation_id"],
+                        input_role="match_candidate",
+                        input_sha256=choice["evidence"]["payload_hash"],
+                    )
+
                 checkpoint_scope(
                     claim,
                     scope_kind="product_match",
@@ -989,14 +1026,8 @@ def execute_matches(job_id):
                     },
                     outcome="conflict",
                     enumeration_complete=True,
-                    envelopes=[
-                        {
-                            "kind": "product_match_decision",
-                            "candidate_id": choice["candidate_id"],
-                            "decision": "conflict",
-                            "reason": "native_dedicated_identity_conflict",
-                        }
-                    ],
+                    typed=True,
+                    write=record_conflict,
                 )
         scopes = list(CollectionScopeRun.objects.filter(
             run_id=claim.run_id, scope_kind="product_match",
@@ -1009,13 +1040,8 @@ def execute_matches(job_id):
             request_count=0,
             selected_count=len(scopes),
             success_count=counts["admitted"],
-            report={
-                "ruleset": RULESET,
-                "decisions": dict(counts),
-                "remaining": len(scope["matches"]) - len(scopes),
-                "provider_calls": 0,
-                "historical_metrics_changed": False,
-            },
+            typed=True,
+            physical_accounting_complete=True,
         )
         return {
             "job_id": str(job.pk),
@@ -1030,8 +1056,46 @@ def execute_matches(job_id):
             status="partial",
             error_code="matching_validation_failed",
             request_count=0,
+            typed=True,
+            physical_accounting_complete=True,
         )
         raise
+
+
+def match_report(run):
+    """Rebuild match outcomes from frozen candidates and typed scope decisions."""
+    from collections import Counter
+
+    require(run.job.operation == "match_crosswalk", "product-match run required")
+    scopes = list(run.scopes.filter(scope_kind="product_match", phase="typed-product-match-v1"))
+    require(
+        all(scope.admission_outcome == scope.outcome for scope in scopes),
+        "product-match scope decision changed",
+    )
+    for scope in scopes:
+        decisions = list(scope.observations.filter(
+            observation_kind="product_match_decision",
+        ).select_related("mapping"))
+        require(
+            len(decisions) == 1
+            and decisions[0].processing_outcome == scope.outcome
+            and (decisions[0].mapping_id is not None) == (scope.outcome == "admitted")
+            and decisions[0].inputs.filter(
+                input_role="match_candidate",
+                input_observation_id=scope.job_target.evidence_observation_id,
+            ).count() == 1,
+            "product-match decision evidence changed",
+        )
+    counts = Counter(scope.outcome for scope in scopes if scope.enumeration_complete)
+    attempt = run.attempts.order_by("-ordinal").first()
+    return {
+        "ruleset": RULESET,
+        "decisions": dict(counts),
+        "remaining": len(run.job.scope["matches"]) - len(scopes),
+        "provider_calls": 0,
+        "historical_metrics_changed": False,
+        "physical_accounting_complete": attempt.accounting_complete is True if attempt else False,
+    }
 
 
 def apply_matches(

@@ -215,16 +215,44 @@ def test_reviewed_apply_is_idempotent_and_durable_without_metric_writes():
     assert target.subject.product_id == product.product_key
     assert target.evidence_observation_id
     assert target.review_confirmed is True
-    assert job.last_success.scopes.get().job_target_id == target.pk
+    assert job.last_success.scopes.get(scope_kind="product_match").job_target_id == target.pk
     assert job.last_success.request_count == 0
-    job.last_success.report = {}
-    job.last_success.save(update_fields=["report"])
+    from core.collection_capture import run_report_document
+
+    assert run_report_document(job.last_success)["decisions"] == {"admitted": 1}
     assert job_status(job.pk)["matching"]["decisions"] == {"admitted": 1}
     assert job_status(job.pk)["matching"]["remaining"] == 0
     again = apply_matches(resume_job_id=job.pk)
     assert again["status"] == "success"
     assert SourceSubjectMapping.objects.count() == 1
     assert CollectionRun.objects.filter(job=job).count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_reviewed_match_uses_typed_decision_after_observation_json_retirement():
+    from core.collection_capture import archive_legacy, run_report_document
+    from core.collection_matching import apply_matches
+    from tests.test_hf_catalog_retirement import denied_retirement_columns
+
+    brand, product, observation = catalog_fixture()
+    observation.legacy_archive = archive_legacy({
+        "listing": observation.listing,
+        "dimensions": observation.dimensions,
+        "source_metadata": observation.source_metadata,
+    })
+    observation.save(update_fields=["legacy_archive"])
+    with denied_retirement_columns():
+        report = preview(brand)
+        result = apply_reviewed(report)
+        assert result["status"] == "success"
+        job = CollectionJob.objects.get(operation="match_crosswalk")
+        scope = job.last_success.scopes.get(scope_kind="product_match")
+        assert scope.phase == "typed-product-match-v1"
+        assert scope.admission_outcome == "admitted"
+        decision = scope.observations.get(observation_kind="product_match_decision")
+        assert decision.mapping.subject.product_id == product.product_key
+        assert run_report_document(job.last_success)["decisions"] == {"admitted": 1}
+        assert apply_matches(resume_job_id=job.pk)["status"] == "success"
 
 
 def test_unreviewed_candidate_persists_unmatched_decision():
@@ -241,7 +269,7 @@ def test_unreviewed_candidate_persists_unmatched_decision():
         reviewed_candidate_ids=[],
     )
     assert not SourceSubjectMapping.objects.exists()
-    assert CollectionScopeRun.objects.get().outcome == "unmatched"
+    assert CollectionScopeRun.objects.get(scope_kind="product_match").outcome == "unmatched"
 
 
 def test_changed_evidence_rolls_back_mapping_and_checkpoint():
@@ -310,7 +338,7 @@ def test_apply_rollback_and_resume_without_preview(monkeypatch):
     with pytest.raises(RuntimeError, match="injected crash"):
         apply_reviewed(report)
     assert not SourceSubjectMapping.objects.exists()
-    assert not CollectionScopeRun.objects.exists()
+    assert not CollectionScopeRun.objects.filter(scope_kind="product_match").exists()
     job = CollectionJob.objects.get(operation="match_crosswalk")
     monkeypatch.setattr(matching, "_admit_choice", original)
     assert matching.apply_matches(resume_job_id=job.pk)["status"] == "success"
@@ -470,7 +498,7 @@ def test_native_conflict_is_a_durable_outcome_without_partial_mapping():
     result = apply_reviewed(report)
     assert result["status"] == "success"
     assert SourceSubjectMapping.objects.count() == 1
-    assert CollectionScopeRun.objects.get().outcome == "conflict"
+    assert CollectionScopeRun.objects.get(scope_kind="product_match").outcome == "conflict"
 
 
 @pytest.mark.django_db(transaction=True)
