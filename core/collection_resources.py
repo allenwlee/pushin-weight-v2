@@ -264,7 +264,45 @@ def observation_fact_values(observation):
             values.pop(field, None)
     if not artifact_sha256 and not observation.listing and observation.payload_sha256:
         values.pop("payload_sha256", None)
+    _publication_fact_values(observation, values)
     return values
+
+
+def _publication_fact_values(observation, values):
+    """Keep publication coordinates distinct from publication/collection clocks."""
+    metadata, dimensions = observation.source_metadata, observation.dimensions
+
+    def merge(field, value):
+        previous = values.get(field)
+        if previous is not None and value is not None and previous != value:
+            raise ValueError("conflicting publication coordinate: " + field)
+        if value is not None or field not in values:
+            values[field] = value
+
+    if "revision" in dimensions:
+        merge("provider_revision", dimensions["revision"])
+    source = observation.run.job.source_id
+    dated_source = source in {"arena", "openrouter", "opencode"}
+    if dated_source:
+        for key in ("date", "period"):
+            if key in dimensions and dimensions[key] is not None:
+                merge("source_record_date", native_date(dimensions[key]))
+    for key in ("numeric_snapshot_identity", "snapshot_identity"):
+        if key not in metadata:
+            continue
+        snapshot = metadata[key]
+        if not isinstance(snapshot, dict):
+            raise TypeError("invalid publication snapshot identity")
+        if snapshot.get("native_identifier", observation.source_identifier) != observation.source_identifier:
+            raise ValueError("conflicting publication native identifier")
+        for coordinate, field in (
+            ("revision", "provider_revision"), ("config", "config_key"),
+            ("category", "category_key"),
+        ):
+            if coordinate in snapshot:
+                merge(field, snapshot[coordinate])
+        if dated_source and snapshot.get("period") is not None:
+            merge("source_record_date", native_date(snapshot["period"]))
 
 
 def project_observation_facts(observation):
