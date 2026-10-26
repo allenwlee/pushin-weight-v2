@@ -49,6 +49,25 @@ def test_missing_resource_and_commit_revision_copy_is_exact_repeatable_and_bound
     assert first.run.attempts.count() == 0
 
 
+def test_resource_copy_reads_archived_observation_when_old_documents_are_cleared():
+    from core.collection_capture import archive_legacy
+
+    row = captured_commit()
+    before = resource_snapshot_values(row)
+    row.legacy_archive = archive_legacy({
+        "listing": row.listing,
+        "dimensions": row.dimensions,
+        "source_metadata": row.source_metadata,
+    })
+    row.listing, row.dimensions, row.source_metadata = {}, {}, {}
+    row.save(update_fields=[
+        "legacy_archive", "listing", "dimensions", "source_metadata",
+    ])
+    assert resource_snapshot_values(row) == before
+    assert project_resource_snapshots_batch().updated == 1
+    assert CollectionResourceSnapshot.objects.get(observation=row).revision == "selected-commit"
+
+
 def test_resource_copy_refuses_known_revision_conflict_without_rewriting_it():
     row = captured_commit()
     snapshot = CollectionResourceSnapshot.objects.create(

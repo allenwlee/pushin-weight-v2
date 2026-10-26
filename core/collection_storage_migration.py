@@ -493,7 +493,7 @@ def project_resource_snapshots_batch(
         query = CollectionObservation.objects.filter(
             pk__gt=after_id, post__isnull=True, run__job__purpose="catalog",
             run__job__source_id__in=["hf", "github"],
-        ).exclude(listing={})
+        ).filter(Q(legacy_archive__isnull=False) | ~Q(listing={}))
         owners = dict(query.order_by("pk").values_list("pk", "run_id")[:batch_size])
         if not verify_only:
             list(CollectionRun.objects.select_for_update().filter(
@@ -501,9 +501,11 @@ def project_resource_snapshots_batch(
             ).order_by("pk").values_list("pk", flat=True))
         query = query.filter(pk__in=owners).select_related(
             "run__job__owner_account", "mapping__publisher_account", "resource_snapshot",
+            "legacy_archive",
         ).only(
             "pk", "run_id", "post_id", "observation_kind", "source_subject_kind",
             "source_identifier", "listing", "dimensions", "source_metadata", "resource_snapshot",
+            "legacy_archive__body", "legacy_archive__content_sha256",
             "run__job_id", "run__job__source_id", "run__job__owner_account__data_source_id",
             "mapping__publisher_account__data_source_id",
         )

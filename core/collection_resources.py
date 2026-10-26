@@ -4,6 +4,7 @@ import re
 from datetime import UTC, date, datetime
 
 from core.benchmark_metric_timing import aware_instant, native_date
+from core.collection_capture import observation_object_documents
 from core.measurement_taxonomy import digest
 from core.models import (
     CollectionMetricGap,
@@ -58,10 +59,10 @@ def _clock(value):
 
 def resource_snapshot_values(observation, *, create_references=False):
     """Parse supported nonnumeric facts without writing the snapshot."""
-    raw = observation.listing
+    raw, dimensions, metadata = observation_object_documents(observation)
     if not isinstance(raw, dict) or observation.post_id:
         return None
-    kind = observation.observation_kind or observation.dimensions.get("kind", observation.source_subject_kind)
+    kind = observation.observation_kind or dimensions.get("kind", observation.source_subject_kind)
     if kind in {"publication_row", "publication_window"}:
         return None
     created = raw.get("createdAt", raw.get("created_at", raw.get("created")))
@@ -71,7 +72,7 @@ def resource_snapshot_values(observation, *, create_references=False):
     commit = raw.get("commit") if isinstance(raw.get("commit"), dict) else {}
     author = commit.get("author") or {}
     committer = commit.get("committer") or {}
-    change = observation.source_metadata.get("file_changes", {})
+    change = metadata.get("file_changes", {})
     gated = raw.get("gated")
     if type(gated) is bool:
         gated = "gated" if gated else "public"
@@ -85,7 +86,7 @@ def resource_snapshot_values(observation, *, create_references=False):
         "native_stable_id": str(raw["id"])
         if observation.run.job.source_id == "github" and raw.get("id") is not None
         else None,
-        "publisher_account_id": _snapshot_publisher(observation, raw),
+        "publisher_account_id": _snapshot_publisher(observation, raw, metadata),
         "display_name": raw.get("name", raw.get("full_name")),
         "provider_created_at": created_at,
         "provider_created_date": created_date,
@@ -149,7 +150,7 @@ def snapshot_resource(observation):
     return snapshot
 
 
-def _snapshot_publisher(observation, raw):
+def _snapshot_publisher(observation, raw, metadata):
     """Use native ownership when supplied; never turn a conflicting owner into a match."""
     from core.models import Account
 
@@ -158,7 +159,7 @@ def _snapshot_publisher(observation, raw):
     if job.source_id == "github":
         if isinstance(raw.get("owner"), dict):
             native = raw["owner"].get("id")
-        inherited_owner = observation.source_metadata.get("owner_id")
+        inherited_owner = metadata.get("owner_id")
         if inherited_owner is not None:
             if native is not None and str(native) != str(inherited_owner):
                 raise ValueError("resource publisher conflicts with captured owner")
