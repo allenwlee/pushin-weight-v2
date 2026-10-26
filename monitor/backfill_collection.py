@@ -18,8 +18,10 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.core.management.base import CommandError
+from django.db import transaction
 from django.db.models import Sum
 
+from core.collection_capture import archive_document, read_document
 from core.collection_jobs import validate_job
 from core.collection_pages import append_page_receipt, page_receipts
 from core.collection_state import (
@@ -35,6 +37,8 @@ from core.measurement_taxonomy import require
 from core.models import (
     CollectionJob,
     CollectionObservation,
+    CollectionRequest,
+    CollectionRun,
     CollectionScopeRun,
     Post,
     PostEnrichmentState,
@@ -237,6 +241,80 @@ def plan_job_definition(*, cfg, since_epoch, until_epoch, brands, requests, mode
     return definition
 
 
+def _typed_scope(run, kind, key, **values):
+    compatibility = {"ownership": {}} if any(
+        field.name == "ownership" for field in CollectionScopeRun._meta.fields
+    ) else {}
+    return CollectionScopeRun.objects.create(
+        run=run, scope_kind=kind, scope_key=key, **compatibility, **values,
+    )
+
+
+def _evidence(document, kind):
+    return archive_document(
+        json.dumps(document, sort_keys=True, separators=(",", ":"), allow_nan=False).encode(),
+        encoding="selected-json-canonical-v1", capture_kind=kind,
+    )
+
+
+def _legacy_budget_report(run):
+    """Explicit adoption only; typed markers prevent later legacy reads."""
+    if any(field.name == "report" for field in CollectionRun._meta.fields) and run.report:
+        return run.report
+    if run.legacy_archive_id:
+        document = read_document(run.legacy_archive)
+        require(isinstance(document, dict) and isinstance(document.get("report", {}), dict),
+                "invalid backfill run archive")
+        return document.get("report", {})
+    if any(field.name == "report" for field in CollectionRun._meta.fields):
+        return {}
+    require(run.request_count == 0,
+            "backfill budget evidence is missing; reconcile before retry")
+    return {}
+
+
+def ensure_response_bytes(run):
+    """Adopt the exact old counter once; never infer bytes from parsed JSON."""
+    if run.physical_bytes_received is None:
+        saved = _legacy_budget_report(run)
+        count = saved.get("response_bytes")
+        if count is None:
+            require(run.request_count == 0, "backfill response byte accounting is missing")
+            count = 0
+        require(type(count) is int and count >= 0, "invalid backfill response bytes")
+        run.physical_bytes_received = count
+        run.save(update_fields=["physical_bytes_received", "updated_at"])
+    return run.physical_bytes_received
+
+
+def _adopt_model_usage(run):
+    if run.scopes.filter(scope_kind="x_model_usage", scope_key="legacy").exists():
+        return
+    report = _legacy_budget_report(run)
+    count = report.get("model_requests", 0)
+    receipts = report.get("staff_relevance", {})
+    require(type(count) is int and count >= 0 and isinstance(receipts, dict)
+            and len(receipts) <= count, "invalid legacy model budget")
+    archive = _evidence({key: report.get(key) for key in (
+        "model_requests", "model_responses", "staff_relevance",
+    )}, "x_model_response") if count else None
+    _typed_scope(run, "x_model_usage", "legacy", phase="backfill_model_v1",
+                 raw_count=count, outcome="adopted", execution_state="completed",
+                 legacy_archive=archive)
+    for identity, receipt in receipts.items():
+        require(isinstance(identity, str) and len(identity) == 64
+                and isinstance(receipt, dict) and receipt.get("status") in {"sent", "returned"},
+                "invalid legacy relevance receipt")
+        if receipt["status"] == "returned":
+            require(isinstance(receipt.get("text"), str), "legacy relevance reply missing")
+        _typed_scope(
+            run, "x_model_call", identity, phase="staff_relevance_v1", raw_count=0,
+            outcome=receipt["status"],
+            execution_state="completed" if receipt["status"] == "returned" else "failed",
+            legacy_archive=_evidence({"identity": identity, **receipt}, "x_model_response"),
+        )
+
+
 class DurableBudget(BackfillBudget):
     """Conservative paid-request admission survives process death and retries."""
 
@@ -246,15 +324,32 @@ class DurableBudget(BackfillBudget):
                          max_llm_calls=job.scope.get("model_requests_per_run", 0),
                          run_seconds=seconds)
         self.claim = claim
+        self._model_scope_id = None
+        with fenced_run(claim) as (locked_job, run):
+            ensure_response_bytes(run)
+            adopted = CollectionScopeRun.objects.filter(
+                scope_kind="x_model_usage", scope_key="legacy",
+            ).values("run_id")
+            for previous in locked_job.runs.exclude(pk__in=adopted).order_by("started_at", "pk"):
+                _adopt_model_usage(previous)
 
-    def claim_llm_request(self, timeout_seconds=0):
+    def claim_llm_request(self, timeout_seconds=0, *, identity=None, model=None):
         super().claim_llm_request(timeout_seconds)
         with fenced_run(self.claim) as (job, run):
-            count = sum(r.report.get("model_requests", 0) for r in job.runs.all())
+            require(self._model_scope_id is None, "previous model outcome is still pending")
+            count = CollectionScopeRun.objects.filter(
+                run__job=job, scope_kind__in=["x_model_call", "x_model_usage"],
+            ).aggregate(n=Sum("raw_count"))["n"] or 0
             if count >= job.scope.get("maximum_model_requests", 0):
                 raise BackfillBudgetExhausted("durable model allowance exhausted")
-            run.report = {**run.report, "model_requests": run.report.get("model_requests", 0) + 1}
-            run.save(update_fields=["report", "updated_at"])
+            key = identity or str(uuid4())
+            scope = _typed_scope(
+                run, "x_model_call", key, raw_count=1,
+                phase="staff_relevance_v1" if identity else "model_reservation_v1",
+                outcome="sent", execution_state="running",
+                legacy_archive=_evidence({"identity": key, "status": "sent", "model": model}, "x_model_response"),
+            )
+            self._model_scope_id = scope.pk
 
     def record_model_response(self, response):
         super().record_model_response(response)
@@ -263,11 +358,19 @@ class DurableBudget(BackfillBudget):
             usage = {"cost_usd": str(response.cost_usd), "input_tokens": response.input_tokens,
                      "output_tokens": response.output_tokens, "response_id": response.response_id}
         with fenced_run(self.claim) as (_, run):
-            run.report = {**run.report, "model_responses": [
-                *run.report.get("model_responses", []),
-                {**self.snapshot()["model_responses"][-1], "usage": usage},
-            ]}
-            run.save(update_fields=["report", "updated_at"])
+            scope = CollectionScopeRun.objects.select_for_update().get(pk=self._model_scope_id, run=run)
+            require(scope.outcome == "sent", "model response already recorded")
+            failed = isinstance(response, BaseException)
+            document = {**read_document(scope.legacy_archive), "status": "failed" if failed else "returned",
+                        "usage": usage}
+            if not failed:
+                document["text"] = str(getattr(response, "text", response))
+            scope.legacy_archive = _evidence(document, "x_model_response")
+            scope.outcome = "unknown" if failed else "returned"
+            scope.execution_state = "failed" if failed else "completed"
+            scope.error_code = type(response).__name__[:64] if failed else None
+            scope.save(update_fields=["legacy_archive", "outcome", "execution_state", "error_code"])
+            self._model_scope_id = None
 
     def relevance(self, cfg):
         """Reuse exact returned gates; a sent outcome without a reply is unknown."""
@@ -277,35 +380,26 @@ class DurableBudget(BackfillBudget):
         def call(system, user):
             identity = hashlib.sha256(json.dumps([cfg.llm.model_dump(mode="json"), system, user],
                                                 sort_keys=True).encode()).hexdigest()
-            job = CollectionJob.objects.get(pk=self.claim.job_id)
-            for attempt in job.runs.order_by("started_at"):
-                receipt = attempt.report.get("staff_relevance", {}).get(identity)
-                if receipt:
-                    require(receipt.get("status") == "returned", "staff relevance outcome unknown")
-                    return receipt["text"]
+            with fenced_run(self.claim):
+                receipts = list(CollectionScopeRun.objects.filter(
+                    run__job_id=self.claim.job_id, scope_kind="x_model_call",
+                    phase="staff_relevance_v1", scope_key=identity,
+                ).select_related("legacy_archive").order_by("pk"))
+                if receipts:
+                    require(all(receipt.outcome == "returned" for receipt in receipts),
+                            "staff relevance outcome unknown")
+                    documents = [read_document(receipt.legacy_archive) for receipt in receipts]
+                    require(all(document.get("identity") == identity
+                                and isinstance(document.get("text"), str)
+                                and document["text"] == documents[0]["text"] for document in documents),
+                            "staff relevance reply conflict")
+                    return documents[0]["text"]
             client = build_relevancy_client_from_env(cfg, deepinfra_key_env="DEEPINFRA_ON_DEMAND")
             require(client is not None, "on-demand staff relevance credential required")
-            def before():
-                self.claim_llm_request(cfg.harvest.relevancy_timeout_seconds)
-                with fenced_run(self.claim) as (_, run):
-                    receipts = run.report.get("staff_relevance", {})
-                    receipts[identity] = {"status": "sent", "model": cfg.llm.relevancy_model}
-                    run.report = {**run.report, "staff_relevance": receipts}
-                    run.save(update_fields=["report", "updated_at"])
-
-            def after(response):
-                self.record_model_response(response)
-                if isinstance(response, BaseException):
-                    return
-                with fenced_run(self.claim) as (_, run):
-                    receipts = run.report["staff_relevance"]
-                    receipts[identity] = {**receipts[identity], "status": "returned",
-                                          "text": str(getattr(response, "text", response))}
-                    run.report = {**run.report, "staff_relevance": receipts}
-                    run.save(update_fields=["report", "updated_at"])
             from monitor.cycle import _BoundedClassifierClient
             bounded = _BoundedClassifierClient(client, maximum_calls=1, pause_seconds=0,
-                                               before_call=before, after_call=after)
+                before_call=lambda: self.claim_llm_request(cfg.harvest.relevancy_timeout_seconds, identity=identity, model=cfg.llm.relevancy_model),
+                after_call=self.record_model_response)
             invoke = build_binary_relevancy_llm_call(
                 client=bounded, model=cfg.llm.relevancy_model,
                 timeout_seconds=cfg.harvest.relevancy_timeout_seconds,
@@ -322,7 +416,7 @@ class DurableBudget(BackfillBudget):
 
                 received_bytes = ensure_staging_bytes(run)
             else:
-                received_bytes = run.report.get("response_bytes", 0)
+                received_bytes = ensure_response_bytes(run)
             prior = job.runs.aggregate(total=Sum("request_count"))["total"] or 0
             if (scope["prior_api_requests"] + prior >= scope["maximum_api_requests"]
                     or run.request_count >= limits["requests"]
@@ -337,11 +431,8 @@ class DurableBudget(BackfillBudget):
         super().record_api_response(response)
         with fenced_run(self.claim) as (_, run):
             run.selected_count += response["raw_results"]
-            run.report = {
-                **run.report,
-                "response_bytes": run.report.get("response_bytes", 0) + response.get("response_bytes", 0),
-            }
-            run.save(update_fields=["selected_count", "report", "updated_at"])
+            run.physical_bytes_received = ensure_response_bytes(run) + response.get("response_bytes", 0)
+            run.save(update_fields=["selected_count", "physical_bytes_received", "updated_at"])
 
     def record_captured_response(self, request, response):
         """Idempotently account an archive, including a capture/commit crash gap.
@@ -366,17 +457,34 @@ class DurableBudget(BackfillBudget):
             original = CollectionRun.objects.select_for_update().get(
                 pk=request.scope_run.run_id, job_id=self.claim.job_id,
             )
-            accounted = list(original.report.get("prefetch_accounted_requests", []))
-            identifier = str(request.pk)
-            if identifier in accounted:
+            request = CollectionRequest.objects.select_for_update(of=("self",)).select_related("archive").get(pk=request.pk)
+            require(request.request_category == "x_backfill_prefetch"
+                    and request.transport_outcome == "received" and request.archive_id is not None,
+                    "prefetch accounting requires captured response")
+            ensure_response_bytes(original)
+            if request.selection_accounted is None:
+                # A new call belongs to this claim. Older calls need exact
+                # legacy adoption; no guessed receipt IDs or HTTP accounting.
+                accounted = False if request.attempt_id == self.claim.attempt_id else (
+                    str(request.pk) in _legacy_budget_report(original).get("prefetch_accounted_requests", [])
+                )
+                request.selection_accounted = accounted
+            if request.raw_count is None:
+                request.raw_count = response["raw_results"]
+                request.response_sha256 = bytes.fromhex(request.archive.content_sha256)
+                request.body_lost = False
+                request.save(update_fields=["raw_count", "response_sha256", "body_lost", "selection_accounted"])
+            require(request.raw_count == response["raw_results"]
+                    and request.response_bytes == response["response_bytes"]
+                    and bytes(request.response_sha256).hex() == request.archive.content_sha256,
+                    "captured response accounting changed")
+            if request.selection_accounted:
                 return
-            original.selected_count += response["raw_results"]
-            original.report = {
-                **original.report,
-                "response_bytes": original.report.get("response_bytes", 0) + response.get("response_bytes", 0),
-                "prefetch_accounted_requests": [*accounted, identifier],
-            }
-            original.save(update_fields=["selected_count", "report", "updated_at"])
+            original.selected_count += request.raw_count
+            original.physical_bytes_received += request.response_bytes
+            original.save(update_fields=["selected_count", "physical_bytes_received", "updated_at"])
+            request.selection_accounted = True
+            request.save(update_fields=["selection_accounted"])
         if original.pk == self.claim.run_id:
             BackfillBudget.record_api_response(self, response)
 
@@ -399,9 +507,9 @@ class PageCheckpoint:
         received = progress.get("pages_received", 0) > 0
         advanced = received and not blocked
         drained = advanced and progress.get("drained") is True
-        envelopes = page_receipts(self.scoped)
+        envelope = None
         if received:
-            envelopes.append({
+            envelope = {
                 "observed_at": datetime.now(UTC).isoformat(),
                 "post_ids": post_ids if post_ids is not None else [], "pages_received": progress["pages_received"],
                 "collection_drained": drained,
@@ -415,7 +523,7 @@ class PageCheckpoint:
                     "prefetch_request_run_id": str(self.capture.request.scope_run.run_id),
                     "prefetch_replayed": self.capture.replayed} if self.capture is not None else {}),
                 **(extra or {}),
-            })
+            }
         page_write = write
         if received and self.capture is not None and self.capture.request.scope_run.run_id != self.claim.run_id:
             def replay_write(run, scope):
@@ -427,13 +535,23 @@ class PageCheckpoint:
                 if page_write is not None:
                     return page_write(run, scope)
             write = replay_write
+        write_page = write
+        def commit_page(run, scope):
+            if write_page is not None:
+                write_page(run, scope)
+            if envelope is not None:
+                append_page_receipt(scope, envelope, cursor=progress.get("cursor") if advanced else scope.cursor)
+                if self.capture is not None:
+                    from core.collection_state import record_scope_request_uses
+                    record_scope_request_uses(scope, page_receipts(scope))
+
         self.scoped = checkpoint_scope(
             self.claim, scope_key=self.scoped.scope_key, scope_kind="x_query",
             ownership=x_scope_ownership(self.scoped),
             cursor=progress.get("cursor") if advanced else self.scoped.cursor,
             cursor_history=progress.get("seen_cursors", []) if advanced else self.scoped.recorded_cursors,
             outcome="blocked" if blocked else ("complete" if drained else "pending"),
-            enumeration_complete=drained, envelopes=envelopes, write=write,
+            enumeration_complete=drained, typed=True, write=commit_page,
             raw_count=self.scoped.raw_count + (
                 self._response()["raw_results"] if received else 0
             ),
@@ -490,17 +608,18 @@ class PageCheckpoint:
 
     def failed(self, progress):
         """A returned HTTP error is an attempt receipt, never a drained page."""
+        envelope = {
+            "observed_at": datetime.now(UTC).isoformat(), "pages_received": 0,
+            "post_ids": [], "collection_drained": False,
+            "reason": progress.get("reason"), "response_status_code": progress["response_status_code"],
+            "retry_after_seconds": progress.get("retry_after_seconds"),
+        }
         self.scoped = checkpoint_scope(
             self.claim, scope_key=self.scoped.scope_key, scope_kind="x_query",
             ownership=x_scope_ownership(self.scoped), cursor=self.scoped.cursor,
             cursor_history=self.scoped.recorded_cursors, outcome=self.scoped.outcome,
-            enumeration_complete=False, raw_count=self.scoped.raw_count,
-            envelopes=[*page_receipts(self.scoped), {
-                "observed_at": datetime.now(UTC).isoformat(), "pages_received": 0,
-                "post_ids": [], "collection_drained": False,
-                "reason": progress.get("reason"), "response_status_code": progress["response_status_code"],
-                "retry_after_seconds": progress.get("retry_after_seconds"),
-            }],
+            enumeration_complete=False, raw_count=self.scoped.raw_count, typed=True,
+            write=lambda _run, scope: append_page_receipt(scope, envelope, cursor=scope.cursor),
         )
 
     def persist_rare(self, runner, call, items):
@@ -681,6 +800,58 @@ def _report(job, run_id):
     return report
 
 
+def backfill_report(run):
+    """Operational totals come from typed owners; saved diagnostics stay exact."""
+    marker = run.scopes.get(scope_kind="x_backfill_result", scope_key="result", phase="backfill_result_v1")
+    report = read_document(marker.legacy_archive)
+    require(isinstance(report, dict) and report.get("run_id", str(run.pk)) == str(run.pk),
+            "backfill result evidence owner changed")
+    if "reconciliation_error" not in report:
+        report.update(_report(run.job, run.pk))
+    return report
+
+
+@transaction.atomic
+def adopt_completed_backfill_result(run_id, *, verify_only=False):
+    """Project one historical result, proving exact existing Post membership.
+
+    This creates no run, attempt or provider receipt. Missing old certification
+    remains a reconciliation error, including a coincidentally empty membership.
+    """
+    job_id = CollectionRun.objects.only("job_id").get(pk=run_id).job_id
+    job = CollectionJob.objects.select_for_update().get(pk=job_id)
+    run = CollectionRun.objects.select_for_update().get(pk=run_id, job=job)
+    require((job.source_id, job.purpose, job.operation, run.status)
+            == ("x", "content", "x_backfill", "success"),
+            "completed X backfill result required")
+    report = _legacy_budget_report(run)
+    receipt = report.get("post_membership")
+    ids = report.get("recovered_post_ids")
+    require(isinstance(receipt, dict) and receipt.get("version") == 1
+            and type(receipt.get("distinct_posts")) is int
+            and isinstance(ids, list) and all(isinstance(value, str) and value for value in ids)
+            and len(ids) == len(set(ids)) == receipt["distinct_posts"],
+            "historical membership certification missing or invalid")
+    typed = _report(job, run.pk)
+    require(report.get("job_id") == str(job.pk) and report.get("run_id") == str(run.pk)
+            and report.get("collection_drained") is True and typed["collection_drained"]
+            and set(ids) == set(typed["recovered_post_ids"])
+            and receipt == typed["post_membership"],
+            "historical membership differs from typed Post owners")
+    marker = run.scopes.filter(scope_kind="x_backfill_result", scope_key="result").first()
+    if marker is not None:
+        require(marker.phase == "backfill_result_v1" and marker.outcome == "success"
+                and marker.legacy_archive_id is not None
+                and read_document(marker.legacy_archive) == report,
+                "historical backfill result evidence changed")
+    else:
+        require(not verify_only, "historical backfill result is not projected")
+        _typed_scope(run, "x_backfill_result", "result", phase="backfill_result_v1",
+                     outcome="success", execution_state="completed",
+                     legacy_archive=_evidence(report, "x_backfill_result"))
+    return {"run_id": str(run.pk), "copied": marker is None, "distinct_posts": len(ids)}
+
+
 def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_options=None):
     from monitor.backfill_prefetch import Prefetcher, PrefetchOptions
     from monitor.cycle import CycleRunner
@@ -698,8 +869,9 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
     cfg = bounded_backfill_config(raw_cfg, enrichment_limit=1, collection_policy=current_policy)
     scope = validate_scope(job, raw_cfg if current_policy else cfg)
     if read_only or job.state == "completed":
+        from core.collection_capture import run_report_document
         return {"job_id": str(job.pk), "state": job.state,
-                "report": job.last_attempt.report if job.last_attempt_id else None}
+                "report": run_report_document(job.last_attempt) if job.last_attempt_id else None}
     if job.next_retry_at and job.next_retry_at > datetime.now(UTC):
         remaining = max(1, int((job.next_retry_at - datetime.now(UTC)).total_seconds()) + 1)
         raise BackfillProviderSafetyError(429, retry_after_seconds=min(300, remaining))
@@ -731,7 +903,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
         if not CollectionScopeRun.objects.filter(run_id=claim.run_id, scope_kind="x_query").exists():
             import_scope_checkpoints(
                 claim, definition_sha256=job.definition_sha256,
-                scopes=scope["units"], provenance=scope.get("provenance", {"format": ADAPTER_VERSION}),
+                scopes=scope["units"], provenance=scope.get("provenance", {"format": ADAPTER_VERSION}), typed=True,
             )
         if retry_blocked:
             with fenced_run(claim):
@@ -853,8 +1025,20 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
     status = "failed" if error else (
         "success" if report["collection_drained"] and not pending and not deferred_state else "partial"
     )
-    finish_run(claim, status=status, report=report, retry_at=retry_at,
-               error_code=type(error).__name__ if error else None)
+    with fenced_run(claim) as (_, finished):
+        saved = finished.scopes.filter(scope_kind="x_backfill_result", scope_key="result").first()
+        values = {"phase": "backfill_result_v1", "outcome": status, "execution_state": "completed",
+                  "legacy_archive": _evidence(report, "x_backfill_result")}
+        if saved is None:
+            _typed_scope(finished, "x_backfill_result", "result", **values)
+        else:
+            require(saved.phase == "backfill_result_v1", "backfill result marker changed")
+            for field, value in values.items():
+                setattr(saved, field, value)
+            saved.save(update_fields=list(values))
+        finish_run(claim, status=status, typed=True, retry_at=retry_at,
+                   request_count=finished.request_count, physical_accounting_complete=False,
+                   error_code=type(error).__name__ if error else None)
     if error:
         if isinstance(error, BackfillProviderSafetyError):
             raise error

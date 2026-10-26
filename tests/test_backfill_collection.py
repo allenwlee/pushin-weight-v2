@@ -10,6 +10,7 @@ from django.core.management.base import CommandError
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
+from core.collection_capture import read_document, run_report_document
 from core.collection_jobs import register_job, set_job_state
 from core.collection_pages import page_receipts
 from core.collection_state import StaleClaim
@@ -260,7 +261,7 @@ def test_database_job_resumes_exact_page_and_preserves_previous_attempt(pipeline
     old_scope.envelopes = [{"deliberately": "unusable retired receipt"}]
     old_scope.save(update_fields=["envelopes"])
     assert old_scope.raw_count == 1
-    assert old.report["checkpoint_import"]["historical_attempt_timestamps"] is None
+    assert read_document(old.scopes.get(scope_kind="x_checkpoint_import").legacy_archive)["historical_attempt_timestamps"] is None
     pipeline.responses.append(page("2"))
     second = run(job)
     assert second["collection_drained"]
@@ -622,8 +623,8 @@ def test_historical_call_a_staff_uses_on_demand_model_and_durable_usage(pipeline
     def model(self, **kwargs):
         assert not connection.in_atomic_block
         attempt = CollectionRun.objects.get(job=job)
-        assert attempt.report["model_requests"] == 1
-        assert next(iter(attempt.report["staff_relevance"].values()))["status"] == "sent"
+        assert attempt.scopes.get(scope_kind="x_model_call").raw_count == 1
+        assert attempt.scopes.get(scope_kind="x_model_call", phase="staff_relevance_v1").outcome == "sent"
         assert self.api_key == "test-on-demand"
         calls.append(kwargs)
         return SimpleNamespace(text=verdict, provider_usage={"cost_usd": "0.0001"})
@@ -646,7 +647,7 @@ def test_historical_call_a_staff_uses_on_demand_model_and_durable_usage(pipeline
     report = run(job)
     assert report["collection_drained"] and len(calls) == 1
     attempt = CollectionRun.objects.filter(job=job).order_by("started_at").first()
-    assert attempt.report["model_responses"][0]["usage"]["cost_usd"] == "0.0001"
+    assert read_document(attempt.scopes.get(scope_kind="x_model_call").legacy_archive)["usage"]["cost_usd"] == "0.0001"
     assert report["recovered_post_ids"] == (["1", "2"] if verdict == "KEEP" else [])
     assert CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_key="A").raw_count == 2
     evidence = page_receipts(CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_key="A"))[-1]
@@ -675,7 +676,7 @@ def test_historical_rare_inbox_precedes_gate_and_never_uses_live_slot(pipeline, 
     def model(self, request_bytes, **kwargs):
         assert not connection.in_atomic_block
         assert RareTypeSearchHit.objects.count() == 1 and not Post.objects.exists()
-        assert CollectionRun.objects.get(job=job).report["model_requests"] == 1
+        assert CollectionRun.objects.get(job=job).scopes.get(scope_kind="x_model_call").raw_count == 1
         probabilities = {key: .1 for key in QUESTION_SET}
         probabilities.update(ai_related=.95, role_opening=.95)
         return JevResponse("test-response", probabilities, 1200, 0, Decimal("0.00005"))
@@ -987,7 +988,7 @@ def test_staff_timeout_preserves_shared_fail_open_and_continues_pages_and_routes
     attempt = CollectionRun.objects.get(job=job)
     evidence = page_receipts(attempt.scopes.get(scope_key="A"))
     assert all(row["relevancy_degraded"] for row in evidence)
-    assert next(iter(attempt.report["staff_relevance"].values()))["status"] == "sent"
+    assert attempt.scopes.get(scope_kind="x_model_call", phase="staff_relevance_v1").outcome == "unknown"
 
 
 def test_clipped_page_records_received_tail_ids_without_advancing(pipeline):
@@ -1034,19 +1035,19 @@ def test_provider_safety_response_stops_all_scopes_and_preserves_cursor(pipeline
     assert secret_body not in str(caught.value) and secret_body not in caplog.text
     attempt = CollectionRun.objects.get(job=job)
     assert attempt.request_count == 1 and attempt.status == "failed"
-    assert not attempt.report["collection_drained"]
-    assert attempt.report["global_failure"]["response_status_code"] == http_status
+    assert not run_report_document(attempt)["collection_drained"]
+    assert run_report_document(attempt)["global_failure"]["response_status_code"] == http_status
     for row in attempt.scopes.filter(scope_kind="x_query"):
         assert row.cursor == "committed-cursor" and not row.enumeration_complete
     failed_scope = attempt.scopes.get(scope_key="B1:aug09")
     assert failed_scope.envelopes == []
     receipt = page_receipts(failed_scope)[-1]
     assert receipt["response_status_code"] == http_status and receipt["pages_received"] == 0
-    assert secret_body not in str(attempt.report) and secret_body not in str(receipt)
+    assert secret_body not in str(run_report_document(attempt)) and secret_body not in str(receipt)
     if http_status == 429:
         job.refresh_from_db()
         assert job.next_retry_at is not None
-        assert attempt.report["global_failure"]["retry_after_seconds"] == 300
+        assert run_report_document(attempt)["global_failure"]["retry_after_seconds"] == 300
         with pytest.raises(CommandError):
             run(job)
         assert len(requests) == CollectionRun.objects.filter(job=job).count() == 1

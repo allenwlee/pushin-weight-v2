@@ -366,7 +366,7 @@ def test_provider_failure_stops_admission_and_saves_paid_body(http_pages, status
     assert request.http_status == status and request.archive_id
     assert request.transport_outcome == "received"
     assert not Post.objects.exists()
-    assert not CollectionScopeRun.objects.filter(enumeration_complete=True).exists()
+    assert not CollectionScopeRun.objects.filter(scope_kind="x_query", enumeration_complete=True).exists()
     job.refresh_from_db()
     if status == 429:
         assert job.next_retry_at is not None
@@ -382,7 +382,7 @@ def test_byte_cap_retains_unknown_receipt_and_cursor(http_pages):
     assert len(state["requests"]) == 1
     assert not Post.objects.exists()
     assert CollectionRequest.objects.get().transport_outcome == "transport_error"
-    assert CollectionScopeRun.objects.get(run__job=job).cursor is None
+    assert CollectionScopeRun.objects.get(run__job=job, scope_kind="x_query").cursor is None
 
 
 def test_capture_accounting_crash_is_repaired_once_before_replay(http_pages, monkeypatch):
@@ -405,8 +405,9 @@ def test_capture_accounting_crash_is_repaired_once_before_replay(http_pages, mon
         assert len(state["requests"]) == 1
     owner.refresh_from_db()
     assert owner.selected_count == 1
-    assert owner.report["response_bytes"] == request.response_bytes
-    assert owner.report["prefetch_accounted_requests"] == [str(request.pk)]
+    assert owner.physical_bytes_received == request.response_bytes
+    request.refresh_from_db()
+    assert request.selection_accounted is True
     assert execute_job(job.pk)["state"] == "completed"
 
 
