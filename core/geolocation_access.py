@@ -7,8 +7,8 @@ prints credentials, grants owner membership, or adds a second web connection.
 from django.apps import apps
 from psycopg import sql
 
-from core.migrations._benchmark_serving_v2 import VIEWS as BENCHMARK_VIEWS
-from core.migrations._benchmark_serving_v2 import validate_view
+from core.migrations._benchmark_serving_v3 import VIEWS as BENCHMARK_VIEWS
+from core.migrations._benchmark_serving_v3 import validate_view
 
 # Both names are denied during the rolling-image bridge. Old entries disappear
 # from the physical inventory after final deletion; they must never be granted.
