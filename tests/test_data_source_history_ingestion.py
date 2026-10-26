@@ -642,6 +642,25 @@ def test_provider_qualified_unknown_subtype_can_map_statistics_but_not_text_benc
     project_observation_groups_batch(after_id=observation.pk - 1, batch_size=1)
     CollectionObservation.objects.filter(pk=observation.pk).update(groups={})
     assert validate_model_kind(product, qualification) == qualification
+    from core.collection_capture import archive_legacy
+
+    archive = archive_legacy({
+        "listing": observation.listing,
+        "dimensions": observation.dimensions,
+        "source_metadata": observation.source_metadata,
+        "envelopes": observation.envelopes,
+        "groups": {"listing": "ok"},
+    })
+    CollectionObservation.objects.filter(pk=observation.pk).update(
+        legacy_archive=archive, listing={}, dimensions={}, source_metadata={},
+    )
+    assert validate_model_kind(product, qualification) == qualification
+    # The numeric evidence projector is a separate RG6 reader cutover.
+    CollectionObservation.objects.filter(pk=observation.pk).update(
+        listing=observation.listing,
+        dimensions=observation.dimensions,
+        source_metadata=observation.source_metadata,
+    )
     subject = MeasurementSubject.objects.get(
         pk=subject_id("product", product.product_key)
     )

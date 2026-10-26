@@ -7,6 +7,23 @@ from core.models import BrandCompany, CollectionObservation
 MODEL_KIND_POLICY = "hf-public-model-registry-v1"
 
 
+def _captured_fields(observation):
+    """Read frozen historical evidence when its retired columns have been cleared."""
+    if observation.legacy_archive_id is None:
+        return observation.listing, observation.dimensions, observation.source_metadata
+    from core.collection_capture import read_document
+
+    document = read_document(observation.legacy_archive)
+    require(
+        isinstance(document, dict)
+        and all(isinstance(document.get(key), dict) for key in (
+            "listing", "dimensions", "source_metadata",
+        )),
+        "invalid archived model-registry evidence",
+    )
+    return document["listing"], document["dimensions"], document["source_metadata"]
+
+
 def _qualification(product, observation):
     ownership = product.publisher_ownership
     require(
@@ -24,7 +41,7 @@ def _qualification(product, observation):
         ).exists(),
         "public model publisher/brand identity is unqualified",
     )
-    raw = observation.listing
+    raw, dimensions, source_metadata = _captured_fields(observation)
     require(
         observation.run.job.source_id == "hf"
         and observation.run.job.purpose == "catalog"
@@ -57,9 +74,9 @@ def _qualification(product, observation):
         "payload_sha256": digest(raw),
         "evidence_identity_sha256": digest(
             [
-                observation.dimensions,
+                dimensions,
                 observation_group_outcomes(observation),
-                observation.source_metadata,
+                source_metadata,
                 str(observation.run_id),
                 observation.source_identifier,
                 observation.observed_at.isoformat(),
@@ -85,7 +102,7 @@ def qualify_model_kind(product):
             status="ok",
             source_subject_kind="repository",
         )
-        .select_related("run__job", "scope_run")
+        .select_related("run__job", "scope_run", "legacy_archive")
         .order_by("pk")
     )
     for observation in observations.iterator():
@@ -99,7 +116,7 @@ def qualify_model_kind(product):
 def validate_model_kind(product, pin):
     require(pin.get("policy") == MODEL_KIND_POLICY, "unsupported model-kind policy")
     observation = CollectionObservation.objects.select_related(
-        "run__job", "scope_run"
+        "run__job", "scope_run", "legacy_archive"
     ).get(pk=pin["observation_id"])
     require(
         _qualification(product, observation) == pin,
