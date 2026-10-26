@@ -82,8 +82,21 @@ def read_document(archive):
     return json.loads(body)
 
 
+def _has_legacy_fields(model, *names):
+    present = {field.name for field in model._meta.fields}
+    return all(name in present for name in names)
+
+
 def observation_object_documents(observation):
     """Return a catalog object's captured fields, preferring frozen legacy evidence."""
+    if observation.projection_kind == "github-catalog-object-v1":
+        from core.github_catalog import observation_documents
+
+        return observation_documents(observation)
+    if observation.projection_kind == "hf-native-history-v1":
+        from core.model_native_history import observation_documents
+
+        return observation_documents(observation)
     if (observation.legacy_archive_id is not None
             and observation.legacy_archive.capture_kind == "hf_inventory_evidence"):
         from core.hf_inventory_capture import inventory_documents
@@ -138,6 +151,12 @@ def observation_object_documents(observation):
         )
         return matching[0], {}, {}
     if observation.legacy_archive_id is None:
+        require(
+            _has_legacy_fields(
+                type(observation), "listing", "dimensions", "source_metadata",
+            ),
+            "unarchived observation has no retained source document",
+        )
         return observation.listing, observation.dimensions, observation.source_metadata
     document = read_document(observation.legacy_archive)
     require(
@@ -153,6 +172,53 @@ def observation_object_documents(observation):
 def run_report_document(run):
     """Read a completed run's report after its old JSON column is cleared."""
     job = run.job
+    if (
+        job.source_id == "x" and job.purpose == "content"
+        and job.operation == "x_backfill"
+        and run.scopes.filter(
+            scope_kind="x_backfill_result", scope_key="result",
+            phase="backfill_result_v1",
+        ).exists()
+    ):
+        from monitor.backfill_collection import backfill_report
+
+        return backfill_report(run)
+    if (
+        job.source_id == "github" and job.purpose == "catalog"
+        and job.operation == "github_catalog"
+        and run.scopes.filter(phase="typed-github-catalog-v1").exists()
+    ):
+        from core.github_catalog import catalog_report
+
+        return catalog_report(run)
+    if (
+        job.purpose == "catalog" and job.operation == "model_history"
+        and run.scopes.filter(
+            scope_kind="history_execution", scope_key="execution",
+            phase="typed-history-v1",
+        ).exists()
+    ):
+        from core.model_history_collection import history_report
+
+        return history_report(run)
+    if (
+        job.purpose == "metric" and job.operation == "collect_metrics"
+        and run.scopes.filter(
+            scope_kind="numeric_projection", scope_key="saved-evidence",
+            phase="projection_results_v1",
+        ).exists()
+    ):
+        from core.source_metric_projection import projection_report
+
+        projection = projection_report(run)
+        attempt = run.attempts.order_by("-ordinal").only("accounting_complete").first()
+        return {
+            "projection": projection,
+            "coverage": projection["coverage"],
+            "physical_accounting_complete": (
+                attempt.accounting_complete is True if attempt else False
+            ),
+        }
     if job.source_id == "hf" and job.purpose == "catalog" and job.operation in {"hf_catalog", "model_inventory"}:
         from core.model_inventory import inventory_report
 
@@ -173,8 +239,14 @@ def run_report_document(run):
         from core.hf_catalog import catalog_report
 
         return catalog_report(run)
-    if run.legacy_archive_id is None or run.report:
-        return run.report
+    retained_report = (
+        run.report if _has_legacy_fields(type(run), "report") else None
+    )
+    if retained_report:
+        return retained_report
+    if run.legacy_archive_id is None:
+        require(retained_report is not None, "unarchived run has no retained report")
+        return retained_report
     document = read_document(run.legacy_archive)
     require(
         isinstance(document, dict) and isinstance(document.get("report"), dict),
@@ -187,10 +259,14 @@ def scope_object_documents(scope):
     """Return checkpoint wording from its preserved document after retirement."""
     # Live additive writers may still advance a copied scope. The final frozen
     # delta repairs its archive before old columns are removed.
-    if scope.legacy_archive_id is None or any((
+    retained_fields = _has_legacy_fields(
+        type(scope), "ownership", "cursor_history", "envelopes",
+    )
+    if retained_fields and (scope.legacy_archive_id is None or any((
         scope.ownership, scope.cursor_history, scope.envelopes,
-    )):
+    ))):
         return scope.ownership, scope.cursor_history, scope.envelopes
+    require(scope.legacy_archive_id is not None, "unarchived scope has no retained document")
     document = read_document(scope.legacy_archive)
     require(
         isinstance(document, dict)

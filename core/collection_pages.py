@@ -26,6 +26,12 @@ APPEARANCE_KIND = "x_page_appearance"
 RETAINED = {"retained_post", "retained_inbox", "unaccounted"}
 
 
+def _scope_compatibility():
+    return {"ownership": {}} if any(
+        field.name == "ownership" for field in CollectionScopeRun._meta.fields
+    ) else {}
+
+
 @transaction.atomic
 def append_page_receipt(scope, envelope, *, cursor=None, legacy_archive=None):
     """Caller fences its run; this transaction also supports bounded old-data copy."""
@@ -56,7 +62,7 @@ def append_page_receipt(scope, envelope, *, cursor=None, legacy_archive=None):
     child = CollectionScopeRun.objects.create(
         run=scope.run, parent_scope=scope, source_dataset=scope.source_dataset,
         job_target=scope.job_target, scope_kind=PAGE_KIND,
-        scope_key=digest(["x-page", scope.pk, ordinal]), ownership={},
+        scope_key=digest(["x-page", scope.pk, ordinal]), **_scope_compatibility(),
         checkpoint_ordinal=ordinal, pages_received=envelope.get("pages_received"),
         raw_count=envelope.get("raw_count", 0), raw_count_known="raw_count" in envelope,
         received_ids_known="received_post_ids" in envelope,
@@ -308,7 +314,10 @@ def copy_continuation_scopes(previous, run):
     from core.collection_cursors import replace_scope_cursor_history
 
     copies, originals = {}, {}
-    for original in previous.scopes.exclude(scope_kind__in=["resource_group", PAGE_KIND]).order_by("pk"):
+    for original in previous.scopes.exclude(scope_kind__in=[
+        "resource_group", PAGE_KIND, "x_model_call", "x_model_usage",
+        "x_backfill_result", "x_checkpoint_import",
+    ]).order_by("pk"):
         identifier = original.pk
         cursors = original.recorded_cursors
         originals[identifier] = original

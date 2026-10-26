@@ -110,10 +110,20 @@ def import_selected_history(claim, manifest):
             imported.status in {"success", "partial"},
             "historical numeric admission failed",
         )
-        ids = sorted(set(run.report.get("numeric_run_ids", [])) | {str(imported.pk)})
-        run.report = {**run.report, "numeric_run_ids": ids}
-        run.save(update_fields=["report", "updated_at"])
         key = digest(manifest)
+        def retain_result(owner_run, scope):
+            require(
+                owner_run.pk == run.pk
+                and scope.scope_kind == "archive_import"
+                and imported.job.source_id == owner_run.job.source_id
+                and imported.job.purpose == "metric"
+                and imported.job.contract_id == contract.pk
+                and scope.result_run_id in (None, imported.pk),
+                "archive import result owner changed",
+            )
+            scope.result_run = imported
+            scope.phase = "typed-archive-import-v1"
+
         checkpoint_scope(
             claim,
             scope_kind="archive_import",
@@ -124,25 +134,8 @@ def import_selected_history(claim, manifest):
             },
             enumeration_complete=True,
             outcome="observed",
-            envelopes=[
-                {
-                    "selected_manifest_sha256": key,
-                    "numeric_run_id": str(imported.pk),
-                    "snapshots": [
-                        {
-                            k: s.get(k)
-                            for k in (
-                                "date",
-                                "immutable_revision",
-                                "file_path",
-                                "raw_artifact_sha256",
-                                "upstream_binary_sha256",
-                            )
-                        }
-                        for s in manifest["snapshots"]
-                    ],
-                }
-            ],
+            typed=True,
+            write=retain_result,
         )
         return imported
 

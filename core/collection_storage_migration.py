@@ -135,6 +135,80 @@ class ContinuationBatch:
     updated: int
 
 
+@dataclass(frozen=True)
+class ArchiveImportBatch:
+    last_id: int
+    scanned: int
+    updated: int
+
+
+def project_archive_import_links_batch(
+    *, after_id: int = 0, batch_size: int = 200, verify_only: bool = False,
+) -> ArchiveImportBatch:
+    """Copy exact historical numeric-run links before retiring scope envelopes."""
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative scope ID")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        query = (
+            CollectionScopeRun.objects.filter(scope_kind="archive_import", pk__gt=after_id)
+            .select_related("run__job", "result_run__job")
+            .order_by("pk")
+        )
+        if not verify_only:
+            query = query.select_for_update(of=("self",))
+        scopes = list(query[:batch_size])
+        updated = 0
+        for scope in scopes:
+            receipts = scope.envelopes
+            if not receipts and scope.phase == "typed-archive-import-v1":
+                result = scope.result_run
+                if (
+                    result is None or result.job.purpose != "metric"
+                    or result.job.source_id != scope.run.job.source_id
+                    or str(result.job.contract_id) != scope.run.job.scope.get("numeric_contract_id")
+                ):
+                    raise ValueError("typed archive import result owner changed")
+                continue
+            if not isinstance(receipts, list) or len(receipts) != 1:
+                raise ValueError("archive import has no unique historical result receipt")
+            receipt = receipts[0]
+            if (
+                not isinstance(receipt, dict)
+                or receipt.get("selected_manifest_sha256") != scope.scope_key
+            ):
+                raise ValueError("archive import manifest identity changed")
+            try:
+                result_id = UUID(receipt["numeric_run_id"])
+            except (KeyError, TypeError, ValueError, AttributeError):
+                raise ValueError("archive import result ID is invalid") from None
+            result = CollectionRun.objects.select_related("job").filter(pk=result_id).first()
+            if (
+                result is None or result.job.purpose != "metric"
+                or result.job.source_id != scope.run.job.source_id
+                or str(result.job.contract_id) != scope.ownership.get("contract_id")
+                or str(result_id) not in scope.run.report.get("numeric_run_ids", [])
+            ):
+                raise ValueError("archive import result source, contract or run receipt changed")
+            if scope.result_run_id not in (None, result_id):
+                raise ValueError("archive import linked result changed")
+            if scope.result_run_id is None:
+                if verify_only:
+                    raise ValueError("archive import result link is missing")
+                scope.result_run = result
+                scope.phase = "typed-archive-import-v1"
+                scope.save(update_fields=["result_run", "phase"])
+                updated += 1
+        return ArchiveImportBatch(
+            last_id=scopes[-1].pk if scopes else after_id,
+            scanned=len(scopes), updated=updated,
+        )
+
+
 def project_run_continuations_batch(
     *, after_id: UUID | None = None, batch_size: int = 200,
     verify_only: bool = False,
@@ -1722,11 +1796,19 @@ def _legacy_owner_predicate(table: str) -> str:
     # These new typed records never owned the retired collection JSON. Their
     # archive pointer retains source checkpoint evidence, not their empty fields.
     if table == "collection_scope_runs":
-        return "t.scope_kind NOT IN ('resource_group','numeric_projection_item','x_page_checkpoint')"
+        return (
+            "t.scope_kind NOT IN ('resource_group','numeric_projection_item',"
+            "'numeric_projection_result','numeric_projection_output',"
+            "'history_execution','catalog_execution','x_page_checkpoint',"
+            "'x_model_call','x_model_usage','x_backfill_result',"
+            "'x_checkpoint_import') "
+            "AND NOT (t.scope_kind='numeric_projection' "
+            "AND t.phase='projection_results_v1')"
+        )
     if table == "collection_observations":
         return (
             "(t.observation_kind IS NULL OR t.observation_kind NOT IN "
-            "('x_page_checkpoint','x_page_appearance','x_page_diagnostic','x_request_appearance','hf_catalog_listing')) "
+            "('x_page_checkpoint','x_page_appearance','x_page_diagnostic','x_request_appearance','hf_catalog_listing','coverage')) "
             "AND NOT EXISTS (SELECT 1 FROM collection_evidence_archives hf_capture "
             "WHERE hf_capture.id=t.legacy_archive_id "
             "AND hf_capture.capture_kind='hf_inventory_evidence' OFFSET 0)"

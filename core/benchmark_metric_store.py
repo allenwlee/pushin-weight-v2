@@ -694,12 +694,13 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
         and run.status == "running",
         "active metric-purpose run required",
     )
-    observations, reused, pending_values = [], [], []
+    observations, reused, created_ids, pending_by_key = [], [], set(), {}
     if not reuse_snapshots:
         observations = CollectionObservation.objects.bulk_create(
             [CollectionObservation(run=run, **data) for data, _ in prepared],
             batch_size=1000,
         )
+        created_ids = {observation.pk for observation in observations}
     else:
         for data, values in prepared:
             require(
@@ -707,15 +708,38 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
                 == SOURCE_STATISTICS_POLICY,
                 "snapshot reuse requires source statistics",
             )
-            observation, created = (
+            stored = {
+                key: value for key, value in data.items()
+                if key not in {"listing", "dimensions", "source_metadata", "envelopes", "groups"}
+            }
+            owners = list(
                 CollectionObservation.objects.select_related("run__job")
-                .defer("run__raw_payload", "run__job__definition")
-                .get_or_create(
-                    observation_key=data["observation_key"],
-                    projection_kind=SOURCE_STATISTICS_POLICY,
-                    defaults={"run": run, **data},
+                .only(
+                    "id", "run_id", "run__job_id", "run__job__contract_id",
+                    "run__job__source_id", "mapping_id", "product_id",
+                    "projection_kind",
+                    "source_identifier", "source_subject_kind", "published_at",
+                    "published_date", "publication_precision", "observed_at",
+                    "original_retrieved_at", "observation_kind", "config_key",
+                    "category_key", "provider_revision", "coordinate_key",
+                    "source_record_date",
                 )
+                .filter(
+                    observation_key=data["observation_key"],
+                    run__job__contract_id=run.job.contract_id,
+                    run__job__source_id=run.job.source_id,
+                    run__job__purpose="metric",
+                )
+                .order_by("pk")[:2]
             )
+            require(len(owners) <= 1, "ambiguous source statistics snapshot identity")
+            if owners:
+                observation, created = owners[0], False
+            else:
+                observation = CollectionObservation.objects.create(
+                    run=run, projection_kind=SOURCE_STATISTICS_POLICY, **stored
+                )
+                created = True
             if not created:
                 require(
                     observation.run.job.contract_id == run.job.contract_id
@@ -755,7 +779,21 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
                     == (aware_instant(expected_retrieval) if expected_retrieval else None),
                     "immutable snapshot clock conflict",
                 )
+                require(
+                    observation.projection_kind in (None, SOURCE_STATISTICS_POLICY),
+                    "immutable snapshot projection kind conflict",
+                )
+                if observation.projection_kind is None:
+                    require(
+                        CollectionObservation.objects.filter(
+                            pk=observation.pk, projection_kind__isnull=True,
+                        ).update(projection_kind=SOURCE_STATISTICS_POLICY) == 1,
+                        "legacy statistics identity changed during adoption",
+                    )
+                    observation.projection_kind = SOURCE_STATISTICS_POLICY
                 reused.append(observation.pk)
+            else:
+                created_ids.add(observation.pk)
             observations.append(observation)
     for observation, (_, values) in zip(observations, prepared, strict=True):
         existing = (
@@ -764,7 +802,9 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
             else {}
         )
         for value in values:
-            previous = existing.get(value["source_metric"].pk)
+            metric_id = value["source_metric"].pk
+            key = (observation.pk, metric_id)
+            previous = existing.get(metric_id) or pending_by_key.get(key)
             if previous:
                 for field, expected in value.items():
                     if field == "source_metric":
@@ -778,7 +818,10 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
                         "immutable numeric snapshot conflict: " + field,
                     )
             else:
-                pending_values.append(MetricValue(observation=observation, **timing_storage(value)))
+                pending_by_key[key] = MetricValue(
+                    observation=observation, **timing_storage(value)
+                )
+    pending_values = list(pending_by_key.values())
     MetricValue.objects.bulk_create(pending_values, batch_size=1000)
     from core.collection_resources import attach_numeric_evidence
 
@@ -786,7 +829,7 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
         run,
         observations,
         prepared,
-        reused_ids=reused,
+        created_ids=created_ids,
         supplemented_ids={v.observation_id for v in pending_values} & set(reused),
     )
     from core.collection_capture import attach_metric_requests
@@ -821,8 +864,6 @@ def record_arena_publications(run, dates):
                 "observation_kind": "publication_marker",
                 "source_dataset": run.source_dataset,
                 "publication_complete": True,
-                "dimensions": {"kind": "publication_marker"},
-                "source_metadata": {"publication_complete": True},
             },
         )
         require(

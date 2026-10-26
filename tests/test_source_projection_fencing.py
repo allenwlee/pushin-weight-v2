@@ -47,7 +47,7 @@ def capture(operation="hf_catalog", *, queued=True):
         },
     )
     set_job_state(job.pk, "ready")
-    claim = claim_job(job.pk)
+    claim = claim_job(job.pk, typed=operation == "github_catalog")
     snapshot = CollectionObservation.objects.create(
         run_id=claim.run_id,
         source_identifier=str(raw["id"]),
@@ -115,7 +115,10 @@ def test_reclaimed_acquisition_cannot_acknowledge_committed_projection(
     queue = CollectionRun.objects.get(pk=abandoned.run_id).scopes.get(
         scope_kind="numeric_projection"
     )
-    assert queue.envelopes == [{"observation_id": snapshot.pk}]
+    assert queue.envelopes == []
+    assert list(queue.child_scopes.filter(scope_kind="numeric_projection_item").values_list(
+        "resource_observation_id", "outcome",
+    )) == [(snapshot.pk, "pending")]
     assert queue.outcome == "pending" and queue.cursor is None
     committed_values = list(MetricValue.objects.order_by("pk").values())
     assert len(committed_values) == (2 if operation == "hf_catalog" else 3)
@@ -127,6 +130,9 @@ def test_reclaimed_acquisition_cannot_acknowledge_committed_projection(
     assert recovered["acknowledged"] == recovered["reused_resources"] == 1
     assert recovered["written_values"] == 0 and recovered["pending"] is False
     assert queue.envelopes == [] and queue.outcome == "complete"
+    assert list(queue.child_scopes.filter(scope_kind="numeric_projection_item").values_list(
+        "resource_observation_id", "outcome",
+    )) == [(snapshot.pk, "complete")]
     assert list(MetricValue.objects.order_by("pk").values()) == committed_values
     assert numeric.observations.get().run_id == numeric.pk
 
@@ -243,7 +249,10 @@ def test_standalone_recovery_cannot_acknowledge_after_acquisition_starts(monkeyp
     queue = CollectionRun.objects.get(job__purpose="catalog").scopes.get(
         scope_kind="numeric_projection"
     )
-    assert queue.envelopes == [{"observation_id": snapshot.pk}]
+    assert queue.envelopes == []
+    assert list(queue.child_scopes.filter(scope_kind="numeric_projection_item").values_list(
+        "resource_observation_id", "outcome",
+    )) == [(snapshot.pk, "pending")]
     assert queue.outcome == "pending" and MetricValue.objects.count() == 2
 
 

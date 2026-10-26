@@ -1,6 +1,7 @@
 """Typed nonnumeric source facts and per-measurement timing explanations."""
 
 import re
+from collections import Counter
 from datetime import UTC, date, datetime
 
 from core.benchmark_metric_timing import aware_instant, native_date
@@ -188,8 +189,10 @@ def _snapshot_publisher(observation, raw, metadata):
     return None
 
 
-def observation_fact_values(observation):
-    listing, dimensions, metadata = observation_object_documents(observation)
+def observation_fact_values(observation, *, documents=None):
+    listing, dimensions, metadata = (
+        observation_object_documents(observation) if documents is None else documents
+    )
     artifact_sha256 = metadata.get("raw_artifact_sha256")
     if artifact_sha256 is not None and not (
         isinstance(artifact_sha256, str)
@@ -375,7 +378,7 @@ def project_observation_facts(observation):
 
 
 def attach_numeric_evidence(
-    run, observations, prepared, *, reused_ids=(), supplemented_ids=()
+    run, observations, prepared, *, created_ids=(), supplemented_ids=()
 ):
     """Project lineage and selected metric gaps in batches inside the writer fence.
 
@@ -385,12 +388,12 @@ def attach_numeric_evidence(
     """
     from core.measurement_taxonomy import require
 
-    reused_ids = set(reused_ids)
+    created_ids = set(created_ids)
     supplemented_ids = set(supplemented_ids)
     pairs = [
         pair
         for pair in zip(observations, prepared, strict=True)
-        if pair[0].pk not in reused_ids or pair[0].pk in supplemented_ids
+        if pair[0].pk in created_ids or pair[0].pk in supplemented_ids
     ]
     if not pairs:
         return
@@ -411,7 +414,7 @@ def attach_numeric_evidence(
             pk__in=[d["id"] for d in configuration["definitions"]]
         )
     )
-    inputs, gaps, changed, fields = [], [], [], set()
+    inputs, gaps, changed, fields, projected = [], [], [], set(), set()
     from core.collection_datasets import resolve_dataset
 
     dataset_cache = {}
@@ -429,18 +432,24 @@ def attach_numeric_evidence(
                     observation=observation,
                     input_observation=origin,
                     input_role="numeric_supplement"
-                    if observation.pk in reused_ids
+                    if observation.pk not in created_ids
                     else "numeric_projection",
                     input_sha256=origin.observation_key,
                 )
             )
         present = {v["source_metric"].pk for v in values}
-        if observation.pk in reused_ids:
+        if observation.pk not in created_ids:
             CollectionMetricGap.objects.filter(
                 observation=observation, source_metric_id__in=present
             ).delete()
             continue
-        facts = observation_fact_values(observation)
+        if observation.pk in projected:
+            continue
+        projected.add(observation.pk)
+        facts = observation_fact_values(
+            observation,
+            documents=(data.get("listing", {}), data["dimensions"], metadata),
+        )
         dataset = resolve_dataset(run.job.source_id, metadata, cache=dataset_cache)
         if dataset is not None:
             if observation.source_dataset_id not in (None, dataset.pk):
@@ -511,13 +520,19 @@ def attach_numeric_evidence(
     CollectionMetricGap.objects.bulk_create(
         gaps, ignore_conflicts=True, batch_size=1000
     )
-    if supplemented_ids:
+    occurrences = Counter(observation.pk for observation in observations)
+    repeated_created = {
+        observation_id for observation_id, count in occurrences.items()
+        if observation_id in created_ids and count > 1
+    }
+    refresh_input_hash_ids = supplemented_ids | repeated_created
+    if refresh_input_hash_ids:
         # New optional counters can extend a publication, while original capture
         # clocks, primary payload and existing value provenance remain unchanged.
         references = {}
         for owner_id, input_id, fingerprint, role in (
             CollectionObservationInput.objects.filter(
-                observation_id__in=supplemented_ids
+                observation_id__in=refresh_input_hash_ids
             )
             .order_by("input_observation_id", "input_role")
             .values_list(

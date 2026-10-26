@@ -1482,6 +1482,9 @@ def execute_enrichment(
 
 def adopt_completed_membership(job):
     """Adopt genuine pre-0085 stored-page evidence without rewriting history."""
+    from core.collection_capture import read_document
+    from core.models import CollectionScopeRun
+
     if job.state != "completed" or not job.last_success_id:
         return
     run = CollectionRun.objects.select_related("job").only("id", "job_id", "status", "job__purpose").get(
@@ -1489,11 +1492,25 @@ def adopt_completed_membership(job):
     )
     if run.job_id != job.pk or run.status != "success" or run.job.purpose != "content":
         raise BatchAdmissionError("historical_membership_success_run_mismatch")
-    marker = (
-        CollectionRun.objects.filter(pk=run.pk)
-        .values_list("report__post_membership", flat=True)
-        .get()
-    )
+    typed_result = CollectionScopeRun.objects.filter(
+        run=run, scope_kind="x_backfill_result", scope_key="result",
+        phase="backfill_result_v1",
+    ).select_related("legacy_archive").first()
+    if typed_result is not None:
+        if typed_result.legacy_archive_id is None:
+            raise BatchAdmissionError("typed_membership_result_evidence_missing")
+        saved = read_document(typed_result.legacy_archive)
+        if not isinstance(saved, dict):
+            raise BatchAdmissionError("typed_membership_result_evidence_invalid")
+        marker = saved.get("post_membership")
+    elif any(field.name == "report" for field in CollectionRun._meta.fields):
+        marker = (
+            CollectionRun.objects.filter(pk=run.pk)
+            .values_list("report__post_membership", flat=True)
+            .get()
+        )
+    else:
+        raise BatchAdmissionError("historical_membership_requires_pre_retirement_adoption")
     if marker is not None:
         if (
             not isinstance(marker, dict)
@@ -1513,6 +1530,8 @@ def adopt_completed_membership(job):
         if count != marker["distinct_posts"]:
             raise BatchAdmissionError("historical_typed_membership_count_changed")
         return
+    if typed_result is not None:
+        raise BatchAdmissionError("typed_membership_result_marker_missing")
     reported = run.report.get("recovered_post_ids")
     if not isinstance(reported, list) or len(reported) > 100000:
         raise BatchAdmissionError("historical_membership_legacy_receipt_invalid")

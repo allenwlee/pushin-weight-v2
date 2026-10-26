@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.collection_capture import read_document
+from core.collection_capture import archive_document, read_document
 from core.collection_storage_migration import (
     archive_legacy_batch,
     archive_metric_payload_batch,
@@ -60,6 +60,30 @@ def test_arena_publication_copy_rebuilds_an_empty_cohort_without_duplicate_rows(
     assert project_arena_publication_batch().inserted == 1
     assert project_arena_publication_batch().inserted == 0
     assert project_arena_publication_batch(verify_only=True).scanned == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_new_arena_publication_marker_needs_no_retiring_json_columns():
+    from core.benchmark_metric_store import persist_source, record_arena_publications
+    from core.measurement_taxonomy import digest
+    from tests.test_benchmark_download_persistence import provider_contract
+    from tests.test_hf_catalog_retirement import denied_retirement_columns
+
+    contract = provider_contract(
+        "arena", ["rating", "rating_lower", "rating_upper", "rank"]
+    )
+    run = persist_source(
+        contract, "arena", digest("rg6-arena-typed-publication"),
+        {"status": "ok", "config": "text_style_control", "rows": [],
+         "coverage": "publication_window"},
+    )
+    with denied_retirement_columns():
+        assert record_arena_publications(run, ["2026-09-29"]) == 1
+        marker = CollectionObservation.objects.get(
+            run=run, observation_kind="publication_marker",
+            published_date=datetime(2026, 9, 29, tzinfo=UTC).date(),
+        )
+        assert marker.publication_complete is True
 
 
 def test_metric_time_provenance_copy_is_bounded_and_preserves_typed_only_values():
@@ -820,6 +844,15 @@ def test_legacy_documents_are_archived_once_and_changed_rows_are_reconciled():
 
 def test_legacy_archive_sweep_excludes_typed_only_group_and_queue_scopes():
     run, _, parent = execution()
+    diagnostic = archive_document(
+        b'{"version":1,"projection_error":"invalid source"}',
+        encoding="selected-json-canonical-v1",
+        capture_kind="numeric_projection_evidence",
+    )
+    projection = CollectionScopeRun.objects.create(
+        run=run, scope_kind="numeric_projection", scope_key="saved-evidence",
+        phase="projection_results_v1", ownership={}, legacy_archive=diagnostic,
+    )
     observation = CollectionObservation.objects.create(
         run=run, scope_run=parent, source_identifier="captured",
         source_subject_kind="model", observation_key="c" * 64,
@@ -834,6 +867,40 @@ def test_legacy_archive_sweep_excludes_typed_only_group_and_queue_scopes():
             scope_key="typed-pending", ownership={},
             resource_observation=observation,
         ),
+        CollectionScopeRun.objects.create(
+            run=run, parent_scope=parent, scope_kind="numeric_projection_result",
+            scope_key="typed-source-result", ownership={},
+            resource_observation=observation,
+        ),
+        CollectionScopeRun.objects.create(
+            run=run, parent_scope=parent, scope_kind="numeric_projection_output",
+            scope_key="typed-output-result", ownership={},
+            resource_observation=observation,
+        ),
+        CollectionScopeRun.objects.create(
+            run=run, scope_kind="history_execution", scope_key="execution",
+            phase="typed-history-v1", ownership={},
+        ),
+        CollectionScopeRun.objects.create(
+            run=run, scope_kind="catalog_execution", scope_key="execution",
+            phase="typed-github-catalog-v1", ownership={},
+        ),
+        CollectionScopeRun.objects.create(
+            run=run, scope_kind="x_model_call", scope_key="typed-model",
+            phase="staff_relevance_v1", ownership={},
+        ),
+        CollectionScopeRun.objects.create(
+            run=run, scope_kind="x_model_usage", scope_key="legacy",
+            phase="backfill_model_v1", ownership={},
+        ),
+        CollectionScopeRun.objects.create(
+            run=run, scope_kind="x_backfill_result", scope_key="result",
+            phase="backfill_result_v1", ownership={},
+        ),
+        CollectionScopeRun.objects.create(
+            run=run, scope_kind="x_checkpoint_import", scope_key="typed-import",
+            phase="typed-import-v1", ownership={},
+        ),
     ]
 
     assert archive_legacy_batch("collection_scope_runs").archived == 1
@@ -844,6 +911,20 @@ def test_legacy_archive_sweep_excludes_typed_only_group_and_queue_scopes():
     for child in children:
         child.refresh_from_db()
         assert child.legacy_archive_id is None
+    projection.refresh_from_db()
+    assert projection.legacy_archive_id == diagnostic.pk
+
+    coverage = CollectionObservation.objects.create(
+        run=run, scope_run=parent, source_identifier="typed-coverage",
+        source_subject_kind="model", observation_kind="coverage",
+        observation_key="d" * 64,
+    )
+    assert archive_legacy_batch("collection_observations").archived == 1
+    assert stale_legacy_archive_count("collection_observations") == 0
+    observation.refresh_from_db()
+    coverage.refresh_from_db()
+    assert observation.legacy_archive_id is not None
+    assert coverage.legacy_archive_id is None
 
 
 def test_benchmark_provenance_copy_is_bounded_and_repeatable():

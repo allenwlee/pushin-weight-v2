@@ -3596,6 +3596,10 @@ class CollectionScopeRun(models.Model):
     prerequisite_scope = models.ForeignKey("self", null=True, on_delete=models.PROTECT, related_name="dependent_scopes")
     phase = models.CharField(max_length=32, null=True)
     resource_observation = models.ForeignKey("CollectionObservation", null=True, on_delete=models.PROTECT, related_name="resource_scopes")
+    result_run = models.ForeignKey(
+        "CollectionRun", null=True, on_delete=models.PROTECT,
+        related_name="archive_import_scopes",
+    )
     resource_path = models.TextField(null=True)
     admission_outcome = models.CharField(max_length=32, null=True)
     confidence_pct = models.PositiveSmallIntegerField(null=True)
@@ -3638,6 +3642,10 @@ class CollectionScopeRun(models.Model):
             models.UniqueConstraint(
                 fields=["run", "scope_kind", "scope_key"],
                 name="uq_collection_run_scope",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(result_run__isnull=True) | models.Q(scope_kind="archive_import"),
+                name="ck_scope_result_run_kind",
             ),
             models.UniqueConstraint(
                 fields=["parent_scope", "checkpoint_ordinal"],

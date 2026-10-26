@@ -599,6 +599,37 @@ def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time
     )
     assert imported_scope.result_run_id == imported.pk
     assert imported_scope.phase == "typed-archive-import-v1"
+    from core.collection_storage_migration import project_archive_import_links_batch
+    from core.measurement_taxonomy import digest
+
+    historical_manifest = manifest(contract)
+    CollectionScopeRun.objects.filter(pk=imported_scope.pk).update(
+        result_run=None, phase=None,
+        ownership={
+            "dataset_id": historical_manifest["dataset_id"],
+            "contract_id": str(contract.pk),
+        },
+        envelopes=[{
+            "selected_manifest_sha256": digest(historical_manifest),
+            "numeric_run_id": str(imported.pk),
+        }],
+    )
+    CollectionRun.objects.filter(pk=claim.run_id).update(
+        report={"numeric_run_ids": [str(imported.pk)]},
+    )
+    with pytest.raises(ValueError, match="result link is missing"):
+        project_archive_import_links_batch(
+            after_id=imported_scope.pk - 1, batch_size=1, verify_only=True,
+        )
+    copied = project_archive_import_links_batch(
+        after_id=imported_scope.pk - 1, batch_size=1,
+    )
+    assert (copied.scanned, copied.updated) == (1, 1)
+    assert project_archive_import_links_batch(
+        after_id=imported_scope.pk - 1, batch_size=1, verify_only=True,
+    ).updated == 0
+    imported_scope.refresh_from_db()
+    assert imported_scope.result_run_id == imported.pk
 
 
 def test_shared_openrouter_window_is_fetched_once_and_other_never_fills_missing_model():
@@ -886,5 +917,5 @@ def test_github_uses_current_reviewed_alias_and_rechecks_public_visibility(resum
         run = execute_model_history(job.pk, budget=budget(30))
         assert (
             run.status == "success"
-            and run.observations.filter(dimensions__kind="releases").count() == 2
+            and run.observations.filter(observation_kind="releases").count() == 2
         )

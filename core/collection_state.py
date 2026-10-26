@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import uuid
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -257,7 +258,8 @@ def _key(job, invocation_id):
 
 @transaction.atomic
 def claim_job(
-    job_id, *, invocation_id=None, manual_authorized=False, continue_from=None, now=None
+    job_id, *, invocation_id=None, manual_authorized=False, continue_from=None,
+    typed=False, now=None,
 ):
     now = now or timezone.now()
     # Campaign peers share a finite reservation ceiling. Lock in one order before
@@ -288,6 +290,13 @@ def claim_job(
         .get(pk=job_id)
     )
     validate_job(job)
+    if typed:
+        require(
+            job.purpose == "catalog"
+            and job.operation in {"model_history", "github_catalog"}
+            and (not bounded_campaign or job.campaign_id is not None),
+            "typed catalog claim requires its sealed campaign and operation",
+        )
     require(
         job.state == "ready"
         and (
@@ -391,11 +400,54 @@ def claim_job(
     run.execution_state = "running"
     run.lease_token, run.lease_expires_at = token, lease
     run.error_code = None
-    run.save()
+    if typed and not run._state.adding:
+        run.save(update_fields=[
+            "status", "completed_at", "execution_state", "lease_token",
+            "lease_expires_at", "error_code", "updated_at",
+        ])
+    else:
+        run.save()
     attempt = _begin_attempt(
         run, attempt_key=ingestion_key, limits=job.budgets, now=now,
         source_invocation_id=invocation_id,
     )
+    if typed:
+        if job.operation == "model_history":
+            require(
+                not run.scopes.filter(
+                    scope_kind__in=["model_coverage", "native_publication_coverage"],
+                    resource_observation__isnull=True,
+                ).exists(),
+                "historical history coverage needs typed adoption before resume",
+            )
+        compatibility = {"ownership": {}} if any(
+            field.name == "ownership" for field in CollectionScopeRun._meta.fields
+        ) else {}
+        marker_kind, marker_phase = (
+            ("history_execution", "typed-history-v1")
+            if job.operation == "model_history" else
+            ("catalog_execution", "typed-github-catalog-v1")
+        )
+        if job.operation == "github_catalog" and not run.scopes.filter(
+            scope_kind=marker_kind, scope_key="execution", phase=marker_phase,
+        ).exists():
+            retained_fields = {field.name for field in CollectionRun._meta.fields}
+            require(
+                not run.scopes.exists()
+                and ("report" not in retained_fields or not run.report)
+                and ("invocations" not in retained_fields or not run.invocations)
+                and run.legacy_archive_id is None,
+                "historical GitHub catalog run requires typed adoption before resume",
+            )
+        marker, _ = CollectionScopeRun.objects.get_or_create(
+            run=run, scope_kind=marker_kind, scope_key="execution",
+            defaults={"phase": marker_phase, **compatibility},
+        )
+        require(
+            marker.phase == marker_phase
+            and marker.resource_observation_id is None,
+            "typed catalog execution marker changed",
+        )
     if bounded_campaign and job.purpose == "metric" and job.last_attempt_id:
         previous = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
         if previous.status == "partial" and previous.completed_at is not None:
@@ -696,6 +748,108 @@ def _validate_typed_hf_scope(job, run, kind, key, ownership, observation):
     )
 
 
+def _validate_typed_projection_scope(job, kind, key, ownership, contract, observation):
+    """Pin a typed projection parent to the frozen source and contract."""
+    require(
+        kind == "numeric_projection" and contract is not None
+        and observation is None and job.source_id in contract.source_configuration,
+        "typed numeric projection requires its source contract",
+    )
+    require(
+        (
+            job.purpose == "catalog"
+            and key == str(contract.pk)
+            and ownership == {
+                "contract_id": str(contract.pk),
+                "contract_hash": contract.contract_hash,
+            }
+        ) or (
+            job.purpose == "metric" and job.operation == "collect_metrics"
+            and job.contract_id == contract.pk and key == "saved-evidence"
+            and ownership == {"contract_hash": contract.contract_hash}
+        ),
+        "typed numeric projection identity differs from frozen contract",
+    )
+
+
+def _validate_typed_model_history_scope(
+    job, run, kind, key, ownership, start_at, end_at, observation,
+):
+    """Tie coverage checkpoints to the sealed cohort and typed runtime window."""
+    from core.benchmark_metric_store import aware_instant
+
+    frozen = job.scope
+    require(
+        job.purpose == "catalog" and job.operation == "model_history"
+        and job.source_id in {"hf", "github", "openrouter", "arena"}
+        and observation is None and isinstance(frozen, dict)
+        and isinstance(frozen.get("cohort_hash"), str),
+        "typed model history needs its sealed cohort",
+    )
+    runtime = run.scopes.filter(
+        scope_kind="publication_runtime", scope_key="window",
+    ).first()
+    if kind == "publication_runtime":
+        days = frozen.get("publication_recheck_days", 7)
+        require(
+            job.source_id in {"openrouter", "arena"}
+            and key == "window"
+            and frozen.get("publication_window_policy") == "rolling-completed-days-v1"
+            and ownership == {
+                "policy": frozen["publication_window_policy"],
+                "cohort_hash": frozen["cohort_hash"],
+            }
+            and type(days) is int and 1 <= days <= 90
+            and start_at is not None and end_at is not None,
+            "typed publication window differs from sealed policy",
+        )
+        start, end = aware_instant(start_at), aware_instant(end_at)
+        require(
+            start.astimezone(UTC).time() == datetime.min.time()
+            and end.astimezone(UTC).time() == datetime.min.time()
+            and end - start == timedelta(days=days),
+            "typed publication window must span completed UTC days",
+        )
+        return
+    if kind == "model_coverage":
+        models = frozen.get("models", [])
+        selected = [row for row in models if row.get("product_key") == key]
+        require(len(selected) == 1, "typed model coverage has no unique frozen model")
+        model = selected[0]
+        require(
+            ownership == {
+                "product_key": key,
+                "cohort_hash": frozen["cohort_hash"],
+                "provider_pins": model.get("provider_pins", []),
+            }
+            and start_at is not None and end_at is not None
+            and aware_instant(start_at) == aware_instant(model["creation"]["at"])
+            and aware_instant(end_at) == (
+                runtime.requested_end_at if runtime is not None
+                else aware_instant(frozen["cutoff"])
+            ),
+            "typed model coverage differs from frozen request window",
+        )
+        return
+    require(
+        kind == "native_publication_coverage" and key == "selection"
+        and job.source_id in {"openrouter", "arena"}
+        and frozen.get("models", []) == []
+        and bool(frozen.get("native_publication_identifiers"))
+        and ownership == {"cohort_hash": frozen["cohort_hash"]}
+        and start_at is not None and end_at is not None
+        and aware_instant(start_at) == (
+            runtime.requested_start_at if runtime is not None
+            else aware_instant(frozen["global_start_at"])
+        )
+        and aware_instant(end_at) == (
+            runtime.requested_end_at if runtime is not None
+            else aware_instant(frozen["cutoff"])
+        ),
+        "typed native publication coverage differs from frozen selection",
+    )
+
+
 def checkpoint_scope(
     claim: RunClaim,
     *,
@@ -728,8 +882,8 @@ def checkpoint_scope(
     require(isinstance(ownership, dict), "scope ownership object required")
     if typed:
         require(
-            envelopes is None and projection_contract is None,
-            "typed HF checkpoint cannot use legacy envelopes or projection ownership",
+            envelopes is None,
+            "typed checkpoint cannot use legacy envelopes",
         )
     if projection_contract is not None:
         require(
@@ -771,9 +925,76 @@ def checkpoint_scope(
         from core.collection_datasets import resolve_dataset
 
         if typed:
-            _validate_typed_hf_scope(
-                run.job, run, scope_kind, scope_key, ownership, resource_observation,
-            )
+            if scope_kind == "numeric_projection":
+                _validate_typed_projection_scope(
+                    run.job, scope_kind, scope_key, ownership,
+                    projection_contract, resource_observation,
+                )
+            elif (
+                run.job.source_id == "github" and run.job.purpose == "catalog"
+                and run.job.operation == "github_catalog"
+            ):
+                require(projection_contract is None, "unexpected GitHub scope contract")
+                from core.github_catalog import validate_typed_scope
+
+                validate_typed_scope(
+                    run.job, run, scope_kind, scope_key, ownership,
+                    resource_observation,
+                )
+            elif scope_kind == "archive_import":
+                require(
+                    run.job.purpose == "catalog"
+                    and run.job.operation == "model_history"
+                    and projection_contract is None
+                    and resource_observation is None
+                    and set(ownership) == {"dataset_id", "contract_id"}
+                    and ownership["contract_id"]
+                    == run.job.scope.get("numeric_contract_id"),
+                    "archive import must use the frozen history contract",
+                )
+            elif scope_kind == "x_query" and run.job.operation == "x_backfill":
+                require(
+                    run.job.source_id == "x"
+                    and run.job.purpose == "content"
+                    and projection_contract is None
+                    and resource_observation is None
+                    and sum(
+                        unit.get("scope_kind") == "x_query"
+                        and unit.get("scope_key") == scope_key
+                        and unit.get("ownership") == ownership
+                        for unit in run.job.scope.get("units", [])
+                        if isinstance(unit, dict)
+                    ) == 1,
+                    "typed X query differs from the frozen backfill unit",
+                )
+            elif scope_kind in {
+                "publication_runtime", "model_coverage", "native_publication_coverage",
+            }:
+                require(projection_contract is None, "unexpected history scope contract")
+                _validate_typed_model_history_scope(
+                    run.job, run, scope_kind, scope_key, ownership,
+                    requested_start_at, requested_end_at, resource_observation,
+                )
+            elif (
+                run.job.operation == "model_history" and scope_kind in {
+                    "hf_history_head", "hf_repository_history", "repository_history",
+                    "repository_events", "release_assets", "repository_tree",
+                    "repository_file",
+                }
+            ):
+                require(projection_contract is None, "unexpected native-history contract")
+                from core.model_native_history import validate_typed_scope
+
+                validate_typed_scope(
+                    run.job, run, scope_kind, scope_key, ownership,
+                    resource_observation,
+                )
+            else:
+                require(projection_contract is None, "unexpected typed scope contract")
+                _validate_typed_hf_scope(
+                    run.job, run, scope_kind, scope_key, ownership,
+                    resource_observation,
+                )
         dataset = resolve_dataset(run.job.source_id, ownership)
         target = None
         if scope_kind == "product_match":
@@ -826,12 +1047,14 @@ def checkpoint_scope(
                 "scope source observation changed",
             )
             scope.resource_observation = resource_observation
-        if typed:
+        if typed and scope_kind not in {
+            "model_coverage", "native_publication_coverage",
+        }:
             require(
                 scope.resource_observation_id == (
                     resource_observation.pk if resource_observation is not None else None
                 ),
-                "typed HF scope has a different source observation",
+                "typed scope has a different source observation",
             )
         for field, value in (
             ("requested_start_at", requested_start_at),
@@ -851,6 +1074,27 @@ def checkpoint_scope(
         )
         if write is not None:
             write(run, scope)
+        if typed and scope_kind in {
+            "model_coverage", "native_publication_coverage",
+        }:
+            from core.models import Product
+
+            result = scope.resource_observation
+            require(
+                result is not None and result.run_id == run.pk
+                and result.scope_run_id == scope.pk
+                and result.observation_kind == "coverage"
+                and result.source_subject_kind == (
+                    "model" if scope_kind == "model_coverage" else "aggregate"
+                )
+                and (
+                    Product.objects.filter(
+                        pk=result.product_id, product_key=scope_key,
+                    ).exists()
+                    if scope_kind == "model_coverage" else result.product_id is None
+                ),
+                "typed history coverage has no owned result observation",
+            )
         if scope.source_dataset_id is not None:
             scope.observations.filter(
                 pk__gt=last_observation, source_dataset__isnull=True,
@@ -921,7 +1165,8 @@ def checkpoint_scope(
         if typed:
             scope.save(update_fields=[
                 "source_dataset", "job_target", "projection_contract",
-                "resource_observation", "requested_start_at", "requested_end_at",
+                "resource_observation", "result_run", "phase",
+                "requested_start_at", "requested_end_at",
                 "cursor", "outcome", "enumeration_complete", "execution_state",
                 "coverage_state", "raw_count",
             ])
@@ -962,10 +1207,35 @@ def finish_run(
         safe_payload(report or {})
     with fenced_run(claim, now=now) as (job, run):
         if typed:
+            from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
+
+            metric_projection = (
+                job.purpose == "metric" and job.operation == "collect_metrics"
+                and job.contract_id is not None
+                and job.contract.source_configuration.get(job.source_id, {}).get(
+                    "eligibility_policy"
+                ) == SOURCE_STATISTICS_POLICY
+                and request_count == 0
+            )
+            model_history = (
+                job.purpose == "catalog" and job.operation == "model_history"
+                and job.source_id in {"hf", "github", "openrouter", "arena"}
+                and request_count is not None
+            )
+            github_catalog = (
+                job.source_id == "github" and job.purpose == "catalog"
+                and job.operation == "github_catalog"
+                and request_count is not None
+            )
+            x_backfill = (
+                job.source_id == "x" and job.purpose == "content"
+                and job.operation == "x_backfill" and request_count is not None
+            )
             require(
-                job.source_id == "hf" and job.purpose == "catalog"
-                and job.operation in {"model_inventory", "hf_catalog"},
-                "typed completion is limited to HF inventory",
+                (job.source_id == "hf" and job.purpose == "catalog"
+                 and job.operation in {"model_inventory", "hf_catalog"})
+                or metric_projection or model_history or github_catalog or x_backfill,
+                "typed completion needs a supported collection operation",
             )
         now = now or timezone.now()
         run.status = status
@@ -1063,13 +1333,18 @@ def finish_run(
 
 
 @transaction.atomic
-def record_rejection(job_id, *, invocation_id, reason, report=None, now=None):
+def record_rejection(job_id, *, invocation_id, reason, report=None, typed=False, now=None):
     """A receipt does not acquire an execution lease or alter active pointers."""
     now = now or timezone.now()
     job = CollectionJob.objects.select_for_update().get(pk=job_id)
     require(
         job.purpose == "content", "rejected invocation receipts are content attempts"
     )
+    if typed:
+        require(
+            job.source_id == "x" and job.operation == "x_backfill",
+            "typed rejection requires a bounded X backfill",
+        )
     require(
         isinstance(reason, str) and 0 < len(reason) <= 64, "rejection reason required"
     )
@@ -1085,6 +1360,35 @@ def record_rejection(job_id, *, invocation_id, reason, report=None, now=None):
             "invocation receipt conflict",
         )
         return existing
+    if typed:
+        from core.collection_capture import archive_document
+
+        diagnostic = {
+            **(report or {}),
+            "definition_sha256": job.definition_sha256,
+            "invocation_id": invocation_id,
+            "provider_usage": None,
+        }
+        archive = archive_document(
+            json.dumps(
+                {"report": diagnostic, "error_code": reason},
+                sort_keys=True, separators=(",", ":"), allow_nan=False,
+            ).encode(),
+            encoding="selected-json-canonical-v1",
+            capture_kind="x_backfill_rejection",
+        )
+        run = CollectionRun.objects.create(
+            job=job, ingestion_key=ingestion_key, status="aborted",
+            execution_state="aborted", started_at=now, completed_at=now,
+            error_code=reason, legacy_archive=archive,
+        )
+        CollectionAttempt.objects.create(
+            run=run, attempt_key=ingestion_key,
+            source_invocation_id=invocation_id, ordinal=1,
+            started_at=now, finished_at=now, outcome="aborted",
+            stop_reason=reason,
+        )
+        return run
     return CollectionRun.objects.create(
         job=job,
         ingestion_key=ingestion_key,
@@ -1101,7 +1405,9 @@ def record_rejection(job_id, *, invocation_id, reason, report=None, now=None):
     )
 
 
-def import_scope_checkpoints(claim: RunClaim, *, definition_sha256, scopes, provenance):
+def import_scope_checkpoints(
+    claim: RunClaim, *, definition_sha256, scopes, provenance, typed=False,
+):
     """Import committed pilot progress into a current attempt, never old receipts.
 
     The X adapter decodes its versioned file into this typed scope list. Missing
@@ -1127,6 +1433,22 @@ def import_scope_checkpoints(claim: RunClaim, *, definition_sha256, scopes, prov
             len(scopes) <= job.budgets["items"],
             "checkpoint item budget exceeded",
         )
+        if typed:
+            require(
+                job.source_id == "x" and job.operation == "x_backfill",
+                "typed checkpoint import requires X backfill",
+            )
+            import_key = digest([str(run.pk), provenance, scopes])
+            prior = run.scopes.filter(
+                scope_kind="x_checkpoint_import", scope_key=import_key,
+                phase="typed-import-v1",
+            ).first()
+            if prior is not None:
+                require(
+                    prior.legacy_archive_id is not None,
+                    "typed checkpoint import evidence is missing",
+                )
+                return run
         for scope in scopes:
             require(isinstance(scope, dict), "checkpoint scope object required")
             require(
@@ -1144,7 +1466,52 @@ def import_scope_checkpoints(claim: RunClaim, *, definition_sha256, scopes, prov
                 },
                 "unsupported checkpoint fields",
             )
+            if typed:
+                from core.collection_pages import append_page_receipt
+
+                receipts = scope.get("envelopes", [])
+                require(isinstance(receipts, list), "checkpoint pages must be a list")
+
+                def retain_pages(_, stored, pages=receipts):
+                    for page in pages:
+                        append_page_receipt(stored, page)
+
+                checkpoint_scope(
+                    claim,
+                    **{key: value for key, value in scope.items() if key != "envelopes"},
+                    typed=True,
+                    write=retain_pages if receipts else None,
+                )
+                continue
             checkpoint_scope(claim, **scope)
+        if typed:
+            from core.collection_capture import archive_document
+
+            archive = archive_document(
+                json.dumps(
+                    {
+                        "definition_sha256": definition_sha256,
+                        "provenance": provenance,
+                        "imported_at": timezone.now().isoformat(),
+                        "historical_attempt_timestamps": None,
+                        "scope_count": len(scopes),
+                    },
+                    sort_keys=True, separators=(",", ":"), allow_nan=False,
+                ).encode(),
+                encoding="selected-json-canonical-v1",
+                capture_kind="x_checkpoint_import",
+            )
+            compatibility = {"ownership": {}} if any(
+                field.name == "ownership" for field in CollectionScopeRun._meta.fields
+            ) else {}
+            CollectionScopeRun.objects.create(
+                run=run, scope_kind="x_checkpoint_import", scope_key=import_key,
+                phase="typed-import-v1", outcome="complete",
+                enumeration_complete=True, execution_state="completed",
+                coverage_state="complete", legacy_archive=archive,
+                **compatibility,
+            )
+            return run
         run.report = {
             **run.report,
             "checkpoint_import": {

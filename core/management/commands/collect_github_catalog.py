@@ -5,6 +5,7 @@ import os
 
 from django.core.management.base import BaseCommand, CommandError
 
+from core.collection_capture import run_report_document
 from core.collection_jobs import validate_job
 from core.github_catalog import execute_github_catalog
 from core.models import CollectionJob
@@ -41,7 +42,7 @@ class Command(BaseCommand):
             )
             self.stdout.write(
                 json.dumps(
-                    {"run_id": str(run.pk), "status": run.status, "report": run.report}
+                    {"run_id": str(run.pk), "status": run.status, "report": run_report_document(run)}
                 )
             )
         except (ValueError, CollectionJob.DoesNotExist) as exc:

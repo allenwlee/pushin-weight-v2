@@ -217,7 +217,9 @@ class Prefetcher:
                 if not self.budget.remaining_api_requests:
                     return
                 with fenced_run(self.claim) as (_, run):
-                    bytes_left = self.job.budgets["bytes"] - run.report.get("response_bytes", 0)
+                    from monitor.backfill_collection import ensure_response_bytes
+
+                    bytes_left = self.job.budgets["bytes"] - ensure_response_bytes(run)
                     items_left = self.job.budgets["items"] - run.selected_count
                     spent = self.job.runs.aggregate(n=Sum("request_count"))["n"] or 0
                     starts_left = self.job.scope["maximum_api_requests"] - self.job.scope["prior_api_requests"] - spent
@@ -255,6 +257,9 @@ class Prefetcher:
                                 request = begin_request(attempt, scope, endpoint_url=_endpoint(scope),
                                     cursor=scope.cursor, request_config=_request_identity(scope),
                                     request_category="x_backfill_prefetch")
+                                request.body_lost = False
+                                request.selection_accounted = False
+                                request.save(update_fields=["body_lost", "selection_accounted"])
                             futures[pool.submit(fetch_page, key, _params(scope), max_bytes=max_bytes,
                                                  timeout=30)] = (scope, request)
                             self.next_start = time.monotonic() + 1 / self.options.starts_per_second
