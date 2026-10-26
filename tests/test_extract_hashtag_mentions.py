@@ -133,3 +133,16 @@ def test_missing_tag_key_skipped():
     post = _post(entities={"hashtags": [{"other_key": "value"}]})
     rows = extract_hashtag_mentions(post, BRAND_HASHTAGS, post["entities"])
     assert rows == []
+
+
+@pytest.mark.parametrize("key", ["text", "tag"])
+def test_provider_and_legacy_hashtag_aliases(key):
+    rows = extract_hashtag_mentions(_post(), BRAND_HASHTAGS, {"hashtags": [{key: "Qwen"}]})
+    assert [(r.brand_id, r.raw_token) for r in rows] == [("qwen", "#qwen")]
+
+
+def test_hashtag_alias_precedence_and_duplicate_signals():
+    # Provider text wins conflicting legacy tag; duplicate spellings are one signal.
+    entities = {"hashtags": [{"text": "Qwen", "tag": "MiniMax"}, {"tag": "QWEN"}]}
+    rows = extract_hashtag_mentions(_post(), BRAND_HASHTAGS, entities)
+    assert [(r.brand_id, r.raw_token) for r in rows] == [("qwen", "#qwen")]

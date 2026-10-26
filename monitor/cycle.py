@@ -156,6 +156,7 @@ from x_monitor.harvest_policy import HarvestPolicy
 from x_monitor.jev_decisions import build_jev_decision_gate
 from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
+from x_monitor.tweet_entities import merge_entities
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
 logger = logging.getLogger(__name__)
@@ -2240,9 +2241,7 @@ def _upsert_post(
     conversation_id = raw.get("conversation_id") or raw.get("conversationId") or ""
     if conversation_id:
         defaults["conversation_id"] = str(conversation_id)
-    entities = raw.get("entities") or {}
-    if entities:
-        defaults["entities"] = entities
+    entities = merge_entities({}, raw.get("entities"))
     source_qid = raw.get("source_query_id") or raw.get("sourceQueryId") or ""
     if source_qid:
         defaults["source_query_id"] = source_qid
@@ -2342,9 +2341,18 @@ def _upsert_post(
         defaults["author_verified_type_id"] = reference_id(
             "account_verification_types", "x", defaults.pop("author_verified_type")
         )
-    post, created = Post.objects.update_or_create(
-        tweet_id=tweet_id, defaults=defaults
-    )
+    # update_or_create locks an existing row. Keep that lock until entity
+    # merging finishes, so concurrent partial observations cannot lose data.
+    with transaction.atomic():
+        post, created = Post.objects.update_or_create(
+            tweet_id=tweet_id, defaults=defaults,
+            create_defaults={**defaults, **({"entities": entities} if entities else {})},
+        )
+        if not created and entities:
+            merged = merge_entities(post.entities, entities)
+            if merged != post.entities:
+                post.entities = merged
+                post.save(update_fields=["entities"])
     if raw.get("author_location") is not None:
         from core.geolocation_evidence import write_source_evidence
 

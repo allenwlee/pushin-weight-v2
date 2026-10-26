@@ -1154,3 +1154,20 @@ class TestListMembers:
         assert snapshot.complete is True
         assert client._request_log[-1]["n_results"] == 1
         assert get.call_args.kwargs["params"] == {"list_id": "42"}
+
+
+@pytest.mark.parametrize("encoded", [False, True])
+def test_normalize_tweet_preserves_provider_entities(provider_tweet_entities, encoded):
+    from x_monitor.apify import _normalize_tweet
+    value = json.dumps(provider_tweet_entities) if encoded else provider_tweet_entities
+    tweet = _normalize_tweet({"id": "1", "entities": value,
+                              "author": {"entities": {"description": "separate"}}})
+    assert tweet["entities"] == provider_tweet_entities
+    assert tweet["author_entities"] == {"description": "separate"}
+
+
+@pytest.mark.parametrize("value", [None, {}, "", "null", "{}", "[]", "bad json", [], 12, True])
+def test_normalize_tweet_empty_or_malformed_entities(value):
+    from x_monitor.apify import _normalize_tweet
+    assert _normalize_tweet({"id": "1", "entities": value})["entities"] == {}
+    assert _normalize_tweet({"id": "1"})["entities"] == {}
