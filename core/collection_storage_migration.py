@@ -1815,6 +1815,8 @@ def _legacy_owner_predicate(table: str) -> str:
             "AND marker.scope_key='execution' OFFSET 0))"
         )
     if table == "collection_scope_runs":
+        # Old scopes often have NULL phase. SQL NOT (kind AND phase) would
+        # evaluate to NULL and silently omit their source documents.
         return (
             "t.scope_kind NOT IN ('resource_group','numeric_projection_item',"
             "'numeric_projection_result','numeric_projection_output',"
@@ -1824,24 +1826,24 @@ def _legacy_owner_predicate(table: str) -> str:
             "'x_page_checkpoint',"
             "'x_model_call','x_model_usage','x_backfill_result',"
             "'x_checkpoint_import') "
-            "AND NOT (t.scope_kind='numeric_projection' "
-            "AND t.phase='projection_results_v1') "
-            "AND NOT (t.scope_kind='archive_import' "
-            "AND t.phase='typed-archive-import-v1') "
-            "AND NOT (t.scope_kind IN ('publication_window','publication_selection') "
-            "AND t.phase='typed-publication-v1') "
-            "AND NOT (t.scope_kind='model_catalog' "
-            "AND t.phase='typed-openrouter-catalog-v1') "
-            "AND NOT (t.scope_kind='metric_fetch' "
-            "AND t.phase='typed-metric-fetch-v1') "
-            "AND NOT (t.scope_kind='product_match' "
-            "AND t.phase='typed-product-match-v1') "
-            "AND NOT (t.scope_kind='staged_post_copy' "
-            "AND t.phase IN ('typed-x-promotion-v1','typed-x-promotion-quotes-v1')) "
-            "AND NOT (t.scope_kind='quote_repair' "
-            "AND t.phase='typed-x-promotion-quotes-v1') "
-            "AND NOT (t.scope_kind IN ('archive_snapshot','archive_projection') "
-            "AND t.phase='typed-hf-archive-v1')"
+            "AND ((t.scope_kind='numeric_projection' "
+            "AND t.phase='projection_results_v1') IS NOT TRUE) "
+            "AND ((t.scope_kind='archive_import' "
+            "AND t.phase='typed-archive-import-v1') IS NOT TRUE) "
+            "AND ((t.scope_kind IN ('publication_window','publication_selection') "
+            "AND t.phase='typed-publication-v1') IS NOT TRUE) "
+            "AND ((t.scope_kind='model_catalog' "
+            "AND t.phase='typed-openrouter-catalog-v1') IS NOT TRUE) "
+            "AND ((t.scope_kind='metric_fetch' "
+            "AND t.phase='typed-metric-fetch-v1') IS NOT TRUE) "
+            "AND ((t.scope_kind='product_match' "
+            "AND t.phase='typed-product-match-v1') IS NOT TRUE) "
+            "AND ((t.scope_kind='staged_post_copy' "
+            "AND t.phase IN ('typed-x-promotion-v1','typed-x-promotion-quotes-v1')) IS NOT TRUE) "
+            "AND ((t.scope_kind='quote_repair' "
+            "AND t.phase='typed-x-promotion-quotes-v1') IS NOT TRUE) "
+            "AND ((t.scope_kind IN ('archive_snapshot','archive_projection') "
+            "AND t.phase='typed-hf-archive-v1') IS NOT TRUE)"
         )
     if table == "collection_observations":
         return (

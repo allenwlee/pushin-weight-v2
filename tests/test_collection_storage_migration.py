@@ -44,6 +44,25 @@ def execution(*, purpose="catalog"):
     return run, run.attempts.get(), scope
 
 
+def test_archive_sweep_includes_null_phase_legacy_scope_beside_typed_scope():
+    from core.collection_storage_migration import archive_legacy_batch
+
+    run, _, legacy = execution()
+    legacy.scope_kind = "product_match"
+    legacy.save(update_fields=["scope_kind"])
+    typed = CollectionScopeRun.objects.create(
+        run=run, scope_kind="product_match", scope_key="typed",
+        phase="typed-product-match-v1",
+    )
+
+    batch = archive_legacy_batch("collection_scope_runs", batch_size=10)
+    legacy.refresh_from_db()
+    typed.refresh_from_db()
+    assert batch.archived >= 1
+    assert legacy.legacy_archive_id is not None
+    assert typed.legacy_archive_id is None
+
+
 def test_new_arena_publication_marker_needs_no_retiring_json_columns():
     from core.benchmark_metric_store import persist_source, record_arena_publications
     from core.measurement_taxonomy import digest
