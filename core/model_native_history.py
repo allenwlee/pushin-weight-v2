@@ -309,17 +309,21 @@ def _hf_history(claim, job, pins, budget, items):
                 )
                 revision = data["sha"]
             else:
-                revision = head.envelopes[0]["revision"]
+                captured_head = head.observations.select_related("resource_snapshot").get(
+                    observation_kind="hf_metadata",
+                )
+                revision = captured_head.resource_snapshot.revision
+                require(isinstance(revision, str) and revision, "native HF head revision required")
             for kind in ("commits", "tree"):
                 if kind == "tree":
                     commits = CollectionObservation.objects.filter(
                         run_id=claim.run_id,
                         source_identifier=identifier,
-                        dimensions__kind="hf_commits",
-                    )
+                        observation_kind="hf_commits",
+                    ).select_related("resource_snapshot")
                     dated_head = _latest_before_cutoff(
                         commits,
-                        lambda o: o.source_metadata.get("source_record_date"),
+                        lambda o: o.source_record_at,
                         aware_instant(job.scope["cutoff"]),
                     )
                     if dated_head is None:
@@ -333,7 +337,8 @@ def _hf_history(claim, job, pins, budget, items):
                             envelopes=[{"reason": "no_qualified_commit_at_cutoff"}],
                         )
                         continue
-                    revision = dated_head.listing["id"]
+                    revision = dated_head.resource_snapshot.revision
+                    require(isinstance(revision, str) and revision, "native HF commit revision required")
                 key = identifier + ":" + kind
                 scoped = (
                     CollectionRun.objects.get(pk=claim.run_id)

@@ -61,7 +61,7 @@ def snapshot_resource(observation):
     raw = observation.listing
     if not isinstance(raw, dict) or observation.post_id:
         return None
-    kind = observation.dimensions.get("kind", observation.source_subject_kind)
+    kind = observation.observation_kind or observation.dimensions.get("kind", observation.source_subject_kind)
     if kind in {"publication_row", "publication_window"}:
         return None
     created = raw.get("createdAt", raw.get("created_at", raw.get("created")))
@@ -75,6 +75,10 @@ def snapshot_resource(observation):
     gated = raw.get("gated")
     if type(gated) is bool:
         gated = "gated" if gated else "public"
+    if kind == "hf_commits" and "id" in raw and (
+        not isinstance(raw["id"], str) or not raw["id"]
+    ):
+        raise ValueError("HF commit revision is missing")
     values = {
         "resource_kind": kind,
         "native_identifier": observation.source_identifier,
@@ -101,7 +105,9 @@ def snapshot_resource(observation):
         else None,
         "authored_at": _clock(author.get("date"))[0],
         "committed_at": _clock(committer.get("date"))[0],
-        "revision": raw.get("sha"),
+        # HF history rows identify the individual commit with `id`; the
+        # observation's provider_revision is the head used to request the page.
+        "revision": raw.get("id") if kind == "hf_commits" else raw.get("sha"),
         "tree_revision": (commit.get("tree") or {}).get("sha"),
         "is_private": raw.get("private") if type(raw.get("private")) is bool else None,
         "gated_status": gated if isinstance(gated, str) else None,
@@ -117,6 +123,19 @@ def snapshot_resource(observation):
         observation=observation,
         defaults=metadata_references(values, source_id=observation.run.job.source_id),
     )
+    if kind == "hf_commits" and "id" in raw:
+        revision = raw["id"]
+        if snapshot.revision not in (None, revision):
+            raise ValueError("HF commit revision conflicts with captured evidence")
+        if snapshot.revision is None:
+            # Repair the pre-cutover projection's missing commit identity only;
+            # a known identity cannot be rewritten from another payload.
+            CollectionResourceSnapshot.objects.filter(
+                pk=snapshot.pk, revision__isnull=True,
+            ).update(revision=revision)
+            snapshot.refresh_from_db(fields=["revision"])
+            if snapshot.revision != revision:
+                raise ValueError("HF commit revision conflicts with captured evidence")
     return snapshot
 
 

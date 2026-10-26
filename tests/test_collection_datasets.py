@@ -62,13 +62,21 @@ def test_archive_scope_keeps_dataset_on_its_captured_observation():
         CollectionObservation.objects.create(
             run=run, scope_run=scope, source_identifier="publisher/archive",
             source_subject_kind="aggregate", observation_key="c" * 64,
+            listing={"id": 42, "private": False},
+            dimensions={"kind": "repository"},
+            source_metadata={"revision": "captured-revision"},
         )
 
     scope = checkpoint_scope(
         claim, scope_kind="archive_snapshot", scope_key="snapshot",
         ownership={"dataset_id": "publisher/archive"}, write=write,
     )
-    assert scope.observations.get().source_dataset_id == scope.source_dataset_id
+    observation = scope.observations.get()
+    assert observation.source_dataset_id == scope.source_dataset_id
+    assert observation.observation_kind == "repository"
+    assert observation.provider_revision == "captured-revision"
+    assert observation.resource_snapshot.native_stable_id == "42"
+    assert scope.requests.count() == observation.inputs.count() == 0
 
 
 @pytest.mark.parametrize("metadata", [
