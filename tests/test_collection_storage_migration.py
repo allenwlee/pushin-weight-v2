@@ -2,6 +2,7 @@
 
 import hashlib
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 
@@ -313,6 +314,30 @@ def test_recurring_x_query_target_keeps_query_fixed_and_window_on_scope():
     next_scope.job_target = None
     with pytest.raises(ValueError, match="requires a typed query target"):
         x_scope_ownership(next_scope)
+
+
+def test_scheduled_cycle_registration_reuses_plan_and_rotates_changed_query():
+    from core.x_cycle_lineage import register_scheduled_cycle
+
+    calls = [
+        SimpleNamespace(call_id="A", query_string="from:publisher"),
+        SimpleNamespace(call_id="B1", query_string="product release"),
+    ]
+    limits = {"requests": 100, "bytes": 1000000, "seconds": 300, "items": 2000}
+    first = register_scheduled_cycle(calls, limits=limits)
+    repeated = register_scheduled_cycle(calls, limits=limits)
+    assert first.pk == repeated.pk
+    assert first.state == "paused"
+    assert list(first.targets.order_by("ordinal").values_list(
+        "target_key", "search_query__query_text", "requested_start_at",
+    )) == [
+        ("A", "from:publisher", None), ("B1", "product release", None),
+    ]
+    changed = register_scheduled_cycle([
+        calls[0], SimpleNamespace(call_id="B1", query_string="new product release"),
+    ], limits=limits)
+    assert changed.pk != first.pk
+    assert changed.job_key != first.job_key
 
 
 def test_legacy_product_match_scope_pins_existing_subject_and_input_digest():
