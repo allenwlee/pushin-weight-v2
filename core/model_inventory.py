@@ -396,7 +396,7 @@ def execute_model_inventory(job_id, *, budget=None, key=None):
             projection = {"pending": True, "error": str(exc)}
     run.refresh_from_db()
     scopes = run.scopes.exclude(
-        scope_kind__in=["numeric_projection", "hf_metadata", "hf_profile", "resource_group"]
+        scope_kind__in=["numeric_projection", "numeric_projection_item", "hf_metadata", "hf_profile", "resource_group"]
     )
     from django.db.models import Sum
 

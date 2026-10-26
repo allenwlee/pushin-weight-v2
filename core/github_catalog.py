@@ -979,7 +979,7 @@ def execute_github_catalog(job_id, *, client=None, key=None):
                 reason = "numeric_projection_pending"
         except (ValueError, KeyError, TypeError):
             reason = reason or "numeric_projection_failed"
-    scopes = run.scopes.all()
+    scopes = run.scopes.exclude(scope_kind="numeric_projection_item")
     selected, successful = (
         scopes.count(),
         scopes.filter(enumeration_complete=True).count(),

@@ -367,6 +367,37 @@ def test_native_repository_commit_pagination_checkpoints_and_resumes():
     assert MetricValue.objects.count() == 0
 
 
+def test_numeric_queue_items_do_not_inflate_github_scope_counts():
+    from core.models import TimeZone
+    from tests.test_source_metric_projection import configured as statistics
+
+    contract, repo, _, _ = statistics("github")
+    TimeZone.objects.get_or_create(pk="UTC")
+    publisher = contract.mappings.get(source_subject_kind="account").subject.account
+    job = register_job(
+        job_key="github-typed-queue", source=publisher.data_source,
+        purpose="catalog", operation="github_catalog", mode="manual",
+        definition={
+            "version": 1,
+            "scope": {
+                "publishers": [{
+                    "account_key": str(publisher.pk), "native_id": "42",
+                    "login": "publisher", "account_kind": "organization",
+                }],
+                "numeric_contract_id": str(contract.pk), "include_release_assets": False,
+            },
+            "schedule": {"kind": "manual", "driver": "manual"},
+            "budgets": {"requests": 30, "bytes": 100000, "seconds": 60, "items": 100},
+        },
+    )
+    set_job_state(job.pk, "ready")
+    run = execute_github_catalog(job.pk, client=reader(responses(repo, []), 30))
+    assert run.status == "success", run.report
+    assert run.selected_count == run.success_count == 9
+    assert run.scopes.filter(scope_kind="numeric_projection_item", outcome="complete").count() == 2
+    assert MetricValue.objects.count() == 6
+
+
 def test_dry_run_command_never_constructs_provider_or_writes(monkeypatch):
     obj, _ = configured()
     monkeypatch.setattr(

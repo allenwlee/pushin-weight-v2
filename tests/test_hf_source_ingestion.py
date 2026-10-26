@@ -107,6 +107,7 @@ def test_facade_acquires_metadata_and_projects_without_importer():
         job, {}, Budget(httpx.Client(transport=httpx.MockTransport(respond)))
     )
     assert run.status == "success", run.report
+    assert run.selected_count == run.success_count == 1
     assert MetricValue.objects.count() >= 3
     assert not run.observations.filter(values__isnull=False).exists()
     assert (
@@ -162,8 +163,10 @@ def test_595_saved_native_snapshots_replay_twice_without_http(monkeypatch):
     assert run.report["projection"]["written_values"] == 0
 
 
-def test_committed_projection_recovers_after_crash_before_ack_without_refetch(
-    monkeypatch,
+@pytest.mark.parametrize("committed", [False, True])
+@pytest.mark.parametrize("stale_envelopes", [False, True])
+def test_projection_recovers_after_crash_before_ack_without_refetch(
+    monkeypatch, committed, stale_envelopes,
 ):
     from datetime import timedelta
 
@@ -178,7 +181,8 @@ def test_committed_projection_recovers_after_crash_before_ack_without_refetch(
     real_project = projection.project_evidence
 
     def crash_after_commit(*args, **kwargs):
-        real_project(*args, **kwargs)
+        if committed:
+            real_project(*args, **kwargs)
         raise RuntimeError("worker stopped before queue acknowledgement")
 
     def respond(request):
@@ -193,7 +197,22 @@ def test_committed_projection_recovers_after_crash_before_ack_without_refetch(
         execute_model_inventory(
             job.pk, budget=Budget(httpx.Client(transport=httpx.MockTransport(respond)))
         )
-    assert MetricValue.objects.count() == 2
+    assert MetricValue.objects.count() == (2 if committed else 0)
+    pending_item = CollectionRun.objects.get(job=job, status="running").scopes.get(
+        scope_kind="numeric_projection_item",
+    )
+    assert pending_item.outcome == "pending"
+    type(pending_item).objects.filter(run__job=job, scope_kind="numeric_projection").update(
+        envelopes=[{"observation_id": 0}] if stale_envelopes else [], ownership={},
+    )
+    from core.collection_capture import scope_object_documents
+
+    def queue_documents_forbidden(scope):
+        if scope.scope_kind == "numeric_projection":
+            pytest.fail("typed projection queue read retired documents")
+        return scope_object_documents(scope)
+
+    monkeypatch.setattr("core.collection_capture.scope_object_documents", queue_documents_forbidden)
     assert CollectionRun.objects.filter(
         job__purpose="catalog",
         scopes__scope_kind="numeric_projection",
@@ -201,6 +220,9 @@ def test_committed_projection_recovers_after_crash_before_ack_without_refetch(
     ).exists()
     CollectionRun.objects.filter(job=job, status="running").update(
         lease_expires_at=timezone.now() - timedelta(seconds=1)
+    )
+    CollectionRun.objects.filter(job__job_key__startswith="projection:", status="running").update(
+        lease_expires_at=timezone.now() - timedelta(seconds=1),
     )
     monkeypatch.setattr(projection, "project_evidence", real_project)
 
@@ -213,6 +235,8 @@ def test_committed_projection_recovers_after_crash_before_ack_without_refetch(
     assert recovered.status == "success", recovered.report
     assert MetricValue.objects.count() == 2
     assert recovered.report["numeric_projection"]["pending"] is False
+    pending_item.refresh_from_db()
+    assert pending_item.outcome == "complete" and pending_item.enumeration_complete
     assert not recovered.scopes.filter(
         scope_kind="numeric_projection", outcome="pending"
     ).exists()

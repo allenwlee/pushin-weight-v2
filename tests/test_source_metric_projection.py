@@ -682,7 +682,11 @@ def test_pending_projection_reference_is_atomic_with_evidence_and_pause_fences_w
     pending.refresh_from_db()
     assert pending.projection_contract_id == contract.pk
     snapshot = CollectionObservation.objects.get()
-    assert pending.envelopes == [{"observation_id": snapshot.pk}]
+    assert pending.envelopes == []
+    item = pending.child_scopes.get(scope_kind="numeric_projection_item")
+    assert item.resource_observation_id == snapshot.pk
+    assert item.projection_contract_id == contract.pk
+    assert item.outcome == "pending" and not item.enumeration_complete
     selected = register_job(
         job_key="paused-projection",
         source=DataSource.objects.get(pk="hf"),
@@ -716,6 +720,83 @@ def test_historical_metric_projection_scope_uses_owning_job_contract():
     migration.copy_projection_contracts(None, SimpleNamespace(connection=connection))
     scope.refresh_from_db()
     assert scope.projection_contract_id == contract.pk
+
+
+@pytest.mark.parametrize("archived", [False, True])
+def test_historical_projection_queue_adopts_exact_pending_inputs_once(archived, monkeypatch):
+    from core.collection_capture import archive_legacy
+    from core.models import CollectionScopeRun
+    from core.source_metric_projection import drain_pending_projections
+
+    contract, raw, _, _ = configured()
+    captured = projection_queue_capture(contract, raw)
+    queue = CollectionScopeRun.objects.create(
+        run=captured.run, scope_kind="numeric_projection", scope_key=str(contract.pk),
+        projection_contract=contract,
+        ownership={"contract_id": str(contract.pk), "contract_hash": contract.contract_hash},
+        envelopes=[{"observation_id": captured.pk}],
+    )
+    if archived:
+        queue.legacy_archive = archive_legacy({
+            "ownership": queue.ownership, "cursor_history": [], "envelopes": queue.envelopes,
+        })
+        queue.ownership, queue.envelopes = {}, []
+        queue.save()
+    result = drain_pending_projections(captured.run.job_id)
+    assert result["acknowledged"] == 1 and result["written_values"] == 2
+    assert result["pending_resources"] == 0
+    queue.refresh_from_db()
+    child = queue.child_scopes.get(scope_kind="numeric_projection_item")
+    assert child.resource_observation_id == captured.pk
+    assert child.projection_contract_id == contract.pk
+    assert child.outcome == "complete" and child.enumeration_complete
+    # The untouched historical document is evidence, not the current queue.
+    monkeypatch.setattr(
+        "core.collection_capture.scope_object_documents",
+        lambda *a, **kw: pytest.fail("adopted queue read old pending references"),
+    )
+    assert drain_pending_projections(captured.run.job_id)["acknowledged"] == 0
+    assert MetricValue.objects.count() == 2
+
+
+def test_projection_queue_refuses_foreign_capture_job_before_writing_children():
+    from core.models import CollectionScopeRun
+    from core.source_metric_projection import drain_pending_projections
+
+    contract, raw, _, _ = configured()
+    captured = projection_queue_capture(contract, raw)
+    foreign = evidence("github", {"id": 123})
+    queue = CollectionScopeRun.objects.create(
+        run=captured.run, scope_kind="numeric_projection", scope_key=str(contract.pk),
+        projection_contract=contract, ownership={},
+        envelopes=[{"observation_id": foreign.pk}],
+    )
+    with pytest.raises(ValueError, match="outside capture job"):
+        drain_pending_projections(captured.run.job_id)
+    queue.refresh_from_db()
+    assert queue.phase is None
+    assert not queue.child_scopes.exists()
+    assert not MetricValue.objects.exists()
+
+
+def projection_queue_capture(contract, raw):
+    job = register_job(
+        job_key="queued-capture", source=contract.mappings.first().source,
+        purpose="catalog", operation="hf_catalog", mode="manual",
+        definition={
+            "version": 1, "scope": {},
+            "schedule": {"kind": "manual", "driver": "manual"},
+            "budgets": {"requests": 1, "seconds": 60, "bytes": 100000, "items": 100},
+        },
+    )
+    run = CollectionRun.objects.create(
+        job=job, ingestion_key=digest(["queued-capture"]), status="success",
+        completed_at=timezone.now(),
+    )
+    return CollectionObservation.objects.create(
+        run=run, source_subject_kind="repository", source_identifier=raw["id"],
+        listing=raw, observed_at=CAPTURED, observation_key=digest(["queued-evidence"]),
+    )
 
 
 @pytest.mark.django_db(transaction=True)

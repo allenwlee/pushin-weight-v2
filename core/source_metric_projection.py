@@ -31,8 +31,12 @@ from core.models import (
     BrandAccount,
     CollectionJob,
     CollectionObservation,
+    CollectionScopeRun,
     CompanyAccount,
 )
+
+PROJECTION_ITEM_KIND = "numeric_projection_item"
+PROJECTION_QUEUE_PHASE = "projection_queue"
 
 
 def _ownership_pin(account):
@@ -515,6 +519,99 @@ def _publication_rows(contract, source, evidence, payload, captured_dimensions, 
     yield row
 
 
+def _projection_items(scope):
+    return scope.child_scopes.filter(scope_kind=PROJECTION_ITEM_KIND)
+
+
+def _retain_projection_items(scope, evidence_ids):
+    """Keep one durable work item per actual source result, including completion."""
+    ids = sorted(set(evidence_ids))
+    require(
+        len(ids) <= 100000 and all(type(pk) is int and pk > 0 for pk in ids)
+        and CollectionObservation.objects.filter(
+            pk__in=ids, run__job_id=scope.run.job_id,
+        ).count() == len(ids),
+        "queue evidence outside capture job",
+    )
+    CollectionScopeRun.objects.bulk_create([
+        CollectionScopeRun(
+            run_id=scope.run_id, scope_kind=PROJECTION_ITEM_KIND,
+            scope_key=f"{scope.projection_contract_id}:{observation_id}",
+            ownership={}, parent_scope=scope, resource_observation_id=observation_id,
+            projection_contract_id=scope.projection_contract_id,
+        )
+        for observation_id in ids
+    ], ignore_conflicts=True, batch_size=500)
+    actual = {
+        item.scope_key: item for item in CollectionScopeRun.objects.filter(
+            run_id=scope.run_id, scope_kind=PROJECTION_ITEM_KIND,
+            scope_key__in=[f"{scope.projection_contract_id}:{pk}" for pk in ids],
+        )
+    }
+    for observation_id in ids:
+        item = actual.get(f"{scope.projection_contract_id}:{observation_id}")
+        require(
+            item is not None and item.parent_scope_id == scope.pk
+            and item.resource_observation_id == observation_id
+            and item.projection_contract_id == scope.projection_contract_id,
+            "numeric projection item identity changed",
+        )
+
+
+def _legacy_projection_ids(scope):
+    from core.collection_capture import scope_object_documents
+
+    _, _, references = scope_object_documents(scope)
+    require(
+        isinstance(references, list) and len(references) <= 100000 and all(
+            isinstance(row, dict) and set(row) == {"observation_id"}
+            and type(row["observation_id"]) is int and row["observation_id"] > 0
+            for row in references
+        ),
+        "invalid historical numeric projection references",
+    )
+    ids = [row["observation_id"] for row in references]
+    require(len(ids) == len(set(ids)), "duplicate historical numeric projection reference")
+    return ids
+
+
+def _adopt_projection_queue(scope):
+    """Adopt old pending references once, under the origin and queue locks."""
+    require(
+        scope.scope_kind == "numeric_projection"
+        and scope.run.job.purpose == "catalog"
+        and scope.projection_contract_id is not None
+        and scope.scope_key == str(scope.projection_contract_id),
+        "numeric projection queue identity changed",
+    )
+    if scope.phase != PROJECTION_QUEUE_PHASE:
+        _retain_projection_items(scope, _legacy_projection_ids(scope))
+        scope.phase = PROJECTION_QUEUE_PHASE
+        scope.save(update_fields=["phase"])
+    require(
+        not _projection_items(scope).exclude(
+            run_id=scope.run_id, projection_contract_id=scope.projection_contract_id,
+            resource_observation__run__job_id=scope.run.job_id,
+        ).exists(),
+        "numeric projection item ownership mismatch",
+    )
+    for item in _projection_items(scope).only(
+        "scope_key", "resource_observation_id", "outcome", "enumeration_complete",
+    ):
+        require(
+            item.scope_key == f"{scope.projection_contract_id}:{item.resource_observation_id}"
+            and item.outcome in {"pending", "complete"}
+            and item.enumeration_complete == (item.outcome == "complete"),
+            "numeric projection item state mismatch",
+        )
+    if scope.outcome == "pending" and not _projection_items(scope).filter(outcome="pending").exists():
+        scope.outcome, scope.enumeration_complete = "complete", True
+        scope.execution_state, scope.coverage_state = "completed", "complete"
+        scope.save(update_fields=[
+            "outcome", "enumeration_complete", "execution_state", "coverage_state",
+        ])
+
+
 def enqueue_projection(claim, *, contract, evidence_ids):
     """Call within the evidence commit transaction: retain pending IDs atomically.
 
@@ -542,27 +639,28 @@ def enqueue_projection(claim, *, contract, evidence_ids):
         existing = run.scopes.filter(
             scope_kind="numeric_projection", scope_key=key
         ).first()
-        # Ownership stays immutable; pending references live in envelopes.
-        references = sorted(
-            set(
-                ids
-                + (
-                    [r["observation_id"] for r in existing.envelopes]
-                    if existing
-                    else []
-                )
-            )
-        )
-        return checkpoint_scope(
-            claim,
-            scope_kind="numeric_projection",
-            scope_key=key,
+        scope = existing or checkpoint_scope(
+            claim, scope_kind="numeric_projection", scope_key=key,
             ownership={"contract_id": key, "contract_hash": contract.contract_hash},
             projection_contract=contract,
-            envelopes=[{"observation_id": pk} for pk in references],
-            outcome="pending",
-            raw_count=len(references),
         )
+        if existing is None:
+            scope.phase = PROJECTION_QUEUE_PHASE
+            scope.save(update_fields=["phase"])
+        scope = CollectionScopeRun.objects.select_for_update().get(pk=scope.pk)
+        require(scope.projection_contract_id == contract.pk, "projection contract pin changed")
+        _adopt_projection_queue(scope)
+        _retain_projection_items(scope, ids)
+        count = _projection_items(scope).filter(outcome="pending").count()
+        scope.outcome = "pending" if count else "complete"
+        scope.enumeration_complete = not count
+        scope.execution_state = "pending" if count else "completed"
+        scope.coverage_state = "pending" if count else "complete"
+        scope.raw_count = count
+        scope.save(update_fields=[
+            "outcome", "enumeration_complete", "execution_state", "coverage_state", "raw_count",
+        ])
+        return scope
 
 
 def _project_evidence(
@@ -916,7 +1014,6 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
     acknowledgement so a replaced worker leaves pending references intact.
     """
     from core.collection_jobs import register_job, set_job_state, validate_job
-    from core.models import CollectionScopeRun, MetricCollectionContract
 
     with _projection_origin(catalog_job_id, origin_claim) as origin:
         validate_job(origin)
@@ -944,28 +1041,20 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
         CollectionScopeRun.objects.filter(
             run__job=origin, scope_kind="numeric_projection", outcome="pending"
         )
-        .select_related("run", "projection_contract")
+        .select_related("run__job", "projection_contract")
         .order_by("pk")
     )
     for scope in pending.iterator():
-        with _projection_origin(catalog_job_id, origin_claim):
-            pass
         if selected_count >= limits["items"] or remaining_seconds() <= 0:
             break
-        if scope.projection_contract_id:
-            contract = scope.projection_contract
-            require(
-                str(contract.pk) == scope.scope_key,
-                "projection contract pin changed",
-            )
-        else:
-            contract = MetricCollectionContract.objects.get(
-                pk=scope.ownership["contract_id"]
-            )
-            require(
-                contract.contract_hash == scope.ownership["contract_hash"],
-                "projection contract pin changed",
-            )
+        with _projection_origin(catalog_job_id, origin_claim):
+            scope = CollectionScopeRun.objects.select_for_update(of=("self",)).select_related(
+                "run__job", "projection_contract",
+            ).get(pk=scope.pk)
+            _adopt_projection_queue(scope)
+        if scope.outcome != "pending":
+            continue
+        contract = scope.projection_contract
         definition = {
             "version": 1,
             "scope": {
@@ -997,7 +1086,9 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
             job = set_job_state(job.pk, "ready")
         ids = []
         evidence_batch = CollectionObservation.objects.filter(
-            pk__in=[row["observation_id"] for row in scope.envelopes]
+            pk__in=_projection_items(scope).filter(outcome="pending").values(
+                "resource_observation_id",
+            ),
         ).order_by("pk")[: limits["items"] - selected_count]
         for evidence in evidence_batch.iterator(chunk_size=100):
             size = _evidence_bytes(evidence)
@@ -1027,15 +1118,22 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
         # this fence fails; its successor will reuse that immutable snapshot.
         with _projection_origin(catalog_job_id, origin_claim):
             current = CollectionScopeRun.objects.select_for_update().get(pk=scope.pk)
-            current.envelopes = [
-                row
-                for row in current.envelopes
-                if row["observation_id"] not in committed
-            ]
-            current.outcome = "pending" if current.envelopes else "complete"
-            current.enumeration_complete = not current.envelopes
+            _adopt_projection_queue(current)
+            _projection_items(current).filter(
+                resource_observation_id__in=committed, outcome="pending",
+            ).update(
+                outcome="complete", enumeration_complete=True,
+                execution_state="completed", coverage_state="complete",
+            )
+            remaining = _projection_items(current).filter(outcome="pending").exists()
+            current.outcome = "pending" if remaining else "complete"
+            current.enumeration_complete = not remaining
+            current.execution_state = "pending" if remaining else "completed"
+            current.coverage_state = "partial" if remaining else "complete"
             current.cursor = str(max(committed)) if committed else current.cursor
-            current.save()
+            current.save(update_fields=[
+                "outcome", "enumeration_complete", "execution_state", "coverage_state", "cursor",
+            ])
         result["written_values"] += projection["written_values"]
         result["reused_resources"] += len(projection["reused_observation_ids"])
         result["acknowledged"] += len(committed)
@@ -1047,10 +1145,12 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
     result["pending"] = CollectionScopeRun.objects.filter(
         run__job=origin, scope_kind="numeric_projection", outcome="pending"
     ).exists()
-    result["pending_resources"] = sum(
-        len(scope.envelopes)
-        for scope in CollectionScopeRun.objects.filter(
-            run__job=origin, scope_kind="numeric_projection", outcome="pending"
+    result["pending_resources"] = 0
+    for scope in CollectionScopeRun.objects.filter(
+        run__job=origin, scope_kind="numeric_projection", outcome="pending",
+    ):
+        result["pending_resources"] += (
+            _projection_items(scope).filter(outcome="pending").count()
+            if scope.phase == PROJECTION_QUEUE_PHASE else len(_legacy_projection_ids(scope))
         )
-    )
     return result
