@@ -7,12 +7,17 @@ import pytest
 
 from core.collection_jobs import register_job, set_job_state
 from core.github_catalog import execute_github_catalog
-from core.models import MetricValue
+from core.models import MetricValue, TimeZone
 from core.source_metric_projection import configure_source_statistics
 from tests.test_github_catalog import reader, responses
 from tests.test_source_metric_projection import configured, evidence, project
 
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
+
+
+@pytest.fixture(autouse=True)
+def seed_utc_timezone():
+    TimeZone.objects.get_or_create(pk="UTC")
 
 
 def source_job(*, role="inventory", key="fresh", requests=30):
