@@ -132,10 +132,14 @@ def test_twenty_fetches_use_exact_page_counts_and_shared_storage(http_pages):
 
 
 @pytest.mark.parametrize("resume_options", [None, {"concurrency": 2}])
-def test_restart_replays_archives_across_legacy_runs_without_paid_refetch(http_pages, monkeypatch, resume_options):
+def test_restart_replays_archives_across_legacy_runs_without_paid_refetch(
+    http_pages, monkeypatch, resume_options, provider_tweet_entities,
+):
     job = job_for_scopes(2)
     def response(params):
-        return page(re.search(r"marker(\d+)", params["query"]).group(1))
+        body = page(re.search(r"marker(\d+)", params["query"]).group(1))
+        body["tweets"][0]["entities"] = provider_tweet_entities
+        return body
     original = PageCheckpoint.persist
     def crash(*args, **kwargs):
         raise RuntimeError("fixture before Post commit")
@@ -153,6 +157,11 @@ def test_restart_replays_archives_across_legacy_runs_without_paid_refetch(http_p
     assert result["cumulative_api_requests"] == 2
     assert Post.objects.count() == 2
     assert CollectionRequest.objects.count() == 2
+
+    from core.product_verification import source_repo_evidence
+    for post in Post.objects.all():
+        assert post.entities == provider_tweet_entities
+        assert source_repo_evidence(post, "Qwen/Qwen3-4B")["exact_hf_repo_link"]
 
 
 def test_live_writer_can_acquire_during_http_and_blocks_replay(http_pages):

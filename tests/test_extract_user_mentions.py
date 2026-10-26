@@ -187,3 +187,29 @@ def test_non_dict_entry_in_user_mentions_is_skipped():
     rows = extract_user_mentions(post, BRAND_ACCOUNTS, post["entities"])
     assert len(rows) == 1
     assert rows[0].brand_id == "minimax"
+
+
+@pytest.mark.parametrize("id_key", ["id_str", "id"])
+@pytest.mark.parametrize("handle_key", ["screen_name", "username"])
+def test_provider_and_legacy_mention_aliases(id_key, handle_key):
+    rows = extract_user_mentions(_post(), BRAND_ACCOUNTS,
+                                 {"user_mentions": [{id_key: "1001", handle_key: "MiniMaxAI"}]})
+    assert [(r.brand_id, r.raw_token) for r in rows] == [("minimax", "@MiniMaxAI")]
+
+
+def test_mention_alias_precedence_and_duplicate_signals():
+    # Stable provider id_str wins conflicting id; existing username precedence stays.
+    entities = {"user_mentions": [
+        {"id_str": "1001", "id": "1002", "username": "MiniMaxAI", "screen_name": "wrong"},
+        {"id": 1001, "screen_name": "minimaxai"},
+    ]}
+    rows = extract_user_mentions(_post(), BRAND_ACCOUNTS, entities)
+    assert [(r.brand_id, r.raw_token) for r in rows] == [("minimax", "@MiniMaxAI")]
+
+
+@pytest.mark.parametrize("entry", [
+    {"id_str": [], "screen_name": "Qwen"}, {"id": True, "username": "Qwen"},
+    {"id": "1001", "username": {}}, {"id": "1001", "username": "   "},
+])
+def test_malformed_mention_values_do_not_become_tokens(entry):
+    assert extract_user_mentions(_post(), BRAND_ACCOUNTS, {"user_mentions": [entry]}) == []
