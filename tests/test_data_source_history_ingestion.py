@@ -434,6 +434,14 @@ def test_opt_in_model_kind_pins_native_evidence_without_changing_taxonomy_type(d
 
 
 def test_rolling_publication_selection_uses_current_window_with_frozen_cohort():
+    from types import SimpleNamespace
+
+    from core.collection_storage_migration import (
+        project_publication_runtime_bounds_batch,
+    )
+    from core.model_history_collection import _runtime_publication_window
+    from core.models import CollectionScopeRun
+
     provider, _product, scope = publication_scope()
     original = copy.deepcopy(scope)
     scope.update(
@@ -449,10 +457,43 @@ def test_rolling_publication_selection_uses_current_window_with_frozen_cohort():
     assert requests[0].url.params["end_date"] == "2026-10-14"
     job.refresh_from_db()
     assert job.definition["scope"]["cutoff"] == original["cutoff"]
-    assert (
-        run.scopes.get(scope_kind="publication_runtime").envelopes[0]["cutoff"]
-        == "2026-10-15T00:00:00+00:00"
+    runtime = run.scopes.get(scope_kind="publication_runtime")
+    assert runtime.envelopes[0]["cutoff"] == "2026-10-15T00:00:00+00:00"
+    CollectionScopeRun.objects.filter(pk=runtime.pk).update(
+        requested_start_at=None, requested_end_at=None,
     )
+    with pytest.raises(ValueError, match="missing typed bounds"):
+        project_publication_runtime_bounds_batch(verify_only=True)
+    assert project_publication_runtime_bounds_batch(batch_size=1).updated == 1
+    assert project_publication_runtime_bounds_batch(batch_size=1).updated == 0
+    assert project_publication_runtime_bounds_batch(verify_only=True).scanned == 1
+    runtime.refresh_from_db()
+    assert runtime.requested_start_at == datetime(2026, 10, 13, tzinfo=UTC)
+    assert runtime.requested_end_at == datetime(2026, 10, 15, tzinfo=UTC)
+
+    # A historical resume reads the saved typed window even after the legacy
+    # envelope is absent and the wall clock has advanced.
+    saved_envelopes = copy.deepcopy(runtime.envelopes)
+    runtime.envelopes = []
+    runtime.save(update_fields=["envelopes"])
+    with patch(
+        "core.model_history_collection.timezone.now",
+        return_value=now + timedelta(days=20),
+    ):
+        resumed = _runtime_publication_window(SimpleNamespace(run_id=run.pk), job)
+    assert resumed.scope["cutoff"] == "2026-10-15T00:00:00+00:00"
+    assert resumed.scope["publication_start_at"] == "2026-10-13T00:00:00+00:00"
+
+    saved_envelopes[0]["cutoff"] = "2026-10-16T00:00:00+00:00"
+    runtime.envelopes = saved_envelopes
+    runtime.save(update_fields=["envelopes"])
+    with pytest.raises(ValueError, match="conflicting typed bounds"):
+        project_publication_runtime_bounds_batch()
+    runtime.envelopes[0]["cutoff"] = "2026-10-15T00:00:00+00:00"
+    runtime.ownership["cohort_hash"] = "e" * 64
+    runtime.save(update_fields=["ownership", "envelopes"])
+    with pytest.raises(ValueError, match="runtime identity"):
+        project_publication_runtime_bounds_batch()
 
 
 def test_native_publication_scope_needs_no_invented_products_or_accounts():

@@ -756,6 +756,79 @@ def project_publication_scope_references_batch(
         return ProvenanceBatch(scopes[-1].pk, len(scopes), len(changed))
 
 
+def project_publication_runtime_bounds_batch(
+    *, after_id: int = 0, batch_size: int = 100, verify_only: bool = False
+) -> ScopeBoundsBatch:
+    """Preserve a rolling invocation's frozen window, never today's window."""
+    from core.benchmark_metric_timing import aware_instant
+    from core.models import CollectionJob
+
+    if type(after_id) is not int or after_id < 0:
+        raise ValueError("after_id must be a nonnegative integer")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        query = CollectionScopeRun.objects.filter(
+            scope_kind="publication_runtime", pk__gt=after_id,
+        ).only(
+            "id", "run_id", "scope_key", "ownership", "envelopes",
+            "requested_start_at", "requested_end_at",
+        )
+        if not verify_only:
+            query = query.select_for_update()
+        scopes = list(query.order_by("pk")[:batch_size])
+        if not scopes:
+            return ScopeBoundsBatch(after_id, 0, 0)
+        run_jobs = dict(CollectionRun.objects.filter(
+            pk__in={scope.run_id for scope in scopes},
+        ).values_list("pk", "job_id"))
+        jobs = CollectionJob.objects.in_bulk(set(run_jobs.values()))
+        changed = []
+        for scope in scopes:
+            job = jobs[run_jobs[scope.run_id]]
+            instruction = job.scope
+            if (
+                job.source_id not in {"arena", "openrouter"}
+                or job.operation != "model_history"
+                or scope.scope_key != "window"
+                or instruction.get("publication_window_policy") != "rolling-completed-days-v1"
+                or not instruction.get("cohort_hash")
+                or scope.ownership != {
+                    "policy": instruction["publication_window_policy"],
+                    "cohort_hash": instruction["cohort_hash"],
+                }
+                or not isinstance(scope.envelopes, list)
+                or len(scope.envelopes) != 1
+            ):
+                raise ValueError("invalid historical publication runtime identity")
+            saved = scope.envelopes[0]
+            if (
+                not isinstance(saved, dict)
+                or set(saved) != {"cutoff", "publication_start_at", "acquisition_generation"}
+                or saved["acquisition_generation"] != str(scope.run_id)
+            ):
+                raise ValueError("invalid historical publication runtime window")
+            start = aware_instant(saved["publication_start_at"])
+            end = aware_instant(saved["cutoff"])
+            if start >= end:
+                raise ValueError("invalid historical publication runtime bounds")
+            if scope.requested_start_at not in (None, start) or scope.requested_end_at not in (None, end):
+                raise ValueError("publication runtime has conflicting typed bounds")
+            if scope.requested_start_at is None or scope.requested_end_at is None:
+                if verify_only:
+                    raise ValueError("publication runtime has missing typed bounds")
+                scope.requested_start_at, scope.requested_end_at = start, end
+                changed.append(scope)
+        if changed:
+            CollectionScopeRun.objects.bulk_update(
+                changed, ["requested_start_at", "requested_end_at"],
+            )
+        return ScopeBoundsBatch(scopes[-1].pk, len(scopes), len(changed))
+
+
 def project_scope_rare_hits_batch(
     *, after_id: int = 0, batch_size: int = 200
 ) -> RareHitMembershipBatch:
