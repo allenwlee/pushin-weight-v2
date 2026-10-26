@@ -784,6 +784,7 @@ def checkpoint_scope(
             ).update(source_dataset=scope.source_dataset)
         if envelopes is not None:
             record_scope_request_uses(scope, envelopes)
+        requests = ()
         if envelopes or scope.requests.exists():
             from core.collection_capture import link_request
             from core.models import CollectionObservationInput, CollectionRequest
@@ -812,14 +813,16 @@ def checkpoint_scope(
             requests = CollectionRequest.objects.filter(
                 pk__in=identifiers, archive__isnull=False
             ).exclude(pk__in=used)
-            for observation in scope.observations.filter(pk__gt=last_observation):
-                for request in requests:
-                    link_request(
-                        observation, request, row_locator=observation.source_identifier
-                    )
-                from core.collection_resources import project_observation_facts
+        # Imported observations also own typed facts. A captured HTTP request
+        # is optional evidence, not a prerequisite for projecting those facts.
+        from core.collection_resources import project_observation_facts
 
-                project_observation_facts(observation)
+        for observation in scope.observations.filter(pk__gt=last_observation):
+            for request in requests:
+                link_request(
+                    observation, request, row_locator=observation.source_identifier
+                )
+            project_observation_facts(observation)
         scope.cursor, scope.outcome = cursor, outcome
         scope.enumeration_complete = enumeration_complete
         scope.execution_state = "completed" if enumeration_complete else "yielded"

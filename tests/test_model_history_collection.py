@@ -61,8 +61,9 @@ def history_job(
 @pytest.mark.parametrize(
     ("reachable", "pagination"), [(True, "cursor"), (False, "cursor"), (True, "legacy")]
 )
+@pytest.mark.parametrize("typed_only_resume", [False, True])
 def test_native_hf_history_pins_revision_and_resumes_without_weight_download(
-    reachable, pagination
+    reachable, pagination, typed_only_resume
 ):
     import httpx
 
@@ -154,14 +155,20 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download(
         checkpoint = first.scopes.get(scope_kind="hf_repository_history")
         assert checkpoint.cursor == "hf-commits-page:v1:1:50"
         assert checkpoint.enumeration_complete is False
+    if typed_only_resume:
+        first.observations.update(listing={}, source_metadata={}, dimensions={})
+        first.scopes.update(envelopes=[])
+        prior = list(first.observations.order_by("pk").values())
     second = execute_model_history(job.pk, budget=budget(8))
     assert second.pk == first.pk and second.status == "success"
     assert second.request_count == len(seen) == (5 if pagination == "legacy" else 4)
     assert second.attempts.count() == 2
     assert sum(a.requests.count() for a in second.attempts.all()) == len(seen)
     assert all(o.inputs.exists() for o in second.observations.all())
-    commit = second.observations.filter(dimensions__kind="hf_commits").order_by("pk").first()
+    commit = second.observations.filter(observation_kind="hf_commits").order_by("pk").first()
     assert commit.source_record_at == datetime(2026, 9, 3, tzinfo=UTC)
+    assert commit.provider_revision == "a" * 40
+    assert commit.resource_snapshot.revision == "b" * 40
     assert list(
         second.observations.filter(pk__in=[row["id"] for row in prior])
         .order_by("pk")
@@ -175,7 +182,7 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download(
         == 1
     )
     assert not any("/resolve/" in url for url in seen)
-    assert second.observations.filter(dimensions__kind="hf_commits").count() == (
+    assert second.observations.filter(observation_kind="hf_commits").count() == (
         2 if pagination == "legacy" else 1
     )
     assert MetricValue.objects.count() == 0
