@@ -11,6 +11,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
 from core.collection_jobs import register_job, set_job_state
+from core.collection_pages import page_receipts
 from core.collection_state import StaleClaim
 from core.models import CallState, CollectionRun, DataSource, HarvestBacklogWindow, Post
 from monitor.backfill_collection import ADAPTER_VERSION, config_digest
@@ -254,7 +255,10 @@ def test_database_job_resumes_exact_page_and_preserves_previous_attempt(pipeline
     old_scope = old.scopes.get(scope_kind="x_query")
     assert old.status == "partial" and old.request_count == 1
     assert old_scope.cursor == "second-page"
-    assert old_scope.envelopes[-1]["post_ids"] == ["1"]
+    assert old_scope.envelopes == []
+    assert page_receipts(old_scope)[-1]["post_ids"] == ["1"]
+    old_scope.envelopes = [{"deliberately": "unusable retired receipt"}]
+    old_scope.save(update_fields=["envelopes"])
     assert old_scope.raw_count == 1
     assert old.report["checkpoint_import"]["historical_attempt_timestamps"] is None
     pipeline.responses.append(page("2"))
@@ -266,6 +270,9 @@ def test_database_job_resumes_exact_page_and_preserves_previous_attempt(pipeline
     assert second["enrichment_pending_count"] == 2
     old_scope.refresh_from_db()
     assert old_scope.cursor == "second-page" and not old_scope.enumeration_complete
+    assert old_scope.envelopes == [{"deliberately": "unusable retired receipt"}]
+    resumed = CollectionRun.objects.get(pk=second["run_id"]).scopes.get(scope_kind="x_query")
+    assert resumed.envelopes == [] and len(page_receipts(resumed)) == 2
     assert pipeline.requests[1]["cursor"] == "second-page"
     assert pipeline.requests[0]["query"] == pipeline.requests[1]["query"]
     assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
@@ -642,7 +649,7 @@ def test_historical_call_a_staff_uses_on_demand_model_and_durable_usage(pipeline
     assert attempt.report["model_responses"][0]["usage"]["cost_usd"] == "0.0001"
     assert report["recovered_post_ids"] == (["1", "2"] if verdict == "KEEP" else [])
     assert CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_key="A").raw_count == 2
-    evidence = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_key="A").envelopes[-1]
+    evidence = page_receipts(CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_key="A"))[-1]
     assert evidence["received_post_ids"] == ["1", "2"]
     assert {entry["reason"] for entry in evidence["exclusions"]} == ({"relevance_drop"} if verdict == "DROP" else set())
     assert len(evidence["post_ids"]) + len(evidence["exclusions"]) == 2
@@ -690,10 +697,14 @@ def test_historical_rare_inbox_precedes_gate_and_never_uses_live_slot(pipeline, 
     assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
     assert reopened == ["rare-kept"]
     scoped = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_key="RARE_EXTRA")
-    evidence = scoped.envelopes[0]
+    assert scoped.envelopes == []
+    evidence = page_receipts(scoped)[0]
     assert evidence["received_post_ids"] == evidence["inbox_post_ids"] == ["rare-kept"]
     assert evidence["raw_count"] == 1 and len(evidence["rare_hit_ids"]) == 1
     assert list(scoped.rare_hit_memberships.values_list("rare_hit_id", flat=True)) == evidence["rare_hit_ids"]
+    # Explicit legacy fixture for the migration-only copier below.
+    scoped.envelopes = page_receipts(scoped)
+    scoped.save(update_fields=["envelopes"])
     assert scope_rare_hit_mismatch_counts() == (0, 0)
     CollectionScopeRareHit.objects.filter(scope_run=scoped).delete()
     empty_window = CollectionScopeRun.objects.create(
@@ -745,7 +756,7 @@ def test_historical_rare_resume_uses_saved_inbox_and_exact_cursor(pipeline, monk
     with pytest.raises(CommandError):
         run(job)
     assert RareTypeSearchHit.objects.count() == 1 and not model_calls and not Post.objects.exists()
-    CollectionScopeRun.objects.filter(run__job=job).update(envelopes=[])
+    CollectionScopeRun.objects.filter(run__job=job).update(envelopes=[{"deliberately": "unusable retired receipt"}])
     pipeline.responses.append(page("second"))
     report = run(job)
     assert report["collection_drained"] and report["rare_gate_pending"] == 0
@@ -921,7 +932,8 @@ def test_page_ledger_reconciles_duplicate_ids_and_every_deterministic_rejection(
     pipeline.responses.append(body)
     report = run(ready_job())
     row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_kind="x_query")
-    evidence = row.envelopes[-1]
+    assert row.envelopes == []
+    evidence = page_receipts(row)[-1]
     assert row.raw_count == 6
     assert evidence["received_post_ids"] == ["kept", "kept", "unmatched", "excluded", "outside", "invalid"]
     assert evidence["post_ids"] == ["kept"]
@@ -939,7 +951,8 @@ def test_all_rejected_page_retains_receipt_and_can_truthfully_drain(pipeline):
     pipeline.responses.append(body)
     report = run(ready_job())
     row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_kind="x_query")
-    evidence = row.envelopes[-1]
+    assert row.envelopes == []
+    evidence = page_receipts(row)[-1]
     assert report["collection_drained"] and not report["recovered_post_ids"]
     assert row.raw_count == 1 and evidence["received_post_ids"] == ["rejected"]
     assert evidence["exclusions"] == [{"post_id": "rejected", "appearance": 0, "reason": "unmatched_attribution"}]
@@ -972,7 +985,7 @@ def test_staff_timeout_preserves_shared_fail_open_and_continues_pages_and_routes
     assert len(model_calls) == 1 and len(pipeline.requests) == 3
     assert pipeline.requests[1]["cursor"] == "second"
     attempt = CollectionRun.objects.get(job=job)
-    evidence = attempt.scopes.get(scope_key="A").envelopes
+    evidence = page_receipts(attempt.scopes.get(scope_key="A"))
     assert all(row["relevancy_degraded"] for row in evidence)
     assert next(iter(attempt.report["staff_relevance"].values()))["status"] == "sent"
 
@@ -983,7 +996,8 @@ def test_clipped_page_records_received_tail_ids_without_advancing(pipeline):
     pipeline.responses.append(body)
     report = run(ready_job())
     row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_kind="x_query")
-    evidence = row.envelopes[-1]
+    assert row.envelopes == []
+    evidence = page_receipts(row)[-1]
     assert not row.enumeration_complete and row.cursor is None
     assert row.raw_count == evidence["raw_count"] == 21
     assert evidence["received_post_ids"] == [str(index) for index in range(21)]
@@ -1024,7 +1038,9 @@ def test_provider_safety_response_stops_all_scopes_and_preserves_cursor(pipeline
     assert attempt.report["global_failure"]["response_status_code"] == http_status
     for row in attempt.scopes.filter(scope_kind="x_query"):
         assert row.cursor == "committed-cursor" and not row.enumeration_complete
-    receipt = attempt.scopes.get(scope_key="B1:aug09").envelopes[-1]
+    failed_scope = attempt.scopes.get(scope_key="B1:aug09")
+    assert failed_scope.envelopes == []
+    receipt = page_receipts(failed_scope)[-1]
     assert receipt["response_status_code"] == http_status and receipt["pages_received"] == 0
     assert secret_body not in str(attempt.report) and secret_body not in str(receipt)
     if http_status == 429:

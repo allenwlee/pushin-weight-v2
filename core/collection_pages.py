@@ -213,11 +213,11 @@ def project_page_receipts(scope, envelopes, *, cursor=None, legacy_archive=None)
 
 
 def adopt_unprojected_page_receipts(scope):
-    """Transitional writer guard, called under a run fence before typed reads.
+    """Migration-only adoption, called under the importer's run fence.
 
     An empty retired column is allowed after successful projection. A surviving
-    old prefix must be adopted first, or its missing owners fail the transaction.
-    This is deliberately not a fallback in the serving reader.
+    old prefix must be adopted before deploying typed-only checkpoint callers,
+    or its missing owners fail the transaction. Runtime readers never call this.
     """
     if scope.envelopes:
         project_page_receipts(scope, scope.envelopes, legacy_archive=scope.legacy_archive)
@@ -309,14 +309,14 @@ def copy_continuation_scopes(previous, run):
 
     copies, originals = {}, {}
     for original in previous.scopes.exclude(scope_kind__in=["resource_group", PAGE_KIND]).order_by("pk"):
-        if original.scope_kind == "x_query":
-            adopt_unprojected_page_receipts(original)
         identifier = original.pk
         cursors = original.recorded_cursors
         originals[identifier] = original
         # A new instance keeps the original identity available for page inputs.
         copy = CollectionScopeRun.objects.get(pk=identifier)
         copy.pk, copy.run = None, run
+        if copy.scope_kind == "x_query":
+            copy.envelopes = []
         copy.save(force_insert=True)
         replace_scope_cursor_history(copy, cursors)
         copies[identifier] = copy

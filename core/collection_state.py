@@ -844,7 +844,7 @@ def checkpoint_scope(
         )
         if cursor_history is not None:
             replace_scope_cursor_history(scope, cursor_history)
-        if envelopes is not None:
+        if envelopes is not None and scope_kind != "x_query":
             scope.envelopes = envelopes
         if raw_count is not None:
             scope.raw_count = raw_count

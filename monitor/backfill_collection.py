@@ -21,11 +21,7 @@ from django.core.management.base import CommandError
 from django.db.models import Sum
 
 from core.collection_jobs import validate_job
-from core.collection_pages import (
-    adopt_unprojected_page_receipts,
-    append_page_receipt,
-    page_receipts,
-)
+from core.collection_pages import append_page_receipt, page_receipts
 from core.collection_state import (
     StaleClaim,
     checkpoint_scope,
@@ -394,8 +390,6 @@ class PageCheckpoint:
         self.claim, self.scoped, self.budget = claim, scoped, budget
         self.capture = capture
         self.written = False
-        with fenced_run(claim):
-            adopt_unprojected_page_receipts(scoped)
 
     def _response(self):
         return self.capture.response if self.capture is not None else self.budget.snapshot()["api_responses"][-1]
@@ -630,10 +624,7 @@ def _drain_historical_rare(claim, job, cfg, budget):
                     record_post_membership(run, row, ids)
                     from monitor.backfill_enrichment import reopen_incomplete_successes
                     reopen_incomplete_successes(job, CollectionObservation.objects.filter(run=run, post_id__in=ids))
-                    adopt_unprojected_page_receipts(row)
                     append_page_receipt(row, {"post_ids": ids, "rare_gate_publication": True})
-                    row.envelopes = page_receipts(row)
-                    row.save(update_fields=["envelopes"])
             with fenced_run(claim):
                 pass
 

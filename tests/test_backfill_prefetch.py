@@ -15,6 +15,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
 from core.collection_jobs import register_job, set_job_state
+from core.collection_pages import page_receipts
 from core.collection_storage_migration import (
     project_scope_request_uses_batch,
     scope_request_use_mismatch_counts,
@@ -131,9 +132,14 @@ def test_twenty_fetches_use_exact_page_counts_and_shared_storage(http_pages):
     for row in rows:
         i = int(row.scope_key.split(":")[1])
         assert row.raw_count == 1 + (i % 2)
-        assert row.envelopes[-1]["raw_count"] == row.raw_count
-        assert row.envelopes[-1]["prefetch_request_id"]
-        assert str(row.request_uses.get().request_id) == row.envelopes[-1]["prefetch_request_id"]
+        receipts = page_receipts(row)
+        assert row.envelopes == []
+        assert receipts[-1]["raw_count"] == row.raw_count
+        assert receipts[-1]["prefetch_request_id"]
+        assert str(row.request_uses.get().request_id) == receipts[-1]["prefetch_request_id"]
+        # Explicit legacy fixture for the migration-only request-use copier.
+        row.envelopes = receipts
+        row.save(update_fields=["envelopes"])
     assert scope_request_use_mismatch_counts() == (0, 0)
     first = rows.first()
     CollectionScopeRequestUse.objects.filter(scope_run=first).delete()
@@ -444,7 +450,8 @@ def test_parallel_rare_capture_keeps_its_own_raw_count_and_shared_gate(http_page
     scopes = CollectionScopeRun.objects.filter(run_id=report["run_id"])
     for call, expected in (("RARE_EXTRA", 1), ("B1", 2)):
         scope = scopes.get(scope_key=call)
-        pages = [entry for entry in scope.envelopes if entry.get("prefetch_request_id")]
+        assert scope.envelopes == []
+        pages = [entry for entry in page_receipts(scope) if entry.get("prefetch_request_id")]
         assert len(pages) == 1 and pages[0]["raw_count"] == expected
         assert scope.raw_count == expected
     assert RareTypeSearchRun.objects.get().raw_result_count == 1
@@ -475,7 +482,7 @@ def test_expired_interrupted_run_resumes_committed_cursor_without_recollection(h
         assert old.status == "running" and old.scopes.get(scope_kind="x_query").cursor == "next"
         saved = old.scopes.get(scope_kind="x_query")
         assert saved.request_uses.count() == 1
-        saved.envelopes = []
+        saved.envelopes = [{"deliberately": "unusable retired receipt"}]
         saved.save(update_fields=["envelopes"])
         with pytest.raises(RuntimeError, match="historical_run_active"):
             month._check_saved_jobs({"campaign": "parallel-test"})

@@ -1,6 +1,7 @@
 """Real PostgreSQL constraints and typed-only checkpoint/continuation evidence."""
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from django.db import IntegrityError, transaction
@@ -67,6 +68,35 @@ def test_ordered_grouped_checkpoint_preserves_duplicates_and_null_vs_empty_ids(s
     assert CollectionObservation.objects.filter(source_subject_kind="post").count() == 1
 
 
+@pytest.mark.parametrize("failed", [False, True])
+def test_page_checkpoint_uses_typed_prefix_with_unusable_retired_payload(failed):
+    from monitor.backfill_collection import PageCheckpoint
+
+    job = ready_job()
+    claim = claim_job(job.pk, invocation_id="typed-checkpoint-call", manual_authorized=True)
+    import_scope_checkpoints(claim, definition_sha256=job.definition_sha256,
+                             scopes=job.scope["units"], provenance={"format": "fixture"})
+    scope = CollectionScopeRun.objects.get(run_id=claim.run_id, scope_kind="x_query")
+    append_page_receipt(scope, {"post_ids": [], "raw_count": 0, "received_post_ids": []})
+    retired = [{"deliberately": "unusable retired receipt"}]
+    scope.envelopes = retired
+    scope.save(update_fields=["envelopes"])
+    budget = SimpleNamespace(snapshot=lambda: {"api_responses": [{"raw_results": 0}]})
+    checkpoint = PageCheckpoint(claim, scope, budget)
+    if failed:
+        checkpoint.failed({"reason": "provider_error", "response_status_code": 503})
+    else:
+        checkpoint.empty({"calls": [{"n_persist_failed": 0, "backfill_progress": {
+            "pages_received": 1, "received_post_ids": [], "drained": True, "reason": "no_next_page",
+        }}]})
+    scope.refresh_from_db()
+    receipts = page_receipts(scope)
+    assert scope.envelopes == retired
+    assert len(receipts) == 2 and receipts[0]["raw_count"] == 0
+    assert receipts[-1]["pages_received"] == (0 if failed else 1)
+    assert scope.enumeration_complete is not failed
+
+
 def test_unknown_old_timestamp_and_empty_page_remain_distinct(scope):
     scope.envelopes = [{"post_ids": [], "collection_drained": True}]
     scope.save(update_fields=["envelopes"])
@@ -82,7 +112,7 @@ def test_unknown_old_timestamp_and_empty_page_remain_distinct(scope):
     assert page_receipt_parity_batch(after_id=scope.pk - 1).mismatched == 1
 
 
-def test_legacy_writer_adoption_preserves_membership_set_and_exact_archive_sequence(scope):
+def test_legacy_migration_adoption_preserves_membership_set_and_exact_archive_sequence(scope):
     from core.collection_capture import archive_legacy, read_document
 
     for identifier in ("a", "b"):
@@ -130,7 +160,7 @@ def test_historical_page_can_reference_post_credited_to_another_query(scope):
     assert marker.inputs.get(input_role="retained_post").input_observation.scope_run_id == other.pk
 
 
-def test_first_writer_rejects_changed_or_extra_typed_receipts_but_allows_cleared_json(scope):
+def test_migration_adoption_rejects_changed_or_extra_typed_receipts_but_allows_cleared_json(scope):
     envelope = {"post_ids": [], "received_post_ids": [], "raw_count": 0, "collection_drained": False}
     child = append_page_receipt(scope, envelope)
     scope.envelopes = [envelope]
@@ -191,7 +221,7 @@ def test_continuation_copies_typed_receipts_and_remaps_sibling_scopes(scope):
     CollectionScopeRun.objects.create(run=scope.run, scope_kind="projection_input", scope_key="input",
                                       parent_scope=numeric_parent, prerequisite_scope=scope,
                                       resource_observation=resource, ownership={})
-    CollectionScopeRun.objects.filter(run=scope.run).update(envelopes=[])
+    CollectionScopeRun.objects.filter(run=scope.run).update(envelopes=[{"deliberately": "unusable retired receipt"}])
     previous = scope.run
     run = CollectionRun.objects.get(pk=previous.pk)
     run.pk = None
@@ -202,6 +232,7 @@ def test_continuation_copies_typed_receipts_and_remaps_sibling_scopes(scope):
     with transaction.atomic():
         copy_continuation_scopes(previous, run)
     copied = run.scopes.get(scope_kind="x_query")
+    assert copied.envelopes == []
     assert page_receipts(copied) == page_receipts(scope)
     assert copied.child_scopes.get().cursor == "next"
     input_scope = run.scopes.get(scope_kind="projection_input")
