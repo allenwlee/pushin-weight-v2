@@ -182,8 +182,10 @@ def _github_history(claim, job, pins, budget, items):
         )
         cutoff = aware_instant(job.scope["cutoff"])
         head = _latest_before_cutoff(
-            commits.observations.all(),
-            lambda o: o.source_metadata.get("clocks", {}).get("committer_at"),
+            commits.observations.select_related("resource_snapshot").defer(
+                "listing", "dimensions", "source_metadata", "envelopes", "groups",
+            ),
+            lambda o: o.resource_snapshot.committed_at,
             cutoff,
         )
         if head:

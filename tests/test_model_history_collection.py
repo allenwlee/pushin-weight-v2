@@ -350,6 +350,20 @@ def test_github_history_uses_reviewed_native_repo_and_pinned_tree():
     assert all(o.inputs.exists() for o in run.observations.all())
     assert MetricValue.objects.count() == 0
 
+    from core.model_native_history import _latest_before_cutoff
+
+    commits = run.observations.filter(observation_kind="commits")
+    expected = max(commits.values_list("observation_key", flat=True))
+    commits.update(listing={}, dimensions={}, source_metadata={})
+    head = _latest_before_cutoff(
+        commits.select_related("resource_snapshot").defer(
+            "listing", "dimensions", "source_metadata", "envelopes", "groups",
+        ),
+        lambda observation: observation.resource_snapshot.committed_at,
+        datetime(2026, 9, 12, tzinfo=UTC),
+    )
+    assert head.observation_key == expected
+
 
 def test_archive_acquisition_to_numeric_writer_keeps_zero_and_missing_distinct():
     import io
