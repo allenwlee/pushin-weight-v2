@@ -114,9 +114,9 @@ relations:
     - collection_corrections
     - post_unsanctioned_flag_assignments
     - account_query_memberships
-    - collection_scope_rare_hits
     - collection_scope_cursor_receipts
     - collection_scope_request_uses
+    - collection_observation_metric_selections
     - source_datasets
     - metric_values
     - people_names
@@ -208,6 +208,8 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   excluded_tables:
+    # Scope links cannot be copied when their rare-hit inbox parent is excluded.
+    - collection_scope_rare_hits
     # Publication state is valid only for the local materialized view.
     - materialization_state
     # Editorial jobs, accepted editions and media are one environment-local graph.
@@ -365,6 +367,7 @@ relations:
     - collection_scope_rare_hits
     - collection_scope_cursor_receipts
     - collection_scope_request_uses
+    - collection_observation_metric_selections
     - source_datasets
     - metric_values
     - editorial_assessments
@@ -723,6 +726,7 @@ relations:
 
 scrub:
   truncate_tables:
+    - collection_scope_rare_hits
     - materialization_state
     - provider_batches
     - editorial_assessments

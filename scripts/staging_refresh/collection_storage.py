@@ -2,6 +2,15 @@
 
 from psycopg import sql
 
+# These are execution-owned links, not independent evidence owners. Historical
+# dumps may predate their migrations, so discover them before issuing SQL.
+SCOPE_CHILD_TABLES = (
+    "collection_scope_rare_hits",
+    "collection_scope_cursor_receipts",
+    "collection_scope_request_uses",
+)
+OBSERVATION_CHILD_TABLES = ("collection_observation_metric_selections",)
+
 OWNED_TABLES = (
     "collection_jobs",
     "collection_runs",
@@ -14,10 +23,17 @@ OWNED_TABLES = (
     "collection_resource_snapshots",
     "collection_metric_gaps",
     "collection_corrections",
+    *SCOPE_CHILD_TABLES,
+    *OBSERVATION_CHILD_TABLES,
 )
 
 
 def purge_relational_collection_runtime(cursor, purpose):
+    cursor.execute(
+        "SELECT name FROM unnest(%s::text[]) AS names(name) WHERE to_regclass(name) IS NOT NULL",
+        [list(SCOPE_CHILD_TABLES + OBSERVATION_CHILD_TABLES)],
+    )
+    child_tables = {row[0] for row in cursor.fetchall()}
     # These tables exist only in the transaction operating on the non-serving
     # shadow. No temporary state or cleanup runs against production.
     cursor.execute("DROP TABLE IF EXISTS pg_temp.pw_refresh_kept_runs")
@@ -63,8 +79,17 @@ def purge_relational_collection_runtime(cursor, purpose):
                 "INSERT INTO pw_refresh_kept_runs SELECT o.run_id FROM collection_observations o JOIN {} t ON t.{}=o.id ON CONFLICT DO NOTHING"
             ).format(sql.Identifier(table), sql.Identifier(column))
         cursor.execute(query)
+    # A later retained scope can reuse a reply captured by an earlier run. Keep
+    # that request's actual owner, including its scope/attempt, to preserve FKs.
+    request_use_lineage = """
+                UNION SELECT a.run_id FROM collection_scope_request_uses u
+                    JOIN collection_scope_runs s ON s.id=u.scope_run_id
+                    JOIN pw_refresh_kept_runs k ON k.id=s.run_id
+                    JOIN collection_requests request ON request.id=u.request_id
+                    JOIN collection_attempts a ON a.id=request.attempt_id
+    """ if "collection_scope_request_uses" in child_tables else ""
     while True:
-        cursor.execute("""
+        cursor.execute(f"""
             INSERT INTO pw_refresh_kept_runs
             SELECT referenced FROM (
                 SELECT r.continuation_of_id AS referenced FROM collection_runs r JOIN pw_refresh_kept_runs k ON k.id=r.id
@@ -85,6 +110,7 @@ def purge_relational_collection_runtime(cursor, purpose):
                     JOIN collection_observations o ON o.id=s.observation_id
                     JOIN pw_refresh_kept_runs k ON k.id=o.run_id
                     JOIN collection_observations prior ON prior.id=s.prior_snapshot_id
+                {request_use_lineage}
             ) refs WHERE referenced IS NOT NULL ON CONFLICT DO NOTHING
         """)
         if cursor.rowcount == 0:
@@ -107,18 +133,28 @@ def purge_relational_collection_runtime(cursor, purpose):
         ("collection_observation_inputs", "observation_id"),
         ("collection_metric_gaps", "observation_id"),
         ("collection_resource_snapshots", "observation_id"),
+        *((table, "observation_id") for table in OBSERVATION_CHILD_TABLES if table in child_tables),
     ):
         cursor.execute(
             sql.SQL(
                 "DELETE FROM {} WHERE {} IN(SELECT id FROM collection_observations WHERE run_id NOT IN(SELECT id FROM pw_refresh_kept_runs))"
             ).format(sql.Identifier(table), sql.Identifier(owner))
         )
+    for table in SCOPE_CHILD_TABLES:
+        if table in child_tables:
+            cursor.execute(sql.SQL(
+                "DELETE FROM {} WHERE scope_run_id IN(SELECT id FROM collection_scope_runs WHERE run_id NOT IN(SELECT id FROM pw_refresh_kept_runs))"
+            ).format(sql.Identifier(table)))
+    # Request-owned appearances (0190) point to their same-run captured request.
+    # Delete observations first; retained cross-run replay uses were closed above.
+    cursor.execute(
+        "DELETE FROM collection_observations WHERE run_id NOT IN(SELECT id FROM pw_refresh_kept_runs)"
+    )
     cursor.execute(
         "DELETE FROM collection_requests WHERE attempt_id IN(SELECT id FROM collection_attempts WHERE run_id NOT IN(SELECT id FROM pw_refresh_kept_runs))"
     )
     for table in (
         "collection_attempts",
-        "collection_observations",
         "collection_scope_runs",
     ):
         cursor.execute(

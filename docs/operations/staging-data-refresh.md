@@ -133,6 +133,7 @@ TO staging_refresh_reader;
 -- definition travels through pg_dump/restore; after a refresh, run
 -- python manage.py refresh_home_counts before checking materialized-path use.
 GRANT MAINTAIN ON
+  collection_scope_rare_hits,
   materialization_state,
   editorial_assessments, editorial_budgets, editorial_calls,
   editorial_editions, editorial_heroes, content_pictures, editorial_stories,
@@ -212,8 +213,9 @@ WHERE schemaname = 'public'
     'collection_observation_inputs', 'collection_resource_snapshots',
     'collection_metric_gaps', 'collection_corrections',
     'post_unsanctioned_flag_assignments', 'account_query_memberships',
-    'collection_scope_rare_hits', 'collection_scope_cursor_receipts',
-    'collection_scope_request_uses', 'source_datasets'
+    'collection_scope_cursor_receipts',
+    'collection_scope_request_uses', 'collection_observation_metric_selections',
+    'source_datasets'
   )
 \gexec
 
