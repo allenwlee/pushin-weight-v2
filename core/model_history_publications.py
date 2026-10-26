@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
 from core.benchmark_metric_store import calendar_window, native_date
+from core.collection_capture import observation_object_documents
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import (
     checkpoint_scope,
@@ -121,8 +122,8 @@ def _publication_window(parent, budget, start, end, *, key, config):
         CollectionObservation.objects.filter(
             run__job__source_id=parent.source_id,
             status="ok",
-            dimensions__kind="publication_window",
-            dimensions__cache_key=cache_key,
+            observation_kind="publication_window",
+            observation_key=cache_key,
         )
         .order_by("pk")
         .first()
@@ -289,7 +290,8 @@ def _admit_publication(claim, job, publication, start, end):
             contract_id=contract_id, purpose="metric", source_id=job.source_id
         ).values_list("external_identifier", flat=True)
     )
-    payload = copy.deepcopy(publication.listing)
+    listing, _, source_metadata = observation_object_documents(publication)
+    payload = copy.deepcopy(listing)
     field = "model_permaslug" if job.source_id == "openrouter" else "model_name"
     payload["rows"] = [
         r for r in payload["rows"] if r[field] in identifiers and r[field] != "other"
@@ -304,11 +306,11 @@ def _admit_publication(claim, job, publication, start, end):
     publisher = "openrouter" if job.source_id == "openrouter" else "lmarena-ai"
     snap = {
         "date": end,
-        "immutable_revision": digest(publication.listing),
+        "immutable_revision": digest(listing),
         "file_path": "selected-publication.json",
         "raw_artifact_sha256": digest(payload),
         "payload": payload,
-        "upstream_retrieval_coordinates": publication.source_metadata,
+        "upstream_retrieval_coordinates": source_metadata,
     }
     import_selected_history(
         claim,
@@ -340,6 +342,7 @@ def _queue_publication(claim, job, publication, contract, start, end):
         return []
     source = job.source_id
     settings = contract.source_configuration[source]
+    listing, _, _ = observation_object_documents(publication)
     births = {
         pin["native_identifier"]: model["creation"]["at"][:10]
         for model in job.scope.get("models", [])
@@ -354,7 +357,7 @@ def _queue_publication(claim, job, publication, contract, start, end):
     )
     rows = [
         row
-        for row in publication.listing["rows"]
+        for row in listing["rows"]
         if row[field] == "other"
         or row[field] in identifiers
         and (row["date"] if source == "openrouter" else row["leaderboard_publish_date"])
@@ -365,7 +368,7 @@ def _queue_publication(claim, job, publication, contract, start, end):
     native_ids = set(job.scope.get("native_publication_identifiers", []))
     rows += [
         row
-        for row in publication.listing["rows"]
+        for row in listing["rows"]
         if row[field] in native_ids
         and row[field] not in identifiers
         and row[field] != "other"
@@ -386,7 +389,7 @@ def _queue_publication(claim, job, publication, contract, start, end):
                 if source == "openrouter"
                 else raw["leaderboard_publish_date"]
             )
-            revision = publication.listing.get("revision") or publication.listing.get(
+            revision = listing.get("revision") or listing.get(
                 "artifact_sha256"
             )
             if not revision:
@@ -395,7 +398,7 @@ def _queue_publication(claim, job, publication, contract, start, end):
                 "dataset_id": settings["publication_provenance"]["dataset_id"],
                 "native_identifier": raw[field],
                 "period": period,
-                "config": publication.listing.get("config"),
+                "config": listing.get("config"),
                 "category": raw.get("category"),
                 "revision": revision,
             }
@@ -403,7 +406,7 @@ def _queue_publication(claim, job, publication, contract, start, end):
             payload = {
                 **{
                     k: copy.deepcopy(v)
-                    for k, v in publication.listing.items()
+                    for k, v in listing.items()
                     if k != "rows"
                 },
                 "rows": [copy.deepcopy(raw)],
@@ -539,7 +542,7 @@ def _publication_evidence(claim, job, model, pins, budget, *, key):
         publication = _publication_window(
             job, budget, start, end, key=key, config=config
         )
-        payload = publication.listing
+        payload, _, _ = observation_object_documents(publication)
         _admit_publication(claim, job, publication, start, end)
         field = "model_permaslug" if job.source_id == "openrouter" else "model_name"
         rows = [

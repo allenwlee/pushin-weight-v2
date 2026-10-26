@@ -222,6 +222,7 @@ def transport(
 def test_actual_history_dispatch_writes_numeric_and_reuses_saved_publication(
     source, config, monkeypatch
 ):
+    from core.collection_capture import archive_legacy
     from core.collection_scheduling import execute_due_job
 
     monkeypatch.setenv("BENCHMARK_OPENROUTER_API_KEY", "fixture")
@@ -240,6 +241,20 @@ def test_actual_history_dispatch_writes_numeric_and_reuses_saved_publication(
     assert MetricValue.objects.filter(observation__product=product).exists()
     assert all(v.observation.run.purpose == "metric" for v in MetricValue.objects.all())
     before = MetricValue.objects.count()
+    publications = CollectionObservation.objects.filter(observation_kind="publication_window")
+    assert publications.exists()
+    for publication in publications:
+        publication.legacy_archive = archive_legacy({
+            "listing": publication.listing,
+            "dimensions": publication.dimensions,
+            "source_metadata": publication.source_metadata,
+        })
+        publication.listing = {}
+        publication.dimensions = {}
+        publication.source_metadata = {}
+        publication.save(update_fields=[
+            "legacy_archive", "listing", "dimensions", "source_metadata",
+        ])
     replay = register(provider, scope, key="history-other-job")
     fresh_budget, fresh_requests = transport(source, config=config)
     again = execute_model_history(replay.pk, budget=fresh_budget, key="fixture")
