@@ -52,13 +52,13 @@ def test_twenty_simultaneous_requests_without_body_archives(http_pages, monkeypa
     assert state["peak"] == 20
     assert report["collection_drained"]
     assert report["prefetch"]["max_buffered"] == 20
-    assert Post.objects.count() == CollectionObservation.objects.filter(run_id=report["run_id"]).count() == 20
-    assert not CollectionEvidenceArchive.objects.exists()
+    assert Post.objects.count() == CollectionObservation.objects.filter(run_id=report["run_id"], source_subject_kind="post").count() == 20
+    assert not CollectionEvidenceArchive.objects.exclude(capture_kind="legacy_snapshot").exists()
     assert CollectionRequest.objects.filter(request_category="x_backfill_staging", archive__isnull=True,
         transport_outcome="received", accounting_complete=True).count() == 20
     from core.models import CollectionScopeRequestUse
 
-    assert CollectionScopeRequestUse.objects.filter(scope_run__run_id=report["run_id"]).count() == 20
+    assert CollectionScopeRequestUse.objects.filter(scope_run__run_id=report["run_id"], scope_run__scope_kind="x_query").count() == 20
     job.refresh_from_db()
     receipts = job.last_attempt.report["staging_responses"]
     assert len(receipts) == 20
@@ -104,7 +104,7 @@ def test_interrupted_page_retries_only_when_uncommitted(http_pages, monkeypatch,
         with pytest.raises(CommandError):
             execute_job(job.pk)
         assert Post.objects.count() == int(after_commit)
-        scope = CollectionScopeRun.objects.filter(run__job=job).latest("id")
+        scope = CollectionScopeRun.objects.filter(run__job=job, scope_kind="x_query").latest("id")
         assert scope.enumeration_complete == after_commit
         monkeypatch.setattr(PageCheckpoint, "persist", original)
         report = execute_job(job.pk)
@@ -112,7 +112,7 @@ def test_interrupted_page_retries_only_when_uncommitted(http_pages, monkeypatch,
     assert len(state["requests"]) == (1 if after_commit else 2)
     assert report["prefetch"]["lost_responses"] == int(not after_commit)
     assert Post.objects.count() == 1
-    assert not CollectionEvidenceArchive.objects.exists()
+    assert not CollectionEvidenceArchive.objects.exclude(capture_kind="legacy_snapshot").exists()
 
 
 def test_unknown_outcome_is_not_automatically_refetched(http_pages, monkeypatch):  # noqa: F811
@@ -155,7 +155,7 @@ def test_error_drains_every_started_request_and_keeps_cursors(http_pages, monkey
         execute_job(job.pk, collection_options={"concurrency": 3})
     assert len(state["requests"]) == 3
     assert CollectionRequest.objects.filter(transport_outcome="received").count() == 3
-    assert not CollectionEvidenceArchive.objects.exists()
+    assert not CollectionEvidenceArchive.objects.exclude(capture_kind="legacy_snapshot").exists()
     assert not CollectionScopeRun.objects.filter(run__job=job, enumeration_complete=True).exists()
 
 
@@ -166,7 +166,7 @@ def test_underfilled_pages_follow_cursor_and_deduplicate(http_pages, monkeypatch
     with http_pages(response) as state:
         report = execute_job(job.pk, collection_options={"concurrency": 2})
     assert report["collection_drained"] and len(state["requests"]) == 2
-    assert Post.objects.count() == CollectionObservation.objects.filter(run_id=report["run_id"]).count() == 1
+    assert Post.objects.count() == CollectionObservation.objects.filter(run_id=report["run_id"], source_subject_kind="post").count() == 1
 
 
 @pytest.mark.parametrize("kept", [False, True])
@@ -201,7 +201,7 @@ def test_staging_rare_gate_still_controls_admission(http_pages, monkeypatch, tmp
     assert Post.objects.filter(pk="rare-staging").exists() == kept
     assert CollectionObservation.objects.filter(run__job=job, post_id="rare-staging").exists() == kept
     assert RareTypeSearchHit.objects.get(provider_post_id="rare-staging").gate_state == ("kept" if kept else "junk")
-    assert not CollectionEvidenceArchive.objects.exists()
+    assert not CollectionEvidenceArchive.objects.exclude(capture_kind="legacy_snapshot").exists()
 
 
 def test_staging_request_ceiling_survives_resume(http_pages, monkeypatch):  # noqa: F811

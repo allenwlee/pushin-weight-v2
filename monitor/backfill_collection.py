@@ -21,6 +21,11 @@ from django.core.management.base import CommandError
 from django.db.models import Sum
 
 from core.collection_jobs import validate_job
+from core.collection_pages import (
+    adopt_unprojected_page_receipts,
+    append_page_receipt,
+    page_receipts,
+)
 from core.collection_state import (
     StaleClaim,
     checkpoint_scope,
@@ -372,6 +377,8 @@ class PageCheckpoint:
         self.claim, self.scoped, self.budget = claim, scoped, budget
         self.capture = capture
         self.written = False
+        with fenced_run(claim):
+            adopt_unprojected_page_receipts(scoped)
 
     def _response(self):
         return self.capture.response if self.capture is not None else self.budget.snapshot()["api_responses"][-1]
@@ -381,7 +388,7 @@ class PageCheckpoint:
         received = progress.get("pages_received", 0) > 0
         advanced = received and not blocked
         drained = advanced and progress.get("drained") is True
-        envelopes = list(self.scoped.envelopes)
+        envelopes = page_receipts(self.scoped)
         if received:
             envelopes.append({
                 "observed_at": datetime.now(UTC).isoformat(),
@@ -477,7 +484,7 @@ class PageCheckpoint:
             ownership=x_scope_ownership(self.scoped), cursor=self.scoped.cursor,
             cursor_history=self.scoped.recorded_cursors, outcome=self.scoped.outcome,
             enumeration_complete=False, raw_count=self.scoped.raw_count,
-            envelopes=[*self.scoped.envelopes, {
+            envelopes=[*page_receipts(self.scoped), {
                 "observed_at": datetime.now(UTC).isoformat(), "pages_received": 0,
                 "post_ids": [], "collection_drained": False,
                 "reason": progress.get("reason"), "response_status_code": progress["response_status_code"],
@@ -606,7 +613,9 @@ def _drain_historical_rare(claim, job, cfg, budget):
                     record_post_membership(run, row, ids)
                     from monitor.backfill_enrichment import reopen_incomplete_successes
                     reopen_incomplete_successes(job, CollectionObservation.objects.filter(run=run, post_id__in=ids))
-                    row.envelopes.append({"post_ids": ids, "rare_gate_publication": True})
+                    adopt_unprojected_page_receipts(row)
+                    append_page_receipt(row, {"post_ids": ids, "rare_gate_publication": True})
+                    row.envelopes = page_receipts(row)
                     row.save(update_fields=["envelopes"])
             with fenced_run(claim):
                 pass
@@ -711,14 +720,14 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
     prefetch = None
     pages = None
     try:
-        if not CollectionScopeRun.objects.filter(run_id=claim.run_id).exists():
+        if not CollectionScopeRun.objects.filter(run_id=claim.run_id, scope_kind="x_query").exists():
             import_scope_checkpoints(
                 claim, definition_sha256=job.definition_sha256,
                 scopes=scope["units"], provenance=scope.get("provenance", {"format": ADAPTER_VERSION}),
             )
         if retry_blocked:
             with fenced_run(claim):
-                CollectionScopeRun.objects.filter(run_id=claim.run_id, outcome="blocked").update(outcome="pending")
+                CollectionScopeRun.objects.filter(run_id=claim.run_id, scope_kind="x_query", outcome="blocked").update(outcome="pending")
         def serial_scopes():
             for _ in range(job.budgets["requests"]):
                 requests = job.runs.aggregate(total=Sum("request_count"))["total"] or 0
@@ -797,7 +806,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
                     if any("TwitterApiAuthError" in str(item) for item in stats.get("errors", [])):
                         break
         if current_policy and not CollectionScopeRun.objects.filter(
-            run_id=claim.run_id, enumeration_complete=False,
+            run_id=claim.run_id, scope_kind="x_query", enumeration_complete=False,
         ).exists():
             deferred_state = _drain_historical_rare(claim, job, cfg, budget)
     except StaleClaim:

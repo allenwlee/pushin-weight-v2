@@ -398,12 +398,9 @@ def claim_job(
     if bounded_campaign and job.purpose == "metric" and job.last_attempt_id:
         previous = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
         if previous.status == "partial" and previous.completed_at is not None:
-            for scope in previous.scopes.exclude(scope_kind="resource_group"):
-                cursors = scope.recorded_cursors
-                scope.pk = None
-                scope.run = run
-                scope.save(force_insert=True)
-                replace_scope_cursor_history(scope, cursors)
+            from core.collection_pages import copy_continuation_scopes
+
+            copy_continuation_scopes(previous, run)
             run.continuation_of = previous
             run.save(update_fields=["continuation_of", "updated_at"])
     if continue_from is not None and job.instruction_version == 2:
@@ -425,12 +422,9 @@ def claim_job(
             previous.pk == job.last_attempt_id,
             "continuation must use the preceding attempt",
         )
-        for scope in previous.scopes.exclude(scope_kind="resource_group"):
-            cursors = scope.recorded_cursors
-            scope.pk = None
-            scope.run = run
-            scope.save(force_insert=True)
-            replace_scope_cursor_history(scope, cursors)
+        from core.collection_pages import copy_continuation_scopes
+
+        copy_continuation_scopes(previous, run)
         run.continuation_of = previous
         run.save(update_fields=["continuation_of", "updated_at"])
     job.active_run, job.last_attempt = run, run
@@ -786,6 +780,10 @@ def checkpoint_scope(
             ).update(source_dataset=scope.source_dataset)
         if envelopes is not None:
             record_scope_request_uses(scope, envelopes)
+            if scope_kind == "x_query":
+                from core.collection_pages import project_page_receipts
+
+                project_page_receipts(scope, envelopes, cursor=cursor)
         requests = ()
         if envelopes or scope.requests.exists():
             from core.collection_capture import link_request

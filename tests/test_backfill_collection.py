@@ -205,7 +205,7 @@ def test_native_page_yields_to_scheduled_tick_and_resumes_exact_cursor(pipeline,
         # The queued scheduled command executes only after the paid historical
         # page has committed membership and its exact continuation.
         old = CollectionRun.objects.filter(job=job).order_by("started_at").first()
-        saved_scope = old.scopes.get()
+        saved_scope = old.scopes.get(scope_kind="x_query")
         live_saw_checkpoint.append((saved_scope.cursor, Post.objects.filter(pk="1").exists()))
         Post.objects.create(tweet_id="live-tick-proof", text="scheduled collection proof")
 
@@ -232,7 +232,7 @@ def test_native_page_yields_to_scheduled_tick_and_resumes_exact_cursor(pipeline,
     assert Post.objects.filter(pk="live-tick-proof").exists()
     first_run = CollectionRun.objects.get(pk=first["run_id"])
     assert first_run.request_count == 1
-    assert first_run.scopes.get().cursor == "after-paid-page"
+    assert first_run.scopes.get(scope_kind="x_query").cursor == "after-paid-page"
     monkeypatch.setattr("x_monitor.apify.requests.get", original_get)
     resumed = run(job)
     assert resumed["collection_drained"]
@@ -241,7 +241,7 @@ def test_native_page_yields_to_scheduled_tick_and_resumes_exact_cursor(pipeline,
     assert resumed["recovered_post_ids"] == ["1", "2"]
     first_run.refresh_from_db()
     assert first_run.request_count == 1
-    assert first_run.scopes.get().cursor == "after-paid-page"
+    assert first_run.scopes.get(scope_kind="x_query").cursor == "after-paid-page"
     assert not CallState.objects.exists() and not HarvestBacklogWindow.objects.exists()
 
 
@@ -250,7 +250,7 @@ def test_database_job_resumes_exact_page_and_preserves_previous_attempt(pipeline
     pipeline.responses.append(page("1", cursor="second-page"))
     first = run(job)
     old = CollectionRun.objects.get(pk=first["run_id"])
-    old_scope = old.scopes.get()
+    old_scope = old.scopes.get(scope_kind="x_query")
     assert old.status == "partial" and old.request_count == 1
     assert old_scope.cursor == "second-page"
     assert old_scope.envelopes[-1]["post_ids"] == ["1"]
@@ -295,7 +295,7 @@ def test_page_failure_rolls_back_all_posts_and_keeps_cursor(pipeline, monkeypatc
         run(job)
     attempt = CollectionRun.objects.get(job=job)
     assert attempt.status == "failed" and attempt.request_count == 1
-    assert attempt.scopes.get().cursor == "previous"
+    assert attempt.scopes.get(scope_kind="x_query").cursor == "previous"
     assert not Post.objects.filter(pk__in=["1", "2"]).exists()
 
 
@@ -312,7 +312,7 @@ def test_pausing_during_fetch_rejects_post_and_cursor(pipeline, monkeypatch):
     with pytest.raises(StaleClaim):
         run(job)
     assert not Post.objects.filter(pk="1").exists()
-    assert CollectionRun.objects.get(job=job).scopes.get().cursor == "previous"
+    assert CollectionRun.objects.get(job=job).scopes.get(scope_kind="x_query").cursor == "previous"
 
 
 def test_api_start_is_durable_before_http_and_not_reset_after_interruption(pipeline, monkeypatch):
@@ -378,7 +378,7 @@ def test_lease_expiring_during_storage_rolls_back_page(pipeline, monkeypatch):
     with pytest.raises(StaleClaim):
         run(job)
     assert not Post.objects.filter(pk="1").exists()
-    assert CollectionRun.objects.get(job=job).scopes.get().cursor == "previous"
+    assert CollectionRun.objects.get(job=job).scopes.get(scope_kind="x_query").cursor == "previous"
 
 
 def test_storage_probe_updates_same_page_without_http_or_new_posts(pipeline):
@@ -424,7 +424,7 @@ def test_blocked_page_retains_valid_post_evidence_without_advancing_cursor(pipel
     body["tweets"].append(outside)
     pipeline.responses.append(body)
     result = run(job)
-    scope = CollectionRun.objects.get(pk=result["run_id"]).scopes.get()
+    scope = CollectionRun.objects.get(pk=result["run_id"]).scopes.get(scope_kind="x_query")
     assert scope.outcome == "blocked" and scope.cursor == "previous"
     assert result["recovered_post_ids"] == ["1"]
     assert scope.raw_count == 2
@@ -471,7 +471,7 @@ def test_recoverable_scope_error_does_not_starve_independent_queries(pipeline):
     assert Post.objects.filter(pk="survivor").exists()
     assert attempt.scopes.get(scope_key="B1:independent").enumeration_complete
     assert not attempt.scopes.get(scope_key="B1:aug09").enumeration_complete
-    for scoped in attempt.scopes.all():
+    for scoped in attempt.scopes.filter(scope_kind="x_query"):
         assert scoped.requested_start_at == datetime.fromtimestamp(1786233600, UTC)
         assert scoped.requested_end_at == datetime.fromtimestamp(1786234500, UTC)
         assert scoped.job_target.search_query.query_text == "Qwen"
@@ -703,7 +703,7 @@ def test_historical_rare_inbox_precedes_gate_and_never_uses_live_slot(pipeline, 
     assert scope_rare_hit_mismatch_counts() == (2, 0)
     assert project_scope_rare_hits_batch(after_id=scoped.pk - 1).inserted == 2
     assert set(CollectionScopeRareHit.objects.filter(
-        rare_hit_id=evidence["rare_hit_ids"][0]
+        rare_hit_id=evidence["rare_hit_ids"][0], scope_run__scope_kind="x_query",
     ).values_list("scope_run_id", flat=True)) == {scoped.pk, replay.pk}
     assert scope_rare_hit_mismatch_counts() == (0, 0)
     assert not evidence["exclusions"]
@@ -905,7 +905,7 @@ def test_page_ledger_reconciles_duplicate_ids_and_every_deterministic_rejection(
     body["tweets"].extend([unmatched, excluded, outside, invalid])
     pipeline.responses.append(body)
     report = run(ready_job())
-    row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get()
+    row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_kind="x_query")
     evidence = row.envelopes[-1]
     assert row.raw_count == 6
     assert evidence["received_post_ids"] == ["kept", "kept", "unmatched", "excluded", "outside", "invalid"]
@@ -923,7 +923,7 @@ def test_all_rejected_page_retains_receipt_and_can_truthfully_drain(pipeline):
     body["tweets"][0]["text"] = "ordinary lunch without tracked terms"
     pipeline.responses.append(body)
     report = run(ready_job())
-    row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get()
+    row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_kind="x_query")
     evidence = row.envelopes[-1]
     assert report["collection_drained"] and not report["recovered_post_ids"]
     assert row.raw_count == 1 and evidence["received_post_ids"] == ["rejected"]
@@ -967,7 +967,7 @@ def test_clipped_page_records_received_tail_ids_without_advancing(pipeline):
     body["tweets"] = [page(str(index))["tweets"][0] for index in range(21)]
     pipeline.responses.append(body)
     report = run(ready_job())
-    row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get()
+    row = CollectionRun.objects.get(pk=report["run_id"]).scopes.get(scope_kind="x_query")
     evidence = row.envelopes[-1]
     assert not row.enumeration_complete and row.cursor is None
     assert row.raw_count == evidence["raw_count"] == 21
@@ -1007,7 +1007,7 @@ def test_provider_safety_response_stops_all_scopes_and_preserves_cursor(pipeline
     assert attempt.request_count == 1 and attempt.status == "failed"
     assert not attempt.report["collection_drained"]
     assert attempt.report["global_failure"]["response_status_code"] == http_status
-    for row in attempt.scopes.all():
+    for row in attempt.scopes.filter(scope_kind="x_query"):
         assert row.cursor == "committed-cursor" and not row.enumeration_complete
     receipt = attempt.scopes.get(scope_key="B1:aug09").envelopes[-1]
     assert receipt["response_status_code"] == http_status and receipt["pages_received"] == 0

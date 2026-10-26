@@ -202,7 +202,10 @@ def verify_window(job_id, *, cfg, collection_only=False):
             or job.last_success.status != "success"
         ):
             raise ValueError("collection_not_successful")
-        scopes = list(job.last_success.scopes.all())
+        from core.collection_pages import page_receipts
+
+        scopes = list(job.last_success.scopes.filter(scope_kind="x_query"))
+        receipts = {scope.pk: page_receipts(scope) for scope in scopes}
         if (
             {(s.scope_kind, s.scope_key) for s in scopes}
             != {(u.get("scope_kind", "x_query"), u["scope_key"]) for u in job.scope["units"]}
@@ -214,9 +217,9 @@ def verify_window(job_id, *, cfg, collection_only=False):
         ):
             raise ValueError("collection_scope_not_drained")
         for scope in scopes:
-            if not any(e.get("collection_drained") for e in scope.envelopes):
+            if not any(e.get("collection_drained") for e in receipts[scope.pk]):
                 raise ValueError("collection_terminal_receipt_missing")
-            for envelope in scope.envelopes:
+            for envelope in receipts[scope.pk]:
                 if "received_post_ids" not in envelope:
                     continue  # Publication-only envelope; source page is separate.
                 received = envelope["received_post_ids"]
@@ -234,10 +237,10 @@ def verify_window(job_id, *, cfg, collection_only=False):
                 ):
                     raise ValueError("collection_page_accounting_mismatch")
         checkpoint_ids = {
-            str(i) for s in scopes for e in s.envelopes for i in e.get("post_ids", [])
+            str(i) for s in scopes for e in receipts[s.pk] for i in e.get("post_ids", [])
         }
         # Gate outcomes are durable source facts, independent of model enrichment.
-        hit_ids = {hit for scope in scopes for envelope in scope.envelopes
+        hit_ids = {hit for scope in scopes for envelope in receipts[scope.pk]
                    for hit in envelope.get("rare_hit_ids", [])}
         hits = list(RareTypeSearchHit.objects.filter(pk__in=hit_ids)
                     .values("pk", "gate_state", "post_id")) if hit_ids else []

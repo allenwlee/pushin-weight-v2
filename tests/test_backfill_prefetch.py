@@ -125,7 +125,7 @@ def test_twenty_fetches_use_exact_page_counts_and_shared_storage(http_pages):
     assert result["collection_drained"]
     assert state["peak"] == 20
     assert len(state["requests"]) == result["usage"]["api_requests"] == 20
-    rows = CollectionScopeRun.objects.filter(run_id=result["run_id"]).order_by("scope_key")
+    rows = CollectionScopeRun.objects.filter(run_id=result["run_id"], scope_kind="x_query").order_by("scope_key")
     for row in rows:
         i = int(row.scope_key.split(":")[1])
         assert row.raw_count == 1 + (i % 2)
@@ -139,7 +139,7 @@ def test_twenty_fetches_use_exact_page_counts_and_shared_storage(http_pages):
     assert project_scope_request_uses_batch(after_id=first.pk - 1).inserted == 1
     assert scope_request_use_mismatch_counts() == (0, 0)
     assert Post.objects.count() == 30
-    assert CollectionObservation.objects.filter(run_id=result["run_id"]).count() == 30
+    assert CollectionObservation.objects.filter(run_id=result["run_id"], source_subject_kind="post").count() == 30
     assert CollectionRequest.objects.filter(transport_outcome="received", archive__isnull=False).count() == 20
 
 
@@ -170,7 +170,7 @@ def test_restart_replays_archives_across_legacy_runs_without_paid_refetch(
     assert Post.objects.count() == 2
     assert CollectionRequest.objects.count() == 2
     assert CollectionScopeRequestUse.objects.filter(
-        scope_run__run_id=result["run_id"]
+        scope_run__run_id=result["run_id"], scope_run__scope_kind="x_query",
     ).exclude(request__scope_run__run_id=result["run_id"]).count() == 2
 
     from core.product_verification import source_repo_evidence
@@ -460,8 +460,8 @@ def test_expired_interrupted_run_resumes_committed_cursor_without_recollection(h
         with pytest.raises(StaleClaim, match="fixture interruption"):
             execute_job(job.pk, collection_options={"concurrency": 20})
         old = CollectionRun.objects.get(job=job)
-        assert old.status == "running" and old.scopes.get().cursor == "next"
-        saved = old.scopes.get()
+        assert old.status == "running" and old.scopes.get(scope_kind="x_query").cursor == "next"
+        saved = old.scopes.get(scope_kind="x_query")
         assert saved.request_uses.count() == 1
         saved.envelopes = []
         saved.save(update_fields=["envelopes"])

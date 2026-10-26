@@ -1292,6 +1292,7 @@ def scope_rare_hit_mismatch_counts() -> tuple[int, int]:
             "missing AS (SELECT * FROM expected EXCEPT SELECT scope_run_id,rare_hit_id "
             "FROM collection_scope_rare_hits), "
             "extra AS (SELECT scope_run_id,rare_hit_id FROM collection_scope_rare_hits "
+            "WHERE scope_run_id NOT IN (SELECT id FROM collection_scope_runs WHERE scope_kind='x_page_checkpoint') "
             "EXCEPT SELECT * FROM expected) "
             "SELECT (SELECT count(*) FROM missing),(SELECT count(*) FROM extra)"
         )
@@ -1349,7 +1350,9 @@ def scope_request_use_mismatch_counts() -> tuple[int, int]:
             "missing AS (SELECT * FROM expected EXCEPT "
             "SELECT scope_run_id,request_id,ordinal,observed_at FROM collection_scope_request_uses), "
             "extra AS (SELECT scope_run_id,request_id,ordinal,observed_at "
-            "FROM collection_scope_request_uses EXCEPT SELECT * FROM expected) "
+            "FROM collection_scope_request_uses "
+            "WHERE scope_run_id NOT IN (SELECT id FROM collection_scope_runs WHERE scope_kind='x_page_checkpoint') "
+            "EXCEPT SELECT * FROM expected) "
             "SELECT (SELECT count(*) FROM missing),(SELECT count(*) FROM extra)"
         )
         return tuple(cursor.fetchone())
@@ -1709,6 +1712,16 @@ def _document_expression(fields: tuple[str, ...]) -> str:
     return f"convert_to(jsonb_build_object({arguments})::text, 'UTF8')"
 
 
+def _legacy_owner_predicate(table: str) -> str:
+    # These new typed records never owned the retired collection JSON. Their
+    # archive pointer retains source checkpoint evidence, not their empty fields.
+    if table == "collection_scope_runs":
+        return "t.scope_kind <> 'x_page_checkpoint'"
+    if table == "collection_observations":
+        return "(t.observation_kind IS NULL OR t.observation_kind NOT IN ('x_page_checkpoint','x_page_appearance','x_page_diagnostic'))"
+    return "TRUE"
+
+
 def archive_legacy_batch(
     table: str, *, batch_size: int = 100, repair_stale: bool = False
 ) -> ArchiveBatch:
@@ -1731,6 +1744,7 @@ def archive_legacy_batch(
     else:
         source = f"{table} t"
         needed = "t.legacy_archive_id IS NULL"
+    needed = f"({needed}) AND {_legacy_owner_predicate(table)}"
     with transaction.atomic(), connection.cursor() as cursor:
         cursor.execute("SET LOCAL lock_timeout = '5s'")
         cursor.execute("SET LOCAL statement_timeout = '30s'")
@@ -1803,12 +1817,13 @@ def stale_legacy_archive_count(table: str, *, batch_size: int = 1000) -> int:
             cursor.execute("SET LOCAL enable_mergejoin = off")
             cursor.execute("SET LOCAL max_parallel_workers_per_gather = 0")
             cursor.execute("SET LOCAL statement_timeout = '30s'")
-            where = "WHERE id > %s" if after_id is not None else ""
+            where = "WHERE t.id > %s AND " if after_id is not None else "WHERE "
+            where += _legacy_owner_predicate(table)
             params = ([after_id] if after_id is not None else []) + [batch_size, ENCODING]
             cursor.execute(
                 f"""
                 WITH selected AS MATERIALIZED (
-                    SELECT id FROM {table} {where} ORDER BY id LIMIT %s
+                    SELECT t.id FROM {table} t {where} ORDER BY t.id LIMIT %s
                 )
                 SELECT
                     (SELECT id FROM selected ORDER BY id DESC LIMIT 1),

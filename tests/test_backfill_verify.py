@@ -213,13 +213,19 @@ def test_collection_window_accepts_only_complete_durable_zero_results(native, br
         envelope["post_ids"] = ["missing-member"]
     if broken == "rare":
         envelope["rare_hit_ids"] = [999999999]
-    CollectionScopeRun.objects.create(
+    scoped = CollectionScopeRun.objects.create(
         run=run, scope_kind=unit["scope_kind"], scope_key=unit["scope_key"],
         ownership=unit["ownership"], enumeration_complete=broken != "cursor",
         outcome="pending" if broken == "cursor" else "complete", envelopes=[envelope],
         execution_state="yielded" if broken == "cursor" else "completed",
         coverage_state="partial" if broken == "cursor" else "complete",
     )
+    if broken not in {"membership", "rare"}:
+        from core.collection_pages import project_page_receipts
+
+        project_page_receipts(scoped, [envelope])
+    scoped.envelopes = []
+    scoped.save(update_fields=["envelopes"])
     if broken:
         with pytest.raises(ValueError, match="collection_"):
             verify_collection_window(job.pk, cfg=cfg)

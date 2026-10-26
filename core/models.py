@@ -3617,6 +3617,13 @@ class CollectionScopeRun(models.Model):
     outcome = models.CharField(max_length=64, default="pending")
     envelopes = models.JSONField(default=list)
     raw_count = models.BigIntegerField(default=0)
+    checkpoint_ordinal = models.PositiveIntegerField(null=True)
+    pages_received = models.PositiveIntegerField(null=True)
+    raw_count_known = models.BooleanField(null=True)
+    received_ids_known = models.BooleanField(null=True)
+    prefetch_replayed = models.BooleanField(null=True)
+    response_status_code = models.PositiveSmallIntegerField(null=True)
+    retry_after_seconds = models.PositiveIntegerField(null=True)
 
     @property
     def recorded_cursors(self):
@@ -3630,6 +3637,26 @@ class CollectionScopeRun(models.Model):
             models.UniqueConstraint(
                 fields=["run", "scope_kind", "scope_key"],
                 name="uq_collection_run_scope",
+            ),
+            models.UniqueConstraint(
+                fields=["parent_scope", "checkpoint_ordinal"],
+                name="uq_scope_checkpoint_ordinal",
+            ),
+            models.CheckConstraint(
+                condition=(models.Q(scope_kind="x_page_checkpoint", parent_scope__isnull=False,
+                                    checkpoint_ordinal__isnull=False, raw_count_known__isnull=False,
+                                    received_ids_known__isnull=False, raw_count__gte=0)
+                           | (~models.Q(scope_kind="x_page_checkpoint")
+                              & models.Q(checkpoint_ordinal__isnull=True, pages_received__isnull=True,
+                                         raw_count_known__isnull=True, received_ids_known__isnull=True,
+                                         prefetch_replayed__isnull=True, response_status_code__isnull=True,
+                                         retry_after_seconds__isnull=True))),
+                name="ck_scope_page_receipt",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(response_status_code__isnull=True)
+                | models.Q(response_status_code__gte=100, response_status_code__lte=599),
+                name="ck_scope_page_http_status",
             ),
         )
 
@@ -9038,6 +9065,8 @@ class CollectionRun(models.Model):
 
 
 class CollectionObservation(models.Model):
+    receipt_ordinal = models.PositiveIntegerField(null=True)
+    source_identifier_is_null = models.BooleanField(null=True)
     source_dataset = models.ForeignKey(SourceDataset, null=True, on_delete=models.PROTECT)
     input_set_sha256 = models.CharField(max_length=64, null=True)
     observation_kind = models.CharField(max_length=32, null=True)
@@ -9116,6 +9145,29 @@ class CollectionObservation(models.Model):
             ),
         ]
         constraints = [
+            models.UniqueConstraint(
+                fields=["scope_run", "observation_kind", "receipt_ordinal"],
+                name="uq_observation_receipt_ordinal",
+            ),
+            models.CheckConstraint(
+                condition=(models.Q(observation_kind="x_page_appearance", source_subject_kind="post_appearance",
+                                    scope_run__isnull=False, receipt_ordinal__isnull=False,
+                                    source_identifier_is_null__isnull=False, processing_outcome__isnull=False)
+                           | (models.Q(observation_kind="x_page_diagnostic", source_subject_kind="aggregate",
+                                       scope_run__isnull=False, receipt_ordinal__isnull=False,
+                                       source_identifier_is_null__isnull=True))
+                           | (models.Q(receipt_ordinal__isnull=True, source_identifier_is_null__isnull=True)
+                              & ~models.Q(source_subject_kind="post_appearance")
+                              & (models.Q(observation_kind__isnull=True)
+                                 | ~models.Q(observation_kind__in=["x_page_appearance", "x_page_diagnostic"])))),
+                name="ck_observation_page_receipt",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(source_identifier_is_null__isnull=True)
+                | models.Q(source_identifier_is_null=False)
+                | models.Q(source_identifier=""),
+                name="ck_observation_null_native_id",
+            ),
             models.CheckConstraint(
                 condition=(models.Q(source_subject_kind="post", post__isnull=False, source_identifier=models.F("post_id"), product__isnull=True, mapping__isnull=True, created_product=False) | (models.Q(post__isnull=True) & ~models.Q(source_subject_kind="post"))),
                 name="ck_observation_post_subject",
@@ -9150,6 +9202,7 @@ class CollectionObservation(models.Model):
                         "account",
                         "aggregate",
                         "post",
+                        "post_appearance",
                     ]
                 ),
                 name="ck_observation_kind",
