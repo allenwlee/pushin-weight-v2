@@ -108,13 +108,13 @@ def import_legacy_timing_batch(
         if not owner_ids:
             return CorrectionImportBatch(after_id, 0, 0, 0)
         observations_query = CollectionObservation.objects.filter(
-            pk__in=owner_ids,
+            pk__in=owner_ids, legacy_archive__isnull=False,
         ).select_related("legacy_archive")
         if not verify_only:
             observations_query = observations_query.select_for_update(of=("self",))
         observations = list(
             observations_query.only(
-                "id", "source_metadata", "legacy_archive__body",
+                "id", "legacy_archive__body",
                 "legacy_archive__content_sha256",
             ).order_by("pk")
         )

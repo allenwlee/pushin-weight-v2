@@ -7,6 +7,7 @@ import pytest
 from django.core.management import call_command
 from django.utils import timezone
 
+from core.collection_capture import archive_legacy
 from core.collection_jobs import register_job
 from core.measurement_taxonomy import digest
 from core.models import (
@@ -75,8 +76,11 @@ def catalog_fixture(name="Model-7B-Instruct", source="arena", native=None):
         source_subject_kind="model",
         observation_key=digest([str(product.pk), native]),
         observation_kind="publication_row",
-        dimensions={"kind": "publication_row"},
-        listing={"rows": [{"model": native}]},
+        legacy_archive=archive_legacy({
+            "dimensions": {"kind": "publication_row"},
+            "listing": {"rows": [{"model": native}]},
+            "source_metadata": {},
+        }),
     )
     return brand, product, observation
 
@@ -230,17 +234,12 @@ def test_reviewed_apply_is_idempotent_and_durable_without_metric_writes():
 
 @pytest.mark.django_db(transaction=True)
 def test_reviewed_match_uses_typed_decision_after_observation_json_retirement():
-    from core.collection_capture import archive_legacy, run_report_document
+    from core.collection_capture import run_report_document
     from core.collection_matching import apply_matches
     from tests.test_hf_catalog_retirement import denied_retirement_columns
 
     brand, product, observation = catalog_fixture()
-    observation.legacy_archive = archive_legacy({
-        "listing": observation.listing,
-        "dimensions": observation.dimensions,
-        "source_metadata": observation.source_metadata,
-    })
-    observation.save(update_fields=["legacy_archive"])
+    assert observation.legacy_archive_id is not None
     with denied_retirement_columns():
         report = preview(brand)
         result = apply_reviewed(report)
@@ -286,24 +285,12 @@ def test_changed_evidence_rolls_back_mapping_and_checkpoint():
 
 
 def test_match_evidence_pin_survives_retired_observation_documents():
-    from core.collection_capture import archive_legacy
-
     brand, _, observation = catalog_fixture()
     cutoff = timezone.now()
     expected = preview(brand, cutoff=cutoff)
-    observation.legacy_archive = archive_legacy(
-        {
-            "listing": observation.listing,
-            "dimensions": observation.dimensions,
-            "source_metadata": observation.source_metadata,
-        }
-    )
-    observation.listing = {}
-    observation.dimensions = {}
-    observation.source_metadata = {}
-    observation.save(
-        update_fields=["legacy_archive", "listing", "dimensions", "source_metadata"]
-    )
+    assert observation.legacy_archive_id is not None
+    assert not hasattr(observation, "listing")
+    observation.refresh_from_db()
     assert preview(brand, cutoff=cutoff) == expected
     apply_reviewed(expected)
     assert SourceSubjectMapping.objects.get().external_identifier == observation.source_identifier
@@ -424,20 +411,14 @@ def test_embedded_publication_identity_is_present_without_metric_rows():
     identifier = observation.source_identifier
     observation.source_identifier = "publication:2026-10-17"
     observation.source_subject_kind = "aggregate"
-    observation.dimensions = {"kind": "publication_window"}
     observation.observation_kind = "publication_window"
-    observation.listing = {"rows": [{"model_name": identifier}]}
-    observation.save()
     observation.legacy_archive = archive_legacy({
-        "listing": observation.listing,
-        "dimensions": observation.dimensions,
-        "source_metadata": observation.source_metadata,
+        "listing": {"rows": [{"model_name": identifier}]},
+        "dimensions": {"kind": "publication_window"},
+        "source_metadata": {},
     })
-    observation.listing = {}
-    observation.dimensions = {}
-    observation.source_metadata = {}
     observation.save(update_fields=[
-        "legacy_archive", "listing", "dimensions", "source_metadata",
+        "source_identifier", "source_subject_kind", "observation_kind", "legacy_archive",
     ])
     report = preview(brand)
     assert report["products"][0]["candidates"][0]["identifier"] == identifier
@@ -461,7 +442,12 @@ def test_continuation_processes_at_most_fifty_choices_and_reuses_run():
             source_identifier=f"model{index}",
             source_subject_kind="model",
             observation_key=digest(["continuation", index]),
-            dimensions={"kind": "publication_row"},
+            observation_kind="publication_row",
+            legacy_archive=archive_legacy({
+                "listing": {"rows": [{"model": f"model{index}"}]},
+                "dimensions": {"kind": "publication_row"},
+                "source_metadata": {},
+            }),
         )
     first_result = apply_reviewed(preview(brand))
     assert first_result["status"] == "partial"
@@ -602,10 +588,20 @@ def test_review_capped_publication_search_preserves_unknown_presence():
     identity = observation.source_identifier
     observation.source_identifier = "publication:oldest"
     observation.source_subject_kind = "aggregate"
-    observation.dimensions = {"kind": "publication_window"}
     observation.observation_kind = "publication_window"
-    observation.listing = {"rows": [{"model_name": identity}]}
-    observation.save()
+    observation.legacy_archive = archive_legacy({
+        "listing": {"rows": [{"model_name": identity}]},
+        "dimensions": {"kind": "publication_window"},
+        "source_metadata": {},
+    })
+    observation.save(update_fields=[
+        "source_identifier", "source_subject_kind", "observation_kind", "legacy_archive",
+    ])
+    unrelated = archive_legacy({
+        "listing": {"rows": [{"model_name": "unrelated"}]},
+        "dimensions": {"kind": "publication_window"},
+        "source_metadata": {},
+    })
     CollectionObservation.objects.bulk_create(
         [
             CollectionObservation(
@@ -614,8 +610,7 @@ def test_review_capped_publication_search_preserves_unknown_presence():
                 source_subject_kind="aggregate",
                 observation_key=digest(["cap", i]),
                 observation_kind="publication_window",
-                listing={"rows": [{"model_name": f"unrelated-{i}"}]},
-                dimensions={"kind": "publication_window"},
+                legacy_archive=unrelated,
             )
             for i in range(501)
         ]
@@ -662,15 +657,20 @@ def test_review_explicit_first_party_reference_qualifies_without_candidate_appro
     product.card_data = {"github": url}
     product.save()
     observation.source_subject_kind = "repository"
-    observation.dimensions = {"kind": "repository"}
     observation.observation_kind = "repository"
-    observation.listing = {
-        "id": 123,
-        "full_name": "publisher/Model-7B-Instruct",
-        "private": False,
-        "owner": {"id": 42, "login": "publisher"},
-    }
-    observation.save()
+    observation.legacy_archive = archive_legacy({
+        "listing": {
+            "id": 123,
+            "full_name": "publisher/Model-7B-Instruct",
+            "private": False,
+            "owner": {"id": 42, "login": "publisher"},
+        },
+        "dimensions": {"kind": "repository"},
+        "source_metadata": {},
+    })
+    observation.save(update_fields=[
+        "source_subject_kind", "observation_kind", "legacy_archive",
+    ])
     report = preview_matches(brand_ids=[brand.pk], sources=["github"])
     candidate = report["products"][0]["candidates"][0]
     assert candidate["decision"] == "qualified" and candidate["confidence_pct"] == 99

@@ -3615,12 +3615,9 @@ class CollectionScopeRun(models.Model):
     error_code = models.CharField(max_length=64, null=True)
     retry_at = models.DateTimeField(null=True)
     legacy_archive = models.ForeignKey("CollectionEvidenceArchive", null=True, on_delete=models.PROTECT, related_name="legacy_scopes")
-    ownership = models.JSONField()
     cursor = models.TextField(null=True, blank=True)
-    cursor_history = models.JSONField(default=list)
     enumeration_complete = models.BooleanField(default=False)
     outcome = models.CharField(max_length=64, default="pending")
-    envelopes = models.JSONField(default=list)
     raw_count = models.BigIntegerField(default=0)
     checkpoint_ordinal = models.PositiveIntegerField(null=True)
     pages_received = models.PositiveIntegerField(null=True)
@@ -8995,8 +8992,6 @@ class CollectionRun(models.Model):
     scheduled_slot_at = models.DateTimeField(null=True)
     legacy_archive = models.ForeignKey("CollectionEvidenceArchive", null=True, on_delete=models.PROTECT, related_name="legacy_runs")
     lease_token = models.UUIDField(null=True)
-    invocations = models.JSONField(default=list, db_default=[])
-    report = models.JSONField(default=dict, db_default={})
     updated_at = models.DateTimeField(auto_now=True, null=True)
     ingestion_key = models.CharField(max_length=64, unique=True)
     status = models.CharField(max_length=16, default="running")
@@ -9007,8 +9002,6 @@ class CollectionRun(models.Model):
     source_as_of = models.DateTimeField(null=True)
     direct_ingestion = models.BooleanField(null=True)
     source_url = models.TextField(default="")
-    request_params = models.JSONField(default=dict)
-    source_metadata = models.JSONField(default=dict)
     source_metadata_archive = models.ForeignKey(
         "CollectionEvidenceArchive", null=True, on_delete=models.PROTECT,
         related_name="source_metadata_runs",
@@ -9018,7 +9011,6 @@ class CollectionRun(models.Model):
     selected_count = models.PositiveIntegerField(default=0)
     success_count = models.PositiveIntegerField(default=0)
     payload_sha256 = models.CharField(max_length=64, null=True)
-    raw_payload = models.JSONField(null=True)
     payload_archive = models.ForeignKey(
         "CollectionEvidenceArchive", null=True, on_delete=models.PROTECT,
         related_name="payload_runs",
@@ -9165,9 +9157,6 @@ class CollectionObservation(models.Model):
         related_name="collection_observations",
     )
     created_product = models.BooleanField(default=False, db_default=False)
-    listing = models.JSONField(default=dict, db_default={})
-    envelopes = models.JSONField(default=list, db_default=[])
-    groups = models.JSONField(default=dict, db_default={})
     processing_outcome = models.CharField(max_length=64, null=True)
     updated_at = models.DateTimeField(auto_now=True, null=True)
     mapping = models.ForeignKey(
@@ -9176,8 +9165,6 @@ class CollectionObservation(models.Model):
     source_identifier = models.CharField(max_length=256)
     source_subject_kind = models.CharField(max_length=32)
     observed_at = models.DateTimeField(default=timezone.now)
-    dimensions = models.JSONField(default=dict)
-    source_metadata = models.JSONField(default=dict)
     observation_key = models.CharField(max_length=64)
     status = models.CharField(max_length=16, default="ok")
     published_at = models.DateTimeField(null=True)
@@ -9249,11 +9236,6 @@ class CollectionObservation(models.Model):
             ),
             models.UniqueConstraint(
                 fields=["run", "observation_key"], name="uq_metric_observation"
-            ),
-            models.UniqueConstraint(
-                fields=["observation_key"],
-                condition=models.Q(source_metadata__projection_kind="source-statistics-v1"),
-                name="uq_source_statistics_snapshot",
             ),
             models.UniqueConstraint(
                 fields=["observation_key"],
