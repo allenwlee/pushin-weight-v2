@@ -617,7 +617,7 @@ def record_scope_request_uses(scope, envelopes):
         for use in scope.request_uses.all()
     }
     require(set(existing) <= set(ids), "typed request use exceeds scope receipt")
-    inserted = 0
+    missing = []
     for ordinal, envelope in wanted:
         request = requests[str(envelope["prefetch_request_id"])]
         observed_at = aware_instant(envelope["observed_at"])
@@ -639,12 +639,14 @@ def record_scope_request_uses(scope, envelopes):
                 "scope captured request order or time changed",
             )
         else:
-            CollectionScopeRequestUse.objects.create(
-                scope_run=scope, request=request,
-                ordinal=ordinal, observed_at=observed_at,
+            missing.append(
+                CollectionScopeRequestUse(
+                    scope_run=scope, request=request,
+                    ordinal=ordinal, observed_at=observed_at,
+                )
             )
-            inserted += 1
-    return inserted
+    CollectionScopeRequestUse.objects.bulk_create(missing)
+    return len(missing)
 
 
 def checkpoint_scope(
