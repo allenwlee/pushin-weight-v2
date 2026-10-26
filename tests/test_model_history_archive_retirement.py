@@ -202,7 +202,6 @@ def test_unadopted_old_archive_is_rejected_before_any_range_request(legacy):
             run_id=claim.run_id,
             scope_kind="archive_snapshot",
             scope_key=key,
-            ownership={},
         )
     else:
         CollectionObservation.objects.create(
@@ -225,14 +224,21 @@ def test_generic_archive_repair_keeps_selected_source_capture():
         stale_legacy_archive_count,
     )
 
-    job, _, budget, _ = configured()
+    job, _, budget, calls = configured()
     claim = claim_job(job.pk, typed=True)
     acquire_hf_archives(claim, job, budget)
     snapshot = CollectionObservation.objects.get(projection_kind=SNAPSHOT_CAPTURE)
-    archive_id = snapshot.legacy_archive_id
-    archive_legacy_batch("collection_observations", batch_size=100, repair_stale=True)
+    archive_id, archive_bytes = snapshot.legacy_archive_id, bytes(snapshot.legacy_archive.body)
+    pointers = dict(CollectionObservation.objects.values_list("pk", "legacy_archive_id"))
+    before = len(calls)
+    result = archive_legacy_batch("collection_observations", batch_size=100, repair_stale=True)
+    assert result.selected == result.archived == 0
+    assert archive_legacy_batch("collection_observations", repair_stale=True).selected == 0
     snapshot.refresh_from_db()
     assert snapshot.legacy_archive_id == archive_id
+    assert bytes(snapshot.legacy_archive.body) == archive_bytes
+    assert dict(CollectionObservation.objects.values_list("pk", "legacy_archive_id")) == pointers
+    assert len(calls) == before
     assert stale_legacy_archive_count("collection_observations") == 0
     assert observation_object_documents(snapshot)[0]["raw_artifact_sha256"] == digest(
         observation_object_documents(snapshot)[0]["payload"]

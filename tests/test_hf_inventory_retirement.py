@@ -6,6 +6,7 @@ from io import StringIO
 import httpx
 import pytest
 from django.core.management import call_command
+from django.db import connection
 
 from core.collection_capture import (
     observation_object_documents,
@@ -146,9 +147,18 @@ def test_archive_sweep_preserves_typed_inventory_evidence_and_copies_legacy_neig
     assert archive_legacy_batch("collection_observations", repair_stale=True).selected == 0
     legacy = CollectionObservation.objects.create(
         run=run, source_subject_kind="repository", source_identifier="lab/old",
-        observation_key=digest(["historical-neighbor"]), listing={"id": "lab/old"},
+        observation_key=digest(["historical-neighbor"]),
     )
+    # This is a pre-DROP migration fixture. The old physical column remains
+    # during ORM detachment; runtime models must never regain its descriptor.
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE collection_observations SET listing=%s::jsonb WHERE id=%s",
+            [json.dumps({"id": "lab/old"}), legacy.pk],
+        )
     assert stale_legacy_archive_count("collection_observations", batch_size=1) == 1
     assert archive_legacy_batch("collection_observations", repair_stale=True).selected == 1
     assert stale_legacy_archive_count("collection_observations", batch_size=1) == 0
+    legacy.refresh_from_db()
+    assert read_document(legacy.legacy_archive)["listing"] == {"id": "lab/old"}
     assert dict(run.observations.exclude(pk=legacy.pk).values_list("pk", "legacy_archive_id")) == pointers
