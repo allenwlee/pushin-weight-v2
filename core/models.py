@@ -9079,6 +9079,11 @@ class CollectionObservation(models.Model):
     class Meta:
         db_table = "collection_observations"
         indexes = [
+            models.Index(
+                fields=["id"],
+                condition=models.Q(legacy_archive__isnull=True),
+                name="idx_rg6_obs_unarchived",
+            ),
             models.Index(fields=["run", "post"], name="idx_observation_run_post"),
             models.Index(
                 fields=["mapping", "observed_at"], name="idx_observation_mapping_time"
