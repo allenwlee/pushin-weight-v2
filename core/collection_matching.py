@@ -998,8 +998,10 @@ def execute_matches(job_id):
                         }
                     ],
                 )
-        scopes = list(CollectionScopeRun.objects.filter(run_id=claim.run_id))
-        counts = Counter(s.envelopes[0]["decision"] for s in scopes if s.envelopes)
+        scopes = list(CollectionScopeRun.objects.filter(
+            run_id=claim.run_id, scope_kind="product_match",
+        ))
+        counts = Counter(s.outcome for s in scopes if s.enumeration_complete)
         complete = len(scopes) == len(scope["matches"])
         run = finish_run(
             claim,
