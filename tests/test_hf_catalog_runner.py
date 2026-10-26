@@ -93,6 +93,8 @@ def test_request_cap_commits_discovery_before_pending_enrichment_and_resumes():
     assert resumed["requests"] == 4
     assert resumed["cumulative_requests"] == 6
     assert resumed["imported"] == 2
+    run = CollectionRun.objects.get(pk=result["run_id"])
+    assert list(run.attempts.order_by("ordinal").values_list("actual_requests", flat=True)) == [2, 4]
 
 
 def test_resumed_projection_reuses_loaded_job_instead_of_fetching_per_model(monkeypatch):

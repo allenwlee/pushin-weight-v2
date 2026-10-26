@@ -105,6 +105,70 @@ def test_invocation_copy_accepts_existing_attempt_with_non_uuid_identity():
     assert job.runs.get(pk=claim.run_id).attempts.get().outcome == "running"
 
 
+def test_archived_catalog_invocations_keep_known_usage_and_finish_clocks():
+    from core.measurement_taxonomy import digest
+    from core.models import CollectionAttempt, CollectionJob, CollectionRun
+    from tests.test_collection_jobs import ready
+
+    source = ready().source
+    definition = {
+        "version": 1, "scope": {},
+        "execution": {"executable": False},
+    }
+    job = CollectionJob.objects.create(
+        job_key="rg6-archived-invocations", source=source,
+        purpose="catalog", operation="archived_run", mode="manual",
+        definition=definition, definition_sha256=digest(definition),
+        state="completed",
+    )
+    run = CollectionRun.objects.create(
+        job=job,
+        ingestion_key=digest("rg6-archived-invocations"),
+        status="success",
+        completed_at=datetime(2026, 10, 20, 12, tzinfo=UTC),
+        invocations=[
+            {
+                "started_at": "2026-10-20T10:00:00+00:00",
+                "ended_at": "2026-10-20T10:30:00+00:00",
+                "outcome": "partial", "requests": 4, "retries": 1,
+                "max_requests": 10, "max_models": None,
+                "last_request": {"endpoint": "models"},
+            },
+            {
+                "started_at": "2026-10-20T11:00:00+00:00",
+                "ended_at": "2026-10-20T12:00:00+00:00",
+                "outcome": "complete", "requests": 5, "retries": 0,
+                "max_requests": 2**63 - 1, "max_models": 20,
+                "last_request": {"endpoint": "models"},
+            },
+        ],
+    )
+    CollectionAttempt.objects.create(
+        run=run, attempt_key=digest([str(run.pk), "lease-token"]),
+        ordinal=1, started_at=datetime(2026, 10, 20, 10, tzinfo=UTC),
+        finished_at=datetime(2026, 10, 20, 10, 30, tzinfo=UTC),
+        outcome="partial", actual_requests=4, reserved_requests=10,
+    )
+    with pytest.raises(ValueError, match="missing historical attempt"):
+        project_run_invocations_batch(verify_only=True)
+    assert project_run_invocations_batch().inserted == 1
+    first, second = run.attempts.order_by("ordinal")
+    assert [first.outcome, second.outcome] == ["partial", "success"]
+    assert [first.actual_requests, second.actual_requests] == [4, 5]
+    assert [first.reserved_requests, second.reserved_requests] == [10, None]
+    assert [first.effective_items, second.effective_items] == [None, 20]
+    assert first.finished_at == datetime(2026, 10, 20, 10, 30, tzinfo=UTC)
+    assert project_run_invocations_batch(verify_only=True).inserted == 0
+    CollectionAttempt.objects.create(
+        run=run, attempt_key=digest([str(run.pk), "pre-receipt-crash"]),
+        ordinal=3, outcome="interrupted",
+    )
+    assert project_run_invocations_batch(verify_only=True).inserted == 0
+    assert archive_legacy_batch("collection_runs").archived == 1
+    run.refresh_from_db()
+    assert read_document(run.legacy_archive)["invocations"][1]["max_requests"] == 2**63 - 1
+
+
 def test_x_scope_bounds_copy_rechecks_older_rows_and_rejects_invalid_epochs():
     _, _, scope = execution()
     scope.scope_kind = "x_query"

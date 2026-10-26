@@ -667,6 +667,9 @@ def execute_catalog(*, hf, scope=None, run_id=None, max_models=None):
                     run.save()
                     from core.collection_state import complete_attempt
 
-                    complete_attempt(claim, run, status=run.status, request_count=hf.requests)
+                    complete_attempt(
+                        claim, run, status=run.status,
+                        request_count=prior_requests + hf.requests,
+                    )
             finally:
                 hf.on_attempt = None

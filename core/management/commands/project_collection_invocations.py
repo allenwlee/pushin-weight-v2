@@ -6,7 +6,7 @@ from core.collection_storage_migration import project_run_invocations_batch
 
 
 class Command(BaseCommand):
-    help = "Copy or verify ordered run invocations as typed attempts; archived catalog runs are separate"
+    help = "Copy or verify ordered run invocations, including archived catalog receipts"
 
     def add_arguments(self, parser):
         parser.add_argument("--batch-size", type=int, default=200)

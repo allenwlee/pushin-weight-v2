@@ -109,13 +109,13 @@ def project_run_invocations_batch(
     *, after_id: UUID | None = None, batch_size: int = 200,
     verify_only: bool = False,
 ) -> InvocationBatch:
-    """Recover shared-collector attempts from ordered legacy run receipts.
+    """Recover attempts from ordered legacy run receipts.
 
     The original invocation string remains in the immutable run archive.
     Its existing job-qualified digest is the operational idempotency key;
     historical receipts without a finish clock retain an unknown outcome.
-    Direct archived-catalog runs have a different receipt format and are
-    reconciled separately.
+    Direct archived-catalog runs have a different receipt shape and retain
+    their known request counts, limits and finish clocks.
     """
     from core.measurement_taxonomy import digest
 
@@ -130,7 +130,6 @@ def project_run_invocations_batch(
         runs = list(
             CollectionRun.objects.select_for_update()
             .select_related("job")
-            .exclude(job__operation="archived_run")
             .exclude(invocations=[])
             .filter(pk__gt=after_id or UUID(int=0))
             .order_by("pk")[:batch_size]
@@ -145,19 +144,35 @@ def project_run_invocations_batch(
         missing = []
         for run in runs:
             for ordinal, receipt in enumerate(run.invocations, start=1):
+                attempt = existing.pop((run.pk, ordinal), None)
+                if run.job.operation == "archived_run":
+                    values = _archived_invocation_values(receipt)
+                    if attempt is not None:
+                        if (
+                            attempt.started_at is None
+                            or abs((attempt.started_at - values["started_at"]).total_seconds()) > 60
+                            or attempt.outcome != values["outcome"]
+                            or attempt.actual_requests != values["actual_requests"]
+                        ):
+                            raise ValueError("historical attempt differs from invocation receipt")
+                        continue
+                    if verify_only:
+                        raise ValueError("missing historical attempt")
+                    missing.append(CollectionAttempt(
+                        run=run,
+                        attempt_key=digest(["archived-catalog-invocation-v1", str(run.pk), ordinal]),
+                        ordinal=ordinal,
+                        imported_at=timezone.now(),
+                        **values,
+                    ))
+                    continue
                 if type(receipt) is not dict or set(receipt) != {"invocation_id", "started_at"}:
                     raise ValueError("unsupported historical invocation receipt")
                 identity = receipt["invocation_id"]
                 if type(identity) is not str or not 0 < len(identity) <= 256:
                     raise ValueError("invalid historical invocation identity")
-                try:
-                    started_at = datetime.fromisoformat(receipt["started_at"])
-                except (TypeError, ValueError):
-                    raise ValueError("invalid historical invocation clock") from None
-                if timezone.is_naive(started_at):
-                    raise ValueError("invalid historical invocation clock")
+                started_at = _historical_timestamp(receipt["started_at"])
                 attempt_key = digest({"job": str(run.job_id), "invocation": identity})
-                attempt = existing.pop((run.pk, ordinal), None)
                 if attempt is None:
                     if verify_only:
                         raise ValueError("missing historical attempt")
@@ -168,10 +183,70 @@ def project_run_invocations_batch(
                     ))
                 elif attempt.attempt_key != attempt_key or attempt.started_at != started_at:
                     raise ValueError("historical attempt differs from invocation receipt")
-        if existing:
+        operation_by_run = {run.pk: run.job.operation for run in runs}
+        if any(operation_by_run[run_id] != "archived_run" for run_id, _ in existing):
             raise ValueError("typed attempt has no historical invocation receipt")
         CollectionAttempt.objects.bulk_create(missing, batch_size=500)
         return InvocationBatch(runs[-1].pk, len(runs), len(missing))
+
+
+def _historical_timestamp(value):
+    try:
+        parsed = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        raise ValueError("invalid historical invocation clock") from None
+    if timezone.is_naive(parsed):
+        raise ValueError("invalid historical invocation clock")
+    return parsed
+
+
+def _archived_invocation_values(receipt):
+    required = {"started_at", "requests", "max_requests", "max_models", "outcome"}
+    allowed = required | {
+        "ended_at", "retries", "last_request", "max_seconds",
+        "max_response_bytes", "max_total_bytes",
+    }
+    if type(receipt) is not dict or not required <= set(receipt) or set(receipt) - allowed:
+        raise ValueError("unsupported archived invocation receipt")
+    requests = receipt["requests"]
+    maximum = receipt["max_requests"]
+    items = receipt["max_models"]
+    seconds = receipt.get("max_seconds")
+    total_bytes = receipt.get("max_total_bytes")
+    if (
+        type(requests) is not int or requests < 0
+        or type(maximum) is not int or maximum <= 0
+        or (maximum > 2_147_483_647 and maximum != 2**63 - 1)
+        or (items is not None and (type(items) is not int or items <= 0))
+        or (seconds is not None and (type(seconds) is not int or seconds <= 0))
+        or (total_bytes is not None and (type(total_bytes) is not int or total_bytes <= 0))
+    ):
+        raise ValueError("invalid archived invocation accounting")
+    outcome = receipt["outcome"]
+    if type(outcome) is not str or outcome not in {
+        "complete", "partial", "interrupted", "running", "failed",
+    }:
+        raise ValueError("invalid archived invocation outcome")
+    started_at = _historical_timestamp(receipt["started_at"])
+    finished_at = (
+        _historical_timestamp(receipt["ended_at"])
+        if receipt.get("ended_at") else None
+    )
+    if finished_at is not None and finished_at < started_at:
+        raise ValueError("invalid archived invocation finish clock")
+    return {
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "outcome": "success" if outcome == "complete" else outcome,
+        "actual_requests": requests,
+        # The old sys.maxsize sentinel means no cap, not a real reservation.
+        # Its exact spelling remains in the run's immutable evidence archive.
+        "reserved_requests": None if maximum == 2**63 - 1 else maximum,
+        "effective_items": items,
+        "effective_seconds": seconds,
+        "reserved_bytes": total_bytes,
+        "accounting_complete": False,
+    }
 
 
 PROVENANCE_EXPRESSIONS = {
