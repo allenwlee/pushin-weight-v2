@@ -13,6 +13,7 @@ from django.utils import timezone
 from core.benchmark_metric_store import native_date
 from core.benchmark_serving import (
     hydrate_observations,
+    observation_dimensions,
     observation_ids,
     publication_runs,
 )
@@ -203,7 +204,7 @@ def _point(value, definition, day):
                 "period_label_date",
             )
         },
-        "dimensions": observation.dimensions,
+        "dimensions": observation_dimensions(observation),
         "secondary_source": metadata.get("secondary_source", False),
         "history_basis": metadata.get(
             "history_basis",
@@ -364,7 +365,7 @@ def metric_points(contract, line, days):
             observation__run__status__in=["success", "partial"],
             observation__status="ok",
         )
-        .select_related("observation__run")
+        .select_related("observation__run__job")
         .defer("observation__source_metadata", "observation__run__source_metadata",
                "observation__run__report", "observation__run__raw_payload", "observation__run__request_params")
         .prefetch_related("observation__values__source_metric")
@@ -378,9 +379,10 @@ def metric_points(contract, line, days):
         observation = value.observation
         run = observation.run
         required_dimensions = line.get("dimensions", {})
+        actual_dimensions = observation_dimensions(observation)
         require(
             all(
-                observation.dimensions.get(k) == v
+                actual_dimensions.get(k) == v
                 for k, v in required_dimensions.items()
             ),
             "line context differs from source observation",

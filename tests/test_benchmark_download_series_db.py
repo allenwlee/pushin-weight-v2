@@ -36,6 +36,42 @@ def test_openrouter_absence_uses_typed_day_even_for_unmapped_or_aggregate_rows(i
     assert all(point["raw_value"] is None for point in after)
 
 
+@pytest.mark.parametrize("source", ["openrouter", "arena"])
+def test_chart_dimensions_and_selection_survive_retired_observation_documents(source):
+    from core.benchmark_metric_series import metric_points
+    from core.benchmark_metric_store import persist_source
+    from core.models import CollectionObservation
+    from tests.test_benchmark_download_persistence import provider_contract
+
+    if source == "openrouter":
+        contract = provider_contract(source, ["total_tokens"])
+        record = {"date": "2026-10-05", "model_permaslug": "lab/model", "total_tokens": "100"}
+        payload = {"status": "ok", "meta": {"version": "v1"},
+                   "as_of": "2026-10-06T00:30:00Z", "rows": [record]}
+        day, metric, dimensions = "2026-10-05", "total_tokens", {"date": "2026-10-05"}
+    else:
+        contract = provider_contract(source, ["rating", "rating_lower", "rating_upper", "rank"])
+        record = {"model_name": "lab/model", "category": "overall",
+                  "leaderboard_publish_date": "2026-09-25", "rating": 1400.0,
+                  "rating_lower": 1390.0, "rating_upper": 1410.0, "rank": 10.0}
+        payload = {"status": "ok", "config": "text_style_control",
+                   "coverage": "latest_publication_only", "rows": [record]}
+        day, metric = "2026-09-25", "rating"
+        dimensions = {"category": "overall", "config": "text_style_control"}
+    run = persist_source(contract, source, digest([source, day]), payload)
+    assert run.status == "success"
+    line = {"source": source, "subject_id": str(contract.mappings.get().subject_id),
+            "metric_key": metric, "mapping_identifiers": ["lab/model"],
+            "aggregation": "single", "dimensions": dimensions}
+    before, _, _ = metric_points(contract, line, [day])
+    assert before[0]["dimensions"] == dimensions
+    CollectionObservation.objects.filter(run=run).update(
+        dimensions={}, source_metadata={}, listing={},
+    )
+    after, _, _ = metric_points(contract, line, [day])
+    assert after == before
+
+
 def test_percentage_is_change_from_fixed_baseline_with_missing_day_preserved():
     from core.benchmark_metric_series import build_comparison
 
