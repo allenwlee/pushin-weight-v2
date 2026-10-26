@@ -6,7 +6,6 @@ retaining the original evidence. Export time orders reports; retrieval time
 controls when this application actually knew them.
 """
 
-import json
 import re
 
 from django.db import connection
@@ -107,69 +106,49 @@ def record_endpoint_checks(run, checks, contract, *, verify_only=False):
 
 
 def retained_checks(contract, *, cutoff=None):
-    runs = CollectionRun.objects.filter(
-        job__contract=contract,
-        job__source_id="opencode",
-        status__in=["success", "partial"],
-    )
-    if cutoff is not None:
-        runs = runs.filter(completed_at__lte=cutoff)
-    result = []
-    for index, run in enumerate(
-        runs.only("source_metadata", "completed_at")
-        .order_by("-completed_at", "-id")[:10001]
-        .iterator(chunk_size=100)
-    ):
-        require(index < 10000, "OpenCode revision query budget exceeded")
-        for check in run.source_metadata.get("endpoint_checks", []):
-            if check.get("status") == "ok" and (
-                cutoff is None or aware_instant(check["updated_at"]) <= cutoff
-            ):
-                result.append((run, check))
-    return result
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT p.run_id,p.external_identifier,p.period_date,p.observation_id,"
+            "p.updated_at,p.body_sha256,p.conflicting_revision "
+            "FROM benchmark_endpoint_revisions p "
+            "JOIN collection_runs r ON r.id=p.run_id "
+            "JOIN collection_jobs j ON j.id=r.job_id "
+            "WHERE j.contract_id=%s AND j.source_id='opencode' "
+            "AND (%s::timestamptz IS NULL OR (r.completed_at<=%s AND p.updated_at<=%s)) "
+            "ORDER BY r.completed_at DESC,r.id DESC,p.external_identifier,p.updated_at "
+            "LIMIT 10001",
+            [contract.pk, cutoff, cutoff, cutoff],
+        )
+        rows = cursor.fetchall()
+    require(len(rows) <= 10000, "OpenCode revision query budget exceeded")
+    runs = CollectionRun.objects.in_bulk({row[0] for row in rows})
+    grouped = {}
+    for run_id, identifier, day, observation_id, updated, body_hash, conflict in rows:
+        key = (run_id, identifier, updated, body_hash)
+        check = grouped.setdefault(
+            key,
+            {
+                "source_identifier": identifier,
+                "status": "ok",
+                "updated_at": updated.isoformat(),
+                "body_sha256": body_hash,
+                "row_references": {},
+            },
+        )
+        check["row_references"][day.isoformat()] = observation_id
+        if conflict:
+            check["revision_anomaly"] = "same_update_different_body"
+    return [(runs[run_id], check) for (run_id, _, _, _), check in grouped.items()]
 
 
 def selected_rows(contract, mapping_ids, start, end, *, cutoff=None, canonical=False):
     """Latest reported row per exact model/date, with a stable conflict order."""
     require(0 < len(mapping_ids) <= 100, "OpenCode mapping query budget")
-    mappings = dict(
-        contract.mappings.filter(
-            purpose="metric", pk__in=mapping_ids, source_id="opencode"
-        ).values_list("external_identifier", "pk")
-    )
-    # Project requested dates in PostgreSQL rather than loading every hourly
-    # report's full reference window into Python memory.
-    sql = """
-        SELECT DISTINCT ON (check_row.value->>'source_identifier', reference.key)
-            check_row.value->>'source_identifier', reference.key,
-            reference.value::bigint, r.id,
-            check_row.value - 'row_references' - 'dates'
-        FROM collection_runs r
-        JOIN collection_jobs j ON j.id = r.job_id
-        CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.source_metadata->'endpoint_checks', '[]'::jsonb)) check_row
-        CROSS JOIN LATERAL jsonb_each_text(COALESCE(check_row.value->'row_references', '{}'::jsonb)) reference
-        WHERE j.contract_id = %s AND j.source_id = 'opencode'
-            AND r.status IN ('success', 'partial')
-            AND check_row.value->>'status' = 'ok'
-            AND check_row.value->>'source_identifier' = ANY(%s)
-            AND reference.key BETWEEN %s AND %s
-    """
-    params = [contract.pk, list(mappings), start, end]
-    if cutoff is not None:
-        sql += " AND r.completed_at <= %s AND (check_row.value->>'updated_at')::timestamptz <= %s"
-        params.extend([cutoff, cutoff])
-    sql += " ORDER BY check_row.value->>'source_identifier', reference.key, (check_row.value->>'updated_at')::timestamptz DESC, check_row.value->>'body_sha256' DESC, r.completed_at DESC, r.id DESC LIMIT 36601"
-    if canonical:
-        from core.benchmark_serving import selected_endpoint_rows
+    from core.benchmark_serving import selected_endpoint_rows
 
-        selected = selected_endpoint_rows(contract, mapping_ids, start, end, cutoff)
-    else:
-        with connection.cursor() as cursor:
-            cursor.execute(sql, params)
-            selected = cursor.fetchall()
+    selected = selected_endpoint_rows(contract, mapping_ids, start, end, cutoff)
     chosen = {}
     for identifier, label, observation_id, run_id, check in selected:
-        check = json.loads(check) if isinstance(check, str) else check
         chosen[(identifier, label)] = {
             "observation_id": observation_id,
             "revision": (aware_instant(check["updated_at"]), check["body_sha256"]),
@@ -199,7 +178,8 @@ def selected_rows(contract, mapping_ids, start, end, *, cutoff=None, canonical=F
         require(
             observation is not None
             and observation.source_identifier == identifier
-            and observation.dimensions.get("date") == label,
+            and observation.source_record_date
+            and observation.source_record_date.isoformat() == label,
             "OpenCode retained reference mismatch",
         )
         row["observation"] = observation
@@ -282,12 +262,14 @@ def prepare_revisions(contract, prepared, payload):
             with connection.cursor() as cursor:
                 cursor.execute(
                     """SELECT EXISTS (
-                    SELECT 1 FROM collection_runs r
-        JOIN collection_jobs j ON j.id = r.job_id
-                    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.source_metadata->'endpoint_checks', '[]'::jsonb)) c
-                    WHERE j.contract_id=%s AND j.source_id='opencode' AND r.status IN ('success','partial')
-                    AND c.value->>'status'='ok' AND c.value->>'source_identifier'=%s
-                    AND (c.value->>'updated_at')::timestamptz=%s AND c.value->>'body_sha256'<>%s
+                    SELECT 1 FROM collection_observations marker
+                    JOIN collection_runs r ON r.id=marker.run_id
+                    JOIN collection_jobs j ON j.id=r.job_id
+                    WHERE j.contract_id=%s AND j.source_id='opencode'
+                    AND r.status IN ('success','partial')
+                    AND marker.observation_kind='endpoint_check'
+                    AND marker.source_identifier=%s
+                    AND marker.source_record_at=%s AND marker.payload_sha256<>%s
                 )""",
                     [
                         contract.pk,
@@ -310,8 +292,8 @@ def prepare_revisions(contract, prepared, payload):
         prior = current.get(key)
         if (
             prior
-            and prior["observation"].source_metadata.get("row_semantic_hash")
-            == observation["source_metadata"]["row_semantic_hash"]
+            and bytes(prior["observation"].row_semantic_digest or b"")
+            == bytes.fromhex(observation["source_metadata"]["row_semantic_hash"])
         ):
             by_identifier[key[0]]["row_references"][key[1]] = prior["observation"].pk
             if observation["mapping"]:

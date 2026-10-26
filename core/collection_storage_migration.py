@@ -11,6 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from django.db import connection, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from core.benchmark_metric_timing import native_date
@@ -447,6 +448,10 @@ def _archived_invocation_values(receipt):
 
 PROVENANCE_EXPRESSIONS = {
     "projection_kind": "t.source_metadata->>'projection_kind'",
+    "row_semantic_digest": (
+        "CASE WHEN t.source_metadata->>'row_semantic_hash' ~ '^[0-9a-f]{64}$' "
+        "THEN decode(t.source_metadata->>'row_semantic_hash', 'hex') END"
+    ),
     "archive_snapshot_date": (
         "CASE WHEN t.source_metadata->>'archive_snapshot_date' ~ "
         "'^[0-9]{4}-[0-9]{2}-[0-9]{2}$' "
@@ -474,6 +479,10 @@ PROVENANCE_EXPRESSIONS = {
         "THEN (t.source_metadata->>'reconstruction_date')::date END"
     ),
 }
+INVALID_ROW_SEMANTIC_HASH = (
+    "t.source_metadata ? 'row_semantic_hash' AND NOT "
+    "COALESCE(t.source_metadata->>'row_semantic_hash' ~ '^[0-9a-f]{64}$', FALSE)"
+)
 
 SCOPE_BOUNDS_VALID = (
     "CASE WHEN t.ownership->>'since_epoch' ~ '^[0-9]{1,12}$' "
@@ -829,6 +838,13 @@ def project_benchmark_provenance_batch(
         ids = [row[0] for row in cursor.fetchall()]
         if not ids:
             return ProvenanceBatch(after_id, 0, 0)
+        cursor.execute(
+            f"SELECT count(*) FROM collection_observations t WHERE t.id=ANY(%s) "
+            f"AND ({INVALID_ROW_SEMANTIC_HASH})",
+            [ids],
+        )
+        if cursor.fetchone()[0]:
+            raise ValueError("invalid historical row semantic SHA-256")
         assignments = ", ".join(
             f"{name} = {expression}"
             for name, expression in PROVENANCE_EXPRESSIONS.items()
@@ -856,7 +872,8 @@ def project_run_ingestion_mode() -> int:
         cursor.execute("SET LOCAL statement_timeout = '30s'")
         cursor.execute(
             "UPDATE collection_runs SET direct_ingestion = " + expression
-            + " WHERE direct_ingestion IS DISTINCT FROM " + expression
+            + " WHERE source_metadata ? 'ingestion_mode' "
+            "AND direct_ingestion IS DISTINCT FROM " + expression
         )
         return cursor.rowcount
 
@@ -880,7 +897,9 @@ def project_arena_publication_batch(
             job__source_id="arena",
             job__purpose="metric",
             status__in=["success", "partial"],
-            source_metadata__has_key="publication_dates",
+        ).filter(
+            Q(source_metadata__has_key="publication_dates")
+            | Q(source_metadata_archive__isnull=False)
         )
         if after_id is not None:
             runs = runs.filter(pk__gt=after_id)
@@ -889,12 +908,20 @@ def project_arena_publication_batch(
         selected = list(runs.order_by("pk")[:batch_size])
         inserted = 0
         for run in selected:
-            native = run.source_metadata["publication_dates"]
+            from core.collection_capture import read_document
+
+            metadata = (
+                read_document(run.source_metadata_archive)
+                if run.source_metadata_archive_id is not None else run.source_metadata
+            )
+            if not isinstance(metadata, dict):
+                raise ValueError("Arena source metadata is invalid")
+            if "publication_dates" not in metadata:
+                continue
+            native = metadata["publication_dates"]
             if not isinstance(native, list) or not 0 < len(native) <= 366:
                 raise ValueError("invalid Arena publication-date evidence")
             dates = sorted({native_date(day).isoformat() for day in native})
-            from core.collection_capture import read_document
-
             payload = (
                 read_document(run.payload_archive)
                 if run.payload_archive_id is not None else run.raw_payload
@@ -958,7 +985,9 @@ def project_opencode_endpoint_batch(
             job__source_id="opencode",
             job__purpose="metric",
             status__in=["success", "partial"],
-            source_metadata__has_key="endpoint_checks",
+        ).filter(
+            Q(source_metadata__has_key="endpoint_checks")
+            | Q(source_metadata_archive__isnull=False)
         ).select_related("job__contract")
         if after_id is not None:
             runs = runs.filter(pk__gt=after_id)
@@ -967,7 +996,17 @@ def project_opencode_endpoint_batch(
         selected = list(runs.order_by("pk")[:batch_size])
         inserted = 0
         for run in selected:
-            checks = run.source_metadata["endpoint_checks"]
+            from core.collection_capture import read_document
+
+            metadata = (
+                read_document(run.source_metadata_archive)
+                if run.source_metadata_archive_id is not None else run.source_metadata
+            )
+            if not isinstance(metadata, dict):
+                raise ValueError("OpenCode source metadata is invalid")
+            if "endpoint_checks" not in metadata:
+                continue
+            checks = metadata["endpoint_checks"]
             if not isinstance(checks, list) or len(checks) > 100:
                 raise ValueError("invalid OpenCode endpoint check evidence")
             inserted += record_endpoint_checks(
@@ -984,15 +1023,15 @@ def provenance_mismatch_counts() -> tuple[int, int]:
     changed = " OR ".join(
         f"t.{name} IS DISTINCT FROM {expression}"
         for name, expression in PROVENANCE_EXPRESSIONS.items()
-    )
+    ) + f" OR ({INVALID_ROW_SEMANTIC_HASH})"
     run_expression = (
         "CASE WHEN source_metadata ? 'ingestion_mode' THEN "
         "source_metadata->>'ingestion_mode' = 'direct' END"
     )
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT count(*) FROM collection_runs WHERE direct_ingestion "
-            "IS DISTINCT FROM " + run_expression
+            "SELECT count(*) FROM collection_runs WHERE source_metadata ? 'ingestion_mode' "
+            "AND direct_ingestion IS DISTINCT FROM " + run_expression
         )
         runs = cursor.fetchone()[0]
         cursor.execute(

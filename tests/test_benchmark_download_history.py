@@ -116,7 +116,7 @@ def test_arena_history_keeps_publication_when_selected_cohort_is_empty():
 
     assert run.raw_payload is None
     assert read_document(run.payload_archive)["coverage"] == "publication_window"
-    assert run.source_metadata["publication_dates"] == ["2026-09-10", "2026-09-11"]
+    assert read_document(run.source_metadata_archive)["publication_dates"] == ["2026-09-10", "2026-09-11"]
     assert set(run.observations.values_list("observation_kind", flat=True)) == {
         "publication_marker"
     }

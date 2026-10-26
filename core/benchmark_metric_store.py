@@ -914,6 +914,17 @@ def persist_source(
                 run.batch_id = batch_id
 
         def save_result():
+            if source_details:
+                from core.collection_capture import archive_document
+
+                run.source_metadata_archive = archive_document(
+                    json.dumps(
+                        source_details, sort_keys=True, separators=(",", ":"),
+                        allow_nan=False,
+                    ).encode(),
+                    encoding="selected-json-canonical-v1",
+                    capture_kind="source_metadata",
+                )
             if transport_budget is not None:
                 run.physical_bytes_received = transport_budget.total_bytes_read
             if claim.direct_driver == "persist_source":
@@ -937,6 +948,7 @@ def persist_source(
             return result
 
         request_coordinates = {}
+        source_details = {}
         try:
             if fetch is not None:
                 require(payload is None, "supply a payload or fetch, not both")
@@ -957,6 +969,8 @@ def persist_source(
             safe_payload(request_params or {})
             request_coordinates = metric_request_coordinates(request_params or {})
             safe_payload(source_metadata or {})
+            require(isinstance(source_metadata or {}, dict), "source metadata must be an object")
+            source_details = dict(source_metadata or {})
             raw_hash = digest(payload)
             require(
                 len(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
@@ -975,13 +989,12 @@ def persist_source(
             )
             run.payload_sha256 = raw_hash
             run.observed_at = now
-            run.source_metadata = source_metadata or {}
             run.direct_ingestion = (
-                run.source_metadata.get("ingestion_mode") == "direct"
-                if "ingestion_mode" in run.source_metadata else None
+                source_details.get("ingestion_mode") == "direct"
+                if "ingestion_mode" in source_details else None
             )
-            if source == "arena" and run.source_metadata.get("publication_dates"):
-                dates = run.source_metadata["publication_dates"]
+            if source == "arena" and source_details.get("publication_dates"):
+                dates = source_details["publication_dates"]
                 require(
                     isinstance(dates, list) and len(dates) <= 366,
                     "publication date budget",
@@ -998,8 +1011,8 @@ def persist_source(
                     ),
                     "publication context excludes rows",
                 )
-                run.source_metadata = {
-                    **run.source_metadata,
+                source_details = {
+                    **source_details,
                     "publication_start": dates[0],
                     "publication_end": dates[-1],
                 }
@@ -1018,7 +1031,7 @@ def persist_source(
                 prepared, checks, retained_successful = prepare_revisions(
                     contract, prepared, payload
                 )
-                run.source_metadata["endpoint_checks"] = checks
+                source_details["endpoint_checks"] = checks
                 revisions = [
                     aware_instant(c["updated_at"])
                     for c in checks
@@ -1039,7 +1052,7 @@ def persist_source(
             successful = retained_successful
             errors = False
             observations, _ = commit_prepared_rows(run, prepared)
-            if source == "arena" and run.source_metadata.get("publication_dates"):
+            if source == "arena" and source_details.get("publication_dates"):
                 record_arena_publications(run, dates)
             for observation, (_, values) in zip(observations, prepared, strict=True):
                 errors |= observation.status == "error"
@@ -1048,7 +1061,7 @@ def persist_source(
                 if source == "opencode" and observation.status == "ok":
                     check = next(
                         c
-                        for c in run.source_metadata["endpoint_checks"]
+                        for c in source_details["endpoint_checks"]
                         if c["source_identifier"] == observation.source_identifier
                     )
                     check["row_references"][observation.dimensions["date"]] = (
@@ -1058,7 +1071,7 @@ def persist_source(
                 from core.benchmark_opencode import record_endpoint_checks
 
                 record_endpoint_checks(
-                    run, run.source_metadata["endpoint_checks"], contract
+                    run, source_details["endpoint_checks"], contract
                 )
             run.success_count = len(successful)
             run.status = (
@@ -1069,7 +1082,7 @@ def persist_source(
                 or (prepared and not errors)
                 or (
                     source == "arena"
-                    and run.source_metadata.get("publication_dates")
+                    and source_details.get("publication_dates")
                     and not errors
                 )
                 else "failed"

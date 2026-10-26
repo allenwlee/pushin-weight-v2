@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
+from core.collection_capture import read_document
 from tests.test_benchmark_download_sources import budget
 
 
@@ -131,7 +132,9 @@ def test_endpoint_checks_have_typed_cross_run_ready_row_links():
         run=run, observation_kind="endpoint_check"
     )
     assert marker.source_record_at == datetime(2026, 10, 7, 12, 44, 18, tzinfo=UTC)
-    assert marker.payload_sha256 == run.source_metadata["endpoint_checks"][0]["body_sha256"]
+    from core.collection_capture import read_document
+
+    assert marker.payload_sha256 == read_document(run.source_metadata_archive)["endpoint_checks"][0]["body_sha256"]
     assert marker.revision_conflict is None
     links = CollectionObservationInput.objects.filter(
         observation=marker, input_role="endpoint_revision_row"
@@ -180,9 +183,11 @@ def test_hourly_replay_deduplicates_values_and_retains_corrected_partial_windows
     )
     assert second.status == "success"
     assert MetricValue.objects.count() == 6
+    from core.collection_capture import read_document
+
     assert (
-        second.source_metadata["endpoint_checks"][0]["row_references"]
-        == first.source_metadata["endpoint_checks"][0]["row_references"]
+        read_document(second.source_metadata_archive)["endpoint_checks"][0]["row_references"]
+        == read_document(first.source_metadata_archive)["endpoint_checks"][0]["row_references"]
     )
     second_marker = CollectionObservation.objects.get(
         run=second, observation_kind="endpoint_check"
@@ -239,7 +244,7 @@ def test_endpoint_revision_orders_current_data_and_same_time_conflicts_are_flagg
         contract, "opencode", "7" * 64, read(endpoint(20, "2026-10-07T12:30:00Z"))
     )
     assert (
-        conflict.source_metadata["endpoint_checks"][0]["revision_anomaly"]
+        read_document(conflict.source_metadata_archive)["endpoint_checks"][0]["revision_anomaly"]
         == "same_update_different_body"
     )
     assert CollectionObservation.objects.get(

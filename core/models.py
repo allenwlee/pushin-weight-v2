@@ -8945,6 +8945,10 @@ class CollectionRun(models.Model):
     source_url = models.TextField(default="")
     request_params = models.JSONField(default=dict)
     source_metadata = models.JSONField(default=dict)
+    source_metadata_archive = models.ForeignKey(
+        "CollectionEvidenceArchive", null=True, on_delete=models.PROTECT,
+        related_name="source_metadata_runs",
+    )
     request_count = models.PositiveIntegerField(default=0)
     physical_bytes_received = models.PositiveBigIntegerField(null=True)
     selected_count = models.PositiveIntegerField(default=0)
@@ -9032,6 +9036,7 @@ class CollectionObservation(models.Model):
     payload_sha256 = models.CharField(max_length=64, null=True)
     definition_sha256 = models.CharField(max_length=64, null=True)
     mapping_sha256 = models.CharField(max_length=64, null=True)
+    row_semantic_digest = models.BinaryField(null=True)
     historical_visibility_proven = models.BooleanField(null=True)
     supersedes_observation = models.ForeignKey("self", null=True, on_delete=models.PROTECT, related_name="superseding_observations")
     legacy_archive = models.ForeignKey("CollectionEvidenceArchive", null=True, on_delete=models.PROTECT, related_name="legacy_observations")

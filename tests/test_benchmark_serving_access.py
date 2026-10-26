@@ -26,7 +26,9 @@ def test_populated_chart_and_series_keep_source_documents_private(serving_login,
     data["rows"][0]["_source_metadata"] = {"location": "PRIVATE-GEO-SENTINEL"}
     run = persist_source(contract, "hf", "d" * 64, data,
                          source_metadata={"location": "PRIVATE-GEO-SENTINEL", "ingestion_mode": "direct"})
-    assert run.source_metadata["location"] == "PRIVATE-GEO-SENTINEL"
+    from core.collection_capture import read_document
+
+    assert read_document(run.source_metadata_archive)["location"] == "PRIVATE-GEO-SENTINEL"
     assert run.observations.get().source_metadata["location"] == "PRIVATE-GEO-SENTINEL"
     day = run.observed_at.date().isoformat()
     serving, _role, _owner, _report = serving_login
