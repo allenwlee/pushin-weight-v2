@@ -9,6 +9,7 @@ from django.conf import settings
 from django.core.management.base import CommandError
 
 from core.collection_jobs import register_job, set_job_state
+from core.collection_staging import staging_receipt
 from core.models import (
     CollectionEvidenceArchive,
     CollectionObservation,
@@ -60,9 +61,10 @@ def test_twenty_simultaneous_requests_without_body_archives(http_pages, monkeypa
 
     assert CollectionScopeRequestUse.objects.filter(scope_run__run_id=report["run_id"], scope_run__scope_kind="x_query").count() == 20
     job.refresh_from_db()
-    receipts = job.last_attempt.report["staging_responses"]
+    receipts = [staging_receipt(request) for request in CollectionRequest.objects.filter(attempt__run=job.last_attempt)]
     assert len(receipts) == 20
-    assert all(len(r["returned_ids"]) == r["raw_count"] == 1 for r in receipts.values())
+    assert all(len(r["returned_ids"]) == r["raw_count"] == 1 for r in receipts)
+    assert "staging_responses" not in job.last_attempt.report
 
 
 def test_fast_page_commits_and_refills_before_slow_request_finishes(http_pages, monkeypatch):  # noqa: F811
@@ -104,8 +106,17 @@ def test_interrupted_page_retries_only_when_uncommitted(http_pages, monkeypatch,
         with pytest.raises(CommandError):
             execute_job(job.pk)
         assert Post.objects.count() == int(after_commit)
+        received = CollectionRequest.objects.get(request_category="x_backfill_staging")
+        assert received.raw_count == received.received_appearances.count() == 1
+        assert received.selection_accounted and received.body_lost is False
+        assert received.received_appearances.get().scope_run_id is None
         scope = CollectionScopeRun.objects.filter(run__job=job, scope_kind="x_query").latest("id")
         assert scope.enumeration_complete == after_commit
+        # Typed receipt and request-use state alone survive a restart.
+        from core.models import CollectionRun
+
+        CollectionRun.objects.filter(job=job).update(report={})
+        CollectionScopeRun.objects.filter(run__job=job).update(envelopes=[])
         monkeypatch.setattr(PageCheckpoint, "persist", original)
         report = execute_job(job.pk)
     assert report["collection_drained"]

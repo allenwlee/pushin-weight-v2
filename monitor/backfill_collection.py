@@ -321,11 +321,17 @@ class DurableBudget(BackfillBudget):
         super().claim_api_request(timeout_seconds)
         with fenced_run(self.claim) as (job, run):
             limits, scope = job.budgets, job.scope
+            if scope.get("response_storage") == "staging":
+                from core.collection_staging import ensure_staging_bytes
+
+                received_bytes = ensure_staging_bytes(run)
+            else:
+                received_bytes = run.report.get("response_bytes", 0)
             prior = job.runs.aggregate(total=Sum("request_count"))["total"] or 0
             if (scope["prior_api_requests"] + prior >= scope["maximum_api_requests"]
                     or run.request_count >= limits["requests"]
                     or run.selected_count >= limits["items"]
-                    or run.report.get("response_bytes", 0) >= limits["bytes"]):
+                    or received_bytes >= limits["bytes"]):
                 raise BackfillBudgetExhausted("durable backfill allowance exhausted")
             run.request_count += 1
             run.save(update_fields=["request_count", "updated_at"])
@@ -349,6 +355,17 @@ class DurableBudget(BackfillBudget):
         marker commit together on that original run.
         """
         from core.models import CollectionRun
+        if request.request_category == "x_backfill_staging":
+            from core.collection_staging import account_staging_response
+
+            with fenced_run(self.claim):
+                original = CollectionRun.objects.select_for_update().get(
+                    pk=request.scope_run.run_id, job_id=self.claim.job_id,
+                )
+                recorded = account_staging_response(original, request, response)
+            if recorded and original.pk == self.claim.run_id:
+                BackfillBudget.record_api_response(self, response)
+            return
         with fenced_run(self.claim):
             original = CollectionRun.objects.select_for_update().get(
                 pk=request.scope_run.run_id, job_id=self.claim.job_id,

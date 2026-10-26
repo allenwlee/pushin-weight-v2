@@ -38,6 +38,7 @@ from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.indexes import GinIndex, GistIndex, OpClass
 from django.db import IntegrityError, models, router, transaction
 from django.db.models.functions import Upper
+from django.db.models.lookups import Exact, IsNull
 from django.utils import timezone
 
 from core.measurement_time import measurement_window
@@ -8970,6 +8971,12 @@ class CollectionJob(models.Model):
 
 
 class CollectionRun(models.Model):
+    staging_retry_version = models.PositiveSmallIntegerField(null=True)
+    staging_retry_phase = models.PositiveSmallIntegerField(null=True)
+    staging_retry_cooldowns = models.PositiveSmallIntegerField(null=True)
+    staging_retry_successes = models.PositiveSmallIntegerField(null=True)
+    staging_retry_until = models.FloatField(null=True)
+    staging_retry_failures = ArrayField(models.FloatField(), size=3, null=True)
     source_dataset = models.ForeignKey(SourceDataset, null=True, on_delete=models.PROTECT)
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     batch_id = models.UUIDField(default=uuid.uuid4)
@@ -9045,6 +9052,43 @@ class CollectionRun(models.Model):
         ]
         constraints = [
             models.CheckConstraint(
+                condition=models.Q(
+                    staging_retry_version__isnull=True, staging_retry_phase__isnull=True,
+                    staging_retry_cooldowns__isnull=True, staging_retry_successes__isnull=True,
+                    staging_retry_until__isnull=True, staging_retry_failures__isnull=True,
+                ) | models.Q(
+                    staging_retry_version=1, staging_retry_version__isnull=False,
+                    staging_retry_phase__isnull=False, staging_retry_phase__lte=3,
+                    staging_retry_cooldowns__isnull=False, staging_retry_cooldowns__lte=3,
+                    staging_retry_successes__isnull=False, staging_retry_successes__lte=4,
+                    staging_retry_until__isnull=False, staging_retry_until__gte=0,
+                    staging_retry_until__lt=float("inf"),
+                    staging_retry_failures__isnull=False, staging_retry_failures__len__lte=3,
+                ),
+                name="ck_run_staging_retry_shape",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(staging_retry_failures__isnull=True) | (
+                    models.Q(IsNull(models.Func(
+                        models.F("staging_retry_failures"), models.Value(None, output_field=models.FloatField()),
+                        function="array_position", output_field=models.IntegerField(),
+                    ), True))
+                    & (models.Q(staging_retry_failures__len__lte=0) | models.Q(staging_retry_failures__0__gte=0, staging_retry_failures__0__lt=float("inf")))
+                    & (models.Q(staging_retry_failures__len__lte=1) | models.Q(staging_retry_failures__1__gte=0, staging_retry_failures__1__lt=float("inf")))
+                    & (models.Q(staging_retry_failures__len__lte=2) | models.Q(staging_retry_failures__2__gte=0, staging_retry_failures__2__lt=float("inf")))
+                ),
+                name="ck_run_staging_retry_times",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(staging_retry_failures__isnull=True)
+                | models.Q(staging_retry_failures__len=0)
+                | models.Q(Exact(models.Func(
+                    models.F("staging_retry_failures"), models.Value(1),
+                    function="array_lower", output_field=models.IntegerField(),
+                ), models.Value(1))),
+                name="ck_run_staging_retry_array_bounds",
+            ),
+            models.CheckConstraint(
                 condition=models.Q(ingestion_key__regex=r"^[0-9a-f]{64}$"),
                 name="ck_metric_ingestion_key",
             ),
@@ -9065,6 +9109,10 @@ class CollectionRun(models.Model):
 
 
 class CollectionObservation(models.Model):
+    request = models.ForeignKey(
+        "CollectionRequest", null=True, on_delete=models.PROTECT,
+        related_name="received_appearances", db_index=False,
+    )
     numeric_fields_explicit = models.BooleanField(null=True)
     receipt_ordinal = models.PositiveIntegerField(null=True)
     source_identifier_is_null = models.BooleanField(null=True)
@@ -9150,17 +9198,31 @@ class CollectionObservation(models.Model):
                 fields=["scope_run", "observation_kind", "receipt_ordinal"],
                 name="uq_observation_receipt_ordinal",
             ),
+            models.UniqueConstraint(
+                fields=["request", "receipt_ordinal"],
+                condition=models.Q(request__isnull=False),
+                name="uq_observation_request_position",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(observation_kind="x_request_appearance", observation_kind__isnull=False, request__isnull=False)
+                | (models.Q(request__isnull=True)
+                   & (models.Q(observation_kind__isnull=True) | ~models.Q(observation_kind="x_request_appearance"))),
+                name="ck_observation_request_owner",
+            ),
             models.CheckConstraint(
                 condition=(models.Q(observation_kind="x_page_appearance", source_subject_kind="post_appearance",
                                     scope_run__isnull=False, receipt_ordinal__isnull=False,
                                     source_identifier_is_null__isnull=False, processing_outcome__isnull=False)
+                           | models.Q(observation_kind="x_request_appearance", source_subject_kind="post_appearance",
+                                      scope_run__isnull=True, receipt_ordinal__isnull=False,
+                                      source_identifier_is_null__isnull=False, processing_outcome="received")
                            | (models.Q(observation_kind="x_page_diagnostic", source_subject_kind="aggregate",
                                        scope_run__isnull=False, receipt_ordinal__isnull=False,
                                        source_identifier_is_null__isnull=True))
                            | (models.Q(receipt_ordinal__isnull=True, source_identifier_is_null__isnull=True)
                               & ~models.Q(source_subject_kind="post_appearance")
                               & (models.Q(observation_kind__isnull=True)
-                                 | ~models.Q(observation_kind__in=["x_page_appearance", "x_page_diagnostic"])))),
+                                 | ~models.Q(observation_kind__in=["x_page_appearance", "x_request_appearance", "x_page_diagnostic"])))),
                 name="ck_observation_page_receipt",
             ),
             models.CheckConstraint(
@@ -9519,10 +9581,30 @@ class CollectionRequest(models.Model):
     response_etag = models.TextField(null=True)
     archive = models.ForeignKey(CollectionEvidenceArchive, null=True, on_delete=models.PROTECT, related_name="requests")
     accounting_complete = models.BooleanField(default=False)
+    raw_count = models.PositiveBigIntegerField(null=True)
+    response_sha256 = models.BinaryField(null=True)
+    body_lost = models.BooleanField(null=True)
+    selection_accounted = models.BooleanField(null=True)
 
     class Meta:
         db_table = "collection_requests"
         constraints: ClassVar[list] = [
+            models.CheckConstraint(
+                condition=models.Q(response_sha256__isnull=True) | models.Q(Exact(
+                    models.Func(models.F("response_sha256"), function="octet_length", output_field=models.IntegerField()),
+                    models.Value(32),
+                )),
+                name="ck_request_response_sha256",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(raw_count__isnull=True, response_sha256__isnull=True,
+                                   body_lost__isnull=True, selection_accounted__isnull=True)
+                | (models.Q(body_lost__isnull=False, selection_accounted__isnull=False)
+                   & (models.Q(raw_count__isnull=True, response_sha256__isnull=True, body_lost=False, selection_accounted=False)
+                      | models.Q(raw_count__isnull=False, response_sha256__isnull=False,
+                                 response_bytes__isnull=False, transport_outcome="received"))),
+                name="ck_request_staging_receipt",
+            ),
             models.UniqueConstraint(fields=["attempt", "ordinal"], name="uq_collection_request_ordinal"),
             models.CheckConstraint(condition=models.Q(ordinal__gt=0), name="ck_collection_request_ordinal"),
             models.CheckConstraint(condition=models.Q(http_status__isnull=True) | models.Q(http_status__gte=100, http_status__lte=599), name="ck_collection_request_status"),

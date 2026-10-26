@@ -84,7 +84,8 @@ def test_timeout_retries_exact_cursor_without_rewriting_unknown_receipt(http_pag
         failed = CollectionRequest.objects.get(error_code="Timeout")
         immutable = CollectionRequest.objects.filter(pk=failed.pk).values().get()
         assert failed.accounting_complete is False and failed.response_bytes is None
-        assert job.runs.get(pk=first["run_id"]).report["staging_responses"][str(failed.pk)]["raw_count"] is None
+        assert failed.raw_count is None and failed.body_lost is False and failed.selection_accounted is False
+        assert not failed.received_appearances.exists()
         with pytest.raises(BackfillProviderSafetyError):
             execute_job(job.pk)
         assert len(state["requests"]) == 3
@@ -136,8 +137,10 @@ def test_twenty_in_flight_cluster_saves_successes_and_resumes_after_cooldown(htt
         assert Post.objects.count() == 17
         job.refresh_from_db()
         assert job.state == "ready" and job.active_run_id is None
-        saved = job.last_attempt.report["staging_retry"]
+        saved = RetryControl.from_run(job.last_attempt).snapshot()
         assert saved["phase"] == "open" and saved["cooldowns"] == 1
+        job.last_attempt.report = {}
+        job.last_attempt.save(update_fields=["report"])
         assert 45 <= (job.next_retry_at - clock.now(UTC)).total_seconds() <= 60
         # Neither a row lock nor a live-writer lease survives the cooldown.
         from monitor.run_lock import harvest_writer_lock

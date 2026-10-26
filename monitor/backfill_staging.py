@@ -13,16 +13,29 @@ import os
 import random
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from copy import copy
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
 
 from django.conf import settings
 from django.db.models import Sum
 
 from core.collection_capture import begin_request, finish_request
+from core.collection_staging import (
+    adopt_retry_state,
+    adopt_staging_receipt,
+    ensure_staging_bytes,
+    write_staging_receipt,
+)
 from core.collection_state import fenced_run, x_scope_ownership
 from core.measurement_taxonomy import require
-from core.models import Brand, CollectionAttempt, CollectionRequest, CollectionScopeRun
+from core.models import (
+    Brand,
+    CollectionAttempt,
+    CollectionRequest,
+    CollectionRun,
+    CollectionScopeRequestUse,
+    CollectionScopeRun,
+)
 from monitor.backfill_prefetch import (
     CapturedPage,
     Prefetcher,
@@ -31,7 +44,7 @@ from monitor.backfill_prefetch import (
     _request_identity,
     fetch_page,
 )
-from monitor.backfill_retry import PAGE_FAILURE_LIMIT, POLICY, RetryControl, transient
+from monitor.backfill_retry import PAGE_FAILURE_LIMIT, POLICY, transient
 from monitor.run_lock import backfill_yield_requested, harvest_writer_lock
 from x_monitor.apify import SEARCH_PATH
 from x_monitor.twitterapi_credentials import (
@@ -61,20 +74,26 @@ class StagingPrefetcher(Prefetcher):
     def __init__(self, claim, job, budget, options):
         super().__init__(claim, job, budget, options)
         validate_staging(job.scope)
-        previous = job.last_attempt.report if job.last_attempt_id else {}
-        self.retry = RetryControl.restore(previous.get("staging_retry"))
+        with fenced_run(self.claim) as (_, run):
+            previous = (CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
+                        if run.staging_retry_version is None and job.last_attempt_id
+                        and job.last_attempt_id != run.pk else run)
+            self.retry = adopt_retry_state(previous)
+            self.retry.save(run)
+            ensure_staging_bytes(run)
         self.retry_at = None
         self.metrics.update(mode="staging", lost_responses=0, max_buffered=0,
                             retry_policy=POLICY, transient_failures=0, retry_requests=0)
-        self._save_retry()
 
     def _save_retry(self):
         with fenced_run(self.claim) as (_, run):
-            run.report = {**run.report, "staging_retry": self.retry.snapshot()}
-            run.save(update_fields=["report", "updated_at"])
+            self.retry.save(run)
 
     def _pending(self, scope):
-        consumed = {str(e["prefetch_request_id"]) for e in scope.envelopes if e.get("prefetch_request_id")}
+        consumed = CollectionScopeRequestUse.objects.filter(
+            scope_run__run__job_id=self.claim.job_id, scope_run__scope_kind="x_query",
+            scope_run__scope_key=scope.scope_key,
+        ).values_list("request_id", flat=True)
         requests = CollectionRequest.objects.filter(
             attempt__run__job_id=self.claim.job_id, scope_run__scope_key=scope.scope_key,
             request_category=CATEGORY,
@@ -86,7 +105,8 @@ class StagingPrefetcher(Prefetcher):
             require(x_scope_ownership(request.scope_run) == x_scope_ownership(scope), "staging scope ancestry changed")
             if (request.http_method == "GET" and request.transport_outcome in {"received", "transport_error", "timeout"}
                     and transient(request.error_code, request.http_status)):
-                original_scope = SimpleNamespace(ownership=x_scope_ownership(scope), cursor=request.cursor_before)
+                original_scope = copy(request.scope_run)
+                original_scope.cursor = request.cursor_before
                 require(request.request_config == _request_identity(original_scope)
                         and request.endpoint_url == _endpoint(original_scope), "staging retry ancestry changed")
                 if request.cursor_before == scope.cursor:
@@ -97,10 +117,9 @@ class StagingPrefetcher(Prefetcher):
                 continue
             require(request.transport_outcome == "received",
                     "staging physical request outcome unknown; reconcile before retry")
-            original = request.attempt.run
-            meta = original.report.get("staging_responses", {}).get(str(request.pk))
-            require(meta is not None, "staging response accounting missing; reconcile before retry")
-            if meta.get("body_lost") or request.http_status != 200:
+            with fenced_run(self.claim):
+                request = adopt_staging_receipt(request)
+            if request.body_lost or request.http_status != 200:
                 continue
             require(request.error_code is None, "invalid staging response requires reconciliation")
             require(request.cursor_before == scope.cursor and request.request_config == _request_identity(scope)
@@ -108,11 +127,8 @@ class StagingPrefetcher(Prefetcher):
             # The successful receipt is durable but its page did not commit. Be
             # explicit about paid refetch and never claim identical search recall.
             with fenced_run(self.claim):
-                from core.models import CollectionRun
-                original = CollectionRun.objects.select_for_update().get(pk=original.pk)
-                receipts = original.report["staging_responses"]
-                receipts[str(request.pk)]["body_lost"] = True
-                original.save(update_fields=["report", "updated_at"])
+                request.body_lost = True
+                request.save(update_fields=["body_lost"])
             self.metrics["lost_responses"] += 1
         require(failures < PAGE_FAILURE_LIMIT, "staging page retry allowance exhausted")
         return not_before, group
@@ -141,19 +157,17 @@ class StagingPrefetcher(Prefetcher):
                 http_status=response["status_code"], cursor=cursor if isinstance(cursor, str) else None,
                 error_code=result.error, response_bytes=response["response_bytes"] if result.body is not None else None,
                 retry_after_at=retry_after, now=result.received_at)
-            receipts = dict(run.report.get("staging_responses", {}))
-            receipts[str(request.pk)] = {"raw_count": len(ids) if result.body is not None else None,
+            request = write_staging_receipt(request, {"raw_count": len(ids) if result.body is not None else None,
                 "returned_ids": ids if result.body is not None else None,
                 "body_sha256": hashlib.sha256(result.body).hexdigest() if result.body is not None else None,
-                "body_lost": False}
+                "body_lost": False})
             if retryable:
                 self.retry.failed(result.received_at.timestamp(), retry_after=result.retry_after_seconds or 0,
                                   rate_limited=response["status_code"] == 429)
                 self.metrics["transient_failures"] += 1
             elif not result.error:
                 self.retry.succeeded()
-            run.report = {**run.report, "staging_responses": receipts, "staging_retry": self.retry.snapshot()}
-            run.save(update_fields=["report", "updated_at"])
+            self.retry.save(run)
             if result.body is not None:
                 self.budget.record_captured_response(request, response)
         self.metrics["captured_pages"] += int(result.body is not None)
@@ -208,7 +222,7 @@ class StagingPrefetcher(Prefetcher):
                             delayed[scope.pk] = due
                             continue
                         with fenced_run(self.claim) as (_, run):
-                            bytes_left = self.job.budgets["bytes"] - run.report.get("response_bytes", 0) - sum(v[2] for v in futures.values())
+                            bytes_left = self.job.budgets["bytes"] - ensure_staging_bytes(run) - sum(v[2] for v in futures.values())
                             items_left = self.job.budgets["items"] - run.selected_count - 20 * len(futures)
                             spent = self.job.runs.aggregate(n=Sum("request_count"))["n"] or 0
                         if items_left < 20 or bytes_left <= 0 or spent + self.job.scope["prior_api_requests"] >= self.job.scope["maximum_api_requests"]:
