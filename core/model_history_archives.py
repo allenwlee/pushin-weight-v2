@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from core.benchmark_metric_history import import_history, prepare_history
 from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
 from core.benchmark_metric_store import aware_instant
+from core.collection_capture import observation_object_documents
 from core.collection_state import (
     checkpoint_scope,
     fenced_run,
@@ -209,9 +210,9 @@ def acquire_hf_archives(claim, job, budget):
         )
         old = CollectionObservation.objects.filter(
             run_id=claim.run_id, observation_key=cache_key
-        ).first()
+        ).select_related("legacy_archive").first()
         if old:
-            snap = old.listing
+            snap = observation_object_documents(old)[0]
         else:
             budget.check()
             reader = ArchiveBudget(
@@ -372,7 +373,10 @@ def _queue_hf_archive(claim, job, contract, archive, snapshot):
                     },
                 },
             )
-            require(observation.listing == payload, "immutable HF archive conflict")
+            require(
+                observation_object_documents(observation)[0] == payload,
+                "immutable HF archive conflict",
+            )
             ids.append(observation.pk)
         if ids:
             enqueue_projection(claim, contract=contract, evidence_ids=ids)

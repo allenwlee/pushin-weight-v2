@@ -389,7 +389,9 @@ def test_archive_acquisition_to_numeric_writer_keeps_zero_and_missing_distinct()
     import pyarrow.parquet as pq
 
     from core.benchmark_metric_identity import configure_collection
+    from core.collection_capture import archive_legacy
     from core.model_history_collection import acquire_hf_archives
+    from core.models import CollectionObservation
     from scripts.benchmark_download_collector.sources import Budget
     from tests.test_benchmark_download_db_identity import setup_spec
 
@@ -466,6 +468,18 @@ def test_archive_acquisition_to_numeric_writer_keeps_zero_and_missing_distinct()
     assert value.window_start_at == value.window_end_at - timedelta(days=30)
     assert value.observation.source_metadata["archive_snapshot_date"] == "2026-09-10"
     count = len(calls)
+    saved = CollectionObservation.objects.get(
+        run_id=claim.run_id, scope_run__scope_kind="archive_snapshot"
+    )
+    saved.legacy_archive = archive_legacy({
+        "listing": saved.listing,
+        "dimensions": saved.dimensions,
+        "source_metadata": saved.source_metadata,
+    })
+    saved.listing, saved.dimensions, saved.source_metadata = {}, {}, {}
+    saved.save(update_fields=[
+        "legacy_archive", "listing", "dimensions", "source_metadata",
+    ])
     acquire_hf_archives(claim, job, budget)
     assert len(calls) == count and MetricValue.objects.count() == 1
 
