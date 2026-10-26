@@ -22,42 +22,6 @@ def observation_ids(predicate, params=(), *, mapping_ids, contract_id, source_id
     )
 
 
-def hydrate_observations(observations):
-    """Attach a bounded safe dictionary in memory, never a persisted JSON copy."""
-    from collections import defaultdict
-
-    by_id = defaultdict(list)
-    for observation in observations:
-        by_id[observation.pk].append(observation)
-    if not by_id:
-        return
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "SELECT id,reconstructed,secondary_source,archive_snapshot_date,"
-            "reconstruction_date,publication_complete,partial,direct "
-            "FROM benchmark_observation_provenance WHERE id=ANY(%s)", [list(by_id)],
-        )
-        rows = cursor.fetchall()
-    for key, reconstructed, secondary, archived, rebuilt, complete, partial, direct in rows:
-        metadata = {"secondary_source": secondary, "publication_complete": complete}
-        if reconstructed:
-            metadata["history_basis"] = "reconstructed_current_relationships"
-        if archived:
-            metadata["archive_snapshot_date"] = archived.isoformat()
-        if rebuilt:
-            metadata["reconstruction_date"] = rebuilt.isoformat()
-        metadata["period_status"] = (
-            None if partial is None else "partial" if partial else "completed"
-        )
-        for observation in by_id[key]:
-            observation.source_metadata = metadata
-            observation.run.source_metadata = {
-                "ingestion_mode": None if direct is None else "direct" if direct else "historical_import",
-            }
-    if len(rows) != len(by_id):
-        raise ValueError("Missing canonical benchmark provenance")
-
-
 def observation_dimensions(observation):
     """Render source coordinates from the retained typed observation facts."""
     source = observation.run.job.source_id

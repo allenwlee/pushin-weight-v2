@@ -158,18 +158,18 @@ def test_typed_provenance_keeps_unknown_distinct_from_false(flag):
     assert _typed("benchmark_observation_provenance", observation.pk) == [
         (observation.pk, flag, flag, None, None, flag, flag, flag)
     ]
-    from core.benchmark_serving import hydrate_observations
+    from core.benchmark_serving import observation_provenance_metadata
 
     _install_typed_views()
-    hydrate_observations([observation])
-    assert observation.source_metadata["secondary_source"] is flag
-    assert observation.source_metadata["publication_complete"] is flag
-    assert observation.source_metadata["period_status"] == (
+    observation.refresh_from_db()
+    observation.run.refresh_from_db()
+    metadata = observation_provenance_metadata(observation)
+    assert metadata.get("secondary_source") is flag
+    assert metadata.get("publication_complete") is flag
+    assert metadata.get("period_status") == (
         None if flag is None else "partial" if flag else "completed"
     )
-    assert observation.run.source_metadata["ingestion_mode"] == (
-        None if flag is None else "direct" if flag else "historical_import"
-    )
+    assert observation.run.direct_ingestion is flag
 
 
 @pytest.mark.parametrize("body_hash", [None, "invalid", "A" * 64, "a" * 63])
