@@ -327,6 +327,32 @@ def test_projection_links_saved_input_and_records_absent_and_invalid_selected_me
     assert CollectionObservationInput.objects.count() == 1
 
 
+def test_archived_hf_field_selection_prevents_unselected_metric_gaps():
+    from core.collection_capture import archive_legacy
+    from core.models import CollectionMetricGap
+
+    contract, raw, _, _ = configured()
+    raw["likes"] = "invalid"
+    source = evidence("hf", raw)
+    source.source_metadata = {"numeric_fields": ["downloads", "likes"]}
+    archive = archive_legacy({
+        "listing": source.listing,
+        "dimensions": source.dimensions,
+        "source_metadata": source.source_metadata,
+        "envelopes": source.envelopes,
+        "groups": source.groups,
+    })
+    CollectionObservation.objects.filter(pk=source.pk).update(
+        legacy_archive=archive, listing={}, dimensions={}, source_metadata={},
+    )
+    source.refresh_from_db()
+    run = project(contract, "hf", [source])
+    numeric = run.observations.get()
+    assert set(CollectionMetricGap.objects.filter(
+        observation=numeric,
+    ).values_list("source_metric__metric_key", flat=True)) == {"likes"}
+
+
 def test_other_model_admission_is_separate_from_text_benchmark_policy():
     from core.benchmark_metric_identity import configure_collection
 

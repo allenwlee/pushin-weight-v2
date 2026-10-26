@@ -477,7 +477,8 @@ def attach_numeric_evidence(
             ):
                 continue
             selected_fields = (
-                origin.source_metadata.get("numeric_fields") if origin else None
+                observation_object_documents(origin)[2].get("numeric_fields")
+                if origin else None
             )
             if (
                 selected_fields is not None
