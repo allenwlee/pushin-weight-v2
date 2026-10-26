@@ -5,10 +5,13 @@ from __future__ import annotations
 import hashlib
 
 from django.db import transaction
+from django.utils import timezone
 
 from core.collection_jobs import register_job
+from core.collection_state import claim_job, fenced_run, finish_run
 from core.measurement_taxonomy import digest, require
-from core.models import DataSource, SearchQuery
+from core.models import CollectionScopeRun, DataSource, SearchQuery
+from core.provider_batches import save_post_membership
 
 
 @transaction.atomic
@@ -63,3 +66,80 @@ def register_scheduled_cycle(calls, *, limits):
         },
         targets=targets,
     )
+
+
+class ScheduledCycleLineage:
+    """Keep a scheduled run's query scopes and committed Post members together."""
+
+    def __init__(self, claim):
+        self.claim = claim
+
+    @classmethod
+    def start(cls, calls, *, limits, invocation_id):
+        from core.collection_jobs import set_job_state
+
+        job = register_scheduled_cycle(calls, limits=limits)
+        if job.state == "paused":
+            job = set_job_state(job.pk, "ready")
+        require(job.state == "ready", "scheduled job is not ready")
+        return cls(claim_job(job.pk, invocation_id=invocation_id, manual_authorized=True))
+
+    def begin_call(self, call, *, since_epoch, until_epoch):
+        from datetime import UTC, datetime
+
+        lower = datetime.fromtimestamp(since_epoch, UTC)
+        upper = datetime.fromtimestamp(until_epoch, UTC)
+        require(lower < upper, "scheduled query window is reversed")
+        with fenced_run(self.claim) as (job, run):
+            target = job.targets.select_related("search_query").get(target_key=call.call_id)
+            require(
+                target.target_kind == "query"
+                and target.target_role == call.call_id
+                and target.search_query.query_text == call.query_string
+                and target.requested_start_at is None
+                and target.requested_end_at is None,
+                "scheduled query differs from frozen target",
+            )
+            scope, created = CollectionScopeRun.objects.get_or_create(
+                run=run, scope_kind="x_query", scope_key=call.call_id,
+                defaults={
+                    "job_target": target, "ownership": {},
+                    "requested_start_at": lower, "requested_end_at": upper,
+                },
+            )
+            require(
+                created or (
+                    scope.job_target_id == target.pk
+                    and scope.requested_start_at == lower
+                    and scope.requested_end_at == upper
+                ),
+                "scheduled query window changed after checkpoint",
+            )
+            return scope.pk
+
+    def finish_call(self, scope_id, *, post_ids, raw_count, outcome, complete):
+        require(type(raw_count) is int and raw_count >= 0,
+                "scheduled raw count must be nonnegative")
+        with fenced_run(self.claim) as (_, run):
+            scope = CollectionScopeRun.objects.select_for_update().get(
+                pk=scope_id, run=run,
+            )
+            saved = save_post_membership(run, scope, post_ids)
+            scope.raw_count = raw_count
+            scope.outcome = outcome
+            scope.enumeration_complete = complete
+            scope.execution_state = "completed" if complete else "yielded"
+            scope.coverage_state = (
+                "complete" if complete else "partial" if raw_count else "unavailable"
+            )
+            scope.save(update_fields=[
+                "raw_count", "outcome", "enumeration_complete",
+                "execution_state", "coverage_state",
+            ])
+            return len(saved)
+
+    def finish(self, *, success):
+        return finish_run(
+            self.claim, status="success" if success else "partial",
+            now=timezone.now(),
+        )

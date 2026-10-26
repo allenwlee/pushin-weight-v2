@@ -340,6 +340,35 @@ def test_scheduled_cycle_registration_reuses_plan_and_rotates_changed_query():
     assert changed.job_key != first.job_key
 
 
+def test_scheduled_scope_records_post_without_claiming_backfill_enrichment():
+    from core.models import (
+        CollectionObservation,
+        CollectionScopeRun,
+        Post,
+        PostEnrichmentState,
+    )
+    from core.x_cycle_lineage import ScheduledCycleLineage
+
+    call = SimpleNamespace(call_id="B1", query_string="product release")
+    limits = {"requests": 100, "bytes": 1000000, "seconds": 300, "items": 2000}
+    lineage = ScheduledCycleLineage.start(
+        [call], limits=limits, invocation_id="scheduled-lineage-test",
+    )
+    scope_id = lineage.begin_call(call, since_epoch=1783809000, until_epoch=1783809300)
+    post = Post.objects.create(tweet_id="scheduled-lineage-post", text="Qwen", lang="en")
+    PostEnrichmentState.objects.create(post=post)
+    assert lineage.finish_call(
+        scope_id, post_ids=[post.pk], raw_count=2, outcome="ok", complete=True,
+    ) == 1
+    scope = CollectionScopeRun.objects.get(pk=scope_id)
+    assert scope.raw_count == 2 and scope.coverage_state == "complete"
+    assert CollectionObservation.objects.filter(
+        run_id=lineage.claim.run_id, scope_run=scope, post=post,
+    ).exists()
+    assert PostEnrichmentState.objects.get(post=post).source_collection_job_id is None
+    lineage.finish(success=True)
+
+
 def test_legacy_product_match_scope_pins_existing_subject_and_input_digest():
     from django.utils import timezone
 
