@@ -156,6 +156,82 @@ def project(contract, source, snapshots, *, key="projection"):
     )
 
 
+def test_github_replay_selects_archived_capture_after_old_columns_clear():
+    from core.collection_capture import archive_legacy
+    from core.collection_resources import project_observation_facts
+    from core.models import DataSource
+    from core.source_metric_projection import replay_saved_evidence
+
+    contract, raw, _, _ = configured("github")
+    captured = evidence("github", raw)
+    project_observation_facts(captured)
+    archive = archive_legacy({
+        "listing": captured.listing,
+        "dimensions": captured.dimensions,
+        "source_metadata": captured.source_metadata,
+        "envelopes": captured.envelopes,
+        "groups": captured.groups,
+    })
+    CollectionObservation.objects.filter(pk=captured.pk).update(
+        legacy_archive=archive, listing={}, dimensions={}, source_metadata={},
+    )
+    job = register_job(
+        job_key="archived-github-replay",
+        source=DataSource.objects.get(pk="github"),
+        purpose="metric", operation="collect_metrics", mode="historical",
+        contract=contract,
+        definition={
+            "version": 1,
+            "scope": {"origin_run_ids": [str(captured.run_id)]},
+            "schedule": {"kind": "manual", "driver": "manual"},
+            "budgets": {"requests": 1, "seconds": 60, "bytes": 100000, "items": 100},
+        },
+    )
+    set_job_state(job.pk, "ready")
+    run = replay_saved_evidence(job.pk)
+    assert run.status == "success" and run.selected_count == 1
+    assert MetricValue.objects.filter(observation__run=run).count() == 3
+
+
+def test_hf_replay_skips_archived_evidence_without_selected_numbers():
+    from core.collection_capture import archive_legacy
+    from core.models import DataSource
+    from core.source_metric_projection import replay_saved_evidence
+
+    contract, raw, _, _ = configured("hf")
+    skipped = evidence("hf", raw)
+    skipped.source_metadata = {"numeric_fields": []}
+    skipped.save(update_fields=["source_metadata"])
+    selected = evidence("hf", raw, observed_at=CAPTURED + timedelta(seconds=1))
+    for captured in (skipped, selected):
+        archive = archive_legacy({
+            "listing": captured.listing,
+            "dimensions": captured.dimensions,
+            "source_metadata": captured.source_metadata,
+            "envelopes": captured.envelopes,
+            "groups": captured.groups,
+        })
+        CollectionObservation.objects.filter(pk=captured.pk).update(
+            legacy_archive=archive, listing={}, dimensions={}, source_metadata={},
+        )
+    job = register_job(
+        job_key="archived-hf-replay",
+        source=DataSource.objects.get(pk="hf"),
+        purpose="metric", operation="collect_metrics", mode="historical",
+        contract=contract,
+        definition={
+            "version": 1,
+            "scope": {"origin_run_ids": [str(skipped.run_id), str(selected.run_id)]},
+            "schedule": {"kind": "manual", "driver": "manual"},
+            "budgets": {"requests": 1, "seconds": 60, "bytes": 100000, "items": 100},
+        },
+    )
+    set_job_state(job.pk, "ready")
+    run = replay_saved_evidence(job.pk)
+    assert run.status == "success" and run.selected_count == 1
+    assert MetricValue.objects.filter(observation__run=run).count() == 2
+
+
 @pytest.mark.parametrize("source,count", [("hf", 2), ("github", 3)])
 def test_saved_native_counters_write_and_cross_job_replay_reuses_original_clock(
     source, count, monkeypatch

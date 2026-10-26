@@ -295,6 +295,23 @@ def _publisher(contract, source, identifier):
     return mapping
 
 
+def _captured_documents(evidence):
+    """Recover immutable historical evidence from its archive after JSON retirement."""
+    if evidence.legacy_archive_id is None:
+        return evidence.listing, evidence.dimensions, evidence.source_metadata
+    from core.collection_capture import read_document
+
+    document = read_document(evidence.legacy_archive)
+    require(
+        isinstance(document, dict)
+        and isinstance(document.get("listing"), dict)
+        and isinstance(document.get("dimensions"), dict)
+        and isinstance(document.get("source_metadata"), dict),
+        "invalid archived source evidence",
+    )
+    return document["listing"], document["dimensions"], document["source_metadata"]
+
+
 def evidence_rows(contract, source, evidence):
     """Yield supported native rows; preserve snapshot and effective clocks separately."""
     require(
@@ -302,10 +319,12 @@ def evidence_rows(contract, source, evidence):
         "catalog evidence source mismatch",
     )
     require(evidence.status == "ok", "source evidence is an error")
-    raw = evidence.listing
+    raw, captured_dimensions, captured_metadata = _captured_documents(evidence)
     require(isinstance(raw, dict), "native object evidence required")
     if source in {"openrouter", "arena"}:
-        yield from _publication_rows(contract, source, evidence)
+        yield from _publication_rows(
+            contract, source, evidence, raw, captured_dimensions, captured_metadata,
+        )
         return
     dimensions = {}
     if evidence.source_subject_kind == "account":
@@ -343,7 +362,7 @@ def evidence_rows(contract, source, evidence):
         publisher = _publisher(contract, source, identity.split("/", 1)[0])
         native = {"repo_id": identity, "raw": raw}
     elif source == "github":
-        kind = evidence.dimensions.get("kind")
+        kind = captured_dimensions.get("kind")
         require(
             kind in {"repository", "repository_access", "release_asset"},
             "unsupported numeric evidence kind",
@@ -366,14 +385,14 @@ def evidence_rows(contract, source, evidence):
             )
             owner = str(raw.get("owner", {}).get("id"))
         else:
-            owner = str(evidence.source_metadata.get("owner_id"))
+            owner = str(captured_metadata.get("owner_id"))
             require(
-                raw.get("id") == evidence.dimensions.get("asset_id")
-                and evidence.dimensions.get("release_id") is not None,
+                raw.get("id") == captured_dimensions.get("asset_id")
+                and captured_dimensions.get("release_id") is not None,
                 "asset identity required",
             )
             dimensions = {
-                key: evidence.dimensions[key] for key in ("release_id", "asset_id")
+                key: captured_dimensions[key] for key in ("release_id", "asset_id")
             }
         publisher = _publisher(contract, source, owner)
         native = {"repository_id": identity, "raw": raw, "dimensions": dimensions}
@@ -382,8 +401,8 @@ def evidence_rows(contract, source, evidence):
     from core.benchmark_metric_timing import native_origin
 
     created = native_origin(raw)
-    if "numeric_fields" in evidence.source_metadata:
-        fields = set(evidence.source_metadata["numeric_fields"])
+    if "numeric_fields" in captured_metadata:
+        fields = set(captured_metadata["numeric_fields"])
         native["raw"] = {
             key: value
             for key, value in raw.items()
@@ -398,7 +417,7 @@ def evidence_rows(contract, source, evidence):
     )
     # Native publication/period/revision pins may be supplied by history adapters.
     # Repository modification times never substitute for a measurement end.
-    snapshot = evidence.source_metadata.get("numeric_snapshot_identity")
+    snapshot = captured_metadata.get("numeric_snapshot_identity")
     snapshot_kind = "publication" if snapshot else "capture"
     if not snapshot:
         snapshot = {
@@ -408,7 +427,7 @@ def evidence_rows(contract, source, evidence):
             "payload_sha256": digest(raw),
         }
     metadata = {
-        **copy.deepcopy(evidence.source_metadata),
+        **copy.deepcopy(captured_metadata),
         "projection_kind": SOURCE_STATISTICS_POLICY,
         "snapshot_kind": snapshot_kind,
         "snapshot_identity": snapshot,
@@ -421,7 +440,7 @@ def evidence_rows(contract, source, evidence):
         "definitions_sha256": digest(
             contract.source_configuration[source]["definitions"]
         ),
-        "clocks": copy.deepcopy(evidence.source_metadata.get("clocks", {})),
+        "clocks": copy.deepcopy(captured_metadata.get("clocks", {})),
     }
     row["source_metadata"] = metadata
     row["projection_key"] = digest(
@@ -442,25 +461,24 @@ def evidence_rows(contract, source, evidence):
     if evidence.published_date:
         row["published_date"] = evidence.published_date.isoformat()
     # History adapters pin precision; the shared writer resolves omitted reported timing.
-    for key, times in evidence.source_metadata.get("metric_times", {}).items():
+    for key, times in captured_metadata.get("metric_times", {}).items():
         if key in row["metrics"]:
             row["metrics"][key].update(times)
     yield row
 
 
-def _publication_rows(contract, source, evidence):
+def _publication_rows(contract, source, evidence, payload, captured_dimensions, captured_metadata):
     settings = contract.source_configuration[source]
     validate_publication_provenance(source, settings)
     require(
-        evidence.dimensions.get("kind") == "publication_row",
+        captured_dimensions.get("kind") == "publication_row",
         "selected publication evidence required",
     )
     require(
-        evidence.source_metadata.get("publication_provenance")
+        captured_metadata.get("publication_provenance")
         == settings["publication_provenance"],
         "publication provenance pin mismatch",
     )
-    payload = evidence.listing
     require(len(payload.get("rows", [])) == 1, "one immutable publication row required")
     if source == "arena":
         require(
@@ -473,7 +491,7 @@ def _publication_rows(contract, source, evidence):
     )
     row["observed_at"] = evidence.observed_at.isoformat()
     row["resource_key"] = row["source_identifier"]
-    snapshot = evidence.source_metadata["numeric_snapshot_identity"]
+    snapshot = captured_metadata["numeric_snapshot_identity"]
     row["dimensions"]["revision"] = snapshot["revision"]
     row["source_metadata"] = {
         **row["source_metadata"],
@@ -485,7 +503,7 @@ def _publication_rows(contract, source, evidence):
         "source_payload_sha256": digest(payload),
         "publication_provenance": settings["publication_provenance"],
         "dataset_id": settings["publication_provenance"]["dataset_id"],
-        "clocks": copy.deepcopy(evidence.source_metadata.get("clocks", {})),
+        "clocks": copy.deepcopy(captured_metadata.get("clocks", {})),
     }
     row["projection_key"] = digest(
         [
@@ -584,7 +602,7 @@ def _project_evidence(
 
     enforce_source_collection(contract, source)
     selected = list(
-        CollectionObservation.objects.select_related("run", "source_dataset")
+        CollectionObservation.objects.select_related("run", "source_dataset", "legacy_archive")
         .prefetch_related("run__job")
         .filter(pk__in=evidence_ids)
         .order_by("pk")
@@ -752,9 +770,10 @@ def _project_evidence(
 
 
 def _evidence_bytes(evidence):
+    listing, metadata, dimensions = _captured_documents(evidence)
     return len(
         json.dumps(
-            [evidence.listing, evidence.source_metadata, evidence.dimensions],
+            [listing, metadata, dimensions],
             ensure_ascii=False,
         ).encode("utf-8")
     )
@@ -824,32 +843,26 @@ def replay_saved_evidence(job_id):
         source_subject_kind__in=["repository", "account", "model", "aggregate"],
         status="ok",
     ).order_by("pk")
-    if job.source_id == "hf":
-        selected = selected.exclude(
-            Q(source_metadata__has_key="numeric_fields")
-            & Q(source_metadata__numeric_fields=[])
-        )
     if job.source_id == "github":
         selected = selected.filter(
             Q(source_subject_kind="account")
-            | Q(
-                dimensions__kind__in=[
-                    "repository",
-                    "repository_access",
-                    "release_asset",
-                ]
-            )
+            | Q(observation_kind__in=["repository", "repository_access", "release_asset"])
         )
     if job.source_id in {"openrouter", "arena"}:
-        selected = selected.filter(dimensions__kind="publication_row")
+        selected = selected.filter(observation_kind="publication_row")
     ids, consumed, complete = [], 0, True
-    evidence_rows = selected.only("id", "listing", "source_metadata", "dimensions")[
-        : job.budgets["items"] + 1
-    ].iterator(chunk_size=1)
+    last_processed = cursor
+    evidence_rows = selected.select_related("legacy_archive").only(
+        "id", "listing", "source_metadata", "dimensions",
+        "legacy_archive__body", "legacy_archive__content_sha256",
+    ).iterator(chunk_size=100)
     for evidence in evidence_rows:
         if monotonic() >= deadline:
             complete = False
             break
+        if job.source_id == "hf" and _captured_documents(evidence)[2].get("numeric_fields") == []:
+            last_processed = evidence.pk
+            continue
         size = _evidence_bytes(evidence)
         require(
             size <= job.budgets["bytes"],
@@ -864,10 +877,11 @@ def replay_saved_evidence(job_id):
             break
         ids.append(evidence.pk)
         consumed += size
+        last_processed = evidence.pk
     return project_evidence(
         claim,
         ids,
-        cursor=str(ids[-1] if ids else cursor),
+        cursor=str(last_processed),
         complete=complete,
         deadline=deadline,
     )
