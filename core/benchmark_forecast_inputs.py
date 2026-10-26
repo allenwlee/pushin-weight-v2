@@ -6,6 +6,7 @@ from django.db.models import Q
 
 from core.benchmark_attribution import enforce_use
 from core.benchmark_metric_store import aware_instant
+from core.benchmark_serving import observation_dimensions
 from core.measurement_taxonomy import require
 from core.models import MetricValue
 
@@ -152,7 +153,14 @@ def forecast_inputs(
     for value in selected:
         observation, definition = value.observation, value.source_metric
         run = observation.run
-        metadata = observation.source_metadata
+        # OpenCode's forecast coordinates are retained as typed publication
+        # facts; its observation documents can be retired independently.
+        if run.job.source_id == "opencode":
+            metadata = {"period_status": observation.period_status}
+            dimensions = observation_dimensions(observation)
+        else:
+            metadata = observation.source_metadata
+            dimensions = observation.dimensions
         rows.append(
             {
                 "value_id": value.pk,
@@ -172,7 +180,7 @@ def forecast_inputs(
                 "window_mode": definition.window_mode,
                 "source_timezone": value.source_timezone_reference_id or "unknown",
                 "temporal_status": value.temporal_status,
-                "dimensions": observation.dimensions,
+                "dimensions": dimensions,
                 "source_metadata": metadata,
                 "first_local_observed_at": observation.observed_at.isoformat(),
                 "import_completed_at": run.completed_at.isoformat(),

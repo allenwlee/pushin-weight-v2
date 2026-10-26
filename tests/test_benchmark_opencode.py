@@ -454,6 +454,19 @@ def test_operational_cutoff_and_raw_snapshot_export_never_include_later_poll():
     )
     from core.models import CollectionObservation
 
+    expected_coordinates = [
+        (value["dimensions"], value["source_metadata"]["period_status"])
+        for value in result["values"]
+    ]
+    CollectionObservation.objects.filter(run=first).update(
+        dimensions={}, source_metadata={}, listing={},
+    )
+    retained = forecast_inputs(contract, cutoff)
+    assert [
+        (value["dimensions"], value["source_metadata"]["period_status"])
+        for value in retained["values"]
+    ] == expected_coordinates
+
     CollectionObservation.objects.filter(run=first).update(period_status=None)
     output = StringIO()
     call_command(
