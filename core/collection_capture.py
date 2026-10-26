@@ -426,7 +426,7 @@ def attach_metric_requests(run, observations):
         coordinate = (
             observation.source_identifier.casefold()
             if source == "hf"
-            else observation.source_metadata.get("endpoint_path")
+            else observation_object_documents(observation)[2].get("endpoint_path")
             if source == "opencode"
             else None
         )

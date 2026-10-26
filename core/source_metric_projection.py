@@ -697,9 +697,9 @@ def _project_evidence(
                 "source": source,
                 "observation_id": observation.pk,
                 "source_identifier": observation.source_identifier,
-                "dimensions": observation.dimensions,
+                "dimensions": observation_object_documents(observation)[1],
                 "outcome": "native_only"
-                if observation.source_metadata.get("native_only")
+                if observation.product_id is None
                 else "reused"
                 if observation.pk in accounting["reused_observation_ids"]
                 else "written",
