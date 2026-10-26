@@ -460,8 +460,8 @@ def prepare_rows(contract, source, payload, *, adapter=None):
                 observation_key__in=[
                     row["projection_key"] for row in rows if row.get("projection_key")
                 ],
-                source_metadata__projection_kind=SOURCE_STATISTICS_POLICY,
-            ).values("observation_key", "observed_at", "source_metadata")
+                projection_kind=SOURCE_STATISTICS_POLICY,
+            ).values("observation_key", "observed_at", "original_retrieved_at")
         }
         if statistics
         else {}
@@ -581,9 +581,10 @@ def prepare_rows(contract, source, payload, *, adapter=None):
                                 "observed_at": retained["observed_at"],
                                 "source_metadata": {
                                     **metadata,
-                                    "original_retrieved_at": retained[
-                                        "source_metadata"
-                                    ].get("original_retrieved_at"),
+                                    "original_retrieved_at": (
+                                        retained["original_retrieved_at"].isoformat()
+                                        if retained["original_retrieved_at"] else None
+                                    ),
                                 },
                             }
                         point, basis = reported_times(
@@ -671,7 +672,7 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
                 .defer("run__raw_payload", "run__job__definition")
                 .get_or_create(
                     observation_key=data["observation_key"],
-                    source_metadata__projection_kind=SOURCE_STATISTICS_POLICY,
+                    projection_kind=SOURCE_STATISTICS_POLICY,
                     defaults={"run": run, **data},
                 )
             )
@@ -705,9 +706,10 @@ def commit_prepared_rows(run, prepared, *, reuse_snapshots=False):
                         observation.observed_at == data["observed_at"],
                         "immutable snapshot clock conflict",
                     )
+                expected_retrieval = data["source_metadata"].get("original_retrieved_at")
                 require(
-                    observation.source_metadata.get("clocks")
-                    == data["source_metadata"].get("clocks"),
+                    observation.original_retrieved_at
+                    == (aware_instant(expected_retrieval) if expected_retrieval else None),
                     "immutable snapshot clock conflict",
                 )
                 reused.append(observation.pk)

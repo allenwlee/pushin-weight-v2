@@ -188,6 +188,9 @@ def test_saved_native_counters_write_and_cross_job_replay_reuses_original_clock(
     assert observation.source_metadata["reported_time"]["policy"] == "reported-time-v1"
     assert all(value.reported_time_policy == "reported-time-v1" for value in observation.values.all())
     assert any(v.integer_value == 0 for v in observation.values.all())
+    # Replaying a retained numeric projection must use its typed identity and
+    # timing facts after the superseded observation document is cleared.
+    CollectionObservation.objects.filter(pk=observation.pk).update(source_metadata={})
     second = project(contract, source, [snapshot], key="second")
     assert second.status == "success" and MetricValue.objects.count() == count
     assert second.report["projection"]["reused_observation_ids"] == [observation.pk]
@@ -198,6 +201,18 @@ def test_saved_native_counters_write_and_cross_job_replay_reuses_original_clock(
     )
     product.refresh_from_db()
     assert product.product_type_code is None
+
+
+def test_replay_refuses_typed_retrieval_clock_drift_after_document_retirement():
+    contract, raw, _, _ = configured()
+    snapshot = evidence("hf", raw)
+    first = project(contract, "hf", [snapshot])
+    numeric = first.observations.get()
+    CollectionObservation.objects.filter(pk=numeric.pk).update(
+        source_metadata={}, original_retrieved_at=CAPTURED + timedelta(days=1),
+    )
+    with pytest.raises(ValueError, match="immutable snapshot clock conflict"):
+        project(contract, "hf", [snapshot], key="drifted-typed-clock")
 
 
 def test_bad_optional_fields_do_not_drop_other_numbers_and_new_capture_is_distinct():
