@@ -8,6 +8,7 @@ from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import StaleClaim
@@ -705,8 +706,12 @@ def test_historical_rare_inbox_precedes_gate_and_never_uses_live_slot(pipeline, 
         envelopes=[{"rare_hit_ids": evidence["rare_hit_ids"]}],
     )
     assert scope_rare_hit_mismatch_counts() == (2, 0)
-    first = project_scope_rare_hits_batch(after_id=scoped.pk - 1, batch_size=1)
+    with CaptureQueriesContext(connection) as copied_queries:
+        first = project_scope_rare_hits_batch(after_id=scoped.pk - 1, batch_size=1)
     assert first.last_id == scoped.pk and first.scanned == first.inserted == 1
+    copied_sql = "\n".join(query["sql"] for query in copied_queries)
+    assert '"collection_runs"."report"' not in copied_sql
+    assert '"rare_type_search_hits"."public_payload"' not in copied_sql
     assert not CollectionScopeRareHit.objects.filter(scope_run=empty_window).exists()
     middle = project_scope_rare_hits_batch(after_id=empty_window.pk - 1, batch_size=1)
     assert middle.last_id == empty_window.pk and middle.scanned == 1 and middle.inserted == 0

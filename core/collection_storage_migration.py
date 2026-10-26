@@ -1241,6 +1241,7 @@ def project_scope_rare_hits_batch(
             CollectionScopeRun.objects.filter(pk__in=ids)
             .extra(where=["jsonb_path_exists(envelopes, '$[*].rare_hit_ids')"])
             .select_related("run")
+            .only("pk", "scope_kind", "envelopes", "run__job_id")
         )
         expected = set()
         for scope in scopes:
@@ -1257,7 +1258,7 @@ def project_scope_rare_hits_batch(
             hit.pk: hit
             for hit in RareTypeSearchHit.objects.filter(
                 pk__in={hit_id for _, hit_id in expected}
-            ).select_related("run")
+            ).select_related("run").only("pk", "run__lane")
         }
         if len(hit_rows) != len({hit_id for _, hit_id in expected}):
             raise ValueError("historical rare hit is missing")
@@ -1315,10 +1316,10 @@ def project_scope_request_uses_batch(
     with transaction.atomic(), connection.cursor() as cursor:
         cursor.execute("SET LOCAL lock_timeout = '5s'")
         cursor.execute("SET LOCAL statement_timeout = '30s'")
+        # Empty windows advance the cursor; the JSON check is local to each
+        # bounded window rather than searching the whole historical table.
         cursor.execute(
             "SELECT id FROM collection_scope_runs WHERE id>%s "
-            "AND EXISTS (SELECT 1 FROM jsonb_array_elements(envelopes) e "
-            "WHERE e ? 'prefetch_request_id') "
             "ORDER BY id LIMIT %s FOR UPDATE",
             [after_id, batch_size],
         )
@@ -1327,7 +1328,9 @@ def project_scope_request_uses_batch(
             return RequestUseBatch(after_id, 0, 0)
         scopes = list(
             CollectionScopeRun.objects.filter(pk__in=ids)
+            .extra(where=["jsonb_path_exists(envelopes, '$[*].prefetch_request_id')"])
             .select_related("run")
+            .only("pk", "scope_kind", "envelopes", "run__job_id")
             .order_by("pk")
         )
         inserted = 0

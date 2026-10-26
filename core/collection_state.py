@@ -604,6 +604,8 @@ def record_scope_request_uses(scope, envelopes):
         str(request.pk): request
         for request in CollectionRequest.objects.filter(pk__in=ids)
         .select_related("scope_run__run")
+        .only("pk", "transport_outcome", "http_status", "archive_id",
+              "request_category", "scope_run__run__job_id")
     }
     require(len(requests) == len(ids), "scope captured request is missing")
     existing = {

@@ -11,6 +11,8 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 import requests
 from django.core.management.base import CommandError
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from core.collection_jobs import register_job, set_job_state
 from core.collection_storage_migration import (
@@ -136,8 +138,18 @@ def test_twenty_fetches_use_exact_page_counts_and_shared_storage(http_pages):
     first = rows.first()
     CollectionScopeRequestUse.objects.filter(scope_run=first).delete()
     assert scope_request_use_mismatch_counts() == (1, 0)
-    assert project_scope_request_uses_batch(after_id=first.pk - 1).inserted == 1
+    with CaptureQueriesContext(connection) as copied_queries:
+        assert project_scope_request_uses_batch(after_id=first.pk - 1).inserted == 1
+    assert '"collection_runs"."report"' not in "\n".join(
+        query["sql"] for query in copied_queries
+    )
     assert scope_request_use_mismatch_counts() == (0, 0)
+    empty_window = CollectionScopeRun.objects.create(
+        run=first.run, scope_kind="x_query", scope_key="empty-prefetch-window",
+        ownership={}, envelopes=[],
+    )
+    empty = project_scope_request_uses_batch(after_id=empty_window.pk - 1, batch_size=1)
+    assert empty.last_id == empty_window.pk and empty.scanned == 1 and empty.inserted == 0
     assert Post.objects.count() == 30
     assert CollectionObservation.objects.filter(run_id=result["run_id"], source_subject_kind="post").count() == 30
     assert CollectionRequest.objects.filter(transport_outcome="received", archive__isnull=False).count() == 20
