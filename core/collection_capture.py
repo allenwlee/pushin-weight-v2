@@ -223,7 +223,7 @@ def run_report_document(run):
     ):
         from monitor.backfill_collection import backfill_report
 
-        return backfill_report(run)
+        return _with_campaign_receipts(run, backfill_report(run))
     if (
         job.source_id == "github" and job.purpose == "catalog"
         and job.operation == "github_catalog"
@@ -324,7 +324,38 @@ def run_report_document(run):
         isinstance(document, dict) and isinstance(document.get("report"), dict),
         "invalid archived run report",
     )
-    return document["report"]
+    return _with_campaign_receipts(run, document["report"])
+
+
+def _with_campaign_receipts(run, report):
+    """Overlay campaign receipts stored as immutable scope evidence."""
+    if run.job.source_id != "x" or run.job.operation != "x_backfill":
+        return report
+    scopes = run.scopes.filter(
+        scope_kind="x_campaign_receipt", phase="campaign_receipt_v1",
+    ).select_related("legacy_archive").order_by("scope_key")
+    previous = report.get("backfill_campaign", {})
+    if not previous and run.legacy_archive_id is not None:
+        archived = read_document(run.legacy_archive)
+        require(isinstance(archived, dict) and isinstance(archived.get("report"), dict),
+                "invalid archived run report")
+        previous = archived["report"].get("backfill_campaign", {})
+    history = list(previous.get("history", []))
+    for scope in scopes:
+        require(scope.legacy_archive_id is not None, "campaign receipt evidence missing")
+        document = read_document(scope.legacy_archive)
+        require(isinstance(document, dict) and isinstance(document.get("receipt"), dict),
+                "invalid campaign receipt evidence")
+        value = document["receipt"]
+        history = [*history[-19:], {"at": document["at"], **value}]
+        previous = {
+            **previous,
+            **({document["phase"]: value} if document["phase"] is not None else {}),
+            "mode": previous.get("mode", "evaluate_at_end"),
+            "latest": value,
+            "history": history,
+        }
+    return {**report, "backfill_campaign": previous} if previous else report
 
 
 def scope_object_documents(scope):

@@ -22,7 +22,7 @@ from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from core.classification_contract import CONTRACT_VERSION, TAXONOMY_VERSION
-from core.collection_capture import read_document
+from core.collection_capture import archive_document, read_document, run_report_document
 from core.collection_jobs import register_job, set_job_state
 from core.models import (
     CollectionJob,
@@ -531,7 +531,7 @@ def _collect_window(window, *, frozen, cfg, collection_options=None, legacy_eval
             job.refresh_from_db()
             if not job.last_attempt_id or job.last_attempt.status == "running":
                 raise
-            report = job.last_attempt.report
+            report = run_report_document(job.last_attempt)
             emit("COLLECTION_ERRORS_RETAINED", {
                 "job_id": str(job.pk), "scope_errors": report.get("scope_errors", []),
             })
@@ -755,27 +755,26 @@ def _enrich_window(job, window, *, frozen, cfg, evaluate_at_end, enrichment_conc
 
 
 def save_campaign_report(job, result, *, phase=None):
-    """Append execution evidence to the existing run; collection facts stay intact."""
+    """Append campaign evidence without rewriting the collection run report."""
     if not job.last_attempt_id:
         return
     with transaction.atomic():
         run = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
-        previous = run.report.get("backfill_campaign", {})
-        history = previous.get("history", [])
         value = json.loads(json.dumps(result, default=str))
-        run.report = run.report | {
-            "backfill_campaign": {
-                **previous,
-                **({phase: value} if phase is not None else {}),
-                "mode": previous.get("mode", "evaluate_at_end"),
-                "latest": value,
-                "history": [
-                    *history[-19:],
-                    {"at": timezone.now().isoformat(), **value},
-                ],
-            }
-        }
-        run.save(update_fields=["report", "updated_at"])
+        previous = run.scopes.filter(
+            scope_kind="x_campaign_receipt", phase="campaign_receipt_v1",
+        ).order_by("-scope_key").values_list("scope_key", flat=True).first()
+        ordinal = int(previous) + 1 if previous is not None else 1
+        evidence = archive_document(
+            json.dumps({"phase": phase, "receipt": value, "at": timezone.now().isoformat()},
+                       sort_keys=True, separators=(",", ":"), allow_nan=False).encode(),
+            encoding="selected-json-canonical-v1", capture_kind="x_campaign_receipt",
+        )
+        CollectionScopeRun.objects.create(
+            run=run, scope_kind="x_campaign_receipt", scope_key=f"{ordinal:08d}",
+            phase="campaign_receipt_v1", outcome="recorded",
+            execution_state="completed", coverage_state="complete", legacy_archive=evidence,
+        )
 
 
 def assess_campaign(frozen, cfg, attempts):

@@ -1,5 +1,7 @@
 """Explicit aggregate evaluation defers failures without declaring success."""
 
+import json
+
 import pytest
 
 from scripts.backfill_campaign import block_live_cursor_writes, run_sequence
@@ -278,13 +280,37 @@ def test_failed_enrichment_receipt_preserves_collection_success(monkeypatch):
     from scripts import backfill_campaign as campaign
 
     collection = {"status": "verified", "checked_posts": 4}
-    run = SimpleNamespace(report={"unrelated": {"keep": True}, "backfill_campaign": {"collection": collection}}, save=lambda **kw: None)
+    run = SimpleNamespace(pk="run", report={"unrelated": {"keep": True}, "backfill_campaign": {"collection": collection}})
+    written = []
+
+    class Scopes:
+        def filter(self, **kwargs):
+            return self
+
+        def order_by(self, *args):
+            return self
+
+        def values_list(self, *args, **kwargs):
+            return self
+
+        def first(self):
+            return f"{len(written):08d}" if written else None
+
+        def create(self, **kwargs):
+            written.append(kwargs)
+
+    run.scopes = Scopes()
     monkeypatch.setattr(campaign.transaction, "atomic", nullcontext)
     monkeypatch.setattr(campaign, "CollectionRun", SimpleNamespace(objects=SimpleNamespace(select_for_update=lambda: SimpleNamespace(get=lambda **kw: run))))
+    monkeypatch.setattr(campaign, "CollectionScopeRun", SimpleNamespace(objects=run.scopes))
+    monkeypatch.setattr(campaign, "archive_document", lambda body, **kw: body)
     campaign.save_campaign_report(SimpleNamespace(last_attempt_id="run"), {"status": "failed"}, phase="enrichment")
     assert run.report["unrelated"] == {"keep": True}
     assert run.report["backfill_campaign"]["collection"] == collection
-    assert run.report["backfill_campaign"]["enrichment"]["status"] == "failed"
+    assert len(written) == 1
+    assert written[0]["scope_kind"] == "x_campaign_receipt"
+    assert written[0]["scope_key"] == "00000001"
+    assert json.loads(written[0]["legacy_archive"])["receipt"] == {"status": "failed"}
 
 
 def test_phase_receipt_accounts_inline_models_separately_from_later_enrichment(monkeypatch):
