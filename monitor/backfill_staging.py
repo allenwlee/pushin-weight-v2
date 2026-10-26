@@ -13,8 +13,8 @@ import os
 import random
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from copy import copy
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
 
 from django.conf import settings
 from django.db.models import Sum
@@ -31,7 +31,13 @@ from monitor.backfill_prefetch import (
     _request_identity,
     fetch_page,
 )
-from monitor.backfill_retry import PAGE_FAILURE_LIMIT, POLICY, RetryControl, transient
+from monitor.backfill_retry import (
+    COOLDOWNS,
+    PAGE_FAILURE_SLOWDOWN,
+    POLICY,
+    RetryControl,
+    transient,
+)
 from monitor.run_lock import backfill_yield_requested, harvest_writer_lock
 from x_monitor.apify import SEARCH_PATH
 from x_monitor.twitterapi_credentials import (
@@ -43,10 +49,19 @@ CATEGORY = "x_backfill_staging"
 
 
 def validate_staging(scope):
-    require(os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT") == "staging",
+    from monitor.backfill_database import identity, scope_relocated
+    moved = scope_relocated(scope)
+    dedicated = scope.get("response_storage") == "database"
+    if dedicated:
+        actual = identity()
+        require(os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT") == "backfill"
+                and actual["name"] == actual["user"] == "xbackfiller"
+                and scope.get("database_host") == actual["host"],
+                "dedicated backfill database required")
+    require(moved or dedicated or os.environ.get("X_MONITOR_DEPLOYMENT_ENVIRONMENT") == "staging",
             "direct ingestion requires staging environment")
-    require(scope.get("staging_host") == settings.DATABASES["default"].get("HOST")
-            and bool(scope.get("staging_host")), "staging database host changed")
+    require(moved or dedicated or (scope.get("staging_host") == settings.DATABASES["default"].get("HOST")
+            and bool(scope.get("staging_host"))), "staging database host changed")
     # The frozen Call A author roles can name brands outside the keyword set.
     # Check their foreign keys before HTTP admission, not after a paid response.
     needed = set(scope.get("brands", []))
@@ -81,16 +96,20 @@ class StagingPrefetcher(Prefetcher):
         ).exclude(pk__in=consumed).select_related(
             "scope_run__run", "scope_run__job_target__search_query", "attempt__run"
         ).order_by("started_at", "pk")
-        failures, not_before, group = 0, None, None
+        failures, not_before, group, last_failure = 0, None, None, None
         for request in requests:
             require(x_scope_ownership(request.scope_run) == x_scope_ownership(scope), "staging scope ancestry changed")
             if (request.http_method == "GET" and request.transport_outcome in {"received", "transport_error", "timeout"}
                     and transient(request.error_code, request.http_status)):
-                original_scope = SimpleNamespace(ownership=x_scope_ownership(scope), cursor=request.cursor_before)
+                # Keep typed query ownership and legacy run identity intact.
+                # Only the cursor differs when verifying an earlier receipt.
+                original_scope = copy(scope)
+                original_scope.cursor = request.cursor_before
                 require(request.request_config == _request_identity(original_scope)
                         and request.endpoint_url == _endpoint(original_scope), "staging retry ancestry changed")
                 if request.cursor_before == scope.cursor:
                     failures += 1
+                    last_failure = max(last_failure or request.started_at, request.received_at or request.started_at)
                     group = group or request.request_group or str(request.pk)
                     due = request.retry_after_at or request.started_at + timedelta(seconds=10)
                     not_before = max(not_before or due, due)
@@ -114,7 +133,12 @@ class StagingPrefetcher(Prefetcher):
                 receipts[str(request.pk)]["body_lost"] = True
                 original.save(update_fields=["report", "updated_at"])
             self.metrics["lost_responses"] += 1
-        require(failures < PAGE_FAILURE_LIMIT, "staging page retry allowance exhausted")
+        if failures >= PAGE_FAILURE_SLOWDOWN:
+            # Retain every physical failure and its unknown billing. An isolated
+            # bad page waits while other scopes can progress; a provider-wide
+            # incident is also throttled by RetryControl's single recovery probe.
+            due = last_failure + timedelta(seconds=COOLDOWNS[-1])
+            not_before = max(not_before or due, due)
         return not_before, group
 
     def _save(self, request, result):
@@ -148,7 +172,7 @@ class StagingPrefetcher(Prefetcher):
                 "body_lost": False}
             if retryable:
                 self.retry.failed(result.received_at.timestamp(), retry_after=result.retry_after_seconds or 0,
-                                  rate_limited=response["status_code"] == 429)
+                                  rate_limited=response["status_code"] in {401, 403, 429})
                 self.metrics["transient_failures"] += 1
             elif not result.error:
                 self.retry.succeeded()
@@ -211,7 +235,7 @@ class StagingPrefetcher(Prefetcher):
                             bytes_left = self.job.budgets["bytes"] - run.report.get("response_bytes", 0) - sum(v[2] for v in futures.values())
                             items_left = self.job.budgets["items"] - run.selected_count - 20 * len(futures)
                             spent = self.job.runs.aggregate(n=Sum("request_count"))["n"] or 0
-                        if items_left < 20 or bytes_left <= 0 or spent + self.job.scope["prior_api_requests"] >= self.job.scope["maximum_api_requests"]:
+                        if items_left < 20 or bytes_left <= 0 or self.budget.cumulative_api_limit_reached(spent):
                             admission_open = False
                             break
                         max_bytes = min(1024 * 1024, bytes_left // (self.options.concurrency - len(futures)))

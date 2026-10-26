@@ -1299,12 +1299,12 @@ def execute_enrichment(
         or job.operation != "x_backfill"
     ):
         raise BatchAdmissionError("enrichment_requires_real_x_backfill_job")
-    pinned_database = job.scope.get("database", {})
     with connection.cursor() as cursor:
         # Match the login saved by the collector, including SET ROLE sessions.
         cursor.execute("SELECT current_database(), session_user")
         name, role = cursor.fetchone()
-    if pinned_database != {"name": name, "user": role}:
+    from monitor.backfill_database import job_database_matches
+    if not job_database_matches(job, {"name": name, "user": role}):
         raise BatchAdmissionError("enrichment_database_identity_mismatch")
     existing = job.provider_batches.order_by("created_at").first()
     pin = configuration_pin(cfg)

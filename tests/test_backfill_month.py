@@ -288,6 +288,8 @@ def test_command_routes_new_month_phases_without_changing_recipe(tmp_path, monke
                 "enrichment_concurrency": 8,
                 "collection_concurrency": 20,
                 "collection_starts_per_second": 10,
+                "collection_unlimited_requests": False,
+                "collection_no_deadline": False,
                 "evaluate_at_end": False,
             },
         )
@@ -401,7 +403,7 @@ def test_phase_runtime_holds_original_month_and_campaign_locks_and_cursor_guard(
     monkeypatch.setenv("DATABASE_URL", "postgres://fixture")
     monkeypatch.setattr(psycopg, "connect", lambda *a, **kw: Guard())
     monkeypatch.setattr(
-        month, "_validate_campaign_runtime", lambda *a: events.append("runtime_checked")
+        month, "_validate_campaign_runtime", lambda *a, **kw: events.append("runtime_checked")
     )
     monkeypatch.setattr(
         month, "_check_saved_jobs", lambda *a: events.append("saved_checked")
@@ -460,6 +462,19 @@ def test_phase_runtime_holds_original_month_and_campaign_locks_and_cursor_guard(
     ]
     assert all("window" not in row for row in out)
 
+    # Actual controller boundary must honor explicit expiry removal, while
+    # forwarding rate/request controls and retaining the same locking path.
+    frozen["deadline"] = "2000-01-01T00:00:00+00:00"
+    seen = []
+    monkeypatch.setattr(month, "check_deadline", lambda *a: pytest.fail("expiry was not removed"))
+    monkeypatch.setattr(campaign, "collect_window", lambda w, **kw:
+                        seen.append(kw["collection_options"]) or {"status": "verified"})
+    month.run_phases(frozen, object(), phase="collect", collection_no_deadline=True,
+                     collection_unlimited_requests=True, collection_concurrency=20,
+                     collection_starts_per_second=20)
+    assert seen == [{"concurrency": 20, "starts_per_second": 20,
+                     "unlimited_requests": True, "no_deadline": True}] * 2
+
 
 def test_legacy_command_without_phase_still_uses_existing_runner(tmp_path, monkeypatch):
     from django.core.management import call_command
@@ -495,3 +510,40 @@ def test_expired_deadline_fails_dry_run_before_work(tmp_path, monkeypatch):
     )
     with pytest.raises(CommandError, match="deadline"):
         call_command("run_backfill", month_recipe=path, phase="all", dry_run=True)
+
+
+@pytest.mark.parametrize('flag', ['collection_no_deadline', 'collection_unlimited_requests'])
+@pytest.mark.parametrize('phase', ['all', 'enrich'])
+def test_collection_limit_override_cannot_change_enrichment_limits(flag, phase):
+    with pytest.raises(ValueError, match='require_collect_phase'):
+        month.execution_options(recipe(), phase=phase, **{flag: True})
+
+
+@pytest.mark.parametrize('value', ['true', 1, None])
+def test_limit_override_requires_explicit_boolean(value):
+    with pytest.raises(ValueError, match='overrides_invalid'):
+        month.execution_options(recipe(), phase='collect', collection_no_deadline=value)
+
+
+def test_command_expired_recipe_can_select_unlimited_collection_without_rewriting_it(tmp_path, monkeypatch):
+    from django.core.management import call_command
+    from django.core.management.base import CommandError
+
+    import monitor.management.commands.run_backfill as command
+
+    frozen = recipe()
+    frozen['spec']['deadline'] = frozen['template']['deadline'] = '2000-01-01T00:00:00+00:00'
+    path = command_input(tmp_path, frozen)
+    original = path.read_bytes()
+    seen = []
+    monkeypatch.setattr(command, 'load_config', lambda *a: 'config')
+    monkeypatch.setattr(command, 'run_phases', lambda *a, **kw: seen.append(kw))
+    with pytest.raises(CommandError, match='deadline_exhausted'):
+        call_command('run_backfill', month_recipe=path, phase='collect', execute=True)
+    assert not seen
+    call_command('run_backfill', month_recipe=path, phase='collect', execute=True,
+                 collection_no_deadline=True, collection_unlimited_requests=True,
+                 collection_concurrency=20, collection_starts_per_second=20)
+    assert seen[0]['collection_no_deadline'] and seen[0]['collection_unlimited_requests']
+    assert seen[0]['collection_starts_per_second'] == 20
+    assert path.read_bytes() == original

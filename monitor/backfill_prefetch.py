@@ -39,11 +39,14 @@ from x_monitor.twitterapi_credentials import (
 class PrefetchOptions:
     concurrency: int = 1
     starts_per_second: float = 10
+    unlimited_requests: bool = False
+    no_deadline: bool = False
 
     @classmethod
     def parse(cls, value=None):
         value = {} if value is None else value
-        require(isinstance(value, dict) and set(value) <= {"concurrency", "starts_per_second"},
+        require(isinstance(value, dict) and set(value) <= {
+            "concurrency", "starts_per_second", "unlimited_requests", "no_deadline"},
                 "invalid collection execution options")
         selected = cls(**value)
         require(type(selected.concurrency) is int and 1 <= selected.concurrency <= 20,
@@ -51,6 +54,8 @@ class PrefetchOptions:
         rate = selected.starts_per_second
         require(type(rate) in {int, float} and math.isfinite(rate) and 0 < rate <= 20,
                 "collection request-start rate must be greater than zero and at most20")
+        require(type(selected.unlimited_requests) is bool and type(selected.no_deadline) is bool,
+                "collection limit overrides must be booleans")
         return selected
 
 
@@ -210,7 +215,8 @@ class Prefetcher:
                     bytes_left = self.job.budgets["bytes"] - run.report.get("response_bytes", 0)
                     items_left = self.job.budgets["items"] - run.selected_count
                     spent = self.job.runs.aggregate(n=Sum("request_count"))["n"] or 0
-                    starts_left = self.job.scope["maximum_api_requests"] - self.job.scope["prior_api_requests"] - spent
+                    starts_left = (len(scopes) if self.options.unlimited_requests else
+                                   self.job.scope["maximum_api_requests"] - self.job.scope["prior_api_requests"] - spent)
                 count = min(len(scopes), self.budget.remaining_api_requests,
                             max(0, items_left // 20), max(0, starts_left))
                 if count <= 0 or bytes_left <= 0:

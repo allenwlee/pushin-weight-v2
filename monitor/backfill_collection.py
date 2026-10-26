@@ -104,10 +104,11 @@ def validate_scope(job, cfg):
     require(scope.get("credential_purpose") == TwitterApiCredentialPurpose.ON_DEMAND.value,
             "on-demand credential purpose required")
     actual_db = {key.lower(): settings.DATABASES["default"].get(key) for key in ("NAME", "USER")}
-    require(scope.get("database") == actual_db, "backfill database identity changed")
+    from monitor.backfill_database import job_database_matches
+    require(job_database_matches(job, actual_db), "backfill database identity changed")
     storage = scope.get("response_storage", "archive")
-    require(storage in {"archive", "staging"}, "unsupported response storage")
-    if storage == "staging":
+    require(storage in {"archive", "staging", "database"}, "unsupported response storage")
+    if storage in {"staging", "database"}:
         from monitor.backfill_staging import validate_staging
         validate_staging(scope)
     require(scope.get("config_digest") == config_digest(cfg, version=version), "backfill configuration changed")
@@ -239,12 +240,18 @@ def plan_job_definition(*, cfg, since_epoch, until_epoch, brands, requests, mode
 class DurableBudget(BackfillBudget):
     """Conservative paid-request admission survives process death and retries."""
 
-    def __init__(self, claim, job, seconds):
+    def __init__(self, claim, job, seconds, *, unlimited_requests=False):
         limits = job.budgets
         super().__init__(max_api_requests=limits["requests"],
                          max_llm_calls=job.scope.get("model_requests_per_run", 0),
                          run_seconds=seconds)
         self.claim = claim
+        self.maximum_api_requests = None if unlimited_requests else job.scope["maximum_api_requests"]
+        self.prior_api_requests = job.scope["prior_api_requests"]
+
+    def cumulative_api_limit_reached(self, spent):
+        return (self.maximum_api_requests is not None
+                and self.prior_api_requests + spent >= self.maximum_api_requests)
 
     def claim_llm_request(self, timeout_seconds=0):
         super().claim_llm_request(timeout_seconds)
@@ -315,9 +322,9 @@ class DurableBudget(BackfillBudget):
     def claim_api_request(self, timeout_seconds=0):
         super().claim_api_request(timeout_seconds)
         with fenced_run(self.claim) as (job, run):
-            limits, scope = job.budgets, job.scope
+            limits = job.budgets
             prior = job.runs.aggregate(total=Sum("request_count"))["total"] or 0
-            if (scope["prior_api_requests"] + prior >= scope["maximum_api_requests"]
+            if (self.cumulative_api_limit_reached(prior)
                     or run.request_count >= limits["requests"]
                     or run.selected_count >= limits["items"]
                     or run.report.get("response_bytes", 0) >= limits["bytes"]):
@@ -660,7 +667,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
 
     job = CollectionJob.objects.get(pk=job_id)
     from core.models import CollectionRequest
-    direct_staging = job.scope.get("response_storage") == "staging"
+    direct_staging = job.scope.get("response_storage") in {"staging", "database"}
     use_prefetch = direct_staging or collection_options is not None or CollectionRequest.objects.filter(
         attempt__run__job=job, request_category="x_backfill_prefetch",
     ).exists()
@@ -677,7 +684,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
     # Resolve this exact key before claiming or sending any HTTP request.
     require_twitterapi_api_key(TwitterApiCredentialPurpose.ON_DEMAND)
     seconds = job.budgets["seconds"]
-    if scope.get("deadline") and any(not unit.get("enumeration_complete") for unit in scope["units"]):
+    if not options.no_deadline and scope.get("deadline") and any(not unit.get("enumeration_complete") for unit in scope["units"]):
         seconds = min(seconds, (datetime.fromisoformat(scope["deadline"]) - datetime.now(UTC)).total_seconds())
     require(seconds > 0, "campaign deadline exhausted")
     # A legacy continuation copies its saved scopes when claimed. Yield before
@@ -689,7 +696,13 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
             return {"job_id": str(job.pk), "state": "waiting_for_live_writer"}
     claim = claim_job(job.pk, invocation_id=str(uuid4()), manual_authorized=True,
                       continue_from=job.last_attempt_id)
-    budget = DurableBudget(claim, job, seconds)
+    budget = DurableBudget(claim, job, seconds, unlimited_requests=options.unlimited_requests)
+    with fenced_run(claim) as (_, run):
+        from monitor.backfill_database import relocation_audit
+        audit = relocation_audit()
+        run.report = {**run.report, "collection_options": asdict(options),
+                      **({"database_relocation": audit} if audit else {})}
+        run.save(update_fields=["report", "updated_at"])
     error = None
     deferred_scopes = set()
     scope_errors = []
@@ -710,7 +723,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
         def serial_scopes():
             for _ in range(job.budgets["requests"]):
                 requests = job.runs.aggregate(total=Sum("request_count"))["total"] or 0
-                if scope["prior_api_requests"] + requests >= scope["maximum_api_requests"]:
+                if budget.cumulative_api_limit_reached(requests):
                     return
                 scoped = CollectionScopeRun.objects.filter(
                     run_id=claim.run_id, scope_kind="x_query", enumeration_complete=False,

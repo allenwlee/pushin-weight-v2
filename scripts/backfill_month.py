@@ -143,17 +143,25 @@ def execution_options(
     enrichment_concurrency=None,
     collection_concurrency=1,
     collection_starts_per_second=10,
+    collection_unlimited_requests=False,
+    collection_no_deadline=False,
 ):
     """Validate preferences before runtime checks, writes, locks or provider calls."""
     if phase not in {"collect", "enrich", "all"}:
         raise ValueError("phase_invalid")
+    if type(collection_unlimited_requests) is not bool or type(collection_no_deadline) is not bool:
+        raise ValueError("collection_limit_overrides_invalid")
+    if (collection_unlimited_requests or collection_no_deadline) and phase != "collect":
+        raise ValueError("collection_limit_overrides_require_collect_phase")
     frozen = (
         instructions["template"]
         if instructions.get("format") == "x-month-recipe/v1"
         else instructions
     )
+    from monitor.backfill_database import scope_relocated
     if phase != "collect" and any(
         window.get("collection_definition", {}).get("scope", {}).get("response_storage") == "staging"
+        and not scope_relocated(window["collection_definition"]["scope"])
         for window in frozen.get("windows", [])
     ):
         raise ValueError("staging acquisition requires collect phase; promote before enrichment")
@@ -192,6 +200,8 @@ def execution_options(
         "collection_options": {
             "concurrency": collection_concurrency,
             "starts_per_second": collection_starts_per_second,
+            **({"unlimited_requests": True} if collection_unlimited_requests else {}),
+            **({"no_deadline": True} if collection_no_deadline else {}),
         },
     }
 
@@ -199,7 +209,7 @@ def execution_options(
 def selected_runtime(recipe, runtime=None):
     """Attest reviewed code without modifying frozen recipe hashes or job keys."""
     spec = copy.deepcopy(recipe["spec"])
-    staging = any(w["collection_definition"]["scope"].get("response_storage") == "staging"
+    staging = any(w["collection_definition"]["scope"].get("response_storage") in {"staging", "database"}
                   for w in recipe["template"]["windows"])
     required = RUNTIME_MODULES | ({"monitor/backfill_staging.py", "monitor/backfill_collection.py", "monitor/run_lock.py"} if staging else set())
     if runtime is not None:
@@ -343,7 +353,7 @@ def phase_sequence(
     return results
 
 
-def _validate_campaign_runtime(frozen, cfg, revision):
+def _validate_campaign_runtime(frozen, cfg, revision, *, no_deadline=False):
     from monitor.backfill_collection import POLICY_ADAPTER_VERSION, config_digest
     from monitor.backfill_enrichment import configuration_pin
     from scripts import backfill_campaign as campaign
@@ -358,9 +368,11 @@ def _validate_campaign_runtime(frozen, cfg, revision):
         != frozen["runtime_config_sha256"]
     ):
         raise RuntimeError("pinned_runtime_config_changed")
-    if campaign.database_identity() != frozen["database"]:
+    from monitor.backfill_database import campaign_database_matches
+    if not campaign_database_matches(frozen, campaign.database_identity()):
         raise RuntimeError("campaign_database_identity_rejected")
-    check_deadline(frozen["deadline"])
+    if not no_deadline:
+        check_deadline(frozen["deadline"])
     from core.collection_jobs import validate_definition
     from core.models import CollectionJob
     from monitor.backfill_collection import validate_scope
@@ -449,6 +461,8 @@ def run_phases(
     enrichment_concurrency=None,
     collection_concurrency=1,
     collection_starts_per_second=10,
+    collection_unlimited_requests=False,
+    collection_no_deadline=False,
     runtime_revision=None,
     runtime_attestation=None,
     evaluate_at_end=False,
@@ -460,6 +474,8 @@ def run_phases(
         enrichment_concurrency=enrichment_concurrency,
         collection_concurrency=collection_concurrency,
         collection_starts_per_second=collection_starts_per_second,
+        collection_unlimited_requests=collection_unlimited_requests,
+        collection_no_deadline=collection_no_deadline,
     )
     is_month = instructions.get("format") == "x-month-recipe/v1"
     if is_month:
@@ -481,7 +497,7 @@ def run_phases(
         namespace = "x-manual-month-controller:" + str(database)
     manifests = lambda: iter_manifests(instructions)
     for frozen in manifests():
-        _validate_campaign_runtime(frozen, cfg, runtime_revision)
+        _validate_campaign_runtime(frozen, cfg, runtime_revision, no_deadline=collection_no_deadline)
     import psycopg
     from django.db import connection, connections
 
@@ -516,7 +532,8 @@ def run_phases(
 
         def boundary():
             for frozen in manifests():
-                check_deadline(frozen["deadline"])
+                if not collection_no_deadline:
+                    check_deadline(frozen["deadline"])
                 guard.execute("SELECT 1")
                 yield frozen
 

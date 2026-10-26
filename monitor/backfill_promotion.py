@@ -76,11 +76,12 @@ def _completed_source(job_id):
         cursor.execute("SET LOCAL statement_timeout='20s'")
     job = CollectionJob.objects.select_related("last_success").get(pk=job_id)
     validate_staging(job.scope)
-    require(job.scope.get("response_storage") == "staging" and job.state == "completed"
+    require(job.scope.get("response_storage") in {"staging", "database"} and job.state == "completed"
             and job.last_success_id and job.last_success.report.get("collection_drained"),
             "completed direct-staging collection required")
     identity = database_identity()
-    require(job.scope["database"] == {k: identity[k] for k in ("name", "user")}, "staging identity mismatch")
+    from monitor.backfill_database import job_database_matches
+    require(job_database_matches(job, identity), "staging identity mismatch")
     return job, {"database": identity, "job_id": str(job.pk), "run_id": str(job.last_success_id),
         "definition_sha256": job.definition_sha256, "since_epoch": job.scope["since_epoch"],
         "until_epoch": job.scope["until_epoch"], "historical_keyword_recall": "incomplete"}

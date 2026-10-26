@@ -5,14 +5,16 @@ from dataclasses import asdict, dataclass, field
 
 from core.measurement_taxonomy import require
 
-POLICY = "staging-get-retry/v1"
-PAGE_FAILURE_LIMIT = 5
+POLICY = "staging-get-retry/v2"
+PAGE_FAILURE_SLOWDOWN = 5
 COOLDOWNS = (60, 300, 900)
 
 
 def transient(error, status):
     # Missing/malformed replies and unknown sends are not transport failures.
-    return status in {429, 500, 502, 503, 504} or (
+    # An operator-approved recheck of a previously working key uses the same
+    # credentials. Repeated rejection enters increasingly slow retries.
+    return status in {401, 403, 429, 500, 502, 503, 504} or (
         status is None and error in {"Timeout", "ConnectionError"}
     )
 
@@ -30,7 +32,7 @@ class RetryControl:
         if saved is None:
             return cls()
         require(set(saved) == {"policy", "phase", "failures", "cooldowns", "until", "successes"}
-                and saved["policy"] == POLICY, "invalid staging retry state")
+                and saved["policy"] in {"staging-get-retry/v1", POLICY}, "invalid staging retry state")
         value = cls(**{k: v for k, v in saved.items() if k != "policy"})
         require(value.phase in {"closed", "open", "probe", "ramp"}
                 and type(value.cooldowns) is int and 0 <= value.cooldowns <= len(COOLDOWNS)

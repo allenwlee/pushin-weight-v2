@@ -110,14 +110,16 @@ def manifest(
     direct_concurrency=32,
     response_storage="archive",
 ):
-    if response_storage not in {"archive", "staging"}:
+    if response_storage not in {"archive", "staging", "database"}:
         raise ValueError("unsupported_response_storage")
-    if response_storage == "staging":
+    if response_storage in {"staging", "database"}:
         from django.conf import settings
 
         from monitor.backfill_staging import validate_staging
         staging_host = settings.DATABASES["default"].get("HOST")
-        validate_staging({"staging_host": staging_host})
+        storage_scope = {"response_storage": response_storage,
+                         "staging_host" if response_storage == "staging" else "database_host": staging_host}
+        validate_staging(storage_scope)
     validate_concurrency(direct_concurrency)
     deadline = deadline or timezone.now() + timedelta(hours=72)
     planned = plan_calls_for_cycle(cfg, scheduled_exclusions=True)
@@ -175,8 +177,8 @@ def manifest(
             maximum_models=window["maximum_model_requests"],
         )
         definition["scope"]["deadline"] = deadline.isoformat()
-        if response_storage == "staging":
-            definition["scope"].update(response_storage="staging", staging_host=staging_host)
+        if response_storage in {"staging", "database"}:
+            definition["scope"].update(storage_scope)
         for extra_index, (call, query) in enumerate(supplemental_queries):
             definition["scope"]["units"].append({
                 "scope_key": f"{call}:supplement:{extra_index}", "scope_kind": "x_query",
@@ -461,6 +463,9 @@ def execute_window(window, *, frozen, cfg, evaluate_at_end=False):
 
 
 def _collect_window(window, *, frozen, cfg, collection_options=None, legacy_evaluate_at_end=None):
+    from monitor.backfill_prefetch import PrefetchOptions
+
+    options = PrefetchOptions.parse(collection_options)
     resolve_api_key(DEEPINFRA_ON_DEMAND_KEY_ENV)
     identity = hashlib.sha256(json.dumps(frozen, sort_keys=True).encode()).hexdigest()
     if frozen.get("instruction_format") != "x-backfill-campaign/v2":
@@ -491,16 +496,16 @@ def _collect_window(window, *, frozen, cfg, collection_options=None, legacy_eval
     if job.state == "paused":
         set_job_state(job.pk, "ready")
     emit("WINDOW_START", {**window, "job_id": str(job.pk)})
-    deadline = datetime.fromisoformat(frozen["deadline"])
+    deadline = None if options.no_deadline else datetime.fromisoformat(frozen["deadline"])
     idle_since = time.monotonic()
     issues = []
     while job.state != "completed":
-        if timezone.now() >= deadline:
+        if deadline is not None and timezone.now() >= deadline:
             raise RuntimeError("campaign_deadline_exhausted")
         if job.next_retry_at and job.next_retry_at > timezone.now():
             _wait((job.next_retry_at - timezone.now()).total_seconds())
             # A recorded provider cooldown is intentional waiting, like live
-            # writer priority. The original campaign deadline remains binding.
+            # writer priority. Respect the selected calendar-expiry policy.
             idle_since = time.monotonic()
             job.refresh_from_db()
             continue
@@ -524,7 +529,7 @@ def _collect_window(window, *, frozen, cfg, collection_options=None, legacy_eval
         if report.get("state") == "waiting_for_live_writer":
             emit("WAITING_FOR_LIVE_WRITER", {"job_id": str(job.pk)})
             # A first invocation has no last_attempt yet. Intentional yielding
-            # is not a stalled collection; the hard deadline above still applies.
+            # is not a stalled collection; any selected deadline still applies.
             _wait(15)
             idle_since = time.monotonic()
             continue
@@ -544,7 +549,7 @@ def _collect_window(window, *, frozen, cfg, collection_options=None, legacy_eval
             break
         if job.last_attempt.scopes.filter(outcome="blocked").exists():
             raise RuntimeError("collection_cursor_blocked")
-        if report.get("cumulative_api_requests", 0) >= window["maximum_api_requests"]:
+        if not options.unlimited_requests and report.get("cumulative_api_requests", 0) >= window["maximum_api_requests"]:
             raise RuntimeError("collection_request_allowance_exhausted")
         if report.get("usage", {}).get("api_requests", 0) or report.get("usage", {}).get("llm_requests", 0):
             idle_since = time.monotonic()
@@ -831,13 +836,9 @@ def run(frozen, cfg, *, evaluate_at_end=False, runtime_revision=None):
         != frozen["runtime_config_sha256"]
     ):
         raise RuntimeError("pinned_runtime_config_changed")
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT current_database(),current_user")
-        if cursor.fetchone() != (
-            frozen["database"]["name"],
-            frozen["database"]["user"],
-        ):
-            raise RuntimeError("campaign_database_identity_rejected")
+    from monitor.backfill_database import campaign_database_matches
+    if not campaign_database_matches(frozen, database_identity()):
+        raise RuntimeError("campaign_database_identity_rejected")
     validate_storage_schema()
     # A dedicated session keeps this campaign lock while ordinary connections
     # close between waits. No application row or transaction remains locked.

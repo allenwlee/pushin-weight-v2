@@ -148,7 +148,7 @@ def test_error_drains_every_started_request_and_keeps_cursors(http_pages, monkey
     def response(params):
         barrier.wait(timeout=20)
         if "marker0" in params["query"]:
-            return 403, {"error": "denied"}
+            return 402, {"error": "credits exhausted"}
         time.sleep(0.2)
         return result_for(params)
     with http_pages(response) as state, pytest.raises(CommandError):

@@ -87,14 +87,20 @@ class Command(BaseCommand):
             help="Physical search request start rate (default10).",
         )
         parser.add_argument(
-            "--response-storage", choices=["archive", "staging"], default=None,
-            help="New instructions only: staging saves Posts and receipts without full response archives.",
+            "--response-storage", choices=["archive", "staging", "database"], default=None,
+            help="New instructions only: database saves Posts and receipts in the dedicated backfill database.",
         )
+        parser.add_argument("--collection-unlimited-requests", action="store_true",
+                            help="Explicit collect-only override: remove cumulative X request cap; retain attempt budgets.")
+        parser.add_argument("--collection-no-deadline", action="store_true",
+                            help="Explicit collect-only override: remove calendar expiry; retain request/attempt timeouts.")
         parser.add_argument(
             "--runtime-attestation",
             type=Path,
             help="Month runtime JSON: runtime_revision and source_sha256; paired with --runtime-revision.",
         )
+        parser.add_argument("--database-relocation", type=Path, help="Verified storage relocation receipt for preserved jobs.")
+        parser.add_argument("--database-relocation-sha256", help="Expected SHA256 of the relocation receipt.")
         mode = parser.add_mutually_exclusive_group()
         mode.add_argument(
             "--execute",
@@ -108,6 +114,14 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        from monitor.backfill_database import relocated_database
+        try:
+            with relocated_database(options.get("database_relocation"), options.get("database_relocation_sha256")):
+                return self._handle(*args, **options)
+        except ValueError as exc:
+            raise CommandError(str(exc)) from exc
+
+    def _handle(self, *args, **options):
         try:
             phase = options["phase"]
             if options["response_storage"] is not None:
@@ -116,6 +130,8 @@ class Command(BaseCommand):
                 if options["response_storage"] == "staging" and phase != "collect":
                     raise CommandError("staging acquisition requires --phase collect; promote before enrichment")
             preferences = {
+                "collection_unlimited_requests": options["collection_unlimited_requests"],
+                "collection_no_deadline": options["collection_no_deadline"],
                 "enrichment_concurrency": options["enrichment_concurrency"],
                 "collection_concurrency": 1
                 if options["collection_concurrency"] is None
@@ -126,7 +142,9 @@ class Command(BaseCommand):
             }
             if phase is None and (
                 options["month_recipe"]
-                or any(options[k] is not None for k in preferences)
+                or options["collection_unlimited_requests"] or options["collection_no_deadline"]
+                or any(options[k] is not None for k in (
+                    "enrichment_concurrency", "collection_concurrency", "collection_starts_per_second"))
             ):
                 raise CommandError(
                     "--month-recipe and execution preferences require --phase"
@@ -219,7 +237,8 @@ class Command(BaseCommand):
                     raise CommandError("month runtime attestation revision mismatch")
             if phase is not None:
                 execution_options(frozen, phase=phase, **preferences)
-                check_deadline((frozen.get("spec") or frozen)["deadline"])
+                if not options["collection_no_deadline"]:
+                    check_deadline((frozen.get("spec") or frozen)["deadline"])
             self.result = frozen
             if options["execute"]:
                 execution = {"evaluate_at_end": options["evaluate_at_end"]}

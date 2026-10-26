@@ -480,7 +480,7 @@ def test_phase_controller_respects_real_month_and_legacy_campaign_sessions(monke
     frozen = {"campaign": "locked-campaign", "database": campaign.database_identity(),
               "direct_concurrency": 32, "deadline": "2099-01-01T00:00:00+00:00", "windows": [{"index": 1}]}
     calls = []
-    monkeypatch.setattr(month, "_validate_campaign_runtime", lambda *args: None)
+    monkeypatch.setattr(month, "_validate_campaign_runtime", lambda *args, **kwargs: None)
     monkeypatch.setattr(campaign, "collect_window", lambda *args, **kwargs:
                         calls.append("collect") or {"status": "verified"})
     namespace = "x-manual-month-controller:" if held_lock == "month" else frozen["campaign"]

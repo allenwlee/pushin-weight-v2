@@ -11,7 +11,7 @@ import requests
 from django.core.management.base import CommandError
 from django.utils import timezone
 
-from core.models import CollectionRequest, CollectionScopeRun, Post
+from core.models import CollectionRequest, Post
 from monitor.backfill_collection import BackfillProviderSafetyError, execute_job
 from monitor.backfill_retry import POLICY, RetryControl
 from tests.test_backfill_pipeline import page
@@ -99,7 +99,8 @@ def test_timeout_retries_exact_cursor_without_rewriting_unknown_receipt(http_pag
     assert Post.objects.count() == 3
 
 
-def test_twenty_in_flight_cluster_saves_successes_and_resumes_after_cooldown(http_pages, monkeypatch, clock):  # noqa: F811
+@pytest.mark.parametrize("failure", ["timeout", 401, 403])
+def test_twenty_in_flight_cluster_saves_successes_and_resumes_after_cooldown(http_pages, monkeypatch, clock, failure):  # noqa: F811
     job = staged_job(monkeypatch, 40)
     barrier = threading.Barrier(20)
     wave = {"initial": True}
@@ -117,13 +118,16 @@ def test_twenty_in_flight_cluster_saves_successes_and_resumes_after_cooldown(htt
     def response(params):
         if wave["initial"]:
             barrier.wait(timeout=25)
-            if int(re.search(r"marker(\d+)", params["query"]).group(1)) >= 3:
+            marker = int(re.search(r"marker(\d+)", params["query"]).group(1))
+            if marker < 3 and failure != "timeout":
+                return failure, {"error": "fixture rejected key"}
+            if marker >= 3:
                 time.sleep(1)
         return result_for(params)
 
     def fail(params):
         marker = int(re.search(r"marker(\d+)", params["query"]).group(1))
-        if marker < 3 and marker not in lost:
+        if failure == "timeout" and marker < 3 and marker not in lost:
             lost.add(marker)
             return True
         return False
@@ -151,22 +155,22 @@ def test_twenty_in_flight_cluster_saves_successes_and_resumes_after_cooldown(htt
     assert limits[0] == 1 and 4 in limits and limits[-1] == 20
     assert report["prefetch"]["retry_requests"] == 3
     assert Post.objects.count() == 40
-    assert CollectionRequest.objects.filter(accounting_complete=False).count() == 3
+    assert CollectionRequest.objects.filter(accounting_complete=False).count() == (3 if failure == "timeout" else 0)
 
 
-def test_repeated_failures_keep_page_ceiling_across_attempts(http_pages, monkeypatch, clock):  # noqa: F811
+def test_repeated_failures_slow_down_without_ending_campaign(http_pages, monkeypatch, clock):  # noqa: F811
     job = staged_job(monkeypatch, 1)
+    fail = {"enabled": True}
     with http_pages(result_for) as state:
-        lose_response(monkeypatch, lambda _: True)
-        for _ in range(5):
+        lose_response(monkeypatch, lambda _: fail["enabled"])
+        for _ in range(6):
             report = execute_job(job.pk)
             assert not report["collection_drained"]
             clock.advance(job)
-        with pytest.raises(CommandError, match="ValueError"):
-            execute_job(job.pk)
-    assert len(state["requests"]) == 5
-    assert CollectionRequest.objects.filter(error_code="Timeout", accounting_complete=False).count() == 5
-    assert not CollectionScopeRun.objects.filter(enumeration_complete=True).exists()
+        fail["enabled"] = False
+        assert execute_job(job.pk)["collection_drained"]
+    assert len(state["requests"]) == 7
+    assert CollectionRequest.objects.filter(error_code="Timeout", accounting_complete=False).count() == 6
 
 
 def test_timeout_does_not_reset_window_request_allowance(http_pages, monkeypatch, clock):  # noqa: F811
@@ -181,7 +185,7 @@ def test_timeout_does_not_reset_window_request_allowance(http_pages, monkeypatch
     assert not second["collection_drained"] and second["cumulative_api_requests"] == 1
 
 
-@pytest.mark.parametrize("status", [401, 402, 403, 400])
+@pytest.mark.parametrize("status", [402, 400])
 def test_permanent_http_errors_still_stop(http_pages, monkeypatch, status):  # noqa: F811
     job = staged_job(monkeypatch, 1)
     with http_pages(lambda _: (status, {"error": "fixture"})) as state, pytest.raises((CommandError, BackfillProviderSafetyError)):
@@ -189,7 +193,7 @@ def test_permanent_http_errors_still_stop(http_pages, monkeypatch, status):  # n
     assert len(state["requests"]) == 1
 
 
-@pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
+@pytest.mark.parametrize("status", [401, 403, 429, 500, 502, 503, 504])
 def test_transient_http_response_can_recover(http_pages, monkeypatch, clock, status):  # noqa: F811
     job = staged_job(monkeypatch, 1)
     replies = iter([(status, {"error": "fixture"}), page("recovered")])
@@ -229,6 +233,77 @@ def test_retry_after_is_not_shortened():
     assert policy.until == 190
     policy.failed(15, retry_after=200, rate_limited=True)
     assert policy.until == 215 and policy.cooldowns == 1
+
+
+def test_previous_retry_receipt_remains_usable():
+    original = RetryControl().snapshot() | {"policy": "staging-get-retry/v1"}
+    assert RetryControl.restore(original).snapshot()["policy"] == POLICY
+    assert original["policy"] == "staging-get-retry/v1"
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_auth_retries_slow_down_and_keep_all_receipts(http_pages, monkeypatch, clock, status):  # noqa: F811
+    job = staged_job(monkeypatch, 1)
+    rejected = {"enabled": True}
+    with http_pages(lambda _: (status, {"error": "fixture"}) if rejected["enabled"] else page("recovered")) as state:
+        for index in range(6):
+            result = execute_job(job.pk)
+            assert result["state"] == "waiting_for_provider"
+            job.refresh_from_db()
+            if index >= 2:
+                assert (job.next_retry_at - clock.now(UTC)).total_seconds() >= 890
+            clock.advance(job)
+        rejected["enabled"] = False
+        assert execute_job(job.pk)["collection_drained"]
+    assert len(state["requests"]) == 7
+    assert CollectionRequest.objects.filter(http_status=status).count() == 6
+    assert Post.objects.count() == 1
+
+
+def test_unlimited_requests_resumes_exhausted_job_without_refetching_completed_scope(http_pages, monkeypatch):  # noqa: F811
+    job = staged_job(monkeypatch, 2, maximum=1)
+    before = copy.deepcopy(job.definition)
+    with http_pages(result_for) as state:
+        first = execute_job(job.pk)
+        assert not first["collection_drained"] and len(state["requests"]) == 1
+        exhausted = execute_job(job.pk)
+        assert not exhausted["collection_drained"] and len(state["requests"]) == 1
+        result = execute_job(job.pk, collection_options={"unlimited_requests": True})
+    assert result["collection_drained"] and result["cumulative_api_requests"] == 2
+    assert len(state["requests"]) == Post.objects.count() == 2
+    job.refresh_from_db()
+    assert job.definition == before
+    assert job.last_attempt.report["collection_options"]["unlimited_requests"] is True
+
+
+def test_expired_campaign_and_exhausted_cap_can_be_explicitly_overridden(http_pages, monkeypatch, clock):  # noqa: F811
+    from core.models import CollectionJob
+    from scripts import backfill_campaign as campaign
+    from x_monitor.config import load_config
+
+    template = staged_job(monkeypatch, 2, maximum=1)
+    definition = copy.deepcopy(template.definition)
+    deadline = (clock.now(UTC) - timedelta(days=1)).isoformat()
+    definition["scope"]["deadline"] = deadline
+    frozen = {"campaign": "override-campaign", "instruction_format": "x-backfill-campaign/v2", "deadline": deadline}
+    window = {"index": 1, "maximum_api_requests": 1, "collection_definition": definition}
+    before = copy.deepcopy((frozen, window))
+    monkeypatch.setenv("DEEPINFRA_ON_DEMAND", "fixture-only")
+    with http_pages(lambda _: {"tweets": [], "has_next_page": False}) as state:
+        with pytest.raises(RuntimeError, match="campaign_deadline_exhausted"):
+            campaign.collect_window(window, frozen=frozen, cfg=load_config(Path("config.yaml")))
+        job = CollectionJob.objects.get(job_key="override-campaign/1")
+        with pytest.raises(ValueError, match="campaign deadline exhausted"):
+            execute_job(job.pk)
+        assert not state["requests"]
+        result = campaign.collect_window(window, frozen=frozen, cfg=load_config(Path("config.yaml")),
+            collection_options={"no_deadline": True, "unlimited_requests": True, "starts_per_second": 20})
+    assert result["status"] == "verified" and len(state["requests"]) == 2
+    assert (frozen, window) == before
+    job.refresh_from_db()
+    options = job.last_attempt.report["collection_options"]
+    assert options["no_deadline"] and options["unlimited_requests"] and options["starts_per_second"] == 20
+    assert job.last_attempt.report["usage"]["api_limit"] == job.budgets["requests"]
 
 
 def test_malformed_success_is_not_retried(http_pages, monkeypatch):  # noqa: F811
