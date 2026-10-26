@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from django.db import transaction
 
 from core.benchmark_metric_store import aware_instant
+from core.collection_capture import observation_object_documents
 from core.collection_identity import qualified_ownership
 from core.collection_jobs import register_job
 from core.measurement_taxonomy import digest, require
@@ -74,18 +75,20 @@ def _creation_record(product, aliases, mappings, company_ids, cutoff):
                     run__job__source_id="openrouter",
                     run__job__purpose="catalog",
                     source_identifier=mapping.external_identifier,
-                    dimensions__kind="model_catalog",
+                    observation_kind="model_catalog",
                     status="ok",
                 )
+                .select_related("legacy_archive")
                 .order_by("observed_at", "pk")
                 .first()
             )
+            listing = observation_object_documents(observation)[0] if observation else {}
             if (
                 observation
-                and type(observation.listing.get("created")) is int
-                and observation.listing["created"] > 0
+                and type(listing.get("created")) is int
+                and listing["created"] > 0
             ):
-                native = datetime.fromtimestamp(observation.listing["created"], UTC)
+                native = datetime.fromtimestamp(listing["created"], UTC)
                 if native <= cutoff:
                     return {
                         "at": native.isoformat(),
@@ -104,14 +107,16 @@ def _creation_record(product, aliases, mappings, company_ids, cutoff):
                     run__job__source_id="github",
                     run__job__purpose="catalog",
                     source_identifier=mapping.external_identifier,
-                    dimensions__kind="repository",
+                    observation_kind="repository",
                     status="ok",
                 )
+                .select_related("legacy_archive")
                 .order_by("observed_at", "pk")
                 .first()
             )
-            if observation and observation.listing.get("created_at"):
-                native = aware_instant(observation.listing["created_at"])
+            listing = observation_object_documents(observation)[0] if observation else {}
+            if observation and listing.get("created_at"):
+                native = aware_instant(listing["created_at"])
                 if native <= cutoff:
                     return {
                         "at": native.isoformat(),

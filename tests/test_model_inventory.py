@@ -46,6 +46,8 @@ def inventory_job(source_id, scope):
 
 
 def test_openrouter_model_catalog_correlates_api_only_creation_through_reviewed_mapping():
+    from core.collection_capture import archive_legacy
+
     brands, cutoff, _ = inventory()
     account = upsert_account(
         source="hf",
@@ -106,6 +108,15 @@ def test_openrouter_model_catalog_correlates_api_only_creation_through_reviewed_
     assert observation.values.count() == 0
     assert run.attempts.get().requests.get().archive_id
     assert observation.inputs.get().input_request_id
+    observation.legacy_archive = archive_legacy({
+        "listing": observation.listing,
+        "dimensions": observation.dimensions,
+        "source_metadata": observation.source_metadata,
+    })
+    observation.listing, observation.dimensions, observation.source_metadata = {}, {}, {}
+    observation.save(update_fields=[
+        "legacy_archive", "listing", "dimensions", "source_metadata",
+    ])
     jobs = freeze(brands, cutoff)
     selected = next(
         j
