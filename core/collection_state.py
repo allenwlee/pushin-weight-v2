@@ -312,14 +312,9 @@ def claim_job(
             active.completed_at = None if resumable else now
             active.execution_state = "interrupted"
             active.error_code = "expired_lease"
-            active.report = {
-                **active.report,
-                "interrupted_execution": {
-                    "reconciled_at": now.isoformat(),
-                    "process_finished_at": None,
-                },
-            }
-            active.save()
+            active.save(update_fields=[
+                "status", "completed_at", "execution_state", "error_code", "updated_at",
+            ])
             active.attempts.filter(outcome="running").update(
                 outcome="interrupted",
                 stop_reason="expired_lease",
@@ -651,6 +646,56 @@ def record_scope_request_uses(scope, envelopes):
     return len(missing)
 
 
+def _validate_typed_hf_scope(job, run, kind, key, ownership, observation):
+    """Match transient HF scope claims to frozen selection and typed parents."""
+    require(
+        job.source_id == "hf" and job.purpose == "catalog"
+        and job.operation in {"model_inventory", "hf_catalog"}
+        and kind in {"namespace", "hf_metadata", "hf_profile"},
+        "typed checkpoint is limited to HF inventory scopes",
+    )
+    frozen = job.scope.get("hf_scope")
+    require(isinstance(frozen, dict), "frozen HF inventory scope required")
+    entries = frozen.get("namespaces")
+    require(isinstance(entries, list), "frozen HF namespaces required")
+    if kind == "namespace":
+        require(
+            observation is None and ownership in entries
+            and key == ownership.get("namespace"),
+            "HF namespace checkpoint differs from frozen selection",
+        )
+        return
+    if kind == "hf_metadata":
+        require(
+            observation is not None and observation.run_id == run.pk
+            and observation.observation_kind == "creation_inventory"
+            and observation.scope_run is not None
+            and observation.scope_run.scope_kind == "namespace"
+            and ownership == {
+                "namespace": observation.scope_run.scope_key,
+                "repository": observation.source_identifier,
+            }
+            and any(entry.get("namespace") == ownership["namespace"] for entry in entries)
+            and key in {
+                observation.source_identifier + ":detail",
+                observation.source_identifier + ":expanded",
+            },
+            "HF metadata checkpoint differs from its captured listing",
+        )
+        return
+    from core.models import Account
+
+    require(
+        observation is None and set(ownership) == {"account_id"}
+        and any(entry.get("namespace") == key for entry in entries)
+        and Account.objects.filter(
+            pk=ownership["account_id"], data_source_id="hf",
+            normalized_identifier=key.casefold(),
+        ).exists(),
+        "HF profile checkpoint differs from its frozen account",
+    )
+
+
 def checkpoint_scope(
     claim: RunClaim,
     *,
@@ -667,6 +712,7 @@ def checkpoint_scope(
     requested_end_at=None,
     projection_contract=None,
     resource_observation=None,
+    typed=False,
     write: Callable | None = None,
 ):
     require(
@@ -680,6 +726,11 @@ def checkpoint_scope(
     if cursor_history is not None:
         validate_cursor_history(cursor_history)
     require(isinstance(ownership, dict), "scope ownership object required")
+    if typed:
+        require(
+            envelopes is None and projection_contract is None,
+            "typed HF checkpoint cannot use legacy envelopes or projection ownership",
+        )
     if projection_contract is not None:
         require(
             scope_kind in {"numeric_projection", "publication_selection"}
@@ -719,6 +770,10 @@ def checkpoint_scope(
     with fenced_run(claim) as (_, run):
         from core.collection_datasets import resolve_dataset
 
+        if typed:
+            _validate_typed_hf_scope(
+                run.job, run, scope_kind, scope_key, ownership, resource_observation,
+            )
         dataset = resolve_dataset(run.job.source_id, ownership)
         target = None
         if scope_kind == "product_match":
@@ -730,17 +785,24 @@ def checkpoint_scope(
                 run.job, scope_key, query_text=query_text, call_id=call_id,
                 start_at=requested_start_at, end_at=requested_end_at,
             )
+        if typed:
+            compatibility = {"ownership": {}} if any(
+                field.name == "ownership" for field in CollectionScopeRun._meta.fields
+            ) else {}
+        else:
+            compatibility = {"ownership": ownership}
         scope, created = CollectionScopeRun.objects.get_or_create(
             run=run,
             scope_kind=scope_kind,
             scope_key=scope_key,
             defaults={
-                "ownership": ownership, "job_target": target,
+                **compatibility, "job_target": target,
                 "projection_contract": projection_contract,
                 "resource_observation": resource_observation,
             },
         )
-        require(created or scope.ownership == ownership, "scope ownership pin changed")
+        if not typed:
+            require(created or scope.ownership == ownership, "scope ownership pin changed")
         if dataset is not None:
             require(scope.source_dataset_id in (None, dataset.pk), "scope dataset pin changed")
             scope.source_dataset = dataset
@@ -764,6 +826,13 @@ def checkpoint_scope(
                 "scope source observation changed",
             )
             scope.resource_observation = resource_observation
+        if typed:
+            require(
+                scope.resource_observation_id == (
+                    resource_observation.pk if resource_observation is not None else None
+                ),
+                "typed HF scope has a different source observation",
+            )
         for field, value in (
             ("requested_start_at", requested_start_at),
             ("requested_end_at", requested_end_at),
@@ -793,7 +862,7 @@ def checkpoint_scope(
 
                 project_page_receipts(scope, envelopes, cursor=cursor)
         requests = ()
-        if envelopes or scope.requests.exists():
+        if not typed and (envelopes or scope.requests.exists()):
             from core.collection_capture import link_request
             from core.models import CollectionObservationInput, CollectionRequest
 
@@ -825,12 +894,13 @@ def checkpoint_scope(
         # is optional evidence, not a prerequisite for projecting those facts.
         from core.collection_resources import project_observation_facts
 
-        for observation in scope.observations.filter(pk__gt=last_observation):
-            for request in requests:
-                link_request(
-                    observation, request, row_locator=observation.source_identifier
-                )
-            project_observation_facts(observation)
+        if not typed:
+            for observation in scope.observations.filter(pk__gt=last_observation):
+                for request in requests:
+                    link_request(
+                        observation, request, row_locator=observation.source_identifier
+                    )
+                project_observation_facts(observation)
         scope.cursor, scope.outcome = cursor, outcome
         scope.enumeration_complete = enumeration_complete
         scope.execution_state = "completed" if enumeration_complete else "yielded"
@@ -848,7 +918,15 @@ def checkpoint_scope(
             scope.envelopes = envelopes
         if raw_count is not None:
             scope.raw_count = raw_count
-        scope.save()
+        if typed:
+            scope.save(update_fields=[
+                "source_dataset", "job_target", "projection_contract",
+                "resource_observation", "requested_start_at", "requested_end_at",
+                "cursor", "outcome", "enumeration_complete", "execution_state",
+                "coverage_state", "raw_count",
+            ])
+        else:
+            scope.save()
         return scope
 
 
@@ -863,14 +941,32 @@ def finish_run(
     selected_count=None,
     success_count=None,
     error_code=None,
+    typed=False,
+    physical_accounting_complete=None,
     now=None,
 ):
     require(
         status in {"success", "partial", "failed", "aborted"},
         "terminal/yield outcome required",
     )
-    safe_payload(report or {})
+    if typed:
+        require(
+            report is None and type(physical_accounting_complete) is bool,
+            "typed completion needs explicit physical accounting and no legacy report",
+        )
+    else:
+        require(
+            physical_accounting_complete is None,
+            "legacy completion keeps its existing accounting receipt",
+        )
+        safe_payload(report or {})
     with fenced_run(claim, now=now) as (job, run):
+        if typed:
+            require(
+                job.source_id == "hf" and job.purpose == "catalog"
+                and job.operation in {"model_inventory", "hf_catalog"},
+                "typed completion is limited to HF inventory",
+            )
         now = now or timezone.now()
         run.status = status
         run.completed_at = (
@@ -879,51 +975,50 @@ def finish_run(
             and status == "partial"
             else now
         )
-        supplied_report = dict(report or {})
-        require(
-            supplied_report.pop("definition_sha256", job.definition_sha256)
-            == job.definition_sha256
-            and run.report.get("definition_sha256", job.definition_sha256)
-            == job.definition_sha256,
-            "instruction provenance cannot change",
-        )
-        run.report = {**run.report, **supplied_report}
-        run.report.pop("definition_sha256", None)
-        # Only an adapter proving complete physical accounting may release unused
-        # reservation. Interrupted/ambiguous attempts retain their conservative cap.
-        reservation = run.report.get("campaign_usage") if job.campaign_id is None else None
-        campaign = job.campaign_settings
-        if (
-            isinstance(campaign, dict)
-            and campaign.get("kind") == "backfiller-data-source-v1"
-            and reservation
-            and status == "success"
-            and (report or {}).get("physical_accounting_complete") is True
-            and request_count is not None
-            and all(
-                key in reservation
-                for key in (
-                    "reserved_before_current",
-                    "recorded_before_current",
-                    "current_invocation_reservation",
-                )
-            )
-        ):
-            # The successor proves only its own physical usage. Earlier partial
-            # or expired invocations retain their reservation, even when a
-            # catalog attempt reuses the same run row after a hard interruption.
-            current_requests = request_count - reservation["recorded_before_current"]
+        if not typed:
+            supplied_report = dict(report or {})
             require(
-                0 <= current_requests <= reservation["current_invocation_reservation"],
-                "accounted requests exceed current invocation reservation",
+                supplied_report.pop("definition_sha256", job.definition_sha256)
+                == job.definition_sha256
+                and run.report.get("definition_sha256", job.definition_sha256)
+                == job.definition_sha256,
+                "instruction provenance cannot change",
             )
-            run.report["campaign_usage"] = {
-                **reservation,
-                "reserved_requests": reservation["reserved_before_current"]
-                + current_requests,
-                "accounting": "complete_current_invocation_accounting",
-            }
+            run.report = {**run.report, **supplied_report}
+            run.report.pop("definition_sha256", None)
+            # Only an adapter proving complete physical accounting may release
+            # unused reservation. Ambiguous attempts retain their cap.
+            reservation = run.report.get("campaign_usage") if job.campaign_id is None else None
+            campaign = job.campaign_settings
+            if (
+                isinstance(campaign, dict)
+                and campaign.get("kind") == "backfiller-data-source-v1"
+                and reservation
+                and status == "success"
+                and (report or {}).get("physical_accounting_complete") is True
+                and request_count is not None
+                and all(
+                    key in reservation
+                    for key in (
+                        "reserved_before_current",
+                        "recorded_before_current",
+                        "current_invocation_reservation",
+                    )
+                )
+            ):
+                current_requests = request_count - reservation["recorded_before_current"]
+                require(
+                    0 <= current_requests <= reservation["current_invocation_reservation"],
+                    "accounted requests exceed current invocation reservation",
+                )
+                run.report["campaign_usage"] = {
+                    **reservation,
+                    "reserved_requests": reservation["reserved_before_current"]
+                    + current_requests,
+                    "accounting": "complete_current_invocation_accounting",
+                }
         run.error_code = error_code
+        changed = ["status", "completed_at", "error_code", "updated_at"]
         for field, value in (
             ("request_count", request_count),
             ("selected_count", selected_count),
@@ -935,18 +1030,24 @@ def finish_run(
                     "invalid execution counter",
                 )
                 setattr(run, field, value)
+                changed.append(field)
         require(
             run.success_count <= run.selected_count,
             "successful count exceeds selected count",
         )
-        run.save()
+        if typed:
+            run.save(update_fields=changed)
+        else:
+            run.save()
         complete_attempt(
             claim,
             run,
             status=status,
             request_count=request_count,
-            accounting_complete=(report or {}).get("physical_accounting_complete")
-            is True,
+            accounting_complete=(
+                physical_accounting_complete if typed
+                else (report or {}).get("physical_accounting_complete") is True
+            ),
             error_code=error_code,
             now=now,
         )
