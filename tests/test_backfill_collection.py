@@ -714,7 +714,7 @@ def test_historical_rare_resume_uses_saved_inbox_and_exact_cursor(pipeline, monk
 
     import requests
 
-    from core.models import RareTypeSearchHit
+    from core.models import CollectionScopeRun, RareTypeSearchHit
     from x_monitor.jev_decisions import QUESTION_SET, JevDecisionsClient, JevResponse
     job = policy_job(monkeypatch, tmp_path, calls={"RARE_EXTRA"}, rare=True)
     monkeypatch.setenv("TYPESAFE_API_KEY", "test-typesafe")
@@ -730,6 +730,7 @@ def test_historical_rare_resume_uses_saved_inbox_and_exact_cursor(pipeline, monk
     with pytest.raises(CommandError):
         run(job)
     assert RareTypeSearchHit.objects.count() == 1 and not model_calls and not Post.objects.exists()
+    CollectionScopeRun.objects.filter(run__job=job).update(envelopes=[])
     pipeline.responses.append(page("second"))
     report = run(job)
     assert report["collection_drained"] and report["rare_gate_pending"] == 0

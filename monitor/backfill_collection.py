@@ -534,6 +534,19 @@ class PageCheckpoint:
         return [], 0, 0, 0, 0, 0, []
 
 
+def _rare_scope_memberships(rows, job_id):
+    """Read this job's inbox across continuation runs by frozen scope key."""
+    from core.models import CollectionScopeRareHit
+
+    owners = {row.scope_key: set() for row in rows}
+    for scope_key, hit_id in CollectionScopeRareHit.objects.filter(
+        scope_run__run__job_id=job_id, scope_run__scope_kind="x_query",
+        scope_run__scope_key__in=owners,
+    ).values_list("scope_run__scope_key", "rare_hit_id"):
+        owners[scope_key].add(hit_id)
+    return owners
+
+
 def _drain_historical_rare(claim, job, cfg, budget):
     """Process only this job's saved inbox; never reserve a scheduled slot."""
     from core.models import RareTypeSearchHit
@@ -541,8 +554,9 @@ def _drain_historical_rare(claim, job, cfg, budget):
     from monitor.cycle import CycleRunner, _build_brand_index, _load_brand_search_terms
     from x_monitor.jev_decisions import build_jev_decision_gate
 
-    rows = list(CollectionScopeRun.objects.filter(run_id=claim.run_id))
-    hit_ids = {hit for row in rows for envelope in row.envelopes for hit in envelope.get("rare_hit_ids", [])}
+    rows = list(CollectionScopeRun.objects.filter(run_id=claim.run_id, scope_kind="x_query"))
+    owned_hits = _rare_scope_memberships(rows, job.pk)
+    hit_ids = set().union(*owned_hits.values()) if owned_hits else set()
     if not hit_ids:
         return
     gate = build_jev_decision_gate(
@@ -585,7 +599,7 @@ def _drain_historical_rare(claim, job, cfg, budget):
                 if result["selected"] == 0 or result["failed"]:
                     break
             for row in rows:
-                owned = {hit for envelope in row.envelopes for hit in envelope.get("rare_hit_ids", [])}
+                owned = owned_hits[row.scope_key]
                 ids = sorted(set(RareTypeSearchHit.objects.filter(pk__in=owned, post_id__isnull=False)
                                  .values_list("post_id", flat=True)))
                 if ids:
@@ -600,8 +614,10 @@ def _drain_historical_rare(claim, job, cfg, budget):
 
 def _report(job, run_id):
     rows = list(CollectionScopeRun.objects.filter(run_id=run_id, scope_kind="x_query"))
-    ids = sorted({str(pid) for row in rows for envelope in row.envelopes
-                  for pid in envelope.get("post_ids", [])})
+    members = set(CollectionObservation.objects.filter(
+        run__job=job, source_subject_kind="post",
+    ).values_list("post_id", flat=True))
+    ids = sorted(str(pid) for pid in members)
     require(len(rows) == len(job.scope["units"]), "incomplete scope ledger")
     require(Post.objects.filter(pk__in=ids).count() == len(ids), "checkpoint Posts missing")
     complete = PostEnrichmentState.objects.filter(
@@ -618,20 +634,16 @@ def _report(job, run_id):
         "cumulative_api_requests": job.scope["prior_api_requests"] + requests,
         "provider_billing": None,
     }
-    members = set(CollectionObservation.objects.filter(
-        run__job=job, source_subject_kind="post",
-    ).values_list("post_id", flat=True))
-    if members == set(ids):
-        # The typed ledger is complete. Later enrichment can read this scalar
-        # without materializing the compatibility receipt or every member ID.
-        report["post_membership"] = {"version": 1, "distinct_posts": len(ids)}
+    # Membership writes and Post persistence commit in the same page transaction.
+    # Continuations retain their observations on the earlier owning run.
+    report["post_membership"] = {"version": 1, "distinct_posts": len(ids)}
     if job.scope.get("adapter") == POLICY_ADAPTER_VERSION:
         from collections import Counter
 
         from core.models import RareTypeSearchHit
 
-        hit_ids = {hit for row in rows for envelope in row.envelopes
-                   for hit in envelope.get("rare_hit_ids", [])}
+        owned_hits = _rare_scope_memberships(rows, job.pk)
+        hit_ids = set().union(*owned_hits.values()) if owned_hits else set()
         hits = list(RareTypeSearchHit.objects.filter(pk__in=hit_ids)
                     .values("pk", "gate_state", "post_id"))
         missing = sorted(hit_ids - {h["pk"] for h in hits})
