@@ -58,16 +58,14 @@ def test_history_replay_keeps_snapshot_dates_separate_from_import_time():
         run.source_dataset_id,
     }
     assert {
-        o.source_metadata["archive_snapshot_date"] for o in run.observations.all()
+        o.archive_snapshot_date.isoformat() for o in run.observations.all()
     } == {"2026-09-10", "2026-09-11"}
     assert all(o.observed_at >= run.started_at for o in run.observations.all())
     assert MetricValue.objects.filter(window_end_at__isnull=False).count() == 4
     for value in MetricValue.objects.select_related("observation", "source_metric"):
-        from datetime import date, timedelta
+        from datetime import timedelta
 
-        day = date.fromisoformat(
-            value.observation.source_metadata["archive_snapshot_date"]
-        )
+        day = value.observation.archive_snapshot_date
         assert value.window_end_at.date() == day + timedelta(days=1)
         assert value.period_label_date == day
         assert value.temporal_status == "date_only"
@@ -129,8 +127,8 @@ def test_arena_history_keeps_publication_when_selected_cohort_is_empty():
     }
 
 
-@pytest.mark.parametrize("legacy_markers", [True, False], ids=["dual-write", "typed-only"])
-def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields(legacy_markers):
+@pytest.mark.parametrize("archived", [True, False], ids=["archived-evidence", "direct-capture"])
+def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields(archived):
     from datetime import UTC, datetime
     from io import StringIO
 
@@ -156,9 +154,14 @@ def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields(lega
         metadata = observation.source_metadata
         metadata.pop("reported_time", None)
         metadata["unrelated"] = "preserve"
-        type(observation).objects.filter(pk=observation.pk).update(
-            source_metadata=metadata
-        )
+        changes = {"source_metadata": metadata}
+        if archived:
+            from core.collection_capture import archive_legacy
+
+            changes["legacy_archive"] = archive_legacy({
+                "listing": {}, "dimensions": {}, "source_metadata": metadata,
+            })
+        type(observation).objects.filter(pk=observation.pk).update(**changes)
     before = list(
         MetricValue.objects.order_by("id").values(
             "id", "integer_value", "window_end_at", "temporal_status"
@@ -213,9 +216,6 @@ def test_timing_repair_is_bounded_repeatable_and_restores_only_owned_fields(lega
     assert summary["changed_values"] == summary["metadata_updates"] == 0
     assert CollectionCorrection.objects.count() == 4
     assert list(run.observations.order_by("id").values("source_metadata")) == saved
-    if not legacy_markers:
-        # Rollback must remain available after the legacy marker is retired.
-        run.observations.update(source_metadata={"unrelated": "preserve"})
     call_command(
         "repair_metric_timing",
         apply=True,
@@ -296,7 +296,7 @@ def test_timing_correction_refuses_conflicts_and_rolls_back_failed_batches(
         update = repair._update_locked_batch
 
         def fail_metadata(model, rows, names):
-            if model is CollectionObservation:
+            if model is MetricValue:
                 raise RuntimeError("simulated write failure")
             return update(model, rows, names)
 
@@ -304,10 +304,9 @@ def test_timing_correction_refuses_conflicts_and_rolls_back_failed_batches(
         with pytest.raises(RuntimeError, match="simulated write failure"):
             call_command("repair_metric_timing", **kwargs)
         assert list(MetricValue.objects.order_by("pk").values()) == before
-        assert all(
-            "timing_correction_v1" not in o.source_metadata
-            for o in run.observations.all()
-        )
+        from core.models import CollectionCorrection
+
+        assert not CollectionCorrection.objects.exists()
     elif failure == "busy":
         import psycopg
 
@@ -337,8 +336,7 @@ def test_timing_correction_refuses_conflicts_and_rolls_back_failed_batches(
             assert value.window_end_basis == "later_review"
         else:
             assert value.window_end_at is None
-        if failure == "later_timing":
-            assert value.observation.source_metadata["timing_correction_v1"][str(value.pk)]
-        else:
-            assert value.observation.source_metadata == {}
+        from core.models import CollectionCorrection
+
+        assert CollectionCorrection.objects.filter(metric_value=value).count() == 1
         assert '"conflicts": 1' in out.getvalue().splitlines()[-1]

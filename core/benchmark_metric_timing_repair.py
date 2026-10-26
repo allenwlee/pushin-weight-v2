@@ -1,6 +1,5 @@
 """Bounded timing-only correction using the same resolver as normal ingestion."""
 
-import copy
 from collections import Counter, defaultdict
 from contextlib import contextmanager
 from datetime import date, datetime
@@ -8,21 +7,23 @@ from datetime import date, datetime
 from django.db import connection, transaction
 from django.db.models import Q
 
-from core.benchmark_metric_store import TIME_FIELDS, value_times
+from core.benchmark_metric_store import TIME_FIELDS, native_rows, value_times
 from core.benchmark_metric_timing import (
     POLICY,
+    aware_instant,
     catalog_origins,
     native_origin,
     reported_times,
     timing_storage,
 )
+from core.collection_capture import observation_object_documents, read_document
 from core.collection_corrections import (
     TIME_BASIS_FIELDS,
     correction_head,
     record_timing_correction,
 )
 from core.collection_resources import metric_time_provenance
-from core.measurement_taxonomy import require
+from core.measurement_taxonomy import digest, require
 from core.models import CollectionObservation, MetricValue, SourceMetric
 
 REPAIR_KEY = "timing_correction_v1"
@@ -66,11 +67,16 @@ def serial_fields(fields):
 
 
 def _correction_state(correction, side):
-    return serial_fields({
-        field: (getattr(correction, side + "_source_timezone_reference_id") or "unknown")
-        if field == "source_timezone" else getattr(correction, side + "_" + field)
-        for field in FIELDS
-    })
+    return serial_fields(
+        {
+            field: (
+                getattr(correction, side + "_source_timezone_reference_id") or "unknown"
+            )
+            if field == "source_timezone"
+            else getattr(correction, side + "_" + field)
+            for field in FIELDS
+        }
+    )
 
 
 @contextmanager
@@ -89,8 +95,8 @@ def repair_lock():
 def candidate_values(cutoff, after=0, rollback=False):
     values = MetricValue.objects.filter(id__gt=after, id__lte=cutoff)
     if rollback:
-        # Inspect markers only after bounding the scalar primary-key page. A
-        # metadata join can scan the entire observation corpus before LIMIT.
+        # Bound the primary-key page before inspecting correction heads and
+        # archived markers; never scan the evidence corpus to find a page.
         return values
     source_ids = defaultdict(list)
     for pk, source in SourceMetric.objects.filter(
@@ -110,8 +116,161 @@ def candidate_values(cutoff, after=0, rollback=False):
     )
 
 
+def _archived_observation(observation):
+    """Explicit maintenance evidence; never read the retired live JSON columns."""
+    if observation.legacy_archive_id is None:
+        return None
+    archive = observation.legacy_archive
+    if archive.capture_kind != "legacy_snapshot":
+        return None
+    document = read_document(archive)
+    require(
+        isinstance(document, dict)
+        and all(
+            isinstance(document.get(key), dict)
+            for key in ("listing", "dimensions", "source_metadata")
+        ),
+        "invalid retained timing evidence",
+    )
+    return document
+
+
+def _repair_evidence(observation, archived, payload_rows):
+    """Replay only this observation's immutable source, never a newer capture."""
+    metadata = archived["source_metadata"] if archived else {}
+    raw = archived["listing"] if archived else {}
+    links = list(
+        observation.inputs.filter(input_role="numeric_projection").select_related(
+            "input_observation__run__job"
+        )
+    )
+    require(len(links) <= 1, "ambiguous primary timing evidence")
+    if links:
+        link = links[0]
+        origin = link.input_observation
+        require(
+            origin is not None
+            and origin.run.job.source_id == observation.run.job.source_id
+            and origin.source_identifier == observation.source_identifier
+            and link.input_sha256 == origin.observation_key,
+            "timing evidence origin changed",
+        )
+        require(
+            metadata.get("origin_observation_id", origin.pk) == origin.pk,
+            "archived timing origin differs from typed input",
+        )
+        source_archive = _archived_observation(origin)
+        if source_archive is not None:
+            raw = source_archive["listing"]
+            if archived is None:
+                metadata = source_archive["source_metadata"]
+        else:
+            # Never enter the helper's historical live-column fallback.
+            require(
+                origin.projection_kind
+                in {
+                    "github-catalog-object-v1",
+                    "hf-native-history-v1",
+                }
+                or origin.legacy_archive_id is not None
+                or origin.observation_kind == "hf_catalog_listing",
+                "timing origin has no captured source object",
+            )
+            raw, _, source_metadata = observation_object_documents(origin)
+            if archived is None:
+                metadata = source_metadata
+        created = native_origin(raw)
+    elif archived is not None:
+        require(
+            not metadata.get("origin_observation_id"),
+            "historical timing origin needs typed input projection",
+        )
+        created = native_origin(raw)
+    else:
+        run = observation.run
+        require(
+            run.payload_archive_id is not None,
+            "timing repair requires retained source evidence",
+        )
+        if run.pk not in payload_rows:
+            payload = read_document(run.payload_archive)
+            require(
+                digest(payload) == run.payload_sha256,
+                "timing source payload hash changed",
+            )
+            selected = {}
+            for row in native_rows(run.job.source_id, payload):
+                meta = row.get("source_metadata", {})
+                key = digest(
+                    [
+                        row["source_subject_kind"],
+                        row.get("identifier_scope", ""),
+                        row["source_identifier"],
+                        row.get("dimensions", {}),
+                        row.get("published_at"),
+                        row.get("published_date"),
+                        meta.get("archive_snapshot_date"),
+                        meta.get("reconstruction_date"),
+                        meta.get("history_basis"),
+                        meta.get("immutable_revision"),
+                    ]
+                )
+                require(
+                    key not in selected or selected[key] == row,
+                    "conflicting retained timing rows",
+                )
+                selected[key] = row
+            payload_rows[run.pk] = selected
+        row = payload_rows[run.pk].get(observation.observation_key)
+        require(row is not None, "timing observation absent from retained source")
+        metadata = row.get("source_metadata", {})
+        created = row.get("native_created_at")
+    # Import/correction time must never become the original capture time.
+    metadata = dict(metadata)
+    if observation.original_retrieved_at is not None:
+        require(
+            not metadata.get("original_retrieved_at")
+            or aware_instant(metadata["original_retrieved_at"])
+            == observation.original_retrieved_at,
+            "timing capture clock changed",
+        )
+        metadata["original_retrieved_at"] = observation.original_retrieved_at
+    for field in ("archive_snapshot_date", "period_status"):
+        value = getattr(observation, field)
+        if value is not None:
+            expected = value.isoformat() if isinstance(value, date) else value
+            require(
+                metadata.get(field, expected) == expected,
+                "timing source coordinate changed: " + field,
+            )
+            metadata[field] = expected
+    return {
+        "source_metadata": metadata,
+        "observed_at": observation.observed_at,
+        "published_date": observation.published_date,
+        "published_at": observation.published_at,
+    }, created
+
+
+def _rollback_point(target, basis, definition):
+    """Restore the validator's reported-date explanation from typed provenance."""
+    point = dict(target)
+    if target["temporal_status"] == "date_only":
+        reported = {"policy": basis["reported_time_policy"]}
+        if definition.source_id == "hf":
+            reported["normalization"] = "UTC_report_day_exclusive_next_midnight"
+        elif definition.source_id == "opencode":
+            reported.update(basis=basis["window_end_basis"], partial=True)
+        point["_reported_time"] = reported
+    return point
+
+
 def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False):
-    """The observation before-image and all timing changes commit together."""
+    """Typed before-images and timing changes commit together; archives stay immutable."""
+    require(
+        type(batch_size) is int and 1 <= batch_size <= 1000,
+        "invalid correction batch size",
+    )
     with transaction.atomic():
         with connection.cursor() as cursor:
             cursor.execute("SET LOCAL lock_timeout = '1s'")
@@ -128,20 +287,35 @@ def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False
             "scanned_values": len(ids),
             "changed_values": 0,
             "metadata_updates": 0,
+            "correction_records": 0,
             "reasons": {},
             "conflicts": 0,
             "deferred_values": 0,
         }
         if not ids:
             return result
-        observation_ids = list(
+        observation_ids = (
             MetricValue.objects.filter(pk__in=ids)
             .values_list("observation_id", flat=True)
             .distinct()
         )
-        observations = CollectionObservation.objects.filter(
-            pk__in=observation_ids
-        ).order_by("pk")
+        observations = (
+            CollectionObservation.objects.filter(pk__in=observation_ids)
+            .only(
+                "id",
+                "run_id",
+                "observation_key",
+                "source_identifier",
+                "legacy_archive_id",
+                "observed_at",
+                "published_date",
+                "published_at",
+                "original_retrieved_at",
+                "archive_snapshot_date",
+                "period_status",
+            )
+            .order_by("pk")
+        )
         if apply:
             observations = observations.select_for_update()
         observations = {o.pk: o for o in observations}
@@ -152,119 +326,92 @@ def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False
         )
         if apply:
             values = values.select_for_update(of=("self",))
-        values = list(values)
-        # Follow only exact retained evidence references, never a newer capture.
-        origin_ids = {
-            o.source_metadata.get("origin_observation_id")
-            for o in observations.values()
-        }
-        origin_ids = {int(pk) for pk in origin_ids if str(pk).isdigit()}
-        native = dict(
-            CollectionObservation.objects.filter(pk__in=origin_ids).values_list(
-                "id", "listing"
-            )
-        )
-        origins = catalog_origins([o.source_identifier for o in observations.values()])
         grouped = defaultdict(list)
         for value in values:
             grouped[value.observation_id].append(value)
-        reasons = Counter()
-        changed_values, changed_observations = [], []
+        origins = (
+            catalog_origins([o.source_identifier for o in observations.values()])
+            if not rollback
+            else {}
+        )
+        reasons, changed_values, payload_rows = Counter(), [], {}
         for pk, selected in grouped.items():
             observation = observations[pk]
-            metadata = copy.deepcopy(observation.source_metadata)
-            context = {
-                "source_metadata": metadata,
-                "observed_at": observation.observed_at,
-                "published_date": observation.published_date,
-                "published_at": observation.published_at,
-            }
-            raw = (
-                native.get(metadata.get("origin_observation_id"))
-                or observation.listing
-                or {}
+            archived = _archived_observation(observation)
+            markers = (
+                archived["source_metadata"].get(REPAIR_KEY, {}) if archived else {}
             )
+            context = None
             for value in selected:
-                previous_basis_fields = {name: getattr(value, name) for name in TIME_BASIS_FIELDS}
-                previous = serial_fields(
-                    {field: (value.source_timezone_reference_id or "unknown")
-                     if field == "source_timezone" else getattr(value, field) for field in FIELDS}
-                )
-                marker = metadata.get(REPAIR_KEY, {}).get(str(value.pk))
-                current_basis = (
-                    metadata.get("reported_time", {})
-                    .get("metrics", {})
-                    .get(value.source_metric.metric_key)
-                )
-                marker_conflict = marker and (
-                    previous != marker["after"]
-                    or current_basis != marker["after_basis"]
-                )
-                recorded = correction_head(observation, metric_value=value, kind="timing")
-                repaired = recorded and recorded.policy_version == POLICY and recorded.reason_code in {
-                    "reported_time_repair", "historical_reported_time_repair",
+                previous_basis = {
+                    name: getattr(value, name) for name in TIME_BASIS_FIELDS
                 }
-                if repaired:
-                    # The current typed head owns both the time and its explanation.
-                    # A retired JSON marker must neither disable rollback nor hide
-                    # a later change to either part of the saved after-image.
-                    typed_conflict = previous != _correction_state(recorded, "after") or any(
-                        previous_basis_fields[name] != getattr(recorded, "after_" + name)
+                previous = serial_fields(
+                    {
+                        field: (value.source_timezone_reference_id or "unknown")
+                        if field == "source_timezone"
+                        else getattr(value, field)
+                        for field in FIELDS
+                    }
+                )
+                recorded = correction_head(
+                    observation, metric_value=value, kind="timing"
+                )
+                require(
+                    str(value.pk) not in markers or recorded is not None,
+                    "legacy timing marker must be imported before repair or rollback",
+                )
+                repaired = (
+                    recorded
+                    and recorded.policy_version == POLICY
+                    and recorded.reason_code
+                    in {
+                        "reported_time_repair",
+                        "historical_reported_time_repair",
+                    }
+                )
+                if recorded:
+                    if previous != _correction_state(recorded, "after") or any(
+                        previous_basis[name] != getattr(recorded, "after_" + name)
                         for name in TIME_BASIS_FIELDS
-                    )
-                    if typed_conflict or marker_conflict:
+                    ):
                         result["conflicts"] += 1
                         reasons["timing_changed_after_correction"] += 1
                         continue
-                    if not rollback:
+                    if repaired and not rollback:
                         continue
-                elif rollback and recorded:
-                    if recorded.policy_version == POLICY and recorded.reason_code == "reported_time_rollback":
+                    if (
+                        rollback
+                        and recorded.policy_version == POLICY
+                        and recorded.reason_code == "reported_time_rollback"
+                    ):
                         continue
-                    result["conflicts"] += 1
-                    reasons["timing_changed_after_correction"] += 1
-                    continue
+                    if (
+                        not repaired
+                        and recorded.reason_code != "reported_time_rollback"
+                    ):
+                        result["conflicts"] += 1
+                        reasons["timing_changed_after_correction"] += 1
+                        continue
                 if rollback:
-                    if not repaired and not marker:
+                    if not repaired:
                         continue
-                    if not repaired and marker_conflict:
-                        result["conflicts"] += 1
-                        reasons["timing_changed_after_correction"] += 1
-                        continue
-                    if repaired:
-                        target = _correction_state(recorded, "before")
-                        point = target
-                    else:
-                        target = marker["before"]
-                        point = {**target, "_reported_time": marker.get("before_basis") or {}}
-                    # Maintain an existing old-image receipt during additive rollout;
-                    # never recreate legacy storage when only typed history exists.
-                    if marker:
-                        metric = value.source_metric.metric_key
-                        report = metadata.get("reported_time", {}).get("metrics", {})
-                        if marker.get("before_basis") is None:
-                            report.pop(metric, None)
-                        else:
-                            report[metric] = marker["before_basis"]
-                        if not report:
-                            metadata.pop("reported_time", None)
-                        del metadata[REPAIR_KEY][str(value.pk)]
-                        if not metadata[REPAIR_KEY]:
-                            del metadata[REPAIR_KEY]
-                    target_basis_fields = {
-                        name: getattr(recorded, "before_" + name) for name in TIME_BASIS_FIELDS
-                    } if recorded else metric_time_provenance(value.source_metric, point, marker.get("before_basis"))
+                    target = _correction_state(recorded, "before")
+                    target_basis = {
+                        name: getattr(recorded, "before_" + name)
+                        for name in TIME_BASIS_FIELDS
+                    }
+                    point = _rollback_point(target, target_basis, value.source_metric)
                 else:
-                    if marker:
-                        if marker_conflict:
-                            result["conflicts"] += 1
-                            reasons["timing_changed_after_correction"] += 1
-                        continue
+                    if context is None:
+                        context, created = _repair_evidence(
+                            observation, archived, payload_rows
+                        )
                     point, basis = reported_times(
                         value.source_metric,
                         previous,
                         context,
-                        native_created=native_origin(raw),
+                        native_created=created,
                         catalog_created=origins.get(
                             observation.source_identifier.casefold()
                         ),
@@ -279,48 +426,44 @@ def repair_batch(*, cutoff, after=0, batch_size=250, apply=False, rollback=False
                     if "start" in unknowns or "end" in unknowns:
                         result["deferred_values"] += 1
                     target = serial_fields(value_times(value.source_metric, point))
-                    metric = value.source_metric.metric_key
-                    before_basis = copy.deepcopy(
-                        metadata.get("reported_time", {}).get("metrics", {}).get(metric)
+                    projected = metric_time_provenance(
+                        value.source_metric, point, basis
                     )
-                    if target == previous and basis == before_basis:
-                        continue
-                    metadata.setdefault(REPAIR_KEY, {})[str(value.pk)] = {
-                        "policy": POLICY,
-                        "before": previous,
-                        "after": target,
-                        "before_basis": before_basis,
-                        "after_basis": basis,
+                    target_basis = {
+                        name: projected.get(name) for name in TIME_BASIS_FIELDS
                     }
-                    metadata.setdefault(
-                        "reported_time", {"policy": POLICY, "metrics": {}}
-                    )["metrics"][metric] = basis
-                    target_basis_fields = metric_time_provenance(value.source_metric, point, basis)
-                # The regular validator enforces ranges and precision on rollback too.
+                    if target == previous and target_basis == previous_basis:
+                        continue
                 validated = value_times(value.source_metric, point)
+                result["correction_records"] += 1
                 if apply:
                     record_timing_correction(
-                        value, before={**previous, **previous_basis_fields},
-                        after={**target, **target_basis_fields}, policy=POLICY,
-                        reason="reported_time_rollback" if rollback else "reported_time_repair",
+                        value,
+                        before={**previous, **previous_basis},
+                        after={**target, **target_basis},
+                        policy=POLICY,
+                        reason="reported_time_rollback"
+                        if rollback
+                        else "reported_time_repair",
                     )
-                if target != previous:
-                    result["changed_values"] += 1
-                if apply and (target != previous or previous_basis_fields != target_basis_fields):
-                    for field, instant in {**timing_storage(validated), **target_basis_fields}.items():
+                    for field, instant in {
+                        **timing_storage(validated),
+                        **target_basis,
+                    }.items():
                         setattr(value, field, instant)
                     changed_values.append(value)
-            if metadata != observation.source_metadata:
-                result["metadata_updates"] += 1
-                if apply:
-                    observation.source_metadata = metadata
-                    changed_observations.append(observation)
+                if target != previous:
+                    result["changed_values"] += 1
         if apply:
-            _update_locked_batch(MetricValue, changed_values, (
-                *TIME_FIELDS, "temporal_status", "source_timezone_reference", *TIME_BASIS_FIELDS,
-            ))
             _update_locked_batch(
-                CollectionObservation, changed_observations, ["source_metadata"]
+                MetricValue,
+                changed_values,
+                (
+                    *TIME_FIELDS,
+                    "temporal_status",
+                    "source_timezone_reference",
+                    *TIME_BASIS_FIELDS,
+                ),
             )
         result["reasons"] = dict(reasons)
         return result

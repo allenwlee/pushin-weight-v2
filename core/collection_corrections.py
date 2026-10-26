@@ -69,7 +69,7 @@ def record_timing_correction(
                 )
             },
         )
-    observation = CollectionObservation.objects.select_for_update().get(
+    observation = CollectionObservation.objects.only("id").select_for_update().get(
         pk=value.observation_id
     )
     predecessor = correction_head(observation, metric_value=value, kind="timing")

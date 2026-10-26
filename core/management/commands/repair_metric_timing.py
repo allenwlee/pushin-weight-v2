@@ -12,7 +12,10 @@ from core.models import MetricValue
 
 
 class Command(BaseCommand):
-    help = "Bounded timing correction from retained evidence, with before-images."
+    help = (
+        "Bounded timing correction from retained evidence, with typed before-images. "
+        "Import legacy timing markers before repair or rollback; source archives stay immutable."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument("--database-name", required=True)
@@ -53,6 +56,7 @@ class Command(BaseCommand):
             "scanned_values": 0,
             "changed_values": 0,
             "metadata_updates": 0,
+            "correction_records": 0,
             "conflicts": 0,
             "deferred_values": 0,
             "batches": 0,
@@ -73,6 +77,7 @@ class Command(BaseCommand):
                     "scanned_values",
                     "changed_values",
                     "metadata_updates",
+                    "correction_records",
                     "conflicts",
                     "deferred_values",
                 ):
