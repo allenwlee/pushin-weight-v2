@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from django.utils import timezone
 
+from core.collection_capture import run_report_document
 from core.models import (
     CollectionJob,
     CollectionObservation,
@@ -100,9 +101,10 @@ def test_campaign_retries_rare_writer_handoff_without_repaying(
             partial_runs.append(attempt.pk)
             assert job.state != "completed" and job.active_run_id is None
             assert attempt.status == "partial"
-            assert attempt.report["collection_drained"]
-            assert attempt.report["state"] == "waiting_for_live_writer"
-            assert attempt.report["rare_gate_pending"] == (0 if mode == "published_before_report" else 1)
+            saved = run_report_document(attempt)
+            assert saved["collection_drained"]
+            assert saved["state"] == "waiting_for_live_writer"
+            assert saved["rare_gate_pending"] == (0 if mode == "published_before_report" else 1)
             assert RareTypeSearchHit.objects.get().gate_state == "kept"
             assert len(model_calls) == len(pipeline.requests) == 1
             releases[0]()
@@ -127,8 +129,9 @@ def test_campaign_retries_rare_writer_handoff_without_repaying(
                 partial_runs[0]: "partial", job.last_success_id: "success",
             }
             assert CollectionObservation.objects.filter(run__job=job, post_id="rare-handoff").count() == 1
-            assert job.last_success.report["recovered_post_ids"] == ["rare-handoff"]
-            assert "state" not in job.last_success.report
+            saved = run_report_document(job.last_success)
+            assert saved["recovered_post_ids"] == ["rare-handoff"]
+            assert "state" not in saved
             assert result["phase_usage"]["twitterapi_requests"] == 1
             assert result["phase_usage"]["collection_gate"]["requests_started"] == 1
             assert result["phase_usage"]["post_enrichment"]["requests_sent"] == 0
