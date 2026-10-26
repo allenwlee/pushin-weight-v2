@@ -210,7 +210,10 @@ WHERE schemaname = 'public'
     'collection_campaigns', 'collection_job_targets', 'collection_attempts',
     'collection_requests', 'collection_evidence_archives',
     'collection_observation_inputs', 'collection_resource_snapshots',
-    'collection_metric_gaps', 'collection_corrections'
+    'collection_metric_gaps', 'collection_corrections',
+    'post_unsanctioned_flag_assignments', 'account_query_memberships',
+    'collection_scope_rare_hits', 'collection_scope_cursor_receipts',
+    'collection_scope_request_uses', 'source_datasets'
   )
 \gexec
 
@@ -256,7 +259,9 @@ WHERE schemaname = 'public'
     'person_name_selections_id_seq', 'original_content_subject_labels_id_seq',
     'trend_narrative_subject_labels_id_seq',
     'collection_job_targets_id_seq', 'collection_observation_inputs_id_seq',
-    'collection_metric_gaps_id_seq'
+    'collection_metric_gaps_id_seq',
+    'post_unsanctioned_flag_assignments_id_seq', 'account_query_memberships_id_seq',
+    'source_datasets_id_seq'
   )
 \gexec
 

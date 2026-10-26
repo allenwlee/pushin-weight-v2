@@ -112,6 +112,12 @@ relations:
     - collection_resource_snapshots
     - collection_metric_gaps
     - collection_corrections
+    - post_unsanctioned_flag_assignments
+    - account_query_memberships
+    - collection_scope_rare_hits
+    - collection_scope_cursor_receipts
+    - collection_scope_request_uses
+    - source_datasets
     - metric_values
     - people_names
     - person_name_selections
@@ -354,6 +360,12 @@ relations:
     - collection_resource_snapshots
     - collection_metric_gaps
     - collection_corrections
+    - post_unsanctioned_flag_assignments
+    - account_query_memberships
+    - collection_scope_rare_hits
+    - collection_scope_cursor_receipts
+    - collection_scope_request_uses
+    - source_datasets
     - metric_values
     - editorial_assessments
     - editorial_budgets
@@ -505,6 +517,9 @@ relations:
     - collection_job_targets_id_seq
     - collection_observation_inputs_id_seq
     - collection_metric_gaps_id_seq
+    - post_unsanctioned_flag_assignments_id_seq
+    - account_query_memberships_id_seq
+    - source_datasets_id_seq
     - metric_values_id_seq
     - editorial_assessments_id_seq
     - editorial_calls_id_seq
@@ -639,6 +654,9 @@ relations:
     - collection_job_targets_id_seq
     - collection_observation_inputs_id_seq
     - collection_metric_gaps_id_seq
+    - post_unsanctioned_flag_assignments_id_seq
+    - account_query_memberships_id_seq
+    - source_datasets_id_seq
     - metric_values_id_seq
     - editorial_assessments_id_seq
     - editorial_calls_id_seq
