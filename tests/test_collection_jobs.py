@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 import pytest
-from django.db import close_old_connections, connection
+from django.db import IntegrityError, close_old_connections, connection, transaction
 from django.utils import timezone
 
 from core.collection_jobs import register_job, set_job_state
@@ -62,6 +62,30 @@ def test_definition_change_requires_new_identity():
             mode=obj.mode,
             definition=changed,
         )
+
+
+def test_sql_cannot_change_a_job_identity_after_its_first_run():
+    obj = ready()
+    claim_job(obj.pk)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        CollectionJob.objects.filter(pk=obj.pk).update(definition_sha256="f" * 64)
+
+
+def test_run_uses_immutable_job_identity_without_report_copy():
+    obj = ready()
+    claim = claim_job(obj.pk)
+    run = CollectionRun.objects.get(pk=claim.run_id)
+    assert "definition_sha256" not in run.report
+    finish_run(claim, status="success")
+    run.refresh_from_db()
+    assert "definition_sha256" not in run.report
+
+
+def test_finish_rejects_a_conflicting_legacy_report_hash():
+    obj = ready()
+    claim = claim_job(obj.pk)
+    with pytest.raises(ValueError, match="instruction provenance"):
+        finish_run(claim, status="success", report={"definition_sha256": "f" * 64})
 
 
 def test_only_one_additional_table_and_existing_names():

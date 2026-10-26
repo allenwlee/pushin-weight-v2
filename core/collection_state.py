@@ -366,7 +366,6 @@ def claim_job(
             ingestion_key=ingestion_key,
             started_at=now,
             scheduled_slot_at=slot,
-            report={"definition_sha256": job.definition_sha256},
         )
     if bounded_campaign and job.campaign_id is None:
         prior_usage = run.report.get("campaign_usage", {})
@@ -393,10 +392,6 @@ def claim_job(
     if bounded_campaign and job.purpose == "metric" and job.last_attempt_id:
         previous = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)
         if previous.status == "partial" and previous.completed_at is not None:
-            require(
-                previous.report.get("definition_sha256") == job.definition_sha256,
-                "continuation identity mismatch",
-            )
             for scope in previous.scopes.all():
                 scope.pk = None
                 scope.run = run
@@ -415,9 +410,7 @@ def claim_job(
         )
         previous = CollectionRun.objects.select_for_update().get(pk=continue_from)
         require(
-            previous.job_id == job.pk
-            and previous.completed_at is not None
-            and previous.report.get("definition_sha256") == job.definition_sha256,
+            previous.job_id == job.pk and previous.completed_at is not None,
             "continuation identity mismatch",
         )
         require(
@@ -835,11 +828,16 @@ def finish_run(
             and status == "partial"
             else now
         )
-        run.report = {**run.report, **(report or {})}
+        supplied_report = dict(report or {})
         require(
-            run.report.get("definition_sha256") == job.definition_sha256,
+            supplied_report.pop("definition_sha256", job.definition_sha256)
+            == job.definition_sha256
+            and run.report.get("definition_sha256", job.definition_sha256)
+            == job.definition_sha256,
             "instruction provenance cannot change",
         )
+        run.report = {**run.report, **supplied_report}
+        run.report.pop("definition_sha256", None)
         # Only an adapter proving complete physical accounting may release unused
         # reservation. Interrupted/ambiguous attempts retain their conservative cap.
         reservation = run.report.get("campaign_usage") if job.campaign_id is None else None
