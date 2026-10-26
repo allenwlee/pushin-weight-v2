@@ -10,6 +10,8 @@ ollija:
   workflow: plan
   delivery_target: production
   delivery_selected_by_user: true
+  delivery_route: direct
+  delivery_route_selected_by_user: true
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -44,14 +46,10 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+4. On the owner-selected direct route, fetch the remote production lane: `git fetch origin refs/heads/main`.
+5. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+6. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+7. After step 6 succeeds, perform worktree cleanup as the final filesystem action:
     - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/dashboard-each-timeout` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
     - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/dashboard-each-timeout` without `--force`.
     - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
@@ -70,7 +68,9 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-None.
+- Owner selected direct production on 2026-10-26 after G2 confirmed that the staging web/database are actively on RG6 `23f650f8`/`0182` and this candidate's older serving-view validator is incompatible. Staging deployment and checks are waived, not passed.
+- Owner accepted the two unrelated red CI jobs: official-company discovery (40 current-main harvest/account fixture failures) and staff identity (two current-main profile fixture failures). Homepage/dashboard and editorial CI passed on product candidate `009eaa4e`; the red jobs remain red, not passed.
+- Owner waived the incomplete Bridgewright candidate gate for this release. Its local PostgreSQL-required obligations were skipped because the shared test database is ahead of this branch; the gate is not passed. Focused dashboard and browser tests passed on the G2-compatible local schema, and the homepage/dashboard CI job passed on this branch's own PostgreSQL schema. Verify live latency and chart responses after production deployment.
 
 # Fix the Moonshot Kimi dashboard timeout
 
@@ -78,13 +78,13 @@ None.
 
 The Moonshot Kimi page should open promptly and category tabs should update their chart without a server error. Production currently spends tens of seconds calculating chart data, and some requests terminate with HTTP 500. The dashboard pills should show only the models tracked on the homepage. Keep chart counts, labels, ordering, tabs, and feed for those models. Change how the existing chart reader obtains the same data; no new tables or fields are needed.
 
-Verify exact chart values and the public page/browser path with deterministic fixtures, then compare request cost on representative data. On 2026-10-26 the owner requested `lfg todeployment`; release to production through the default staged route and verify the live page.
+Verify exact chart values and the public page/browser path with deterministic fixtures, then compare request cost on representative data. On 2026-10-26 the owner requested `lfg todeployment` and later selected direct production with the stated waivers because staging is occupied and incompatible. Verify the live page after release.
 
 ## Scope and evidence
 
 - TOUCH: `monitor/views.py` chart and dashboard assembly, dashboard chart JavaScript/template, focused dashboard tests, the homepage counts GitHub Actions job, this plan.
 - PRESERVE: other chart routes, classification semantics, full-result counts, locale, feed, trend narrative, stored data, harvest.
-- DELIVERY: production authorized on 2026-10-26; default staged route applies.
+- DELIVERY: production and direct route authorized on 2026-10-26 with the Delivery Exceptions above.
 - Production 2026-10-24 UTC: `/dashboard/each?brand=moonshot_kimi` first byte 6–16 seconds in direct samples; 30-day sample 15.98 seconds. The 30-day Post Types chart returned HTTP 500 after 32.8 seconds; 1-day Language returned HTTP 500 after 31.0 seconds. Render trace shows worker abort in `_each_chart_payload`, including DeepSeek ranking scan and per-batch Post Types edge query. One 1-day Post Types request succeeded after 44 seconds.
 - Parallel `fix/home-30d-chart-timeout` worktree last edited October 16 changes a different homepage pulse function in `monitor/views.py`; retain it untouched and isolate this work from current `origin/main`.
 - 2026-10-26 owner addition: "for dashboard, pills should only include tracked brands (follow homepage lead). add those to this fix, then execute." Use the homepage's `_tracked_home_brand_nicknames` through `_build_brands_context(..., tracked_only=True)` for page selection and chart endpoint validation; scope pulse entries to that same brand tuple. Unknown or untracked query-string brands fall back to the first tracked model. No direct link to an untracked brand remains selectable from this dashboard.
@@ -110,5 +110,5 @@ Verify exact chart values and the public page/browser path with deterministic fi
 - The homepage counts GitHub Actions job now runs both dashboard suites on a fresh database built from this branch's migration graph. Its result will verify compatibility with the current production schema lineage without modifying the shared local test database.
 - Candidate `1ef24589` ran 248 PostgreSQL-required tests with zero skips/errors: both dashboard suites passed, while the broader job had two pre-existing failures unchanged from `origin/main`. The old-migration fixture inserted through the current `Post` model after migrating to `0092`, referencing a later column, and the Render config test omitted the already-declared serving role. Follow-up test-only corrections use historical models for the migration fixture and assert the exact serving role value; CI must rerun before delivery.
 - Candidate `108be2c7` passed the broader PostgreSQL step, including the dashboard suites. Its Node step exposed an unchanged stale Taiwan test fixture using the retired `kind: 'taiwan'`; the current server and client contract uses `kind: 'labelled_parent'`. The fixture now uses the current kind while retaining its visible-text and no-Taiwan-flag assertions. Local Node run: 114 passed, 0 failed; CI must rerun.
-- G2 confirmed the staging web and database are actively serving its `23f650f8`/`0182` work. Deploying this main-based candidate there could fail the older serving-view validator and interrupt RG6. Direct production route selection is pending; no staging or production deployment has occurred.
+- G2 confirmed the staging web and database are actively serving its `23f650f8`/`0182` work. Deploying this main-based candidate there could fail the older serving-view validator and interrupt RG6. The owner selected direct production with the Delivery Exceptions above; no production deployment has occurred yet.
 - Production remains on the prior revision pending this authorized release.
