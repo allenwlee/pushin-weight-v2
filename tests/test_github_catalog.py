@@ -149,10 +149,9 @@ def reader(handler, requests):
     )
 
 
-def test_release_assets_keep_typed_publisher_and_distinct_release_parents():
+@pytest.fixture
+def captured_release_assets():
     from copy import deepcopy
-
-    from core.models import Account
 
     base, repo = configured()
     definition = deepcopy(base.definition)
@@ -177,6 +176,19 @@ def test_release_assets_keep_typed_publisher_and_distinct_release_parents():
 
     run = execute_github_catalog(job.pk, client=reader(respond, 30))
     assert run.status == "success"
+    return run, repo
+
+
+def test_release_assets_keep_typed_publisher_and_distinct_release_parents(monkeypatch, captured_release_assets):
+    from core.benchmark_metric_identity import register_definitions
+    from core.collection_capture import observation_object_documents
+    from core.measurement_taxonomy import configure_taxonomy, subject_id
+    from core.models import Account, TimeZone
+    from core.source_metric_projection import configure_source_statistics, evidence_rows
+    from tests.test_benchmark_use_policy import decision
+    from tests.test_source_metric_projection import project
+
+    run, repo = captured_release_assets
     assets = list(run.observations.filter(observation_kind="release_asset").order_by("pk"))
     assert len(assets) == 2
     publisher = Account.objects.get(data_source_id="github", normalized_identifier="42")
@@ -193,10 +205,89 @@ def test_release_assets_keep_typed_publisher_and_distinct_release_parents():
         assert asset.resource_snapshot.publisher_account_id == publisher.pk
         expected_parents[asset.pk] = release.pk
     assert len(set(expected_parents.values())) == 2
+    publisher.data_source.metadata = {
+        "use_policy": {use: decision() for use in ("collection", "retention")},
+    }
+    publisher.data_source.save(update_fields=["metadata"])
+    taxonomy = configure_taxonomy({
+        "reviewed_by": "fixture", "subjects": [{"kind": "account", "key": str(publisher.pk)}],
+    })
+    TimeZone.objects.get_or_create(pk="UTC")
+    register_definitions()
+    contract = configure_source_statistics({
+        "taxonomy_version": str(taxonomy.pk), "reviewed_by": "fixture",
+        "mappings": [{
+            "source": "github", "source_subject_kind": "account",
+            "identifier_scope": publisher.account_kind,
+            "external_identifier": publisher.normalized_identifier,
+            "subject_id": str(subject_id("account", publisher.pk)),
+            "publisher_account_key": str(publisher.pk),
+            "evidence_url": "https://example.com/publisher",
+        }],
+        "source_configuration": {"github": {"metrics": ["asset_downloads", "asset_size_bytes"]}},
+    })
+    with monkeypatch.context() as old_selector:
+        old_selector.setattr("core.source_metric_projection._evidence_documents", observation_object_documents)
+        original_rows = [list(evidence_rows(contract, "github", asset)) for asset in assets]
+    assert [list(evidence_rows(contract, "github", asset)) for asset in assets] == original_rows
+    first = project(contract, "github", assets[:1], key="asset-original")
+    assert first.status == "success", first.report
+    before = list(MetricValue.objects.order_by("pk").values())
+    assert len(before) == 2
     run.observations.update(listing={}, source_metadata={}, dimensions={})
     for asset in run.observations.filter(observation_kind="release_asset"):
         assert asset.inputs.get(input_role="release_asset_parent").input_observation_id == expected_parents[asset.pk]
         assert asset.resource_snapshot.publisher_account_id == publisher.pk
+    refreshed_assets = list(run.observations.filter(observation_kind="release_asset").order_by("pk"))
+    assert [list(evidence_rows(contract, "github", asset)) for asset in refreshed_assets] == original_rows
+    monkeypatch.setattr(httpx, "Client", lambda *a, **kw: pytest.fail("HTTP during replay"))
+    replay = project(contract, "github", refreshed_assets, key="asset-after-clear")
+    assert replay.status == "success", replay.report
+    # The first asset is idempotent; the pending second asset gets its first
+    # measurements only after all retiring observation documents are cleared.
+    assert replay.report["projection"]["written_values"] == 2
+    assert list(MetricValue.objects.filter(
+        pk__in=[row["id"] for row in before],
+    ).order_by("pk").values()) == before
+    assert sorted(MetricValue.objects.filter(
+        source_metric__metric_key="asset_downloads",
+    ).values_list("integer_value", flat=True)) == [10, 20]
+    assert not run.observations.filter(values__isnull=False).exists()
+    after = list(MetricValue.objects.order_by("pk").values())
+    repeated = project(contract, "github", refreshed_assets, key="asset-idempotent")
+    assert repeated.status == "success", repeated.report
+    assert repeated.report["projection"]["written_values"] == 0
+    assert list(MetricValue.objects.order_by("pk").values()) == after
+
+
+@pytest.mark.parametrize("corruption, message", [
+    ("missing_parent", "one captured release parent"),
+    ("parent_coordinate", "release parent identity mismatch"),
+    ("parent_repository", "release parent identity mismatch"),
+    ("parent_hash", "release parent identity mismatch"),
+    ("reply_hash", "response identity mismatch"),
+    ("payload_hash", "absent or conflicting"),
+])
+def test_asset_replay_refuses_conflicting_typed_evidence(captured_release_assets, corruption, message):
+    from core.github_resource_evidence import asset_documents
+
+    run, _ = captured_release_assets
+    asset = run.observations.filter(observation_kind="release_asset").first()
+    parent = asset.inputs.get(input_role="release_asset_parent")
+    if corruption == "missing_parent":
+        parent.delete()
+    elif corruption == "parent_coordinate":
+        type(parent).objects.filter(pk=parent.pk).update(row_locator="999")
+    elif corruption == "parent_repository":
+        type(asset).objects.filter(pk=parent.input_observation_id).update(source_identifier="999")
+    elif corruption == "parent_hash":
+        type(parent).objects.filter(pk=parent.pk).update(input_sha256="a" * 64)
+    elif corruption == "reply_hash":
+        asset.inputs.filter(input_request__isnull=False).update(input_sha256="a" * 64)
+    elif corruption == "payload_hash":
+        asset.payload_sha256 = "a" * 64
+    with pytest.raises(ValueError, match=message):
+        asset_documents(asset)
 
 
 def test_two_page_inventory_resumes_and_distinct_events_keep_native_clocks():

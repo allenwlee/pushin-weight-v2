@@ -296,6 +296,17 @@ def _publisher(contract, source, identifier):
     return mapping
 
 
+def _evidence_documents(evidence):
+    from core.github_resource_evidence import asset_documents
+
+    if evidence.observation_kind == "release_asset":
+        return asset_documents(evidence)
+    documents = observation_object_documents(evidence)
+    if documents[1].get("kind") == "release_asset":
+        return asset_documents(evidence, legacy_documents=documents)
+    return documents
+
+
 def evidence_rows(contract, source, evidence):
     """Yield supported native rows; preserve snapshot and effective clocks separately."""
     require(
@@ -303,7 +314,7 @@ def evidence_rows(contract, source, evidence):
         "catalog evidence source mismatch",
     )
     require(evidence.status == "ok", "source evidence is an error")
-    raw, captured_dimensions, captured_metadata = observation_object_documents(evidence)
+    raw, captured_dimensions, captured_metadata = _evidence_documents(evidence)
     require(isinstance(raw, dict), "native object evidence required")
     if source in {"openrouter", "arena"}:
         yield from _publication_rows(
@@ -754,7 +765,7 @@ def _project_evidence(
 
 
 def _evidence_bytes(evidence):
-    listing, dimensions, metadata = observation_object_documents(evidence)
+    listing, dimensions, metadata = _evidence_documents(evidence)
     return len(
         json.dumps(
             [listing, metadata, dimensions],
