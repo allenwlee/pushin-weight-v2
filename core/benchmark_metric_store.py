@@ -966,7 +966,6 @@ def persist_source(
             run.raw_payload = payload
             run.payload_sha256 = raw_hash
             run.observed_at = now
-            run.request_params = request_params or {}
             run.source_metadata = source_metadata or {}
             run.direct_ingestion = (
                 run.source_metadata.get("ingestion_mode") == "direct"

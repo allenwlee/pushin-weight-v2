@@ -105,6 +105,63 @@ class InvocationBatch:
     inserted: int
 
 
+@dataclass(frozen=True)
+class MetricRequestBatch:
+    last_id: UUID | None
+    scanned: int
+    updated: int
+
+
+def project_metric_request_coordinates_batch(
+    *, after_id: UUID | None = None, batch_size: int = 200,
+    verify_only: bool = False,
+) -> MetricRequestBatch:
+    """Copy legacy metric date/cursor options into their existing scope fields."""
+    from core.benchmark_metric_store import (
+        metric_request_coordinates,
+        save_metric_request_coordinates,
+    )
+
+    if after_id is not None and not isinstance(after_id, UUID):
+        raise ValueError("after_id must be a UUID")
+    if type(batch_size) is not int or not 1 <= batch_size <= 500:
+        raise ValueError("batch_size must be an integer from 1 to 500")
+    with transaction.atomic():
+        with connection.cursor() as cursor:
+            cursor.execute("SET LOCAL lock_timeout = '5s'")
+            cursor.execute("SET LOCAL statement_timeout = '30s'")
+        runs = list(
+            CollectionRun.objects.select_for_update()
+            .select_related("job")
+            .exclude(request_params={})
+            .filter(pk__gt=after_id or UUID(int=0))
+            .order_by("pk")[:batch_size]
+        )
+        updated = 0
+        for run in runs:
+            if run.job.purpose != "metric" or run.job.contract_id is None:
+                raise ValueError("metric request options lack their contract owner")
+            coordinates = metric_request_coordinates(run.request_params)
+            scope = run.scopes.filter(
+                scope_kind="metric_fetch", scope_key="source",
+            ).first()
+            if scope is not None and scope.ownership != {
+                "contract_id": str(run.job.contract_id)
+            }:
+                raise ValueError("metric request scope owner differs from its job")
+            if scope is not None and all(
+                getattr(scope, field) == value for field, value in coordinates.items()
+            ):
+                continue
+            if verify_only:
+                raise ValueError("metric request coordinates are not fully projected")
+            save_metric_request_coordinates(run, coordinates)
+            updated += 1
+        return MetricRequestBatch(
+            runs[-1].pk if runs else after_id, len(runs), updated,
+        )
+
+
 def project_run_invocations_batch(
     *, after_id: UUID | None = None, batch_size: int = 200,
     verify_only: bool = False,

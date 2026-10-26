@@ -12,6 +12,7 @@ from core.collection_storage_migration import (
     product_match_target_mismatch_counts,
     project_arena_publication_batch,
     project_benchmark_provenance_batch,
+    project_metric_request_coordinates_batch,
     project_product_match_targets_batch,
     project_run_ingestion_mode,
     project_run_invocations_batch,
@@ -57,6 +58,41 @@ def test_arena_publication_copy_rebuilds_an_empty_cohort_without_duplicate_rows(
     assert project_arena_publication_batch().inserted == 1
     assert project_arena_publication_batch().inserted == 0
     assert project_arena_publication_batch(verify_only=True).scanned == 1
+
+
+def test_metric_request_dates_copy_into_existing_scope_fields():
+    from core.benchmark_metric_store import persist_source
+    from core.measurement_taxonomy import digest
+    from tests.test_benchmark_download_persistence import provider_contract
+
+    contract = provider_contract(
+        "arena", ["rating", "rating_lower", "rating_upper", "rank"]
+    )
+    run = persist_source(
+        contract, "arena", digest("rg6-metric-request-window"),
+        {
+            "status": "ok", "config": "text_style_control",
+            "coverage": "publication_window", "rows": [],
+        },
+        source_metadata={"publication_dates": ["2026-09-27"]},
+        request_params={"start_date": "2026-09-27", "end_date": "2026-09-28"},
+    )
+    scope = run.scopes.get(scope_kind="metric_fetch", scope_key="source")
+    scope.delete()
+    run.request_params = {"start_date": "2026-09-27", "end_date": "2026-09-28"}
+    run.save(update_fields=["request_params", "updated_at"])
+    with pytest.raises(ValueError, match="not fully projected"):
+        project_metric_request_coordinates_batch(verify_only=True)
+    assert project_metric_request_coordinates_batch().updated == 1
+    scope = run.scopes.get(scope_kind="metric_fetch", scope_key="source")
+    assert scope.requested_start_date.isoformat() == "2026-09-27"
+    assert scope.requested_end_date.isoformat() == "2026-09-28"
+    assert project_metric_request_coordinates_batch().updated == 0
+    assert project_metric_request_coordinates_batch(verify_only=True).scanned == 1
+    scope.requested_end_date = datetime(2026, 9, 29, tzinfo=UTC).date()
+    scope.save(update_fields=["requested_end_date"])
+    with pytest.raises(ValueError, match="option changed"):
+        project_metric_request_coordinates_batch()
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 

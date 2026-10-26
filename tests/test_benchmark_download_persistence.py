@@ -78,6 +78,7 @@ def test_metric_request_options_survive_in_typed_scope_without_implied_http_call
     assert scope.requested_end_date == date(2026, 9, 30)
     assert scope.cursor == "next-page"
     assert scope.requests.count() == 0
+    assert run.request_params == {}
 
 
 @pytest.mark.parametrize("replacement", ["expired", "replaced"])
