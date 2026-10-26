@@ -47,7 +47,7 @@ def gating_state_id(value):
         raise ValueError("unregistered model gating state") from exc
 
 
-def metadata_references(values, *, source_id):
+def metadata_references(values, *, source_id, create=True):
     """Convert just fields present in this update; absence never clears prior data."""
     result = dict(values)
     for field, catalogue in (
@@ -56,7 +56,7 @@ def metadata_references(values, *, source_id):
     ):
         if field in result:
             result[field + "_id"] = reference_id(
-                catalogue, source_id, result.pop(field)
+                catalogue, source_id, result.pop(field), create=create,
             )
     for field in ("gated", "gated_status"):
         if field in result:

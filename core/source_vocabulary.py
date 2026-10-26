@@ -21,7 +21,7 @@ CATALOGUES = {
 }
 
 
-def reference_id(catalogue, source_id, code, *, subject_kind=None, using="default"):
+def reference_id(catalogue, source_id, code, *, subject_kind=None, using="default", create=True):
     """Keep code case/wording and NULL distinct from explicit empty identities.
 
     New provider codes may be registered within their typed catalogue. This does
@@ -50,5 +50,11 @@ def reference_id(catalogue, source_id, code, *, subject_kind=None, using="defaul
     identity = {"data_source_id": source_id, "code": code}
     if namespace:
         identity["subject_kind"] = subject_kind
-    value, _ = model.objects.using(using).get_or_create(**identity)
+    if create:
+        value, _ = model.objects.using(using).get_or_create(**identity)
+    else:
+        try:
+            value = model.objects.using(using).get(**identity)
+        except model.DoesNotExist as exc:
+            raise ValueError("unregistered source vocabulary code") from exc
     return value.pk

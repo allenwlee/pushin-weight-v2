@@ -56,7 +56,7 @@ def _clock(value):
         return None, None, "unknown"
 
 
-def resource_snapshot_values(observation):
+def resource_snapshot_values(observation, *, create_references=False):
     """Parse supported nonnumeric facts without writing the snapshot."""
     raw = observation.listing
     if not isinstance(raw, dict) or observation.post_id:
@@ -119,12 +119,14 @@ def resource_snapshot_values(observation):
         "file_change_kind": change.get("kind"),
         "file_comparison_basis": change.get("comparison_basis"),
     }
-    return metadata_references(values, source_id=observation.run.job.source_id)
+    return metadata_references(
+        values, source_id=observation.run.job.source_id, create=create_references,
+    )
 
 
 def snapshot_resource(observation):
     """Project current supported facts; retain unused provider fields in capture."""
-    values = resource_snapshot_values(observation)
+    values = resource_snapshot_values(observation, create_references=True)
     if values is None:
         return None
     snapshot, _ = CollectionResourceSnapshot.objects.get_or_create(
