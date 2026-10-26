@@ -842,14 +842,29 @@ INVALID_ROW_SEMANTIC_HASH = (
     "COALESCE(t.source_metadata->>'row_semantic_hash' ~ '^[0-9a-f]{64}$', FALSE)"
 )
 
-SCOPE_BOUNDS_VALID = (
+LEGACY_SCOPE_BOUNDS_VALID = (
     "CASE WHEN t.ownership->>'since_epoch' ~ '^[0-9]{1,12}$' "
     "AND t.ownership->>'until_epoch' ~ '^[0-9]{1,12}$' "
     "THEN (t.ownership->>'since_epoch')::bigint "
     "< (t.ownership->>'until_epoch')::bigint ELSE FALSE END"
 )
-SCOPE_START = "to_timestamp((t.ownership->>'since_epoch')::double precision)"
-SCOPE_END = "to_timestamp((t.ownership->>'until_epoch')::double precision)"
+TYPED_SCOPE_BOUNDS_VALID = (
+    "t.ownership='{}'::jsonb AND t.requested_start_at IS NOT NULL "
+    "AND t.requested_end_at IS NOT NULL "
+    "AND t.requested_start_at<t.requested_end_at"
+)
+SCOPE_BOUNDS_VALID = (
+    f"CASE WHEN t.ownership='{{}}'::jsonb THEN ({TYPED_SCOPE_BOUNDS_VALID}) "
+    f"ELSE ({LEGACY_SCOPE_BOUNDS_VALID}) END"
+)
+SCOPE_START = (
+    "CASE WHEN t.ownership='{}'::jsonb THEN t.requested_start_at "
+    "ELSE to_timestamp((t.ownership->>'since_epoch')::double precision) END"
+)
+SCOPE_END = (
+    "CASE WHEN t.ownership='{}'::jsonb THEN t.requested_end_at "
+    "ELSE to_timestamp((t.ownership->>'until_epoch')::double precision) END"
+)
 
 
 def project_scope_bounds_batch(
@@ -916,14 +931,19 @@ def project_x_query_targets_batch(
             cursor.execute("SET LOCAL lock_timeout = '5s'")
             cursor.execute("SET LOCAL statement_timeout = '30s'")
         scopes = list(
-            CollectionScopeRun.objects.select_for_update()
+            CollectionScopeRun.objects.select_for_update(of=("self",))
             .filter(scope_kind="x_query", pk__gt=after_id)
-            .select_related("run__job")
+            .select_related("run__job", "job_target__search_query")
             .only(
                 "pk", "scope_key", "ownership", "job_target_id",
                 "requested_start_at", "requested_end_at", "run_id",
                 "run__job_id", "run__job__operation",
                 "run__job__instruction_version",
+                "job_target__job_id", "job_target__target_kind",
+                "job_target__target_key", "job_target__target_role",
+                "job_target__resolution_state", "job_target__search_query_id",
+                "job_target__requested_start_at", "job_target__requested_end_at",
+                "job_target__search_query__query_text",
             )
             .order_by("pk")[:batch_size]
         )
@@ -932,6 +952,11 @@ def project_x_query_targets_batch(
         targets = {}
         changed = []
         for scope in scopes:
+            if scope.ownership == {}:
+                from core.collection_state import x_scope_ownership
+
+                x_scope_ownership(scope)
+                continue
             query, call_id, start, end = x_query_instruction(scope.ownership)
             key = (scope.run.job_id, scope.scope_key)
             if key not in targets:
@@ -960,21 +985,30 @@ def x_query_target_mismatch_counts() -> tuple[int, int]:
     """Verify all X scope pins, including rows changed below a copy cursor."""
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT count(*) FILTER (WHERE jsonb_typeof(s.ownership) <> 'object' "
+            "SELECT count(*) FILTER (WHERE CASE WHEN s.ownership='{}'::jsonb THEN "
+            "NOT (j.operation='x_cycle' AND j.instruction_version=2 "
+            "AND s.requested_start_at IS NOT NULL AND s.requested_end_at IS NOT NULL "
+            "AND s.requested_start_at<s.requested_end_at) ELSE "
+            "jsonb_typeof(s.ownership) <> 'object' "
             "OR jsonb_typeof(s.ownership->'call_id') <> 'string' "
             "OR jsonb_typeof(s.ownership->'query') <> 'string' "
             "OR coalesce(s.ownership->>'call_id','')='' "
             "OR coalesce(s.ownership->>'query','')='' "
             "OR s.ownership - 'call_id' - 'query' - 'since_epoch' - 'until_epoch' <> '{}'::jsonb "
-            f"OR NOT ({SCOPE_BOUNDS_VALID.replace('t.', 's.')})), "
+            f"OR NOT ({LEGACY_SCOPE_BOUNDS_VALID.replace('t.', 's.')}) END), "
             "count(*) FILTER (WHERE s.job_target_id IS NULL OR jt.job_id <> r.job_id "
             "OR jt.target_key <> s.scope_key OR jt.target_kind <> 'query' "
             "OR jt.resolution_state <> 'resolved' "
-            "OR jt.target_role IS DISTINCT FROM s.ownership->>'call_id' "
+            "OR jt.search_query_id IS NULL "
+            "OR CASE WHEN s.ownership='{}'::jsonb THEN "
+            "jt.target_role IS DISTINCT FROM s.scope_key "
+            "OR jt.requested_start_at IS NOT NULL OR jt.requested_end_at IS NOT NULL "
+            "ELSE jt.target_role IS DISTINCT FROM s.ownership->>'call_id' "
             "OR q.query_text IS DISTINCT FROM s.ownership->>'query' "
             "OR jt.requested_start_at IS DISTINCT FROM s.requested_start_at "
-            "OR jt.requested_end_at IS DISTINCT FROM s.requested_end_at) "
+            "OR jt.requested_end_at IS DISTINCT FROM s.requested_end_at END) "
             "FROM collection_scope_runs s JOIN collection_runs r ON r.id=s.run_id "
+            "JOIN collection_jobs j ON j.id=r.job_id "
             "LEFT JOIN collection_job_targets jt ON jt.id=s.job_target_id "
             "LEFT JOIN search_queries q ON q.id=jt.search_query_id "
             "WHERE s.scope_kind='x_query'"

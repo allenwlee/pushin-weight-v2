@@ -565,6 +565,10 @@ def test_recurring_x_query_target_keeps_query_fixed_and_window_on_scope():
         run=run, scope_kind="x_query", scope_key="B1", job_target=target,
         ownership={}, requested_start_at=lower, requested_end_at=upper,
     )
+    assert scope_bounds_mismatch_counts() == (0, 0)
+    assert project_scope_bounds_batch(after_id=scope.pk - 1).updated == 0
+    assert project_x_query_targets_batch(after_id=scope.pk - 1).updated == 0
+    assert x_query_target_mismatch_counts() == (0, 0)
     assert target.requested_start_at is None and target.requested_end_at is None
     assert x_scope_ownership(scope) == {
         "call_id": "B1", "query": "fixed query",
@@ -580,6 +584,8 @@ def test_recurring_x_query_target_keeps_query_fixed_and_window_on_scope():
         run=next_run, scope_kind="x_query", scope_key="B1", job_target=target,
         ownership={}, requested_start_at=next_lower, requested_end_at=next_upper,
     )
+    assert scope_bounds_mismatch_counts() == (0, 0)
+    assert x_query_target_mismatch_counts() == (0, 0)
     assert ensure_x_query_target(
         job, "B1", query_text="fixed query", call_id="B1",
         start_at=next_lower, end_at=next_upper,
