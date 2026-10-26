@@ -8,7 +8,8 @@ from core.benchmark_metric_identity import SOURCE_STATISTICS_POLICY
 from core.benchmark_metric_store import aware_instant, safe_payload
 from core.collection_capture import observation_object_documents
 from core.collection_jobs import register_job
-from core.collection_state import checkpoint_scope, claim_job, finish_run
+from core.collection_state import checkpoint_scope as shared_checkpoint_scope
+from core.collection_state import claim_job, fenced_run, finish_run
 from core.github_metadata_client import METADATA_FILES, GitHubMetadataClient
 from core.measurement_taxonomy import digest, require
 from core.models import (
@@ -16,11 +17,420 @@ from core.models import (
     CollectionJob,
     CollectionObservation,
     CollectionObservationInput,
+    CollectionRequest,
     CollectionRun,
     CollectionScopeRun,
     DataSource,
 )
 from scripts.benchmark_download_collector.sources import Budget, SourceError
+
+CAPTURE_KIND = "github-catalog-object-v1"
+SCOPE_PHASE = "typed-github-catalog-v1"
+
+
+def validate_typed_scope(job, run, kind, key, ownership, observation):
+    """Validate each scope against its frozen publisher and captured parent."""
+    require(
+        job.source_id == "github"
+        and job.purpose == "catalog"
+        and job.operation == "github_catalog"
+        and run.job_id == job.pk,
+        "GitHub catalog scope required",
+    )
+    pins = job.scope["publishers"]
+    if kind in {"publisher", "publisher_repos"}:
+        require(
+            observation is None
+            and any(key == pin["native_id"] and ownership == pin for pin in pins),
+            "frozen publisher scope required",
+        )
+        return
+    require(
+        observation is not None and observation.run_id == run.pk,
+        "GitHub scope needs an owned resource observation",
+    )
+    snapshot = observation.resource_snapshot
+    account = snapshot.publisher_account
+    require(
+        account is not None
+        and account.data_source_id == "github"
+        and snapshot.native_identifier == observation.source_identifier
+        and snapshot.resource_kind == observation.observation_kind
+        and any(
+            str(account.pk) == pin["account_key"]
+            and account.normalized_identifier == pin["native_id"]
+            for pin in pins
+        ),
+        "captured publisher differs from the frozen publisher",
+    )
+    repository_id = int(observation.source_identifier)
+    owner_id = int(account.normalized_identifier)
+    if kind == "repository_access":
+        expected = {"repository_id": str(repository_id), "owner_id": str(owner_id)}
+        valid = observation.observation_kind == "repository" and key == str(
+            repository_id
+        )
+    elif kind == "repository_events":
+        expected = {"repository_id": repository_id, "owner_id": owner_id}
+        valid = observation.observation_kind == "repository" and key in {
+            f"{repository_id}:{event}" for event in ("releases", "tags", "commits")
+        }
+    elif kind == "release_assets":
+        release_id = int(snapshot.native_stable_id)
+        expected = {
+            "repository_id": repository_id,
+            "release_id": release_id,
+            "owner_id": owner_id,
+        }
+        valid = (
+            observation.observation_kind == "releases"
+            and key == f"{repository_id}:{release_id}"
+        )
+    elif kind in {"repository_tree", "repository_file"}:
+        expected = {
+            "repository_id": repository_id,
+            "revision": snapshot.revision,
+            "tree_revision": snapshot.tree_revision,
+        }
+        prefix = f"{repository_id}:{snapshot.revision}"
+        valid = observation.observation_kind == "commits" and (
+            key == prefix
+            if kind == "repository_tree"
+            else key in {f"{prefix}:{filename}" for filename in METADATA_FILES}
+        )
+    else:
+        raise ValueError("unsupported GitHub catalog scope")
+    require(
+        valid
+        and ownership == expected
+        and all(
+            type(ownership[name]) is type(value) for name, value in expected.items()
+        ),
+        "GitHub scope ownership changed",
+    )
+
+
+def checkpoint_scope(claim, *, resource_observation=None, write=None, **kwargs):
+    """Save parent coordinates with the fenced typed checkpoint."""
+    current = _scope(claim, kwargs["scope_kind"], kwargs["scope_key"])
+    if resource_observation is None and current is not None:
+        resource_observation = current.resource_observation
+
+    def save(run, scope):
+        scope.phase = SCOPE_PHASE
+        fields = ["phase"]
+        if scope.scope_kind in {"repository_tree", "repository_file"}:
+            scope.requested_revision = kwargs["ownership"]["revision"]
+            fields.append("requested_revision")
+            if scope.scope_kind == "repository_file":
+                scope.resource_path = scope.scope_key.split(":", 2)[2]
+                fields.append("resource_path")
+        scope.save(update_fields=fields)
+        if write is not None:
+            write(run, scope)
+
+    return shared_checkpoint_scope(
+        claim,
+        resource_observation=resource_observation,
+        typed=True,
+        write=save,
+        **kwargs,
+    )
+
+
+def _documents(
+    payload, kind, *, coordinate=None, reused_from=None, dimensions=None, metadata=None
+):
+    clocks = {}
+    if kind in {"repository", "repository_access"}:
+        clocks = {
+            "repository_created_at": payload.get("created_at"),
+            "repository_updated_at": payload.get("updated_at"),
+        }
+    elif kind == "releases":
+        clocks = {
+            "release_created_at": payload.get("created_at"),
+            "release_published_at": payload.get("published_at"),
+            "release_updated_at": payload.get("updated_at"),
+        }
+    elif kind == "commits":
+        commit = payload.get("commit", {})
+        clocks = {
+            "author_at": commit.get("author", {}).get("date"),
+            "committer_at": commit.get("committer", {}).get("date"),
+        }
+    elif kind == "release_asset":
+        clocks = {
+            "asset_created_at": payload.get("created_at"),
+            "asset_updated_at": payload.get("updated_at"),
+        }
+    return (
+        payload,
+        {"kind": kind, "coordinate": coordinate, **(dimensions or {})},
+        {
+            "clocks": clocks,
+            "reused_from": reused_from,
+            "projection_kind": CAPTURE_KIND,
+            **(metadata or {}),
+        },
+    )
+
+
+def observation_documents(observation):
+    """Resolve the selected public object from immutable receipts, never old JSON."""
+    from core.collection_capture import read_document
+
+    require(
+        observation.projection_kind == CAPTURE_KIND
+        and observation.run.job.source_id == "github"
+        and observation.run.job.purpose == "catalog"
+        and observation.run.job.operation in {"github_catalog", "model_history"},
+        "typed GitHub capture required",
+    )
+    selected, reused = observation, None
+    while True:
+        direct = list(
+            selected.inputs.filter(input_role="github_source_object").select_related(
+                "input_request__archive",
+                "input_request__attempt",
+            )
+        )
+        cached = list(
+            selected.inputs.filter(input_role="cached_response").select_related(
+                "input_observation__run",
+            )
+        )
+        require(
+            len(direct) + len(cached) == 1, "one selected GitHub source object required"
+        )
+        if direct:
+            edge = direct[0]
+            request = edge.input_request
+            require(
+                request is not None
+                and request.attempt.run_id == selected.run_id
+                and request.scope_run_id == selected.scope_run_id
+                and request.transport_outcome == "received"
+                and request.http_status == 200
+                and request.archive_id is not None
+                and edge.input_sha256 == request.archive.content_sha256,
+                "GitHub source receipt ownership or checksum changed",
+            )
+            payload = read_document(request.archive)
+            if isinstance(payload, list):
+                require(
+                    edge.row_locator is not None
+                    and edge.row_locator.isascii()
+                    and edge.row_locator.isdecimal(),
+                    "GitHub page row locator required",
+                )
+                position = int(edge.row_locator)
+                require(position < len(payload), "GitHub page row is absent")
+                payload = payload[position]
+            else:
+                require(
+                    edge.row_locator is None, "GitHub object cannot have a page locator"
+                )
+            break
+        edge = cached[0]
+        prior = edge.input_observation
+        require(
+            prior is not None
+            and prior.run.job_id == selected.run.job_id
+            and prior.pk < selected.pk
+            and prior.observation_kind == selected.observation_kind == "repository"
+            and prior.source_identifier == selected.source_identifier
+            and prior.observed_at == selected.observed_at
+            and edge.input_sha256 == prior.payload_sha256 == selected.payload_sha256,
+            "cached GitHub object ownership or checksum changed",
+        )
+        validations = list(
+            selected.inputs.filter(input_role="cache_validation").select_related(
+                "input_request__attempt"
+            )
+        )
+        require(len(validations) == 1, "GitHub cache validation receipt required")
+        validation = validations[0].input_request
+        require(
+            validation is not None
+            and validation.attempt.run_id == selected.run_id
+            and validation.scope_run_id == selected.scope_run_id
+            and validation.transport_outcome == "received"
+            and validation.http_status == 304
+            and validation.archive_id is None,
+            "GitHub cache validation receipt required",
+        )
+        if reused is None:
+            reused = {
+                "run_id": str(prior.run_id),
+                "scope_id": prior.scope_run_id,
+                "observed_at": prior.observed_at.isoformat(),
+            }
+        if prior.projection_kind != CAPTURE_KIND:
+            payload = observation_object_documents(prior)[0]
+            break
+        selected = prior
+    require(
+        isinstance(payload, dict) and digest(payload) == observation.payload_sha256,
+        "GitHub selected payload changed",
+    )
+    kind = observation.observation_kind
+    coordinate, dimensions, metadata = None, {}, {}
+    parent = observation.scope_run.resource_observation
+    if parent is not None:
+        publisher = parent.resource_snapshot.publisher_account
+        require(publisher is not None, "GitHub parent publisher is missing")
+        metadata["owner_id"] = int(publisher.normalized_identifier)
+    require(
+        observation.source_subject_kind
+        == ("account" if kind == "publisher" else "repository"),
+        "GitHub selected subject kind changed",
+    )
+    if kind in {"publisher", "repository", "repository_access"}:
+        require(
+            str(payload.get("id")) == observation.source_identifier,
+            "GitHub selected native identity changed",
+        )
+    if parent is not None:
+        require(
+            parent.run_id == observation.run_id
+            and parent.source_identifier == observation.source_identifier,
+            "GitHub parent repository changed",
+        )
+    if kind == "releases":
+        coordinate = payload["id"]
+    elif kind == "commits":
+        coordinate = payload["sha"]
+    elif kind == "tags":
+        coordinate = {"name": payload["name"], "sha": payload["commit"]["sha"]}
+    elif kind in {"tree", "file"}:
+        revision = observation.scope_run.requested_revision
+        require(
+            parent is not None
+            and parent.observation_kind == "commits"
+            and revision
+            == observation.provider_revision
+            == parent.resource_snapshot.revision,
+            "GitHub requested revision changed",
+        )
+        if kind == "tree":
+            require(
+                payload.get("sha") == parent.resource_snapshot.tree_revision,
+                "GitHub captured tree revision changed",
+            )
+        else:
+            require(
+                observation.scope_run.resource_path in METADATA_FILES,
+                "GitHub captured metadata path changed",
+            )
+        coordinate = (
+            revision
+            if kind == "tree"
+            else {"revision": revision, "filename": observation.scope_run.resource_path}
+        )
+        metadata["revision"] = revision
+    elif kind == "release_asset":
+        parent = observation.scope_run.resource_observation
+        edge = observation.inputs.get(input_role="release_asset_parent")
+        require(
+            parent is not None
+            and edge.input_observation_id == parent.pk
+            and parent.source_identifier == observation.source_identifier
+            and edge.input_sha256 == parent.observation_key,
+            "GitHub asset parent changed",
+        )
+        release_id = int(parent.resource_snapshot.native_stable_id)
+        require(
+            edge.row_locator == str(release_id),
+            "GitHub asset release coordinate changed",
+        )
+        dimensions = {"release_id": release_id, "asset_id": payload["id"]}
+        coordinate = dimensions
+        metadata = {
+            "repository_id": int(observation.source_identifier),
+            "owner_id": int(
+                parent.resource_snapshot.publisher_account.normalized_identifier
+            ),
+        }
+    return _documents(
+        payload,
+        kind,
+        coordinate=coordinate,
+        reused_from=reused,
+        dimensions=dimensions,
+        metadata=metadata,
+    )
+
+
+def catalog_report(run):
+    """Build the operator report from scope, attempt and projection results."""
+    scopes = run.scopes.exclude(
+        scope_kind__in={"numeric_projection_item", "catalog_execution"}
+    )
+    attempt = run.attempts.order_by("-ordinal").first()
+    projection = None
+    if run.job.scope.get("numeric_contract_id"):
+        from core.source_metric_projection import projection_report
+
+        queues = CollectionScopeRun.objects.filter(
+            run__job=run.job, scope_kind="numeric_projection"
+        )
+        results = (
+            CollectionRun.objects.filter(
+                scopes__scope_kind="numeric_projection_result",
+                scopes__resource_observation__run__job=run.job,
+                started_at__gte=attempt.started_at,
+            )
+            .distinct()
+            .order_by("started_at", "pk")
+            if attempt
+            else CollectionRun.objects.none()
+        )
+        if attempt and attempt.finished_at:
+            results = results.filter(started_at__lte=attempt.finished_at)
+            queues = queues.filter(run__started_at__lte=attempt.finished_at)
+        reports = [(row, projection_report(row)) for row in results]
+        projection = {
+            "written_values": sum(report["written_values"] for _, report in reports),
+            "reused_resources": sum(
+                len(report["reused_observation_ids"]) for _, report in reports
+            ),
+            "acknowledged": sum(
+                row.scopes.filter(scope_kind="numeric_projection_result")
+                .exclude(outcome="rejected")
+                .count()
+                for row, _ in reports
+            ),
+            "runs": [str(row.pk) for row, _ in reports],
+            "pending": queues.filter(outcome="pending").exists(),
+            "pending_resources": CollectionScopeRun.objects.filter(
+                parent_scope__in=queues,
+                scope_kind="numeric_projection_item",
+                outcome="pending",
+            ).count(),
+        }
+    return {
+        "operation": "github_catalog",
+        "stop_reason": run.error_code,
+        "items_this_invocation": attempt.actual_items if attempt else None,
+        "bytes_this_invocation": attempt.actual_response_bytes if attempt else None,
+        "api_version": "2026-03-10",
+        "native_clocks_are_release_leads": True,
+        "numeric_projection": projection,
+        "physical_accounting_complete": attempt.accounting_complete
+        if attempt
+        else False,
+        "inaccessible_repositories": list(
+            scopes.filter(scope_kind="repository_access", outcome="inaccessible")
+            .order_by("pk")
+            .values_list("scope_key", flat=True)
+        ),
+        "inventory_complete": dict(
+            scopes.filter(scope_kind="publisher_repos").values_list(
+                "scope_key", "enumeration_complete"
+            )
+        ),
+    }
 
 
 class CollectionStop(SourceError):
@@ -94,20 +504,6 @@ def register_github_job(
     )
 
 
-def _envelope(result, *, payload=None, reused_from=None):
-    return {
-        "collection_request_id": result.collection_request_id,
-        "url": result.url,
-        "status": result.status,
-        "etag": result.etag,
-        "next_url": result.next_url,
-        "observed_at": result.observed_at.isoformat(),
-        "retry_at": result.retry_at.isoformat() if result.retry_at else None,
-        "payload": result.payload if payload is None else payload,
-        "reused_from": reused_from,
-    }
-
-
 def _record(
     run,
     scope,
@@ -116,66 +512,132 @@ def _record(
     payload,
     *,
     observed_at,
+    request_id,
     coordinate=None,
     reused_from=None,
     dimensions=None,
     metadata=None,
 ):
+    from core.collection_capture import link_request, read_document
+    from core.collection_resources import (
+        observation_fact_values,
+        project_observation_facts,
+    )
+
     safe_payload(payload)
+    metadata = dict(metadata or {})
+    if kind in {"tree", "file"}:
+        metadata["revision"] = scope.requested_revision
+    documents = _documents(
+        payload,
+        kind,
+        coordinate=coordinate,
+        reused_from=reused_from,
+        dimensions=dimensions,
+        metadata=metadata,
+    )
     resource = (
         f"{identifier}:{kind}:{digest({'coordinate': coordinate, 'payload': payload})}"
     )
-    clocks = {}
-    published_at = None
-    if kind in {"repository", "repository_access"}:
-        clocks = {
-            "repository_created_at": payload.get("created_at"),
-            "repository_updated_at": payload.get("updated_at"),
-        }
-    elif kind == "releases":
-        clocks = {
-            "release_created_at": payload.get("created_at"),
-            "release_published_at": payload.get("published_at"),
-            "release_updated_at": payload.get("updated_at"),
-        }
-        if payload.get("published_at"):
-            published_at = aware_instant(payload["published_at"])
-    elif kind == "commits":
-        commit = payload.get("commit", {})
-        clocks = {
-            "author_at": commit.get("author", {}).get("date"),
-            "committer_at": commit.get("committer", {}).get("date"),
-        }
-    elif kind == "release_asset":
-        clocks = {
-            "asset_created_at": payload.get("created_at"),
-            "asset_updated_at": payload.get("updated_at"),
-        }
-    key = digest({"resource_key": resource})
+    published_at = (
+        aware_instant(payload["published_at"])
+        if kind == "releases" and payload.get("published_at")
+        else None
+    )
+    draft = CollectionObservation(
+        run=run, scope_run=scope, source_identifier=str(identifier)
+    )
     observation, _ = CollectionObservation.objects.get_or_create(
         run=run,
-        observation_key=key,
+        observation_key=digest({"resource_key": resource}),
         defaults={
             "scope_run": scope,
             "resource_key": resource,
             "source_identifier": str(identifier),
             "source_subject_kind": "account" if kind == "publisher" else "repository",
             "observed_at": observed_at,
-            "listing": payload,
-            "dimensions": {
-                "kind": kind,
-                "coordinate": coordinate,
-                **(dimensions or {}),
-            },
-            "source_metadata": {
-                "clocks": clocks,
-                "reused_from": reused_from,
-                **(metadata or {}),
-            },
             "published_at": published_at,
             "publication_precision": "instant" if published_at else "unknown",
+            **observation_fact_values(draft, documents=documents),
         },
     )
+    require(
+        observation.scope_run_id == scope.pk
+        and observation.payload_sha256 == digest(payload),
+        "GitHub capture identity changed",
+    )
+    request = CollectionRequest.objects.select_related("archive").get(
+        pk=request_id, scope_run=scope
+    )
+    if reused_from:
+        require(
+            request.http_status == 304 and kind == "repository",
+            "cached inventory validation required",
+        )
+        prior = CollectionObservation.objects.get(
+            scope_run_id=reused_from["scope_id"],
+            run_id=reused_from["run_id"],
+            source_identifier=str(identifier),
+            observation_kind="repository",
+            observed_at=observed_at,
+            payload_sha256=digest(payload),
+        )
+        require(
+            observation_object_documents(prior)[0] == payload,
+            "cached repository payload changed",
+        )
+        edge, _ = CollectionObservationInput.objects.get_or_create(
+            observation=observation,
+            input_observation=prior,
+            input_role="cached_response",
+            defaults={"input_sha256": prior.payload_sha256},
+        )
+        require(
+            edge.input_sha256 == prior.payload_sha256,
+            "cached repository checksum changed",
+        )
+        CollectionObservationInput.objects.get_or_create(
+            observation=observation,
+            input_request=request,
+            input_role="cache_validation",
+        )
+    else:
+        require(
+            request.http_status == 200 and request.archive_id is not None,
+            "public source body required",
+        )
+        body = read_document(request.archive)
+        locator = (
+            str(body.index(payload))
+            if isinstance(body, list) and payload in body
+            else None
+        )
+        require(
+            body == payload or locator is not None,
+            "selected GitHub object absent from response",
+        )
+        # Identical repeated objects keep the first selected immutable receipt.
+        existing = observation.inputs.filter(input_role="github_source_object").first()
+        if existing is None:
+            link_request(
+                observation, request, role="github_source_object", row_locator=locator
+            )
+    if kind == "release_asset":
+        parent = scope.resource_observation
+        require(
+            parent is not None and parent.observation_kind == "releases",
+            "release asset parent required",
+        )
+        CollectionObservationInput.objects.get_or_create(
+            observation=observation,
+            input_observation=parent,
+            input_role="release_asset_parent",
+            defaults={
+                "row_locator": str(parent.resource_snapshot.native_stable_id),
+                "input_sha256": parent.observation_key,
+            },
+        )
+    project_observation_facts(observation)
     return observation
 
 
@@ -194,7 +656,11 @@ def _queue_numeric(claim, run, observations):
         "statistics contract required",
     )
     wires = {d["definition_metadata"].get("wire_field") for d in config["definitions"]}
-    ids = [o.pk for o in observations if any(w in o.listing for w in wires if w)]
+    ids = []
+    for observation in observations:
+        payload = observation_object_documents(observation)[0]
+        if any(wire in payload for wire in wires if wire):
+            ids.append(observation.pk)
     if ids:
         enqueue_projection(claim, contract=contract, evidence_ids=ids)
 
@@ -205,9 +671,15 @@ def _scope(claim, kind, key):
     ).first()
 
 
-def _prepare_capture(claim, client, kind, key, ownership, scoped=None):
+def _prepare_capture(
+    claim, client, kind, key, ownership, scoped=None, *, resource_observation=None
+):
     scoped = scoped or checkpoint_scope(
-        claim, scope_kind=kind, scope_key=key, ownership=ownership
+        claim,
+        scope_kind=kind,
+        scope_key=key,
+        ownership=ownership,
+        resource_observation=resource_observation,
     )
     client.collection_scope = scoped
     return scoped
@@ -223,7 +695,6 @@ def _checked_response(claim, result, *, kind, key, ownership, scope):
         ownership=ownership,
         cursor=scope.cursor if scope else None,
         cursor_history=scope.recorded_cursors if scope else [],
-        envelopes=[*(scope.envelopes if scope else []), _envelope(result)],
         outcome=f"http_{result.status}",
     )
     raise CollectionStop(f"http_{result.status}", result.retry_at)
@@ -233,37 +704,57 @@ def _cached_inventory_page(previous, cursor):
     """Read the previous actual response through its typed receipt/input links."""
     from core.collection_capture import read_document
 
-    receipt = previous.requests.filter(
-        cursor_before=cursor, transport_outcome="received",
-        http_status__in=[200, 304], error_code__isnull=True,
-    ).select_related("archive").order_by("-attempt__ordinal", "-ordinal").first()
+    receipt = (
+        previous.requests.filter(
+            cursor_before=cursor,
+            transport_outcome="received",
+            http_status__in=[200, 304],
+            error_code__isnull=True,
+        )
+        .select_related("archive")
+        .order_by("-attempt__ordinal", "-ordinal")
+        .first()
+    )
     if receipt is None:
         return None
     body_request = receipt if receipt.archive_id else None
-    resource = previous.observations.filter(
-        inputs__input_request=receipt,
-    ).order_by("pk").first()
+    resource = (
+        previous.observations.filter(
+            inputs__input_request=receipt,
+        )
+        .order_by("pk")
+        .first()
+    )
     observed_at = resource.observed_at if resource else receipt.received_at
     # A 304 has no response body. Follow earlier resource results to the actual
     # public body rather than copying it into the new transport receipt.
     seen = set()
     while body_request is None and resource and resource.pk not in seen:
         seen.add(resource.pk)
-        body_edge = resource.inputs.filter(
-            input_request__archive__isnull=False,
-            input_request__endpoint_url=receipt.endpoint_url,
-        ).select_related("input_request__archive").first()
+        body_edge = (
+            resource.inputs.filter(
+                input_request__archive__isnull=False,
+                input_request__endpoint_url=receipt.endpoint_url,
+            )
+            .select_related("input_request__archive")
+            .first()
+        )
         if body_edge:
             body_request = body_edge.input_request
             break
-        earlier = resource.inputs.filter(input_role="cached_response").select_related("input_observation").first()
+        earlier = (
+            resource.inputs.filter(input_role="cached_response")
+            .select_related("input_observation")
+            .first()
+        )
         resource = earlier.input_observation if earlier else None
     if body_request is None:
         return None
     payload = read_document(body_request.archive)
     require(isinstance(payload, list), "cached repository listing required")
     return {
-        "url": receipt.endpoint_url, "payload": payload,
+        "url": receipt.endpoint_url,
+        "payload": payload,
         "next_url": body_request.cursor_after,
         "etag": receipt.response_etag or receipt.etag,
         "observed_at": observed_at.isoformat(),
@@ -308,6 +799,7 @@ def _publisher_inventory(claim, client, pin, items):
                 "publisher",
                 result.payload,
                 observed_at=result.observed_at,
+                request_id=result.collection_request_id,
             )
             _queue_numeric(claim, run, [observation])
 
@@ -318,7 +810,6 @@ def _publisher_inventory(claim, client, pin, items):
             ownership=pin,
             enumeration_complete=True,
             outcome="complete",
-            envelopes=[_envelope(result)],
             write=write_profile,
         )
     scoped = _scope(claim, "publisher_repos", key)
@@ -378,11 +869,6 @@ def _publisher_inventory(claim, client, pin, items):
                 "public native repository ownership required",
             )
             client.repo_url(row["full_name"])
-        envelope = {
-            **_envelope(result, payload=rows, reused_from=reused),
-            "next_url": next_url,
-        }
-        envelopes = [*(scoped.envelopes if scoped else []), envelope]
         history = [*(scoped.recorded_cursors if scoped else []), result.url]
         require(not next_url or next_url not in history, "pagination loop")
 
@@ -399,40 +885,8 @@ def _publisher_inventory(claim, client, pin, items):
                     if reused
                     else result.observed_at,
                     reused_from=reused,
+                    request_id=result.collection_request_id,
                 )
-                if reused:
-                    from core.models import (
-                        CollectionObservationInput,
-                        CollectionRequest,
-                    )
-
-                    prior = CollectionObservation.objects.get(
-                        scope_run_id=reused["scope_id"],
-                        source_identifier=str(row["id"]),
-                        observation_kind="repository",
-                        observed_at=observation.observed_at,
-                        payload_sha256=digest(row),
-                    )
-                    require(
-                        observation_object_documents(prior)[0] == row,
-                        "cached repository payload changed",
-                    )
-                    CollectionObservationInput.objects.get_or_create(
-                        observation=observation,
-                        input_observation=prior,
-                        input_role="cached_response",
-                        defaults={"input_sha256": prior.payload_sha256},
-                    )
-                    validation = CollectionRequest.objects.get(
-                        pk=result.collection_request_id,
-                        scope_run=scope,
-                        http_status=304,
-                    )
-                    CollectionObservationInput.objects.get_or_create(
-                        observation=observation,
-                        input_request=validation,
-                        input_role="cache_validation",
-                    )
                 captured.append(observation)
             # A 304 carries old counters. Fresh detail below provides today's
             # numbers; the reused listing never becomes a new numeric snapshot.
@@ -446,16 +900,17 @@ def _publisher_inventory(claim, client, pin, items):
             ownership=pin,
             cursor=next_url,
             cursor_history=history,
-            envelopes=envelopes,
             enumeration_complete=next_url is None,
             outcome="complete" if next_url is None else "pending",
             raw_count=(scoped.raw_count if scoped else 0) + len(rows),
             write=write,
         )
         items[0] += len(rows)
-    return scoped.observations.filter(observation_kind="repository").select_related(
-        "legacy_archive"
-    ).order_by("pk")
+    return (
+        scoped.observations.filter(observation_kind="repository")
+        .select_related("legacy_archive")
+        .order_by("pk")
+    )
 
 
 def _repository_access(claim, client, repository):
@@ -470,6 +925,7 @@ def _repository_access(claim, client, repository):
         key,
         ownership,
         _scope(claim, "repository_access", key),
+        resource_observation=repository,
     )
     result = client.repository(repo["full_name"])
     if result.status == 404:
@@ -480,7 +936,6 @@ def _repository_access(claim, client, repository):
             ownership=ownership,
             enumeration_complete=True,
             outcome="inaccessible",
-            envelopes=[_envelope(result)],
         )
         return False
     _checked_response(
@@ -510,6 +965,7 @@ def _repository_access(claim, client, repository):
                 "repository_access",
                 data,
                 observed_at=result.observed_at,
+                request_id=result.collection_request_id,
             )
             _queue_numeric(claim, run, [observation])
 
@@ -520,15 +976,6 @@ def _repository_access(claim, client, repository):
         ownership=ownership,
         enumeration_complete=True,
         outcome="observed" if public else "inaccessible",
-        envelopes=[
-            {
-                "url": result.url,
-                "status": result.status,
-                "observed_at": result.observed_at.isoformat(),
-                "public": public,
-                "collection_request_id": result.collection_request_id,
-            }
-        ],
         write=write_access,
     )
     return public
@@ -536,10 +983,10 @@ def _repository_access(claim, client, repository):
 
 def _release_assets(claim, client, repository, releases, items, limit):
     repo = observation_object_documents(repository)[0]
-    for release in releases.observations.filter(observation_kind="releases").select_related(
-        "legacy_archive"
-    ).order_by(
-        "pk"
+    for release in (
+        releases.observations.filter(observation_kind="releases")
+        .select_related("legacy_archive")
+        .order_by("pk")
     ):
         release_id = observation_object_documents(release)[0]["id"]
         key = f"{repo['id']}:{release_id}"
@@ -553,7 +1000,13 @@ def _release_assets(claim, client, repository, releases, items, limit):
             if items[0] >= limit:
                 raise CollectionStop("item_cap")
             scoped = _prepare_capture(
-                claim, client, "release_assets", key, ownership, scoped
+                claim,
+                client,
+                "release_assets",
+                key,
+                ownership,
+                scoped,
+                resource_observation=release,
             )
             result = client.release_assets(
                 repo["full_name"],
@@ -591,7 +1044,12 @@ def _release_assets(claim, client, repository, releases, items, limit):
             )
 
             def write_assets(
-                run, scope, rows=rows, result=result, release_id=release_id, release=release
+                run,
+                scope,
+                rows=rows,
+                result=result,
+                release_id=release_id,
+                release=release,
             ):
                 captured = [
                     _record(
@@ -601,6 +1059,7 @@ def _release_assets(claim, client, repository, releases, items, limit):
                         "release_asset",
                         row,
                         observed_at=result.observed_at,
+                        request_id=result.collection_request_id,
                         coordinate={"release_id": release_id, "asset_id": row["id"]},
                         dimensions={"release_id": release_id, "asset_id": row["id"]},
                         metadata={
@@ -616,9 +1075,13 @@ def _release_assets(claim, client, repository, releases, items, limit):
                         "release asset repository differs from its parent",
                     )
                     edge, _ = CollectionObservationInput.objects.get_or_create(
-                        observation=observation, input_observation=release,
+                        observation=observation,
+                        input_observation=release,
                         input_role="release_asset_parent",
-                        defaults={"row_locator": str(release_id), "input_sha256": release.observation_key},
+                        defaults={
+                            "row_locator": str(release_id),
+                            "input_sha256": release.observation_key,
+                        },
                     )
                     require(
                         edge.row_locator == str(release_id)
@@ -634,7 +1097,6 @@ def _release_assets(claim, client, repository, releases, items, limit):
                 ownership=ownership,
                 cursor=result.next_url,
                 cursor_history=history,
-                envelopes=[*(scoped.envelopes if scoped else []), _envelope(result)],
                 enumeration_complete=result.next_url is None,
                 outcome="complete" if result.next_url is None else "pending",
                 raw_count=(scoped.raw_count if scoped else 0) + len(rows),
@@ -652,7 +1114,13 @@ def _events(claim, client, repository, kind, items, limit):
         if items[0] >= limit:
             raise CollectionStop("item_cap")
         scoped = _prepare_capture(
-            claim, client, "repository_events", key, ownership, scoped
+            claim,
+            client,
+            "repository_events",
+            key,
+            ownership,
+            scoped,
+            resource_observation=repository,
         )
         result = client.events(
             repo["full_name"],
@@ -721,6 +1189,7 @@ def _events(claim, client, repository, kind, items, limit):
                     row,
                     coordinate=coordinate,
                     observed_at=result.observed_at,
+                    request_id=result.collection_request_id,
                 )
 
         scoped = checkpoint_scope(
@@ -730,7 +1199,6 @@ def _events(claim, client, repository, kind, items, limit):
             ownership=ownership,
             cursor=result.next_url,
             cursor_history=history,
-            envelopes=[*(scoped.envelopes if scoped else []), _envelope(result)],
             enumeration_complete=result.next_url is None,
             outcome="complete" if result.next_url is None else "pending",
             raw_count=(scoped.raw_count if scoped else 0) + raw_count,
@@ -760,7 +1228,13 @@ def _pinned_metadata(claim, client, repository, commits, *, head=None):
     scoped = _scope(claim, "repository_tree", key)
     if scoped is None or not scoped.enumeration_complete:
         scoped = _prepare_capture(
-            claim, client, "repository_tree", key, ownership, scoped
+            claim,
+            client,
+            "repository_tree",
+            key,
+            ownership,
+            scoped,
+            resource_observation=head,
         )
         result = client.tree(repo["full_name"], tree_revision)
         _checked_response(
@@ -784,7 +1258,6 @@ def _pinned_metadata(claim, client, repository, commits, *, head=None):
             ownership=ownership,
             enumeration_complete=True,
             outcome="truncated" if result.payload.get("truncated") else "complete",
-            envelopes=[_envelope(result)],
             write=lambda run, scope: _record(
                 run,
                 scope,
@@ -793,10 +1266,13 @@ def _pinned_metadata(claim, client, repository, commits, *, head=None):
                 result.payload,
                 coordinate=revision,
                 observed_at=result.observed_at,
+                request_id=result.collection_request_id,
             ),
         )
     files = observation_object_documents(
-        scoped.observations.select_related("legacy_archive").get(observation_kind="tree")
+        scoped.observations.select_related("legacy_archive").get(
+            observation_kind="tree"
+        )
     )[0]["tree"]
     for item in files:
         filename = item.get("path")
@@ -812,7 +1288,13 @@ def _pinned_metadata(claim, client, repository, commits, *, head=None):
         if file_scope and file_scope.enumeration_complete:
             continue
         file_scope = _prepare_capture(
-            claim, client, "repository_file", key, ownership, file_scope
+            claim,
+            client,
+            "repository_file",
+            key,
+            ownership,
+            file_scope,
+            resource_observation=head,
         )
         result = client.file(repo["full_name"], filename, revision)
         _checked_response(
@@ -834,7 +1316,6 @@ def _pinned_metadata(claim, client, repository, commits, *, head=None):
             ownership=ownership,
             enumeration_complete=True,
             outcome="complete",
-            envelopes=[_envelope(result)],
             write=lambda run, scope, result=result, filename=filename: _record(
                 run,
                 scope,
@@ -843,6 +1324,7 @@ def _pinned_metadata(claim, client, repository, commits, *, head=None):
                 result.payload,
                 coordinate={"revision": revision, "filename": filename},
                 observed_at=result.observed_at,
+                request_id=result.collection_request_id,
             ),
         )
 
@@ -854,7 +1336,7 @@ def execute_github_catalog(job_id, *, client=None, key=None):
         candidate.operation == "github_catalog" and candidate.source_id == "github",
         "GitHub catalog job required",
     )
-    claim = claim_job(job_id)
+    claim = claim_job(job_id, typed=True)
     run = CollectionRun.objects.select_related("job").get(pk=claim.run_id)
     job = run.job
     require(
@@ -909,7 +1391,9 @@ def execute_github_catalog(job_id, *, client=None, key=None):
             repositories = _publisher_inventory(claim, client, publisher, items)
             for repository in repositories:
                 prior_access = _scope(
-                    claim, "repository_access", str(observation_object_documents(repository)[0]["id"])
+                    claim,
+                    "repository_access",
+                    str(observation_object_documents(repository)[0]["id"]),
                 )
                 if (
                     role == "inventory"
@@ -979,35 +1463,23 @@ def execute_github_catalog(job_id, *, client=None, key=None):
                 reason = "numeric_projection_pending"
         except (ValueError, KeyError, TypeError):
             reason = reason or "numeric_projection_failed"
-    scopes = run.scopes.exclude(scope_kind="numeric_projection_item")
+    scopes = run.scopes.exclude(
+        scope_kind__in={"numeric_projection_item", "catalog_execution"}
+    )
     selected, successful = (
         scopes.count(),
         scopes.filter(enumeration_complete=True).count(),
     )
-    report = {
-        "operation": "github_catalog",
-        "stop_reason": reason,
-        "items_this_invocation": items[0],
-        "bytes_this_invocation": budget.total_bytes_read,
-        "api_version": "2026-03-10",
-        "native_clocks_are_release_leads": True,
-        "numeric_projection": projection,
-        "physical_accounting_complete": True,
-        "inaccessible_repositories": list(
-            scopes.filter(
-                scope_kind="repository_access", outcome="inaccessible"
-            ).values_list("scope_key", flat=True)
-        ),
-        "inventory_complete": {
-            s.scope_key: s.enumeration_complete
-            for s in scopes.filter(scope_kind="publisher_repos")
-        },
-    }
+    with fenced_run(claim) as (_, locked_run):
+        attempt = locked_run.attempts.select_for_update().get(pk=claim.attempt_id)
+        attempt.actual_items = items[0]
+        attempt.save(update_fields=["actual_items"])
     run.refresh_from_db()
     return finish_run(
         claim,
         status="partial" if reason else "success",
-        report=report,
+        typed=True,
+        physical_accounting_complete=True,
         request_count=run.request_count + requests_before - budget.remaining,
         selected_count=selected,
         success_count=successful,

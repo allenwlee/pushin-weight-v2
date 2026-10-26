@@ -5,6 +5,8 @@ import copy
 import httpx
 import pytest
 
+from core.benchmark_serving import github_asset_coordinates
+from core.collection_capture import observation_object_documents, run_report_document
 from core.collection_jobs import register_job, set_job_state
 from core.github_catalog import execute_github_catalog
 from core.models import MetricValue, TimeZone
@@ -126,8 +128,8 @@ def test_fresh_inventory_writes_repo_account_numbers_and_preserves_access_payloa
     seen = []
     run = execute_github_catalog(obj.pk, client=reader(fresh_responses(repo, seen), 30))
     assert run.status == "success"
-    access = run.observations.get(dimensions__kind="repository_access")
-    assert access.listing["subscribers_count"] == 7
+    access = run.observations.get(observation_kind="repository_access")
+    assert observation_object_documents(access)[0]["subscribers_count"] == 7
     values = MetricValue.objects.filter(observation__run__job__source_id="github")
     assert set(values.values_list("source_metric__metric_key", flat=True)) >= {
         "stars",
@@ -156,11 +158,11 @@ def test_release_assets_paginate_and_stay_distinct_without_binary_requests():
         obj.pk, client=reader(fresh_responses(repo, seen, assets=True), 30)
     )
     assert run.status == "success"
-    assets = run.observations.filter(dimensions__kind="release_asset")
-    assert set(assets.values_list("dimensions__asset_id", flat=True)) == {501, 502}
+    assets = run.observations.filter(observation_kind="release_asset")
+    assert {int(asset.resource_snapshot.native_stable_id) for asset in assets} == {501, 502}
     downloads = MetricValue.objects.filter(source_metric__metric_key="asset_downloads")
     assert sorted(downloads.values_list("integer_value", flat=True)) == [0, 4]
-    assert {v.observation.dimensions["asset_id"] for v in downloads} == {501, 502}
+    assert {coordinate["asset_id"] for coordinate in github_asset_coordinates([v.observation_id for v in downloads]).values()} == {501, 502}
     assert set(
         MetricValue.objects.filter(source_metric__metric_key="stars").values_list(
             "integer_value", flat=True
@@ -181,16 +183,16 @@ def test_saved_140_repository_listings_replay_420_values_without_http(monkeypatc
     first = project(contract, "github", saved[:100])
     tail = project(contract, "github", saved[100:], key="projection-tail")
     assert (
-        first.report["projection"]["written_values"]
-        + tail.report["projection"]["written_values"]
+        run_report_document(first)["projection"]["written_values"]
+        + run_report_document(tail)["projection"]["written_values"]
         == 420
     )
     assert MetricValue.objects.count() == 420
     second = project(contract, "github", saved[:100], key="replay-other-job")
     repeated_tail = project(contract, "github", saved[100:], key="replay-other-tail")
     assert (
-        second.report["projection"]["written_values"]
-        + repeated_tail.report["projection"]["written_values"]
+        run_report_document(second)["projection"]["written_values"]
+        + run_report_document(repeated_tail)["projection"]["written_values"]
         == 0
     )
     assert MetricValue.objects.count() == 420
@@ -235,6 +237,6 @@ def test_repository_becoming_unavailable_has_terminal_coverage_without_deep_fetc
 
     run = execute_github_catalog(obj.pk, client=reader(response, 30))
     assert run.status == "success"
-    assert run.report["inaccessible_repositories"] == ["123"]
-    assert not run.observations.filter(dimensions__kind="repository_access").exists()
+    assert run_report_document(run)["inaccessible_repositories"] == ["123"]
+    assert not run.observations.filter(observation_kind="repository_access").exists()
     assert len(seen) == 3

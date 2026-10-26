@@ -12,6 +12,7 @@ import pytest
 from django.core.management import call_command
 from django.utils import timezone
 
+from core.collection_capture import observation_object_documents, run_report_document
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import StaleClaim, claim_job
 from core.github_catalog import execute_github_catalog
@@ -196,7 +197,7 @@ def test_release_assets_keep_typed_publisher_and_distinct_release_parents(monkey
     for asset in assets:
         edge = asset.inputs.get(input_role="release_asset_parent")
         release = edge.input_observation
-        release_id = asset.dimensions["release_id"]
+        release_id = int(asset.inputs.get(input_role="release_asset_parent").row_locator)
         assert release.observation_kind == "releases"
         assert release.resource_snapshot.native_stable_id == str(release_id)
         assert release.source_identifier == asset.source_identifier == str(repo["id"])
@@ -231,7 +232,7 @@ def test_release_assets_keep_typed_publisher_and_distinct_release_parents(monkey
         original_rows = [list(evidence_rows(contract, "github", asset)) for asset in assets]
     assert [list(evidence_rows(contract, "github", asset)) for asset in assets] == original_rows
     first = project(contract, "github", assets[:1], key="asset-original")
-    assert first.status == "success", first.report
+    assert first.status == "success", run_report_document(first)
     before = list(MetricValue.objects.order_by("pk").values())
     assert len(before) == 2
     run.observations.update(listing={}, source_metadata={}, dimensions={})
@@ -242,10 +243,10 @@ def test_release_assets_keep_typed_publisher_and_distinct_release_parents(monkey
     assert [list(evidence_rows(contract, "github", asset)) for asset in refreshed_assets] == original_rows
     monkeypatch.setattr(httpx, "Client", lambda *a, **kw: pytest.fail("HTTP during replay"))
     replay = project(contract, "github", refreshed_assets, key="asset-after-clear")
-    assert replay.status == "success", replay.report
+    assert replay.status == "success", run_report_document(replay)
     # The first asset is idempotent; the pending second asset gets its first
     # measurements only after all retiring observation documents are cleared.
-    assert replay.report["projection"]["written_values"] == 2
+    assert run_report_document(replay)["projection"]["written_values"] == 2
     assert list(MetricValue.objects.filter(
         pk__in=[row["id"] for row in before],
     ).order_by("pk").values()) == before
@@ -255,8 +256,8 @@ def test_release_assets_keep_typed_publisher_and_distinct_release_parents(monkey
     assert not run.observations.filter(values__isnull=False).exists()
     after = list(MetricValue.objects.order_by("pk").values())
     repeated = project(contract, "github", refreshed_assets, key="asset-idempotent")
-    assert repeated.status == "success", repeated.report
-    assert repeated.report["projection"]["written_values"] == 0
+    assert repeated.status == "success", run_report_document(repeated)
+    assert run_report_document(repeated)["projection"]["written_values"] == 0
     assert list(MetricValue.objects.order_by("pk").values()) == after
 
 
@@ -303,13 +304,13 @@ def test_two_page_inventory_resumes_and_distinct_events_keep_native_clocks():
         sum("/orgs/publisher/repos?" in url and "page=2" not in url for url in seen)
         == 1
     )
-    releases = second.observations.filter(dimensions__kind="releases")
-    commits = second.observations.filter(dimensions__kind="commits")
+    releases = second.observations.filter(observation_kind="releases")
+    commits = second.observations.filter(observation_kind="commits")
     assert releases.count() == 2 and commits.count() == 2
     assert releases.first().publication_precision == "instant"
     assert (
-        commits.first().source_metadata["clocks"]["author_at"]
-        != commits.first().source_metadata["clocks"]["committer_at"]
+        commits.first().resource_snapshot.authored_at
+        != commits.first().resource_snapshot.committed_at
     )
     assert MetricValue.objects.count() == 0
     assert second.attempts.count() == 2
@@ -354,14 +355,14 @@ def test_native_repository_commit_pagination_checkpoints_and_resumes():
     assert first.status == "partial" and first.error_code == "request_cap"
     scope = first.scopes.get(scope_key="123:commits")
     assert scope.cursor == continuation and not scope.enumeration_complete
-    original = first.observations.get(dimensions__kind="commits")
-    assert original.listing["sha"] == "a" * 40
+    original = first.observations.get(observation_kind="commits")
+    assert observation_object_documents(original)[0]["sha"] == "a" * 40
 
     second = execute_github_catalog(obj.pk, client=reader(response, 20))
     assert second.pk == first.pk and second.status == "success"
-    assert second.observations.filter(dimensions__kind="commits").count() == 2
+    assert second.observations.filter(observation_kind="commits").count() == 2
     original.refresh_from_db()
-    assert original.listing["sha"] == "a" * 40
+    assert observation_object_documents(original)[0]["sha"] == "a" * 40
     assert seen.count(continuation) == 1
     assert sum("/repos/publisher/family/commits?" in url for url in seen) == 1
     assert MetricValue.objects.count() == 0
@@ -392,7 +393,7 @@ def test_numeric_queue_items_do_not_inflate_github_scope_counts():
     )
     set_job_state(job.pk, "ready")
     run = execute_github_catalog(job.pk, client=reader(responses(repo, []), 30))
-    assert run.status == "success", run.report
+    assert run.status == "success", run_report_document(run)
     assert run.selected_count == run.success_count == 9
     assert run.scopes.filter(scope_kind="numeric_projection_item", outcome="complete").count() == 2
     assert MetricValue.objects.count() == 6
@@ -462,8 +463,8 @@ def test_not_modified_page_reuses_evidence_without_treating_inventory_as_empty()
 
     later = execute_github_catalog(obj.pk, client=reader(response, 20))
     assert later.status == "success"
-    captured = later.observations.get(dimensions__kind="repository")
-    assert captured.source_metadata["reused_from"]["run_id"] == str(initial.pk)
+    captured = later.observations.get(observation_kind="repository")
+    assert str(captured.inputs.get(input_role="cached_response").input_observation.run_id) == str(initial.pk)
     assert later.scopes.get(scope_kind="publisher_repos").raw_count == 1
     prior = initial.observations.get(observation_kind="repository")
     assert captured.observed_at == prior.observed_at
@@ -501,13 +502,11 @@ def test_late_provider_response_cannot_write_after_reclaim():
     obj.refresh_from_db()
     assert obj.active_run_id == successor[0].run_id
     assert (
-        CollectionObservation.objects.filter(dimensions__kind="repository").count() == 0
+        CollectionObservation.objects.filter(observation_kind="repository").count() == 0
     )
 
 
 def test_catalog_resume_rechecks_access_before_using_cached_public_inventory():
-    from core.collection_capture import archive_legacy
-
     obj, repo = configured()
     seen = []
     private = [False]
@@ -524,25 +523,15 @@ def test_catalog_resume_rechecks_access_before_using_cached_public_inventory():
     assert first.status == "partial"
     repositories = list(first.observations.filter(observation_kind="repository"))
     assert repositories
-    for observation in repositories:
-        observation.legacy_archive = archive_legacy({
-            "listing": observation.listing,
-            "dimensions": observation.dimensions,
-            "source_metadata": observation.source_metadata,
-        })
-        observation.listing = {}
-        observation.dimensions = {}
-        observation.source_metadata = {}
-        observation.save(update_fields=[
-            "legacy_archive", "listing", "dimensions", "source_metadata",
-        ])
+    # Resume uses the public body and typed ownership even with no old documents.
+    first.observations.update(listing={}, dimensions={}, source_metadata={})
     private[0] = True
     run = execute_github_catalog(obj.pk, client=reader(response, 20))
     assert (
         run.scopes.get(scope_kind="repository_access", scope_key="123").outcome
         == "inaccessible"
     )
-    assert not run.observations.filter(dimensions__kind="releases").exists()
+    assert not run.observations.filter(observation_kind="releases").exists()
 
 
 def test_authenticated_draft_releases_never_enter_saved_public_evidence():
@@ -571,11 +560,11 @@ def test_authenticated_draft_releases_never_enter_saved_public_evidence():
 
     run = execute_github_catalog(obj.pk, client=reader(response, 30))
     assert run.status == "success"
-    assert run.observations.filter(dimensions__kind="releases").count() == 2
+    assert run.observations.filter(observation_kind="releases").count() == 2
     for scope in run.scopes.all():
         assert "UNPUBLISHED_SENTINEL" not in json.dumps(scope.envelopes)
     for row in run.observations.all():
-        assert "UNPUBLISHED_SENTINEL" not in json.dumps(row.listing)
+        assert "UNPUBLISHED_SENTINEL" not in json.dumps(observation_object_documents(row)[0])
     from core.models import CollectionEvidenceArchive
 
     assert CollectionEvidenceArchive.objects.exists()
