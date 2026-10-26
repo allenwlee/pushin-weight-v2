@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import uuid
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import connection, transaction
 from django.utils import timezone
 
+from core.collection_capture import read_document, run_report_document
 from core.collection_jobs import register_job, set_job_state
 from core.collection_state import checkpoint_scope, claim_job, finish_run
 from core.measurement_taxonomy import require
@@ -23,6 +25,7 @@ from core.models import (
     Brand,
     CollectionJob,
     CollectionObservation,
+    CollectionScopeRun,
     DataSource,
     Post,
     PostBrand,
@@ -37,6 +40,9 @@ from monitor.run_lock import backfill_yield_requested, harvest_writer_lock
 FORMAT = "x-staging-posts/v1"
 MODELS = (Account, XAccountDetail, Post, PostBrand, PostBrandMention, AccountProfileSnapshot)
 MAX_BYTES = 8 * 1024 * 1024
+COPY_PHASE = "typed-x-promotion-v1"
+QUOTE_PHASE = "typed-x-promotion-quotes-v1"
+MEMBERSHIP_KIND = "x-staging-promotion-v1"
 POST_ENRICHMENT = {"headline", "headline_source", "text_en", "text_zh_cn", "commentary_en",
                    "commentary_zh_cn", "lang_detected", "last_quote_count_seen", "last_quote_fetched_at",
                    "metrics_refreshed_at"}
@@ -48,6 +54,183 @@ def encoded(value):
 
 def signature(value):
     return hashlib.sha256(encoded(value)).hexdigest()
+
+
+def validate_typed_scope(job, run, kind, key, ownership, observation):
+    require(
+        job.source_id == "x" and job.purpose == "content"
+        and job.operation == "x_backfill" and run.job_id == job.pk
+        and job.scope.get("adapter") == "x-staging-promotion/v1"
+        and job.scope.get("provider_calls_allowed") is False
+        and kind == "staged_post_copy" and key == "staging-posts"
+        and ownership == job.scope and observation is None,
+        "promotion scope differs from sealed instructions",
+    )
+
+
+def _copy_scope(run):
+    scope = run.scopes.get(scope_kind="staged_post_copy", scope_key="staging-posts")
+    validate_typed_scope(run.job, run, scope.scope_kind, scope.scope_key,
+                         run.job.scope, scope.resource_observation)
+    require(scope.parent_scope_id is None and scope.enumeration_complete
+            and scope.outcome == "complete" and run.status == "success"
+            and run.job.state == "completed" and run.job.last_success_id == run.pk
+            and run.selected_count == run.success_count == scope.raw_count
+            and run.request_count == 0 and not run.attempts.filter(requests__isnull=False).exists(),
+            "completed promotion copy required")
+    return scope
+
+
+def _checked_receipt(run, receipt, members):
+    require(isinstance(receipt, dict) and set(receipt) == {
+        "posts", "existing_posts", "source_job_id", "export_sha256", "twitterapi_requests",
+        "model_requests", "new_post_ids", "pending_quotes", "job_id", "run_id",
+    }, "invalid saved promotion receipt")
+    ids = {item.post_id for item in members}
+    new, pending = receipt["new_post_ids"], receipt["pending_quotes"]
+    require(len(ids) == len(members) and None not in ids and len(ids) <= 100
+            and all(item.source_subject_kind == "post" and item.source_identifier == item.post_id
+                    for item in members), "invalid promotion Post membership")
+    require(isinstance(new, list) and all(isinstance(value, str) for value in new)
+            and new == sorted(set(new)) and set(new) <= ids
+            and isinstance(pending, dict) and set(pending) <= set(new),
+            "quote repair outside promoted Posts")
+    require(receipt["job_id"] == str(run.job_id) and receipt["run_id"] == str(run.pk)
+            and receipt["source_job_id"] == run.job.scope["source"]["job_id"]
+            and receipt["export_sha256"] == run.job.scope["export_sha256"]
+            and type(receipt["posts"]) is int and receipt["posts"] == len(ids)
+            and type(receipt["existing_posts"]) is int
+            and receipt["existing_posts"] == len(ids) - len(new)
+            and type(receipt["twitterapi_requests"]) is type(receipt["model_requests"]) is int
+            and receipt["twitterapi_requests"] == receipt["model_requests"] == 0,
+            "saved promotion receipt differs from sealed execution")
+    require(all(isinstance(value, dict) and set(value) == {"parent", "text_sha256"}
+                and isinstance(value["parent"], str) and 0 < len(value["parent"]) <= 256
+                and isinstance(value["text_sha256"], str)
+                and re.fullmatch(r"[0-9a-f]{64}", value["text_sha256"])
+                for value in pending.values()), "invalid saved quote evidence")
+    return receipt
+
+
+def _quote_report(run, scope, members, links):
+    rows = list(run.scopes.filter(scope_kind="quote_repair"))
+    by_post = {item.post_id: item for item in members}
+    require(len(rows) == len(links) and {row.scope_key for row in rows} == set(links)
+            and all(row.parent_scope_id == scope.pk and row.phase == QUOTE_PHASE
+                    and row.resource_observation_id == by_post[row.scope_key].pk
+                    and row.outcome in {"attached", "already_attached", "pending", "changed"}
+                    for row in rows), "saved quote reconciliation ownership changed")
+    result = {"job_id": str(run.job_id), "attached": [], "already_attached": [], "pending": [], "changed": []}
+    for row in sorted(rows, key=lambda item: item.scope_key):
+        result[row.outcome].append(row.scope_key)
+    return result
+
+
+def promotion_report(run):
+    """Render transfer membership and quote decisions from their typed owners."""
+    scope = _copy_scope(run)
+    require(scope.phase in {COPY_PHASE, QUOTE_PHASE}, "promotion needs exact typed adoption")
+    members = list(run.observations.order_by("post_id"))
+    require(scope.raw_count == len(members) and all(
+        item.scope_run_id == scope.pk and item.observation_kind == "post_membership"
+        and item.projection_kind == MEMBERSHIP_KIND
+        and item.processing_outcome in {"inserted", "existing"}
+        and (item.coordinate_key is None or item.processing_outcome == "inserted")
+        for item in members), "typed promotion membership changed")
+    receipt = _checked_receipt(run, {
+        "posts": len(members),
+        "existing_posts": sum(item.processing_outcome == "existing" for item in members),
+        "source_job_id": run.job.scope["source"]["job_id"],
+        "export_sha256": run.job.scope["export_sha256"],
+        "twitterapi_requests": 0, "model_requests": 0,
+        "new_post_ids": [item.post_id for item in members if item.processing_outcome == "inserted"],
+        "pending_quotes": {item.post_id: {"parent": item.coordinate_key, "text_sha256": item.payload_sha256}
+                           for item in members if item.coordinate_key is not None},
+        "job_id": str(run.job_id), "run_id": str(run.pk),
+    }, members)
+    report = {"promotion": receipt, "post_membership": {"version": 1, "distinct_posts": len(members)}}
+    if scope.phase == QUOTE_PHASE:
+        report["quote_reconciliation"] = _quote_report(run, scope, members, receipt["pending_quotes"])
+    else:
+        require(not run.scopes.filter(scope_kind="quote_repair").exists(), "uncommitted quote reconciliation")
+    return report
+
+
+def _save_quote_result(run, scope, members, summary):
+    expected = {"job_id", "attached", "already_attached", "pending", "changed"}
+    require(isinstance(summary, dict) and set(summary) == expected
+            and summary["job_id"] == str(run.job_id), "invalid quote reconciliation result")
+    outcomes = {}
+    for outcome in sorted(expected - {"job_id"}):
+        ids = summary[outcome]
+        require(isinstance(ids, list) and all(isinstance(value, str) for value in ids)
+                and ids == sorted(set(ids)) and not set(ids) & set(outcomes),
+                "overlapping quote reconciliation results")
+        outcomes.update({identifier: outcome for identifier in ids})
+    quoted = {item.post_id: item for item in members if item.coordinate_key is not None}
+    require(set(outcomes) == set(quoted), "quote reconciliation membership changed")
+    compatibility = {"ownership": {}} if any(
+        field.name == "ownership" for field in CollectionScopeRun._meta.fields
+    ) else {}
+    for identifier, outcome in sorted(outcomes.items()):
+        row, created = CollectionScopeRun.objects.get_or_create(
+            run=run, scope_kind="quote_repair", scope_key=identifier,
+            defaults={**compatibility, "parent_scope": scope, "resource_observation": quoted[identifier],
+                      "phase": QUOTE_PHASE},
+        )
+        require(created or row.parent_scope_id == scope.pk
+                and row.resource_observation_id == quoted[identifier].pk and row.phase == QUOTE_PHASE,
+                "quote reconciliation scope owner changed")
+        row.outcome = outcome
+        row.enumeration_complete = outcome in {"attached", "already_attached"}
+        row.execution_state = "completed" if row.enumeration_complete else "yielded"
+        row.coverage_state = "complete" if row.enumeration_complete else "partial"
+        row.save(update_fields=["outcome", "enumeration_complete", "execution_state", "coverage_state"])
+    scope.phase = QUOTE_PHASE
+    scope.save(update_fields=["phase"])
+
+
+def adopt_promotion_run(run):
+    """Explicitly project a complete archived promotion before manual repair."""
+    require(connection.in_atomic_block, "promotion adoption requires its writer transaction")
+    scope = _copy_scope(run)
+    if scope.phase in {COPY_PHASE, QUOTE_PHASE}:
+        promotion_report(run)
+        return scope
+    require(scope.phase is None and run.status == "success" and run.job.state == "completed"
+            and run.job.last_success_id == run.pk and run.legacy_archive_id is not None,
+            "historical promotion needs an immutable archive before adoption")
+    document = read_document(run.legacy_archive)
+    require(isinstance(document, dict) and isinstance(document.get("report"), dict),
+            "invalid archived promotion report")
+    report = document["report"]
+    members = list(run.observations.order_by("post_id"))
+    receipt = _checked_receipt(run, report.get("promotion"), members)
+    require(report.get("post_membership") == {"version": 1, "distinct_posts": len(members)}
+            and scope.raw_count == len(members)
+            and all(item.scope_run_id == scope.pk for item in members),
+            "archived promotion membership differs from typed records")
+    new = set(receipt["new_post_ids"])
+    for item in members:
+        quote = receipt["pending_quotes"].get(item.post_id, {})
+        values = {"observation_kind": "post_membership", "projection_kind": MEMBERSHIP_KIND,
+                  "processing_outcome": "inserted" if item.post_id in new else "existing",
+                  "coordinate_key": quote.get("parent"), "payload_sha256": quote.get("text_sha256")}
+        require(all(getattr(item, key) in (None, value) or (
+                    key == "payload_sha256" and item.payload_sha256 == signature({})
+                    and item.projection_kind is None and item.observation_kind is None
+                ) for key, value in values.items()),
+                "archived promotion conflicts with typed membership")
+        for key, value in values.items():
+            setattr(item, key, value)
+        item.save(update_fields=list(values))
+    if "quote_reconciliation" in report:
+        _save_quote_result(run, scope, members, report["quote_reconciliation"])
+    else:
+        scope.phase = COPY_PHASE
+        scope.save(update_fields=["phase"])
+    promotion_report(run)
+    return scope
 
 
 def fields(model):
@@ -77,7 +260,7 @@ def _completed_source(job_id):
     job = CollectionJob.objects.select_related("last_success").get(pk=job_id)
     validate_staging(job.scope)
     require(job.scope.get("response_storage") == "staging" and job.state == "completed"
-            and job.last_success_id and job.last_success.report.get("collection_drained"),
+            and job.last_success_id and run_report_document(job.last_success).get("collection_drained"),
             "completed direct-staging collection required")
     identity = database_identity()
     require(job.scope["database"] == {k: identity[k] for k in ("name", "user")}, "staging identity mismatch")
@@ -262,6 +445,15 @@ def _copy(package, run, scope):
     # Recording an already-live Post must not assign its enrichment queue to the
     # backfiller. The shared helper assigns ownership for new pending members.
     save_post_membership(run, scope, existing)
+    source_posts = {row["tweet_id"]: row for row in source["Post"]}
+    for member in CollectionObservation.objects.filter(run=run, scope_run=scope):
+        member.observation_kind = "post_membership"
+        member.projection_kind = MEMBERSHIP_KIND
+        member.processing_outcome = "inserted" if member.post_id in new else "existing"
+        member.coordinate_key = pending_quotes.get(member.post_id, {}).get("parent")
+        member.payload_sha256 = signature(source_posts[member.post_id]["text"]) if member.post_id in new else None
+        member.save(update_fields=["observation_kind", "projection_kind", "processing_outcome",
+                                   "coordinate_key", "payload_sha256"])
     require(set(CollectionObservation.objects.filter(run=run).values_list("post_id", flat=True)) == set(package["ids"]),
             "promotion membership reconciliation failed")
     connection.check_constraints()
@@ -292,7 +484,10 @@ def promote_posts(package, *, target, execute=False):
             if previous and previous.state == "completed":
                 require(set(CollectionObservation.objects.filter(run__job=previous).values_list("post_id", flat=True)) == set(ids),
                         "saved promotion membership mismatch")
-                return {**previous.last_success.report["promotion"], "replayed": True}
+                receipt = _checked_receipt(previous.last_success,
+                    run_report_document(previous.last_success)["promotion"],
+                    list(previous.last_success.observations.all()))
+                return {**receipt, "replayed": True}
             definition = {"version": 1, "schedule": {"kind": "manual", "driver": "manual"},
                 "budgets": {"requests": 1, "seconds": 120, "bytes": MAX_BYTES, "items": 100},
                 "scope": {"adapter": "x-staging-promotion/v1", "database": {k: target[k] for k in ("name", "user")},
@@ -300,14 +495,16 @@ def promote_posts(package, *, target, execute=False):
             job = register_job(job_key=job_key, source=DataSource.objects.get(pk="x"), purpose="content",
                                operation="x_backfill", mode="historical", definition=definition)
             set_job_state(job.pk, "ready")
-            claim = claim_job(job.pk, manual_authorized=True)
+            claim = claim_job(job.pk, manual_authorized=True, typed=True)
             def write(run, scope):
                 summary.update(_copy(package, run, scope))
+                scope.phase = COPY_PHASE
+                scope.save(update_fields=["phase"])
             checkpoint_scope(claim, scope_key="staging-posts", scope_kind="staged_post_copy", ownership=definition["scope"],
-                outcome="complete", enumeration_complete=True, raw_count=len(ids), write=write)
+                outcome="complete", enumeration_complete=True, raw_count=len(ids), write=write, typed=True)
             summary.update(job_id=str(job.pk), run_id=str(claim.run_id))
             finish_run(claim, status="success", selected_count=len(ids), success_count=len(ids), request_count=0,
-                       report={"promotion": summary, "post_membership": {"version": 1, "distinct_posts": len(ids)}})
+                       typed=True, physical_accounting_complete=True)
     return summary
 
 
@@ -331,7 +528,8 @@ def reconcile_saved_quotes(job_id, *, target, execute=False):
             and job.scope.get("database") == {k: target[k] for k in ("name", "user")},
             "saved promotion identity mismatch")
     require(job.state == "completed" and job.last_success_id, "completed promotion required")
-    receipt = job.last_success.report["promotion"]
+    receipt = _checked_receipt(job.last_success, run_report_document(job.last_success)["promotion"],
+                               list(job.last_success.observations.all()))
     links = receipt["pending_quotes"]
     require(set(links) <= set(receipt["new_post_ids"]), "quote repair outside promoted Posts")
     summary = {"job_id": str(job.pk), "attached": [], "already_attached": [], "pending": [], "changed": []}
@@ -360,11 +558,13 @@ def reconcile_saved_quotes(job_id, *, target, execute=False):
                 with connection.cursor() as cursor:
                     cursor.execute("SET LOCAL lock_timeout='3s'")
                     cursor.execute("SET LOCAL statement_timeout='20s'")
+                run = type(job.last_success).objects.select_for_update().get(pk=job.last_success_id)
+                scope = adopt_promotion_run(run)
                 inspect_and_apply()
                 require(not backfill_yield_requested(), "promotion yielding to live writer")
-                run = type(job.last_success).objects.select_for_update().get(pk=job.last_success_id)
-                run.report = {**run.report, "quote_reconciliation": summary}
-                run.save(update_fields=["report", "updated_at"])
+                _save_quote_result(run, scope, list(run.observations.all()), summary)
+                promotion_report(run)
+                run.save(update_fields=["updated_at"])
     else:
         inspect_and_apply()
     return summary

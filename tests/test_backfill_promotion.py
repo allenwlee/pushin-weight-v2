@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 from django.core.management import call_command
 
+from core.collection_capture import run_report_document
 from core.models import (
     Account,
     CollectionJob,
@@ -293,4 +294,4 @@ def test_live_arriving_during_quote_repair_rolls_back_links(exported, monkeypatc
             promotion.reconcile_quotes(package, target=target, execute=True)
         assert pending[0].result(timeout=10)
     assert not Post.objects.filter(pk__in=package["ids"], quoted_status_id__isnull=False).exists()
-    assert "quote_reconciliation" not in CollectionJob.objects.get(pk=result["job_id"]).last_success.report
+    assert "quote_reconciliation" not in run_report_document(CollectionJob.objects.get(pk=result["job_id"]).last_success)
