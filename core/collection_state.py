@@ -48,7 +48,7 @@ class RunClaim:
     attempt_id: uuid.UUID | None = None
 
 
-def _begin_attempt(run, *, attempt_key, limits, now):
+def _begin_attempt(run, *, attempt_key, limits, now, source_invocation_id=None):
     """Called only while the owning job/run is locked, before provider work."""
     run.attempts.filter(outcome="running").update(
         outcome="interrupted",
@@ -58,6 +58,7 @@ def _begin_attempt(run, *, attempt_key, limits, now):
     return CollectionAttempt.objects.create(
         run=run,
         attempt_key=attempt_key,
+        source_invocation_id=source_invocation_id,
         ordinal=previous.ordinal + 1 if previous else 1,
         lease_token=run.lease_token,
         lease_expires_at=run.lease_expires_at,
@@ -387,7 +388,8 @@ def claim_job(
     run.error_code = None
     run.save()
     attempt = _begin_attempt(
-        run, attempt_key=ingestion_key, limits=job.budgets, now=now
+        run, attempt_key=ingestion_key, limits=job.budgets, now=now,
+        source_invocation_id=invocation_id,
     )
     if bounded_campaign and job.purpose == "metric" and job.last_attempt_id:
         previous = CollectionRun.objects.select_for_update().get(pk=job.last_attempt_id)

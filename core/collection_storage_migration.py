@@ -273,8 +273,8 @@ def project_run_invocations_batch(
 ) -> InvocationBatch:
     """Recover attempts from ordered legacy run receipts.
 
-    The original invocation string remains in the immutable run archive.
-    Its existing job-qualified digest is the operational idempotency key;
+    Preserve the original invocation string alongside its existing
+    job-qualified digest, which remains the operational idempotency key;
     historical receipts without a finish clock retain an unknown outcome.
     Direct archived-catalog runs have a different receipt shape and retain
     their known request counts, limits and finish clocks.
@@ -369,11 +369,20 @@ def project_run_invocations_batch(
                         raise ValueError("missing historical attempt")
                     missing.append(CollectionAttempt(
                         run=run, attempt_key=attempt_key, ordinal=ordinal,
+                        source_invocation_id=identity,
                         started_at=started_at, outcome="legacy_unknown",
                         imported_at=timezone.now(),
                     ))
                 elif attempt.attempt_key != attempt_key or attempt.started_at != started_at:
                     raise ValueError("historical attempt differs from invocation receipt")
+                elif attempt.source_invocation_id != identity:
+                    if attempt.source_invocation_id is not None:
+                        raise ValueError("historical invocation identity differs from receipt")
+                    if verify_only:
+                        raise ValueError("historical invocation identity is not projected")
+                    attempt.source_invocation_id = identity
+                    attempt.save(update_fields=["source_invocation_id"])
+                    updated += 1
         operation_by_run = {run.pk: run.job.operation for run in runs}
         if any(operation_by_run[run_id] != "archived_run" for run_id, _ in existing):
             raise ValueError("typed attempt has no historical invocation receipt")

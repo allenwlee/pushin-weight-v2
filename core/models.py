@@ -9342,6 +9342,7 @@ class CollectionAttempt(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     run = models.ForeignKey(CollectionRun, on_delete=models.PROTECT, related_name="attempts")
     attempt_key = models.CharField(max_length=64, unique=True)
+    source_invocation_id = models.TextField(null=True)
     ordinal = models.PositiveIntegerField()
     lease_token = models.UUIDField(null=True)
     lease_expires_at = models.DateTimeField(null=True)

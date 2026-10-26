@@ -285,8 +285,23 @@ def test_historical_invocations_get_distinct_attempts_without_invented_outcomes(
     assert [attempt.outcome for attempt in attempts] == ["legacy_unknown"] * 2
     assert all(attempt.finished_at is None and not attempt.accounting_complete for attempt in attempts)
     assert attempts[0].attempt_key == digest({"job": str(job.pk), "invocation": "first"})
+    assert [attempt.source_invocation_id for attempt in attempts] == ["first", "second"]
     assert project_run_invocations_batch().inserted == 0
     assert project_run_invocations_batch(verify_only=True).inserted == 0
+
+    attempts[0].source_invocation_id = None
+    attempts[0].save(update_fields=["source_invocation_id"])
+    with pytest.raises(ValueError, match="invocation identity is not projected"):
+        project_run_invocations_batch(verify_only=True)
+    assert project_run_invocations_batch().updated == 1
+    attempts[0].refresh_from_db()
+    assert attempts[0].source_invocation_id == "first"
+    attempts[0].source_invocation_id = "different"
+    attempts[0].save(update_fields=["source_invocation_id"])
+    with pytest.raises(ValueError, match="invocation identity differs"):
+        project_run_invocations_batch()
+    attempts[0].source_invocation_id = "first"
+    attempts[0].save(update_fields=["source_invocation_id"])
 
     attempts[0].started_at = datetime(2026, 10, 20, 9, tzinfo=UTC)
     attempts[0].save(update_fields=["started_at"])
@@ -300,6 +315,7 @@ def test_invocation_copy_accepts_existing_attempt_with_non_uuid_identity():
 
     job = ready()
     claim = claim_job(job.pk, invocation_id="operator-run-1")
+    assert job.runs.get(pk=claim.run_id).attempts.get().source_invocation_id == "operator-run-1"
     assert project_run_invocations_batch(verify_only=True).inserted == 0
     assert project_run_invocations_batch().inserted == 0
     assert job.runs.get(pk=claim.run_id).attempts.get().outcome == "running"
@@ -355,6 +371,7 @@ def test_archived_catalog_invocations_keep_known_usage_and_finish_clocks():
     copied = project_run_invocations_batch()
     assert (copied.inserted, copied.updated) == (1, 1)
     first, second = run.attempts.order_by("ordinal")
+    assert first.source_invocation_id is None and second.source_invocation_id is None
     assert [first.outcome, second.outcome] == ["partial", "success"]
     assert [first.actual_requests, second.actual_requests] == [4, 5]
     assert [first.reserved_requests, second.reserved_requests] == [10, None]
