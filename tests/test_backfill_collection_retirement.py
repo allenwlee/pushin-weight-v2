@@ -37,19 +37,25 @@ def on_demand_key(monkeypatch):
     monkeypatch.setenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", "test-only")
 
 
-def test_serial_page_resume_report_and_bytes_without_retired_columns(pipeline):
+def test_serial_page_resume_report_and_bytes_without_retired_columns(pipeline, monkeypatch):
     job = ready_job()
     first_body, second_body = page("1", cursor="next"), page("2")
     pipeline.responses.extend([first_body, second_body])
+    monkeypatch.setattr("monitor.backfill_collection._legacy_budget_report",
+                        lambda _: pytest.fail("fresh typed execution read a legacy budget"))
     with denied_retirement_columns():
         first = execute_job(job.pk)
         original = CollectionRun.objects.get(pk=first["run_id"])
+        assert original.scopes.get(scope_kind="x_backfill_execution").phase == "typed-backfill-v1"
+        assert original.observations.get(source_subject_kind="post").projection_kind == "typed-x-membership-v1"
         assert original.physical_bytes_received == len(json.dumps(first_body).encode())
         assert original.scopes.get(scope_kind="x_query").recorded_cursors == ["next"]
         second = execute_job(job.pk)
         assert second["collection_drained"] and second["recovered_post_ids"] == ["1", "2"]
         assert len(pipeline.requests) == 2 and pipeline.requests[1]["cursor"] == "next"
         current = CollectionRun.objects.get(pk=second["run_id"])
+        assert current.scopes.filter(scope_kind="x_backfill_execution").count() == 1
+        assert current.attempts.get().outcome == "success"
         assert current.physical_bytes_received == len(json.dumps(second_body).encode())
         receipts = page_receipts(current.scopes.get(scope_kind="x_query"))
         assert [row["post_ids"] for row in receipts] == [["1"], ["2"]]
@@ -68,12 +74,13 @@ def test_model_relevance_replay_survives_failure_without_retired_columns(pipelin
             return SimpleNamespace(text="KEEP", provider_usage={"cost_usd": "0.0001"})
     monkeypatch.setattr("x_monitor.reattribute.build_relevancy_client_from_env", lambda *a, **k: Client())
     with denied_retirement_columns():
-        first = claim_job(job.pk, invocation_id="one", manual_authorized=True)
+        first = claim_job(job.pk, invocation_id="one", manual_authorized=True, typed=True)
         budget = DurableBudget(first, job, 300)
         assert budget.relevance(cfg)("system", "user") == "KEEP"
         if interrupt:
             finish_run(first, status="failed", typed=True, request_count=0, physical_accounting_complete=False)
-            claim = claim_job(job.pk, invocation_id="two", manual_authorized=True, continue_from=first.run_id)
+            claim = claim_job(job.pk, invocation_id="two", manual_authorized=True,
+                              continue_from=first.run_id, typed=True)
             budget = DurableBudget(claim, job, 300)
         assert budget.relevance(cfg)("system", "user") == "KEEP"
         assert len(calls) == 1
@@ -94,7 +101,8 @@ def test_unknown_model_outcome_and_historical_reservation_never_get_reissued(pip
     original.save(update_fields=["legacy_archive"])
     finish_run(first, status="failed", report=old)
     with denied_retirement_columns():
-        claim = claim_job(job.pk, invocation_id="resume", manual_authorized=True, continue_from=first.run_id)
+        claim = claim_job(job.pk, invocation_id="resume", manual_authorized=True,
+                          continue_from=first.run_id, typed=True)
         budget = DurableBudget(claim, job, 300)
         monkeypatch.setattr("x_monitor.reattribute.build_relevancy_client_from_env", lambda *a, **k: pytest.fail("resent model"))
         with pytest.raises(ValueError, match="outcome unknown"):
@@ -102,6 +110,16 @@ def test_unknown_model_outcome_and_historical_reservation_never_get_reissued(pip
         with pytest.raises(BackfillBudgetExhausted, match="durable model allowance"):
             budget.claim_llm_request()
         assert CollectionScopeRun.objects.get(run_id=first.run_id, scope_kind="x_model_usage").raw_count == old["model_requests"]
+
+
+def test_zero_http_history_without_model_budget_evidence_refuses_before_transport(pipeline):
+    job = ready_job()
+    claim = claim_job(job.pk, invocation_id="unarchived", manual_authorized=True)
+    finish_run(claim, status="failed", report={"model_requests": 1})
+    assert CollectionRun.objects.get(pk=claim.run_id).request_count == 0
+    with denied_retirement_columns(), pytest.raises(ValueError, match="legacy backfill budget evidence"):
+        execute_job(job.pk)
+    assert pipeline.requests == []
 
 
 def test_archived_prefetch_capture_accounting_crash_replays_once(pipeline, monkeypatch):

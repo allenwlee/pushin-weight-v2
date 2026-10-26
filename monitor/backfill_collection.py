@@ -268,14 +268,15 @@ def _legacy_budget_report(run):
         return document.get("report", {})
     if any(field.name == "report" for field in CollectionRun._meta.fields):
         return {}
-    require(run.request_count == 0,
-            "backfill budget evidence is missing; reconcile before retry")
-    return {}
+    raise ValueError("legacy backfill budget evidence is missing; reconcile before retry")
 
 
 def ensure_response_bytes(run):
     """Adopt the exact old counter once; never infer bytes from parsed JSON."""
     if run.physical_bytes_received is None:
+        require(not run.scopes.filter(
+            scope_kind="x_backfill_execution", scope_key="execution", phase="typed-backfill-v1",
+        ).exists(), "typed backfill response byte accounting is missing")
         saved = _legacy_budget_report(run)
         count = saved.get("response_bytes")
         if count is None:
@@ -289,6 +290,14 @@ def ensure_response_bytes(run):
 
 def _adopt_model_usage(run):
     if run.scopes.filter(scope_kind="x_model_usage", scope_key="legacy").exists():
+        return
+    if run.scopes.filter(
+        scope_kind="x_backfill_execution", scope_key="execution", phase="typed-backfill-v1",
+    ).exists():
+        # The shared claim creates this marker only for a new typed execution.
+        # Actual reservations stay in x_model_call on their original run.
+        _typed_scope(run, "x_model_usage", "legacy", phase="backfill_model_v1",
+                     raw_count=0, outcome="adopted", execution_state="completed")
         return
     report = _legacy_budget_report(run)
     count = report.get("model_requests", 0)
@@ -889,7 +898,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
         if not lease.acquired:
             return {"job_id": str(job.pk), "state": "waiting_for_live_writer"}
     claim = claim_job(job.pk, invocation_id=str(uuid4()), manual_authorized=True,
-                      continue_from=job.last_attempt_id)
+                      continue_from=job.last_attempt_id, typed=True)
     budget = DurableBudget(claim, job, seconds)
     error = None
     deferred_scopes = set()
