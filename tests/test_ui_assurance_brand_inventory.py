@@ -35,8 +35,11 @@ def test_call_a_companies_do_not_expand_public_tracked_brand_surfaces(client, wi
 
     from django.utils import timezone
 
+    from tests.test_chart_harvest_coverage import record_harvest
     from x_monitor.config import load_config
 
+    now = timezone.now()
+    record_harvest(now, finished_at=now, staggered=False)
     tracked = set(load_config(Path("config.yaml")).enabled_models)
     for nickname in tracked:
         Brand.objects.get_or_create(nickname=nickname, defaults={"display_name": nickname})

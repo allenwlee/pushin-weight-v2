@@ -2721,6 +2721,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
     def test_anonymous_filters_window_and_pulse_share_one_request_state(self) -> None:
         """One V22 action emits one immutable state to feed and chart."""
+        from tests.test_chart_harvest_coverage import record_harvest
+
+        now = datetime.now(UTC)
+        record_harvest(now, finished_at=now, staggered=False)
 
         def request_state(url: str) -> tuple[dict[str, object], int]:
             query = parse_qs(urlparse(url).query)
