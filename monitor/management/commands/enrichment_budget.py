@@ -37,7 +37,7 @@ class Command(BaseCommand):
             raise CommandError("pilot is capped at 1200 requests")
         now = timezone.now()
         window = EnrichmentBudgetWindow(
-            scope=options["scope"],
+            enrichment_window_kind=options["scope"],
             starts_at=now,
             ends_at=now + timedelta(hours=options["hours"]),
             request_limit=options["requests"],
@@ -52,7 +52,7 @@ class Command(BaseCommand):
                 {
                     "applied": options["apply"],
                     "window_id": str(window.pk),
-                    "scope": window.scope,
+                    "scope": window.enrichment_window_kind,
                     "starts_at": now.isoformat(),
                     "ends_at": window.ends_at.isoformat(),
                     "requests": window.request_limit,
