@@ -3463,7 +3463,10 @@ def _build_home_chart_payload(
         bucket_timezone if window_days > 1 else "UTC"
     )
     requested_at = now or _dashboard_now()
-    from monitor.harvest_coverage import closed_five_minute_boundary, latest_scheduled_coverage
+    from monitor.harvest_coverage import (
+        closed_five_minute_boundary,
+        latest_scheduled_coverage,
+    )
 
     coverage = latest_scheduled_coverage(requested_at) if window_days == 1 else None
     chart_start = closed_five_minute_boundary(requested_at) - timedelta(days=1)
@@ -4168,7 +4171,10 @@ def _each_chart_payload(
     from itertools import islice
 
     at = now or _dashboard_now()
-    from monitor.harvest_coverage import closed_five_minute_boundary, latest_scheduled_coverage
+    from monitor.harvest_coverage import (
+        closed_five_minute_boundary,
+        latest_scheduled_coverage,
+    )
 
     coverage = latest_scheduled_coverage(at) if window_days == 1 else None
     requested_at = at

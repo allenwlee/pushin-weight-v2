@@ -1,5 +1,5 @@
 ---
-status: ready
+status: pending
 priority: p1
 issue_id: "se-meta-client-20261027"
 tags: [harvester, homepage, meta, special-events]
@@ -30,9 +30,9 @@ Execute native inline, starting with independent backend work. Reuse the permane
 ## Acceptance Criteria
 
 - [x] W1/W7 code: bounded idempotent Meta names/aliases/publisher and brand-color application; seed consistency; classifier/identity contracts preserved. Production application and separate catalog import remain unperformed.
-- [ ] W2/W4/W5/W6/W8: server ordering, locale followers/copy, category colors and public-version context verified through consumers.
+- [x] W2/W4/W5-English/W6/W8: server ordering, localized followers, English pending/promotion copy, category colors and public-version context verified through consumers. New zh/ja copy remains pending owner review.
 - [x] W3 code/focused checks: chart endpoints stop at genuine scheduled harvest coverage, including failed/partial/sparse/boundary cases. Full assurance/performance remains pending.
-- [ ] SE1/SE2: exact selected queries, distinct windows/run identities, shared allowance, stale assessment rejection and actual scheduler caller tests.
+- [x] SE1/SE2 code: exact selected queries, distinct windows/run identities, shared allowance, stale assessment rejection and actual scheduler caller tests. New assessment and activation remain unperformed.
 - [ ] Product-release routing: ordinary and special-event sources enter equivalent intake using available agreed storage; no extra detector LLM calls.
 - [ ] R1: x_client/XClient rename, all callers/mocks/workflow paths and frozen campaign compatibility verified.
 - [ ] Focused checks, required UI/harvester evidence and completed code review recorded; no skipped requirement represented as passing.
@@ -82,3 +82,15 @@ Execute native inline, starting with independent backend work. Reuse the permane
 - Added an explicit shared-DB wrapper option to the assurance gate, preserving its test set and CI default;4 wrapper/candidate-binding tests passed. Full rerun subsequently refused because G2 advanced shared schema to0201. Newly fetched main00dcf8c4 contains that migration; integrate the delivered source rather than reset/clone the DB.
 - Bounded read-only production EXPLAIN of the exact new coverage selection: planning11.037ms, execution21.501ms. This covers one query on the observed data, not full-page performance. Root receipt: `.local/2026-10-27-coordinated-work/chart-coverage-explain.*`.
 - Scoped new files/telemetry/discovery/assurance lint passes; existing cycle/config lint findings retained. Final integrated verification, candidate assurance/performance and code review remain pending.
+
+### 2026-10-27 — Schema0201 integration and local checkpoint
+
+- Merged delivered main00dcf8c4 into this branch at12af531d, without conflicts or database changes. Source now matches the shared0201 schema. G2's production cutover/deletion is still active in the canonical plan; merging source does not establish that release prerequisite for R1.
+- Affected assurance gate on schema0201 passed356 tests/96 subtests, including144 required PostgreSQL tests,0 required skips/errors; Node chart/filter, feed formatter and timezone checks passed. Main model/declaration remain ba03d215.../f084b72a... with5028 prescribed obligations; General has71. This is the affected gate, not a candidate assessment or release receipt.
+- Final combined harvester/backend checks:276 passed/16 subtests,191 required PostgreSQL tests,0 skips/errors;1 historical additional-database migration test explicitly deselected. No skipped/deselected migration proof is claimed.
+- `ce-simplify-code` lenses run inline per repo agent mapping. Kept distinct legacy/new query identities and historical storage names. No behavior-changing reuse or concurrency rewrite justified; expanded four new files for readability, with AST identity verified against the checkpoint. Corrected the new browser-loop error-handler binding and import formatting. Scoped lint comparison versus main:78 baseline findings,78 current,0 introduced; repository-wide lint remains non-clean (1940 findings), not falsely reported passed.
+- Remaining required work: R1 after the selected RG6 production integration point; release-intake integration after actual RG7 ProductReleaseDetail/source-dossier/pending-reader contracts. Current main still defines ModelReleaseDetail and ProductVerificationProposal.source_release. Preserve source-first detector490a34c6 and frozen backfill revisions/recipes; no substitute bridge.
+- New zh/ja copy awaits owner review. Meta command is preview-first; production data application and separate public metadata catalog import were not run. SE remains opt-in with old default unchanged. No paid request, provider activation, remote push, PR, service change or deployment.
+- Overall ce-work remains blocked at these prerequisites. Final candidate assurance/performance, complete code review and shipping are pending, not passed or waived. Resume this branch and the same canonical plan after prerequisites arrive; existing implementation authority persists.
+- Final source-identity/browser rerun:2 tests/4 locale subtests passed,2 required PostgreSQL tests and0 skips/errors. General declaration source identity is577bb1bd...; only its source binding changed, with controls/fixture preserved. `manage.py check` passed with0 issues. Existing staticfiles-directory warnings during browser tests remain environmental; live-server assets and JS checks executed successfully.
+- Private implementation logs are retained at authoritative-root `.local/2026-10-27-coordinated-work/implementation-checks/`; browser artifacts remain in this worktree's ignored `.pytest-tmp/`. Source commits and the canonical plan are retained for authorized continuation.

@@ -4005,7 +4005,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         try:
                             page = context.new_page()
                             errors = []
-                            page.on("pageerror", lambda error: errors.append(str(error)))
+                            page.on("pageerror", lambda error, errors=errors: errors.append(str(error)))
                             page.goto(f"{self.live_server_url}/?locale={locale}", wait_until="networkidle")
                             count = page.locator(f"[data-tweet-id='{self.fixture['replacement_id']}'] .follower-count")
                             self.assertEqual(count.count(), 1)

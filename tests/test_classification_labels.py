@@ -10,8 +10,9 @@ Run against prod via:
 
 from __future__ import annotations
 
-import pytest
 from datetime import timedelta
+
+import pytest
 from django.utils import timezone
 
 from core.classification_contract import (
