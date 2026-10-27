@@ -1444,7 +1444,8 @@ def _publish_stage1_classification(
             .filter(post_id=post_id)
             .first()
         )
-        if claim is None or claim.claim_run_id != str(run_id)[:128]:
+        if (claim is None or claim.claim_run_id != str(run_id)[:128]
+                or claim.claim_expires_at is None or claim.claim_expires_at <= django_timezone.now()):
             return None
         expected = set(
             PostBrand.objects.filter(post_id=post_id).values_list(
@@ -4485,6 +4486,19 @@ class CycleRunner:
 
         results: list[dict[str, Any]] = []
         classification_error_code = "classification_incomplete"
+        classification_errors: dict[str, str] = {}
+
+        def classification_failed(batch, exc):
+            self._error_counts["classifier_batch_failed"] += 1
+            code = "classification_transport_error"
+            if isinstance(exc, LLMCallBudgetExhausted):
+                code = "classification_budget_deferred"
+            elif isinstance(exc, TimeoutError):
+                code = "classification_timeout"
+            elif isinstance(exc, ValueError) and str(exc).startswith("classification_"):
+                code = str(exc)[:128]
+            for tweet in batch:
+                classification_errors[str(tweet["tweet_id"])] = code
         if classification_tweets and classifier_client is None:
             logger.warning("_run_post_fetch: no classifier client — skipping classify")
             self._error_counts["classifier_unavailable"] += 1
@@ -4512,10 +4526,7 @@ class CycleRunner:
                     brand_registry,
                     bounded_classifier_client,
                     model=self.cfg.llm.classifier_model,
-                    on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
-                        "classifier_batch_failed",
-                        self._error_counts["classifier_batch_failed"] + 1,
-                    ),
+                    on_batch_error=classification_failed,
                     deadline=classification_deadline,
                     max_workers=3,
                     telemetry_context={"stage": "post_fetch", "run_id": run_id},
@@ -4555,6 +4566,7 @@ class CycleRunner:
                 results = []
 
         classification_succeeded: set[str] = set()
+        counters["n_tracked_promotion_subjects_removed"] = 0
         targeted_calls_remaining = (
             0 if repair_manifest is not None
             else (
@@ -4572,7 +4584,16 @@ class CycleRunner:
             tid = tweet["tweet_id"]
             if tid not in classification_publish_ids:
                 continue
+            removed_subjects = 0
             try:
+                if isinstance(result, dict) and result.get("valid") is True and result.get("promoted_subjects"):
+                    from monitor.classification_persistence import (
+                        discard_tracked_promotion_subjects,
+                    )
+
+                    original_count = len(result["promoted_subjects"])
+                    result = discard_tracked_promotion_subjects(result, tweet.get("tracked_brand_catalog") or [])
+                    removed_subjects = original_count - len(result["promoted_subjects"])
                 flag_result = _publish_stage1_classification(
                     post_id=tid,
                     result=result if isinstance(result, dict) else {},
@@ -4583,8 +4604,13 @@ class CycleRunner:
                 )
             except (DatabaseError, ValueError, KeyError) as exc:
                 logger.warning("_run_post_fetch: Stage 1 publish failed for %s: %s", tid, exc)
+                classification_errors[tid] = (
+                    str(exc) if isinstance(exc, ValueError) and str(exc).startswith("classification_")
+                    else "classification_publication_conflict"
+                )[:128]
                 flag_result = None
             if flag_result is not None and flag_result.outcome in {"persisted", "cleared"}:
+                counters["n_tracked_promotion_subjects_removed"] += removed_subjects
                 classification_succeeded.add(tid)
                 counters[
                     "n_unsanctioned_persisted"
@@ -4668,6 +4694,7 @@ class CycleRunner:
             stage="classification",
             succeeded_ids=classification_succeeded,
             error_code=classification_error_code,
+            error_codes=classification_errors,
             cfg=enrichment_cfg,
         )
         resolved_states = list(
