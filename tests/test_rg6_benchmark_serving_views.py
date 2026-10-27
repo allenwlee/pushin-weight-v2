@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime
 import pytest
 from django.db import connection
 
+from core.collection_capture import archive_legacy
 from core.migrations._benchmark_serving_v3 import VIEWS
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
@@ -72,7 +73,7 @@ def test_arena_publication_dates_match_when_no_model_is_selected():
         publication_complete=True,
     )
     assert _typed("benchmark_publication_dates", run.pk) == typed
-    run.observations.update(listing={}, source_metadata={}, dimensions={})
+    assert not hasattr(marker, "source_metadata")
     assert _typed("benchmark_publication_dates", run.pk) == typed
     run.observations.update(publication_complete=False)
     assert _typed("benchmark_publication_dates", run.pk) == []
@@ -93,16 +94,13 @@ def test_opencode_endpoint_rows_match_with_typed_links():
     assert {row[3] for row in typed} == {date(2026, 10, 6), date(2026, 10, 7)}
     assert all(row[5] == datetime(2026, 10, 7, 12, 44, 18, tzinfo=UTC) for row in typed)
     assert all(row[7] is None for row in typed)
-    run.observations.update(listing={}, source_metadata={}, dimensions={})
+    assert all(not hasattr(row, "dimensions") for row in run.observations.all())
     assert _typed("benchmark_endpoint_revisions", run.pk) == typed
 
 
-def test_observation_provenance_matches_after_bounded_projection():
+def test_observation_provenance_matches_retained_capture_projection():
     from core.benchmark_metric_store import persist_source
-    from core.collection_storage_migration import (
-        project_benchmark_provenance_batch,
-        project_run_ingestion_mode,
-    )
+    from core.collection_resources import project_observation_facts
     from core.measurement_taxonomy import digest
     from core.models import CollectionObservation
     from tests.test_benchmark_download_persistence import provider_contract
@@ -119,15 +117,15 @@ def test_observation_provenance_matches_after_bounded_projection():
     observation = CollectionObservation.objects.create(
         run=run, source_identifier="history", source_subject_kind="aggregate",
         observation_key="a" * 64,
-        source_metadata={
+        legacy_archive=archive_legacy({"listing": {}, "dimensions": {},
+                                     "envelopes": [], "groups": {}, "source_metadata": {
             "history_basis": "reconstructed_current_relationships",
             "secondary_source": True, "publication_complete": False,
             "archive_snapshot_date": "2026-09-26",
             "reconstruction_date": "2026-09-27", "period_status": "partial",
-        },
+        }}),
     )
-    project_run_ingestion_mode()
-    project_benchmark_provenance_batch(after_id=observation.pk - 1)
+    project_observation_facts(observation)
     old, typed = _rows(
         "benchmark_observation_provenance",
         VIEWS["benchmark_observation_provenance"],
@@ -150,10 +148,12 @@ def test_typed_provenance_keeps_unknown_distinct_from_false(flag):
         history_reconstructed=flag, secondary_source=flag, publication_complete=flag,
         period_status=None if flag is None else ("partial" if flag else "completed"),
         archive_snapshot_date=None, reconstruction_date=None,
-        # Neither a malformed old date nor contradictory old flags may supply a
-        # value after the typed cutover.
-        source_metadata={"history_basis": "reconstructed_current_relationships",
-                         "archive_snapshot_date": "2026-02-31", "secondary_source": True},
+        # Retained historical evidence cannot override authoritative typed facts.
+        legacy_archive=archive_legacy({"listing": {}, "dimensions": {},
+                                     "envelopes": [], "groups": {}, "source_metadata": {
+            "history_basis": "reconstructed_current_relationships",
+            "archive_snapshot_date": "2026-02-31", "secondary_source": True,
+        }}),
     )
     assert _typed("benchmark_observation_provenance", observation.pk) == [
         (observation.pk, flag, flag, None, None, flag, flag, flag)

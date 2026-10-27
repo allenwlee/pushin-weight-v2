@@ -66,26 +66,36 @@ def test_definition_change_requires_new_identity():
 
 def test_sql_cannot_change_a_job_identity_after_its_first_run():
     obj = ready()
-    claim_job(obj.pk)
+    claim_job(obj.pk, typed=True)
     with pytest.raises(IntegrityError), transaction.atomic():
         CollectionJob.objects.filter(pk=obj.pk).update(definition_sha256="f" * 64)
 
 
 def test_run_uses_immutable_job_identity_without_report_copy():
     obj = ready()
-    claim = claim_job(obj.pk)
+    claim = claim_job(obj.pk, typed=True)
     run = CollectionRun.objects.get(pk=claim.run_id)
-    assert "definition_sha256" not in run.report
-    finish_run(claim, status="success")
+    assert run.job.definition_sha256 == obj.definition_sha256
+    assert not hasattr(run, "report")
+    assert run.scopes.get().phase == "typed-github-catalog-v1"
+    finish_run(claim, status="success", typed=True,
+               physical_accounting_complete=True, request_count=0)
     run.refresh_from_db()
-    assert "definition_sha256" not in run.report
+    assert run.job.definition_sha256 == obj.definition_sha256
+    assert not hasattr(run, "report")
+    assert run.attempts.get().accounting_complete is True
 
 
-def test_finish_rejects_a_conflicting_legacy_report_hash():
+def test_typed_finish_rejects_mutable_instruction_report():
     obj = ready()
-    claim = claim_job(obj.pk)
-    with pytest.raises(ValueError, match="instruction provenance"):
-        finish_run(claim, status="success", report={"definition_sha256": "f" * 64})
+    claim = claim_job(obj.pk, typed=True)
+    with pytest.raises(ValueError, match="no legacy report"):
+        finish_run(claim, status="success", typed=True,
+                   physical_accounting_complete=True, request_count=0,
+                   report={"definition_sha256": "f" * 64})
+    run = CollectionRun.objects.get(pk=claim.run_id)
+    assert run.status == "running" and run.completed_at is None
+    assert run.job.definition_sha256 == obj.definition_sha256
 
 
 def test_only_one_additional_table_and_existing_names():
@@ -101,45 +111,50 @@ def test_only_one_additional_table_and_existing_names():
 
 def test_second_claim_cannot_replace_active_worker():
     obj = ready()
-    first = claim_job(obj.pk)
+    first = claim_job(obj.pk, typed=True)
     with pytest.raises(BusyJob):
-        claim_job(obj.pk)
+        claim_job(obj.pk, typed=True)
     obj.refresh_from_db()
     assert obj.active_run_id == first.run_id
 
 
 def test_expired_catalog_claim_resumes_logical_run_and_fences_old_token():
     obj = ready()
-    first = claim_job(obj.pk)
+    first = claim_job(obj.pk, typed=True)
     CollectionRun.objects.filter(pk=first.run_id).update(
         lease_expires_at=timezone.now() - timedelta(seconds=1)
     )
-    second = claim_job(obj.pk)
+    second = claim_job(obj.pk, typed=True)
     assert first.run_id == second.run_id
     assert first.lease_token != second.lease_token
     with pytest.raises(StaleClaim):
-        finish_run(first, status="success")
-    finish_run(second, status="success")
+        finish_run(first, status="success", typed=True,
+                   physical_accounting_complete=True, request_count=0)
+    finish_run(second, status="success", typed=True,
+               physical_accounting_complete=True, request_count=0)
 
 
 def test_partial_catalog_is_resumable_but_content_partial_is_terminal():
     catalog = ready()
-    c = claim_job(catalog.pk)
-    finish_run(c, status="partial", retry_at=timezone.now() + timedelta(minutes=1))
+    c = claim_job(catalog.pk, typed=True)
+    finish_run(c, status="partial", retry_at=timezone.now() + timedelta(minutes=1),
+               typed=True, physical_accounting_complete=True, request_count=0)
     run = CollectionRun.objects.get(pk=c.run_id)
     assert run.completed_at is None
     content = ready(purpose="content", key="content")
-    c = claim_job(content.pk, manual_authorized=True)
-    finish_run(c, status="partial")
+    c = claim_job(content.pk, manual_authorized=True, typed=True)
+    finish_run(c, status="partial", typed=True,
+               physical_accounting_complete=True, request_count=0)
     assert CollectionRun.objects.get(pk=c.run_id).completed_at is not None
 
 
 def test_pause_fences_active_writer():
     obj = ready()
-    claim = claim_job(obj.pk)
+    claim = claim_job(obj.pk, typed=True)
     set_job_state(obj.pk, "paused")
     with pytest.raises(StaleClaim):
-        finish_run(claim, status="success")
+        finish_run(claim, status="success", typed=True,
+                   physical_accounting_complete=True, request_count=0)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -149,7 +164,7 @@ def test_two_database_connections_claim_once():
     def attempt():
         close_old_connections()
         try:
-            return claim_job(obj.pk).run_id
+            return claim_job(obj.pk, typed=True).run_id
         except BusyJob:
             return None
         finally:

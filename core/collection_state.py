@@ -44,6 +44,15 @@ class StaleClaim(ValueError):
     """This worker no longer owns the job's active execution."""
 
 
+def _require_legacy_fields(model, *names):
+    """Refuse legacy document APIs before mutation once their fields detach."""
+    retained = {field.name for field in model._meta.fields}
+    require(
+        set(names) <= retained,
+        "legacy collection document API is unavailable; use typed=True",
+    )
+
+
 @dataclass(frozen=True)
 class RunClaim:
     job_id: uuid.UUID
@@ -270,6 +279,8 @@ def claim_job(
         isinstance(campaign, dict)
         and campaign.get("kind") == "backfiller-data-source-v1"
     )
+    if not typed and bounded_campaign and candidate.campaign_id is None:
+        _require_legacy_fields(CollectionRun, "report")
     if bounded_campaign:
         if candidate.campaign_id:
             from core.models import CollectionCampaign
@@ -911,6 +922,8 @@ def checkpoint_scope(
     typed=False,
     write: Callable | None = None,
 ):
+    if not typed:
+        _require_legacy_fields(CollectionScopeRun, "ownership", "envelopes")
     require(
         isinstance(scope_key, str) and 0 < len(scope_key) <= 256, "scope key required"
     )
@@ -1317,6 +1330,8 @@ def finish_run(
     physical_accounting_complete=None,
     now=None,
 ):
+    if not typed:
+        _require_legacy_fields(CollectionRun, "report")
     require(
         status in {"success", "partial", "failed", "aborted"},
         "terminal/yield outcome required",
@@ -1470,6 +1485,8 @@ def finish_run(
 @transaction.atomic
 def record_rejection(job_id, *, invocation_id, reason, report=None, typed=False, now=None):
     """A receipt does not acquire an execution lease or alter active pointers."""
+    if not typed:
+        _require_legacy_fields(CollectionRun, "report")
     now = now or timezone.now()
     job = CollectionJob.objects.select_for_update().get(pk=job_id)
     require(
@@ -1548,6 +1565,9 @@ def import_scope_checkpoints(
     The X adapter decodes its versioned file into this typed scope list. Missing
     historical attempt clocks remain unknown; import time is retrieval evidence.
     """
+    if not typed:
+        _require_legacy_fields(CollectionRun, "report")
+        _require_legacy_fields(CollectionScopeRun, "ownership", "envelopes")
     safe_payload(provenance)
     safe_payload(scopes)
     require(
