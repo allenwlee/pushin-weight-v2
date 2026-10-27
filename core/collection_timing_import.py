@@ -10,8 +10,8 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 from core.benchmark_metric_timing import TIME_FIELDS, aware_instant
-from core.collection_capture import observation_object_documents
-from core.measurement_taxonomy import digest
+from core.collection_capture import read_document
+from core.measurement_taxonomy import digest, require
 from core.models import (
     Actor,
     CollectionCorrection,
@@ -122,11 +122,26 @@ def import_legacy_timing_batch(
             return CorrectionImportBatch(owner_ids[-1], len(owner_ids), 0, 0)
         selected = []
         for observation in observations:
-            markers = observation_object_documents(observation)[2].get(
-                "timing_correction_v1"
+            # This import reads historical markers, not today's reconstructed
+            # catalog object. Typed X checkpoints can share a page/scope archive
+            # with none of the old observation fields.
+            document = read_document(observation.legacy_archive)
+            require(isinstance(document, dict), "invalid archived timing evidence")
+            require(
+                "timing_correction_v1" not in document,
+                "historical timing correction has an unexpected root marker",
             )
-            if markers is None:
+            fields = {"listing", "dimensions", "source_metadata"}
+            if not fields.intersection(document):
                 continue
+            require(
+                all(isinstance(document.get(field), dict) for field in fields),
+                "invalid archived observation object",
+            )
+            metadata = document["source_metadata"]
+            if "timing_correction_v1" not in metadata:
+                continue
+            markers = metadata["timing_correction_v1"]
             if not isinstance(markers, dict):
                 raise TypeError("historical timing corrections must be keyed by value")
             for value_id, marker in markers.items():
