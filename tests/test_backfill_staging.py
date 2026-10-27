@@ -130,6 +130,93 @@ def test_unknown_outcome_is_not_automatically_refetched(http_pages, monkeypatch)
     assert CollectionRequest.objects.get(request_category="x_backfill_staging").transport_outcome == "pending"
 
 
+def test_explicit_interrupted_reconciliation_preserves_cost_and_resumes(http_pages, monkeypatch):  # noqa: F811
+    from django.utils import timezone
+
+    from monitor.backfill_staging import (
+        StagingPrefetcher,
+        reconcile_interrupted_requests,
+    )
+
+    job = staged_job(monkeypatch, 20)
+    barrier = threading.Barrier(20)
+
+    def response(params):
+        barrier.wait(timeout=25)
+        return result_for(params)
+
+    original = StagingPrefetcher._save
+    monkeypatch.setattr(StagingPrefetcher, "_save", lambda *a: (_ for _ in ()).throw(RuntimeError("receipt lost")))
+    with http_pages(response) as state:
+        with pytest.raises(CommandError):
+            execute_job(job.pk, collection_options={"concurrency": 20})
+        monkeypatch.setattr(StagingPrefetcher, "_save", original)
+        job.refresh_from_db()
+        stopped = job.last_attempt
+        stopped.lease_expires_at = timezone.now()
+        stopped.save(update_fields=["lease_expires_at"])
+        ids = list(CollectionRequest.objects.filter(attempt__run=stopped).values_list("pk", flat=True))
+        assert len(ids) == len(state["requests"]) == 20
+        with pytest.raises(CommandError):
+            execute_job(job.pk, collection_options={"concurrency": 20})
+        assert len(state["requests"]) == 20
+        set_job_state(job.pk, "paused")
+        reconcile_interrupted_requests(job.pk, stopped.pk, ids, reason="operator confirmed process stopped")
+        reconcile_interrupted_requests(job.pk, stopped.pk, ids, reason="idempotent repeat")
+        assert CollectionRequest.objects.filter(pk__in=ids, transport_outcome="unknown",
+                                                accounting_complete=False, http_status=None).count() == 20
+        attempt = stopped.attempts.get()
+        assert attempt.actual_requests == attempt.unknown_sent_requests == 20
+        set_job_state(job.pk, "ready")
+        report = execute_job(job.pk, collection_options={"concurrency": 20})
+    assert report["collection_drained"]
+    assert state["peak"] == 20
+    assert len(state["requests"]) == 40
+    assert CollectionRequest.objects.filter(attempt__run__job=job).count() == 40
+    assert CollectionObservation.objects.filter(run__job=job).count() == 20
+    assert CollectionRequest.objects.filter(pk__in=ids, transport_outcome="unknown").count() == 20
+
+
+@pytest.mark.parametrize("fault", ["active", "run", "method", "identity", "reason"])
+def test_interrupted_reconciliation_rejects_unsafe_or_unrelated_requests(http_pages, monkeypatch, fault):  # noqa: F811
+    from django.utils import timezone
+
+    from monitor.backfill_staging import (
+        StagingPrefetcher,
+        reconcile_interrupted_requests,
+    )
+
+    job = staged_job(monkeypatch, 1)
+    monkeypatch.setattr(StagingPrefetcher, "_save", lambda *a: (_ for _ in ()).throw(RuntimeError("receipt lost")))
+    with http_pages(result_for) as state:
+        with pytest.raises(CommandError):
+            execute_job(job.pk)
+        job.refresh_from_db()
+        stopped = job.last_attempt
+        stopped.lease_expires_at = timezone.now()
+        stopped.save(update_fields=["lease_expires_at"])
+        request = CollectionRequest.objects.get(attempt__run=stopped)
+        set_job_state(job.pk, "paused")
+        if fault == "active":
+            set_job_state(job.pk, "ready")
+        elif fault == "run":
+            from datetime import timedelta
+
+            stopped.lease_expires_at = timezone.now() + timedelta(minutes=5)
+            stopped.save(update_fields=["lease_expires_at"])
+        elif fault == "method":
+            request.http_method = "POST"
+            request.save(update_fields=["http_method"])
+        elif fault == "identity":
+            request.request_config = "different"
+            request.save(update_fields=["request_config"])
+        with pytest.raises(ValueError):
+            reconcile_interrupted_requests(job.pk, stopped.pk, [request.pk],
+                                           reason="" if fault == "reason" else "confirmed stop")
+    request.refresh_from_db()
+    assert request.transport_outcome == "pending" and len(state["requests"]) == 1
+
+
 @pytest.mark.parametrize("fault", ["environment", "host"])
 def test_wrong_target_refused_before_paid_request(http_pages, monkeypatch, fault):  # noqa: F811
     job = staged_job(monkeypatch, 1)

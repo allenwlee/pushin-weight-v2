@@ -17,12 +17,21 @@ from copy import copy
 from datetime import UTC, datetime, timedelta
 
 from django.conf import settings
+from django.db import transaction
 from django.db.models import Sum
+from django.utils import timezone
 
 from core.collection_capture import begin_request, finish_request
 from core.collection_state import fenced_run, x_scope_ownership
 from core.measurement_taxonomy import require
-from core.models import Brand, CollectionAttempt, CollectionRequest, CollectionScopeRun
+from core.models import (
+    Brand,
+    CollectionAttempt,
+    CollectionJob,
+    CollectionRequest,
+    CollectionRun,
+    CollectionScopeRun,
+)
 from monitor.backfill_prefetch import (
     CapturedPage,
     Prefetcher,
@@ -46,6 +55,49 @@ from x_monitor.twitterapi_credentials import (
 )
 
 CATEGORY = "x_backfill_staging"
+
+
+@transaction.atomic
+def reconcile_interrupted_requests(job_id, run_id, request_ids, *, reason):
+    """Explicitly permit paid GET refetches after an operator confirms a stop.
+
+    The original requests remain unknown and billable. This does not advance a
+    cursor, manufacture a response, or relax automatic unknown-outcome stops.
+    """
+    require(isinstance(reason, str) and bool(reason.strip()), "reconciliation reason required")
+    ids = {str(value) for value in request_ids}
+    require(bool(ids), "explicit interrupted request IDs required")
+    job = CollectionJob.objects.select_for_update().get(pk=job_id)
+    validate_staging(job.scope)
+    require(job.state == "paused" and job.active_run_id is None, "pause job before reconciliation")
+    run = CollectionRun.objects.select_for_update().get(pk=run_id, job=job)
+    require(run.status in {"aborted", "failed", "interrupted", "partial"}
+            and (run.lease_expires_at is None or run.lease_expires_at <= timezone.now()),
+            "confirm stopped run before reconciliation")
+    requests = list(CollectionRequest.objects.select_for_update(of=("self",)).filter(
+        pk__in=ids, attempt__run=run, request_category=CATEGORY,
+    ).select_related("scope_run__run", "scope_run__job_target__search_query"))
+    require({str(request.pk) for request in requests} == ids, "interrupted request ancestry changed")
+    approvals = dict(run.report.get("staging_unknown_retries", {}))
+    for request in requests:
+        scope = copy(request.scope_run)
+        scope.cursor = request.cursor_before
+        require(request.http_method == "GET" and request.transport_outcome in {"pending", "unknown"}
+                and request.received_at is None and request.http_status is None
+                and request.archive_id is None and not request.accounting_complete
+                and request.request_config == _request_identity(scope)
+                and request.endpoint_url == _endpoint(scope), "request is not an interrupted search GET")
+        if str(request.pk) in approvals:
+            require(request.transport_outcome == "unknown"
+                    and request.error_code == "operator_reconciled_interruption",
+                    "interrupted reconciliation changed")
+            continue
+        require(request.transport_outcome == "pending", "unknown request already finalized")
+        finish_request(request, outcome="unknown", error_code="operator_reconciled_interruption")
+        approvals[str(request.pk)] = {"reason": reason.strip(), "at": timezone.now().isoformat()}
+    run.report = {**run.report, "staging_unknown_retries": approvals}
+    run.save(update_fields=["report", "updated_at"])
+    return sorted(ids)
 
 
 def validate_staging(scope):
@@ -99,6 +151,19 @@ class StagingPrefetcher(Prefetcher):
         failures, not_before, group, last_failure = 0, None, None, None
         for request in requests:
             require(x_scope_ownership(request.scope_run) == x_scope_ownership(scope), "staging scope ancestry changed")
+            approval = request.attempt.run.report.get("staging_unknown_retries", {}).get(str(request.pk))
+            if request.transport_outcome == "unknown" and approval:
+                original_scope = copy(scope)
+                original_scope.cursor = request.cursor_before
+                require(request.error_code == "operator_reconciled_interruption"
+                        and request.http_method == "GET" and not request.accounting_complete
+                        and set(approval) == {"reason", "at"} and bool(approval["reason"])
+                        and request.request_config == _request_identity(original_scope)
+                        and request.endpoint_url == _endpoint(original_scope),
+                        "interrupted retry ancestry changed")
+                if request.cursor_before == scope.cursor:
+                    group = group or request.request_group or str(request.pk)
+                continue
             if (request.http_method == "GET" and request.transport_outcome in {"received", "transport_error", "timeout"}
                     and transient(request.error_code, request.http_status)):
                 # Keep typed query ownership and legacy run identity intact.
