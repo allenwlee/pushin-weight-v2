@@ -3554,10 +3554,6 @@ class ProductVerificationProposal(models.Model):
         Post, on_delete=models.PROTECT, related_name="product_verification_proposals",
         db_column="source_post_id", to_field="tweet_id",
     )
-    source_release = models.ForeignKey(
-        "ModelRelease", on_delete=models.SET_NULL, blank=True, null=True,
-        related_name="product_verification_proposals",
-    )
     source_dossier = models.ForeignKey(
         "EventDossier", on_delete=models.PROTECT, blank=True, null=True,
         related_name="product_verification_proposals",
@@ -7658,95 +7654,6 @@ class Opportunity(models.Model):
                 name="ck_opportunities_extraction_conf",
             ),
         ]
-
-
-class ModelRelease(models.Model):
-    CHANNELS = (("stable", "Stable"), ("preview", "Preview"), ("beta", "Beta"), ("other", "Other"))
-
-    id = models.BigAutoField(primary_key=True)
-    brand = models.ForeignKey(
-        Brand, on_delete=models.PROTECT, related_name="model_releases",
-        blank=True, null=True, to_field="nickname",
-    )
-    brand_discovery_candidate = models.ForeignKey(
-        BrandDiscoveryCandidate, on_delete=models.PROTECT,
-        related_name="model_releases", blank=True, null=True,
-    )
-    observed_model_name = models.TextField()
-    version = models.TextField(blank=True, default="")
-    release_maturity_reference = models.ForeignKey(
-        ReleaseMaturity,
-        db_column="release_maturity_id",
-        on_delete=models.PROTECT,
-        related_name="extracted_releases",
-    )
-    release_value = models.CharField(max_length=64, blank=True, null=True)
-    release_precision = models.CharField(
-        max_length=16,
-        choices=tuple(
-            choice for choice in TEMPORAL_PRECISION_CHOICES if choice[0] != "datetime"
-        ),
-        default="unknown",
-    )
-    release_identity = models.CharField(max_length=64, unique=True)
-    rg7_dossier = models.ForeignKey(
-        "EventDossier", on_delete=models.PROTECT, blank=True, null=True,
-        related_name="+",
-    )
-    first_seen_at = models.DateTimeField()
-    last_seen_at = models.DateTimeField()
-    extraction_version = models.TextField()
-    review_status = models.CharField(
-        max_length=16, choices=REVIEW_STATUS_CHOICES, default="pending"
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "model_releases"
-        ordering = ["-first_seen_at", "id"]
-        constraints = [
-            models.CheckConstraint(
-                condition=(
-                    models.Q(brand__isnull=False, brand_discovery_candidate__isnull=True)
-                    | models.Q(brand__isnull=True, brand_discovery_candidate__isnull=False)
-                ), name="ck_model_release_one_owner",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(last_seen_at__gte=models.F("first_seen_at")),
-                name="ck_model_release_seen_window",
-            ),
-            models.CheckConstraint(
-                condition=_precision_value_condition("release_value", "release_precision"),
-                name="ck_model_release_precision",
-            ),
-        ]
-
-
-class ModelReleaseEvidence(models.Model):
-    id = models.BigAutoField(primary_key=True)
-    release = models.ForeignKey(ModelRelease, on_delete=models.CASCADE, related_name="evidence")
-    source_post = models.ForeignKey(
-        Post, on_delete=models.PROTECT, related_name="model_release_evidence",
-        db_column="source_post_id", to_field="tweet_id",
-    )
-    source_url = models.URLField(max_length=2048, blank=True, null=True)
-    observed_at = models.DateTimeField()
-    observed_claim = models.JSONField(default=dict)
-    evidence_hash = models.CharField(max_length=64)
-    rg7_claim = models.ForeignKey(
-        "EventDossierClaim", on_delete=models.PROTECT, blank=True, null=True,
-        related_name="+",
-    )
-    extraction_version = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = "model_release_evidence"
-        constraints = [models.UniqueConstraint(
-            fields=["release", "source_post", "evidence_hash"],
-            name="uq_model_release_evidence",
-        )]
 
 
 class RareTypeCategoryAssignment(models.Model):

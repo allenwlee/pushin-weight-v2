@@ -1566,7 +1566,7 @@ def _persist_categories(
     return written
 
 
-def _persist_model_releases(
+def _persist_product_release_reports(
     post: Post, records: list[Mapping[str, Any]], version: str
 ):
     written = evidence = candidates = 0
@@ -1695,7 +1695,7 @@ _PERSISTERS = {
     "job_listing_extraction": _persist_jobs,
     "personnel_change_extraction": _persist_personnel,
     "profile_affiliation_extraction": _persist_personnel,
-    "model_release_extraction": _persist_model_releases,
+    "model_release_extraction": _persist_product_release_reports,
 }
 
 

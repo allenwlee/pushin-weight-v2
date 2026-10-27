@@ -174,8 +174,6 @@ def test_rare_type_relations_have_explicit_copy_or_scrub_policy() -> None:
     policy = load_policy(POLICY_PATH)
 
     assert {
-        "model_release_evidence",
-        "model_releases",
         "posts_brands_products",
         "rare_type_category_assignments",
     } <= policy.relations.copied_tables
@@ -193,8 +191,6 @@ def test_rare_type_relations_have_explicit_copy_or_scrub_policy() -> None:
     } <= policy.relations.excluded_tables
     assert {
         "brand_discovery_candidates",
-        "model_release_evidence",
-        "model_releases",
         "posts_brands_products",
         "products",
         "rare_type_category_assignments",
@@ -202,8 +198,6 @@ def test_rare_type_relations_have_explicit_copy_or_scrub_policy() -> None:
     rare_type_sequences = {
         "brand_discovery_candidate_token_evidence_id_seq",
         "brand_discovery_candidate_tokens_id_seq",
-        "model_release_evidence_id_seq",
-        "model_releases_id_seq",
         "product_verification_proposals_id_seq",
         "profile_movement_candidates_id_seq",
         "rare_type_category_assignments_id_seq",
@@ -564,8 +558,6 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "job_listings",
         "job_source_states",
         "job_source_sync_runs",
-        "model_release_evidence",
-        "model_releases",
         "opportunities",
         "people",
         "people_accounts",

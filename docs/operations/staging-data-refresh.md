@@ -104,7 +104,7 @@ GRANT SELECT ON
   django_site, event_evidence, events, geopolitical_mode_keys,
   geopolitical_mode_labels, x_account_details, job_discovery_runs,
   job_listing_evidence,
-  job_listings, model_release_evidence, model_releases, nationalism_keys,
+  job_listings, nationalism_keys,
   nationalism_labels, national_stance_keys,
   national_stance_labels, opportunities, people,
   people_accounts, people_brand_affiliation_evidence,
@@ -293,8 +293,7 @@ GRANT SELECT ON
   event_evidence_id_seq, events_id_seq, harvest_backlog_windows_id_seq,
   job_discovery_runs_id_seq,
   job_listing_evidence_id_seq, job_listings_id_seq,
-  job_source_sync_runs_id_seq, model_release_evidence_id_seq,
-  model_releases_id_seq, opportunities_id_seq,
+  job_source_sync_runs_id_seq, opportunities_id_seq,
   post_synthesis_artifacts_id_seq, post_synthesis_daily_budgets_id_seq,
   post_synthesis_demands_id_seq, post_synthesis_rate_limit_buckets_id_seq,
   post_synthesis_texts_id_seq, post_translation_artifacts_id_seq,
@@ -373,11 +372,12 @@ the Stage 1 classification state, people/jobs/events/opportunities, targeted
 extraction, headline demand, and split translation/synthesis migrations
 `0028`–`0055`, including classification judgment history, event evidence, the
 U18A topic/geopolitical/promotion catalogs and assignments, and the rare-type
-feature. The rare-type copy set retains `model_releases`,
-`model_release_evidence`, `rare_type_category_assignments`, and
-`posts_brands_products`; existing `products` and `brand_discovery_candidates`
-remain copied. Exact source/candidate counts protect all six domain relations
-whenever they exist on the source.
+feature. The rare-type copy set retains canonical `event_dossiers`,
+`event_dossier_sources`, `event_dossier_claims`,
+`rare_type_category_assignments`, and `posts_brands_products`; existing
+`products` and `brand_discovery_candidates` remain copied. The prototype
+release and evidence tables were retired by RG7 migration 0205. Exact
+source/candidate counts protect the selected relations when present.
 
 Rare-type search, gate, budget, run, hit, attempt, and processing-cycle rows
 belong to one environment and are excluded and scrubbed. The same is true for
@@ -572,8 +572,8 @@ UNION ALL SELECT 'brand_discovery_candidates', count(*) FROM brand_discovery_can
 UNION ALL SELECT 'brands', count(*) FROM brands
 UNION ALL SELECT 'brands_companies', count(*) FROM brands_companies
 UNION ALL SELECT 'companies', count(*) FROM companies
-UNION ALL SELECT 'model_release_evidence', count(*) FROM model_release_evidence
-UNION ALL SELECT 'model_releases', count(*) FROM model_releases
+UNION ALL SELECT 'event_dossiers', count(*) FROM event_dossiers
+UNION ALL SELECT 'event_dossier_claims', count(*) FROM event_dossier_claims
 UNION ALL SELECT 'posts', count(*) FROM posts
 UNION ALL SELECT 'posts_brands', count(*) FROM posts_brands
 UNION ALL SELECT 'posts_brands_products', count(*) FROM posts_brands_products
