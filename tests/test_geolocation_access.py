@@ -122,6 +122,47 @@ def test_reconciliation_refuses_to_repurpose_owner():
         apply_serving_grants(connection, owner)
 
 
+def test_worker_budget_is_owner_only_and_old_serving_grants_are_revoked(serving_login):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from core.geolocation_access import verify_serving_access
+    from core.models import EnrichmentBudgetWindow
+
+    serving, role, _owner, _report = serving_login
+    now = timezone.now()
+    window = EnrichmentBudgetWindow.objects.create(
+        scope="pilot", starts_at=now, ends_at=now + timedelta(hours=1),
+        request_limit=10, usd_limit=1, config_fingerprint="a" * 64,
+    )
+    assert EnrichmentBudgetWindow.objects.filter(pk=window.pk).update(reserved_requests=1) == 1
+    queries = (
+        "SELECT * FROM enrichment_budget_windows",
+        "INSERT INTO enrichment_budget_windows (id) VALUES (gen_random_uuid())",
+        "UPDATE enrichment_budget_windows SET request_limit=1000000",
+        "DELETE FROM enrichment_budget_windows",
+    )
+    for query in queries:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            serving.execute(query)
+    # Reproduce the previous generic reconciliation's column and table grants.
+    with connection.cursor() as cursor:
+        cursor.execute(sql.SQL("GRANT SELECT,INSERT,UPDATE (request_limit) ON enrichment_budget_windows TO {}").format(sql.Identifier(role)))
+        cursor.execute(sql.SQL("GRANT DELETE ON enrichment_budget_windows TO {}").format(sql.Identifier(role)))
+    with patch.object(connections["default"], "connection", serving), pytest.raises(ValueError, match="owner-only"):
+        verify_serving_access(connections["default"])
+    with transaction.atomic():
+        apply_serving_grants(connection, role)
+    for query in queries:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            serving.execute(query)
+    with patch.object(connections["default"], "connection", serving):
+        assert verify_serving_access(connections["default"]) == role
+    window.refresh_from_db()
+    assert window.reserved_requests == 1 and window.request_limit == 10
+
+
 @pytest.mark.parametrize("key", ["CELERY_BROKER_URL", "CELERY_RESULT_BACKEND", "MIGRATION_DATABASE_URL", "STAGING_REFRESH_SOURCE_DATABASE_URL"])
 def test_serving_environment_rejects_secondary_database_credentials(key):
     from core.geolocation_access import verify_serving_environment
