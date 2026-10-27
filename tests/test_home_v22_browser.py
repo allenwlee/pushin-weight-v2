@@ -4026,6 +4026,40 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
+    def test_chart_initial_and_refresh_share_completed_harvest_tail(self) -> None:
+        from django.utils import timezone
+
+        from monitor.harvest_coverage import closed_five_minute_boundary
+        from tests.test_chart_harvest_coverage import record_harvest
+
+        searched_through = timezone.now() - timedelta(minutes=10)
+        run = record_harvest(searched_through)
+        last_start = closed_five_minute_boundary(searched_through) - timedelta(minutes=5)
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._anonymous_context(browser)
+                try:
+                    page = context.new_page()
+                    errors = []
+                    page.on("pageerror", lambda error: errors.append(str(error)))
+                    page.goto(f"{self.live_server_url}/?locale=en", wait_until="networkidle")
+                    chart = page.locator("canvas.home-chart")
+                    self.assertTrue(chart.is_visible())
+                    initial = chart.evaluate("node => JSON.parse(node.dataset.home)")
+                    self.assertEqual(initial["days"][-1], last_start.isoformat())
+                    self.assertEqual(initial["harvest_coverage"]["run_id"], str(run.pk))
+                    with page.expect_response(lambda response: "/chart.html?" in response.url and response.status == 200) as response:
+                        page.evaluate("() => window.pwFilter.set('brands', ['moonshot_kimi'])")
+                    refreshed = page.evaluate("html => JSON.parse(new DOMParser().parseFromString(html, 'text/html').querySelector('canvas[data-home]').dataset.home)", response.value.text())
+                    self.assertEqual(refreshed["days"][-1], last_start.isoformat())
+                    page.wait_for_function("() => Object.keys(JSON.parse(document.querySelector('canvas[data-home]').dataset.home).series).join(',') === 'moonshot_kimi'")
+                    self.assertEqual(errors, [])
+                finally:
+                    context.close()
+            finally:
+                browser.close()
+
     def test_stepfun_is_single_nonempty_browser_identity(self) -> None:
         from django.utils import timezone
         from core.models import SearchQuery

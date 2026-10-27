@@ -3463,6 +3463,14 @@ def _build_home_chart_payload(
         bucket_timezone if window_days > 1 else "UTC"
     )
     requested_at = now or _dashboard_now()
+    from monitor.harvest_coverage import closed_five_minute_boundary, latest_scheduled_coverage
+
+    coverage = latest_scheduled_coverage(requested_at) if window_days == 1 else None
+    chart_start = closed_five_minute_boundary(requested_at) - timedelta(days=1)
+    chart_end = (
+        max(chart_start, datetime.fromisoformat(coverage["chart_end_at"]))
+        if coverage else chart_start
+    ) if window_days == 1 else requested_at
     normalized_filters = _normalize_home_filters(filters)
     tracked_brands = _tracked_home_brand_nicknames() if tracked_only else None
     from monitor.home_count_summary import home_count_cache_token, read_home_counts
@@ -3474,7 +3482,8 @@ def _build_home_chart_payload(
         cache_key = _home_chart_cache_key(
             window_days, normalized_filters, locale, bucket_timezone
         )
-        cache_key += (requested_at.date(), count_token)
+        cache_key += (requested_at.date(), count_token, chart_start, chart_end,
+                      coverage["run_id"] if coverage else None)
         if tracked_brands is not None:
             cache_key += (tracked_brands,)
         cache_now = monotonic()
@@ -3496,10 +3505,10 @@ def _build_home_chart_payload(
     pulse = _build_home_pulse_payload(
         window_days, now=requested_at, brand_nicknames=tracked_brands,
     )
-    now = requested_at
+    now = chart_end
     local_today = now.astimezone(bucket_tzinfo).date()
     if window_days == 1:
-        window_start = now - timedelta(days=1)
+        window_start = chart_start
     else:
         first_day = local_today - timedelta(days=window_days - 1)
         window_start = datetime(
@@ -3589,10 +3598,10 @@ def _build_home_chart_payload(
         "brand", condition=Q(brand__is_sentinel=False),
     ))
     if window_days == 1:
-        # Minute granularity: 288 5-minute buckets, oldest-first labels
+        # Complete five-minute buckets only; unsearched tail is absent.
         granularity = "minute"
-        bucket_count = 288
-        cutoff = now - timedelta(days=1)
+        bucket_count = max(0, int((chart_end - chart_start).total_seconds() // 300))
+        cutoff = chart_start
         days: list[str] = [
             (cutoff + timedelta(minutes=5 * i)).isoformat()
             for i in range(bucket_count)
@@ -3717,6 +3726,7 @@ def _build_home_chart_payload(
         "bucket_timezone": bucket_timezone,
         "computed_at": computed_at,
         "fetched_at": computed_at,
+        "harvest_coverage": coverage,
         "pulse": pulse,
         "trend_narrative": trend_narrative,
         "top_voices": top_voices,
@@ -4157,13 +4167,19 @@ def _each_chart_payload(
     from itertools import islice
 
     at = now or _dashboard_now()
+    from monitor.harvest_coverage import closed_five_minute_boundary, latest_scheduled_coverage
+
+    coverage = latest_scheduled_coverage(at) if window_days == 1 else None
+    requested_at = at
     timezone_name, tzinfo = _resolve_chart_timezone(
         bucket_timezone if window_days > 1 else "UTC"
     )
     local_today = at.astimezone(tzinfo).date()
     if window_days == 1:
-        start = at - timedelta(days=1)
-        labels = [(start + timedelta(minutes=5 * i)).isoformat() for i in range(288)]
+        start = closed_five_minute_boundary(at) - timedelta(days=1)
+        at = max(start, datetime.fromisoformat(coverage["chart_end_at"])) if coverage else start
+        buckets = max(0, int((at - start).total_seconds() // 300))
+        labels = [(start + timedelta(minutes=5 * i)).isoformat() for i in range(buckets)]
     else:
         first = local_today - timedelta(days=window_days - 1)
         start = datetime(first.year, first.month, first.day, tzinfo=tzinfo).astimezone(UTC)
@@ -4317,7 +4333,7 @@ def _each_chart_payload(
                      "color": _EACH_FIXED_COLORS.get(entry["key"], original_colors[entry["key"]])}
                     for entry in entries],
         "counting_unit": "posts" if tab in {"sentiment", "lang", "role"} else "label_assignments",
-        "computed_at": at.isoformat(),
+        "computed_at": requested_at.isoformat(), "harvest_coverage": coverage,
     }
 
 

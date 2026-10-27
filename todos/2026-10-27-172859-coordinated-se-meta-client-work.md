@@ -31,7 +31,7 @@ Execute native inline, starting with independent backend work. Reuse the permane
 
 - [x] W1/W7 code: bounded idempotent Meta names/aliases/publisher and brand-color application; seed consistency; classifier/identity contracts preserved. Production application and separate catalog import remain unperformed.
 - [ ] W2/W4/W5/W6/W8: server ordering, locale followers/copy, category colors and public-version context verified through consumers.
-- [ ] W3: chart endpoints stop at genuine scheduled harvest coverage, including failed/partial/sparse/boundary cases.
+- [x] W3 code/focused checks: chart endpoints stop at genuine scheduled harvest coverage, including failed/partial/sparse/boundary cases. Full assurance/performance remains pending.
 - [ ] SE1/SE2: exact selected queries, distinct windows/run identities, shared allowance, stale assessment rejection and actual scheduler caller tests.
 - [ ] Product-release routing: ordinary and special-event sources enter equivalent intake using available agreed storage; no extra detector LLM calls.
 - [ ] R1: x_client/XClient rename, all callers/mocks/workflow paths and frozen campaign compatibility verified.
@@ -64,3 +64,11 @@ Execute native inline, starting with independent backend work. Reuse the permane
 - An initial browser attempt used a nonexistent homepage sort selector and was stopped; its leftover fixture caused one setup failure on the next run. Normal test teardown cleared it, then the corrected real filter interaction and clean reruns passed. No replacement database or schema reset was used.
 - Scoped Ruff reports21 existing findings in views/context processors; do not call that check clean. Diff whitespace check passes. Root/prototype files remain outside implementation commits.
 - Read-only production coverage receipt: `.local/2026-10-27-coordinated-work/harvest-coverage.*` in authoritative root. Latest inspected successful scheduled run has per-query searched bounds and complete coverage, but source_as_of is NULL; W3 must read actual query scopes.
+
+### 2026-10-27 — Harvest-backed chart cutoff
+
+- Added `monitor.harvest_coverage`: bounded latest96 executions over one day, three reads for runs/frozen ordinary targets/scopes. Uses exact query window ends; every ordinary target must be present and fully enumerated. Completed empty searches count; missing, truncated, running and future scopes do not. Optional discovery outcomes are excluded; a settled attempt can establish ordinary coverage even if its run remains partial.
+- Both one-day chart builders use closed UTC five-minute buckets, trim the unsearched tail and expose `harvest_coverage` with run/searched-through/completed/end timestamps. Unknown coverage returns no buckets, not fabricated zeros. Existing longer-window behavior remains. Cache identity includes coverage so a newly completed run invalidates the old tail.
+- Reuses CollectionRun/CollectionAttempt/CollectionJobTarget/CollectionScopeRun; zero tables, columns or migrations. CallState was rejected because backlog transfer can advance it over incomplete searches; source_as_of is unwritten on the observed scheduled path.
+-45 focused PostgreSQL tests/53 subtests passed; separate real Chromium initial-chart/filter-refresh test passed1. No required skips/errors. Test fixture records now go through the real ScheduledCycleLineage writer. Initial fixture attempts hit ingestion/lifecycle guards and were corrected to use the writer; guards stayed intact. Browser test's initial endpoint expectation was corrected to the actual `/chart.html` fragment route.
+- Broader graph/control assurance and candidate performance are still pending; these focused results do not replace them.

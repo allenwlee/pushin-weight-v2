@@ -49,6 +49,9 @@ class DashboardEachTests(PostgreSQLV22TestCase):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
+        from tests.test_chart_harvest_coverage import record_harvest
+
+        record_harvest(NOW, finished_at=NOW, staggered=False)
         for key in ("positive", "mixed", "neutral", "negative"):
             SentimentKey.objects.get_or_create(key=key)
         for key in ("other", "releases_updates", "opinions_reactions"):

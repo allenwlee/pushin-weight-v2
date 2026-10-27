@@ -74,6 +74,9 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
+        from tests.test_chart_harvest_coverage import record_harvest
+
+        record_harvest(ANCHOR, finished_at=ANCHOR, staggered=False)
         Brand.objects.filter(
             nickname__in=(
                 "anthropic",
@@ -346,7 +349,8 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             "unsanctioned": "off",
         }
         # Pulse (two queries), brand inventory, and chart aggregate. No ranking.
-        with self.assertNumQueries(4):
+        # Three bounded reads for run/target/scope coverage plus four aggregates.
+        with self.assertNumQueries(7):
             payload = _build_home_chart_payload(1, active, now=ANCHOR)
         self.assertEqual(payload["totals"], {"up": 1})
         self.assertEqual(payload["computed_at"], payload["pulse"]["computed_at"])
@@ -686,7 +690,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
             [post.tweet_id],
         )
 
-    def test_first_partial_minute_is_included_after_exact_cutoff(self):
+    def test_first_bucket_stays_aligned_to_five_minutes_between_refreshes(self):
         brand = Brand.objects.create(
             nickname="boundary",
             display_name="Boundary",
@@ -707,7 +711,7 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
 
         chart = _build_home_chart_payload(1, {}, now=ANCHOR + timedelta(seconds=30))
 
-        self.assertEqual(chart["totals"]["boundary"], 1)
+        self.assertEqual(chart["totals"]["boundary"], 2)
 
     def test_refresh_row_preserves_repost_and_reply_counts(self):
         row = _serialize_feed_row(
