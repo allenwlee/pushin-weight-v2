@@ -84,7 +84,7 @@ def _run_cycle(
     monkeypatch.setattr(cycle_mod, "_build_brand_index", lambda _models: (None, {}))
     monkeypatch.setattr(cycle_mod, "_load_brand_search_terms", dict)
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient,
+        cycle_mod.XClient,
         "from_env",
         classmethod(lambda cls, _purpose: FakeApi()),
     )

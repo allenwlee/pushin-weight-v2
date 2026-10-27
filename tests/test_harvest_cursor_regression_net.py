@@ -101,7 +101,7 @@ def cycle(monkeypatch, seeded_policy_keywords):
             lambda cfg=None, **_kwargs: list(calls if calls is not None else _full_cycle_plan()),
         )
         monkeypatch.setattr(
-            cycle_mod.TwitterApiClient,
+            cycle_mod.XClient,
             "from_env",
             classmethod(lambda cls, _purpose: api),
         )

@@ -1,7 +1,7 @@
 """Rare-type extra-search query in harvest PlannedCall shape.
 
 Harvest renders ``(<groups OR-ed>) min_faves:N`` then CycleRunner injects
-``since_time`` / ``until_time`` via TwitterApiClient.run_search kwargs.
+``since_time`` / ``until_time`` via XClient.run_search kwargs.
 A bare ``A OR B OR C min_faves:0 since_time:T`` only time-filters the last
 clause (X AND binds tighter than OR). The outer paren is the same wrap
 ``query_plan._build_query`` uses when there is more than one brand group.
@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import re
 
-from x_monitor.apify import TwitterApiClient
 from x_monitor.queries import assert_under_length_cap
+from x_monitor.x_client import XClient
 
 QUERY_VERSION = "rare-types-v3-provisional-2026-09-23"
 
@@ -115,7 +115,7 @@ def render_rare_type_extra_search_query(
         min_faves=min_faves,
     )
     query_string = planned_query_string(min_faves=min_faves)
-    rendered = TwitterApiClient._effective_search_query(
+    rendered = XClient._effective_search_query(
         query_string,
         since=None,
         since_time=int(since_time),

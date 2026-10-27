@@ -85,7 +85,7 @@ def test_deadline_reduces_deep_page_budget_before_starting(call):
 
 
 def test_scheduled_search_checks_remaining_time_between_pages(call, monkeypatch):
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
     class Deadline:
         @staticmethod
@@ -93,7 +93,7 @@ def test_scheduled_search_checks_remaining_time_between_pages(call, monkeypatch)
             # Fast responses must not be capped at floor(400 / 188) == two pages.
             return 400.0
 
-    api = TwitterApiClient(api_key="fake", timeout_s=60, max_retries=2)
+    api = XClient(api_key="fake", timeout_s=60, max_retries=2)
     requests = []
 
     def get(path, params):

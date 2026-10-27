@@ -103,7 +103,7 @@ def test_stale_assessment_aborts_real_run_before_provider_creation(
     _enable(cfg, tmp_path)
     cfg.discovery.rare_types.query_pack = "special-events-v1"
     monkeypatch.setattr(
-        "monitor.cycle.TwitterApiClient.from_env",
+        "monitor.cycle.XClient.from_env",
         lambda purpose: pytest.fail("invalid assessment reached provider construction"),
     )
     result = CycleRunner(cfg=cfg, _backfill_call_ids=selected_ids).run()
@@ -206,7 +206,7 @@ def test_real_planner_scheduled_runner_dispatches_two_once_then_one_decision_dra
     api = FakeApi([{"tweets": []}, {"tweets": []}])
     purposes, drains = [], []
     monkeypatch.setattr(
-        "monitor.cycle.TwitterApiClient.from_env",
+        "monitor.cycle.XClient.from_env",
         lambda purpose: purposes.append(purpose.value) or api,
     )
     monkeypatch.setattr(

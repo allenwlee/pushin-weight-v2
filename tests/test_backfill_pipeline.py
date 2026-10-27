@@ -17,7 +17,7 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 def pipeline(monkeypatch, tmp_path, seeded_policy_keywords):
     from monitor import cycle
     from monitor.management.commands import backfill
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
     responses = []
     requests = []
@@ -35,8 +35,8 @@ def pipeline(monkeypatch, tmp_path, seeded_policy_keywords):
     monkeypatch.setattr(cycle.CycleRunner, "_request_synthesis_prewarm", forbidden)
     def factory(cls, purpose):
         purposes.append(purpose)
-        return TwitterApiClient(api_key="test-only")
-    monkeypatch.setattr(TwitterApiClient, "from_env", classmethod(factory))
+        return XClient(api_key="test-only")
+    monkeypatch.setattr(XClient, "from_env", classmethod(factory))
     def get(*args, **kwargs):
         requests.append(kwargs["params"])
         body = responses.pop(0)
@@ -44,7 +44,7 @@ def pipeline(monkeypatch, tmp_path, seeded_policy_keywords):
             raise body
         return SimpleNamespace(status_code=200, content=json.dumps(body).encode(),
                                json=lambda: body, text=json.dumps(body))
-    monkeypatch.setattr("x_monitor.apify.requests.get", get)
+    monkeypatch.setattr("x_monitor.x_client.requests.get", get)
     def run(**kwargs):
         call_command("backfill", since="2026-08-09T00:00:00Z", until="2026-08-09T00:15:00Z",
                      brands="qwen", call_ids="B1", max_results=20, max_pages=1,
@@ -281,8 +281,16 @@ def test_manual_long_translation_and_cache_use_same_smaller_chunks(pipeline, mon
     pipeline.run()
     assert seen == [("cache", 2_000), ("translation", 2_000)]
     seen.clear()
+    # Exercise the retained inline path; scheduled worker mode only enqueues.
+    cfg.harvest.enrichment.mode = "inline"
     runner = cycle.CycleRunner(cfg=cfg)
-    pipeline.post_fetch_method(runner, [], run_id="scheduled-control", post_ids=["1"])
+    control = Post.objects.create(
+        tweet_id="scheduled-control", text="word " * 1_200, lang="en"
+    )
+    PostEnrichmentState.objects.create(post=control, classification_status="succeeded")
+    pipeline.post_fetch_method(
+        runner, [], run_id="scheduled-control", post_ids=[control.pk]
+    )
     assert seen == [("cache", None), ("translation", None)]
 
 
@@ -456,14 +464,17 @@ def test_real_post_fetch_claims_only_frozen_new_cohort(pipeline, monkeypatch):
     outside = Post.objects.create(tweet_id="global-pending", text="Qwen outside campaign")
     PostEnrichmentState.objects.create(post=outside)
     monkeypatch.setattr(CycleRunner, "_run_post_fetch", pipeline.post_fetch_method)
-    monkeypatch.setattr("x_monitor.reattribute.build_translator_client_from_env", lambda cfg: None)
-    monkeypatch.setattr("x_monitor.reattribute.build_classifier_client_from_env", lambda cfg: None)
+    monkeypatch.setattr("x_monitor.reattribute.build_translator_client_from_env", lambda cfg, **kwargs: None)
+    monkeypatch.setattr("x_monitor.reattribute.build_classifier_client_from_env", lambda cfg, **kwargs: None)
     pipeline.responses.append(page("1"))
     with pytest.raises(CommandError, match="attempt failed"):
         pipeline.run()
     claimed = PostEnrichmentState.objects.get(pk="1")
     unrelated = PostEnrichmentState.objects.get(pk="global-pending")
-    assert claimed.translation_attempts > 0
-    assert claimed.classification_attempts > 0
+    # Missing clients record deferred work without pretending a model was called.
+    assert claimed.translation_error_code == "translator_unavailable"
+    assert claimed.classification_error_code == "classifier_unavailable"
+    assert claimed.translation_attempts == claimed.classification_attempts == 0
     assert unrelated.translation_attempts == unrelated.classification_attempts == 0
+    assert unrelated.translation_error_code == unrelated.classification_error_code == ""
     assert unrelated.claim_run_id == ""

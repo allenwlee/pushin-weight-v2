@@ -36,11 +36,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from x_monitor.config import Config
-from x_monitor.store import Store
 from x_monitor.intent_classifier import attribute_to_brand
 from x_monitor.query_plan import plan_calls
+from x_monitor.store import Store
 from x_monitor.translator import translate_batch
-
 
 # --- v1.7 end-to-end pipeline shape --------------------------------------
 
@@ -328,9 +327,9 @@ def test_v17_dry_run_pipeline_emits_two_call_summary():
         data_dir = Path(d)
         _seed_data(data_dir)
         cfg = _make_v17_config()
-        # Build a fake TwitterApiClient that records every call.
-        from x_monitor.apify import TwitterApiClient
-        client = TwitterApiClient(api_key="dry-run-test")
+        # Build a fake XClient that records every call.
+        from x_monitor.x_client import XClient
+        client = XClient(api_key="dry-run-test")
         # The pipeline's dry-run path should NOT call client.run_search
         client.run_search = MagicMock(return_value={"tweets": [], "meta": {}})
         from x_monitor.run import RunPipeline

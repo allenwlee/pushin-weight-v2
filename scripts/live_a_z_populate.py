@@ -200,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     # Plan 2026-07-13-001 R1: source ~/.env.secrets before launching the
-    # subprocess so the on-demand key reaches TwitterApiClient.from_env()
+    # subprocess so the on-demand key reaches XClient.from_env()
     # without the caller needing to `source ~/.env.secrets` themselves.
     loaded = _source_secrets(args.secrets)
     if loaded:
@@ -211,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.dry_run and TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV not in os.environ:
         print(
             f"{TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV} not in environment and "
-            f"not found in {args.secrets}. TwitterApiClient.from_env() will "
+            f"not found in {args.secrets}. XClient.from_env() will "
             "raise at subprocess start. Recovery: add "
             f"`export {TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV}=\"...\"` "
             "to your secrets file or pass --secrets <path>.",

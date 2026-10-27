@@ -81,7 +81,7 @@ def wired(monkeypatch, seeded_policy_keywords):
             cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: list(calls)
         )
         monkeypatch.setattr(
-            cycle_mod.TwitterApiClient,
+            cycle_mod.XClient,
             "from_env",
             classmethod(lambda cls, _purpose: api),
         )

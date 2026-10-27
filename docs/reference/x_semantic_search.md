@@ -183,7 +183,7 @@ Results are relevance-ranked. Content may be truncated in display but full text 
 - `docs/reference/twitterapi-live-queries-by-model.md`
 - `docs/research/2026-06-24-160500-fresh-sampling-methodology.md` (examples of combined keyword + semantic usage)
 - `docs/plans/2026-06-25-001-refactor-b-and-c-calls-for-max-inclusion-plan.md` (live tool test methodology)
-- `x_monitor/apify.py`, `queries.py` — for how production X fetching differs.
+- `x_monitor/x_client.py`, `queries.py` — for how production X fetching differs.
 
 ---
 

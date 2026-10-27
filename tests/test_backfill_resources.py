@@ -6,14 +6,14 @@ import pytest
 
 def test_physical_api_retry_consumes_shared_allowance(monkeypatch):
     from monitor.backfill_resources import BackfillBudget, BackfillBudgetExhausted
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
     budget = BackfillBudget(max_api_requests=1, max_llm_calls=2, run_seconds=30)
     starts = []
     response = SimpleNamespace(status_code=500, text="temporary", content=b"{}")
-    monkeypatch.setattr("x_monitor.apify.requests.get", lambda *a, **k: starts.append(k) or response)
-    monkeypatch.setattr("x_monitor.apify.time.sleep", lambda *_: None)
-    api = TwitterApiClient(api_key="test-only", timeout_s=1,
+    monkeypatch.setattr("x_monitor.x_client.requests.get", lambda *a, **k: starts.append(k) or response)
+    monkeypatch.setattr("x_monitor.x_client.time.sleep", lambda *_: None)
+    api = XClient(api_key="test-only", timeout_s=1,
                            before_request=budget.claim_api_request)
     with pytest.raises(BackfillBudgetExhausted):
         api.run_search("qwen", max_results=20, max_pages=1)
@@ -52,10 +52,10 @@ def test_no_api_start_without_full_timeout_envelope():
 
 
 def test_shared_search_page_iterator_resumes_exact_provider_cursor(monkeypatch):
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
     received = []
-    api = TwitterApiClient(api_key="test-only")
+    api = XClient(api_key="test-only")
     def response(path, params):
         received.append(params)
         return {"tweets": [{"id": "1", "text": "Qwen", "author": {"id": "2"}}],

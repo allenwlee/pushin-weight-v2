@@ -4,7 +4,7 @@ Per-model relevance post-filter (v1.2).
 
 Loads a RelevanceConfig from data/filters/<brand_id>.yaml and applies
 filter_posts() to a list of normalized tweet dicts (the shape produced
-by x_monitor.apify._normalize_tweet, with brand_id and source_query_id
+by x_monitor.x_client._normalize_tweet, with brand_id and source_query_id
 stamped by the run loop). Returns the kept set + per-reason drop counts.
 
 Token matching rules:
@@ -34,7 +34,6 @@ from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
-
 
 # --- Pydantic model ------------------------------------------------------
 

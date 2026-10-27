@@ -1,5 +1,5 @@
 # {{AGENT_ATTRIBUTION}}
-"""Tests for x_monitor.apify (TwitterAPI.io client)."""
+"""Tests for x_monitor.x_client (TwitterAPI.io client)."""
 
 from __future__ import annotations
 
@@ -9,20 +9,20 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from x_monitor.apify import (
-    FOLLOWERS_MAX_PER_PAGE,
-    TwitterApiAuthError,
-    TwitterApiClient,
-    TwitterApiRateLimitError,
-    TwitterApiServerError,
-    _normalize_article,
-    _normalize_follower,
-    _normalize_tweet,
-)
 from x_monitor.twitterapi_credentials import (
     TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
     TWITTERAPI_IO_SCHEDULED_API_KEY_ENV,
     TwitterApiCredentialPurpose,
+)
+from x_monitor.x_client import (
+    FOLLOWERS_MAX_PER_PAGE,
+    XClient,
+    XClientAuthError,
+    XClientRateLimitError,
+    XClientServerError,
+    _normalize_article,
+    _normalize_follower,
+    _normalize_tweet,
 )
 
 # --- error mapping --------------------------------------------------------
@@ -38,20 +38,20 @@ def _mock_response(status: int, body: dict | list | str = {}) -> MagicMock:
 
 
 def test_run_search_raises_auth_error_on_401():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(401, "unauth")):
-        with pytest.raises(TwitterApiAuthError):
+        with pytest.raises(XClientAuthError):
             client.run_search("from:x")
 
 
 def test_exchange_receipts_include_each_physical_retry_and_response_body(monkeypatch):
-    client = TwitterApiClient(api_key="x", max_retries=1)
+    client = XClient(api_key="x", max_retries=1)
     first = _mock_response(503, "busy")
     first.content = b"busy"
     second = _mock_response(200, {"tweets": []})
     second.content = b'{"tweets":[]}'
     monkeypatch.setattr(requests, "get", MagicMock(side_effect=[first, second]))
-    monkeypatch.setattr("x_monitor.apify.time.sleep", lambda _: None)
+    monkeypatch.setattr("x_monitor.x_client.time.sleep", lambda _: None)
     starts, finishes = [], []
     client.on_exchange_start = lambda path, params: starts.append((path, params)) or len(starts)
     client.on_exchange_finish = lambda token, result: finishes.append((token, result))
@@ -64,7 +64,7 @@ def test_exchange_receipts_include_each_physical_retry_and_response_body(monkeyp
 
 
 def test_exchange_receipt_marks_transport_failure_as_unknown_response(monkeypatch):
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     monkeypatch.setattr(
         requests, "get", MagicMock(side_effect=requests.Timeout("sent but no reply")),
     )
@@ -81,7 +81,7 @@ def test_exchange_receipt_marks_transport_failure_as_unknown_response(monkeypatc
 
 
 def test_raw_search_receipt_is_saved_before_normalization(monkeypatch):
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     raw_body = b'{"tweets":[{"malformed":true}]}'
 
     def fake_get(*args, **kwargs):
@@ -90,7 +90,7 @@ def test_raw_search_receipt_is_saved_before_normalization(monkeypatch):
 
     monkeypatch.setattr(client, "_get", fake_get)
     monkeypatch.setattr(
-        "x_monitor.apify._normalize_tweet",
+        "x_monitor.x_client._normalize_tweet",
         MagicMock(side_effect=ValueError("malformed paid slot")),
     )
     captured = []
@@ -108,7 +108,7 @@ def test_raw_search_receipt_is_saved_before_normalization(monkeypatch):
 
 
 def test_raw_search_receipt_is_saved_before_json_decode(monkeypatch):
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     response = _mock_response(200, "not json")
     response.content = b"not json"
     response.json.side_effect = json.JSONDecodeError("bad", "not json", 0)
@@ -127,13 +127,13 @@ def test_raw_search_receipt_is_saved_before_json_decode(monkeypatch):
 
 
 def test_raw_search_receipt_captures_http_error_body_and_status(monkeypatch):
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     response = _mock_response(503, "provider down")
     response.content = b"provider down"
     monkeypatch.setattr(requests, "get", MagicMock(return_value=response))
     captured = []
 
-    with pytest.raises(TwitterApiServerError) as exc_info:
+    with pytest.raises(XClientServerError) as exc_info:
         client.run_search_page_with_raw(
             "query", since_time=1, until_time=2, receipt_sink=captured.append
         )
@@ -143,16 +143,16 @@ def test_raw_search_receipt_captures_http_error_body_and_status(monkeypatch):
 
 
 def test_run_search_raises_rate_limit_on_429():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(429, "rate")):
-        with pytest.raises(TwitterApiRateLimitError):
+        with pytest.raises(XClientRateLimitError):
             client.run_search("from:x")
 
 
 def test_run_search_raises_server_error_on_500():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(500, "boom")):
-        with pytest.raises(TwitterApiServerError):
+        with pytest.raises(XClientServerError):
             client.run_search("from:x")
 
 
@@ -165,7 +165,7 @@ def test_run_search_raises_server_error_on_500():
 ])
 @pytest.mark.parametrize("raw_receipt", [False, True])
 def test_search_error_or_malformed_200_is_not_an_exhausted_page(body, raw_receipt):
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     response = _mock_response(200, body)
     response.content = json.dumps(body).encode()
     captured = []
@@ -186,7 +186,7 @@ def test_search_error_or_malformed_200_is_not_an_exhausted_page(body, raw_receip
 
 def test_run_search_passes_query_as_param():
     """The new client must send `query` (not searchTerms/maxItems/mode)."""
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": []})) as mock_get:
         client.run_search("from:MiniMaxAI lang:en", max_results=10)
         args, kwargs = mock_get.call_args
@@ -195,7 +195,7 @@ def test_run_search_passes_query_as_param():
 
 
 def test_run_search_appends_since_if_provided():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": []})) as mock_get:
         client.run_search("from:MiniMaxAI", since="2026-06-01")
         args, kwargs = mock_get.call_args
@@ -204,7 +204,7 @@ def test_run_search_appends_since_if_provided():
 
 def test_run_search_does_not_double_since():
     """If user already wrote since: in the query, don't append a second one."""
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": []})) as mock_get:
         client.run_search("from:x since:2026-06-01", since="2026-06-02")
         args, kwargs = mock_get.call_args
@@ -214,7 +214,7 @@ def test_run_search_does_not_double_since():
 
 def test_run_search_cookies_arg_is_ignored():
     """Backward-compat: old call sites still pass cookies= — must not error."""
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": []})):
         out = client.run_search(
             "from:x",
@@ -226,7 +226,7 @@ def test_run_search_cookies_arg_is_ignored():
 
 
 def test_run_search_returns_empty_on_200_with_no_tweets():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": []})):
         items, truncated = client.run_search("from:x")
         assert items == []
@@ -235,7 +235,7 @@ def test_run_search_returns_empty_on_200_with_no_tweets():
 
 def test_run_search_normalizes_tweet_shape():
     """Output must have the keys our Store.insert_posts expects."""
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     raw = {
         "tweets": [
             {
@@ -286,7 +286,7 @@ def test_run_search_returns_items_truncated_tuple_not_nameerror():
     Pin the live contract: run_search always returns (list, bool) and the
     list is populated from the API response (i.e. _walk_search ran).
     """
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     raw = {
         "tweets": [
             {
@@ -318,7 +318,7 @@ def test_run_search_truncated_true_when_cap_hit_with_more_pages():
     """When max_results is hit and the API still has a next page, truncated
     must be True so CycleRunner holds the cursor (a44b577 intent).
     """
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     tweets = [
         {
             "id": str(i),
@@ -346,7 +346,7 @@ def test_run_search_truncated_true_when_cap_hit_with_more_pages():
 
 def test_run_search_truncated_false_when_window_exhausted_at_cap():
     """Cap hit but no more pages -> truncated False (window fully swept)."""
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     tweets = [
         {
             "id": str(i),
@@ -376,7 +376,7 @@ def test_run_search_truncated_false_when_window_exhausted_at_cap():
 
 
 def test_run_followers_single_page():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     body = {
         "followers": [
             {"userName": "alice", "name": "Alice", "followers": 100},
@@ -394,7 +394,7 @@ def test_run_followers_single_page():
 
 
 def test_run_followers_paginates_via_cursor():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     page1 = {
         "followers": [
             {"userName": f"user{i}", "name": f"User{i}", "followers": i}
@@ -419,7 +419,7 @@ def test_run_followers_paginates_via_cursor():
 
 def test_run_followers_stops_at_max_results():
     """Even if the API keeps returning pages, we stop at max_results."""
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     page1 = {
         "followers": [
             {"userName": f"u{i}", "name": f"U{i}", "followers": 1}
@@ -440,7 +440,7 @@ def test_run_followers_stops_at_max_results():
 
 
 def test_run_followers_cookies_arg_is_ignored():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     body = {"followers": [], "next_cursor": None}
     with patch.object(requests, "get", return_value=_mock_response(200, body)):
         out = client.run_followers(
@@ -453,13 +453,13 @@ def test_run_followers_cookies_arg_is_ignored():
 
 
 def test_probe_api_returns_false_on_401():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(401, "unauth")):
         assert client.probe_api() is False
 
 
 def test_probe_api_returns_true_on_success():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(200, {
         "status": "success", "data": {"userName": "MiniMaxAI"}
     })):
@@ -467,7 +467,7 @@ def test_probe_api_returns_true_on_success():
 
 
 def test_probe_api_returns_true_on_transient_5xx():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(500, "boom")):
         # Transient errors are NOT a liveness failure.
         assert client.probe_api() is True
@@ -478,9 +478,9 @@ def test_probe_api_returns_true_on_transient_5xx():
 
 def test_from_env_requires_explicit_typed_purpose():
     with pytest.raises(TypeError):
-        TwitterApiClient.from_env()  # type: ignore[call-arg]
+        XClient.from_env()  # type: ignore[call-arg]
     with pytest.raises(TypeError, match="purpose enum"):
-        TwitterApiClient.from_env("scheduled")  # type: ignore[arg-type]
+        XClient.from_env("scheduled")  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -501,7 +501,7 @@ def test_from_env_reads_only_designated_key(monkeypatch, purpose, environment_na
     monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "on-demand-secret")
     monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "legacy-secret")
 
-    client = TwitterApiClient.from_env(purpose)
+    client = XClient.from_env(purpose)
 
     expected = {
         TWITTERAPI_IO_SCHEDULED_API_KEY_ENV: "scheduled-secret",
@@ -532,7 +532,7 @@ def test_from_env_does_not_fall_back(monkeypatch, purpose, missing_name, other_n
     monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "legacy-secret")
 
     with pytest.raises(RuntimeError, match=missing_name):
-        TwitterApiClient.from_env(purpose)
+        XClient.from_env(purpose)
 
 
 # --- normalizer unit tests -----------------------------------------------
@@ -597,11 +597,11 @@ class TestNormalizeArticle:
 
 
 class TestGetArticle:
-    """TwitterApiClient.get_article() calls /twitter/article and normalizes."""
+    """XClient.get_article() calls /twitter/article and normalizes."""
 
     def _client(self):
-        from x_monitor.apify import TwitterApiClient
-        return TwitterApiClient(api_key="test-key", base_url="https://api.example.com")
+        from x_monitor.x_client import XClient
+        return XClient(api_key="test-key", base_url="https://api.example.com")
 
     def test_get_article_returns_normalized_dict(self):
         client = self._client()
@@ -655,23 +655,23 @@ class TestGetArticle:
             assert client.get_article("123") is None
 
     def test_get_article_propagates_auth_error(self):
-        from x_monitor.apify import TwitterApiAuthError
+        from x_monitor.x_client import XClientAuthError
         client = self._client()
         with patch.object(
             client, "_get",
-            side_effect=TwitterApiAuthError("bad key"),
+            side_effect=XClientAuthError("bad key"),
         ):
-            with pytest.raises(TwitterApiAuthError):
+            with pytest.raises(XClientAuthError):
                 client.get_article("123")
 
     def test_get_article_propagates_rate_limit(self):
-        from x_monitor.apify import TwitterApiRateLimitError
+        from x_monitor.x_client import XClientRateLimitError
         client = self._client()
         with patch.object(
             client, "_get",
-            side_effect=TwitterApiRateLimitError("429"),
+            side_effect=XClientRateLimitError("429"),
         ):
-            with pytest.raises(TwitterApiRateLimitError):
+            with pytest.raises(XClientRateLimitError):
                 client.get_article("123")
 
 
@@ -697,7 +697,7 @@ class TestSearchMaxPerPage:
         # TwitterAPI.io caps each advanced_search response at 20; _walk_search
         # relies on this when the caller doesn't pass max_per_page. If they
         # ever raise it, this test forces an explicit decision.
-        client = TwitterApiClient(api_key="k")
+        client = XClient(api_key="k")
         with patch.object(client, "_get", return_value={
             "tweets": [_tweet("1")], "has_next_page": False
         }) as mg:
@@ -706,10 +706,10 @@ class TestSearchMaxPerPage:
 
 
 class TestWalkSearch:
-    """TwitterApiClient._walk_search follows next_cursor until exhausted."""
+    """XClient._walk_search follows next_cursor until exhausted."""
 
     def _client(self):
-        return TwitterApiClient(api_key="test-key", base_url="https://api.example.com")
+        return XClient(api_key="test-key", base_url="https://api.example.com")
 
     def test_single_page_no_cursor(self):
         client = self._client()
@@ -870,7 +870,7 @@ class TestWalkSearch:
     def test_later_page_failure_retains_received_posts(self):
         client = self._client()
         first = {"tweets": [_tweet("first")], "has_next_page": True, "next_cursor": "next"}
-        with patch.object(client, "_get", side_effect=[first, TwitterApiServerError("fake 503")]):
+        with patch.object(client, "_get", side_effect=[first, XClientServerError("fake 503")]):
             items, truncated = client.run_search("DeepSeek", max_results=100)
         assert [item["id"] for item in items] == ["first"]
         assert truncated is True
@@ -894,10 +894,10 @@ class TestWalkSearch:
 
 
 class TestRunSearch:
-    """TwitterApiClient.run_search uses _walk_search + handles since:. """
+    """XClient.run_search uses _walk_search + handles since:. """
 
     def _client(self):
-        return TwitterApiClient(api_key="test-key", base_url="https://api.example.com")
+        return XClient(api_key="test-key", base_url="https://api.example.com")
 
     def test_passes_since_only_when_caller_didnt(self):
         client = self._client()
@@ -971,7 +971,7 @@ def _qt(tid, text="q"):
 
 
 def test_get_quote_tweets_single_page_normalizes_and_params():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     body = {"tweets": [_qt("111", "hello")], "has_next_page": False}
     with patch.object(requests, "get", return_value=_mock_response(200, body)) as mg:
         out = client.get_quote_tweets("999")
@@ -983,14 +983,14 @@ def test_get_quote_tweets_single_page_normalizes_and_params():
 
 
 def test_get_quote_tweets_passes_since_time_as_unix():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     with patch.object(requests, "get", return_value=_mock_response(200, {"tweets": [], "has_next_page": False})) as mg:
         client.get_quote_tweets("999", since_time=1780000000)
     assert mg.call_args.kwargs["params"]["sinceTime"] == 1780000000
 
 
 def test_get_quote_tweets_paginates_via_cursor():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     p1 = {"tweets": [_qt("1"), _qt("2")], "has_next_page": True, "next_cursor": "c1"}
     p2 = {"tweets": [_qt("3")], "has_next_page": False}
     with patch.object(client, "_get", side_effect=[p1, p2]):
@@ -1001,7 +1001,7 @@ def test_get_quote_tweets_paginates_via_cursor():
 def test_get_quote_tweets_stops_on_empty_page_despite_has_next():
     """The has_next_page lie: an empty tweets list must stop iteration even
     when has_next_page is true (documented platform inconsistency)."""
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     p1 = {"tweets": [_qt("1")], "has_next_page": True, "next_cursor": "c1"}
     p2 = {"tweets": [], "has_next_page": True, "next_cursor": "c2"}  # empty!
     with patch.object(client, "_get", side_effect=[p1, p2, {"tweets": [_qt("x")]}]) as mg:
@@ -1011,7 +1011,7 @@ def test_get_quote_tweets_stops_on_empty_page_despite_has_next():
 
 
 def test_get_quote_tweets_max_pages_cap():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     page = {"tweets": [_qt("1")], "has_next_page": True, "next_cursor": "c"}
     with patch.object(client, "_get", side_effect=[page, page, page, page]) as mg:
         client.get_quote_tweets("999", max_pages=2)
@@ -1019,7 +1019,7 @@ def test_get_quote_tweets_max_pages_cap():
 
 
 def test_get_tweets_by_ids_returns_metrics_map():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     body = {"tweets": [
         {"id": "a", "quoteCount": 5, "retweetCount": 9, "replyCount": 1, "likeCount": 2},
         {"id": "b", "quoteCount": 0, "retweetCount": 3, "replyCount": 0, "likeCount": 0},
@@ -1032,7 +1032,7 @@ def test_get_tweets_by_ids_returns_metrics_map():
 
 
 def test_get_tweets_by_ids_chunks_long_list():
-    client = TwitterApiClient(api_key="x", max_retries=0)
+    client = XClient(api_key="x", max_retries=0)
     def fake(path, params):
         # Echo back the requested ids with zero counts.
         ids = params["tweet_ids"].split(",")
@@ -1047,7 +1047,7 @@ def test_get_tweets_by_ids_chunks_long_list():
 
 class TestListMembers:
     def test_complete_multi_page_snapshot_uses_stable_ids_and_cursor(self):
-        client = TwitterApiClient(api_key="x", max_retries=0)
+        client = XClient(api_key="x", max_retries=0)
         pages = [
             {
                 "members": [{"id": "1", "userName": "old_handle"}],
@@ -1087,14 +1087,14 @@ class TestListMembers:
         ],
     )
     def test_rejects_partial_or_malformed_snapshot(self, page, reason):
-        client = TwitterApiClient(api_key="x", max_retries=0)
+        client = XClient(api_key="x", max_retries=0)
         with patch.object(client, "_get", return_value=page):
             snapshot = client.run_list_members("42")
         assert snapshot.complete is False
         assert snapshot.reason == reason
 
     def test_duplicate_id_and_page_cap_are_incomplete(self):
-        client = TwitterApiClient(api_key="x", max_retries=0)
+        client = XClient(api_key="x", max_retries=0)
         duplicate_pages = [
             {"members": [{"id": "1"}], "has_next_page": True, "next_cursor": "x"},
             {"members": [{"id": "1"}], "has_next_page": False, "next_cursor": None},
@@ -1119,14 +1119,14 @@ class TestListMembers:
             def can_start(seconds):
                 return False
 
-        client = TwitterApiClient(api_key="x", max_retries=0)
+        client = XClient(api_key="x", max_retries=0)
         with patch.object(client, "_get") as get:
             snapshot = client.run_list_members("42", deadline=Deadline())
         assert snapshot.reason == "deadline_exhausted"
         get.assert_not_called()
 
     def test_list_members_uses_configured_request_timeout_and_rejects_empty(self):
-        client = TwitterApiClient(api_key="x", max_retries=0, timeout_s=60)
+        client = XClient(api_key="x", max_retries=0, timeout_s=60)
         body = {"members": [], "has_next_page": False, "next_cursor": None}
         with patch.object(
             requests, "get", return_value=_mock_response(200, body)
@@ -1139,7 +1139,7 @@ class TestListMembers:
         assert get.call_args.kwargs["timeout"] == 7
 
     def test_list_members_request_log_counts_members(self):
-        client = TwitterApiClient(api_key="x", max_retries=0)
+        client = XClient(api_key="x", max_retries=0)
         body = {
             "status": "success",
             "members": [{"id": "1", "userName": "member"}],
@@ -1158,7 +1158,7 @@ class TestListMembers:
 
 @pytest.mark.parametrize("encoded", [False, True])
 def test_normalize_tweet_preserves_provider_entities(provider_tweet_entities, encoded):
-    from x_monitor.apify import _normalize_tweet
+    from x_monitor.x_client import _normalize_tweet
     value = json.dumps(provider_tweet_entities) if encoded else provider_tweet_entities
     tweet = _normalize_tweet({"id": "1", "entities": value,
                               "author": {"entities": {"description": "separate"}}})
@@ -1168,6 +1168,6 @@ def test_normalize_tweet_preserves_provider_entities(provider_tweet_entities, en
 
 @pytest.mark.parametrize("value", [None, {}, "", "null", "{}", "[]", "bad json", [], 12, True])
 def test_normalize_tweet_empty_or_malformed_entities(value):
-    from x_monitor.apify import _normalize_tweet
+    from x_monitor.x_client import _normalize_tweet
     assert _normalize_tweet({"id": "1", "entities": value})["entities"] == {}
     assert _normalize_tweet({"id": "1"})["entities"] == {}

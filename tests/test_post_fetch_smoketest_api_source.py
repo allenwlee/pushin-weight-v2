@@ -7,10 +7,10 @@ Verifies:
 - Parser accepts the new flags (--query, --since, --max-pages,
   --max-per-page, --api-quiet).
 - --source=api-query without --query exits 2.
-- _load_api_posts calls TwitterApiClient.run_search with the right
+- _load_api_posts calls XClient.run_search with the right
   kwargs and maps the response into the smoketest's post dict shape.
 - Brand-keyword detection filters no-brand posts (U5 logic shared).
-- A fake TwitterApiClient returning 3 tweets — 1 multi-brand,
+- A fake XClient returning 3 tweets — 1 multi-brand,
   1 single-brand, 1 no-brand — yields 2 processed + 1 skipped.
 """
 
@@ -22,7 +22,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 
-class _FakeTwitterApiClient:
+class _FakeXClient:
     """Fake that returns canned tweets without network I/O."""
 
     def __init__(self, tweets: list[dict] | None = None):
@@ -102,15 +102,15 @@ def test_u6_parser_api_query_without_query_exits_2():
 
 
 def test_u6_load_api_posts_calls_run_search_with_correct_kwargs(monkeypatch):
-    """_load_api_posts invokes TwitterApiClient.run_search with the
+    """_load_api_posts invokes XClient.run_search with the
     exact kwargs from args, and injects `since:` when --since is set.
     """
     from scripts import post_fetch_smoketest
-    from x_monitor import apify
+    from x_monitor import x_client
 
-    fake = _FakeTwitterApiClient(tweets=[])
+    fake = _FakeXClient(tweets=[])
     monkeypatch.setattr(
-        apify.TwitterApiClient, "from_env", staticmethod(lambda purpose: fake)
+        x_client.XClient, "from_env", staticmethod(lambda purpose: fake)
     )
     # Stub the keyword index so detect_brand_mentions returns [].
     monkeypatch.setattr(
@@ -145,9 +145,9 @@ def test_u6_load_api_posts_calls_run_search_with_correct_kwargs(monkeypatch):
 def test_u6_load_api_posts_maps_author_handle_from_user_screen_name(monkeypatch):
     """Apify rows with `user.screen_name` get author_handle extracted."""
     from scripts import post_fetch_smoketest
-    from x_monitor import apify
+    from x_monitor import x_client
 
-    fake = _FakeTwitterApiClient(tweets=[
+    fake = _FakeXClient(tweets=[
         {
             "tweet_id": "abc123",
             "text": "Kimi K2.7 is awesome",
@@ -156,7 +156,7 @@ def test_u6_load_api_posts_maps_author_handle_from_user_screen_name(monkeypatch)
         },
     ])
     monkeypatch.setattr(
-        apify.TwitterApiClient, "from_env", staticmethod(lambda purpose: fake)
+        x_client.XClient, "from_env", staticmethod(lambda purpose: fake)
     )
 
     args = argparse.Namespace(
@@ -178,10 +178,10 @@ def test_u6_load_api_posts_maps_author_handle_from_user_screen_name(monkeypatch)
 def test_u6_load_api_posts_filters_no_brand_posts(monkeypatch):
     """U5 logic: posts with no monitored brand attribution are skipped."""
     from scripts import post_fetch_smoketest
-    from x_monitor import apify
+    from x_monitor import x_client
     from x_monitor.attribution import compile_keyword_index
 
-    fake = _FakeTwitterApiClient(tweets=[
+    fake = _FakeXClient(tweets=[
         # Multi-brand (kept)
         {"tweet_id": "t1", "text": "Kimi K2.7 and Deepseek V4 are great",
          "user": {"screen_name": "u1"}, "lang": "en"},
@@ -193,7 +193,7 @@ def test_u6_load_api_posts_filters_no_brand_posts(monkeypatch):
          "user": {"screen_name": "u3"}, "lang": "en"},
     ])
     monkeypatch.setattr(
-        apify.TwitterApiClient, "from_env", staticmethod(lambda purpose: fake)
+        x_client.XClient, "from_env", staticmethod(lambda purpose: fake)
     )
 
     args = argparse.Namespace(
@@ -214,11 +214,11 @@ def test_u6_load_api_posts_filters_no_brand_posts(monkeypatch):
 
 
 def test_u6_main_with_api_query_uses_fake_client(monkeypatch, tmp_path):
-    """End-to-end: --source=api-query plugs the fake TwitterApiClient
+    """End-to-end: --source=api-query plugs the fake XClient
     into main() and runs the pipeline in-memory.
     """
     from scripts import post_fetch_smoketest
-    from x_monitor import apify, translator
+    from x_monitor import translator, x_client
 
     # Need a populated brand_keywords table so compile_keyword_index
     # has real patterns. Use a tmp DB.
@@ -241,14 +241,14 @@ def test_u6_main_with_api_query_uses_fake_client(monkeypatch, tmp_path):
     monkeypatch.setattr(store_mod, "Store", Store)
 
     # Fake Twitter API client returns 2 brand-attributed tweets.
-    fake_api = _FakeTwitterApiClient(tweets=[
+    fake_api = _FakeXClient(tweets=[
         {"tweet_id": "z1", "text": "Kimi K2.7 is great",
          "user": {"screen_name": "u1"}, "lang": "en"},
         {"tweet_id": "z2", "text": "Kimi launches",
          "user": {"screen_name": "u2"}, "lang": "en"},
     ])
     monkeypatch.setattr(
-        apify.TwitterApiClient, "from_env", staticmethod(lambda purpose: fake_api)
+        x_client.XClient, "from_env", staticmethod(lambda purpose: fake_api)
     )
 
     # Stub the LLM client to avoid real API calls.

@@ -17,12 +17,6 @@ from typing import Any
 # Plan 2026-07-11-002 (U4): Account / role_tag moved from
 # x_monitor.accounts (deleted) to x_monitor.account_graph.
 from .account_graph import Account, role_tag
-from .apify import (
-    TwitterApiAuthError,
-    TwitterApiClient,
-    TwitterApiRateLimitError,
-    TwitterApiServerError,
-)
 
 # v1.8 (R15, R20): the per-tweet classification seam uses the
 # multi-brand `attribute_to_brands` + `classify_post` from
@@ -44,6 +38,12 @@ from .query_plan import MIN_FAVES_FOR_LIST_CALL, PlannedCall, plan_calls
 from .relevance import filter_posts  # noqa: F401 — re-exported for tests
 from .review import ReviewQueue
 from .store import Store
+from .x_client import (
+    XClient,
+    XClientAuthError,
+    XClientRateLimitError,
+    XClientServerError,
+)
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ def filter_and_review(
     brand_id: str,
     review: ReviewQueue,
     cache: HeadlinesCache | None = None,
-    api: TwitterApiClient | None = None,
+    api: XClient | None = None,
     run_fetches_used: list[int] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Per-model post-fetch pipeline: review-queue + headline enrichment.
@@ -795,7 +795,7 @@ class RunPipeline:
 
     def execute(
         self,
-        apify: TwitterApiClient,
+        client: XClient,
         *,
         model_filter: list[str] | None = None,
         query_filter: list[str] | None = None,
@@ -977,7 +977,7 @@ class RunPipeline:
                 # v1.6: build the per-cycle call list once. Account calls
                 # (1 per brand) come first, then intent calls (1-3 per
                 # bucket, split when over the operator cap). For each call:
-                #   1. Run apify.run_search (paginated since v1.6 commit 1).
+                #   1. Run client.run_search (paginated since v1.6 commit 1).
                 #   2. For intent calls, reclassify each tweet's
                 #      brand_id + source_query_id via attribute_to_brand
                 #      + classify_signal.
@@ -1052,7 +1052,7 @@ class RunPipeline:
                     # this PlannedCall. If present, subtract
                     # CURSOR_OVERLAP_HOURS so near-boundary posts
                     # don't fall between cycles, and pass it as the
-                    # `since=` kwarg. `apify.run_search` only injects
+                    # `since=` kwarg. `client.run_search` only injects
                     # it as a `since:` operator if the query string
                     # doesn't already contain one — no conflict
                     # with explicit `since:` strings.
@@ -1126,7 +1126,7 @@ class RunPipeline:
                             if self.max_pages_per_call is not None
                             else s.max_pages
                         )
-                        items = apify.run_search(
+                        items = client.run_search(
                             call.query_string,
                             max_results=max_results_cap,
                             since=since_cursor,
@@ -1134,11 +1134,11 @@ class RunPipeline:
                             max_pages=max_pages_cap,
                             max_per_page=s.max_per_page,
                         )
-                    except TwitterApiAuthError as e:
+                    except XClientAuthError as e:
                         summary["degraded"]["twitterapi_auth"] = str(e)
                         summary["status"] = "aborted"
                         break
-                    except (TwitterApiRateLimitError, TwitterApiServerError) as e:
+                    except (XClientRateLimitError, XClientServerError) as e:
                         summary["queries"].append(
                             {
                                 "brand_id": call.brand_id,
@@ -1222,7 +1222,7 @@ class RunPipeline:
                         # enrichment steps remain.
                         kept_m, drop_stats = filter_and_review(
                             m_items, synth_q, m_id, review,
-                            cache=cache, api=apify,
+                            cache=cache, api=client,
                             run_fetches_used=run_fetches_used,
                         )
                         kept_all.extend(kept_m)
@@ -1284,7 +1284,7 @@ class RunPipeline:
                     # U2 (cursor advance): only advance on success,
                     # AFTER filter/store completed. If any preceding
                     # step raised, we'd have already broken out of
-                    # the loop via TwitterApiAuthError / the
+                    # the loop via XClientAuthError / the
                     # rate-limit-and-server-error continues, so this
                     # point is reached only when the whole per-call
                     # pipeline succeeded. We do NOT advance on
@@ -1411,7 +1411,7 @@ class RunPipeline:
                     _t_qt_o = time.monotonic()
                     try:
                         qt_out = self._capture_official_quote_tweets(
-                            apify, store, qt_index, brand_search_terms_db, qt_staff,
+                            client, store, qt_index, brand_search_terms_db, qt_staff,
                         )
                         summary.setdefault("quote_tweets", {}).update(qt_out)
                     except Exception as e:  # never abort the run over QT capture
@@ -1424,7 +1424,7 @@ class RunPipeline:
                     _t_qt_d = time.monotonic()
                     try:
                         daily_out = self._capture_nonofficial_quote_tweets_daily(
-                            apify, store, qt_index, brand_search_terms_db, qt_staff,
+                            client, store, qt_index, brand_search_terms_db, qt_staff,
                         )
                         summary.setdefault("quote_tweets", {}).update(daily_out)
                     except Exception as e:  # never abort the run over QT capture
@@ -1451,12 +1451,12 @@ class RunPipeline:
                 summary["status"] = "completed" if not summary["degraded"] else "degraded"
             summary["finished_at"] = _now_iso()
             _t("total", _run_t0)
-            # Per-request HTTP log captured by TwitterApiClient._get.
+            # Per-request HTTP log captured by XClient._get.
             # Surfaced at the top level of the run JSON so scripts/
             # dump_http_log.py can post-process any past run without
-            # needing live access to the apify client.
+            # needing live access to the client client.
             try:
-                summary["http_log"] = list(apify._request_log)
+                summary["http_log"] = list(client._request_log)
             except AttributeError:
                 summary["http_log"] = []
             self._write_summary(run_id, summary)
@@ -1472,7 +1472,7 @@ class RunPipeline:
 
     def _capture_official_quote_tweets(
         self,
-        apify: TwitterApiClient,
+        client: XClient,
         store: Store,
         index: Any,
         brand_search_terms: dict[str, str],
@@ -1513,7 +1513,7 @@ class RunPipeline:
             return out
         # Batched refresh: one chunked call for every tracked post's counts.
         try:
-            fresh = apify.get_tweets_by_ids([r["tweet_id"] for r in rows])
+            fresh = client.get_tweets_by_ids([r["tweet_id"] for r in rows])
         except Exception as e:
             log.warning("official QT refresh failed: %s", e)
             out["official_refresh_error"] = str(e)
@@ -1532,7 +1532,7 @@ class RunPipeline:
                 continue
             since_time = _iso_to_epoch(r["last_quote_fetched_at"])
             try:
-                qts = apify.get_quote_tweets(
+                qts = client.get_quote_tweets(
                     tid, since_time=since_time, max_pages=cfg.max_pages
                 )
             except Exception as e:
@@ -1567,7 +1567,7 @@ class RunPipeline:
 
     def _capture_nonofficial_quote_tweets_daily(
         self,
-        apify: TwitterApiClient,
+        client: XClient,
         store: Store,
         index: Any,
         brand_search_terms: dict[str, str],
@@ -1624,7 +1624,7 @@ class RunPipeline:
             out["daily_ran"] = True
             return out
         try:
-            fresh = apify.get_tweets_by_ids([r["tweet_id"] for r in rows])
+            fresh = client.get_tweets_by_ids([r["tweet_id"] for r in rows])
         except Exception as e:
             log.warning("daily QT refresh failed: %s", e)
             out["daily_refresh_error"] = str(e)
@@ -1642,7 +1642,7 @@ class RunPipeline:
             if delta >= 1:
                 since_time = _iso_to_epoch(r["last_quote_fetched_at"])
                 try:
-                    qts = apify.get_quote_tweets(
+                    qts = client.get_quote_tweets(
                         tid, since_time=since_time, max_pages=cfg.max_pages
                     )
                 except Exception as e:
@@ -1802,7 +1802,7 @@ class RunPipeline:
 
     # --- resume ----------------------------------------------------------
 
-    def resume(self, run_id: str, apify: TwitterApiClient) -> dict[str, Any]:
+    def resume(self, run_id: str, client: XClient) -> dict[str, Any]:
         """Re-read raw JSON for a prior run and re-attempt inserts.
 
         Does NOT call Apify. Idempotent on tweet_id.

@@ -32,7 +32,7 @@ from core.profile_snapshots import (
 )
 from monitor.cycle import CycleRunner
 from tests.person_factory import person_with_name
-from x_monitor.apify import _normalize_tweet
+from x_monitor.x_client import _normalize_tweet
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 

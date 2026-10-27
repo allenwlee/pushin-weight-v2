@@ -16,8 +16,8 @@ from core.models import (
     TwitterListMembership,
     TwitterListSyncState,
 )
-from x_monitor.apify import ListMembersSnapshot, TwitterApiClient
 from x_monitor.config import Config
+from x_monitor.x_client import ListMembersSnapshot, XClient
 
 
 @dataclass
@@ -295,7 +295,7 @@ def reconcile_complete_snapshot(
 
 def run_due_reconciliation(
     *,
-    api: TwitterApiClient,
+    api: XClient,
     cfg: Config,
     list_id: int,
     deadline: Any,

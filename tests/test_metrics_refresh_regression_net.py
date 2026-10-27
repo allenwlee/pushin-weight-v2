@@ -41,9 +41,9 @@ def test_P_U1_post_engagement_columns_exist():
 
 def test_P_U2_get_tweets_by_ids_maps_counts():
     """P-U2: by-ids maps likeCount→like_count etc."""
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
-    client = TwitterApiClient(api_key="x")
+    client = XClient(api_key="x")
     payload = {
         "tweets": [
             {
@@ -103,17 +103,17 @@ def test_P_A5_A6_metrics_refresh_config_defaults():
     ({"status": "success", "tweets": [None]}, TypeError),
 ])
 def test_by_id_provider_errors_are_not_silent_missing_posts(payload, exception):
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
-    client = TwitterApiClient(api_key="test")
+    client = XClient(api_key="test")
     with patch.object(client, "_get", return_value=payload), pytest.raises(exception):
         client.get_tweets_by_ids(["99"])
 
 
 def test_by_id_missing_counts_remain_unknown():
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
-    client = TwitterApiClient(api_key="test")
+    client = XClient(api_key="test")
     with patch.object(client, "_get", return_value={"tweets": [{"id": "99", "likeCount": 0}]}):
         result = client.get_tweets_by_ids(["99"])
     assert result == {"99": {"like_count": 0}}

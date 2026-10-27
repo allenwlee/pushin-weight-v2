@@ -28,9 +28,9 @@ import pytest
 
 from monitor import cycle as cycle_mod
 from monitor.cycle import CycleRunner
-from x_monitor.apify import TwitterApiRateLimitError, TwitterApiServerError
 from x_monitor.config import CycleConfig
 from x_monitor.query_plan import PlannedCall
+from x_monitor.x_client import XClientRateLimitError, XClientServerError
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 _CYCLE_DEFAULTS = CycleConfig()
@@ -83,7 +83,7 @@ def harvest(monkeypatch, seeded_policy_keywords):
         api = ScriptedApi(script)
         monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: list(calls))
         monkeypatch.setattr(
-            cycle_mod.TwitterApiClient,
+            cycle_mod.XClient,
             "from_env",
             classmethod(lambda cls, _purpose: api),
         )
@@ -182,7 +182,7 @@ def test_failed_cycle_does_not_advance_the_cursor(harvest):
     harvest(call, [[_tweet("1")]])
     first = CallState.objects.get().last_completed_at
 
-    harvest(call, [TwitterApiRateLimitError("429")])
+    harvest(call, [XClientRateLimitError("429")])
     assert CallState.objects.get().last_completed_at == first, (
         "cursor moved despite a failed fetch; that window is now unreachable"
     )
@@ -197,7 +197,7 @@ def test_cycle_after_a_failure_recovers_the_missed_span(harvest):
     """
     call = [_call()]
     a1, _ = harvest(call, [[_tweet("1")]])
-    a2, _ = harvest(call, [TwitterApiRateLimitError("429")])
+    a2, _ = harvest(call, [XClientRateLimitError("429")])
     a3, _ = harvest(call, [[_tweet("3")]])
 
     cycle1_until = _window(a1)[1]
@@ -220,7 +220,7 @@ def test_server_error_also_holds_the_cursor(harvest):
     call = [_call()]
     harvest(call, [[_tweet("1")]])
     first = CallState.objects.get().last_completed_at
-    harvest(call, [TwitterApiServerError("503")])
+    harvest(call, [XClientServerError("503")])
     assert CallState.objects.get().last_completed_at == first
 
 
@@ -230,7 +230,7 @@ def test_recovery_resumes_normal_advance(harvest):
     call = [_call()]
     harvest(call, [[_tweet("1")]])
     held = CallState.objects.get().last_completed_at
-    harvest(call, [TwitterApiRateLimitError("429")])
+    harvest(call, [XClientRateLimitError("429")])
     harvest(call, [[_tweet("3")]])
     assert CallState.objects.get().last_completed_at >= held, (
         "cursor regressed after a recovered failure"
@@ -292,7 +292,7 @@ def test_one_failing_call_does_not_stall_the_others_cursors(harvest):
 
     calls = [_call("B1"), _call("B2", "doubao")]
     # B1 fails, B2 succeeds (script is consumed in call order).
-    harvest(calls, [TwitterApiRateLimitError("429"), [_tweet("1")]])
+    harvest(calls, [XClientRateLimitError("429"), [_tweet("1")]])
 
     assert not CallState.objects.filter(call_id="B1").exists()
     assert CallState.objects.filter(call_id="B2").exists(), (

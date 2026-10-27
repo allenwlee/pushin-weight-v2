@@ -23,7 +23,7 @@ RUNTIME_MODULES = {
     "scripts/backfill_campaign.py",
     "monitor/management/commands/run_backfill.py",
     "monitor/backfill_prefetch.py",
-    "x_monitor/apify.py",
+    "x_monitor/x_client.py",
     "scripts/backfill_verify.py",
 }
 

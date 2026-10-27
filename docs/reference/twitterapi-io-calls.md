@@ -48,7 +48,7 @@ Each cycle:
 
 1. **Plan calls** via `x_monitor/query_plan.py::plan_calls()` — returns a
    list of `PlannedCall` objects (7: A + B1/B2/B3 + C1/C2/C3).
-2. **Fetch tweets** via `TwitterApiClient.run_search()` — shared library
+2. **Fetch tweets** via `XClient.run_search()` — shared library
    code that wraps the TwitterAPI.io REST API.
 3. **Attribute to brands** via `x_monitor/attribution.py::attribute_to_brands()`
    — stamps `brand_id`, `brand_ids`, and `mentions` on each tweet.
@@ -131,7 +131,7 @@ video app, "kimi" matches an F1 driver and a Turkish interrogative).
 
 **Used by:** every cycle call (A + B1/B2/B3 + C1/C2/C3).
 
-**Method:** `TwitterApiClient.run_search(query, max_results, since, ...)`
+**Method:** `XClient.run_search(query, max_results, since, ...)`
 → `_walk_search(query, max_results, max_pages=5, max_per_page=20)`.
 
 **Per-page cap:** 20 tweets (the TwitterAPI.io platform cap; the live
@@ -193,7 +193,7 @@ wide-net B/C calls may produce empty results for low-volume brands.
 **Used by:** NOT currently wired in the v2 cycle. Available in the shared
 client for future headline enrichment of URL-only posts.
 
-**Method:** `TwitterApiClient.get_article(tweet_id)`.
+**Method:** `XClient.get_article(tweet_id)`.
 
 **Credit cost:** 100 credits per call.
 
@@ -206,7 +206,7 @@ client for future headline enrichment of URL-only posts.
 **Used by:** NOT currently wired in the v2 cycle. Available in the shared
 client for operator diagnostics (e.g., verifying canonical handles).
 
-**Method:** `TwitterApiClient.user_info(handle)`.
+**Method:** `XClient.user_info(handle)`.
 
 **Credit cost:** ~1 credit per call (low-cost endpoint).
 
@@ -219,7 +219,7 @@ client for operator diagnostics (e.g., verifying canonical handles).
 **Used by:** NOT currently wired in the v2 cycle. Available in the shared
 client for operator-initiated account bootstrapping.
 
-**Method:** `TwitterApiClient.run_followers(handle, max_results)`.
+**Method:** `XClient.run_followers(handle, max_results)`.
 
 **Per-page cap:** 200 followers (always request 200 — cheapest per-item
 price at 1 credit each).
@@ -231,7 +231,7 @@ price at 1 credit each).
 **Used by:** NOT currently wired in the v2 cycle. Available in the shared
 client for future QT-capture regimes.
 
-**Method:** `TwitterApiClient.get_quote_tweets(tweet_id, since_time=..., max_pages=5)`.
+**Method:** `XClient.get_quote_tweets(tweet_id, since_time=..., max_pages=5)`.
 
 **Per-page cap:** 20 quotes. Pagination stops on empty page OR `has_next_page=false`.
 
@@ -243,7 +243,7 @@ client for future QT-capture regimes.
 client for cheap `quote_count` refreshes (one call returns metrics for up
 to 50 tweet IDs).
 
-**Method:** `TwitterApiClient.get_tweets_by_ids(tweet_ids)`.
+**Method:** `XClient.get_tweets_by_ids(tweet_ids)`.
 
 **Chunk size:** 50 IDs per call (auto-split for longer lists).
 
@@ -255,7 +255,7 @@ to 50 tweet IDs).
 
 **Used by:** scheduled cycles when the configured six-hour reconciliation is due.
 
-**Method:** `TwitterApiClient.run_list_members(list_id, ...)`.
+**Method:** `XClient.run_list_members(list_id, ...)`.
 
 **Vendor contract:** page size is fixed at 20. Send only required `list_id` and
 the optional `cursor`; `page_size` is not a supported query parameter. See the
@@ -322,7 +322,7 @@ objects.
 ### Phase 2: Fetch
 
 For each `PlannedCall`, `_fetch_tweets()` calls
-`TwitterApiClient.run_search(call.query_string, max_results=<config>,
+`XClient.run_search(call.query_string, max_results=<config>,
 max_pages=<config>, max_per_page=20)`. The `max_results` and `max_pages`
 values come from `config.search.{max_results, max_pages}` (2000 and 100
 on Render); the CLI flags `--limit-per-call` and `--max-pages-per-call`
@@ -373,14 +373,14 @@ current v2 cycle skips LLM calls entirely.
 
 ## Rate limiting and backoff
 
-`TwitterApiClient._get()` handles errors uniformly across all endpoints:
+`XClient._get()` handles errors uniformly across all endpoints:
 
 | HTTP code | Behavior |
 |-----------|----------|
 | 200 | Return `r.json()`. |
-| 401 | Raise `TwitterApiAuthError` (fatal — aborts the cycle). |
-| 429 | Retry with backoff (4s, 8s); raise `TwitterApiRateLimitError` after exhaustion. |
-| 5xx | Retry with backoff (1s, 2s); raise `TwitterApiServerError` after exhaustion. |
+| 401 | Raise `XClientAuthError` (fatal — aborts the cycle). |
+| 429 | Retry with backoff (4s, 8s); raise `XClientRateLimitError` after exhaustion. |
+| 5xx | Retry with backoff (1s, 2s); raise `XClientServerError` after exhaustion. |
 | Other 4xx | Raise `RuntimeError` with response text (first 200 chars). |
 | Network error | Retry with backoff (1s, 2s); re-raise after exhaustion. |
 
@@ -440,4 +440,4 @@ cookie-rot failure mode are gone.
 
 
 
-Last reviewed: 2026-09-21 12:39:30 JST — Detailed call inventory reconciled with monitor/cycle.py, x_monitor/apify.py, config.yaml, harvest policy, and current v2 credential/scheduler boundaries. Provider credit totals remain runtime-only.
+Last reviewed: 2026-09-21 12:39:30 JST — Detailed call inventory reconciled with monitor/cycle.py, x_monitor/x_client.py, config.yaml, harvest policy, and current v2 credential/scheduler boundaries. Provider credit totals remain runtime-only.

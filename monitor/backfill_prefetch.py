@@ -27,16 +27,16 @@ from core.models import (
 )
 from monitor.backfill_resources import BackfillBudgetExhausted
 from monitor.run_lock import backfill_yield_requested, harvest_writer_lock
-from x_monitor.apify import (
-    SEARCH_PATH,
-    TWITTERAPI_BASE,
-    TwitterApiClient,
-    _search_results,
-    search_page_from_response,
-)
 from x_monitor.twitterapi_credentials import (
     TwitterApiCredentialPurpose,
     require_twitterapi_api_key,
+)
+from x_monitor.x_client import (
+    SEARCH_PATH,
+    TWITTERAPI_BASE,
+    XClient,
+    _search_results,
+    search_page_from_response,
 )
 
 
@@ -87,7 +87,7 @@ class TransportResult:
 def fetch_page(api_key, params, *, max_bytes, timeout):
     """One physical call, using the same client and status mapping as harvesting."""
     bodies, receipts = [], []
-    client = TwitterApiClient(api_key=api_key, max_retries=0, timeout_s=timeout,
+    client = XClient(api_key=api_key, max_retries=0, timeout_s=timeout,
                               max_response_bytes=max_bytes, after_response=receipts.append)
     start = time.monotonic()
     error = None
@@ -108,7 +108,7 @@ def fetch_page(api_key, params, *, max_bytes, timeout):
 
 def _params(scope):
     owner = x_scope_ownership(scope)
-    query = TwitterApiClient._effective_search_query(
+    query = XClient._effective_search_query(
         owner["query"], since=None, since_time=owner["since_epoch"], until_time=owner["until_epoch"],
     )
     params = {"query": query, "queryType": "Latest", "limit": 20}

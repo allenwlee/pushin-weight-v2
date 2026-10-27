@@ -18,8 +18,8 @@ from monitor.cycle import CycleRunner, _build_brand_index, _load_brand_search_te
 from scripts.backfill_verify import semantic_snapshot, verify_posts
 from tests.test_backfill_direct_enrichment import DirectProvider, run_direct
 from tests.test_backfill_native_enrichment import native as native_fixture
-from x_monitor.apify import _normalize_tweet
 from x_monitor.deepinfra import DeepInfraChatCompletionsClient
+from x_monitor.x_client import _normalize_tweet
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 native = native_fixture

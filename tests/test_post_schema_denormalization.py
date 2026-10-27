@@ -20,7 +20,6 @@ import pytest
 
 from tests.conftest import requires_postgres
 
-
 # --- Goal schema: the literal column set from plan § 1.1 / 1.2 / 1.3 ---
 # Each entry: (column_name, nullable, type_family). type_family is a
 # coarse category used to detect gross type drift, not exact type matches.
@@ -335,7 +334,7 @@ def test_no_orphan_quoted_fk():
 
 def test_normalize_tweet_extracts_new_tweet_fields():
     """_normalize_tweet returns the new § 1.2 typed-column keys."""
-    from x_monitor.apify import _normalize_tweet
+    from x_monitor.x_client import _normalize_tweet
 
     fixture = {
         "id": "123",
@@ -383,7 +382,7 @@ def test_normalize_tweet_extracts_new_tweet_fields():
 
 def test_normalize_tweet_extracts_new_author_fields():
     """_normalize_tweet returns the new § 1.3 author keys (None when absent)."""
-    from x_monitor.apify import _normalize_tweet
+    from x_monitor.x_client import _normalize_tweet
 
     out = _normalize_tweet(
         {
@@ -429,7 +428,7 @@ def test_normalize_tweet_extracts_new_author_fields():
 
 def test_normalize_uses_none_for_absent_new_fields():
     """§ 1.7: missing API keys → None, not 0/false coercion."""
-    from x_monitor.apify import _normalize_tweet
+    from x_monitor.x_client import _normalize_tweet
 
     out = _normalize_tweet({"id": "1", "author": {"userName": "x"}})
     assert out.get("view_count") is None
@@ -450,7 +449,7 @@ def test_normalize_uses_none_for_absent_new_fields():
 
 def test_normalize_does_not_emit_raw_key():
     """U4: the normalizer no longer leaves a 'raw' key in the returned dict."""
-    from x_monitor.apify import _normalize_tweet
+    from x_monitor.x_client import _normalize_tweet
 
     out = _normalize_tweet({"id": "1", "author": {"userName": "x"}})
     assert "raw" not in out, "_normalize_tweet still emits a 'raw' key (U4 incomplete)"

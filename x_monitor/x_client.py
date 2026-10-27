@@ -37,7 +37,7 @@ LIST_MEMBERS_PATH = "/twitter/list/members"
 # Per docs TwitterAPI.io caps each advanced_search response at 20 tweets.
 # We paginate via next_cursor to retrieve up to max_results. The per-page
 # cap is now passed in by the caller (SearchConfig.max_per_page, default
-# 20) — see TwitterApiClient.run_search / _walk_search.
+# 20) — see XClient.run_search / _walk_search.
 USER_INFO_PATH = "/twitter/user/info"
 # v1.4: long-form X article body. Cost: 100 credits per article.
 ARTICLE_PATH = "/twitter/article"
@@ -60,15 +60,15 @@ TWEETS_BY_IDS_PATH = "/twitter/tweets"
 TWEETS_BY_IDS_CHUNK = 50
 
 
-class TwitterApiAuthError(RuntimeError):
+class XClientAuthError(RuntimeError):
     """Raised on HTTP 401 (X-API-Key missing or invalid)."""
 
 
-class TwitterApiRateLimitError(RuntimeError):
+class XClientRateLimitError(RuntimeError):
     """Raised on HTTP 429."""
 
 
-class TwitterApiServerError(RuntimeError):
+class XClientServerError(RuntimeError):
     """Raised on HTTP 5xx."""
 
 
@@ -135,7 +135,7 @@ class ListMembersSnapshot:
 
 
 @dataclass
-class TwitterApiClient:
+class XClient:
     """REST client for TwitterAPI.io.
 
     Replaces the previous ApifyClient. Callers must declare whether they are
@@ -161,7 +161,7 @@ class TwitterApiClient:
     def from_env(
         cls,
         purpose: TwitterApiCredentialPurpose,
-    ) -> TwitterApiClient:
+    ) -> XClient:
         return cls(api_key=require_twitterapi_api_key(purpose))
 
     # --- low-level HTTP --------------------------------------------------
@@ -239,7 +239,7 @@ class TwitterApiClient:
                     "response_bytes": len(r.content),
                 })
             if r.status_code == 401:
-                exc = TwitterApiAuthError(
+                exc = XClientAuthError(
                     f"TwitterAPI.io auth failed: {r.text[:200]}"
                 )
                 exc.response_status_code = r.status_code
@@ -248,7 +248,7 @@ class TwitterApiClient:
                 if attempt < self.max_retries:
                     time.sleep(2 ** (attempt + 2))
                     continue
-                exc = TwitterApiRateLimitError(
+                exc = XClientRateLimitError(
                     f"TwitterAPI.io rate limit: {r.text[:200]}"
                 )
                 exc.response_status_code = r.status_code
@@ -259,7 +259,7 @@ class TwitterApiClient:
                 )
                 raise exc
             if 500 <= r.status_code < 600:
-                last_exc = TwitterApiServerError(
+                last_exc = XClientServerError(
                     f"TwitterAPI.io 5xx: {r.status_code}"
                 )
                 if attempt < self.max_retries:
@@ -905,8 +905,8 @@ class TwitterApiClient:
         followers_count, verified. Returns None if the user is not found
         (HTTP 200 but no `data`).
 
-        Raises TwitterApiAuthError on 401, TwitterApiRateLimitError on 429,
-        TwitterApiServerError on 5xx, RuntimeError on other 4xx.
+        Raises XClientAuthError on 401, XClientRateLimitError on 429,
+        XClientServerError on 5xx, RuntimeError on other 4xx.
         """
         data = self._get(USER_INFO_PATH, {"userName": handle})
         # TwitterAPI.io shape: { "data": { ...user... }, "status": "success" }
@@ -934,8 +934,8 @@ class TwitterApiClient:
         is not found (HTTP 200 but no `article` key) or if the
         underlying tweet has no long-form article attached.
 
-        Raises TwitterApiAuthError on 401, TwitterApiRateLimitError on
-        429, TwitterApiServerError on 5xx, RuntimeError on other 4xx.
+        Raises XClientAuthError on 401, XClientRateLimitError on
+        429, XClientServerError on 5xx, RuntimeError on other 4xx.
         Cost: 100 credits per call.
         """
         if not tweet_id:
@@ -956,9 +956,9 @@ class TwitterApiClient:
         """
         try:
             data = self._get(USER_INFO_PATH, {"userName": "MiniMaxAI"})
-        except TwitterApiAuthError:
+        except XClientAuthError:
             return False
-        except (TwitterApiRateLimitError, TwitterApiServerError, requests.RequestException):
+        except (XClientRateLimitError, XClientServerError, requests.RequestException):
             return True  # transient — not a liveness failure
         except Exception:
             return False

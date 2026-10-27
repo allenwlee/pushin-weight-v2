@@ -13,7 +13,7 @@ Two regressions to pin:
   (a) The CLI flag must exist with `default=None` so production
       behavior is unchanged when the flag is omitted.
   (b) When the operator sets --max-pages-per-call N, N must flow
-      all the way to the apify.run_search() max_pages= kwarg.
+      all the way to the client.run_search() max_pages= kwarg.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ import re
 from pathlib import Path
 
 import pytest
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -75,7 +74,7 @@ def test_run_pipeline_stashes_max_pages_per_call() -> None:
 
 
 def test_fetch_call_site_uses_max_pages_per_call_override() -> None:
-    """The apify.run_search() call must use max_pages_per_call when set,
+    """The client.run_search() call must use max_pages_per_call when set,
     else fall back to cfg.search.max_pages."""
     src = _read("x_monitor/run.py")
     # The local var name `max_pages_cap` is the seam.
@@ -84,5 +83,5 @@ def test_fetch_call_site_uses_max_pages_per_call_override() -> None:
         "self.max_pages_per_call over s.max_pages."
     )
     assert "max_pages=max_pages_cap" in src, (
-        "apify.run_search(...) must be called with max_pages=max_pages_cap."
+        "client.run_search(...) must be called with max_pages=max_pages_cap."
     )

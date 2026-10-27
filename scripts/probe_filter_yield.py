@@ -305,8 +305,8 @@ def _kept_after_filter(items: list[dict]) -> int:
     """Count tweets whose text contains at least one monitored brand
     token. Reads the keyword index from the live DB via a Store
     instance — the same index production uses."""
-    from x_monitor.store import Store
     from x_monitor.attribution import compile_keyword_index, detect_brand_mentions
+    from x_monitor.store import Store
 
     db_path = REPO_ROOT / "data" / "x_monitoring.db"
     if not db_path.exists():
@@ -510,10 +510,10 @@ def main() -> int:
         )
         return 2
 
-    from x_monitor.apify import TwitterApiClient
     from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    from x_monitor.x_client import XClient
 
-    client = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+    client = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
 
     # Run the actual probe.
     all_rows: list[dict] = []

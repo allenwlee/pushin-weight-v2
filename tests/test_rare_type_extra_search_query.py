@@ -95,7 +95,7 @@ def test_rendered_query_uses_provider_renderer_and_stays_under_512(
 ) -> None:
     import x_monitor.rare_type_extra_search as mod
 
-    real_renderer = mod.TwitterApiClient._effective_search_query
+    real_renderer = mod.XClient._effective_search_query
     captured: dict[str, object] = {}
 
     def capture(query, *, since, since_time, until_time):
@@ -112,7 +112,7 @@ def test_rendered_query_uses_provider_renderer_and_stays_under_512(
             until_time=until_time,
         )
 
-    monkeypatch.setattr(mod.TwitterApiClient, "_effective_search_query", capture)
+    monkeypatch.setattr(mod.XClient, "_effective_search_query", capture)
     rendered = render_rare_type_extra_search_query(
         since_time=since_time,
         until_time=until_time,

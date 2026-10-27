@@ -21,7 +21,7 @@ from tests.test_backfill_staging import (  # noqa: F401
     result_for,
     staged_job,
 )
-from x_monitor.apify import TwitterApiClient
+from x_monitor.x_client import XClient
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
@@ -49,7 +49,7 @@ def clock(monkeypatch):
 
 
 def lose_response(monkeypatch, predicate):
-    original = TwitterApiClient._get_bounded
+    original = XClient._get_bounded
 
     def bounded(self, url, params, timeout):
         response = original(self, url, params, timeout)
@@ -57,7 +57,7 @@ def lose_response(monkeypatch, predicate):
             raise requests.Timeout("fixture lost reply")
         return response
 
-    monkeypatch.setattr(TwitterApiClient, "_get_bounded", bounded)
+    monkeypatch.setattr(XClient, "_get_bounded", bounded)
 
 
 def test_timeout_retries_exact_cursor_without_rewriting_unknown_receipt(http_pages, monkeypatch, clock):  # noqa: F811

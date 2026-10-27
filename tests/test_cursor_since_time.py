@@ -20,7 +20,7 @@ that behavior. The `since:` operator form remains as a defensive
 date floor.
 
 This test pins:
-  (a) apify.run_search accepts `since_time` and injects it into the
+  (a) x_client.run_search accepts `since_time` and injects it into the
       query string as ` since_time:<epoch>` (NOT as a `sinceTime`
       URL param, which TwitterAPI.io silently drops).
   (b) run.py converts prior_iso to unix epoch (NOT date-only
@@ -43,12 +43,12 @@ def _read(path: str) -> str:
 
 
 def test_apify_run_search_accepts_since_time_kwarg() -> None:
-    """apify.run_search must accept `since_time: int | None = None`
+    """x_client.run_search must accept `since_time: int | None = None`
     as a keyword-only argument."""
-    src = _read("x_monitor/apify.py")
+    src = _read("x_monitor/x_client.py")
     pattern = r"def run_search\([^{]*since_time:\s*int\s*\|\s*None\s*=\s*None"
     assert re.search(pattern, src, re.DOTALL), (
-        "apify.run_search must accept since_time: int | None = None"
+        "x_client.run_search must accept since_time: int | None = None"
     )
 
 
@@ -56,7 +56,7 @@ def test_run_search_injects_since_time_as_inline_operator() -> None:
     """run_search must inject `since_time:<epoch>` INTO THE QUERY STRING
     (the only form TwitterAPI.io honors on advanced_search), NOT as a
     separate URL param."""
-    src = _read("x_monitor/apify.py")
+    src = _read("x_monitor/x_client.py")
     # Look for the explicit inline-operator injection in run_search.
     pattern = r"effective_query\s*=\s*f\"\{effective_query\}\s*since_time:\{int\(since_time\)\}\""
     assert re.search(pattern, src), (
@@ -70,7 +70,7 @@ def test_run_search_injects_since_time_as_inline_operator() -> None:
 def test_walk_search_does_not_write_since_time_as_url_param() -> None:
     """_walk_search must NOT write `params['sinceTime']` in its body —
     TwitterAPI.io silently drops unknown URL params on advanced_search."""
-    src = _read("x_monitor/apify.py")
+    src = _read("x_monitor/x_client.py")
     # We slice from the first executable statement after the docstring
     # (the `out: list[dict[str, Any]] = []` line) up to the matching
     # `return` — docstrings may legitimately mention `sinceTime`.
@@ -89,9 +89,9 @@ def test_walk_search_does_not_write_since_time_as_url_param() -> None:
 
 def test_walk_search_does_not_inject_since_time_into_query_string() -> None:
     """_walk_search forwards an already bounded query without duplication."""
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
-    api = TwitterApiClient(api_key="test")
+    api = XClient(api_key="test")
     captured: dict[str, str] = {}
 
     def fake_pages(query, *_args, **_kwargs):
@@ -123,11 +123,11 @@ def test_run_py_converts_prior_iso_to_unix_epoch() -> None:
 
 
 def test_run_py_passes_since_time_to_run_search() -> None:
-    """run.py must pass since_time=since_time_epoch to apify.run_search."""
+    """run.py must pass since_time=since_time_epoch to x_client.run_search."""
     src = _read("x_monitor/run.py")
     assert "since_time=since_time_epoch" in src, (
         "run.py must thread `since_time=since_time_epoch` to "
-        "apify.run_search() so the unix-epoch cursor reaches TwitterAPI.io."
+        "x_client.run_search() so the unix-epoch cursor reaches TwitterAPI.io."
     )
 
 
@@ -154,10 +154,10 @@ def test_since_date_form_kept_as_defensive_floor() -> None:
 
 
 def test_apify_run_search_injects_since_time_into_query_end_to_end() -> None:
-    """End-to-end smoke: when apify.run_search is called with
+    """End-to-end smoke: when x_client.run_search is called with
     since_time, the rendered query string contains `since_time:<n>`
     and the URL params dict does NOT carry a separate sinceTime."""
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
     # Mock the network layer so we can introspect the params dict.
     captured: dict = {}
@@ -167,7 +167,7 @@ def test_apify_run_search_injects_since_time_into_query_end_to_end() -> None:
         captured["params"] = dict(params)
         return {"tweets": [], "has_next_page": False, "next_cursor": None}
 
-    api = TwitterApiClient(api_key="test")
+    api = XClient(api_key="test")
     api._get = fake_get  # type: ignore[method-assign]
 
     api.run_search(
@@ -195,12 +195,12 @@ def test_run_search_injects_until_time_when_since_time_set(monkeypatch) -> None:
     matching upper bound `until_time:<now>` per TwitterAPI.io's working
     pattern. Both bounds must be inline operators (URL-param forms are
     silently dropped)."""
-    from x_monitor import apify
+    from x_monitor import x_client
 
     now = 1735689660
-    monkeypatch.setattr(apify.time, "time", lambda: now)
+    monkeypatch.setattr(x_client.time, "time", lambda: now)
 
-    query = apify.TwitterApiClient._effective_search_query(
+    query = x_client.XClient._effective_search_query(
         "minimax", since=None, since_time=1735689600, until_time=None
     )
 
@@ -212,7 +212,7 @@ def test_apify_run_search_injects_both_bounds_end_to_end() -> None:
     string contains BOTH `since_time:<n>` and `until_time:<now>`."""
     import time as _time
 
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
     captured: dict = {}
 
@@ -220,7 +220,7 @@ def test_apify_run_search_injects_both_bounds_end_to_end() -> None:
         captured["params"] = dict(params)
         return {"tweets": [], "has_next_page": False, "next_cursor": None}
 
-    api = TwitterApiClient(api_key="test")
+    api = XClient(api_key="test")
     api._get = fake_get  # type: ignore[method-assign]
 
     before = int(_time.time())
@@ -258,7 +258,7 @@ def test_run_search_no_until_time_when_no_since_time() -> None:
     """If the caller doesn't pass since_time, run_search must NOT inject
     until_time either — that would be a behavior change for callers that
     only want a static query."""
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
     captured: dict = {}
 
@@ -266,7 +266,7 @@ def test_run_search_no_until_time_when_no_since_time() -> None:
         captured["params"] = dict(params)
         return {"tweets": [], "has_next_page": False, "next_cursor": None}
 
-    api = TwitterApiClient(api_key="test")
+    api = XClient(api_key="test")
     api._get = fake_get  # type: ignore[method-assign]
 
     api.run_search(

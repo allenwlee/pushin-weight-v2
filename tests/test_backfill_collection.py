@@ -20,14 +20,14 @@ from monitor.backfill_collection import ADAPTER_VERSION, config_digest
 from monitor.backfill_resources import bounded_backfill_config
 from tests.test_backfill_pipeline import page
 from tests.test_backfill_pipeline import pipeline as captured_pipeline
-from x_monitor.apify import TwitterApiClient
 from x_monitor.config import load_config
 from x_monitor.reattribute import (
     build_relevancy_client_from_env as REAL_RELEVANCY_FACTORY,
 )
+from x_monitor.x_client import XClient
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
-REAL_FACTORY = TwitterApiClient.__dict__["from_env"]
+REAL_FACTORY = XClient.__dict__["from_env"]
 pipeline = pytest.fixture(name="pipeline")(captured_pipeline.__wrapped__)
 
 
@@ -197,11 +197,11 @@ def test_native_page_yields_to_scheduled_tick_and_resumes_exact_cursor(pipeline,
 
     from monitor.management.commands.run_cycle import Command
     from tests.test_cycle_run_lock import wait_for_live_queue
-    from x_monitor import apify
+    from x_monitor import x_client
 
     job = ready_job(requests=3)
     pipeline.responses.extend([page("1", cursor="after-paid-page"), page("2")])
-    original_get = apify.requests.get
+    original_get = x_client.requests.get
     scheduled_futures = []
     live_saw_checkpoint = []
 
@@ -228,7 +228,7 @@ def test_native_page_yields_to_scheduled_tick_and_resumes_exact_cursor(pipeline,
                 wait_for_live_queue()
             return original_get(*args, **kwargs)
 
-        monkeypatch.setattr("x_monitor.apify.requests.get", fetch)
+        monkeypatch.setattr("x_monitor.x_client.requests.get", fetch)
         first = run(job)
         scheduled_futures[0].result(timeout=5)
     assert len(pipeline.requests) == 1
@@ -237,7 +237,7 @@ def test_native_page_yields_to_scheduled_tick_and_resumes_exact_cursor(pipeline,
     first_run = CollectionRun.objects.get(pk=first["run_id"])
     assert first_run.request_count == 1
     assert first_run.scopes.get(scope_kind="x_query").cursor == "after-paid-page"
-    monkeypatch.setattr("x_monitor.apify.requests.get", original_get)
+    monkeypatch.setattr("x_monitor.x_client.requests.get", original_get)
     resumed = run(job)
     assert resumed["collection_drained"]
     assert pipeline.requests[1]["cursor"] == "after-paid-page"
@@ -313,13 +313,13 @@ def test_page_failure_rolls_back_all_posts_and_keeps_cursor(pipeline, monkeypatc
 def test_pausing_during_fetch_rejects_post_and_cursor(pipeline, monkeypatch):
     job = ready_job(cursor="previous")
     pipeline.responses.append(page("1"))
-    original = __import__("x_monitor.apify", fromlist=["requests"]).requests.get
+    original = __import__("x_monitor.x_client", fromlist=["requests"]).requests.get
     def get(*args, **kwargs):
         assert not connection.in_atomic_block
         response = original(*args, **kwargs)
         set_job_state(job.pk, "paused")
         return response
-    monkeypatch.setattr("x_monitor.apify.requests.get", get)
+    monkeypatch.setattr("x_monitor.x_client.requests.get", get)
     with pytest.raises(StaleClaim):
         run(job)
     assert not Post.objects.filter(pk="1").exists()
@@ -330,12 +330,12 @@ def test_api_start_is_durable_before_http_and_not_reset_after_interruption(pipel
     import requests
     job = ready_job(maximum=4)  # three old starts, one remaining
     pipeline.responses.append(requests.ReadTimeout("timeout"))
-    original = __import__("x_monitor.apify", fromlist=["requests"]).requests.get
+    original = __import__("x_monitor.x_client", fromlist=["requests"]).requests.get
     def get(*args, **kwargs):
         assert not connection.in_atomic_block
         assert CollectionRun.objects.get(job=job).request_count == 1
         return original(*args, **kwargs)
-    monkeypatch.setattr("x_monitor.apify.requests.get", get)
+    monkeypatch.setattr("x_monitor.x_client.requests.get", get)
     with pytest.raises(CommandError):
         run(job)
     second = run(job)
@@ -344,15 +344,15 @@ def test_api_start_is_durable_before_http_and_not_reset_after_interruption(pipel
 
 
 def test_on_demand_key_is_selected_with_all_three_keys_present(pipeline, monkeypatch):
-    monkeypatch.setattr(TwitterApiClient, "from_env", REAL_FACTORY)
+    monkeypatch.setattr(XClient, "from_env", REAL_FACTORY)
     monkeypatch.setenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", "test-on-demand")
     monkeypatch.setenv("TWITTERAPI_IO_SCHEDULED_API_KEY", "test-scheduled")
     monkeypatch.setenv("TWITTERAPI_IO_API_KEY", "test-legacy")
-    original = __import__("x_monitor.apify", fromlist=["requests"]).requests.get
+    original = __import__("x_monitor.x_client", fromlist=["requests"]).requests.get
     def get(*args, **kwargs):
         assert kwargs["headers"]["X-API-Key"] == "test-on-demand"
         return original(*args, **kwargs)
-    monkeypatch.setattr("x_monitor.apify.requests.get", get)
+    monkeypatch.setattr("x_monitor.x_client.requests.get", get)
     pipeline.responses.append(page("1"))
     assert run(ready_job())["collection_drained"]
 
@@ -541,7 +541,7 @@ def test_historical_call_a_matches_normal_roles_outside_keyword_brands(
         _resolve_x_monitor_list_id,
     )
     from tests.test_call_a_role_routing import _call, _seed_author
-    from x_monitor.apify import _normalize_tweet
+    from x_monitor.x_client import _normalize_tweet
 
     account = _seed_author(edges=[("outside-keyword-brands", role)])
     cfg = load_config(Path("config.yaml"))
@@ -1038,7 +1038,7 @@ def test_provider_safety_response_stops_all_scopes_and_preserves_cursor(pipeline
         requests.append(kwargs["params"])
         return SimpleNamespace(status_code=http_status, content=secret_body.encode(), text=secret_body,
                                headers={"Retry-After": "999999"}, json=lambda: {"error": secret_body})
-    monkeypatch.setattr("x_monitor.apify.requests.get", get)
+    monkeypatch.setattr("x_monitor.x_client.requests.get", get)
     with pytest.raises(CommandError) as caught:
         run(job)
     assert len(requests) == 1

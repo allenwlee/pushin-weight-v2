@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from x_monitor.apify import TwitterApiClient
 from x_monitor.queries import assert_under_length_cap
+from x_monitor.x_client import XClient
 
 QUERY_VERSION = "special-events-v1-2026-10-27"
 CALL_IDS = ("SPECIALEVENTS1", "SPECIALEVENTS2")
@@ -45,7 +45,7 @@ def render_query(call_id: str, *, since_time: int, until_time: int) -> str:
             )
     if since_time >= until_time:
         raise ValueError("search window must have positive duration")
-    rendered = TwitterApiClient._effective_search_query(
+    rendered = XClient._effective_search_query(
         QUERIES[call_id],
         since=None,
         since_time=since_time,

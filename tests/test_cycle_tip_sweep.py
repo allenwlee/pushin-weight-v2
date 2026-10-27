@@ -50,7 +50,7 @@ def test_all_seven_searches_use_configured_pages_before_enrichment(monkeypatch):
     api = Api()
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: calls)
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient,
+        cycle_mod.XClient,
         "from_env",
         classmethod(lambda cls, _purpose: api),
     )
@@ -127,11 +127,11 @@ def test_scheduled_cursor_pages_are_stored_before_enrichment(
     from datetime import timedelta
 
     from core.models import CallState, HarvestBacklogWindow, Post, PostBrand
-    from x_monitor.apify import TwitterApiClient, TwitterApiServerError
+    from x_monitor.x_client import XClient, XClientServerError
 
     now = datetime.now(UTC).replace(microsecond=0)
     call = _call("B1")
-    api = TwitterApiClient(api_key="fake-only", timeout_s=1, max_retries=0)
+    api = XClient(api_key="fake-only", timeout_s=1, max_retries=0)
     requests = []
     expected_ids = {str(1000 + n) for n in range(43)}
 
@@ -142,7 +142,7 @@ def test_scheduled_cursor_pages_are_stored_before_enrichment(
     def get(path, params):
         requests.append(dict(params))
         if stop == "late_error" and len(requests) == 2:
-            raise TwitterApiServerError("fake second-page timeout")
+            raise XClientServerError("fake second-page timeout")
         idx = len(requests) - 1
         start, end = [(0, 20), (20, 23), (23, 43), (43, 43)][idx]
         return {
@@ -156,7 +156,7 @@ def test_scheduled_cursor_pages_are_stored_before_enrichment(
         }
 
     monkeypatch.setattr(api, "_get", get)
-    monkeypatch.setattr(cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls, purpose: api))
+    monkeypatch.setattr(cycle_mod.XClient, "from_env", classmethod(lambda cls, purpose: api))
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda *args, **kwargs: [call])
     monkeypatch.setattr(HarvestConfig, "start_deadline", lambda *a, **k: Deadline())
     # Backlog cannot hide a failure to page the current interval in this test.

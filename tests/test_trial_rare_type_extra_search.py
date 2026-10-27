@@ -38,7 +38,7 @@ def _response(status: int, body: dict | str) -> MagicMock:
 def test_preview_needs_no_database_provider_or_credentials(monkeypatch, capsys) -> None:
     monkeypatch.delenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, raising=False)
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient.from_env",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient.from_env",
         lambda *_: pytest.fail("preview constructed a provider client"),
     )
     call_command("trial_rare_type_extra_search", "--preview", "--json")
@@ -102,7 +102,7 @@ def test_trial_uses_on_demand_one_page_and_zero_retries(monkeypatch, capsys) -> 
             return [], False
 
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient",
         FakeClient,
     )
     call_command("trial_rare_type_extra_search", "--window", "15m", "--json")
@@ -121,7 +121,7 @@ def test_trial_uses_on_demand_one_page_and_zero_retries(monkeypatch, capsys) -> 
 
 def test_direct_handle_rejects_invalid_options_before_client(monkeypatch) -> None:
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient.from_env",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient.from_env",
         lambda *_: pytest.fail("invalid direct options reached client construction"),
     )
     with pytest.raises(CommandError, match="max-pages"):
@@ -132,7 +132,7 @@ def test_direct_handle_rejects_invalid_options_before_client(monkeypatch) -> Non
 
 def test_call_command_rejects_more_than_one_page_before_client(monkeypatch) -> None:
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient.from_env",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient.from_env",
         lambda *_: pytest.fail("invalid argparse options reached client"),
     )
     with pytest.raises(CommandError, match="invalid choice"):
@@ -145,7 +145,7 @@ def test_missing_key_names_only_on_demand_env(monkeypatch) -> None:
         raise RuntimeError(f"{TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV} not in environment")
 
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient.from_env",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient.from_env",
         boom,
     )
     with pytest.raises(CommandError, match=TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV) as exc:
@@ -184,7 +184,7 @@ def test_raw_paid_count_is_distinct_from_normalized_rows(monkeypatch, capsys) ->
             )
 
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient",
         FakeClient,
     )
     call_command("trial_rare_type_extra_search", "--json")
@@ -213,7 +213,7 @@ def test_empty_success_uses_fifteen_credit_floor(monkeypatch, capsys) -> None:
             return [], False
 
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient",
         FakeClient,
     )
     call_command("trial_rare_type_extra_search", "--json")
@@ -236,7 +236,7 @@ def test_unavailable_usage_keeps_conservative_reservation(monkeypatch, capsys) -
             return [], False
 
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient",
         FakeClient,
     )
     call_command("trial_rare_type_extra_search", "--json")
@@ -269,7 +269,7 @@ def test_missing_database_reports_unknown_overlap_without_error_text(
             return [{"id": "1", "text": "keeper"}], False
 
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient",
         FakeClient,
     )
     monkeypatch.setattr(
@@ -300,7 +300,7 @@ def test_transport_failures_make_one_physical_attempt(
     get = MagicMock(side_effect=effect if isinstance(effect, Exception) else None)
     if not isinstance(effect, Exception):
         get.return_value = effect
-    monkeypatch.setattr("x_monitor.apify.requests.get", get)
+    monkeypatch.setattr("x_monitor.x_client.requests.get", get)
 
     with pytest.raises(CommandError, match=match):
         call_command("trial_rare_type_extra_search", "--json")
@@ -312,7 +312,7 @@ def test_generic_provider_failure_emits_sanitized_conservative_evidence(
 ) -> None:
     monkeypatch.setenv(TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV, "test-secret")
     get = MagicMock(return_value=_response(400, "postgres://secret@host/db"))
-    monkeypatch.setattr("x_monitor.apify.requests.get", get)
+    monkeypatch.setattr("x_monitor.x_client.requests.get", get)
 
     with pytest.raises(CommandError, match="request failed") as exc:
         call_command("trial_rare_type_extra_search", "--json")
@@ -343,7 +343,7 @@ def test_trial_never_inserts_posts(monkeypatch, capsys) -> None:
             return [{"id": "trial-only", "text": "I've joined an AI lab"}], False
 
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient",
         FakeClient,
     )
     call_command("trial_rare_type_extra_search", "--json")
@@ -371,7 +371,7 @@ def test_volume_preview_validates_exact_nonoverlapping_windows_without_provider(
         ],
     )
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient.from_env",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient.from_env",
         lambda *_: pytest.fail("preview constructed a provider client"),
     )
 
@@ -413,7 +413,7 @@ def test_volume_probe_rejects_invalid_windows_before_http(
     source = tmp_path / "windows.json"
     _write_windows(source, windows)
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient.from_env",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient.from_env",
         lambda *_: pytest.fail("invalid windows reached provider"),
     )
     with pytest.raises(CommandError, match="15-minute|overlap"):
@@ -443,7 +443,7 @@ def test_volume_probe_rejects_unaligned_or_future_windows_before_http(
     source = tmp_path / "windows.json"
     _write_windows(source, windows)
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient.from_env",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient.from_env",
         lambda *_: pytest.fail("invalid windows reached provider"),
     )
     with pytest.raises(CommandError, match="quarter-hour|completed"):
@@ -474,7 +474,7 @@ def test_volume_probe_renders_every_window_before_client(monkeypatch, tmp_path) 
         render,
     )
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient.from_env",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient.from_env",
         lambda *_: pytest.fail("render failure reached provider"),
     )
     with pytest.raises(CommandError, match="bad rendered query"):
@@ -501,7 +501,7 @@ def test_volume_probe_reserves_all_calls_before_http(
         ],
     )
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient.from_env",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient.from_env",
         lambda *_: pytest.fail("unreserved batch reached provider"),
     )
     with pytest.raises(CommandError, match=match):
@@ -573,7 +573,7 @@ def test_volume_probe_captures_raw_before_next_call_and_reconciles_counts(
             return raw_body, raw, normalized, self.calls == 1, 0
 
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient",
         FakeClient,
     )
     call_command(
@@ -653,7 +653,7 @@ def test_volume_probe_error_keeps_raw_receipt_status_and_stops_on_overage(
             raise exc
 
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient",
         FakeClient,
     )
     call_command(
@@ -693,7 +693,7 @@ def test_volume_probe_stops_after_first_request_error_and_reports_unattempted(
             raise requests.Timeout("do not retry later windows")
 
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient",
         FakeClient,
     )
     call_command(
@@ -751,7 +751,7 @@ def test_volume_probe_overage_appends_final_row_without_rewriting_prior_ledger(
             return raw_body, body, [], False, 0
 
     monkeypatch.setattr(
-        "monitor.management.commands.trial_rare_type_extra_search.TwitterApiClient",
+        "monitor.management.commands.trial_rare_type_extra_search.XClient",
         FakeClient,
     )
     monkeypatch.setattr(

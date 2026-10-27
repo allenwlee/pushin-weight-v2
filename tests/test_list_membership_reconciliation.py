@@ -14,8 +14,8 @@ from monitor.list_membership import (
     reconciliation_due,
     run_due_reconciliation,
 )
-from x_monitor.apify import ListMembersSnapshot
 from x_monitor.config import Config
+from x_monitor.x_client import ListMembersSnapshot
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
@@ -197,10 +197,10 @@ def test_due_state_handles_empty_lists_and_deadline_defers_without_api_call():
 
 
 def test_sync_command_dry_run_never_calls_provider(monkeypatch):
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
     monkeypatch.setattr(
-        TwitterApiClient,
+        XClient,
         "from_env",
         classmethod(
             lambda cls, _purpose: (_ for _ in ()).throw(AssertionError("network"))

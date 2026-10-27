@@ -320,13 +320,13 @@ def _load_api_posts(
     `_load_latest_cycle_posts`.
     """
     # Lazy import — the live client is only needed on this path.
-    from x_monitor.apify import TwitterApiClient
     from x_monitor.attribution import detect_brand_mentions
     from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    from x_monitor.x_client import XClient
 
     # Explicit smoke tests are on-demand work and must not consume the
     # scheduled collection credential.
-    client = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+    client = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
     rows = client.run_search(
         query=args.query,
         max_results=args.limit,

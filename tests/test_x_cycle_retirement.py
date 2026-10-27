@@ -196,7 +196,7 @@ def test_scheduled_runner_preserves_actual_request_post_and_accounting_without_r
             return [item], False
     plan = CycleRunner._plan_calls
     monkeypatch.setattr(CycleRunner, "_plan_calls", lambda runner: plan(runner)[1:2])
-    monkeypatch.setattr(cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls, purpose: Api()))
+    monkeypatch.setattr(cycle_mod.XClient, "from_env", classmethod(lambda cls, purpose: Api()))
     monkeypatch.setattr(CycleRunner, "_run_post_fetch", lambda *a, **k: {})
     monkeypatch.setattr(cost_emit, "finalize_and_persist", lambda *a, **k: None)
     monkeypatch.setattr("monitor.metrics_refresh.run_metrics_refresh", lambda *a, **k: {})

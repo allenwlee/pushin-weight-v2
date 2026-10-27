@@ -434,7 +434,7 @@ class DurableBudget(BackfillBudget):
                 raise BackfillBudgetExhausted("durable backfill allowance exhausted")
             run.request_count += 1
             run.save(update_fields=["request_count", "updated_at"])
-        # Transaction has committed before TwitterApiClient starts transport.
+        # Transaction has committed before XClient starts transport.
 
     def record_api_response(self, response):
         super().record_api_response(response)
@@ -992,7 +992,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
                     error = error or CommandError("shared backfill runner failed; committed pages retained")
                     deferred_scopes.add(scoped.scope_key)
                     scope_errors.append({"scope_key": scoped.scope_key, "errors": stats.get("errors", [])})
-                    if any("TwitterApiAuthError" in str(item) for item in stats.get("errors", [])):
+                    if any("XClientAuthError" in str(item) for item in stats.get("errors", [])):
                         break
         if current_policy and not CollectionScopeRun.objects.filter(
             run_id=claim.run_id, scope_kind="x_query", enumeration_complete=False,
@@ -1068,7 +1068,7 @@ def benchmark_page(job_id):
         _load_brand_search_terms,
         _matches_any_term,
     )
-    from x_monitor.apify import _normalize_tweet
+    from x_monitor.x_client import _normalize_tweet
 
     cfg = bounded_backfill_config(load_config(Path("config.yaml")), enrichment_limit=1)
     job = CollectionJob.objects.get(pk=job_id)

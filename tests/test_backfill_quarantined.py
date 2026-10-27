@@ -32,7 +32,7 @@ def test_dots_only_backfill_dry_run_selects_only_b1(monkeypatch):
     from monitor import cycle as cycle_mod
 
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient,
+        cycle_mod.XClient,
         "from_env",
         classmethod(
             lambda cls, purpose: (_ for _ in ()).throw(
@@ -65,7 +65,7 @@ def test_brand_scoped_backfill_rejects_unrelated_call_before_provider(
     from monitor import cycle as cycle_mod
 
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient,
+        cycle_mod.XClient,
         "from_env",
         classmethod(
             lambda cls, purpose: (_ for _ in ()).throw(

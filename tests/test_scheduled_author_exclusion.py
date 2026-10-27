@@ -2,14 +2,13 @@
 
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_scheduled_author_exclusion_reaches_all_eight_provider_requests(monkeypatch):
     """Policy → scheduled runner → concrete client → captured HTTP request."""
     from monitor.cycle import CycleRunner
-    from x_monitor import apify
+    from x_monitor import x_client
     from x_monitor.config import load_config
     from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
 
@@ -24,13 +23,13 @@ def test_scheduled_author_exclusion_reaches_all_eight_provider_requests(monkeypa
         requests.append((path, dict(params)))
         return {"tweets": [], "has_next_page": False}
 
-    monkeypatch.setattr(apify, "require_twitterapi_api_key", fake_key)
-    monkeypatch.setattr(apify.TwitterApiClient, "_get", fake_get)
+    monkeypatch.setattr(x_client, "require_twitterapi_api_key", fake_key)
+    monkeypatch.setattr(x_client.XClient, "_get", fake_get)
 
     cfg = load_config(REPO_ROOT / "config.yaml")
     runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
     calls = runner._plan_calls()
-    client = apify.TwitterApiClient.from_env(runner.twitterapi_credential_purpose)
+    client = x_client.XClient.from_env(runner.twitterapi_credential_purpose)
     window = (1_785_067_200, 1_785_067_260)
     for call in calls:
         items, outcome = runner._fetch_tweets(call, client, window=window)
@@ -41,7 +40,7 @@ def test_scheduled_author_exclusion_reaches_all_eight_provider_requests(monkeypa
     assert [call.call_id for call in calls] == ["A", "B1", "C1", "C2", "C3", "C4", "B2", "B3"]
     assert len(requests) == 8
     for path, params in requests:
-        assert path == apify.SEARCH_PATH
+        assert path == x_client.SEARCH_PATH
         assert params["queryType"] == "Latest"
         assert params["limit"] == cfg.search.max_per_page
         assert params["query"].count("-from:xxyweb3") == 1
@@ -57,11 +56,14 @@ def test_scheduled_author_exclusion_reaches_all_eight_provider_requests(monkeypa
 def test_exclusion_growth_over_final_cap_sends_no_provider_request(monkeypatch):
     """The time-bounded request fails closed when registry growth exhausts headroom."""
     from monitor.cycle import CycleRunner
-    from x_monitor import apify
+    from x_monitor import x_client
     from x_monitor.config import load_config
     from x_monitor.harvest_policy import load_policy
     from x_monitor.query_plan import plan_calls
-    from x_monitor.specs_from_policy import primary_keywords_from_policy, specs_from_policy
+    from x_monitor.specs_from_policy import (
+        primary_keywords_from_policy,
+        specs_from_policy,
+    )
 
     policy = load_policy(REPO_ROOT / "config/harvest_policy.yaml")
     handles = tuple(f"spam_author_{index}" for index in range(3))
@@ -78,11 +80,11 @@ def test_exclusion_growth_over_final_cap_sends_no_provider_request(monkeypatch):
     def forbidden_get(*_args, **_kwargs):
         raise AssertionError("over-cap query reached provider transport")
 
-    monkeypatch.setattr(apify.TwitterApiClient, "_get", forbidden_get)
+    monkeypatch.setattr(x_client.XClient, "_get", forbidden_get)
     runner = CycleRunner(cfg=load_config(REPO_ROOT / "config.yaml"), cycle_kind="scheduled")
     items, outcome = runner._fetch_tweets(
         b1,
-        apify.TwitterApiClient(api_key="fake-key"),
+        x_client.XClient(api_key="fake-key"),
         window=(1_785_067_200, 1_785_067_260),
     )
     assert items == []

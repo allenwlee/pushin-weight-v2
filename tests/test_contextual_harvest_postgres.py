@@ -74,7 +74,7 @@ def test_scheduled_cycle_persists_context_and_deduplicates_c1_c4(monkeypatch, se
                      "author_id": "u10-" + tid, "author_handle": "u10test"}
                     for tid, text in texts.get(cid, [])], False
 
-    monkeypatch.setattr(cycle.TwitterApiClient, "from_env", classmethod(lambda cls, purpose: Api()))
+    monkeypatch.setattr(cycle.XClient, "from_env", classmethod(lambda cls, purpose: Api()))
     monkeypatch.setattr(CycleRunner, "_replay_backlog", lambda self, **kwargs: [])
     monkeypatch.setattr(CycleRunner, "_run_post_fetch", lambda self, items, **kwargs: cohorts.extend(str(i.get("id") or i.get("tweet_id")) for i in items) or {})
     monkeypatch.setattr(cycle, "run_due_reconciliation", lambda **kwargs: SimpleNamespace(status="not_due", observed=0, activated=0, deactivated=0, snapshot_id=None, degraded=[]))

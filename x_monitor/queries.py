@@ -189,7 +189,7 @@ def count_x_operators(query: str) -> int:
 def assert_under_operator_cap(query: str) -> None:
     """Raise ValueError if the query exceeds X's ~22 OR-operator cap.
 
-    Callers in RunPipeline.execute invoke this BEFORE apify.run_search so an
+    Callers in RunPipeline.execute invoke this BEFORE client.run_search so an
     over-cap query is short-circuited into a per-query summary entry
     `{status: "operator_cap_exceeded"}` and no credits are burned.
     """

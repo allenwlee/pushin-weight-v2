@@ -122,7 +122,7 @@ def _patch_replay_preflight(monkeypatch) -> None:
         "x_monitor.reattribute.build_relevancy_client_from_env", lambda _cfg: None
     )
     monkeypatch.setattr(
-        "x_monitor.apify.TwitterApiClient.from_env",
+        "x_monitor.x_client.XClient.from_env",
         classmethod(
             lambda cls, *_a, **_kw: pytest.fail(
                 "saved-hit replay must not construct a TwitterAPI client"

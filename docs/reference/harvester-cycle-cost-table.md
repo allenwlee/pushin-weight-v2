@@ -62,7 +62,7 @@ Per-call result counts are not currently logged at message-create level (`x_moni
 ## Files
 
 - `docs/research/twitterapi_docs/INDEX.md` — pricing knowledge (this table's source)
-- `x_monitor/apify.py` — `SEARCH_PATH = /twitter/tweet/advanced_search` (the API callsite)
+- `x_monitor/x_client.py` — `SEARCH_PATH = /twitter/tweet/advanced_search` (the API callsite)
 - `x_monitor/run.py:958-978` — budget guard with the wrong `300 credits/page` constant
 - `config.yaml:65` — `daily_ceiling: 333` (read but not enforced)
 

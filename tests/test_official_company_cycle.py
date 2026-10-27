@@ -258,7 +258,7 @@ def test_real_scheduled_cycle_reaches_discovery_once_without_changing_queries(
 
     api = FakeApi()
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient, "from_env", classmethod(lambda cls, purpose: api)
+        cycle_mod.XClient, "from_env", classmethod(lambda cls, purpose: api)
     )
     monkeypatch.setattr(
         cycle_mod,

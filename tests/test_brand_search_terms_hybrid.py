@@ -116,7 +116,7 @@ def test_real_cycle_persists_db_only_aliases_including_production_kimi_miss(
         cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [_planned()]
     )
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient,
+        cycle_mod.XClient,
         "from_env",
         classmethod(lambda cls, _purpose: api),
     )
@@ -168,7 +168,7 @@ def test_real_cycle_normalizes_quoted_literal_before_compilation(
         cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [_planned()]
     )
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient,
+        cycle_mod.XClient,
         "from_env",
         classmethod(lambda cls, _purpose: api),
     )
@@ -203,7 +203,7 @@ def test_missing_policy_mapping_blocks_provider_construction(
         cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [_planned()]
     )
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient, "from_env", classmethod(_provider)
+        cycle_mod.XClient, "from_env", classmethod(_provider)
     )
 
     stats = CycleRunner(cycle_kind="scheduled").run()
@@ -218,7 +218,7 @@ def test_replay_missing_policy_mapping_blocks_provider_construction(
     BrandKeyword.objects.filter(brand_id="glm", pattern="ox alpha").delete()
     constructed: list[object] = []
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient,
+        cycle_mod.XClient,
         "from_env",
         classmethod(lambda cls, _purpose: constructed.append(True)),
     )
@@ -242,7 +242,7 @@ def test_unknown_enabled_brand_blocks_provider_construction(
         cycle_mod, "plan_calls_for_cycle", lambda cfg=None, **_kwargs: [_planned()]
     )
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient,
+        cycle_mod.XClient,
         "from_env",
         classmethod(lambda cls, _purpose: constructed.append(True)),
     )

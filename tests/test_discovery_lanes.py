@@ -376,7 +376,7 @@ def test_cycle_call_chain_persists_untracked_discovery_post_and_run(monkeypatch)
     monkeypatch.setattr("monitor.cycle._build_brand_index", lambda _models: (None, {}))
     monkeypatch.setattr("monitor.cycle._load_brand_search_terms", dict)
     monkeypatch.setattr(
-        "monitor.cycle.TwitterApiClient.from_env", lambda _purpose: FakeApi()
+        "monitor.cycle.XClient.from_env", lambda _purpose: FakeApi()
     )
     monkeypatch.setattr(
         CycleRunner,

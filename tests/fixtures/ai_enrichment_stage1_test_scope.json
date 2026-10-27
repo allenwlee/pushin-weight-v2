@@ -112,9 +112,9 @@
     "tests/test_query_plan_v17.py::test_v17_query_plan_does_not_count_operators": "current monitor.cycle imports query_plan helpers and PlannedCall",
     "tests/test_query_plan_v17.py::test_v17_removes_intent_buckets_from_query_plan": "current monitor.cycle imports query_plan helpers and PlannedCall",
     "tests/test_query_plan_v17.py::test_v17_removes_split_brands_to_fit_cap": "current monitor.cycle imports query_plan helpers and PlannedCall",
-    "tests/test_quote_tweets.py::test_normalize_tweet_detects_retweet_via_object": "current TwitterApiClient reaches x_monitor.apify._normalize_tweet",
-    "tests/test_quote_tweets.py::test_normalize_tweet_extracts_quoted_content": "current TwitterApiClient reaches x_monitor.apify._normalize_tweet",
-    "tests/test_quote_tweets.py::test_normalize_tweet_no_quote_is_clean": "current TwitterApiClient reaches x_monitor.apify._normalize_tweet"
+    "tests/test_quote_tweets.py::test_normalize_tweet_detects_retweet_via_object": "current XClient reaches x_monitor.x_client._normalize_tweet",
+    "tests/test_quote_tweets.py::test_normalize_tweet_extracts_quoted_content": "current XClient reaches x_monitor.x_client._normalize_tweet",
+    "tests/test_quote_tweets.py::test_normalize_tweet_no_quote_is_clean": "current XClient reaches x_monitor.x_client._normalize_tweet"
   },
   "required_compatibility_files": [
     "tests/test_classification_analysis.py",

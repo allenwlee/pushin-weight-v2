@@ -31,7 +31,7 @@ from core.rare_type_search import (
     settle_decision_budget,
     settle_search_return,
 )
-from x_monitor.apify import _normalize_tweet
+from x_monitor.x_client import _normalize_tweet
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 

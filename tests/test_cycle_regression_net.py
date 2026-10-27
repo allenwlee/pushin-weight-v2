@@ -224,7 +224,7 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
         return {}
 
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient,
+        cycle_mod.XClient,
         "from_env",
         classmethod(lambda cls, _purpose: api),
     )
@@ -304,8 +304,10 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
     ]
     if enrichment_mode == "worker":
         from monitor.harvest_summary import (
-            HARVEST_COHORT_PREFIX, HARVEST_SUMMARY_PREFIX,
-            parse_cohort_line, parse_summary_line,
+            HARVEST_COHORT_PREFIX,
+            HARVEST_SUMMARY_PREFIX,
+            parse_cohort_line,
+            parse_summary_line,
         )
 
         envelopes = [
@@ -341,8 +343,8 @@ def test_scheduled_empty_and_failed_search_keep_distinct_scope_coverage(
     from monitor import cycle as cycle_mod
     from monitor.cycle import CycleRunner
     from scripts.harvest_cost import emit as cost_emit
-    from x_monitor.apify import TwitterApiServerError
     from x_monitor.config import load_config
+    from x_monitor.x_client import XClientServerError
 
     class FakeApi:
         base_url = "https://api.twitterapi.io"
@@ -364,7 +366,7 @@ def test_scheduled_empty_and_failed_search_keep_distinct_scope_coverage(
                 "error_type": None,
             })
             if search_outcome == "server_error":
-                raise TwitterApiServerError("provider busy")
+                raise XClientServerError("provider busy")
             if search_outcome == "parse_error":
                 raise ValueError("malformed provider response")
             return [], False
@@ -375,7 +377,7 @@ def test_scheduled_empty_and_failed_search_keep_distinct_scope_coverage(
         CycleRunner, "_plan_calls", lambda runner: original_plan(runner)[:1],
     )
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient, "from_env",
+        cycle_mod.XClient, "from_env",
         classmethod(lambda cls, _purpose: FakeApi()),
     )
     monkeypatch.setattr(CycleRunner, "_run_post_fetch", lambda *a, **k: {})
@@ -443,7 +445,7 @@ def test_scheduled_lineage_failure_holds_cursor_after_post_commit(
         lambda *a, **k: (1_785_067_200, 1_785_067_260, True),
     )
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient, "from_env",
+        cycle_mod.XClient, "from_env",
         classmethod(lambda cls, _purpose: FakeApi()),
     )
     advances = []
@@ -497,7 +499,7 @@ def test_scheduled_truncated_search_keeps_saved_post_and_partial_coverage(
         CycleRunner, "_plan_calls", lambda runner: original_plan(runner)[1:2],
     )
     monkeypatch.setattr(
-        cycle_mod.TwitterApiClient, "from_env",
+        cycle_mod.XClient, "from_env",
         classmethod(lambda cls, _purpose: FakeApi()),
     )
     monkeypatch.setattr(CycleRunner, "_run_post_fetch", lambda *a, **k: {})

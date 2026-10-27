@@ -19,13 +19,6 @@ import requests
 from django.core.management.base import BaseCommand, CommandError
 from django.db import DatabaseError
 
-from x_monitor.apify import (
-    SEARCH_PATH,
-    TwitterApiAuthError,
-    TwitterApiClient,
-    TwitterApiRateLimitError,
-    TwitterApiServerError,
-)
 from x_monitor.rare_type_extra_search import (
     QUERY_VERSION,
     planned_query_string,
@@ -34,6 +27,13 @@ from x_monitor.rare_type_extra_search import (
 from x_monitor.twitterapi_credentials import (
     TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
     TwitterApiCredentialPurpose,
+)
+from x_monitor.x_client import (
+    SEARCH_PATH,
+    XClient,
+    XClientAuthError,
+    XClientRateLimitError,
+    XClientServerError,
 )
 
 _WINDOWS = {
@@ -155,7 +155,7 @@ class Command(BaseCommand):
             return
 
         try:
-            client = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+            client = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
         except RuntimeError as exc:
             raise CommandError(
                 f"{exc}. Set {TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV}."
@@ -169,11 +169,11 @@ class Command(BaseCommand):
         # plus since_time/until_time kwargs (not a pre-baked query).
         try:
             tweets, truncated = client.run_search(query_string, **request_kwargs)
-        except TwitterApiAuthError as exc:
+        except XClientAuthError as exc:
             self._fail_paid_attempt(payload, "auth_failed", exc)
-        except TwitterApiRateLimitError as exc:
+        except XClientRateLimitError as exc:
             self._fail_paid_attempt(payload, "rate_limited", exc)
-        except TwitterApiServerError as exc:
+        except XClientServerError as exc:
             self._fail_paid_attempt(payload, "server_error", exc)
         except requests.RequestException as exc:
             self._fail_paid_attempt(payload, "transport_error", exc)
@@ -286,7 +286,7 @@ class Command(BaseCommand):
             raise CommandError("--output-dir must not already exist")
 
         try:
-            client = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+            client = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
         except RuntimeError as exc:
             raise CommandError(
                 f"{exc}. Set {TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV}."
@@ -388,7 +388,7 @@ class Command(BaseCommand):
                     hit_rows.append(hit)
                 if stop_reason.startswith("reservation_undermined_"):
                     break
-            except (TwitterApiAuthError, TwitterApiRateLimitError, TwitterApiServerError,
+            except (XClientAuthError, XClientRateLimitError, XClientServerError,
                     requests.RequestException, json.JSONDecodeError, RuntimeError,
                     TypeError, ValueError) as exc:
                 captured = raw_path.exists()
@@ -790,7 +790,7 @@ class Command(BaseCommand):
             )
 
     @staticmethod
-    def _raw_paid_result_count(client: TwitterApiClient) -> int | None:
+    def _raw_paid_result_count(client: XClient) -> int | None:
         logs = getattr(client, "_request_log", None)
         if not isinstance(logs, list):
             return None

@@ -609,7 +609,7 @@ def enrich_posts(
         added. `stats` is {n_url_only, n_fetched, n_cached, n_failed,
         n_skipped_cap, n_via_api}.
 
-    The optional `api` argument is a TwitterApiClient-like object with
+    The optional `api` argument is a XClient-like object with
     a `.get_article(tweet_id) -> dict | None` method. When the resolved
     URL of a URL-only post is an X-native long-form article
     (x.com/i/article/{id}), the article title is fetched via get_article

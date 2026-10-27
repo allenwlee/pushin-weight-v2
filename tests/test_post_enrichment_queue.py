@@ -495,7 +495,7 @@ def test_cycle_runner_threads_cutoff_to_normal_runs_but_not_backfill(
 
     monkeypatch.setattr(CycleRunner, "_plan_calls", lambda self: [call])
     monkeypatch.setattr(
-        cycle_module.TwitterApiClient,
+        cycle_module.XClient,
         "from_env",
         classmethod(lambda cls, _purpose: EmptyApi()),
     )

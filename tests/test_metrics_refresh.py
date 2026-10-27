@@ -93,8 +93,8 @@ def test_refresh_persists_actual_http_lookup_counts_and_skips_unavailable(monkey
 
     from core.models import Post
     from monitor.metrics_refresh import run_metrics_refresh
-    from x_monitor.apify import TwitterApiClient
     from x_monitor.config import load_config
+    from x_monitor.x_client import XClient
 
     now = timezone.now()
     for tweet_id in ["2111255857925349616", "2111255830230368630"]:
@@ -113,8 +113,8 @@ def test_refresh_persists_actual_http_lookup_counts_and_skips_unavailable(monkey
         ]}).encode()
         return response
 
-    monkeypatch.setattr("x_monitor.apify.requests.get", get)
-    out = run_metrics_refresh(TwitterApiClient(api_key="test", max_retries=0),
+    monkeypatch.setattr("x_monitor.x_client.requests.get", get)
+    out = run_metrics_refresh(XClient(api_key="test", max_retries=0),
                               load_config(REPO / "config.yaml"), now=now)
     assert len(calls) == 1
     assert set(calls[0][1]["tweet_ids"].split(",")) == {"2111255857925349616", "2111255830230368630"}
@@ -134,8 +134,8 @@ def test_http_200_provider_error_is_reported_without_stamping_post(monkeypatch):
 
     from core.models import Post
     from monitor.metrics_refresh import run_metrics_refresh
-    from x_monitor.apify import TwitterApiClient
     from x_monitor.config import load_config
+    from x_monitor.x_client import XClient
 
     now = timezone.now()
     Post.objects.create(tweet_id="2111255857925349616", like_count=7)
@@ -145,10 +145,10 @@ def test_http_200_provider_error_is_reported_without_stamping_post(monkeypatch):
     response = requests.Response()
     response.status_code = 200
     response._content = b'{"status":"error","tweets":[],"msg":"provider failed"}'
-    monkeypatch.setattr("x_monitor.apify.requests.get", lambda *_args, **_kwargs: response)
+    monkeypatch.setattr("x_monitor.x_client.requests.get", lambda *_args, **_kwargs: response)
 
     out = run_metrics_refresh(
-        TwitterApiClient(api_key="test", max_retries=0),
+        XClient(api_key="test", max_retries=0),
         load_config(REPO / "config.yaml"), now=now,
     )
 

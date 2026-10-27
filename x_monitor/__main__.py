@@ -37,8 +37,9 @@ def _project_paths() -> dict[str, Path]:
 
 
 def _load_config_or_die(path: Path):
-    from x_monitor.config import load_config
     from pydantic import ValidationError
+
+    from x_monitor.config import load_config
 
     try:
         return load_config(path)
@@ -48,18 +49,18 @@ def _load_config_or_die(path: Path):
 
 
 def cmd_run(args, paths) -> int:
-    from x_monitor.apify import TwitterApiClient
     from x_monitor.run import RunPipeline
     from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    from x_monitor.x_client import XClient
 
     cfg = _load_config_or_die(paths["config"])
-    api: TwitterApiClient
+    api: XClient
     if args.dry_run:
         # In dry-run we don't need a real client; use a stub.
-        api = TwitterApiClient(api_key="dry-run")
+        api = XClient(api_key="dry-run")
     else:
         try:
-            api = TwitterApiClient.from_env(
+            api = XClient.from_env(
                 TwitterApiCredentialPurpose.ON_DEMAND
             )
         except Exception as e:
@@ -200,14 +201,14 @@ def cmd_queries(args, paths) -> int:
 def cmd_setup(args, paths) -> int:
     if args.setup_action == "twitterapi-key":
         # Just confirms the key is in env; the env file path is informational.
-        from x_monitor.apify import TwitterApiClient
         from x_monitor.twitterapi_credentials import (
             TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
             TwitterApiCredentialPurpose,
         )
+        from x_monitor.x_client import XClient
 
         try:
-            TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+            XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
             print(f"OK: {TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV} present")
             return 0
         except Exception as e:
@@ -349,12 +350,6 @@ def _dispatch_relevance(args, action: str, paths) -> int:
     if action == "audit-handles":
         import yaml as _yaml
 
-        from x_monitor.apify import (
-            TwitterApiAuthError,
-            TwitterApiClient,
-            TwitterApiRateLimitError,
-            TwitterApiServerError,
-        )
         from x_monitor.config import KNOWN_MODELS
         from x_monitor.relevance import (
             load_filter,
@@ -364,11 +359,17 @@ def _dispatch_relevance(args, action: str, paths) -> int:
             TWITTERAPI_IO_ON_DEMAND_API_KEY_ENV,
             TwitterApiCredentialPurpose,
         )
+        from x_monitor.x_client import (
+            XClient,
+            XClientAuthError,
+            XClientRateLimitError,
+            XClientServerError,
+        )
 
         # Try to make a real client. If env var is missing, return 2 so the
         # operator can run `x-monitor setup twitterapi-key` first.
         try:
-            api = TwitterApiClient.from_env(
+            api = XClient.from_env(
                 TwitterApiCredentialPurpose.ON_DEMAND
             )
         except Exception as e:
@@ -402,10 +403,10 @@ def _dispatch_relevance(args, action: str, paths) -> int:
             for handle in cfg.canonical_handles:
                 try:
                     info = api.user_info(handle)
-                except TwitterApiAuthError as e:
+                except XClientAuthError as e:
                     print(f"  AUTH FAILED: {e}", file=sys.stderr)
                     return 2
-                except (TwitterApiRateLimitError, TwitterApiServerError) as e:
+                except (XClientRateLimitError, XClientServerError) as e:
                     print(f"  {m}/{handle}: TRANSIENT ERROR {e}", file=sys.stderr)
                     any_failure = True
                     continue
@@ -446,11 +447,13 @@ def _dispatch_relevance(args, action: str, paths) -> int:
         return 1 if any_failure else 0
 
     if action == "backfill":
+        import time as _time
+
         from x_monitor.headlines import (
-            HeadlinesCache,
             SOURCE_CACHED,
-            SOURCE_FETCHED,
             SOURCE_FETCH_FAILED,
+            SOURCE_FETCHED,
+            HeadlinesCache,
             cache_key_for,
             fetch_url,
             is_tco_url,
@@ -458,7 +461,6 @@ def _dispatch_relevance(args, action: str, paths) -> int:
             x_article_tweet_id,
         )
         from x_monitor.store import Store
-        import time as _time
 
         limit = int(getattr(args, "limit", 200) or 200)
         per_query_cap = int(getattr(args, "batch", 8) or 8)
@@ -474,12 +476,12 @@ def _dispatch_relevance(args, action: str, paths) -> int:
         api = None
         if via_api:
             try:
-                from x_monitor.apify import TwitterApiClient
                 from x_monitor.twitterapi_credentials import (
                     TwitterApiCredentialPurpose,
                 )
+                from x_monitor.x_client import XClient
 
-                api = TwitterApiClient.from_env(
+                api = XClient.from_env(
                     TwitterApiCredentialPurpose.ON_DEMAND
                 )
             except Exception as e:
@@ -668,8 +670,8 @@ def cmd_reattribute(args, paths) -> int:
     Returns 0 on success; 2 on config/env errors.
     """
     from x_monitor.reattribute import (
-        reattribute_all_posts,
         build_anthropic_client_from_env,
+        reattribute_all_posts,
     )
 
     db_path = paths["db"]
@@ -855,8 +857,8 @@ def cmd_backfill_unsanctioned_flags(args, paths) -> int:
         )
         return 1
 
-    from x_monitor.store import Store
     from x_monitor.attribution import classify_pragmatics_full
+    from x_monitor.store import Store
     from x_monitor.translator import AnthropicClaudeClient
 
     db_path = paths["db"]
@@ -968,6 +970,7 @@ def cmd_smoketest(args, paths) -> int:
       --latest N          cap posts for --source=latest-n (default: 20)
     """
     import sys as _sys
+
     from scripts.post_fetch_smoketest import main as _smoke_main
 
     argv: list[str] = ["--source", args.source]

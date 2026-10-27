@@ -35,9 +35,9 @@ pipeline = pytest.fixture(name="pipeline")(captured_pipeline.__wrapped__)
 REAL_GET = requests.get
 from datetime import UTC
 
-from x_monitor.apify import TwitterApiClient
+from x_monitor.x_client import XClient
 
-REAL_BOUNDED = TwitterApiClient._get_bounded
+REAL_BOUNDED = XClient._get_bounded
 
 
 def job_for_scopes(count, *, request_cap=100, maximum=200, byte_cap=32 * 1024 * 1024):
@@ -95,12 +95,12 @@ def http_pages(monkeypatch, pipeline):
         def get(url, **kwargs):
             assert url.startswith("https://api.twitterapi.io/")
             return REAL_GET(f"http://127.0.0.1:{server.server_port}{urlsplit(url).path}", **kwargs)
-        monkeypatch.setattr("x_monitor.apify.requests.get", get)
+        monkeypatch.setattr("x_monitor.x_client.requests.get", get)
         def bounded(client, url, params, timeout):
             assert url.startswith("https://api.twitterapi.io/")
             local = f"http://127.0.0.1:{server.server_port}{urlsplit(url).path}"
             return REAL_BOUNDED(client, local, params, timeout)
-        monkeypatch.setattr(TwitterApiClient, "_get_bounded", bounded)
+        monkeypatch.setattr(XClient, "_get_bounded", bounded)
         monkeypatch.setenv("TWITTERAPI_IO_ON_DEMAND_API_KEY", "fixture-only")
         try:
             yield state

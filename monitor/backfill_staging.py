@@ -46,11 +46,11 @@ from monitor.backfill_prefetch import (
 )
 from monitor.backfill_retry import PAGE_FAILURE_LIMIT, POLICY, transient
 from monitor.run_lock import backfill_yield_requested, harvest_writer_lock
-from x_monitor.apify import SEARCH_PATH
 from x_monitor.twitterapi_credentials import (
     TwitterApiCredentialPurpose,
     require_twitterapi_api_key,
 )
+from x_monitor.x_client import SEARCH_PATH
 
 CATEGORY = "x_backfill_staging"
 

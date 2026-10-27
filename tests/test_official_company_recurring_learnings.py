@@ -71,7 +71,7 @@ def recurring_cycle(monkeypatch, seeded_policy_keywords):
 
     api = FakeApi()
     monkeypatch.setattr(
-        cycle_module.TwitterApiClient, "from_env",
+        cycle_module.XClient, "from_env",
         classmethod(lambda cls, purpose: api),
     )
     monkeypatch.setattr(

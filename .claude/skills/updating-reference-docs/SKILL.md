@@ -158,7 +158,7 @@ For the focused runtime references, check the relevant sources below:
 
 | Subject | Main sources to verify |
 | --- | --- |
-| TwitterAPI calls and credit accounting | `monitor/cycle.py`, `x_monitor/apify.py`, `x_monitor/queries.py`, `config.yaml`, `scripts/harvest_cost/` |
+| TwitterAPI calls and credit accounting | `monitor/cycle.py`, `x_monitor/x_client.py`, `x_monitor/queries.py`, `config.yaml`, `scripts/harvest_cost/` |
 | Live query groups | `config.yaml`, query-planning code, seed data, and focused tests |
 | Database schema | `core/models.py`, ordered `core/migrations/`, and optional authorized PostgreSQL inspection |
 | Lookup tables | Django models, seed commands/data, and attribution code |

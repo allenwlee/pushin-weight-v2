@@ -24,14 +24,15 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
-from unittest.mock import MagicMock
 
 from x_monitor.config import Config
 from x_monitor.query_plan import PlannedCall
 from x_monitor.run import (
-    CURSOR_OVERLAP_HOURS, RunPipeline,
+    CURSOR_OVERLAP_HOURS,
+    RunPipeline,
 )
 from x_monitor.store import Store
 
@@ -233,9 +234,9 @@ def test_cursor_not_advanced_when_run_search_raises(monkeypatch, tmp_data):
     )
 
     # Force apify.run_search to always raise.
-    from x_monitor.apify import TwitterApiRateLimitError
+    from x_monitor.x_client import XClientRateLimitError
     apify = MagicMock()
-    apify.run_search.side_effect = TwitterApiRateLimitError(
+    apify.run_search.side_effect = XClientRateLimitError(
         "rate-limited (test)"
     )
 

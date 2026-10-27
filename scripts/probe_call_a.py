@@ -1,6 +1,6 @@
 """Probe just Call A against TwitterAPI.io.
 
-Bypasses RunPipeline.execute() and calls apify.run_search directly
+Bypasses RunPipeline.execute() and calls client.run_search directly
 with the Call A query string. Used to measure how many posts the
 curated-handles list returns at a given min_faves floor.
 
@@ -37,10 +37,10 @@ def main() -> int:
     print(f"query: {query}", file=sys.stderr)
     print(f"max_pages: {args.max_pages}", file=sys.stderr)
 
-    from x_monitor.apify import TwitterApiClient
     from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+    from x_monitor.x_client import XClient
 
-    api = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+    api = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
     items = api.run_search(
         query,
         max_results=20 * args.max_pages,

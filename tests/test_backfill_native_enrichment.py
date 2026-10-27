@@ -154,7 +154,7 @@ def native(monkeypatch, seeded_policy_keywords):
     def forbidden(*args, **kwargs):
         raise AssertionError("native enrichment used direct inference or X")
 
-    monkeypatch.setattr("x_monitor.apify.TwitterApiClient.from_env", forbidden)
+    monkeypatch.setattr("x_monitor.x_client.XClient.from_env", forbidden)
     delegates = {
         "translation": DeepInfraChatCompletionsClient(
             api_key="test",

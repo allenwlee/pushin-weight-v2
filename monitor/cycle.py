@@ -8,7 +8,7 @@ x_monitor.store.Store.
 The cycle flow:
   1. Load primary keywords from BrandKeyword (Django ORM)
   2. Plan calls via x_monitor.query_plan.plan_calls()
-  3. For each call: fetch tweets via TwitterApiClient
+  3. For each call: fetch tweets via XClient
   4. Attribute to brands via x_monitor.attribution.attribute_to_brands
   5. Persist via Django ORM (Post, Account, PostBrand, PostBrandMention,
      PostBrandSignal)
@@ -143,16 +143,6 @@ from monitor.post_enrichment import (
     present_text as _present_text,
 )
 from monitor.rare_type_telemetry import build_rare_type_cycle_summary
-
-# x_monitor imports — reuse existing pipeline modules.
-# These have no import-time side effects; they don't touch Store or
-# read config.yaml at module level.
-from x_monitor.apify import (
-    TwitterApiAuthError,
-    TwitterApiClient,
-    TwitterApiRateLimitError,
-    TwitterApiServerError,
-)
 from x_monitor.attribution import (
     _MAX_RETRIES,
     _PRAGMATICS_COMPLETENESS_SELECTOR_VERSION,
@@ -172,6 +162,16 @@ from x_monitor.queries import X_LENGTH_CAP, assert_under_length_cap
 from x_monitor.query_plan import PlannedCall, XQuerySpec, plan_calls
 from x_monitor.tweet_entities import merge_entities
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+
+# x_monitor imports — reuse existing pipeline modules.
+# These have no import-time side effects; they don't touch Store or
+# read config.yaml at module level.
+from x_monitor.x_client import (
+    XClient,
+    XClientAuthError,
+    XClientRateLimitError,
+    XClientServerError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -2499,7 +2499,7 @@ class CycleRunner:
     def _fetch_tweets(
         self,
         call: PlannedCall,
-        api: TwitterApiClient,
+        api: XClient,
         *,
         window: tuple[int, int],
         tip_only: bool = False,
@@ -2653,13 +2653,13 @@ class CycleRunner:
                     until_time=cur_until,
                     **page_admission,
                 )
-            except TwitterApiAuthError as exc:
+            except XClientAuthError as exc:
                 logger.error(
                     "_fetch_tweets: auth failure on %s: %s", call.call_id, exc
                 )
                 self._errors.append(f"fetch.{call.call_id}: auth: {exc}")
                 return all_items, ("error" if not all_items else "truncated")
-            except (TwitterApiRateLimitError, TwitterApiServerError) as exc:
+            except (XClientRateLimitError, XClientServerError) as exc:
                 logger.warning(
                     "_fetch_tweets: rate/server error on %s: %s", call.call_id, exc
                 )
@@ -2775,7 +2775,7 @@ class CycleRunner:
         return all_items, "ok"
 
     def _fetch_backfill_pages(
-        self, call: PlannedCall, api: TwitterApiClient, *, window: tuple[int, int],
+        self, call: PlannedCall, api: XClient, *, window: tuple[int, int],
         max_results: int, max_pages: int, max_per_page: int,
     ) -> tuple[list[dict[str, Any]], str]:
         """Retain received pages and resume tokens without skipping tied times."""
@@ -2870,7 +2870,7 @@ class CycleRunner:
             })
 
     def _run_rare_type_search(
-        self, call: PlannedCall, api: TwitterApiClient, *, now: datetime
+        self, call: PlannedCall, api: XClient, *, now: datetime
     ) -> dict[str, Any]:
         """Reserve one page per search identity against the shared allowance."""
 
@@ -2931,7 +2931,7 @@ class CycleRunner:
                 "estimated_credits": run.estimated_credits,
                 "confirmed_credits": run.confirmed_credits,
             }
-        effective_query = TwitterApiClient._effective_search_query(
+        effective_query = XClient._effective_search_query(
             call.query_string,
             since=None,
             since_time=int(run.attempted_start.timestamp()),
@@ -4667,7 +4667,7 @@ class CycleRunner:
         self,
         *,
         calls: list[PlannedCall],
-        api: TwitterApiClient,
+        api: XClient,
         index: Any,
         search_terms: dict[str, str],
         kept_all: list[dict[str, Any]],
@@ -4922,7 +4922,7 @@ class CycleRunner:
                 "post_fetch": {},
                 "errors": list(self._errors),
             }
-        api = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+        api = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
         search_terms = _load_brand_search_terms()
         kept_all: list[dict[str, Any]] = []
         replay_started_monotonic = self._monotonic()
@@ -5117,7 +5117,7 @@ class CycleRunner:
         # Build TwitterAPI client from environment only after attribution
         # policy and database coverage have passed preflight.
         try:
-            api = TwitterApiClient.from_env(self.twitterapi_credential_purpose)
+            api = XClient.from_env(self.twitterapi_credential_purpose)
         except RuntimeError as exc:
             logger.error("CycleRunner.run: cannot create API client: %s", exc)
             summary["status"] = "aborted"

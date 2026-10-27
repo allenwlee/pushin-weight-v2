@@ -389,7 +389,7 @@ def test_scheduled_cycle_call_chain_uses_scheduled_credential_and_no_replay(
     monkeypatch.setattr("monitor.cycle._build_brand_index", lambda _models: (None, {}))
     monkeypatch.setattr("monitor.cycle._load_brand_search_terms", dict)
     monkeypatch.setattr(
-        "monitor.cycle.TwitterApiClient.from_env",
+        "monitor.cycle.XClient.from_env",
         lambda purpose: purposes.append(purpose) or api,
     )
     monkeypatch.setattr(

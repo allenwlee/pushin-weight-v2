@@ -143,9 +143,9 @@ accounts:
         )
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
+        client = MagicMock()
         # 5 query results (no more cookie probe)
-        apify.run_search.side_effect = [
+        client.run_search.side_effect = [
             [{"id": "t1", "text": "hello", "author_handle": "u1"}],  # Q1
             [],  # Q2
             [],  # Q3
@@ -153,7 +153,7 @@ accounts:
             [],  # Q5
             [],  # Q6
         ]
-        summary = p.execute(apify, model_filter=["minimax"])
+        summary = p.execute(client, model_filter=["minimax"])
         # All 5 queries should have run (cost 5*5=25 < 333 budget).
         assert summary["totals"]["n_queries_run"] == 6
         # Raw files present
@@ -178,12 +178,12 @@ def test_pipeline_exits_cleanly_when_already_running():
         p = RunPipeline(cfg, data, db_path=data / "x.db")
         # Pre-acquire the lock so the pipeline's first call fails to acquire.
         with pipeline_lock(p.lock_path):
-            apify = MagicMock()
-            summary = p.execute(apify)
+            client = MagicMock()
+            summary = p.execute(client)
             assert summary["degraded"].get("already_running") is True
             assert summary["status"] == "degraded"
             # Apify was NOT called.
-            apify.run_search.assert_not_called()
+            client.run_search.assert_not_called()
 
 
 # --- run: resume ---------------------------------------------------------
@@ -202,9 +202,9 @@ def test_resume_does_not_call_apify():
         (raw_dir / "minimax_Q1.json").write_text(json.dumps(items), encoding="utf-8")
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
-        out = p.resume(run_id, apify)
-        apify.run_search.assert_not_called()
+        client = MagicMock()
+        out = p.resume(run_id, client)
+        client.run_search.assert_not_called()
         assert out["totals"]["n_inserted"] == 2
 
 
@@ -388,8 +388,8 @@ def _v15_deprecated_pipeline_applies_filter_before_insert():
         )
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
-        apify.run_search.return_value = [
+        client = MagicMock()
+        client.run_search.return_value = [
             {"id": "t1", "text": "minimax is great", "author_handle": "u1",
              "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
             {"id": "t2", "text": "totally unrelated", "author_handle": "u2",
@@ -401,7 +401,7 @@ def _v15_deprecated_pipeline_applies_filter_before_insert():
             {"id": "t5", "text": "random thoughts", "author_handle": "u5",
              "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
         ]
-        summary = p.execute(apify, model_filter=["minimax"])
+        summary = p.execute(client, model_filter=["minimax"])
         # DB has 2 rows (t1, t4); t2/t5 hard-drop, t3 soft-drop
         from x_monitor.store import Store
         store = Store(data / "x.db")
@@ -447,12 +447,12 @@ def _v15_deprecated_pipeline_soft_drop_adds_to_review_queue():
         )
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
-        apify.run_search.return_value = [
+        client = MagicMock()
+        client.run_search.return_value = [
             {"id": "t1", "text": "celebrity news", "author_handle": "u1",
              "like_count": 5, "brand_id": "minimax", "source_query_id": "Q5"},
         ]
-        p.execute(apify, model_filter=["minimax"])
+        p.execute(client, model_filter=["minimax"])
         # t1 NOT in DB
         from x_monitor.store import Store
         store = Store(data / "x.db")
@@ -494,8 +494,8 @@ def _v15_deprecated_pipeline_low_engagement_rule_only_runs_on_kept():
         )
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
-        apify.run_search.return_value = [
+        client = MagicMock()
+        client.run_search.return_value = [
             # Q1 release post that mentions 'minimax' — kept.
             {"id": "kept1", "text": "minimax M3 release", "author_handle": "u1",
              "like_count": 0, "brand_id": "minimax", "source_query_id": "Q1"},
@@ -504,7 +504,7 @@ def _v15_deprecated_pipeline_low_engagement_rule_only_runs_on_kept():
              "author_handle": "u2", "like_count": 0,
              "brand_id": "minimax", "source_query_id": "Q1"},
         ]
-        p.execute(apify, model_filter=["minimax"])
+        p.execute(client, model_filter=["minimax"])
         # DB has only kept1
         from x_monitor.store import Store
         store = Store(data / "x.db")
@@ -547,8 +547,8 @@ def _v15_deprecated_pipeline_drops_match_summary_counts():
         )
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
-        apify.run_search.return_value = [
+        client = MagicMock()
+        client.run_search.return_value = [
             {"id": "t1", "text": "minimax K2 is great", "author_handle": "u1",
              "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
             {"id": "t2", "text": "hello world", "author_handle": "OfficialBrand",
@@ -560,7 +560,7 @@ def _v15_deprecated_pipeline_drops_match_summary_counts():
             {"id": "t5", "text": "https://t.co/abc", "author_handle": "u5",
              "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
         ]
-        summary = p.execute(apify, model_filter=["minimax"])
+        summary = p.execute(client, model_filter=["minimax"])
         entry = summary["queries"][0]
         # t1 kept (must), t2 canonical_bypass, t3 soft_drop_banned,
         # t4 hard_drop_no_signal, t5 url_only_kept
@@ -579,12 +579,12 @@ def _v15_deprecated_pipeline_drops_match_summary_counts():
 
 def _v15_deprecated_pipeline_short_circuits_over_cap_query():
     """A query with > 22 top-level OR operators is short-circuited BEFORE
-    apify.run_search is called. The per-query summary entry has
+    client.run_search is called. The per-query summary entry has
     status="operator_cap_exceeded" and no credits are burned.
 
     We construct one of the six queries to be massively over-cap; the other
     five are normal. After execute(), the over-cap query must appear with
-    status operator_cap_exceeded and apify.run_search must have been called
+    status operator_cap_exceeded and client.run_search must have been called
     exactly 5 times (one per under-cap query), not 6.
     """
     # 30 ORs (31 terms) — well over the 22 cap.
@@ -627,19 +627,19 @@ accounts:
         )
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
+        client = MagicMock()
         # The 5 under-cap queries (Q1, Q2, Q4, Q5, Q6) hit the API.
-        apify.run_search.side_effect = [
+        client.run_search.side_effect = [
             [{"id": "t1", "text": "hi", "author_handle": "u1"}],  # Q1
             [],
             [],
             [],
             [],
         ]
-        summary = p.execute(apify, model_filter=["minimax"])
+        summary = p.execute(client, model_filter=["minimax"])
         # The 5 under-cap queries ran. The 6th call (for Q3) was NOT made
         # because the operator-cap pre-check short-circuited it.
-        assert apify.run_search.call_count == 5
+        assert client.run_search.call_count == 5
         # The Q3 entry must be flagged operator_cap_exceeded.
         q3_entries = [
             q for q in summary["queries"] if q.get("query_id") == "Q3"
@@ -661,7 +661,7 @@ def _stub_plan_calls(enabled_models):
 
     v1.6 plan_calls reads accounts + queries yaml from disk. For
     pipeline tests we don't want to write full yaml; we just need
-    deterministic call lists to drive apify mocks. Returns:
+    deterministic call lists to drive client mocks. Returns:
       - 1 account call per model (release)
       - 1 constrained brand-wide call per model (with the model's brand
         token prefixed)
@@ -691,7 +691,7 @@ def test_pipeline_runs_via_plan_calls_account_call(monkeypatch):
     """v1.6 pipeline iterates plan_calls(...) and runs each call.
 
     We mock plan_calls to return 1 account + 1 intent call, mock
-    apify.run_search to return 1 item per call, and verify the
+    client.run_search to return 1 item per call, and verify the
     pipeline emits 2 summary entries with the correct call_kind.
     """
     monkeypatch.setattr(
@@ -717,18 +717,18 @@ def test_pipeline_runs_via_plan_calls_account_call(monkeypatch):
         )
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
+        client = MagicMock()
         # account call returns 1 item (t1); intent call returns 1 item (t2)
-        apify.run_search.side_effect = [
+        client.run_search.side_effect = [
             [{"id": "t1", "text": "minimax release", "author_handle": "u1"}],
             [{"id": "t2", "text": "minimax how to use", "author_handle": "u2"}],
         ]
-        summary = p.execute(apify, model_filter=["minimax"])
+        summary = p.execute(client, model_filter=["minimax"])
         # 2 calls fired (account + intent) — but the v1.6 plan_calls
         # stub is what we patch; the real plan_calls in our codebase
         # builds from yaml. With the stub returning 2 calls, we expect
-        # 2 apify calls.
-        assert apify.run_search.call_count == 2
+        # 2 client calls.
+        assert client.run_search.call_count == 2
         # The summary has 2 query entries (1 per call).
         assert len(summary["queries"]) == 2
         kinds = {q.get("call_kind") for q in summary["queries"]}
@@ -891,9 +891,9 @@ def test_intent_call_classifies_multi_brand(monkeypatch):
         )
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
+        client = MagicMock()
         # account call: 0 items; intent call: 1 multi-brand post.
-        apify.run_search.side_effect = [
+        client.run_search.side_effect = [
             [],
             [
                 {"id": "mb1", "text": "Qwen 3 vs DeepSeek V3",
@@ -911,7 +911,7 @@ def test_intent_call_classifies_multi_brand(monkeypatch):
             captured["items"] = list(items)
             return orig_insert(self, items)
         monkeypatch.setattr(Store, "insert_posts", _capture)
-        p.execute(apify, model_filter=["qwen", "deepseek"])
+        p.execute(client, model_filter=["qwen", "deepseek"])
         assert len(captured["items"]) == 1
         kept = captured["items"][0]
         # The new v1.8 multi-brand fields are populated.
@@ -981,8 +981,8 @@ def test_intent_call_passes_mentions_to_insert_posts(monkeypatch):
         )
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
-        apify.run_search.side_effect = [
+        client = MagicMock()
+        client.run_search.side_effect = [
             [],
             [
                 {"id": "p1", "text": "minimax is great",
@@ -997,7 +997,7 @@ def test_intent_call_passes_mentions_to_insert_posts(monkeypatch):
             captured["items"] = list(items)
             return orig_insert(self, items)
         monkeypatch.setattr(Store, "insert_posts", _capture)
-        p.execute(apify, model_filter=["minimax"])
+        p.execute(client, model_filter=["minimax"])
         assert len(captured["items"]) == 1
         kept = captured["items"][0]
         assert "mentions" in kept
@@ -1047,8 +1047,8 @@ def test_intent_call_passes_signals_to_insert_posts(monkeypatch):
         )
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
-        apify.run_search.side_effect = [
+        client = MagicMock()
+        client.run_search.side_effect = [
             [],
             [
                 {"id": "s1", "text": "minimax 太强了",
@@ -1063,7 +1063,7 @@ def test_intent_call_passes_signals_to_insert_posts(monkeypatch):
             captured["items"] = list(items)
             return orig_insert(self, items)
         monkeypatch.setattr(Store, "insert_posts", _capture)
-        p.execute(apify, model_filter=["minimax"])
+        p.execute(client, model_filter=["minimax"])
         assert len(captured["items"]) == 1
         kept = captured["items"][0]
         assert "classifications" in kept
@@ -1118,9 +1118,9 @@ def test_pipeline_applies_filter_before_insert_v16(monkeypatch):
         )
         cfg = Config(enabled_models=["minimax"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
+        client = MagicMock()
         # account call: 0 items; intent call: 5 items (1 banned, 2 noise, 2 valid)
-        apify.run_search.side_effect = [
+        client.run_search.side_effect = [
             [],
             [
                 {"id": "t1", "text": "minimax is great", "author_handle": "u1",
@@ -1135,7 +1135,7 @@ def test_pipeline_applies_filter_before_insert_v16(monkeypatch):
                  "like_count": 10, "brand_id": "minimax", "source_query_id": "Q5"},
             ],
         ]
-        summary = p.execute(apify, model_filter=["minimax"])
+        summary = p.execute(client, model_filter=["minimax"])
         from x_monitor.store import Store
         store = Store(data / "x.db")
         posts = store.get_all_posts("minimax")
@@ -1203,11 +1203,11 @@ def test_retired_filter_yaml_does_not_soft_drop(monkeypatch):
         )
         cfg = Config(enabled_models=["moonshot_kimi"], daily_ceiling=333, x_monitor_list_id=1234567890)
         p = RunPipeline(cfg, data, db_path=data / "x.db")
-        apify = MagicMock()
+        client = MagicMock()
         # The checked-in YAML still lists an old F1 exclusion, but the
         # current runtime attributes from its in-code/DB vocabulary and does
         # not load that retired filter file.
-        apify.run_search.side_effect = [
+        client.run_search.side_effect = [
             [],
             [
                 {"id": "f1", "text": "moonshot_kimi is faster than F1 today",
@@ -1216,7 +1216,7 @@ def test_retired_filter_yaml_does_not_soft_drop(monkeypatch):
             ],
         ]
         review = ReviewQueue(data / "_review_queue.json")
-        p.execute(apify, model_filter=["moonshot_kimi"])
+        p.execute(client, model_filter=["moonshot_kimi"])
         from x_monitor.store import Store
         store = Store(data / "x.db")
         assert {

@@ -783,7 +783,7 @@ def test_rare_extra_staging_override_enables_only_the_pinned_assessment(tmp_path
 
 
 def test_bounded_provider_client_clamps_arguments_results_and_retries():
-    from monitor.staging_acceptance import BoundedTwitterApiClient
+    from monitor.staging_acceptance import BoundedXClient
 
     class Delegate:
         max_retries = 2
@@ -796,7 +796,7 @@ def test_bounded_provider_client_clamps_arguments_results_and_retries():
             return [{"id": str(i)} for i in range(9)], False
 
     delegate = Delegate()
-    client = BoundedTwitterApiClient(delegate)
+    client = BoundedXClient(delegate)
     items, truncated = client.run_search(
         "fixture",
         max_results=999,
@@ -816,7 +816,7 @@ def test_bounded_provider_client_clamps_arguments_results_and_retries():
 
 def test_bounded_provider_client_guards_rare_raw_page_caller():
     from monitor.staging_acceptance import (
-        BoundedTwitterApiClient,
+        BoundedXClient,
         StagingAcceptanceError,
     )
 
@@ -832,7 +832,7 @@ def test_bounded_provider_client_guards_rare_raw_page_caller():
             return b"{}", raw, list(raw["tweets"]), True, 0
 
     delegate = Delegate()
-    client = BoundedTwitterApiClient(delegate)
+    client = BoundedXClient(delegate)
     _body, raw, normalized, continuation, errors = (
         client.run_search_page_with_raw(
             "fixture",
@@ -935,7 +935,7 @@ def test_rare_extra_staging_profile_reaches_shared_cycle_with_all_live_caps(
     from monitor.staging_acceptance import (
         RARE_ASSESSMENT_DIGEST_ENVIRONMENT,
         RARE_ASSESSMENT_PATH_ENVIRONMENT,
-        BoundedTwitterApiClient,
+        BoundedXClient,
         prepare_staging_acceptance,
     )
     from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
@@ -978,7 +978,7 @@ def test_rare_extra_staging_profile_reaches_shared_cycle_with_all_live_caps(
             return b"{}", {"tweets": []}, [], False, 0
 
     delegate = Delegate()
-    api = BoundedTwitterApiClient(delegate)
+    api = BoundedXClient(delegate)
     purposes = []
     drain_cutoffs = []
     metrics_configs = []
@@ -991,7 +991,7 @@ def test_rare_extra_staging_profile_reaches_shared_cycle_with_all_live_caps(
     monkeypatch.setattr("monitor.cycle._load_brand_search_terms", dict)
     monkeypatch.setattr("monitor.cycle._resolve_x_monitor_list_id", lambda *_a: None)
     monkeypatch.setattr(
-        "monitor.cycle.TwitterApiClient.from_env",
+        "monitor.cycle.XClient.from_env",
         lambda purpose: purposes.append(purpose) or api,
     )
 
@@ -1141,7 +1141,7 @@ def test_real_nonempty_cycle_runner_reaches_same_cycle_terminal_acceptance(
         credential_purposes.append(purpose)
         return api
 
-    monkeypatch.setattr("monitor.cycle.TwitterApiClient.from_env", fake_from_env)
+    monkeypatch.setattr("monitor.cycle.XClient.from_env", fake_from_env)
     monkeypatch.setattr(
         reattribute, "build_translator_client_from_env", lambda _cfg: client
     )

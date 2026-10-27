@@ -97,11 +97,11 @@ def _probe(spec, api_key: str, max_results: int) -> dict:
     # Imported lazily so the script can be inspected even on
     # systems without x_monitor installed.
     try:
-        from x_monitor.apify import TwitterApiClient
+        from x_monitor.x_client import XClient
     except ImportError as exc:
-        sys.exit(f"x_monitor.apify not importable: {exc}")
+        sys.exit(f"x_monitor.x_client not importable: {exc}")
 
-    client = TwitterApiClient(api_key=api_key)
+    client = XClient(api_key=api_key)
     query = _build_query(spec)
     items = client.run_search(query, max_results=max_results)
 

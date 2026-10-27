@@ -74,7 +74,7 @@ class FakeClaudeClient:
 
 
 class FakeApify:
-    """Stubbed TwitterApiClient that returns canned tweets."""
+    """Stubbed XClient that returns canned tweets."""
 
     def __init__(self, tweets: list[dict]):
         self._tweets = tweets

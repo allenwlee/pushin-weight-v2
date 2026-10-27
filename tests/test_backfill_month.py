@@ -1,6 +1,7 @@
 """Frozen expansion and real command routing, without a database or providers."""
 
 import copy
+import hashlib
 import json
 from datetime import UTC, datetime
 from itertools import pairwise
@@ -205,6 +206,34 @@ def test_runtime_attestation_may_extend_original_sources_but_not_omit_them():
     ]:
         with pytest.raises(ValueError):
             month.selected_runtime(r, change)
+
+
+def test_client_rename_requires_current_sources_without_rewriting_frozen_recipe(
+    tmp_path, monkeypatch
+):
+    """An old recipe stays pinned; it cannot attest a renamed checkout."""
+    r = recipe()
+    r["spec"]["source_sha256"]["x_monitor/apify.py"] = "a" * 64
+    original = copy.deepcopy(r)
+    assert month.selected_runtime(r) == original["spec"]
+    assert r == original
+    monkeypatch.setenv("RENDER_GIT_COMMIT", r["spec"]["runtime_revision"])
+    with pytest.raises(RuntimeError, match="month_runtime_attestation_required"):
+        month.verify_sources(r["spec"])
+
+    monkeypatch.chdir(tmp_path)
+    sources = {}
+    for name in month.RUNTIME_MODULES:
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(name.encode())
+        sources[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    current = r["spec"] | {"source_sha256": sources}
+    month.verify_sources(current)
+    (tmp_path / "x_monitor/x_client.py").write_text("changed client")
+    with pytest.raises(RuntimeError, match="month_runtime_source_changed"):
+        month.verify_sources(current)
+    assert r == original
 
 
 def test_live_lease_rejected_expired_owned_lease_left_for_fenced_reclaim():

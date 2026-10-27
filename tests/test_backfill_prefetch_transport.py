@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from x_monitor.apify import search_page_from_response
+from x_monitor.x_client import search_page_from_response
 
 
 @pytest.mark.parametrize("tweets,more,cursor,expected", [
@@ -44,7 +44,7 @@ def test_total_http_deadline_stops_trickling_server(slow_part):
 
     import requests
 
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -70,7 +70,7 @@ def test_total_http_deadline_stops_trickling_server(slow_part):
     server.daemon_threads = True
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    client = TwitterApiClient(api_key="fixture", max_retries=0, max_response_bytes=1024)
+    client = XClient(api_key="fixture", max_retries=0, max_response_bytes=1024)
     try:
         start = time.monotonic()
         with pytest.raises(requests.Timeout):

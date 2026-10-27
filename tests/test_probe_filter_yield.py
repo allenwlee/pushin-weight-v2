@@ -3,7 +3,7 @@
 Plan: docs/plans/2026-07-08-004-feat-filter-yield-ramp-probe-plan.md
 Mirrors test_call_c_specs.py (subprocess for CLI; in-process for
 helpers). No live API calls in CI — all HTTP is faked via monkeypatch
-or a `FakeTwitterApiClient`.
+or a `FakeXClient`.
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ PROBE_SCRIPT = REPO_ROOT / "scripts" / "probe_filter_yield.py"
 # --- in-process imports --------------------------------------------------
 
 from scripts import probe_filter_yield as pf  # noqa: E402
-
 
 # --- helpers ------------------------------------------------------------
 
@@ -266,7 +265,7 @@ def test_probe_hard_max_clamps_huge_ramp_level():
 
 
 def test_probe_script_imports_cleanly():
-    """The probe imports x_monitor.query_plan and x_monitor.apify on
+    """The probe imports x_monitor.query_plan and x_monitor.x_client on
     live path; even without creds, those imports must succeed."""
     proc = subprocess.run(
         [sys.executable, "-c",
@@ -373,12 +372,12 @@ def test_row_for_csv_failure_path():
         "extrapolated_n_in_15min": None,
         "extrapolation_confidence": "high",
         "sample_tweet_ids": "",
-        "error": "TwitterApiRateLimitError",
+        "error": "XClientRateLimitError",
     }
     row = pf._row_for_csv("B2", 100, result)
     assert row[2] is None  # n_results
     assert row[5] is None  # cost_estimate_usd
-    assert row[12] == "TwitterApiRateLimitError"
+    assert row[12] == "XClientRateLimitError"
 
 
 def test_print_summary_handles_int_n_within_15min():

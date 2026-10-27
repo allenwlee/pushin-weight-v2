@@ -15,8 +15,8 @@ from django.db.models import Q
 from django.utils import timezone as dj_timezone
 
 from core.models import Post
-from x_monitor.apify import TwitterApiClient
 from x_monitor.config import Config, MetricsRefreshConfig
+from x_monitor.x_client import XClient
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ def apply_metrics_to_post(tweet_id: str, info: dict[str, Any], *, now: datetime 
 
 
 def run_metrics_refresh(
-    api: TwitterApiClient,
+    api: XClient,
     cfg: Config | None = None,
     *,
     now: datetime | None = None,

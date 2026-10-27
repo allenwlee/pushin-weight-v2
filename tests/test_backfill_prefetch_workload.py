@@ -28,7 +28,7 @@ from tests.test_backfill_pipeline import page
 from tests.test_backfill_prefetch import http_pages as http_pages_fixture
 from tests.test_backfill_prefetch import job_for_scopes
 from tests.test_backfill_prefetch import pipeline as pipeline_fixture
-from x_monitor.apify import TwitterApiClient
+from x_monitor.x_client import XClient
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 http_pages = pytest.fixture(name="http_pages")(http_pages_fixture.__wrapped__)
@@ -66,7 +66,7 @@ def test_recorded_workload_preserves_fields_checkpoints_and_requests(http_pages,
     sql_usage = {"statements": 0, "seconds": 0.0}
     http_seconds = []
     http_guard = threading.Lock()
-    original_get = TwitterApiClient._get
+    original_get = XClient._get
 
     def timed_get(client, *args, **kwargs):
         start = time.monotonic()
@@ -84,7 +84,7 @@ def test_recorded_workload_preserves_fields_checkpoints_and_requests(http_pages,
             sql_usage["statements"] += 1
             sql_usage["seconds"] += time.monotonic() - start
 
-    monkeypatch.setattr(TwitterApiClient, "_get", timed_get)
+    monkeypatch.setattr(XClient, "_get", timed_get)
     attempt_seconds = []
     connection_samples = []
     started = time.monotonic()

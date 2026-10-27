@@ -1399,7 +1399,7 @@ class Store:
 
         `author_id` is the X user id (immutable, globally-unique identifier
         Twitter/X assigns to each account). Pass it when the caller has it
-        (e.g., the apify normalizers now extract it from the API response).
+        (e.g., the client normalizers now extract it from the API response).
         For callers that don't have one (yaml-derived accounts in
         `data/brands/<brand>/accounts.yaml`), we synthesize a stable
         `handle:<handle>` author_id so re-upserts hit the same row.

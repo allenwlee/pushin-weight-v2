@@ -123,7 +123,7 @@ def _patch_cycle_shell(monkeypatch, *, call, api, drain=True, post_fetch=True):
     monkeypatch.setattr("monitor.cycle._load_brand_search_terms", dict)
     monkeypatch.setattr("monitor.cycle._resolve_x_monitor_list_id", lambda *_a: None)
     monkeypatch.setattr(
-        "monitor.cycle.TwitterApiClient.from_env", lambda _purpose: api
+        "monitor.cycle.XClient.from_env", lambda _purpose: api
     )
     monkeypatch.setattr(
         "scripts.harvest_cost.emit.finalize_and_persist",

@@ -36,7 +36,6 @@ import pytest
 
 from x_monitor.config import KNOWN_MODELS, load_config
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CFG_PATH = REPO_ROOT / "config.yaml"
 PROBE_SCRIPT = REPO_ROOT / "scripts" / "probe_call_c_spec.py"
@@ -160,7 +159,7 @@ def test_probe_script_handles_missing_creds(tmp_path, monkeypatch):
 
 
 def test_probe_script_imports_cleanly():
-    """The probe imports x_monitor.query_plan and x_monitor.apify on
+    """The probe imports x_monitor.query_plan and x_monitor.x_client on
     live path; even with no creds, those imports must succeed."""
     proc = subprocess.run(
         [sys.executable, "-c",

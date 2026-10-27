@@ -6,8 +6,8 @@ Ports x_monitor/run.py:
   - _ingest_quote_tweets
 
 v2 persists via Django ORM (CycleRunner._attribute_items / _persist_items)
-and uses TwitterApiClient.get_tweets_by_ids + get_quote_tweets from
-x_monitor.apify. Tracking columns already exist on core.models.Post:
+and uses XClient.get_tweets_by_ids + get_quote_tweets from
+x_monitor.x_client. Tracking columns already exist on core.models.Post:
   last_quote_count_seen, last_quote_fetched_at, quoted_text, quote_count.
 
 This channel was ~24% of v1 stored volume and was never wired into
@@ -29,8 +29,8 @@ from django.db.models import Q
 from django.utils import timezone as dj_timezone
 
 from core.models import BrandAccount, Post
-from x_monitor.apify import TwitterApiClient
 from x_monitor.config import QuoteTweetConfig
+from x_monitor.x_client import XClient
 
 logger = logging.getLogger(__name__)
 
@@ -195,7 +195,7 @@ def ingest_quote_tweets(
 
 def capture_official_quote_tweets(
     runner: _Attributable,
-    api: TwitterApiClient,
+    api: XClient,
     *,
     index: Any,
     brand_search_terms: dict[str, str],
@@ -288,7 +288,7 @@ def capture_official_quote_tweets(
 
 def capture_nonofficial_quote_tweets_daily(
     runner: _Attributable,
-    api: TwitterApiClient,
+    api: XClient,
     *,
     index: Any,
     brand_search_terms: dict[str, str],
@@ -395,7 +395,7 @@ def capture_nonofficial_quote_tweets_daily(
 
 def run_quote_tweet_channel(
     runner: _Attributable,
-    api: TwitterApiClient,
+    api: XClient,
     *,
     index: Any,
     brand_search_terms: dict[str, str],

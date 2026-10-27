@@ -18,8 +18,8 @@ from typing import Any, Callable
 
 import requests
 
-from x_monitor.apify import SEARCH_PATH, TwitterApiClient
 from x_monitor.twitterapi_credentials import TwitterApiCredentialPurpose
+from x_monitor.x_client import SEARCH_PATH, XClient
 
 PAGE_LIMIT = 20
 RESERVATION_PER_CALL = 300
@@ -175,7 +175,7 @@ def _hit(request_id: str, index: int, item: Any, duplicate: bool) -> dict[str, A
 def run_followup(
     source: Path,
     output: Path,
-    client: TwitterApiClient,
+    client: XClient,
     *,
     max_calls: int = DEFAULT_MAX_CALLS,
     credit_budget: int = DEFAULT_CREDIT_BUDGET,
@@ -362,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-calls", type=int, default=DEFAULT_MAX_CALLS)
     parser.add_argument("--credit-budget", type=int, default=DEFAULT_CREDIT_BUDGET)
     args = parser.parse_args(argv)
-    client = TwitterApiClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
+    client = XClient.from_env(TwitterApiCredentialPurpose.ON_DEMAND)
     client.max_retries = 0
     summary = run_followup(args.input_dir, args.output_dir, client,
                            max_calls=args.max_calls, credit_budget=args.credit_budget)

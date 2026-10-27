@@ -670,7 +670,7 @@ def prepare_staging_acceptance(
     )
 
 
-class BoundedTwitterApiClient:
+class BoundedXClient:
     """Delegate that cannot exceed the acceptance request/result envelope."""
 
     def __init__(self, delegate):
@@ -745,19 +745,19 @@ def bounded_twitter_client_factory() -> Iterator[None]:
     another workload.  The original descriptor is restored even on failure.
     """
 
-    from x_monitor.apify import TwitterApiClient
+    from x_monitor.x_client import XClient
 
-    original_descriptor = TwitterApiClient.__dict__["from_env"]
-    original_factory = TwitterApiClient.from_env
+    original_descriptor = XClient.__dict__["from_env"]
+    original_factory = XClient.from_env
 
     def _from_env(_cls, purpose: TwitterApiCredentialPurpose):
-        return BoundedTwitterApiClient(original_factory(purpose))
+        return BoundedXClient(original_factory(purpose))
 
-    TwitterApiClient.from_env = classmethod(_from_env)
+    XClient.from_env = classmethod(_from_env)
     try:
         yield
     finally:
-        TwitterApiClient.from_env = original_descriptor
+        XClient.from_env = original_descriptor
 
 
 @contextmanager

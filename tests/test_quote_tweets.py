@@ -12,7 +12,6 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from x_monitor.apify import _normalize_tweet
 from x_monitor.attribution import classify_post
 from x_monitor.run import (
     _attribute_call_items,
@@ -20,6 +19,7 @@ from x_monitor.run import (
     _ingest_quote_tweets,
 )
 from x_monitor.store import Store
+from x_monitor.x_client import _normalize_tweet
 
 
 def test_normalize_tweet_extracts_quoted_content():

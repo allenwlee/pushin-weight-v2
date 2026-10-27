@@ -206,7 +206,7 @@ def test_live_policy_resolution_does_not_fallback_to_config_specs(
 
 
 def test_cycle_aborts_before_provider_when_live_policy_is_missing(tmp_path, monkeypatch):
-    """A missing policy cannot reach TwitterApiClient construction/search."""
+    """A missing policy cannot reach XClient construction/search."""
     import os
 
     os.environ.setdefault("DATABASE_URL", "sqlite:///data/django_dev.db")
@@ -228,7 +228,7 @@ def test_cycle_aborts_before_provider_when_live_policy_is_missing(tmp_path, monk
         raise AssertionError("provider must not be constructed on policy failure")
 
     monkeypatch.setattr(
-        cycle_module.TwitterApiClient,
+        cycle_module.XClient,
         "from_env",
         classmethod(fake_from_env),
     )
