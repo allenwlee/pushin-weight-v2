@@ -11,7 +11,7 @@ from django.core.management.base import CommandError
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from core.collection_capture import read_document, run_report_document
+from core.collection_capture import archive_legacy, read_document, run_report_document
 from core.collection_jobs import register_job, set_job_state
 from core.collection_pages import page_receipts
 from core.collection_state import StaleClaim
@@ -259,11 +259,9 @@ def test_database_job_resumes_exact_page_and_preserves_previous_attempt(pipeline
     assert old_scope.cursor == "second-page"
     assert not hasattr(old_scope, "envelopes")
     assert page_receipts(old_scope)[-1]["post_ids"] == ["1"]
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "UPDATE collection_scope_runs SET envelopes=%s::jsonb WHERE id=%s",
-            ['[{"deliberately":"unusable retired receipt"}]', old_scope.pk],
-        )
+    retired = {"envelopes": [{"deliberately": "unusable retired receipt"}]}
+    old_scope.legacy_archive = archive_legacy(retired)
+    old_scope.save(update_fields=["legacy_archive"])
     assert old_scope.raw_count == 1
     assert read_document(old.scopes.get(scope_kind="x_checkpoint_import").legacy_archive)["historical_attempt_timestamps"] is None
     pipeline.responses.append(page("2"))
@@ -275,9 +273,7 @@ def test_database_job_resumes_exact_page_and_preserves_previous_attempt(pipeline
     assert second["enrichment_pending_count"] == 2
     old_scope.refresh_from_db()
     assert old_scope.cursor == "second-page" and not old_scope.enumeration_complete
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT envelopes FROM collection_scope_runs WHERE id=%s", [old_scope.pk])
-        assert json.loads(cursor.fetchone()[0]) == [{"deliberately": "unusable retired receipt"}]
+    assert read_document(old_scope.legacy_archive) == retired
     resumed = CollectionRun.objects.get(pk=second["run_id"]).scopes.get(scope_kind="x_query")
     assert not hasattr(resumed, "envelopes") and len(page_receipts(resumed)) == 2
     assert pipeline.requests[1]["cursor"] == "second-page"
@@ -662,7 +658,9 @@ def test_historical_call_a_staff_uses_on_demand_model_and_durable_usage(pipeline
     assert len(evidence["post_ids"]) + len(evidence["exclusions"]) == 2
 
 
-def test_historical_rare_inbox_precedes_gate_and_never_uses_live_slot(pipeline, monkeypatch, tmp_path):
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0200_merge_rg6_enrichment_budget_contract")], indirect=True)
+def test_historical_rare_inbox_precedes_gate_and_never_uses_live_slot(migration_rehearsal_schema, pipeline, monkeypatch, tmp_path):
+    # Preserve the one-time copier assertions against their pre-DROP schema.
     from decimal import Decimal
 
     from core.collection_storage_migration import (
@@ -768,12 +766,10 @@ def test_historical_rare_resume_uses_saved_inbox_and_exact_cursor(pipeline, monk
     with pytest.raises(CommandError):
         run(job)
     assert RareTypeSearchHit.objects.count() == 1 and not model_calls and not Post.objects.exists()
-    with connection.cursor() as cursor:
-        cursor.execute(
-            "UPDATE collection_scope_runs SET envelopes=%s::jsonb "
-            "WHERE run_id IN (SELECT id FROM collection_runs WHERE job_id=%s)",
-            ['[{"deliberately":"unusable retired receipt"}]', job.pk],
-        )
+    from core.models import CollectionScopeRun
+
+    retired = archive_legacy({"envelopes": [{"deliberately": "unusable retired receipt"}]})
+    CollectionScopeRun.objects.filter(run__job=job, scope_kind="x_query").update(legacy_archive=retired)
     pipeline.responses.append(page("second"))
     report = run(job)
     assert report["collection_drained"] and report["rare_gate_pending"] == 0

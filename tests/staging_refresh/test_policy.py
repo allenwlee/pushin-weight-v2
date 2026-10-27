@@ -346,6 +346,39 @@ def test_valid_staging_preflight_is_authorized() -> None:
     assert result.target.database == "pushinweight_staging"
 
 
+def test_enrichment_allowances_cannot_cross_the_refresh_boundary() -> None:
+    policy = load_policy(POLICY_PATH)
+    table = "enrichment_budget_windows"
+    assert table in policy.relations.excluded_tables
+    assert table in policy.scrub.truncate_tables
+    assert table in policy.relations.optional_source_tables
+    assert table not in policy.relations.copied_tables
+
+    source = _inspection(policy, source=True)
+    with pytest.raises(PolicyError, match="source_excluded_table_readable:" + table):
+        authorize(
+            policy,
+            action="preflight",
+            environ=_environment(policy),
+            source=replace(source, readable_tables=source.readable_tables | {table}),
+            target=_inspection(policy, source=False),
+        )
+
+    # A source predating the allowance table is still supported; a new target
+    # must provision its own spending authority instead of copying production's.
+    authorize(
+        policy,
+        action="preflight",
+        environ=_environment(policy),
+        source=replace(
+            source,
+            base_tables=source.base_tables - {table},
+            maintainable_tables=source.maintainable_tables - {table},
+        ),
+        target=_inspection(policy, source=False),
+    )
+
+
 def test_pre_rename_source_requires_separate_schema_preparation() -> None:
     policy = load_policy(POLICY_PATH)
     source = _inspection(policy, source=True)

@@ -4,9 +4,7 @@ A checkpoint may aggregate several provider pages. Appearance positions describe
 that checkpoint's received sequence, never invented physical HTTP requests.
 """
 
-from typing import NamedTuple
-
-from django.db import connection, transaction
+from django.db import transaction
 from django.utils import timezone
 
 from core.benchmark_metric_store import aware_instant
@@ -218,54 +216,6 @@ def project_page_receipts(scope, envelopes, *, cursor=None, legacy_archive=None)
         append_page_receipt(scope, envelope, cursor=cursor, legacy_archive=legacy_archive)
 
 
-def adopt_unprojected_page_receipts(scope):
-    """Migration-only adoption, called under the importer's run fence.
-
-    An empty retired column is allowed after successful projection. A surviving
-    old prefix must be adopted before deploying typed-only checkpoint callers,
-    or its missing owners fail the transaction. Runtime readers never call this.
-    """
-    if scope.envelopes:
-        project_page_receipts(scope, scope.envelopes, legacy_archive=scope.legacy_archive)
-
-
-class PageProjectionBatch(NamedTuple):
-    last_id: int
-    scanned: int
-    inserted: int
-
-
-@transaction.atomic
-def project_page_receipts_batch(*, after_id=0, batch_size=100):
-    """Explicit migration of a bounded query-scope batch, before JSON retirement.
-
-    Stored Post membership and rare-hit adoption must run first. Old receipt
-    timestamps are copied only when present; no request or page cursor is inferred.
-    """
-    require(type(after_id) is int and after_id >= 0, "invalid page migration cursor")
-    require(type(batch_size) is int and 1 <= batch_size <= 500, "invalid page migration batch size")
-    with connection.cursor() as cursor:
-        cursor.execute("SET LOCAL lock_timeout = '5s'")
-        cursor.execute("SET LOCAL statement_timeout = '30s'")
-    scopes = list(CollectionScopeRun.objects.select_for_update().filter(
-        scope_kind="x_query", pk__gt=after_id,
-    ).order_by("pk")[:batch_size])
-    inserted = 0
-    for scope in scopes:
-        if not scope.envelopes:
-            continue  # Most historical query scopes have no page receipt.
-        before = scope.child_scopes.filter(scope_kind=PAGE_KIND).count()
-        project_page_receipts(scope, scope.envelopes, legacy_archive=scope.legacy_archive)
-        inserted += scope.child_scopes.filter(scope_kind=PAGE_KIND).count() - before
-    return PageProjectionBatch(scopes[-1].pk if scopes else after_id, len(scopes), inserted)
-
-
-class PageParityBatch(NamedTuple):
-    last_id: int
-    scanned: int
-    mismatched: int
-
-
 def _receipt_semantics(envelope):
     """Normalize only equivalences already used by the completion verifier."""
     return {
@@ -283,30 +233,6 @@ def _receipt_semantics(envelope):
         "exclusions": sorted(envelope.get("exclusions", []), key=lambda entry: entry["appearance"]),
         "relevancy_degraded": envelope.get("relevancy_degraded", []),
     }
-
-
-def page_receipt_parity_batch(*, after_id=0, batch_size=100):
-    """Walk every query scope before retirement, including empty old lists.
-
-    Pagination uses the existing primary key; empty lists need no child-count
-    query. One grouped child-count query covers the entire bounded ID range.
-    """
-    from django.db.models import Count
-
-    require(type(after_id) is int and after_id >= 0, "invalid page parity cursor")
-    require(type(batch_size) is int and 1 <= batch_size <= 500, "invalid page parity batch size")
-    scopes = list(CollectionScopeRun.objects.filter(scope_kind="x_query", pk__gt=after_id)
-                  .only("pk", "envelopes").order_by("pk")[:batch_size])
-    counts = dict(CollectionScopeRun.objects.filter(scope_kind=PAGE_KIND, parent_scope_id__in=[s.pk for s in scopes])
-                  .values("parent_scope_id").annotate(count=Count("pk")).values_list("parent_scope_id", "count"))
-    mismatched = 0
-    for scope in scopes:
-        if (counts.get(scope.pk, 0) != len(scope.envelopes)
-            or scope.envelopes and [_receipt_semantics(e) for e in scope.envelopes] != [
-                _receipt_semantics(e) for e in page_receipts(scope)
-            ]):
-            mismatched += 1
-    return PageParityBatch(scopes[-1].pk if scopes else after_id, len(scopes), mismatched)
 
 
 def copy_continuation_scopes(previous, run):
