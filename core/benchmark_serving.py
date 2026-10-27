@@ -150,14 +150,19 @@ def publication_runs(contract, lower, upper):
 
 
 def selected_endpoint_rows(contract, mapping_ids, start, end, cutoff):
+    # Keep this validated view lookup correlated to an eligible contract run.
+    # Flattening it can expand every endpoint revision before applying the
+    # contract filter, even when the chart requests only a few dozen dates.
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT DISTINCT ON (p.external_identifier,p.period_date) "
             "p.external_identifier,p.period_date,p.observation_id,p.run_id,"
             "p.updated_at,p.body_sha256,p.conflicting_revision "
-            "FROM benchmark_endpoint_revisions p JOIN collection_runs r ON r.id=p.run_id "
-            "JOIN collection_jobs j ON j.id=r.job_id "
-            "WHERE j.contract_id=%s AND p.mapping_id=ANY(%s::uuid[]) "
+            "FROM collection_jobs j JOIN collection_runs r ON r.job_id=j.id "
+            "CROSS JOIN LATERAL (SELECT * FROM benchmark_endpoint_revisions p "
+            "WHERE p.run_id=r.id OFFSET 0) p "
+            "WHERE j.contract_id=%s AND j.source_id='opencode' AND j.purpose='metric' "
+            "AND r.status IN ('success','partial') AND p.mapping_id=ANY(%s::uuid[]) "
             "AND p.period_date BETWEEN %s AND %s "
             "AND (%s::timestamptz IS NULL OR (r.completed_at<=%s AND p.updated_at<=%s)) "
             "ORDER BY p.external_identifier,p.period_date,p.updated_at DESC,p.body_sha256 DESC,r.completed_at DESC,r.id DESC LIMIT 36601",

@@ -499,6 +499,103 @@ def test_publication_times_preserve_validated_cross_run_contract_and_null_semant
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db
+def test_endpoint_selection_matches_original_order_reuse_and_cutoffs():
+    import json
+    from io import StringIO
+
+    from django.core.management import call_command
+    from django.db import connection
+
+    from core.benchmark_metric_store import persist_source
+    from core.benchmark_opencode import retained_checks
+    from core.benchmark_serving import selected_endpoint_rows
+    from core.models import CollectionRun
+
+    contract = configured()
+    runs = []
+    for index, tokens, stamp in ((1, 40, "12:00:00"), (2, 40, "12:30:00"), (3, 10, "12:30:00")):
+        run = persist_source(
+            contract, "opencode", str(index) * 64,
+            read(endpoint(tokens, "2026-10-07T" + stamp + "Z")),
+        )
+        CollectionRun.objects.filter(pk=run.pk).update(
+            completed_at=datetime(2026, 10, 7, 13, index, tzinfo=UTC),
+        )
+        runs.append(run)
+    mappings = list(contract.mappings.values_list("pk", flat=True))
+    results = []
+    for cutoff in (None, datetime(2026, 10, 7, 13, tzinfo=UTC),
+                   datetime(2026, 10, 7, 13, 1, 30, tzinfo=UTC),
+                   datetime(2026, 10, 7, 13, 2, 30, tzinfo=UTC)):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT DISTINCT ON (p.external_identifier,p.period_date)
+                p.external_identifier,p.period_date,p.observation_id,p.run_id,
+                p.updated_at,p.body_sha256,p.conflicting_revision
+                FROM benchmark_endpoint_revisions p
+                JOIN collection_runs r ON r.id=p.run_id
+                JOIN collection_jobs j ON j.id=r.job_id
+                WHERE j.contract_id=%s AND p.mapping_id=ANY(%s::uuid[])
+                AND p.period_date BETWEEN %s AND %s
+                AND (%s::timestamptz IS NULL OR (r.completed_at<=%s AND p.updated_at<=%s))
+                ORDER BY p.external_identifier,p.period_date,p.updated_at DESC,
+                    p.body_sha256 DESC,r.completed_at DESC,r.id DESC LIMIT 36601""",
+                [contract.pk, mappings, "2026-10-06", "2026-10-07", cutoff, cutoff, cutoff],
+            )
+            original = [
+                (identifier, day.isoformat(), observation, run,
+                 {"updated_at": updated.isoformat(), "body_sha256": body,
+                  **({"revision_anomaly": "same_update_different_body"} if conflict else {})})
+                for identifier, day, observation, run, updated, body, conflict in cursor.fetchall()
+            ]
+        selected = selected_endpoint_rows(contract, mappings, "2026-10-06", "2026-10-07", cutoff)
+        assert selected == original
+        results.append(selected)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT p.run_id,p.external_identifier,p.period_date,p.observation_id,
+                p.updated_at,p.body_sha256,p.conflicting_revision
+                FROM benchmark_endpoint_revisions p
+                JOIN collection_runs r ON r.id=p.run_id
+                JOIN collection_jobs j ON j.id=r.job_id
+                WHERE j.contract_id=%s AND j.source_id='opencode'
+                AND (%s::timestamptz IS NULL OR (r.completed_at<=%s AND p.updated_at<=%s))
+                ORDER BY r.completed_at DESC,r.id DESC,p.external_identifier,p.updated_at
+                LIMIT 10001""", [contract.pk, cutoff, cutoff, cutoff],
+            )
+            expected_checks = {}
+            for run_id, identifier, day, observation_id, updated, body_hash, conflict in cursor.fetchall():
+                check = expected_checks.setdefault((run_id, identifier, updated, body_hash), {
+                    "source_identifier": identifier, "status": "ok",
+                    "updated_at": updated.isoformat(), "body_sha256": body_hash,
+                    "row_references": {},
+                })
+                check["row_references"][day.isoformat()] = observation_id
+                if conflict:
+                    check["revision_anomaly"] = "same_update_different_body"
+        assert [(run.pk, check) for run, check in retained_checks(contract, cutoff=cutoff)] == [
+            (key[0], check) for key, check in expected_checks.items()
+        ]
+    assert len(results[0]) == 2 and results[1] == []
+    assert {row[3] for row in results[2]} == {runs[0].pk}
+    assert {row[3] for row in results[3]} == {runs[1].pk}
+    assert {row[2] for row in results[2]} == {row[2] for row in results[3]}
+    assert selected_endpoint_rows(contract, mappings, "2026-10-08", "2026-10-09", None) == []
+    assert selected_endpoint_rows(contract, [], "2026-10-06", "2026-10-07", None) == []
+    output = StringIO()
+    call_command(
+        "benchmark_opencode_snapshots", contract=str(contract.pk),
+        start_date="2026-10-06", end_date="2026-10-07",
+        cutoff="2026-10-07T13:01:30+00:00", stdout=output,
+    )
+    exported = json.loads(output.getvalue())["rows"]
+    assert len(exported) == 2
+    assert {row["check_run_id"] for row in exported} == {str(runs[0].pk)}
+    assert {row["date"] for row in exported} == {"2026-10-06", "2026-10-07"}
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
 def test_real_command_chain_imports_source_rows_and_remains_inert_by_default():
     from io import StringIO
     from unittest.mock import patch

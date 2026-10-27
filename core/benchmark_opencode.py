@@ -100,14 +100,17 @@ def record_endpoint_checks(run, checks, contract, *, verify_only=False):
 
 
 def retained_checks(contract, *, cutoff=None):
+    # Bind the operator export to each eligible run before expanding the same
+    # security-barrier view used by the chart readers.
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT p.run_id,p.external_identifier,p.period_date,p.observation_id,"
             "p.updated_at,p.body_sha256,p.conflicting_revision "
-            "FROM benchmark_endpoint_revisions p "
-            "JOIN collection_runs r ON r.id=p.run_id "
-            "JOIN collection_jobs j ON j.id=r.job_id "
+            "FROM collection_jobs j JOIN collection_runs r ON r.job_id=j.id "
+            "CROSS JOIN LATERAL (SELECT * FROM benchmark_endpoint_revisions p "
+            "WHERE p.run_id=r.id OFFSET 0) p "
             "WHERE j.contract_id=%s AND j.source_id='opencode' "
+            "AND j.purpose='metric' AND r.status IN ('success','partial') "
             "AND (%s::timestamptz IS NULL OR (r.completed_at<=%s AND p.updated_at<=%s)) "
             "ORDER BY r.completed_at DESC,r.id DESC,p.external_identifier,p.updated_at "
             "LIMIT 10001",
