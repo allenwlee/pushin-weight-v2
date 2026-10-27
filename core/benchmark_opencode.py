@@ -176,13 +176,24 @@ def selected_rows(contract, mapping_ids, start, end, *, cutoff=None, canonical=F
 
 def publication_times(contract):
     """Project one publication instant per model, without materializing hourly windows."""
+    # Bind each eligible run before expanding the security-barrier view. OFFSET 0
+    # keeps PostgreSQL from flattening this lateral lookup into a global join;
+    # the view still validates every mapping, reference and cross-run owner.
     with connection.cursor() as cursor:
         cursor.execute(
             """SELECT DISTINCT ON (p.external_identifier)
             p.external_identifier,p.updated_at
-            FROM benchmark_endpoint_revisions p JOIN collection_runs r ON r.id=p.run_id
-            JOIN collection_jobs j ON j.id=r.job_id
+            FROM collection_jobs j
+            JOIN collection_runs r ON r.job_id=j.id
+            CROSS JOIN LATERAL (
+                SELECT p.external_identifier,p.updated_at
+                FROM benchmark_endpoint_revisions p
+                WHERE p.run_id=r.id
+                OFFSET 0
+            ) p
             WHERE j.contract_id=%s
+                AND j.purpose='metric' AND j.source_id='opencode'
+                AND r.status IN ('success','partial')
             ORDER BY p.external_identifier,p.updated_at DESC
             LIMIT 101""",
             [contract.pk],
