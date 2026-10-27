@@ -74,3 +74,17 @@ def test_dirty_candidate_is_rejected(candidate_repo):
     path.write_text(json.dumps(data))
     with pytest.raises(subprocess.CalledProcessError):
         candidate_declaration(root, revision)
+
+
+def test_affected_gate_uses_selected_database_wrapper_without_changing_test_scope(monkeypatch):
+    from tests.ui_assurance import gate
+
+    commands = []
+    monkeypatch.setattr(gate, "_run", lambda *args, **kwargs: commands.append((args, kwargs)))
+    assert gate.main(["--scope", "affected", "--pytest-wrapper", "/test/shared-db"]) == 0
+    pytest_calls = [(args, kwargs) for args, kwargs in commands if "pytest" in args]
+    assert len(pytest_calls) == 1
+    args, kwargs = pytest_calls[0]
+    assert args == ("/test/shared-db", "pytest", "-q", *gate.FOCUSED_TESTS)
+    assert kwargs["env_overrides"] == {"DEBUG": "1", "CYBER_QUAN_CAPTURE_ONLY": ""}
+    assert any(args[:2] == ("node", "tests/test_pw_chart_filter.js") for args, _ in commands)

@@ -4898,6 +4898,10 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 self.assertEqual(response.json(), {"error": "invalid hover-freeze range"})
 
     def test_hover_freeze_click_persists_then_restores_the_mobile_home(self) -> None:
+        from tests.test_chart_harvest_coverage import record_harvest
+
+        now = datetime.now(UTC)
+        record_harvest(now, finished_at=now, staggered=False)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             context = browser.new_context(
@@ -5105,6 +5109,10 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 browser.close()
 
     def test_hover_freeze_zh_cn_datetime_and_restore_at_320px(self) -> None:
+        from tests.test_chart_harvest_coverage import record_harvest
+
+        now = datetime.now(UTC)
+        record_harvest(now, finished_at=now, staggered=False)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             context = browser.new_context(

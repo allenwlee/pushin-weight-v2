@@ -162,6 +162,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--performance-rationale")
     parser.add_argument("--bridgewright", default="bridgewright")
+    parser.add_argument(
+        "--pytest-wrapper",
+        help="Run tests through an exclusive shared-database wrapper (wrapper pytest ...).",
+    )
     parser.add_argument("--performance-state-home")
     parser.add_argument("--performance-runtime")
     parser.add_argument("--performance-target-revision")
@@ -201,10 +205,13 @@ def main(argv: list[str] | None = None) -> int:
     tests = FOCUSED_TESTS + (FULL_ADDITIONAL_TESTS if args.scope == "candidate" else [])
     # The existing Django browser suites intentionally use HTTP live-server
     # URLs; isolate their test-only DEBUG setting from Bridgewright and Node.
+    pytest_command = (
+        [args.pytest_wrapper, "pytest"]
+        if args.pytest_wrapper
+        else [sys.executable, "-m", "pytest"]
+    )
     _run(
-        sys.executable,
-        "-m",
-        "pytest",
+        *pytest_command,
         "-q",
         *tests,
         env_overrides={"DEBUG": "1", "CYBER_QUAN_CAPTURE_ONLY": ""},

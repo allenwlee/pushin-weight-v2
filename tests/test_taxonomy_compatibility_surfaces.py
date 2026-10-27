@@ -47,7 +47,7 @@ def compatible_taxonomy_rows():
     for index in range(2):
         post = Post.objects.create(
             tweet_id=f"taxonomy-surface-{index}",
-            created_at=now - timedelta(minutes=index + 1),
+            created_at=now - timedelta(minutes=index + 10),
             text=f"taxonomy source {index}",
             text_en=f"taxonomy translation {index}",
             text_zh_cn=f"分类翻译 {index}",
@@ -184,6 +184,9 @@ def test_chart_endpoints_emit_canonical_filters_and_reuse_one_cache_entry(
     client, django_user_model, compatible_taxonomy_rows, monkeypatch
 ):
     now = timezone.now()
+    from tests.test_chart_harvest_coverage import record_harvest
+
+    record_harvest(now, finished_at=now, staggered=False)
     monkeypatch.setattr(views, "_dashboard_now", lambda: now)
     brand, _posts = compatible_taxonomy_rows
     monkeypatch.setattr(

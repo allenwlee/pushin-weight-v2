@@ -22,6 +22,12 @@ class DashboardEachBrowserTests(StaticLiveServerTestCase):
     def setUp(self):
         super().setUp()
         seed_real_home_orm(fixture_from_oracle())
+        from django.utils import timezone
+
+        from tests.test_chart_harvest_coverage import record_harvest
+
+        now = timezone.now()
+        record_harvest(now, finished_at=now, staggered=False)
         Brand.objects.create(nickname="untracked-demo", display_name="Untracked Demo")
         _clear_home_pulse_cache()
 

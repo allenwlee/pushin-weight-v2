@@ -3482,8 +3482,9 @@ def _build_home_chart_payload(
         cache_key = _home_chart_cache_key(
             window_days, normalized_filters, locale, bucket_timezone
         )
-        cache_key += (requested_at.date(), count_token, chart_start, chart_end,
-                      coverage["run_id"] if coverage else None)
+        cache_key += (requested_at.date(), count_token)
+        if window_days == 1:
+            cache_key += (chart_start, chart_end, coverage["run_id"] if coverage else None)
         if tracked_brands is not None:
             cache_key += (tracked_brands,)
         cache_now = monotonic()
@@ -3713,7 +3714,7 @@ def _build_home_chart_payload(
 
     computed_at = pulse["computed_at"]
     trend_narrative, top_voices = _home_chart_sidecars(
-        window_days, normalized_filters, brand_nicknames, locale, now, computed_at,
+        window_days, normalized_filters, brand_nicknames, locale, requested_at, computed_at,
     )
     payload = {
         "days": days,

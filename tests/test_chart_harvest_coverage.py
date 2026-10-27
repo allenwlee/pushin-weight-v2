@@ -15,6 +15,20 @@ pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 NOW = datetime(2026, 10, 27, 8, 42, 17, tzinfo=UTC)
 
 
+@pytest.mark.parametrize("window", [7, 30, 365])
+def test_long_window_cache_reused_across_request_times(window):
+    from monitor.views import _build_home_chart_payload, _build_home_pulse_payload
+
+    _clear_home_pulse_cache()
+    with patch("monitor.views._build_home_pulse_payload", wraps=_build_home_pulse_payload) as build_pulse:
+        with patch("monitor.views._dashboard_now", return_value=NOW):
+            first = _build_home_chart_payload(window, {})
+        with patch("monitor.views._dashboard_now", return_value=NOW + timedelta(seconds=1)):
+            second = _build_home_chart_payload(window, {})
+    assert build_pulse.call_count == 1
+    assert first["series"] == second["series"]
+
+
 def record_harvest(end, *, incomplete=None, missing=None, optional=False, running=False,
                    finished_at=None, staggered=True):
     calls = [SimpleNamespace(call_id=key, query_string=f"coverage {key}") for key in ("A", "B1")]
