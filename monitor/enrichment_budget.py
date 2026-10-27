@@ -79,7 +79,7 @@ def reserve_request(
             .filter(pk=window_id)
             .first()
         )
-        if window is None or window.scope != scope:
+        if window is None or window.enrichment_window_kind != scope:
             raise LLMCallBudgetExhausted("enrichment_budget_missing")
         if window.config_fingerprint != fingerprint:
             raise LLMCallBudgetExhausted("enrichment_config_changed")
@@ -87,7 +87,7 @@ def reserve_request(
             raise LLMCallBudgetExhausted("enrichment_budget_expired")
         if (
             EnrichmentBudgetWindow.objects.filter(
-                scope=scope,
+                enrichment_window_kind=scope,
                 starts_at__lte=now,
                 ends_at__gt=now,
             )

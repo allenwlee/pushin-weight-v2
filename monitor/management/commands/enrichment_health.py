@@ -63,7 +63,7 @@ class Command(BaseCommand):
             "budgets": list(
                 EnrichmentBudgetWindow.objects.filter(ends_at__gt=now).values(
                     "id",
-                    "scope",
+                    "enrichment_window_kind",
                     "ends_at",
                     "request_limit",
                     "reserved_requests",

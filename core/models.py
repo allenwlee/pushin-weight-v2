@@ -2159,12 +2159,12 @@ class PostEnrichmentState(models.Model):
 class EnrichmentBudgetWindow(models.Model):
     """One explicitly provisioned spending allowance shared by enrichment writers."""
 
-    class Scope(models.TextChoices):
+    class Kind(models.TextChoices):
         PILOT = "pilot", "Pilot"
         SCHEDULED = "scheduled", "Scheduled"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    scope = models.CharField(max_length=16, choices=Scope.choices)
+    enrichment_window_kind = models.CharField(max_length=16, choices=Kind.choices)
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     request_limit = models.PositiveIntegerField()
@@ -2177,8 +2177,9 @@ class EnrichmentBudgetWindow(models.Model):
     class Meta:
         db_table = "enrichment_budget_windows"
         constraints = [
-            models.UniqueConstraint(fields=["scope", "starts_at"], name="uq_enrich_budget_start"),
-            models.CheckConstraint(condition=models.Q(scope__in=["pilot", "scheduled"]), name="ck_enrich_budget_scope"),
+            models.CheckConstraint(condition=models.Q(config_fingerprint__regex=r"^[0-9a-f]{64}$"), name="ck_enrich_budget_fingerprint"),
+            models.UniqueConstraint(fields=["enrichment_window_kind", "starts_at"], name="uq_enrich_budget_start"),
+            models.CheckConstraint(condition=models.Q(enrichment_window_kind__in=["pilot", "scheduled"]), name="ck_enrich_budget_window_kind"),
             models.CheckConstraint(condition=models.Q(ends_at__gt=models.F("starts_at")), name="ck_enrich_budget_interval"),
             models.CheckConstraint(condition=models.Q(request_limit__gt=0, usd_limit__gt=0), name="ck_enrich_budget_positive"),
             models.CheckConstraint(condition=models.Q(reserved_requests__lte=models.F("request_limit")), name="ck_enrich_budget_requests"),

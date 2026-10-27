@@ -117,7 +117,7 @@ def test_budget_restart_does_not_renew_or_reprice_allowance():
     cfg = _cfg()
     now = timezone.now()
     window = EnrichmentBudgetWindow.objects.create(
-        scope="scheduled",
+        enrichment_window_kind="scheduled",
         starts_at=now,
         ends_at=now + timedelta(hours=1),
         request_limit=1,
@@ -154,6 +154,38 @@ def test_budget_restart_does_not_renew_or_reprice_allowance():
     assert window.reserved_usd > 0
 
 
+@pytest.mark.parametrize("fingerprint", ["", "a" * 63, "A" * 64, "g" * 64, "a" * 63 + "\n"])
+def test_budget_database_rejects_invalid_fingerprint_from_bulk_writers(fingerprint):
+    from django.db import IntegrityError, transaction
+
+    now = timezone.now()
+    with pytest.raises(IntegrityError, match="ck_enrich_budget_fingerprint"), transaction.atomic():
+        EnrichmentBudgetWindow.objects.bulk_create([
+            EnrichmentBudgetWindow(
+                enrichment_window_kind="pilot", starts_at=now,
+                ends_at=now + timedelta(hours=1), request_limit=10, usd_limit=1,
+                config_fingerprint=fingerprint,
+            ),
+        ])
+
+
+def test_budget_database_rejects_invalid_kind_and_fingerprint_updates():
+    from django.db import IntegrityError, transaction
+
+    now = timezone.now()
+    window = EnrichmentBudgetWindow.objects.create(
+        enrichment_window_kind="pilot", starts_at=now,
+        ends_at=now + timedelta(hours=1), request_limit=10, usd_limit=1,
+        config_fingerprint="a" * 64,
+    )
+    for changes, constraint in (
+        ({"enrichment_window_kind": "other"}, "ck_enrich_budget_window_kind"),
+        ({"config_fingerprint": "invalid"}, "ck_enrich_budget_fingerprint"),
+    ):
+        with pytest.raises(IntegrityError, match=constraint), transaction.atomic():
+            EnrichmentBudgetWindow.objects.filter(pk=window.pk).update(**changes)
+
+
 def test_classifier_pair_budget_denial_reserves_neither_role_and_spends_no_attempt():
     from types import SimpleNamespace
 
@@ -167,7 +199,7 @@ def test_classifier_pair_budget_denial_reserves_neither_role_and_spends_no_attem
     cfg.llm.classifier_model = DEEPSEEK_0731_MODEL
     now = timezone.now()
     window = EnrichmentBudgetWindow.objects.create(
-        scope="scheduled",
+        enrichment_window_kind="scheduled",
         starts_at=now,
         ends_at=now + timedelta(hours=1),
         request_limit=1,

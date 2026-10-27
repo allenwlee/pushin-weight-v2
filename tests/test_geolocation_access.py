@@ -133,7 +133,7 @@ def test_worker_budget_is_owner_only_and_old_serving_grants_are_revoked(serving_
     serving, role, _owner, _report = serving_login
     now = timezone.now()
     window = EnrichmentBudgetWindow.objects.create(
-        scope="pilot", starts_at=now, ends_at=now + timedelta(hours=1),
+        enrichment_window_kind="pilot", starts_at=now, ends_at=now + timedelta(hours=1),
         request_limit=10, usd_limit=1, config_fingerprint="a" * 64,
     )
     assert EnrichmentBudgetWindow.objects.filter(pk=window.pk).update(reserved_requests=1) == 1
