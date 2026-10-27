@@ -213,8 +213,10 @@ services:
         value: "True"
       - key: X_MONITOR_ENRICHMENT_MODE
         value: worker
+      # Retain operator activation across later Blueprint syncs.
+      # New services stay idle via config.yaml until explicitly enabled.
       - key: X_MONITOR_ENRICHMENT_PROVIDER_CALLS_ACTIVE
-        value: "False"
+        sync: false
       - key: X_MONITOR_ENRICHMENT_BUDGET_WINDOW_ID
         sync: false
 
