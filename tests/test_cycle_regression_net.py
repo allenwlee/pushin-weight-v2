@@ -125,9 +125,12 @@ def test_cycle_runner_plan_calls_does_not_abort_with_self_undefined():
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db
-@pytest.mark.parametrize("cycle_kind", ["manual", "scheduled"])
+@pytest.mark.parametrize(
+    "cycle_kind,enrichment_mode",
+    [("manual", "inline"), ("scheduled", "inline"), ("scheduled", "worker")],
+)
 def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
-    monkeypatch, seeded_policy_keywords, cycle_kind
+    monkeypatch, seeded_policy_keywords, cycle_kind, enrichment_mode, tmp_path, caplog
 ):
     """The live caller sends the policy exhibit and persists aliases.
 
@@ -170,7 +173,7 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
                 })
             return [
                 {
-                    "id": "u5-dots",
+                    "id": "2094999721551225264",
                     "author_id": "u5-author-dots",
                     "author_handle": "u5_dots",
                     "text": "Dots 3 Note Preview is out",
@@ -178,7 +181,7 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
                     "created_at": "Sat Jul 25 12:00:00 +0000 2026",
                 },
                 {
-                    "id": "u5-hy",
+                    "id": "2094999721551225265",
                     "author_id": "u5-author-hy",
                     "author_handle": "u5_hy",
                     "text": "hy4 is genuinely unltd",
@@ -186,7 +189,7 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
                     "created_at": "Sat Jul 25 12:00:01 +0000 2026",
                 },
                 {
-                    "id": "u5-ox",
+                    "id": "2094999721551225266",
                     "author_id": "u5-author-ox",
                     "author_handle": "u5_ox",
                     "text": "Ox Alpha is no longer available",
@@ -205,6 +208,7 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
 
     api = FakeApi()
     enrichment_input: list[tuple[str, str, bool]] = []
+    real_post_fetch = CycleRunner._run_post_fetch
 
     def capture_post_fetch(_runner, items, **_kwargs):
         enrichment_input.extend(
@@ -215,6 +219,8 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
             )
             for item in items
         )
+        if enrichment_mode == "worker":
+            return real_post_fetch(_runner, items, **_kwargs)
         return {}
 
     monkeypatch.setattr(
@@ -227,11 +233,18 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
         "monitor.metrics_refresh.run_metrics_refresh",
         lambda *args, **kwargs: {},
     )
-    # A real run would emit a local data/runs summary. Keep this regression
-    # net focused on the planner/provider/DB path and filesystem-independent.
-    monkeypatch.setattr(cost_emit, "finalize_and_persist", lambda *args, **kwargs: None)
+    if enrichment_mode == "worker":
+        monkeypatch.setattr(
+            CycleRunner, "_process_enrichment_claim_batch",
+            lambda *args, **kwargs: pytest.fail("worker handoff ran inline enrichment"),
+        )
+        monkeypatch.setattr(cost_emit, "default_runs_dir", lambda *args, **kwargs: tmp_path)
+        caplog.set_level("INFO", logger="scripts.harvest_cost.emit")
+    else:
+        monkeypatch.setattr(cost_emit, "finalize_and_persist", lambda *args, **kwargs: None)
 
     cfg = load_config(CONFIG_PATH)
+    cfg.harvest.enrichment.mode = enrichment_mode
     with override_settings(
         X_MONITOR_CYCLE_SINCE_TIME=1_785_067_200,
         X_MONITOR_CYCLE_UNTIL_TIME=1_785_067_260,
@@ -252,14 +265,14 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
         assert collection.request_count == len(api.calls)
         assert collection.scopes.filter(scope_kind="x_query").count() >= len(api.calls)
         assert CollectionObservation.objects.filter(
-            run=collection, post_id="u5-dots",
+            run=collection, post_id="2094999721551225264",
         ).count() == len(api.calls)
         assert CollectionObservationInput.objects.filter(
             observation__run=collection,
-            observation__post_id="u5-dots",
+            observation__post_id="2094999721551225264",
         ).count() == len(api.calls)
         assert PostEnrichmentState.objects.get(
-            post_id="u5-dots",
+            post_id="2094999721551225264",
         ).source_collection_job_id is None
 
     assert tuple(row["call_id"] for row in stats["planned_calls"]) == EXPECTED_PLANNER_CALL_ORDER
@@ -277,18 +290,43 @@ def test_real_cycle_captures_all_seven_queries_and_attributes_new_aliases(
         for _query, kwargs in api.calls
     )
     assert stats["totals"]["n_calls_planned"] == len(EXPECTED_PLANNER_CALL_ORDER)
-    assert PostBrand.objects.filter(post_id="u5-dots", brand_id="dots").exists()
-    assert PostBrand.objects.filter(post_id="u5-hy", brand_id="hunyuan").exists()
-    assert PostBrand.objects.filter(post_id="u5-ox", brand_id="glm").exists()
+    assert PostBrand.objects.filter(post_id="2094999721551225264", brand_id="dots").exists()
+    assert PostBrand.objects.filter(post_id="2094999721551225265", brand_id="hunyuan").exists()
+    assert PostBrand.objects.filter(post_id="2094999721551225266", brand_id="glm").exists()
     assert PostBrand.objects.filter(
         post_id="2094999721551225267", brand_id="moonshot_kimi"
     ).exists()
     assert enrichment_input == [
-        ("u5-dots", "u5-dots", True),
-        ("u5-hy", "u5-hy", True),
-        ("u5-ox", "u5-ox", True),
+        ("2094999721551225264", "2094999721551225264", True),
+        ("2094999721551225265", "2094999721551225265", True),
+        ("2094999721551225266", "2094999721551225266", True),
         ("2094999721551225267", "2094999721551225267", True),
     ]
+    if enrichment_mode == "worker":
+        from monitor.harvest_summary import (
+            HARVEST_COHORT_PREFIX, HARVEST_SUMMARY_PREFIX,
+            parse_cohort_line, parse_summary_line,
+        )
+
+        envelopes = [
+            parse_summary_line(record.message) for record in caplog.records
+            if record.message.startswith(HARVEST_SUMMARY_PREFIX)
+        ]
+        cohorts = [
+            record.message for record in caplog.records
+            if record.message.startswith(HARVEST_COHORT_PREFIX)
+        ]
+        assert len(envelopes) == len(cohorts) == 1
+        receipt = parse_cohort_line(cohorts[0], summary_envelope=envelopes[0])
+        assert receipt["inserted_post_ids"] == sorted(row[1] for row in enrichment_input)
+        assert len(receipt["inserted_post_ids"]) == stats["totals"]["n_inserted"] == 4
+        assert receipt["current_cycle_post_ids"] == []
+        assert receipt["carryover_post_ids"] == []
+        assert receipt["enrichment_state_facts"] == []
+        assert (tmp_path / f"{stats['run_id']}.json").is_file()
+        assert not PostEnrichmentState.objects.exclude(claim_run_id="").exists()
+        assert all(state.translation_attempts == state.classification_attempts == 0
+                   for state in PostEnrichmentState.objects.all())
 
 
 @pytest.mark.requires_postgres

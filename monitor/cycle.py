@@ -3599,6 +3599,20 @@ class CycleRunner:
         return (None if self._max_llm_calls is None
                 else max(0, self._max_llm_calls - self._llm_call_count))
 
+    @staticmethod
+    def _unclaimed_post_fetch_cohort(kept_posts: list[dict[str, Any]]) -> dict[str, Any]:
+        """Retain collection identities even when another process owns enrichment."""
+        return {
+            "inserted_post_ids": sorted({
+                str(item["_persisted_post_id"])
+                for item in kept_posts
+                if item.get("_db_inserted") and item.get("_persisted_post_id")
+            }),
+            "enrichment_current_cycle_post_ids": [],
+            "enrichment_carryover_post_ids": [],
+            "enrichment_state_facts": [],
+        }
+
     def _run_post_fetch(
         self, kept_posts: list[dict[str, Any]], **kwargs: Any,
     ) -> dict[str, Any]:
@@ -3608,6 +3622,7 @@ class CycleRunner:
         if self.cycle_kind == "scheduled" and self.cfg.harvest.enrichment.mode == "worker":
             return {
                 **{key: 0 for key in ENRICHMENT_COUNT_KEYS},
+                **self._unclaimed_post_fetch_cohort(kept_posts),
                 "enrichment_mode": "worker", "enrichment_processed_externally": True,
             }
         from monitor.enrichment_worker import process_enrichment_batch
@@ -3658,17 +3673,7 @@ class CycleRunner:
             "n_unsanctioned_persisted": 0,
             "n_unsanctioned_cleared": 0,
             "flag_dead_letters": [],
-            "inserted_post_ids": sorted(
-                {
-                    str(item.get("_persisted_post_id"))
-                    for item in kept_posts
-                    if item.get("_db_inserted")
-                    and item.get("_persisted_post_id")
-                }
-            ),
-            "enrichment_current_cycle_post_ids": [],
-            "enrichment_carryover_post_ids": [],
-            "enrichment_state_facts": [],
+            **self._unclaimed_post_fetch_cohort(kept_posts),
         }
 
         enrichment_cfg = self.cfg.harvest.enrichment
