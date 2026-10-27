@@ -24,9 +24,9 @@ from psycopg.conninfo import conninfo_to_dict
 
 from scripts.database_lock import (
     acquire_cluster_lock,
+    acquire_enrichment_coordination_lock,
     acquire_harvest_coordination_lock,
     acquire_synthesis_coordination_lock,
-    acquire_enrichment_coordination_lock,
     admin_connection_parameters,
 )
 
@@ -47,6 +47,36 @@ from .receipt import (
 
 class RefreshError(RuntimeError):
     """A secret-free failure before staging activation."""
+
+
+_RG6_RETIRED_COLLECTION_COLUMNS = {
+    "collection_runs": frozenset({
+        "request_params", "source_metadata", "raw_payload", "invocations", "report",
+    }),
+    "collection_scope_runs": frozenset({
+        "ownership", "cursor_history", "envelopes",
+    }),
+    "collection_observations": frozenset({
+        "dimensions", "source_metadata", "listing", "envelopes", "groups",
+    }),
+}
+
+
+def refuse_pre_retirement_collection_source(cursor: Any) -> None:
+    """Stop an old snapshot before HEAD can remove uncopied RG6 documents."""
+    cursor.execute(
+        "SELECT table_name, column_name FROM information_schema.columns "
+        "WHERE table_schema = 'public' "
+        "AND table_name IN ('collection_runs', 'collection_scope_runs', "
+        "'collection_observations')"
+    )
+    old_columns = {
+        (str(table), str(column))
+        for table, column in cursor.fetchall()
+        if str(column) in _RG6_RETIRED_COLLECTION_COLUMNS.get(str(table), ())
+    }
+    if old_columns:
+        raise RefreshError("candidate_rg6_legacy_collection_columns_present")
 
 
 _SOURCE_DEPENDENT_SEED_MIGRATIONS = (
@@ -235,6 +265,8 @@ class SnapshotAdapter(Protocol):
     def purge_collection_runtime(
         self, database_url: str, name: str
     ) -> Mapping[str, int]: ...
+
+    def guard_collection_retirement(self, database_url: str, name: str) -> None: ...
 
     def inspect_candidate(self, database_url: str, name: str) -> CandidateCensus: ...
 
@@ -829,6 +861,13 @@ class PsycopgSnapshotAdapter:
             conn.cursor() as cursor,
         ):
             return purge_collection_runtime(cursor)
+
+    def guard_collection_retirement(self, database_url: str, name: str) -> None:
+        with (
+            self.connect(**self._candidate_parameters(database_url, name)) as conn,
+            conn.cursor() as cursor,
+        ):
+            refuse_pre_retirement_collection_source(cursor)
 
     def inspect_candidate(self, database_url: str, name: str) -> CandidateCensus:
         parameters = self._candidate_parameters(database_url, name)
@@ -1572,6 +1611,7 @@ class CandidateProcessor:
             raise RefreshError("candidate_site_invalid")
 
     def process(self, candidate: ShadowCandidate) -> CandidateResult:
+        self.adapter.guard_collection_retirement(self.target_url, candidate.name)
         purged = self.adapter.purge_collection_runtime(self.target_url, candidate.name)
         self._run_django(candidate.name, "prepare_refresh_references")
         self._run_django(candidate.name, "migrate", "--noinput")

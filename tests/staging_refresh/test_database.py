@@ -55,6 +55,7 @@ class FakeAdapter:
         self.events = events
         self.target_bytes = 100
         self.marker_valid = True
+        self.reject_rg6_source = False
         self.census = SourceCensus(
             snapshot_id="00000003-0000001B-1",
             captured_at=datetime(2026, 8, 27, 1, 2, 3, tzinfo=UTC),
@@ -131,6 +132,11 @@ class FakeAdapter:
     def purge_collection_runtime(self, _url: str, name: str):
         self.events.append(f"candidate:purge-collection:{name}")
         return {}
+
+    def guard_collection_retirement(self, _url: str, name: str) -> None:
+        self.events.append(f"candidate:guard-collection:{name}")
+        if self.reject_rg6_source:
+            raise RefreshError("candidate_rg6_legacy_collection_columns_present")
 
     def scrub_candidate(self, _url: str, name: str) -> ScrubReport:
         self.events.append(f"candidate:scrub:{name}")
@@ -588,12 +594,75 @@ def test_candidate_runs_migrations_scrub_and_full_validation_before_marking(
         ["manage.py", "migrate", "--check"],
         ["manage.py", "normalize_collection_run_jobs", "--purpose=metric"],
     ]
+    assert events.index(f"candidate:guard-collection:{candidate.name}") < events.index(
+        f"candidate:purge-collection:{candidate.name}"
+    )
     assert events.index(f"candidate:scrub:{candidate.name}") < events.index(
         f"candidate:inspect:{candidate.name}"
     )
     assert events[-2] == f"candidate:validated:{candidate.name}"
     assert result.candidate.marker != candidate.marker
     assert result.scrub.removed_narratives == 3
+
+
+def test_old_collection_snapshot_is_refused_before_purge_or_migrate(tmp_path: Path) -> None:
+    engine, adapter, runner, events = _engine(tmp_path)
+    artifact = engine.export_dump()
+    with engine.target_lock():
+        candidate = engine.restore_shadow(artifact)
+        adapter.reject_rg6_source = True
+        with pytest.raises(
+            RefreshError, match="^candidate_rg6_legacy_collection_columns_present$"
+        ):
+            CandidateProcessor(
+                policy=engine.policy,
+                target_url=engine.target_url,
+                adapter=adapter,
+                runner=runner,
+                python="/usr/local/bin/python",
+            ).process(candidate)
+
+    assert f"candidate:guard-collection:{candidate.name}" in events
+    assert f"candidate:purge-collection:{candidate.name}" not in events
+    assert not any("manage.py" in command for command, _ in runner.commands)
+
+
+@pytest.mark.parametrize("table,column", [
+    ("collection_runs", "request_params"),
+    ("collection_runs", "source_metadata"),
+    ("collection_runs", "raw_payload"),
+    ("collection_runs", "invocations"),
+    ("collection_runs", "report"),
+    ("collection_scope_runs", "ownership"),
+    ("collection_scope_runs", "cursor_history"),
+    ("collection_scope_runs", "envelopes"),
+    ("collection_observations", "dimensions"),
+    ("collection_observations", "source_metadata"),
+    ("collection_observations", "listing"),
+    ("collection_observations", "envelopes"),
+    ("collection_observations", "groups"),
+])
+def test_rg6_snapshot_guard_refuses_any_retired_column(table: str, column: str) -> None:
+    class Cursor:
+        def __init__(self, columns):
+            self.columns = columns
+
+        def execute(self, statement):
+            assert "information_schema.columns" in statement
+
+        def fetchall(self):
+            return self.columns
+
+    refresh_database.refuse_pre_retirement_collection_source(
+        Cursor([("collection_runs", "id"), ("collection_runs", "source_metadata_archive_id"),
+                ("collection_observations", "legacy_archive_id")])
+    )
+    with pytest.raises(
+        RefreshError, match="^candidate_rg6_legacy_collection_columns_present$"
+    ):
+        refresh_database.refuse_pre_retirement_collection_source(
+            Cursor([("collection_runs", "id"), (table, column)])
+        )
 
 
 def test_static_pending_migration_deltas_remain_empty_for_source_dependent_seeds() -> (
