@@ -1,16 +1,16 @@
 """Frozen RG6 retirement; full source parity is an external release precondition.
 
 Populated installations require an explicit connection setting, supplied to one
-owner migration process with PGOPTIONS='-c pushinweight.rg6_retirement_ready=0199'.
+owner migration process with PGOPTIONS='-c pushinweight.rg6_retirement_ready=0201'.
 The setting authorizes deletion; it does not assert or calculate source parity.
 Set it only after final copy/parity and every old executable image has drained.
 Automatic deployment without that setting fails closed on populated databases.
 
 Render owner builds run migrations. For each staged/production retirement,
 append this option to the selected owner service's existing PGOPTIONS before
-its0199 build, keep other owner builds behind that migration, verify the ledger,
+its 0201 build, keep other owner builds behind that migration, verify the ledger,
 13 absent columns and serving grants, then restore the prior PGOPTIONS value.
-Subsequent builds need no override because0199 is already applied. If the exact
+Subsequent builds need no override because 0201 is already applied. If the exact
 candidate is available for a separate owner migration process, set PGOPTIONS
 only on that process instead. Never leave the override as a permanent bypass.
 """
@@ -151,7 +151,7 @@ def prepare_retirement(apps, schema_editor):
             populated = populated or has_rows
         if populated:
             cursor.execute("SELECT current_setting('pushinweight.rg6_retirement_ready',true)")
-            if cursor.fetchone() != ("0199",):
+            if cursor.fetchone() != ("0201",):
                 raise RuntimeError("RG6 populated retirement requires explicit connection authorization")
         _check_indexes(cursor)
         _check_dependencies(cursor)

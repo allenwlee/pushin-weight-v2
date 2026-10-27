@@ -1,6 +1,6 @@
 """Rehearse the frozen RG6 operations in the shared DB's disposable schema.
 
-The helper is tested before the0199 migration file is added, so the permanent
+The helper is tested before the 0201 migration file is added, so the permanent
 public schema/ledger do not need to advance merely to test physical retirement.
 """
 
@@ -24,7 +24,7 @@ from core.migrations._rg6_retirement_v1 import (
 )
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
-BASE = ("core", "0198_merge_enrichment_rg6")
+BASE = ("core", "0200_merge_rg6_enrichment_budget_contract")
 
 
 def test_index_predicate_comparison_never_changes_quoted_marker_values():
@@ -44,7 +44,7 @@ def columns():
 
 
 @contextmanager
-def authorization(value="0199"):
+def authorization(value="0201"):
     with connection.cursor() as cursor:
         cursor.execute("SELECT current_setting('pushinweight.rg6_retirement_ready',true)")
         before = cursor.fetchone()[0] or ""
@@ -57,7 +57,7 @@ def authorization(value="0199"):
 
 
 def retire():
-    # This is the0199 migration's exact non-atomic preflight / atomic DDL split.
+    # This is the 0201 migration's exact non-atomic preflight / atomic DDL split.
     with connection.schema_editor(atomic=False) as editor:
         prepare_retirement(None, editor)
         with transaction.atomic():
@@ -164,7 +164,7 @@ def test_populated_drop_preserves_evidence_alias_grants_and_typed_uniqueness(mig
 
 
 @pytest.mark.parametrize("migration_rehearsal_schema", [BASE], indirect=True)
-@pytest.mark.parametrize("fault", ["gate", "archive", "dependency", "index", "alias", "rule", "statistics"])
+@pytest.mark.parametrize("fault", ["gate", "stale_gate", "archive", "dependency", "index", "alias", "rule", "statistics"])
 def test_unready_retirement_refuses_without_partial_deletion(migration_rehearsal_schema, fault):
     run, _observation, _scope, _archives = populated()
     before = columns()
@@ -182,11 +182,13 @@ def test_unready_retirement_refuses_without_partial_deletion(migration_rehearsal
             cursor.execute("CREATE RULE unreviewed_alias_rule AS ON UPDATE TO metric_collection_runs DO ALSO UPDATE collection_runs SET report=report WHERE false")
         elif fault == "statistics":
             cursor.execute("UPDATE collection_observations SET source_metadata='{}'::jsonb || jsonb_build_object('projection_kind','source-statistics-v1'),projection_kind=NULL WHERE run_id=%s", [run.pk])
-    expected = {"gate": "explicit connection authorization", "archive": "Unarchived RG6",
+    expected = {"gate": "explicit connection authorization", "stale_gate": "explicit connection authorization",
+                "archive": "Unarchived RG6",
                 "dependency": "Unreviewed RG6 dependency", "index": "Unready RG6 statistics index",
                 "alias": "Unreviewed RG6 compatibility view", "rule": "Unreviewed RG6 dependency",
                 "statistics": "legacy statistics lack the typed uniqueness owner"}[fault]
-    with authorization("0198" if fault == "gate" else "0199"), pytest.raises(RuntimeError, match=expected):
+    gate = {"gate": "0200", "stale_gate": "0199"}.get(fault, "0201")
+    with authorization(gate), pytest.raises(RuntimeError, match=expected):
         retire()
     assert columns() == before
     with connection.cursor() as cursor:
