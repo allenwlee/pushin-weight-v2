@@ -376,74 +376,61 @@ def test_real_native_http_transport_admission_submit_and_import_reach_publishers
     assert second["status"] == "completed" and second["control_requests"] == 8
 
 
-def test_legacy_completed_collection_membership_is_adopted_without_rewriting_outcome(
-    native,
-):
-    job, _, _, _ = native
+def _complete_membership_fixture(job, *, count=2):
+    from core.collection_capture import archive_legacy
+
     run = job.runs.get()
-    CollectionObservation.objects.filter(run=run).delete()
-    PostEnrichmentState.objects.update(source_collection_job=None)
-    CollectionScopeRun.objects.create(
-        run=run,
-        scope_key="legacy",
-        scope_kind="x_query",
-        ownership={},
-        envelopes=[
-            {
-                "post_ids": ["native-1", "native-2"],
-                "observed_at": timezone.now().isoformat(),
-            }
-        ],
-    )
     run.status, run.completed_at = "success", timezone.now()
-    run.report = {
-        "collection_drained": True,
-        "recovered_post_ids": ["native-1", "native-2"],
-    }
-    run.save()
+    run.save(update_fields=["status", "completed_at"])
+    marker = CollectionScopeRun.objects.create(
+        run=run, scope_kind="x_backfill_result", scope_key="result",
+        phase="backfill_result_v1",
+        legacy_archive=archive_legacy({
+            "post_membership": {"version": 1, "distinct_posts": count},
+            "collection_drained": True,
+        }),
+    )
     job.state, job.last_success = "completed", run
     job.next_due_at, job.next_retry_at = None, None
     job.save()
+    return run, marker
+
+
+def test_completed_typed_membership_is_adopted_without_rewriting_outcome(native):
+    from core.collection_capture import read_document
+
+    job, _, _, _ = native
+    run, marker = _complete_membership_fixture(job)
+    original = marker.legacy_archive_id
     assert advance(native, initial=True)["model_requests_sent"] == 6
     job.refresh_from_db()
     run.refresh_from_db()
-    assert (
-        job.state == "completed"
-        and run.status == "success"
-        and run.report["collection_drained"]
-    )
-    assert (
-        CollectionObservation.objects.filter(
-            run=run, source_subject_kind="post"
-        ).count()
-        == 2
-    )
+    marker.refresh_from_db()
+    assert job.state == "completed" and run.status == "success"
+    assert marker.legacy_archive_id == original
+    assert read_document(marker.legacy_archive)["collection_drained"] is True
+    assert CollectionObservation.objects.filter(run=run, source_subject_kind="post").count() == 2
 
 
 def test_typed_membership_resume_does_not_load_oversized_legacy_receipt(native):
-    job, _, _, _ = native
-    run = job.runs.get()
-    run.status, run.completed_at = "success", timezone.now()
-    run.report = {
-        "post_membership": {"version": 1, "distinct_posts": 2},
-        "recovered_post_ids": ["unused-legacy-array"] * 100001,
-    }
-    run.save()
-    job.state, job.last_success = "completed", run
-    job.next_due_at, job.next_retry_at = None, None
-    job.save()
-    job.refresh_from_db()
+    from core.collection_capture import archive_legacy
+    from tests.test_hf_catalog_retirement import denied_retirement_columns
 
-    def forbid_full_report(execute, sql, params, many, context):
-        if '"collection_runs"."report"' in sql:
-            assert "->" in sql, "typed resume materialized the complete receipt"
+    job, _, _, _ = native
+    run, _ = _complete_membership_fixture(job)
+    run.legacy_archive = archive_legacy({
+        "report": {"recovered_post_ids": ["unused-legacy-array"] * 100001},
+    })
+    run.save(update_fields=["legacy_archive"])
+
+    def forbid_old_archive_read(execute, sql, params, many, context):
+        if '"collection_evidence_archives"' in sql and 'SELECT' in sql.upper():
+            assert run.legacy_archive_id not in (params or ()), "typed resume loaded old receipt"
         return execute(sql, params, many, context)
 
-    with connection.execute_wrapper(forbid_full_report):
+    with denied_retirement_columns(), connection.execute_wrapper(forbid_old_archive_read):
         adopt_completed_membership(job)
-    assert (
-        CollectionObservation.objects.filter(run=run, post__isnull=False).count() == 2
-    )
+    assert CollectionObservation.objects.filter(run=run, post__isnull=False).count() == 2
     assert not OriginalContentCall.objects.exists()
 
 
@@ -451,14 +438,19 @@ def test_typed_membership_count_drift_is_refused_before_provider_work(native):
     from core.provider_batches import BatchAdmissionError
 
     job, _, _, _ = native
-    run = job.runs.get()
-    run.status, run.completed_at = "success", timezone.now()
-    run.report = {"post_membership": {"version": 1, "distinct_posts": 3}}
-    run.save()
-    job.state, job.last_success = "completed", run
-    job.next_due_at, job.next_retry_at = None, None
-    job.save()
+    _complete_membership_fixture(job, count=3)
     with pytest.raises(BatchAdmissionError, match="typed_membership_count_changed"):
+        adopt_completed_membership(job)
+    assert not OriginalContentCall.objects.exists()
+
+
+def test_unadopted_legacy_membership_is_refused_after_retirement(native):
+    from core.provider_batches import BatchAdmissionError
+
+    job, _, _, _ = native
+    _, marker = _complete_membership_fixture(job)
+    marker.delete()
+    with pytest.raises(BatchAdmissionError, match="requires_pre_retirement_adoption"):
         adopt_completed_membership(job)
     assert not OriginalContentCall.objects.exists()
 

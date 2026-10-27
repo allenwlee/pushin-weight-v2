@@ -139,13 +139,13 @@ def test_scheduled_cursor_pages_are_stored_before_enrichment(
         def remaining(self):
             return 0 if stop == "no_time" or (stop == "deadline" and requests) else 400
 
-    def get(path, params):
+    def get(path, params, **_kwargs):
         requests.append(dict(params))
         if stop == "late_error" and len(requests) == 2:
             raise XClientServerError("fake second-page timeout")
         idx = len(requests) - 1
         start, end = [(0, 20), (20, 23), (23, 43), (43, 43)][idx]
-        return {
+        data = {
             "tweets": [{
                 "id": str(1000 + n), "text": "DeepSeek release", "lang": "en",
                 "createdAt": (now - timedelta(minutes=4)).isoformat(),
@@ -155,7 +155,16 @@ def test_scheduled_cursor_pages_are_stored_before_enrichment(
             "next_cursor": f"cursor{idx + 1}" if idx < 3 else "",
         }
 
-    monkeypatch.setattr(api, "_get", get)
+        import json
+
+        from requests import Response
+
+        response = Response()
+        response.status_code = 200
+        response._content = json.dumps(data).encode()
+        return response
+
+    monkeypatch.setattr("x_monitor.x_client.requests.get", get)
     monkeypatch.setattr(cycle_mod.XClient, "from_env", classmethod(lambda cls, purpose: api))
     monkeypatch.setattr(cycle_mod, "plan_calls_for_cycle", lambda *args, **kwargs: [call])
     monkeypatch.setattr(HarvestConfig, "start_deadline", lambda *a, **k: Deadline())

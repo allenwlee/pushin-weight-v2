@@ -1451,6 +1451,7 @@ def load_config(path: Path) -> Config:
     # old broad temporary enable flag without changing the configured cap.
     rare_activation_env_paths = {
         "X_MONITOR_RARE_TYPES_ENABLED": ("discovery", "rare_types", "enabled"),
+        "X_MONITOR_RARE_TYPES_QUERY_PACK": ("discovery", "rare_types", "query_pack"),
         "X_MONITOR_RARE_TYPES_ASSESSMENT_PATH": (
             "discovery",
             "rare_types",

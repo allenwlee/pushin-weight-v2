@@ -16,7 +16,6 @@ from core.models import (
     PersonBrandAffiliationEvidence,
     Post,
     ProfileMovementCandidate,
-    RareTypeSearchHit,
 )
 from core.provider_batches import (
     BatchAdmissionError,
@@ -51,20 +50,10 @@ def requirements(post, cfg):
     if not cfg.targeted_extraction.enabled:
         return {}
     types = set(post.signals.values_list("post_type_id", flat=True))
-    rare = set(
-        RareTypeSearchHit.objects.filter(
-            post=post,
-            gate_state="kept",
-            decision__derived_types__contains=["model_releases"],
-        )
-        .values_list("decision__derived_types", flat=True)
-        .first()
-        or []
-    )
     roles = {
         TYPE_TO_ROLE[t]
         for t in types
-        if t in TYPE_TO_ROLE and (t != "releases_updates" or "model_releases" in rare)
+        if t in TYPE_TO_ROLE
     }
     if (
         AffiliationClaimEvidence.objects.filter(
@@ -173,16 +162,6 @@ def _prepare(job, post, cfg, delegate):
         for role, spec in cfg.targeted_extraction.roles.items()
     }
     types = set(post.signals.values_list("post_type_id", flat=True))
-    rare = set(
-        RareTypeSearchHit.objects.filter(
-            post=post,
-            gate_state="kept",
-            decision__derived_types__contains=["model_releases"],
-        )
-        .values_list("decision__derived_types", flat=True)
-        .first()
-        or []
-    )
     with transaction.atomic():
         CollectionJob.objects.select_for_update().get(pk=job.pk)
         assert_enrichment_admission(job.pk)
@@ -193,7 +172,6 @@ def _prepare(job, post, cfg, delegate):
             config=cfg.targeted_extraction,
             calls=calls,
             max_calls=len(calls),
-            eligible_rare_types=rare,
         )
         if missing:
             transaction.set_rollback(True)

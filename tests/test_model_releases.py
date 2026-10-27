@@ -66,7 +66,6 @@ def _run(post, *records):
         config=_config(),
         calls={"model_release_extraction": lambda *_args: {"records": list(records)}},
         max_calls=1,
-        eligible_rare_types={"model_releases"},
     )
 
 

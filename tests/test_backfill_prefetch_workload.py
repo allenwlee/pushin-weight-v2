@@ -16,6 +16,7 @@ import pytest
 from django.db import connection
 from django.db.models import Sum
 
+from core.collection_pages import page_receipts
 from core.models import (
     CollectionObservation,
     CollectionRun,
@@ -107,7 +108,7 @@ def test_recorded_workload_preserves_fields_checkpoints_and_requests(http_pages,
     assert len(state["requests"]) == 672
     assert len(http_seconds) == 672
     assert CollectionRun.objects.filter(job=job).aggregate(n=Sum("request_count"))["n"] == 672
-    observations = set(CollectionObservation.objects.filter(run__job=job).values_list("post_id", flat=True))
+    observations = set(CollectionObservation.objects.filter(run__job=job, source_subject_kind="post").values_list("post_id", flat=True))
     assert observations == expected_ids
     assert set(PostBrand.objects.values_list("post_id", "brand_id", "weight")) == {
         (pid, "qwen", 1.0) for pid in expected_ids
@@ -121,14 +122,14 @@ def test_recorded_workload_preserves_fields_checkpoints_and_requests(http_pages,
         assert post["created_at"].isoformat() == "2026-08-09T00:10:00+00:00"
         assert post["native_author_id"] == "author-" + post["tweet_id"]
         assert post["author_handle"] == "user" + post["tweet_id"]
-    scopes = list(CollectionScopeRun.objects.filter(run_id=report["run_id"]).order_by("scope_key"))
+    scopes = list(CollectionScopeRun.objects.filter(run_id=report["run_id"], scope_kind="x_query").order_by("scope_key"))
     assert len(scopes) == 576 and all(s.enumeration_complete for s in scopes)
     checkpoints = []
     for scope in scopes:
         i = int(scope.scope_key.split(":")[1])
         assert scope.raw_count == {0: 0, 1: 1, 2: 3, 3: 2}.get(i % 12, 1)
-        assert len(scope.envelopes) == (2 if i % 12 in {1, 2} else 1)
-        checkpoints.append([scope.scope_key, scope.cursor, scope.cursor_history,
+        assert len(page_receipts(scope)) == (2 if i % 12 in {1, 2} else 1)
+        checkpoints.append([scope.scope_key, scope.cursor, scope.recorded_cursors,
                             scope.raw_count, scope.enumeration_complete, scope.outcome])
     assert state["peak"] == 1 if mode == "serial" else 1 < state["peak"] <= 20
     sample = {
@@ -213,16 +214,16 @@ def test_saturated_twenty_worker_workload(http_pages, mode):
     assert CollectionRun.objects.filter(job=job).aggregate(n=Sum("request_count"))["n"] == 40
     ids = {str(index) for index in range(1, 801)}
     assert set(Post.objects.values_list("pk", flat=True)) == ids
-    assert set(CollectionObservation.objects.filter(run__job=job).values_list("post_id", flat=True)) == ids
+    assert set(CollectionObservation.objects.filter(run__job=job, source_subject_kind="post").values_list("post_id", flat=True)) == ids
     brands = sorted(PostBrand.objects.values_list("post_id", "brand_id", "weight"))
     assert set(brands) == {(identifier, "qwen", 1.0) for identifier in ids}
     posts = list(Post.objects.order_by("tweet_id").values(
         "tweet_id", "text", "lang", "created_at", "created_at_epoch", "created_at_raw",
         "native_author_id", "author_handle", "tweet_type", "is_reply", "is_retweet", "is_quote",
     ))
-    scopes = list(CollectionScopeRun.objects.filter(run_id=report["run_id"]).order_by("scope_key"))
+    scopes = list(CollectionScopeRun.objects.filter(run_id=report["run_id"], scope_kind="x_query").order_by("scope_key"))
     assert len(scopes) == 40 and all(s.enumeration_complete and s.raw_count == 20 for s in scopes)
-    checkpoints = [[s.scope_key, s.cursor, s.cursor_history, s.raw_count,
+    checkpoints = [[s.scope_key, s.cursor, s.recorded_cursors, s.raw_count,
                     s.enumeration_complete, s.outcome] for s in scopes]
     result = {
         "profile": "forty-scopes-twenty-posts-eight-second-http", "mode": mode,

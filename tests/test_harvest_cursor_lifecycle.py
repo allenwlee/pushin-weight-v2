@@ -22,6 +22,7 @@ what was really requested rather than what the code intended.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -63,6 +64,8 @@ def _tweet(tid: str):
 class ScriptedApi:
     """Returns scripted results (or raises) and records each window."""
 
+    base_url = "https://api.twitterapi.io"
+
     def __init__(self, script):
         self._script = list(script)
         self.calls: list[dict] = []
@@ -72,6 +75,14 @@ class ScriptedApi:
         step = self._script.pop(0) if self._script else []
         if isinstance(step, Exception):
             raise step
+        if getattr(self, "on_exchange_start", None) is not None:
+            exchange = self.on_exchange_start(
+                "/twitter/tweet/advanced_search", {"query": query},
+            )
+            self.on_exchange_finish(exchange, {
+                "outcome": "received", "status_code": 200,
+                "body": json.dumps({"tweets": step}).encode(), "error_type": None,
+            })
         return list(step), False  # (items, truncated)
 
 

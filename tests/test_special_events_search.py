@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import yaml
 from django.db import close_old_connections
 
 from core.discovery import plan_discovery_calls
@@ -56,6 +57,49 @@ def enabled_config(tmp_path):
     Path(cfg.discovery.rare_types.assessment_path).write_text(json.dumps(assessment))
     cfg.discovery.rare_types.assessment_digest = assessment["assessment_digest"]
     return cfg
+
+
+def test_deployed_query_pack_reaches_real_planner(tmp_path, monkeypatch):
+    selected = enabled_config(tmp_path)
+    lane = selected.discovery.rare_types
+    for key, value in {
+        "X_MONITOR_DEPLOYMENT_ENVIRONMENT": "production",
+        "X_MONITOR_RARE_TYPES_ENABLED": "True",
+        "X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED": "True",
+        "X_MONITOR_RARE_TYPES_QUERY_PACK": "special-events-v1",
+        "X_MONITOR_RARE_TYPES_ASSESSMENT_PATH": lane.assessment_path,
+        "X_MONITOR_RARE_TYPES_ASSESSMENT_DIGEST": lane.assessment_digest,
+    }.items():
+        monkeypatch.setenv(key, value)
+    cfg = load_config(REPO / "config.yaml")
+    calls = plan_discovery_calls(cfg, list_id=42, now=NOW)
+    assert [call.call_id for call in calls] == list(CALL_IDS)
+    assert [call.query_string for call in calls] == list(QUERIES.values())
+    assert cfg.discovery.rare_types.daily_credit_ceiling == 28800
+
+
+@pytest.mark.parametrize("blueprint", ["render.yaml", "render-staging.yaml"])
+def test_release_blueprints_pin_the_real_assessed_queries(blueprint, monkeypatch):
+    services = yaml.safe_load((REPO / blueprint).read_text())["services"]
+    selected = 0
+    for service in services:
+        environment = {
+            row["key"]: str(row["value"])
+            for row in service.get("envVars", [])
+            if "value" in row
+        }
+        if environment.get("X_MONITOR_RARE_TYPES_ENABLED", "").lower() != "true":
+            continue
+        selected += 1
+        with monkeypatch.context() as context:
+            for key, value in environment.items():
+                if key.startswith("X_MONITOR_"):
+                    context.setenv(key, value)
+            cfg = load_config(REPO / "config.yaml")
+            calls = plan_discovery_calls(cfg, list_id=42, now=NOW)
+            assert [call.call_id for call in calls] == list(CALL_IDS)
+            assert [call.query_string for call in calls] == list(QUERIES.values())
+    assert selected == (2 if blueprint == "render.yaml" else 1)
 
 
 def test_exact_selected_pack_fits_provider_renderer_with_eleven_digit_epochs():

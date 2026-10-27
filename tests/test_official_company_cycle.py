@@ -286,7 +286,9 @@ def test_real_scheduled_cycle_reaches_discovery_once_without_changing_queries(
     assert model_call.call_count == expected_calls
     if not dry_run:
         assert result["status"] != "aborted"
-        assert len(result["planned_calls"]) == 7
+        assert [call["call_id"] for call in result["planned_calls"]] == [
+            "A", "B1", "C1", "C2", "C3", "C4", "B2", "B3",
+        ]
         if enabled:
             assert result["official_company_discovery"]["attempted"] == 1
 

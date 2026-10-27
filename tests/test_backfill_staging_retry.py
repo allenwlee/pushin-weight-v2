@@ -139,8 +139,8 @@ def test_twenty_in_flight_cluster_saves_successes_and_resumes_after_cooldown(htt
         assert job.state == "ready" and job.active_run_id is None
         saved = RetryControl.from_run(job.last_attempt).snapshot()
         assert saved["phase"] == "open" and saved["cooldowns"] == 1
-        job.last_attempt.report = {}
-        job.last_attempt.save(update_fields=["report"])
+        # Retry state survives in typed columns after report storage is retired.
+        assert "report" not in {field.name for field in job.last_attempt._meta.fields}
         assert 45 <= (job.next_retry_at - clock.now(UTC)).total_seconds() <= 60
         # Neither a row lock nor a live-writer lease survives the cooldown.
         from monitor.run_lock import harvest_writer_lock
@@ -169,7 +169,7 @@ def test_repeated_failures_keep_page_ceiling_across_attempts(http_pages, monkeyp
             execute_job(job.pk)
     assert len(state["requests"]) == 5
     assert CollectionRequest.objects.filter(error_code="Timeout", accounting_complete=False).count() == 5
-    assert not CollectionScopeRun.objects.filter(enumeration_complete=True).exists()
+    assert not CollectionScopeRun.objects.filter(scope_kind="x_query", enumeration_complete=True).exists()
 
 
 def test_timeout_does_not_reset_window_request_allowance(http_pages, monkeypatch, clock):  # noqa: F811

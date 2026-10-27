@@ -203,10 +203,12 @@ services:
         value: "True"
       - key: X_MONITOR_RARE_TYPES_ENABLED
         value: "True"
+      - key: X_MONITOR_RARE_TYPES_QUERY_PACK
+        value: special-events-v1
       - key: X_MONITOR_RARE_TYPES_ASSESSMENT_PATH
-        value: docs/analysis/harvester/2026-09-24-172323-rare-type-archived-live56-assessment.json
+        value: docs/analysis/harvester/2026-10-27-205000-special-events-query-assessment.json
       - key: X_MONITOR_RARE_TYPES_ASSESSMENT_DIGEST
-        value: 03165d5084fb8605e5eaa115f5dd98274bb5e7a0a2bfa334e5200bc8776a726a
+        value: 1dd606ceb853b2679fc2064e34f4defd92b3f81f389d1751361652f6db2cef85
       - key: X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED
         value: "True"
       - key: X_MONITOR_RARE_TYPES_HF_VERIFICATION_ENABLED
@@ -289,10 +291,12 @@ services:
         value: "1"
       - key: X_MONITOR_RARE_TYPES_ENABLED
         value: "True"
+      - key: X_MONITOR_RARE_TYPES_QUERY_PACK
+        value: special-events-v1
       - key: X_MONITOR_RARE_TYPES_ASSESSMENT_PATH
-        value: docs/analysis/harvester/2026-09-24-172323-rare-type-archived-live56-assessment.json
+        value: docs/analysis/harvester/2026-10-27-205000-special-events-query-assessment.json
       - key: X_MONITOR_RARE_TYPES_ASSESSMENT_DIGEST
-        value: 03165d5084fb8605e5eaa115f5dd98274bb5e7a0a2bfa334e5200bc8776a726a
+        value: 1dd606ceb853b2679fc2064e34f4defd92b3f81f389d1751361652f6db2cef85
       - key: X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED
         value: "True"
       - key: X_MONITOR_RARE_TYPES_HF_VERIFICATION_ENABLED

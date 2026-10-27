@@ -1,4 +1,5 @@
 """Real shared writers and PostgreSQL; only external transports/enrichment are faked."""
+import json
 from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
@@ -65,14 +66,23 @@ def test_scheduled_cycle_persists_context_and_deduplicates_c1_c4(monkeypatch, se
                     ("2113940624651006275", "Meta Muse AIへの招待 code") ]}
 
     class Api:
+        base_url = "https://api.twitterapi.io"
         timeout_s = 1
         max_retries = 0
         def run_search(self, query, **kwargs):
             cid = by_query[query]
             seen.append(cid)
-            return [{"id": tid, "text": text, "created_at": now.isoformat(),
+            results = [{"id": tid, "text": text, "created_at": now.isoformat(),
                      "author_id": "u10-" + tid, "author_handle": "u10test"}
-                    for tid, text in texts.get(cid, [])], False
+                    for tid, text in texts.get(cid, [])]
+            exchange = self.on_exchange_start(
+                "/twitter/tweet/advanced_search", {"query": query},
+            )
+            self.on_exchange_finish(exchange, {
+                "outcome": "received", "status_code": 200,
+                "body": json.dumps({"tweets": results}).encode(), "error_type": None,
+            })
+            return results, False
 
     monkeypatch.setattr(cycle.XClient, "from_env", classmethod(lambda cls, purpose: Api()))
     monkeypatch.setattr(CycleRunner, "_replay_backlog", lambda self, **kwargs: [])

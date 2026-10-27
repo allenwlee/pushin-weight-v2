@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -50,12 +51,22 @@ def _tweet(tweet_id: str, text: str) -> dict[str, str]:
 
 
 class FakeApi:
+    base_url = "https://api.twitterapi.io"
+
     def __init__(self, results: list[dict[str, str]]):
         self.results = results
         self.searches: list[tuple[str, dict]] = []
 
     def run_search(self, query: str, **kwargs):
         self.searches.append((query, kwargs))
+        if getattr(self, "on_exchange_start", None) is not None:
+            exchange = self.on_exchange_start(
+                "/twitter/tweet/advanced_search", {"query": query},
+            )
+            self.on_exchange_finish(exchange, {
+                "outcome": "received", "status_code": 200,
+                "body": json.dumps({"tweets": self.results}).encode(), "error_type": None,
+            })
         return list(self.results), False
 
 

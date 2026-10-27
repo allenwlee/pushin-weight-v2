@@ -1833,7 +1833,6 @@ def run_targeted_extractions(
     calls: Mapping[str, TargetedCall],
     max_calls: int,
     deadline: Any | None = None,
-    eligible_rare_types: set[str] | None = None,
 ) -> TargetedExtractionResult:
     if not config.enabled or max_calls < 1:
         return TargetedExtractionResult()
@@ -1841,10 +1840,6 @@ def run_targeted_extractions(
         TYPE_TO_ROLE[key]
         for key in TYPE_TO_ROLE
         if key in post_types
-        and (
-            key != "releases_updates"
-            or "model_releases" in (eligible_rare_types or set())
-        )
     ]
     has_ambiguous_profile = AffiliationClaimEvidence.objects.filter(
         pk__in=PersonBrandAffiliationEvidence.objects.filter(
