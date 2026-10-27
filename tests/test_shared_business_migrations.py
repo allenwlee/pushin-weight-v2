@@ -717,9 +717,7 @@ def test_citizenship_cutover_preserves_ambiguous_nationality_as_source_text(
 def test_selected_scalar_restoration_preserves_rows_and_completed_review(
     migration_rehearsal_schema,
 ):
-    from core import models
-    from core.event_dossiers import ModelReleaseInput, read_dossier
-    from tests.test_event_dossiers import claim, dossier, review
+    from django.utils import timezone
 
     baseline = ("core", "0146_rg4_career_site_source_type")
     target = ("core", "0147_rg4_restore_selected_scalar_fields")
@@ -735,15 +733,56 @@ def test_selected_scalar_restoration_preserves_rows_and_completed_review(
         person=person, full_name="Original source name", locale_id="und",
         name_type_reference=kind, fingerprint="a" * 64,
     )
-    event = dossier("scalar-restoration")
-    evidence = claim(event, key="scalar-restoration")
-    saved = review(
-        event, evidence, model_release=ModelReleaseInput(
-            observed_name="Source model", native_identifier="source/model",
-            disclosure_state="announced",
-        ),
-    )
-    document = read_dossier(event.pk)
+    now = timezone.now()
+    with transaction.atomic():
+        event = old.get_model("core", "EventDossier").objects.create(
+            event_kind_reference=old.get_model("core", "EventKind").objects.get(
+                code="model_release"
+            ),
+            identity_key="d" * 64,
+        )
+        post = old.get_model("core", "Post").objects.create(
+            tweet_id="scalar-restoration", text="Original release claim"
+        )
+        source = old.get_model("core", "EventDossierSource").objects.create(
+            event_dossier=event, post=post, linked_at=now
+        )
+        evidence = old.get_model("core", "EventDossierClaim").objects.create(
+            event_dossier_source=source,
+            claim_kind_reference=old.get_model("core", "EventClaimKind").objects.get(
+                code="announcement"
+            ),
+            scope_key="source", claim_hash="e" * 64,
+            extraction_version="historical-v1", recorded_at=now,
+            assertion_text="Announced", source_excerpt="Original release claim",
+            source_hash="f" * 64,
+        )
+        saved = old.get_model("core", "EventDossierReview").objects.create(
+            event_dossier=event, revision=1, reviewed_at=now,
+            evidence_cutoff_at=now, method_version="historical-v1",
+            actor="reviewer", reason="Original source",
+            input_hash="1" * 64, display_title="Source model",
+            review_state="provisional",
+        )
+        old.get_model("core", "EventDossierReviewClaim").objects.create(
+            review=saved, claim=evidence, disposition="accepted",
+            reason="Direct source",
+        )
+        old.get_model("core", "ModelReleaseDetail").objects.create(
+            review=saved, observed_name="Source model",
+            native_identifier="source/model",
+            release_maturity_reference=old.get_model(
+                "core", "ReleaseMaturity"
+            ).objects.get(code="unknown"),
+            release_availability_reference=old.get_model(
+                "core", "ReleaseAvailabilityState"
+            ).objects.get(code="unknown"),
+            release_disclosure_reference=old.get_model(
+                "core", "ReleaseDisclosureState"
+            ).objects.get(code="announced"),
+        )
+        event.current_review_id = saved.pk
+        event.save(update_fields=["current_review"])
 
     def stored_rows():
         rows = []
@@ -759,20 +798,21 @@ def test_selected_scalar_restoration_preserves_rows_and_completed_review(
     before = stored_rows()
     MigrationExecutor(connection).migrate([target])
     assert stored_rows() == before
-    assert read_dossier(event.pk) == document
-    restored = models.PersonName.objects.get(pk=original.pk)
+    current = MigrationExecutor(connection).loader.project_state([target]).apps
+    restored = current.get_model("core", "PersonName").objects.get(pk=original.pk)
     assert restored.name_type == "professional"
     assert restored.fingerprint == "a" * 64
-    assert models.ModelReleaseDetail.objects.get(pk=saved.pk).disclosure_state == "announced"
+    details = current.get_model("core", "ModelReleaseDetail")
+    assert details.objects.get(pk=saved.pk).disclosure_state == "announced"
     # The preceding image remains usable throughout the cutover window.
     later = names.objects.create(
         person=person, full_name="Later preceding-image name", locale_id="und",
         name_type_reference=kind, fingerprint="b" * 64,
     )
-    assert models.PersonName.objects.get(pk=later.pk).name_type == "professional"
+    assert current.get_model("core", "PersonName").objects.get(pk=later.pk).name_type == "professional"
     assert names.objects.get(pk=original.pk).name_type_reference.code == "professional"
     with pytest.raises(IntegrityError), transaction.atomic():
-        models.ModelReleaseDetail.objects.filter(pk=saved.pk).update(disclosure_state="unannounced")
+        details.objects.filter(pk=saved.pk).update(disclosure_state="unannounced")
     with pytest.raises(IntegrityError), transaction.atomic():
         names.objects.filter(pk=original.pk).update(
             name_type_reference=old.get_model("core", "PersonNameType").objects.get(code="romanized")

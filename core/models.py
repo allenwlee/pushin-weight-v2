@@ -3558,6 +3558,10 @@ class ProductVerificationProposal(models.Model):
         "ModelRelease", on_delete=models.SET_NULL, blank=True, null=True,
         related_name="product_verification_proposals",
     )
+    source_dossier = models.ForeignKey(
+        "EventDossier", on_delete=models.PROTECT, blank=True, null=True,
+        related_name="product_verification_proposals",
+    )
     proposed_brand = models.ForeignKey(
         Brand, on_delete=models.PROTECT, blank=True, null=True,
         related_name="product_verification_proposals", to_field="nickname",
@@ -7685,6 +7689,10 @@ class ModelRelease(models.Model):
         default="unknown",
     )
     release_identity = models.CharField(max_length=64, unique=True)
+    rg7_dossier = models.ForeignKey(
+        "EventDossier", on_delete=models.PROTECT, blank=True, null=True,
+        related_name="+",
+    )
     first_seen_at = models.DateTimeField()
     last_seen_at = models.DateTimeField()
     extraction_version = models.TextField()
@@ -7726,6 +7734,10 @@ class ModelReleaseEvidence(models.Model):
     observed_at = models.DateTimeField()
     observed_claim = models.JSONField(default=dict)
     evidence_hash = models.CharField(max_length=64)
+    rg7_claim = models.ForeignKey(
+        "EventDossierClaim", on_delete=models.PROTECT, blank=True, null=True,
+        related_name="+",
+    )
     extraction_version = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -10373,6 +10385,22 @@ class EventDossierClaim(models.Model):
     event_dossier_source = models.ForeignKey(
         EventDossierSource, on_delete=models.PROTECT, related_name="claims"
     )
+    source_archive = models.ForeignKey(
+        "CollectionEvidenceArchive", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="dossier_claims",
+    )
+    reported_brand = models.ForeignKey(
+        Brand, to_field="nickname", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="dossier_claims",
+    )
+    reported_brand_discovery_candidate = models.ForeignKey(
+        BrandDiscoveryCandidate, null=True, blank=True,
+        on_delete=models.PROTECT, related_name="dossier_claims",
+    )
+    release_maturity_reference = models.ForeignKey(
+        ReleaseMaturity, db_column="release_maturity_id", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="dossier_claims",
+    )
     claim_kind_reference = models.ForeignKey(
         EventClaimKind,
         db_column="claim_kind_id",
@@ -10414,6 +10442,10 @@ class EventDossierClaim(models.Model):
     class Meta:
         db_table = "event_dossier_claims"
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(reported_brand__isnull=True) | models.Q(reported_brand_discovery_candidate__isnull=True),
+                name="ck_ed_claim_one_owner",
+            ),
             models.CheckConstraint(
                 condition=_ed_time_shape, name="ck_ed_claim_time_shape"
             ),
@@ -10571,12 +10603,12 @@ class EventDossierReviewClaim(models.Model):
         ]
 
 
-class ModelReleaseDetail(models.Model):
+class ProductReleaseDetail(models.Model):
     review = models.OneToOneField(
         EventDossierReview,
         primary_key=True,
         on_delete=models.PROTECT,
-        related_name="model_release",
+        related_name="product_release",
     )
     product = models.ForeignKey(
         Product,
@@ -10588,7 +10620,7 @@ class ModelReleaseDetail(models.Model):
         related_name="release_reviews",
     )
     observed_name = models.TextField()
-    native_identifier = models.TextField()
+    native_identifier = models.TextField(null=True, blank=True)
     version_label = models.TextField(null=True, blank=True)
     variant = models.TextField(null=True, blank=True)
     release_maturity_reference = models.ForeignKey(
@@ -10616,10 +10648,10 @@ class ModelReleaseDetail(models.Model):
     )
 
     class Meta:
-        db_table = "model_release_details"
+        db_table = "product_release_details"
         constraints = [
             models.CheckConstraint(
-                condition=~models.Q(observed_name="") & ~models.Q(native_identifier=""),
+                condition=~models.Q(observed_name="") & (models.Q(native_identifier__isnull=True) | ~models.Q(native_identifier="")),
                 name="ck_ed_release_identity",
             ),
             models.CheckConstraint(

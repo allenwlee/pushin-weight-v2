@@ -475,7 +475,7 @@ def test_optional_source_policy_covers_every_post_0027_relation() -> None:
         "event_dossier_claims",
         "event_dossier_reviews",
         "event_dossier_review_claims",
-        "model_release_details",
+        "product_release_details",
         "personnel_change_details",
         "provider_batches",
         "materialization_state",
@@ -818,7 +818,7 @@ def test_dossier_history_is_copied_and_pre_dossier_sources_remain_supported():
     tables = frozenset({
         "event_dossiers", "event_dossier_sources", "event_dossier_claims",
         "event_dossier_reviews", "event_dossier_review_claims",
-        "model_release_details", "personnel_change_details",
+        "product_release_details", "personnel_change_details",
     })
     sequences = frozenset({
         "event_dossier_sources_id_seq", "event_dossier_review_claims_id_seq",

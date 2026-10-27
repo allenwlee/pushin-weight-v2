@@ -84,7 +84,7 @@ relations:
     - event_dossier_claims
     - event_dossier_reviews
     - event_dossier_review_claims
-    - model_release_details
+    - product_release_details
     - personnel_change_details
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - data_sources
@@ -335,7 +335,7 @@ relations:
     - event_dossier_claims
     - event_dossier_reviews
     - event_dossier_review_claims
-    - model_release_details
+    - product_release_details
     - personnel_change_details
     - materialization_state
     - provider_batches

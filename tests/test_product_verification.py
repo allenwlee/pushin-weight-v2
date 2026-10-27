@@ -12,15 +12,16 @@ from core.models import (
     BrandAccount,
     BrandCompany,
     BrandDiscoveryCandidate,
-    ModelRelease,
+    EventDossier,
+    EventDossierClaim,
     Post,
     PostBrandProduct,
     Product,
     ProductVerificationProposal,
     RareTypeCategoryAssignment,
-    ReleaseMaturity,
     Role,
 )
+from core.product_release_dossiers import record_release_report
 from core.product_verification import (
     POLICY_VERSION,
     attach_verified_product,
@@ -98,20 +99,16 @@ def test_confirmed_known_publisher_attaches_exact_repo_idempotently():
 
 def test_known_publisher_hf_match_attaches_to_owner_approved_x_only_product():
     brand, _org, account, post = _publisher()
-    now = timezone.now()
-    release = ModelRelease.objects.create(
-        release_maturity_reference=ReleaseMaturity.objects.get(code="unknown"),
-        brand=brand,
-        observed_model_name="M2",
-        release_identity="known-m2-release",
-        first_seen_at=now,
-        last_seen_at=now,
-        extraction_version="test",
+    release, _, _ = record_release_report(
+        post=post, record={"model_name": "M2"},
+        release_identity="known-m2-release", observed_name="M2",
+        source_url=None, brand=brand, maturity_code="unknown",
+        release_value=None, release_precision="unknown", extraction_version="test",
     )
     first = ProductVerificationProposal.objects.create(
         proposal_key="7" * 64,
         source_post=post,
-        source_release=release,
+        source_dossier=release,
         proposed_brand=brand,
         account=account,
         observed_name="M2",
@@ -140,7 +137,7 @@ def test_known_publisher_hf_match_attaches_to_owner_approved_x_only_product():
     ProductVerificationProposal.objects.create(
         proposal_key="8" * 64,
         source_post=post,
-        source_release=release,
+        source_dossier=release,
         proposed_brand=brand,
         account=account,
         observed_name="M2",
@@ -332,17 +329,14 @@ def _new_publisher_proposal(*, verified_type: str = "Business"):
         account_evidence=evidence,
         policy_version=POLICY_VERSION,
     )
-    release = ModelRelease.objects.create(
-        release_maturity_reference=ReleaseMaturity.objects.get(code="unknown"),
-        brand_discovery_candidate=candidate,
-        observed_model_name="Model One",
-        release_identity="new-publisher-release",
-        first_seen_at=now,
-        last_seen_at=now,
-        extraction_version="test",
+    release, _, _ = record_release_report(
+        post=post, record={"model_name": "Model One"},
+        release_identity="new-publisher-release", observed_name="Model One",
+        source_url=None, candidate=candidate, maturity_code="unknown",
+        release_value=None, release_precision="unknown", extraction_version="test",
     )
-    proposal.source_release = release
-    proposal.save(update_fields=["source_release", "updated_at"])
+    proposal.source_dossier = release
+    proposal.save(update_fields=["source_dossier", "updated_at"])
     return proposal
 
 
@@ -403,10 +397,11 @@ def test_new_publisher_exact_model_is_cached_then_socials_resume_without_refetch
     )
     assert candidate.reviewed_brand_id == "newpublisher_ai"
     assert not Brand.objects.get(pk="newpublisher_ai").keywords.exists()
-    release = ModelRelease.objects.get()
-    assert release.brand_id is None
-    assert release.brand_discovery_candidate_id == candidate.pk
-    assert proposal.source_release_id == release.pk
+    release = EventDossier.objects.get()
+    claim = EventDossierClaim.objects.get(event_dossier_source__event_dossier=release)
+    assert claim.reported_brand_id is None
+    assert claim.reported_brand_discovery_candidate_id == candidate.pk
+    assert proposal.source_dossier_id == release.pk
     assert proposal.resolved_product_id == product.pk
 
 

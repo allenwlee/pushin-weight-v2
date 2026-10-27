@@ -53,7 +53,7 @@ def test_shadow_scrub_preserves_dossier_sources_linked_to_catalog_observations()
         resource_key="publisher/model",
     )
     dossier = create_dossier(
-        event_kind="model_release",
+        event_kind="product_release",
         identity_key=identity_key("refresh-test", "dossier"),
     )
     source = attach_source(dossier.pk, observation_id=observation.pk)

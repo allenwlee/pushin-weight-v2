@@ -13,9 +13,9 @@ from django.db.models import Q
 from core.discovery import PAID_DISCOVERY_CALL_IDS
 from core.models import (
     BrandDiscoveryCandidateTokenEvidence,
+    EventDossierClaim,
     EventEvidence,
     JobListingEvidence,
-    ModelReleaseEvidence,
     Opportunity,
     PersonBrandAffiliationEvidence,
     PostEnrichmentState,
@@ -150,7 +150,10 @@ def build_rare_type_cycle_summary(summary: Mapping[str, Any]) -> dict[str, int |
         for status in RareTypeDecision.Status.values
     }
 
-    release_evidence = ModelReleaseEvidence.objects.filter(source_post_id__in=post_ids)
+    release_evidence = EventDossierClaim.objects.filter(
+        event_dossier_source__post_id__in=post_ids,
+        event_dossier_source__event_dossier__event_kind_reference__code="product_release",
+    )
     event_evidence = EventEvidence.objects.filter(source_post_id__in=post_ids)
     job_evidence = JobListingEvidence.objects.filter(source_post_id__in=post_ids)
     affiliation_evidence = PersonBrandAffiliationEvidence.objects.filter(
@@ -162,7 +165,9 @@ def build_rare_type_cycle_summary(summary: Mapping[str, Any]) -> dict[str, int |
     )
 
     domain_record_counts = {
-        "model_releases": release_evidence.values("release_id").distinct().count(),
+        "model_releases": release_evidence.values(
+            "event_dossier_source__event_dossier_id"
+        ).distinct().count(),
         "events": event_evidence.values("event_id").distinct().count(),
         "job_listings": job_evidence.values("listing_id").distinct().count(),
         "affiliations": affiliation_evidence.values("affiliation_id").distinct().count(),

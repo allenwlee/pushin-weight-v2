@@ -14,12 +14,12 @@ from core.models import (
     Brand,
     BrandCompany,
     BrandDiscoveryCandidate,
-    ModelRelease,
+    EventDossier,
+    EventKind,
     Post,
     PostBrandProduct,
     Product,
     ProductVerificationProposal,
-    ReleaseMaturity,
 )
 from core.product_verification import decide_product_proposal
 from tests.company_factory import company_with_label
@@ -39,7 +39,7 @@ def _proposal(
     candidate: BrandDiscoveryCandidate | None = None,
     repo_id: str = "",
     hf_outcome: str = "deferred",
-    release: ModelRelease | None = None,
+    release: EventDossier | None = None,
     text: str = "Release <script>alert(1)</script>",
 ) -> ProductVerificationProposal:
     account = Account.objects.create(author_id=f"account-{key}", handle=f"handle-{key}")
@@ -47,7 +47,7 @@ def _proposal(
     return ProductVerificationProposal.objects.create(
         proposal_key=key * 64,
         source_post=post,
-        source_release=release,
+        source_dossier=release,
         proposed_brand=brand,
         proposed_candidate=candidate,
         account=account,
@@ -73,16 +73,13 @@ def _staff_client(*, csrf: bool = False) -> Client:
     return client
 
 
-def _release(brand: Brand) -> ModelRelease:
+def _release(brand: Brand) -> EventDossier:
     now = timezone.now()
-    return ModelRelease.objects.create(
-        release_maturity_reference=ReleaseMaturity.objects.get(code="unknown"),
-        brand=brand,
-        observed_model_name="Model X",
-        release_identity="r" * 64,
+    return EventDossier.objects.create(
+        event_kind_reference=EventKind.objects.get(code="product_release"),
+        identity_key="a" * 64,
         first_seen_at=now,
         last_seen_at=now,
-        extraction_version="test",
     )
 
 

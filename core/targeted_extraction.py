@@ -33,8 +33,6 @@ from core.models import (
     JobDiscoveryRun,
     JobListing,
     JobListingEvidence,
-    ModelRelease,
-    ModelReleaseEvidence,
     Opportunity,
     OpportunityType,
     PersonBrandAffiliation,
@@ -45,13 +43,13 @@ from core.models import (
     ProfileMovementCandidate,
     RareTypeCategoryAssignment,
     RareTypeSearchHit,
-    ReleaseMaturity,
     SearchQuery,
     TargetedExtractionAttempt,
     TargetedExtractionState,
 )
 from core.person_affiliations import matching_moved_claim, require_claim_owner
 from core.person_identity import subject_person
+from core.product_release_dossiers import record_release_report
 from core.product_verification import POLICY_VERSION, source_repo_evidence
 from core.rare_type_search import record_unknown_name_tokens_from_movement
 from core.shared_vocabulary import resolve_time_zone
@@ -83,7 +81,7 @@ ALLOWED_APPLICATION_ROUTES = {
 ALLOWED_EVENT_MODES = {value for value, _label in Event.ATTENDANCE_MODES}
 ALLOWED_EVENT_STATUSES = {value for value, _label in Event.SOURCE_STATUSES}
 ALLOWED_OPPORTUNITY_TYPES = {value for value, _label in Opportunity.OPPORTUNITY_TYPES}
-ALLOWED_RELEASE_CHANNELS = {value for value, _label in ModelRelease.CHANNELS}
+ALLOWED_RELEASE_CHANNELS = {"stable", "preview", "beta", "other"}
 ALLOWED_RARE_CATEGORIES = {
     value for value, _label in RareTypeCategoryAssignment.CATEGORIES
 }
@@ -1625,43 +1623,23 @@ def _persist_model_releases(
                 **({"source_url": source_url} if not version_value else {}),
             }
         )
-        release, created = ModelRelease.objects.get_or_create(
+        dossier, created, evidence_created = record_release_report(
+            post=post,
+            record=dict(record),
             release_identity=identity,
-            defaults={
-                "brand": brand,
-                "brand_discovery_candidate": candidate,
-                "observed_model_name": model_name,
-                "version": version_value,
-                "release_maturity_reference": ReleaseMaturity.objects.get(
-                    code=channel
-                ),
-                "release_value": release_value,
-                "release_precision": release_precision,
-                "first_seen_at": post.fetched_at,
-                "last_seen_at": post.fetched_at,
-                "extraction_version": version,
-                "review_status": "pending",
-            },
-        )
-        if not created and post.fetched_at > release.last_seen_at:
-            release.last_seen_at = post.fetched_at
-            release.save(update_fields=["last_seen_at", "updated_at"])
-        evidence_hash = _hash({"post": str(post.pk), "record": record, "version": version})
-        _evidence, evidence_created = ModelReleaseEvidence.objects.get_or_create(
-            release=release,
-            source_post=post,
-            evidence_hash=evidence_hash,
-            defaults={
-                "source_url": source_url,
-                "observed_at": post.fetched_at,
-                "observed_claim": dict(record),
-                "extraction_version": version,
-            },
+            observed_name=model_name,
+            source_url=source_url,
+            brand=brand,
+            candidate=candidate,
+            maturity_code=channel,
+            release_value=release_value,
+            release_precision=release_precision,
+            extraction_version=version,
         )
         candidate_repo_id = _text(record.get("candidate_repo_id"), maximum=256) or ""
         if post.author_id:
             source_identity_evidence = source_repo_evidence(post, candidate_repo_id)
-            ProductVerificationProposal.objects.get_or_create(
+            proposal, _ = ProductVerificationProposal.objects.get_or_create(
                 proposal_key=_hash(
                     {
                         "post": str(post.pk),
@@ -1672,7 +1650,7 @@ def _persist_model_releases(
                 ),
                 defaults={
                     "source_post": post,
-                    "source_release": release,
+                    "source_dossier": dossier,
                     "proposed_brand": brand,
                     "proposed_candidate": candidate,
                     "account_id": post.author_id,
@@ -1700,6 +1678,12 @@ def _persist_model_releases(
                     ],
                 },
             )
+            if proposal.source_dossier_id is None:
+                proposal.source_dossier = dossier
+                proposal.save(update_fields=["source_dossier"])
+            # The established proposal key can cover several distinct reports
+            # from the same Post. Keep its first linked dossier and preserve
+            # every additional report as its own source claim.
         written += int(created)
         evidence += int(evidence_created)
     return written, evidence, candidates

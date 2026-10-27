@@ -19,14 +19,11 @@ from core.models import (
     BrandDiscoveryCandidate,
     BrandDiscoveryCandidateToken,
     BrandDiscoveryCandidateTokenEvidence,
-    ModelRelease,
-    ModelReleaseEvidence,
     Post,
     PostEnrichmentState,
     RareTypeSearchDailyBudget,
     RareTypeSearchHit,
     RareTypeSearchRun,
-    ReleaseMaturity,
 )
 from monitor.cycle import CycleRunner, plan_calls_for_cycle
 from monitor.harvest_summary import (
@@ -509,24 +506,13 @@ def test_lane_telemetry_separates_records_evidence_tokens_and_latency(
     hit.extracted_at = NOW + timedelta(seconds=4)
     hit.first_visible_at = NOW + timedelta(seconds=5)
     hit.save()
-    release = ModelRelease.objects.create(
-        brand=brand,
-        observed_model_name="Model T",
-        version="1",
-        release_maturity_reference=ReleaseMaturity.objects.get(code="stable"),
-        release_value="2026-09-24",
-        release_precision="day",
-        release_identity="telemetry-model-t",
-        first_seen_at=NOW,
-        last_seen_at=NOW,
-        extraction_version="model-release-extraction-v1",
-    )
-    ModelReleaseEvidence.objects.create(
-        release=release,
-        source_post=post,
-        observed_at=NOW,
-        observed_claim={"model_name": "Model T"},
-        evidence_hash="telemetry-release-evidence",
+    from core.product_release_dossiers import record_release_report
+
+    record_release_report(
+        post=post, record={"model_name": "Model T", "version": "1"},
+        release_identity="telemetry-model-t", observed_name="Model T",
+        source_url=None, brand=brand, maturity_code="stable",
+        release_value="2026-09-24", release_precision="day",
         extraction_version="model-release-extraction-v1",
     )
     candidate = BrandDiscoveryCandidate.objects.create(

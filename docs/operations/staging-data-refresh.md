@@ -208,7 +208,7 @@ WHERE schemaname = 'public'
     'definition_versions', 'service_providers', 'inference_models', 'workflow_stages',
     'event_dossiers', 'event_dossier_sources', 'event_dossier_claims',
     'event_dossier_reviews', 'event_dossier_review_claims',
-    'model_release_details', 'personnel_change_details',
+    'product_release_details', 'personnel_change_details',
     'collection_campaigns', 'collection_job_targets', 'collection_attempts',
     'collection_requests', 'collection_evidence_archives',
     'collection_observation_inputs', 'collection_resource_snapshots',

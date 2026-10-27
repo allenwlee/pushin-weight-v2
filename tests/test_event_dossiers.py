@@ -11,8 +11,8 @@ from django.utils import timezone
 from core import models
 from core.event_dossiers import (
     ClaimDecision,
-    ModelReleaseInput,
     PersonnelChangeInput,
+    ProductReleaseInput,
     StaleReview,
     add_claim,
     attach_source,
@@ -26,14 +26,14 @@ from tests.person_factory import person_with_name
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 
-def dossier(key="model:small", kind="model_release"):
+def dossier(key="model:small", kind="product_release"):
     return create_dossier(event_kind=kind, identity_key=identity_key("test", key))
 
 
 def test_event_kind_uses_shared_identity_without_changing_dossier_replay():
     event = dossier("model:kind-reference")
-    assert event.event_kind_reference.code == "model_release"
-    assert read_dossier(event.pk)["dossier"]["event_kind"] == "model_release"
+    assert event.event_kind_reference.code == "product_release"
+    assert read_dossier(event.pk)["dossier"]["event_kind"] == "product_release"
     assert "event_kind_id" not in read_dossier(event.pk)["dossier"]
     assert dossier("model:kind-reference").pk == event.pk
     assert models.EventDossier.objects.count() == 1
@@ -68,7 +68,7 @@ def review(event, evidence, **kwargs):
         "actor": "test analyst",
         "reason": "New evidence",
         "claims": [ClaimDecision(evidence.pk, "accepted", "Direct source")],
-        "model_release": ModelReleaseInput(
+        "product_release": ProductReleaseInput(
             observed_name="anonymous", native_identifier="test/anonymous"
         ),
     }
@@ -100,7 +100,7 @@ def test_review_reads_frozen_evidence_after_live_post_changes():
     assert result["claims"][0]["effective_precision"] == "month"
     assert result["claims"][0]["effective_at"] is None
     assert result["claims"][0]["effective_date"] is None
-    assert result["model_release"]["product_key"] is None
+    assert result["product_release"]["product_key"] is None
 
 
 def test_shadow_history_unresolved_then_confirmed_and_exact_retry():
@@ -119,7 +119,7 @@ def test_shadow_history_unresolved_then_confirmed_and_exact_retry():
         "expected_current_review_id": second.pk,
         "evidence_cutoff_at": timezone.now(),
         "review_state": "confirmed",
-        "model_release": ModelReleaseInput(
+        "product_release": ProductReleaseInput(
             observed_name="Model Small",
             native_identifier="official/model-small",
             disclosure_state="announced",
@@ -127,12 +127,12 @@ def test_shadow_history_unresolved_then_confirmed_and_exact_retry():
         ),
     }
     third = review(event, official, **values)
-    assert third.model_release.release_maturity_reference.code == "unknown"
-    assert third.model_release.release_availability_reference.code == "available"
-    assert third.model_release.disclosure_state == "announced"
-    assert read_dossier(event.pk)["model_release"]["release_channel"] == "unknown"
-    assert read_dossier(event.pk)["model_release"]["availability_state"] == "available"
-    assert read_dossier(event.pk)["model_release"]["disclosure_state"] == "announced"
+    assert third.product_release.release_maturity_reference.code == "unknown"
+    assert third.product_release.release_availability_reference.code == "available"
+    assert third.product_release.disclosure_state == "announced"
+    assert read_dossier(event.pk)["product_release"]["release_channel"] == "unknown"
+    assert read_dossier(event.pk)["product_release"]["availability_state"] == "available"
+    assert read_dossier(event.pk)["product_release"]["disclosure_state"] == "announced"
     assert review(event, official, **values).pk == third.pk
     assert (
         read_dossier(event.pk, review_id=first.pk)["review"]["review_state"]
@@ -142,7 +142,7 @@ def test_shadow_history_unresolved_then_confirmed_and_exact_retry():
         read_dossier(event.pk, review_id=second.pk)["review"]["review_state"]
         == "unresolved"
     )
-    assert read_dossier(event.pk)["model_release"]["observed_name"] == "Model Small"
+    assert read_dossier(event.pk)["product_release"]["observed_name"] == "Model Small"
     assert third.revision == 3
     with pytest.raises(StaleReview):
         review(event, evidence, expected_current_review_id=first.pk)
@@ -296,7 +296,7 @@ def test_cross_dossier_claim_and_wrong_extension_roll_back():
         review(
             event,
             evidence,
-            model_release=None,
+            product_release=None,
             personnel_change=PersonnelChangeInput(
                 observed_person_name="A", change_kind="move"
             ),
@@ -318,7 +318,7 @@ def test_completed_history_rejects_bulk_updates_deletes_and_late_inputs():
             {"display_title": "rewritten"},
         ),
         (
-            models.ModelReleaseDetail.objects.filter(pk=saved.pk),
+            models.ProductReleaseDetail.objects.filter(pk=saved.pk),
             {"observed_name": "rewritten"},
         ),
         (
@@ -376,7 +376,7 @@ def test_personnel_move_uses_existing_roles_without_changing_them():
     saved = review(
         event,
         evidence,
-        model_release=None,
+        product_release=None,
         personnel_change=PersonnelChangeInput(
             person_id=person.pk,
             observed_person_name="Researcher",
@@ -498,7 +498,7 @@ def test_raw_review_with_foreign_claim_or_wrong_detail_cannot_commit():
                     ),
                 )
             else:
-                models.ModelReleaseDetail.objects.create(
+                models.ProductReleaseDetail.objects.create(
                     review=saved, observed_name="A", native_identifier="test/a",
                     release_maturity_reference=models.ReleaseMaturity.objects.get(
                         code="unknown"
