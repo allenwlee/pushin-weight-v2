@@ -246,6 +246,7 @@ def _call_with_retry(
     deadline: Any | None = None,
     telemetry_context: dict[str, Any] | None = None,
     operation_kind: str = "initial",
+    post_ids: list[str] | None = None,
     max_tokens_override: int | None = None,
     telemetry_role: str = "post_translation_synthesis",
 ) -> dict[str, Any]:
@@ -310,6 +311,8 @@ def _call_with_retry(
                 kwargs["thinking"] = thinking
             if request_timeout is not None:
                 kwargs["timeout"] = request_timeout
+            if getattr(client, "requires_request_context", False):
+                kwargs["_batch_context"] = {"stage": "translation", "post_ids": post_ids or []}
             response = client.messages_create(**kwargs)
             emit_attempt(logger, role=telemetry_role, model=model, attempt=attempt + 1, outcome="success", started=started, response=response, prompt=prompt, **event_context, attempt_kind=attempt_kind)
             return response
@@ -1202,6 +1205,7 @@ def translate_batch_pragmatics(
                 deadline=deadline,
                 telemetry_context=telemetry_context,
                 operation_kind="initial",
+                post_ids=[str(t.get("tweet_id") or t.get("id")) for t in batch],
             )
         except Exception as exc:
             logger.warning(
@@ -1256,6 +1260,7 @@ def translate_batch_pragmatics(
                     deadline=deadline,
                     telemetry_context=telemetry_context,
                     operation_kind="repair",
+                    post_ids=[str(t.get("tweet_id") or t.get("id")) for t in bad_tweets],
                 )
                 repair_parsed = _parse_pragmatics_response(repair_resp, bad_tweets)
             except Exception as exc:

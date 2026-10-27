@@ -43,7 +43,7 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.db import DatabaseError, transaction
-from django.db.models import Case, F, Q, Value, When
+from django.db.models import Case, Q, Value, When
 from django.utils import timezone as django_timezone
 
 from core.classification_contract import (
@@ -104,6 +104,19 @@ from core.rare_type_search import (
     reserve_search_run,
 )
 from monitor.backlog import finish_claim, return_claim, transfer_truncated_coverage
+from monitor.enrichment_queue import (
+    claim_enrichment_states as _claim_enrichment_states,
+)
+from monitor.enrichment_queue import (
+    finish_enrichment_stage as _finish_enrichment_stage,
+)
+from monitor.enrichment_queue import (
+    mark_stage_started,
+    stage_is_due,
+)
+from monitor.enrichment_queue import (
+    release_enrichment_claim as _release_enrichment_claim,
+)
 from monitor.harvest_summary import summarize_latency
 from monitor.list_membership import (
     observe_call_a_authors,
@@ -790,6 +803,8 @@ class _BoundedClassifierClient:
         sleep: Any = time.sleep,
         before_call: Any = None,
         after_call: Any = None,
+        before_dispatch: Any = None,
+        reserve_pair_budget: Any = None,
     ) -> None:
         self._delegate = client
         self._base_url = getattr(client, "_base_url", None)
@@ -799,6 +814,8 @@ class _BoundedClassifierClient:
         self._sleep = sleep
         self._before_call = before_call
         self._after_call = after_call
+        self._before_dispatch = before_dispatch
+        self._reserve_pair_budget = reserve_pair_budget
         self._lock = threading.Lock()
         self._calls = 0
         self._reserved_calls = 0
@@ -828,6 +845,14 @@ class _BoundedClassifierClient:
         return getattr(self._delegate, "deferred_requests", False) is True
 
     @property
+    def requires_request_context(self) -> bool:
+        return self._before_dispatch is not None
+
+    @property
+    def requires_pair_bounds(self) -> bool:
+        return self._reserve_pair_budget is not None
+
+    @property
     def remaining_calls(self) -> int | None:
         """Capacity visible before a two-role batch reserves both siblings."""
         if self._maximum_calls is None:
@@ -835,7 +860,7 @@ class _BoundedClassifierClient:
         with self._lock:
             return max(0, self._maximum_calls - self._calls - self._reserved_calls)
 
-    def reserve_pair(self, *, attempts_per_role: int) -> tuple[str | None, str | None] | None:
+    def reserve_pair(self, *, attempts_per_role: int, request_bounds=None) -> tuple[str | None, str | None] | None:
         """Reserve both role retry envelopes before either role can start.
 
         A transport retry repeats the same request up to ``attempts_per_role``
@@ -844,12 +869,14 @@ class _BoundedClassifierClient:
         """
         if attempts_per_role <= 0:
             raise ValueError("attempts_per_role must be positive")
-        if self._maximum_calls is None:
+        if self._maximum_calls is None and self._reserve_pair_budget is None:
             return (None, None)
         with self._lock:
             required = attempts_per_role * 2
-            if self._calls + self._reserved_calls + required > self._maximum_calls:
+            if self._maximum_calls is not None and self._calls + self._reserved_calls + required > self._maximum_calls:
                 return None
+            if self._reserve_pair_budget is not None:
+                self._reserve_pair_budget(request_bounds, attempts_per_role)
             self._reservation_sequence += 1
             content = f"pair-{self._reservation_sequence}:content"
             brand = f"pair-{self._reservation_sequence}:brand"
@@ -877,6 +904,8 @@ class _BoundedClassifierClient:
                     raise LLMCallBudgetExhausted("classifier reservation exhausted")
                 self._reservations[str(reservation)] = remaining - 1
                 self._reserved_calls -= 1
+                if self._reserve_pair_budget is not None:
+                    kwargs["_enrichment_budget_prepaid"] = True
             elif self._maximum_calls is not None and self._calls + self._reserved_calls >= self._maximum_calls:
                 raise LLMCallBudgetExhausted("classifier transport cap exhausted")
             if not self.deferred_requests and self._last_started is not None and self._pause_seconds:
@@ -887,6 +916,9 @@ class _BoundedClassifierClient:
                     self._sleep(wait_seconds)
             if self._before_call is not None and not self.deferred_requests:
                 self._before_call()
+            if self._before_dispatch is not None and not self.deferred_requests:
+                self._before_dispatch(kwargs)
+                kwargs.pop("_batch_context", None)
             self._calls += 1
             self._last_started = self._monotonic()
 
@@ -996,338 +1028,6 @@ def _requeue_recent_incomplete_translations(
         translation_next_attempt_at=now,
         translation_error_code="translation_output_incomplete",
     )
-
-
-@dataclass(frozen=True)
-class EnrichmentClaimBatch:
-    current_cycle_states: tuple[PostEnrichmentState, ...] = ()
-    carryover_states: tuple[PostEnrichmentState, ...] = ()
-    quarantined: int = 0
-
-    @property
-    def states(self) -> tuple[PostEnrichmentState, ...]:
-        return self.carryover_states + self.current_cycle_states
-
-    @property
-    def current_cycle_post_ids(self) -> tuple[str, ...]:
-        return tuple(str(state.pk) for state in self.current_cycle_states)
-
-    @property
-    def carryover_post_ids(self) -> tuple[str, ...]:
-        return tuple(str(state.pk) for state in self.carryover_states)
-
-
-def _claim_enrichment_states(
-    *,
-    cfg: Any,
-    run_id: str,
-    now: datetime | None = None,
-    prefer_created_before: datetime | None = None,
-    post_ids: set[str] | None = None,
-    defer_translation_attempts: bool = False,
-    source_collection_job_id: Any | None = None,
-) -> EnrichmentClaimBatch:
-    """Quarantine exhausted debt, then claim one atomic two-lane batch.
-
-    Active leases are excluded, expired leases are recoverable, and attempt/
-    age exhaustion becomes an explicit failed state instead of an immortal
-    pending row. Aged rows are transitioned outside the claim budget so they
-    cannot consume slots before live work reaches the classifier.
-    ``skip_locked`` lets a second writer avoid rows currently owned by another
-    transaction even though the outer writer lock normally serializes
-    production entrypoints. A cutoff creates disjoint carryover (older than
-    cutoff) and current-cycle (at or after cutoff) allocations that never
-    borrow from one another. Omitting the cutoff preserves the legacy bounded
-    backlog/backfill claim.
-    """
-
-    now = now or django_timezone.now()
-    age_cutoff = now - timedelta(hours=cfg.max_age_hours)
-    due = (
-        Q(translation_status=PostEnrichmentState.Status.PENDING)
-        | Q(classification_status=PostEnrichmentState.Status.PENDING)
-    ) & (Q(claim_expires_at__isnull=True) | Q(claim_expires_at__lte=now))
-    if post_ids is not None:
-        due &= Q(post_id__in=post_ids)
-    due &= Q(source_collection_job_id=source_collection_job_id)
-    age_eligible = Q(created_at__gt=age_cutoff) if source_collection_job_id is None else Q()
-    current_cycle: list[PostEnrichmentState] = []
-    carryover: list[PostEnrichmentState] = []
-
-    with transaction.atomic():
-        expired_due = due & Q(created_at__lte=age_cutoff) & Q(source_collection_job__isnull=True)
-        quarantined = PostEnrichmentState.objects.filter(expired_due).update(
-            translation_status=Case(
-                When(
-                    translation_status=PostEnrichmentState.Status.PENDING,
-                    then=Value(PostEnrichmentState.Status.FAILED),
-                ),
-                default=F("translation_status"),
-            ),
-            translation_error_code=Case(
-                When(
-                    translation_status=PostEnrichmentState.Status.PENDING,
-                    then=Value("age_exhausted"),
-                ),
-                default=F("translation_error_code"),
-            ),
-            classification_status=Case(
-                When(
-                    classification_status=PostEnrichmentState.Status.PENDING,
-                    then=Value(PostEnrichmentState.Status.FAILED),
-                ),
-                default=F("classification_status"),
-            ),
-            classification_error_code=Case(
-                When(
-                    classification_status=PostEnrichmentState.Status.PENDING,
-                    then=Value("age_exhausted"),
-                ),
-                default=F("classification_error_code"),
-            ),
-            claim_owner="",
-            claim_run_id="",
-            claimed_at=None,
-            claim_expires_at=None,
-        )
-
-        # Transition attempt-exhausted stages before either bounded lane is
-        # sliced. Otherwise terminal debt can consume a claim slot and starve
-        # eligible work at the edge of the cap.
-        attempt_exhausted = due & age_eligible & Q(source_collection_job__isnull=True) & (
-            Q(
-                translation_status=PostEnrichmentState.Status.PENDING,
-                translation_attempts__gte=cfg.max_attempts,
-            )
-            | Q(
-                classification_status=PostEnrichmentState.Status.PENDING,
-                classification_attempts__gte=cfg.max_attempts,
-            )
-        )
-        attempt_exhausted_ids = tuple(
-            str(post_id)
-            for post_id in PostEnrichmentState.objects.filter(
-                attempt_exhausted
-            ).values_list("post_id", flat=True)
-        )
-        if attempt_exhausted_ids:
-            PostEnrichmentState.objects.filter(
-                post_id__in=attempt_exhausted_ids
-            ).update(
-                translation_status=Case(
-                    When(
-                        translation_status=PostEnrichmentState.Status.PENDING,
-                        translation_attempts__gte=cfg.max_attempts,
-                        then=Value(PostEnrichmentState.Status.FAILED),
-                    ),
-                    default=F("translation_status"),
-                ),
-                translation_error_code=Case(
-                    When(
-                        translation_status=PostEnrichmentState.Status.PENDING,
-                        translation_attempts__gte=cfg.max_attempts,
-                        then=Value("attempts_exhausted"),
-                    ),
-                    default=F("translation_error_code"),
-                ),
-                classification_status=Case(
-                    When(
-                        classification_status=PostEnrichmentState.Status.PENDING,
-                        classification_attempts__gte=cfg.max_attempts,
-                        then=Value(PostEnrichmentState.Status.FAILED),
-                    ),
-                    default=F("classification_status"),
-                ),
-                classification_error_code=Case(
-                    When(
-                        classification_status=PostEnrichmentState.Status.PENDING,
-                        classification_attempts__gte=cfg.max_attempts,
-                        then=Value("attempts_exhausted"),
-                    ),
-                    default=F("classification_error_code"),
-                ),
-            )
-
-            terminal_attempt_ids = tuple(
-                str(post_id)
-                for post_id in PostEnrichmentState.objects.filter(
-                    post_id__in=attempt_exhausted_ids
-                )
-                .exclude(
-                    Q(translation_status=PostEnrichmentState.Status.PENDING)
-                    | Q(classification_status=PostEnrichmentState.Status.PENDING)
-                )
-                .values_list("post_id", flat=True)
-            )
-            if terminal_attempt_ids:
-                quarantined += len(terminal_attempt_ids)
-                PostEnrichmentState.objects.filter(
-                    post_id__in=terminal_attempt_ids
-                ).update(
-                    claim_owner="",
-                    claim_run_id="",
-                    claimed_at=None,
-                    claim_expires_at=None,
-                )
-
-        eligible_qs = (
-            PostEnrichmentState.objects.select_for_update(skip_locked=True)
-            .select_related("post")
-            .filter(due, age_eligible)
-            .annotate(
-                _retry_priority=Case(
-                    When(
-                        Q(
-                            translation_status=PostEnrichmentState.Status.PENDING,
-                            translation_attempts__gt=0,
-                        )
-                        | Q(
-                            classification_status=PostEnrichmentState.Status.PENDING,
-                            classification_attempts__gt=0,
-                        ),
-                        then=Value(0),
-                    ),
-                    default=Value(1),
-                )
-            )
-            .order_by("-created_at", "_retry_priority", "post_id")
-        )
-        if source_collection_job_id is not None:
-            eligible_qs = eligible_qs.order_by("post_id")
-
-        if prefer_created_before is None:
-            legacy_cap = min(
-                cfg.claim_per_cycle,
-                cfg.carryover_claim_per_cycle,
-            )
-            carryover = list(eligible_qs[:legacy_cap])
-        else:
-            carryover = list(
-                eligible_qs.filter(created_at__lt=prefer_created_before)[
-                    : cfg.carryover_claim_per_cycle
-                ]
-            )
-            aggregate_remainder = max(cfg.claim_per_cycle - len(carryover), 0)
-            current_cap = min(
-                cfg.current_cycle_claim_per_cycle,
-                aggregate_remainder,
-            )
-            current_cycle = list(
-                eligible_qs.filter(created_at__gte=prefer_created_before)[:current_cap]
-            )
-
-        candidates = [*carryover, *current_cycle]
-        for state in candidates:
-            state.claim_owner = f"harvester:{run_id}"[:128]
-            state.claim_run_id = str(run_id)[:128]
-            state.claimed_at = now
-            state.claim_expires_at = now + timedelta(seconds=cfg.claim_ttl_seconds)
-            for prefix in ("translation", "classification"):
-                if (
-                    getattr(state, f"{prefix}_status")
-                    != PostEnrichmentState.Status.PENDING
-                ):
-                    continue
-                attempts_name = f"{prefix}_attempts"
-                first_name = f"{prefix}_first_attempt_at"
-                if source_collection_job_id is not None or (prefix == "translation" and defer_translation_attempts):
-                    continue
-                setattr(state, attempts_name, getattr(state, attempts_name) + 1)
-                if getattr(state, first_name) is None:
-                    setattr(state, first_name, now)
-                setattr(state, f"{prefix}_last_attempt_at", now)
-            state.save()
-
-    return EnrichmentClaimBatch(
-        current_cycle_states=tuple(current_cycle),
-        carryover_states=tuple(carryover),
-        quarantined=quarantined,
-    )
-
-
-def _release_enrichment_claim(post_id: str, *, run_id: str) -> bool:
-    return bool(
-        PostEnrichmentState.objects.filter(
-            post_id=post_id,
-            claim_run_id=str(run_id)[:128],
-        ).update(
-            claim_owner="",
-            claim_run_id="",
-            claimed_at=None,
-            claim_expires_at=None,
-        )
-    )
-
-
-def _finish_enrichment_stage(
-    *,
-    post_ids: list[str],
-    run_id: str,
-    stage: str,
-    succeeded_ids: set[str],
-    error_code: str,
-    cfg: Any,
-    now: datetime | None = None,
-    called_ids: set[str] | None = None,
-    progressed_ids: set[str] | None = None,
-    error_codes: dict[str, str] | None = None,
-    diagnostics: dict[str, dict[str, str]] | None = None,
-) -> int:
-    """Resolve one claimed stage and return new terminal failures."""
-
-    if stage not in {"translation", "classification"}:
-        raise ValueError(f"unknown enrichment stage: {stage}")
-    now = now or django_timezone.now()
-    age_cutoff = now - timedelta(hours=cfg.max_age_hours)
-    failed = 0
-    with transaction.atomic():
-        states = list(
-            PostEnrichmentState.objects.select_for_update()
-            .filter(post_id__in=post_ids, claim_run_id=str(run_id)[:128])
-            .order_by("post_id")
-        )
-        for state in states:
-            status_name = f"{stage}_status"
-            if getattr(state, status_name) != PostEnrichmentState.Status.PENDING:
-                continue
-            next_name = f"{stage}_next_attempt_at"
-            error_name = f"{stage}_error_code"
-            update_fields = [status_name, next_name, error_name, "updated_at"]
-            if stage == "translation" and called_ids is not None:
-                if str(state.post_id) in called_ids:
-                    state.translation_last_attempt_at = now
-                    if state.translation_first_attempt_at is None:
-                        state.translation_first_attempt_at = now
-                    if str(state.post_id) not in (progressed_ids or set()):
-                        state.translation_attempts += 1
-                    update_fields.extend([
-                        "translation_attempts", "translation_first_attempt_at",
-                        "translation_last_attempt_at",
-                    ])
-                state.translation_diagnostics = (diagnostics or {}).get(str(state.post_id), {})
-                update_fields.append("translation_diagnostics")
-            if str(state.post_id) in succeeded_ids:
-                setattr(state, status_name, PostEnrichmentState.Status.SUCCEEDED)
-                setattr(state, next_name, None)
-                setattr(state, error_name, "")
-            else:
-                exhausted = state.source_collection_job_id is None and getattr(state, f"{stage}_attempts") >= cfg.max_attempts
-                aged = state.source_collection_job_id is None and state.created_at <= age_cutoff
-                if exhausted or aged:
-                    setattr(state, status_name, PostEnrichmentState.Status.FAILED)
-                    setattr(
-                        state,
-                        error_name,
-                        "age_exhausted" if aged else "attempts_exhausted",
-                    )
-                    setattr(state, next_name, None)
-                    failed += 1
-                else:
-                    setattr(state, next_name, now)
-                    selected_error = (error_codes or {}).get(str(state.post_id), error_code)
-                    setattr(state, error_name, str(selected_error or "stage_failed")[:128])
-            state.save(update_fields=update_fields)
-    return failed
 
 
 def _literal_translation_error_code(row: dict[str, Any]) -> str:
@@ -1444,7 +1144,8 @@ def _publish_stage1_classification(
             .filter(post_id=post_id)
             .first()
         )
-        if claim is None or claim.claim_run_id != str(run_id)[:128]:
+        if (claim is None or claim.claim_run_id != str(run_id)[:128]
+                or claim.claim_expires_at is None or claim.claim_expires_at <= django_timezone.now()):
             return None
         expected = set(
             PostBrand.objects.filter(post_id=post_id).values_list(
@@ -3899,6 +3600,21 @@ class CycleRunner:
                 else max(0, self._max_llm_calls - self._llm_call_count))
 
     def _run_post_fetch(
+        self, kept_posts: list[dict[str, Any]], **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Shared boundary for collection, explicit batches and the worker."""
+        if self.cycle_kind == "backfill" or kwargs.get("source_collection_job_id") is not None:
+            return self._process_enrichment_claim_batch(kept_posts, **kwargs)
+        if self.cycle_kind == "scheduled" and self.cfg.harvest.enrichment.mode == "worker":
+            return {
+                **{key: 0 for key in ENRICHMENT_COUNT_KEYS},
+                "enrichment_mode": "worker", "enrichment_processed_externally": True,
+            }
+        from monitor.enrichment_worker import process_enrichment_batch
+
+        return process_enrichment_batch(self, kept_posts, **kwargs)
+
+    def _process_enrichment_claim_batch(
         self,
         kept_posts: list[dict[str, Any]],
         *,
@@ -3909,6 +3625,8 @@ class CycleRunner:
         repair_manifest: dict[str, dict[str, Any]] | None = None,
         source_collection_job_id: Any | None = None,
         classification_input_snapshot: dict[str, Any] | None = None,
+        fair_queue: bool = False,
+        dispatch_guard: Any | None = None,
     ) -> dict[str, Any]:
         """Drain a bounded durable translation/classification claim batch.
 
@@ -3989,6 +3707,7 @@ class CycleRunner:
             post_ids=selected_post_ids,
             defer_translation_attempts=self.cfg.llm.literal_translation_v2_enabled,
             source_collection_job_id=source_collection_job_id,
+            fair_queue=fair_queue,
         )
         claimed_states = list(claim_batch.states)
         counters["n_enrichment_claimed"] = len(claimed_states)
@@ -4012,6 +3731,14 @@ class CycleRunner:
             )
         if not claimed_states:
             return counters
+        if fair_queue:
+            from x_monitor.config import MonotonicDeadline
+
+            started = self._monotonic()
+            deadline = MonotonicDeadline(
+                started_at=started, deadline_at=started + enrichment_cfg.claim_safe_envelope_seconds,
+                tip_target_at=started,
+            )
 
         # Normalize claimed Django rows to v1 format. ``kept_posts`` remains
         # in the signature for caller compatibility; durable state is the
@@ -4078,12 +3805,18 @@ class CycleRunner:
                         if affiliation["brand_id"] in brand_ids
                     ],
                 }
-                if state.translation_status == PostEnrichmentState.Status.PENDING:
+                if stage_is_due(state, "translation", state.claimed_at):
                     translation_tweets.append(tweet)
-                if state.classification_status == PostEnrichmentState.Status.PENDING:
+                if stage_is_due(state, "classification", state.claimed_at):
                     classification_tweets.append(tweet)
 
         if not translation_tweets and not classification_tweets:
+            for stage in ("translation", "classification"):
+                _finish_enrichment_stage(
+                    post_ids=[str(state.pk) for state in claimed_states if stage_is_due(state, stage, state.claimed_at)],
+                    run_id=run_id, stage=stage, succeeded_ids=set(), error_code="source_text_missing",
+                    cfg=enrichment_cfg, called_ids=set(), attempts_recorded=True,
+                )
             for state in claimed_states:
                 _release_enrichment_claim(state.pk, run_id=run_id)
             return counters
@@ -4149,6 +3882,29 @@ class CycleRunner:
         from x_monitor.translator import translate_batch_pragmatics
 
         claimed_post_ids = [str(state.pk) for state in claimed_states]
+        started_ids: dict[str, set[str]] = {"translation": set(), "classification": set()}
+
+        def before_dispatch(stage: str):
+            if source_collection_job_id is not None:
+                return None
+
+            def record(request):
+                from django.db import connections
+
+                context = request.get("_batch_context") or {}
+                ids = [str(value) for value in context.get("post_ids", [])]
+                try:
+                    with transaction.atomic():
+                        if dispatch_guard is not None:
+                            dispatch_guard(request)
+                        mark_stage_started(post_ids=ids, run_id=run_id, stage=stage)
+                    started_ids[stage].update(ids)
+                finally:
+                    if threading.current_thread() is not threading.main_thread():
+                        connections["default"].close()
+
+            return record
+
         translation_succeeded: set[str] = set()
         bounded_translator_client = None
         if translation_tweets and translator_client is None:
@@ -4163,11 +3919,14 @@ class CycleRunner:
             translation_rows = []
         elif translation_tweets:
             remaining_llm_calls = self._remaining_model_calls()
+            if fair_queue and remaining_llm_calls is not None and classification_tweets:
+                remaining_llm_calls = max(0, remaining_llm_calls - enrichment_cfg.classifier_reserved_calls)
             bounded_translator_client = _BoundedClassifierClient(
                 translator_client,
                 maximum_calls=remaining_llm_calls,
                 pause_seconds=0,
                 monotonic=self._monotonic,
+                before_dispatch=before_dispatch("translation"),
                 **self._backfill_model_callbacks(),
             )
             try:
@@ -4197,14 +3956,21 @@ class CycleRunner:
                             deadline=enrichment_cfg.start_attempt_deadline(
                                 monotonic=self._monotonic, budget_seconds=short_budget
                             ),
-                            max_workers=3, telemetry_context=telemetry,
+                            max_workers=enrichment_cfg.translation_concurrency, telemetry_context=telemetry,
                         ))
                     if long_tweets:
                         long_budget = (
                             enrichment_cfg.long_post_budget_seconds
                             if short_tweets else enrichment_cfg.attempt_budget_seconds
                         )
-                        long_limit = 10 if source_collection_job_id is not None else 1
+                        # Continuous batches have their own bounded time and
+                        # provider allowance. Share the configured pool across
+                        # long posts instead of inheriting the cron's one-post
+                        # limit, which cannot keep up with long-post arrivals.
+                        long_limit = (
+                            len(long_tweets) if fair_queue
+                            else 10 if source_collection_job_id is not None else 1
+                        )
                         current_long = long_tweets[:long_limit]
                         chunk_options = {"chunk_size": 2_000} if self._backfill_context is not None or source_collection_job_id is not None else {}
                         cached = load_literal_translation_chunks(
@@ -4217,7 +3983,8 @@ class CycleRunner:
                             deadline=enrichment_cfg.start_attempt_deadline(
                                 monotonic=self._monotonic, budget_seconds=long_budget
                             ),
-                            max_workers=1, telemetry_context=telemetry,
+                            max_workers=(enrichment_cfg.translation_concurrency if fair_queue else 1),
+                            telemetry_context=telemetry,
                             **chunk_options,
                             cached_chunks=cached,
                             on_chunk_success=(lambda **kwargs: deferred_chunks.append(kwargs) or True)
@@ -4253,7 +4020,7 @@ class CycleRunner:
                         ),
                         cfg=self.cfg,
                         deadline=translation_deadline,
-                        max_workers=3,
+                        max_workers=enrichment_cfg.translation_concurrency,
                         telemetry_context={"stage": "post_fetch", "run_id": run_id},
                     )
             except Exception as exc:
@@ -4279,6 +4046,8 @@ class CycleRunner:
                     str(post.tweet_id): post for post in Post.objects.filter(tweet_id__in=tids)
                 }
             for r in translation_rows:
+                if dispatch_guard is not None:
+                    dispatch_guard.lease.assert_held()
                 tid = r.get("tweet_id")
                 if not tid:
                     continue
@@ -4451,7 +4220,7 @@ class CycleRunner:
             and len(str(translation_input_text.get(post_id) or "")) > LONG_POST_THRESHOLD
         } if self.cfg.llm.literal_translation_v2_enabled else set()
         newly_failed = _finish_enrichment_stage(
-            post_ids=claimed_post_ids,
+            post_ids=[str(tweet["tweet_id"]) for tweet in translation_tweets],
             run_id=run_id,
             stage="translation",
             succeeded_ids=translation_succeeded,
@@ -4461,7 +4230,9 @@ class CycleRunner:
                 else "translation_incomplete"
             ),
             cfg=enrichment_cfg,
-            called_ids=literal_called_ids if self.cfg.llm.literal_translation_v2_enabled else None,
+            called_ids=(started_ids["translation"] if source_collection_job_id is None else
+                        literal_called_ids if self.cfg.llm.literal_translation_v2_enabled else None),
+            attempts_recorded=source_collection_job_id is None,
             progressed_ids=literal_progressed_ids,
             error_codes={
                 post_id: _literal_translation_error_code(row)
@@ -4485,6 +4256,19 @@ class CycleRunner:
 
         results: list[dict[str, Any]] = []
         classification_error_code = "classification_incomplete"
+        classification_errors: dict[str, str] = {}
+
+        def classification_failed(batch, exc):
+            self._error_counts["classifier_batch_failed"] += 1
+            code = "classification_transport_error"
+            if isinstance(exc, LLMCallBudgetExhausted):
+                code = "classification_budget_deferred"
+            elif isinstance(exc, TimeoutError):
+                code = "classification_timeout"
+            elif isinstance(exc, ValueError) and str(exc).startswith("classification_"):
+                code = str(exc)[:128]
+            for tweet in batch:
+                classification_errors[str(tweet["tweet_id"])] = code
         if classification_tweets and classifier_client is None:
             logger.warning("_run_post_fetch: no classifier client — skipping classify")
             self._error_counts["classifier_unavailable"] += 1
@@ -4504,6 +4288,8 @@ class CycleRunner:
                 maximum_calls=remaining_llm_calls,
                 pause_seconds=pause_sec,
                 monotonic=self._monotonic,
+                before_dispatch=before_dispatch("classification"),
+                reserve_pair_budget=dispatch_guard.reserve_pair if dispatch_guard is not None else None,
                 **self._backfill_model_callbacks(),
             )
             try:
@@ -4512,12 +4298,9 @@ class CycleRunner:
                     brand_registry,
                     bounded_classifier_client,
                     model=self.cfg.llm.classifier_model,
-                    on_batch_error=lambda batch, exc: self._error_counts.__setitem__(
-                        "classifier_batch_failed",
-                        self._error_counts["classifier_batch_failed"] + 1,
-                    ),
+                    on_batch_error=classification_failed,
                     deadline=classification_deadline,
-                    max_workers=3,
+                    max_workers=enrichment_cfg.classification_concurrency,
                     telemetry_context={"stage": "post_fetch", "run_id": run_id},
                     tracked_catalog_snapshot=(
                         classification_catalog
@@ -4555,6 +4338,7 @@ class CycleRunner:
                 results = []
 
         classification_succeeded: set[str] = set()
+        counters["n_tracked_promotion_subjects_removed"] = 0
         targeted_calls_remaining = (
             0 if repair_manifest is not None
             else (
@@ -4572,7 +4356,18 @@ class CycleRunner:
             tid = tweet["tweet_id"]
             if tid not in classification_publish_ids:
                 continue
+            removed_subjects = 0
             try:
+                if dispatch_guard is not None:
+                    dispatch_guard.lease.assert_held()
+                if isinstance(result, dict) and result.get("valid") is True and result.get("promoted_subjects"):
+                    from monitor.classification_persistence import (
+                        discard_tracked_promotion_subjects,
+                    )
+
+                    original_count = len(result["promoted_subjects"])
+                    result = discard_tracked_promotion_subjects(result, tweet.get("tracked_brand_catalog") or [])
+                    removed_subjects = original_count - len(result["promoted_subjects"])
                 flag_result = _publish_stage1_classification(
                     post_id=tid,
                     result=result if isinstance(result, dict) else {},
@@ -4583,8 +4378,13 @@ class CycleRunner:
                 )
             except (DatabaseError, ValueError, KeyError) as exc:
                 logger.warning("_run_post_fetch: Stage 1 publish failed for %s: %s", tid, exc)
+                classification_errors[tid] = (
+                    str(exc) if isinstance(exc, ValueError) and str(exc).startswith("classification_")
+                    else "classification_publication_conflict"
+                )[:128]
                 flag_result = None
             if flag_result is not None and flag_result.outcome in {"persisted", "cleared"}:
+                counters["n_tracked_promotion_subjects_removed"] += removed_subjects
                 classification_succeeded.add(tid)
                 counters[
                     "n_unsanctioned_persisted"
@@ -4663,12 +4463,15 @@ class CycleRunner:
                 )
 
         newly_failed += _finish_enrichment_stage(
-            post_ids=claimed_post_ids,
+            post_ids=[str(tweet["tweet_id"]) for tweet in classification_tweets],
             run_id=run_id,
             stage="classification",
             succeeded_ids=classification_succeeded,
             error_code=classification_error_code,
+            error_codes=classification_errors,
             cfg=enrichment_cfg,
+            called_ids=started_ids["classification"],
+            attempts_recorded=True,
         )
         resolved_states = list(
             PostEnrichmentState.objects.select_related("post").filter(

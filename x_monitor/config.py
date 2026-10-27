@@ -498,9 +498,30 @@ class EnrichmentConfig(BaseModel):
     short_post_budget_seconds: int = Field(default=240, ge=1)
     long_post_budget_seconds: int = Field(default=60, ge=1)
     terminalization_reserve_seconds: int = Field(default=30, ge=1)
+    mode: Literal["inline", "worker"] = "inline"
+    provider_calls_active: bool = False
+    batch_size: int = Field(default=100, ge=1, le=100)
+    fresh_batch_size: int = Field(default=80, ge=0, le=100)
+    fresh_minutes: int = Field(default=30, ge=1)
+    translation_concurrency: int = Field(default=3, ge=1, le=20)
+    classification_concurrency: int = Field(default=3, ge=1, le=20)
+    max_worker_processes: int = Field(default=1, ge=1, le=8)
+    poll_seconds: int = Field(default=5, ge=1, le=60)
+    max_calls_per_batch: int = Field(default=600, ge=1, le=1200)
+    classifier_reserved_calls: int = Field(default=120, ge=2, le=600)
+    gemma_concurrency_limit: int = Field(default=20, ge=1, le=100)
+    # Two commentary slots plus a separate three-slot staging/production peer.
+    other_gemma_concurrency: int = Field(default=7, ge=0, le=100)
+    budget_window_id: str = ""
 
     @model_validator(mode="after")
     def _validate_attempt_budget(self) -> EnrichmentConfig:
+        if self.fresh_batch_size > self.batch_size:
+            raise ValueError("fresh_batch_size must not exceed batch_size")
+        if self.classifier_reserved_calls >= self.max_calls_per_batch:
+            raise ValueError("classifier allowance must leave room for translation")
+        if self.translation_concurrency * self.max_worker_processes + self.other_gemma_concurrency > self.gemma_concurrency_limit:
+            raise ValueError("combined Gemma concurrency exceeds its declared allowance")
         if (
             self.current_cycle_claim_per_cycle + self.carryover_claim_per_cycle
             > self.claim_per_cycle
@@ -914,7 +935,8 @@ class SynthesisConfig(BaseModel):
     activation_state: Literal["pending", "owner_override", "reviewed"] = "pending"
     provider_calls_enabled: bool = False
     control_revision: str = Field(default="off-v1", min_length=1, max_length=64)
-    batch_size: int = Field(default=5, ge=1, le=10)
+    batch_size: int = Field(default=5, ge=1, le=20)
+    concurrency: int = Field(default=1, ge=1, le=20)
     poll_seconds: int = Field(default=2, ge=1, le=30)
     lease_seconds: int = Field(default=600, ge=30, le=900)
     timeout_seconds: int = Field(default=300, ge=5, le=300)
@@ -939,6 +961,8 @@ class SynthesisConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_route(self) -> SynthesisConfig:
+        if self.concurrency > self.batch_size:
+            raise ValueError("synthesis batch_size must be at least concurrency")
         if (
             self.provider != "deepinfra"
             or self.base_url.rstrip("/") != DEEPINFRA_OPENAI_BASE_URL
@@ -1207,6 +1231,22 @@ def load_config(path: Path) -> Config:
     }
     if official_overrides:
         raw['official_company'] = {**(raw.get('official_company') or {}), **official_overrides}
+
+    # Operational handoff controls use this single validated configuration
+    # path. Stage capacities remain checked-in values, not ambient overrides.
+    enrichment_controls = {
+        field: os.environ[name]
+        for field, name in {
+            "mode": "X_MONITOR_ENRICHMENT_MODE",
+            "provider_calls_active": "X_MONITOR_ENRICHMENT_PROVIDER_CALLS_ACTIVE",
+            "budget_window_id": "X_MONITOR_ENRICHMENT_BUDGET_WINDOW_ID",
+        }.items() if name in os.environ
+    }
+    if enrichment_controls:
+        harvest = raw.get("harvest") or {}
+        raw["harvest"] = {**harvest, "enrichment": {
+            **(harvest.get("enrichment") or {}), **enrichment_controls,
+        }}
 
     raw_llm = raw.get("llm", {}) if isinstance(raw.get("llm"), dict) else {}
     env_llm_overrides = {

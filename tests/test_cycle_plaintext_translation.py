@@ -250,6 +250,59 @@ def test_cycle_short_post_finishes_before_long_retry_and_reuses_saved_chunks(mon
     assert artifact.state == PostTranslationArtifact.State.SUCCEEDED
 
 
+def test_continuous_worker_advances_all_long_posts_with_bounded_parallel_calls(monkeypatch):
+    import threading
+
+    posts = [
+        Post.objects.create(tweet_id=f"worker-long-{word}", text=(word + " ") * 2_000, lang="en")
+        for word in ("alpha", "bravo", "gamma")
+    ]
+    for post in posts:
+        PostEnrichmentState.objects.create(post=post, classification_status="succeeded")
+    lock = threading.Lock()
+    first_calls = threading.Barrier(2)
+    entered = set()
+    active = maximum = 0
+
+    class RawClient:
+        def messages_create_text(self, **kwargs):
+            nonlocal active, maximum
+            prompt = kwargs["messages"][0]["content"]
+            content = prompt.split("CHUNK:\n", 1)[1]
+            word = content.split()[0]
+            with lock:
+                active += 1
+                maximum = max(maximum, active)
+                synchronize = word not in entered and len(entered) < 2
+                entered.add(word)
+            try:
+                if synchronize:
+                    first_calls.wait(timeout=5)
+                prefix = "日" if "Japanese (ja)" in prompt else "中"
+                return ProviderTextResponse(prefix + content, {"input_tokens": 5, "output_tokens": 5})
+            finally:
+                with lock:
+                    active -= 1
+
+    monkeypatch.setattr(reattribute, "build_relevancy_client_from_env", lambda *a, **kw: None)
+    cfg = Config(enabled_models=["deepseek"], daily_ceiling=100, llm=LlmConfig(
+        literal_translation_v2_enabled=True,
+        translator_model="deepseek-v4-flash",
+        translator_base_url="https://api.deepseek.com/anthropic",
+    ))
+    cfg.harvest.enrichment.translation_concurrency = 2
+    counters = CycleRunner(
+        cfg=cfg, _post_fetch_clients={"translation": RawClient(), "classification": None},
+    )._run_post_fetch([], run_id="long-worker-pool", fair_queue=True)
+
+    # Before this fix only one selected long post ran, leaving free slots idle.
+    assert maximum == 2
+    assert entered == {"alpha", "bravo", "gamma"}
+    assert counters["n_enrichment_succeeded"] == 3
+    assert PostTranslationArtifact.objects.filter(post__in=posts, state="succeeded", is_current=True).count() == 3
+    assert not PostEnrichmentState.objects.filter(post__in=posts).exclude(translation_status="succeeded").exists()
+
+
 def test_chunk_cache_rejects_changed_source_model_and_stale_claim():
     from monitor.post_artifacts import (
         load_literal_translation_chunks,

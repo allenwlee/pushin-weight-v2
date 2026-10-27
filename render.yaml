@@ -170,6 +170,57 @@ services:
         value: v2-demand-ja-output1024-20260921
 
   # --------------------------------------------------------------------------
+  # Dedicated queue-only enrichment. Activate after the compatible harvest
+  # image is live and an explicit spending window has been provisioned.
+  # --------------------------------------------------------------------------
+  - type: worker
+    name: pushinweight-enrichment
+    runtime: python
+    region: oregon
+    plan: starter
+    numInstances: 1
+    maxShutdownDelaySeconds: 120
+    buildCommand: ./build.sh
+    startCommand: python manage.py run_enrichment_worker --json
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
+      - key: DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: X_MONITOR_DEPLOYMENT_ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pushinweight-db-shadow
+          property: connectionString
+      - key: PW_SERVING_DATABASE_ROLE
+        value: pushinweight_web_serving
+      - key: DEEPINFRA_API_KEY
+        sync: false
+      - key: X_MONITOR_LITERAL_TRANSLATION_V2_ENABLED
+        value: "True"
+      - key: X_MONITOR_RARE_TYPES_ENABLED
+        value: "True"
+      - key: X_MONITOR_RARE_TYPES_ASSESSMENT_PATH
+        value: docs/analysis/harvester/2026-09-24-172323-rare-type-archived-live56-assessment.json
+      - key: X_MONITOR_RARE_TYPES_ASSESSMENT_DIGEST
+        value: 03165d5084fb8605e5eaa115f5dd98274bb5e7a0a2bfa334e5200bc8776a726a
+      - key: X_MONITOR_RARE_TYPES_TARGETED_EXTRACTION_ENABLED
+        value: "True"
+      - key: X_MONITOR_RARE_TYPES_HF_VERIFICATION_ENABLED
+        value: "True"
+      - key: X_MONITOR_ENRICHMENT_MODE
+        value: worker
+      # Retain operator activation across later Blueprint syncs.
+      # New services stay idle via config.yaml until explicitly enabled.
+      - key: X_MONITOR_ENRICHMENT_PROVIDER_CALLS_ACTIVE
+        sync: false
+      - key: X_MONITOR_ENRICHMENT_BUDGET_WINDOW_ID
+        sync: false
+
+  # --------------------------------------------------------------------------
   # Harvest cron — runs every 15 minutes (mirrors v1 launchd cadence)
   # --------------------------------------------------------------------------
   - type: cron

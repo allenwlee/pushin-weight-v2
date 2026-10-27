@@ -24,6 +24,7 @@ from psycopg.conninfo import conninfo_to_dict
 
 from scripts.database_lock import (
     acquire_cluster_lock,
+    acquire_enrichment_coordination_lock,
     acquire_harvest_coordination_lock,
     acquire_synthesis_coordination_lock,
     admin_connection_parameters,
@@ -46,6 +47,36 @@ from .receipt import (
 
 class RefreshError(RuntimeError):
     """A secret-free failure before staging activation."""
+
+
+_RG6_RETIRED_COLLECTION_COLUMNS = {
+    "collection_runs": frozenset({
+        "request_params", "source_metadata", "raw_payload", "invocations", "report",
+    }),
+    "collection_scope_runs": frozenset({
+        "ownership", "cursor_history", "envelopes",
+    }),
+    "collection_observations": frozenset({
+        "dimensions", "source_metadata", "listing", "envelopes", "groups",
+    }),
+}
+
+
+def refuse_pre_retirement_collection_source(cursor: Any) -> None:
+    """Stop an old snapshot before HEAD can remove uncopied RG6 documents."""
+    cursor.execute(
+        "SELECT table_name, column_name FROM information_schema.columns "
+        "WHERE table_schema = 'public' "
+        "AND table_name IN ('collection_runs', 'collection_scope_runs', "
+        "'collection_observations')"
+    )
+    old_columns = {
+        (str(table), str(column))
+        for table, column in cursor.fetchall()
+        if str(column) in _RG6_RETIRED_COLLECTION_COLUMNS.get(str(table), ())
+    }
+    if old_columns:
+        raise RefreshError("candidate_rg6_legacy_collection_columns_present")
 
 
 _SOURCE_DEPENDENT_SEED_MIGRATIONS = (
@@ -234,6 +265,8 @@ class SnapshotAdapter(Protocol):
     def purge_collection_runtime(
         self, database_url: str, name: str
     ) -> Mapping[str, int]: ...
+
+    def guard_collection_retirement(self, database_url: str, name: str) -> None: ...
 
     def inspect_candidate(self, database_url: str, name: str) -> CandidateCensus: ...
 
@@ -828,6 +861,13 @@ class PsycopgSnapshotAdapter:
             conn.cursor() as cursor,
         ):
             return purge_collection_runtime(cursor)
+
+    def guard_collection_retirement(self, database_url: str, name: str) -> None:
+        with (
+            self.connect(**self._candidate_parameters(database_url, name)) as conn,
+            conn.cursor() as cursor,
+        ):
+            refuse_pre_retirement_collection_source(cursor)
 
     def inspect_candidate(self, database_url: str, name: str) -> CandidateCensus:
         parameters = self._candidate_parameters(database_url, name)
@@ -1571,6 +1611,7 @@ class CandidateProcessor:
             raise RefreshError("candidate_site_invalid")
 
     def process(self, candidate: ShadowCandidate) -> CandidateResult:
+        self.adapter.guard_collection_retirement(self.target_url, candidate.name)
         purged = self.adapter.purge_collection_runtime(self.target_url, candidate.name)
         self._run_django(candidate.name, "prepare_refresh_references")
         self._run_django(candidate.name, "migrate", "--noinput")
@@ -2065,6 +2106,7 @@ class PostgresRuntime:
         lock_factory: Callable[..., Any] = acquire_cluster_lock,
         harvest_lock_factory: Callable[..., Any] = acquire_harvest_coordination_lock,
         synthesis_lock_factory: Callable[..., Any] | None = None,
+        enrichment_lock_factory: Callable[..., Any] | None = None,
         now: Callable[[], datetime] | None = None,
         broker_url: str | None = None,
         quiescence_guard: Callable[[], QuiescenceInspection] | None = None,
@@ -2087,6 +2129,11 @@ class PostgresRuntime:
             harvest_lock_factory
             if harvest_lock_factory is not acquire_harvest_coordination_lock
             else acquire_synthesis_coordination_lock
+        )
+        self.enrichment_lock_factory = enrichment_lock_factory or (
+            harvest_lock_factory
+            if harvest_lock_factory is not acquire_harvest_coordination_lock
+            else acquire_enrichment_coordination_lock
         )
         self.quiescence_guard = quiescence_guard or (
             lambda: inspect_staging_quiescence(policy, broker_url)
@@ -2223,8 +2270,17 @@ class PostgresRuntime:
         ):
             yield
 
+    @contextmanager
+    def _enrichment_lock(self) -> Iterator[None]:
+        if not self.target_url:
+            raise RefreshError("target_url_missing")
+        with self.enrichment_lock_factory(
+            self.target_url, environment=self.policy.quiescence.harvest_environment,
+        ):
+            yield
+
     def _refresh(self) -> Receipt:
-        with self._harvest_lock(), self._synthesis_lock():
+        with self._harvest_lock(), self._synthesis_lock(), self._enrichment_lock():
             self._require_quiescence()
             if self.engine is None:
                 raise RefreshError("refresh_urls_missing")
@@ -2271,7 +2327,7 @@ class PostgresRuntime:
 
     def execute(self, action: str, *, recovery: str | None = None) -> dict[str, object]:
         if action == "preflight":
-            with self._harvest_lock(), self._synthesis_lock():
+            with self._harvest_lock(), self._synthesis_lock(), self._enrichment_lock():
                 self._require_quiescence()
                 if self.engine is None:
                     raise RefreshError("refresh_urls_missing")
@@ -2288,13 +2344,13 @@ class PostgresRuntime:
         if action == "rollback":
             if recovery is None:
                 raise RefreshError("recovery_name_missing")
-            with self._harvest_lock(), self._synthesis_lock(), self._target_lock():
+            with self._harvest_lock(), self._synthesis_lock(), self._enrichment_lock(), self._target_lock():
                 self._require_quiescence()
                 return self._lifecycle().rollback(recovery).to_payload()
         if action == "prune":
             if recovery is None:
                 raise RefreshError("recovery_name_missing")
-            with self._harvest_lock(), self._synthesis_lock(), self._target_lock():
+            with self._harvest_lock(), self._synthesis_lock(), self._enrichment_lock(), self._target_lock():
                 self._require_quiescence()
                 pruned = self._lifecycle().prune(recovery)
             return {"action": "prune", "recovery_database": pruned}

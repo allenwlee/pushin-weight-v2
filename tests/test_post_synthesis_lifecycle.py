@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from datetime import timedelta
+from threading import Barrier
 
 import pytest
 from django.utils import timezone
@@ -460,6 +462,34 @@ def test_worker_failure_persists_artifact_state_and_keeps_demand_retryable():
     assert artifact.attempts == 1
     assert artifact.error_code == "transport_timeout"
     assert artifact.is_current is False
+
+
+def test_parallel_worker_publishes_both_posts_and_accounts_usage_once():
+    posts = [Post.objects.create(tweet_id=f"two-slot-{i}", text=f"Release {i}") for i in range(3)]
+    config = _config(concurrency=2)
+    request_post_synthesis(post_ids=[post.pk for post in posts], reason="visible", config=config)
+    barrier = Barrier(2)
+
+    class ParallelClient(_SynthesisClient):
+        def messages_create_text(self, **kwargs):
+            barrier.wait(timeout=3)
+            response = super().messages_create_text(**kwargs)
+            post_id = re.search(r"two-slot-\d+", kwargs["messages"][0]["content"])[0]
+            return ProviderTextResponse(
+                text=response.text.replace("worker-1", post_id),
+                provider_usage=response.provider_usage,
+            )
+
+    result = process_synthesis_batch(config=config, client=ParallelClient(), owner="parallel")
+
+    assert result["claimed"] == result["succeeded"] == 2
+    assert result["failed"] == 0
+    assert PostSynthesisDemand.objects.filter(state="pending", attempts=0).count() == 1
+    assert PostSynthesisArtifact.objects.filter(state="succeeded", is_current=True).count() == 2
+    budget = PostSynthesisDailyBudget.objects.get()
+    assert budget.reserved_requests == 2
+    assert budget.observed_input_tokens == 84
+    assert budget.observed_output_tokens == 48
 
 
 def test_worker_persists_safe_tagged_formatter_reason():

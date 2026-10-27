@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import timedelta
 from uuid import uuid4
 
@@ -172,8 +173,10 @@ def _upsert_demand(*, post: Post, fingerprint: str, reason: str, config, now):
     raise RuntimeError("synthesis demand upsert failed")
 
 
-def claim_synthesis_demands(*, config, owner: str | None = None, now=None):
+def claim_synthesis_demands(*, config, owner: str | None = None, now=None, limit=None):
     """Claim disjoint due rows with short SKIP LOCKED transactions."""
+    if limit is not None and limit < 1:
+        raise ValueError("synthesis claim limit must be positive")
     current = now or timezone.now()
     PostSynthesisRateLimitBucket.objects.filter(
         bucket_start__lt=current - timedelta(days=2)
@@ -206,7 +209,7 @@ def claim_synthesis_demands(*, config, owner: str | None = None, now=None):
             model=config.model,
         )
         budget = PostSynthesisDailyBudget.objects.select_for_update().get(pk=budget.pk)
-        capacity = config.batch_size
+        capacity = min(config.batch_size, limit) if limit is not None else config.batch_size
         claimed = list(due.order_by("-priority", "first_requested_at", "pk")[:capacity])
         for demand in claimed:
             demand.state = PostSynthesisDemand.State.PROCESSING
@@ -332,7 +335,7 @@ def _owns(demand, *, owner: str, fence: int, now) -> bool:
 
 
 def process_synthesis_batch(*, config, client, owner: str | None = None, now=None):
-    """Perform provider work outside database locks, then publish by fence."""
+    """Run bounded model calls in parallel; keep all database work on this thread."""
     from x_monitor.synthesis import synthesis_failure_code, synthesize_post
 
     if not config.provider_calls_active:
@@ -344,50 +347,58 @@ def process_synthesis_batch(*, config, client, owner: str | None = None, now=Non
             "cancelled": 0,
         }
     current = now or timezone.now()
-    claimed = claim_synthesis_demands(config=config, owner=owner, now=current)
+    # Do not lease a waiting executor backlog: every claim has a provider slot.
+    claimed = claim_synthesis_demands(
+        config=config, owner=owner, now=current, limit=config.concurrency
+    )
     succeeded = 0
     failed = 0
     cancelled = 0
-    for demand in claimed:
-        context, fingerprint, _provenance = post_context(demand.post)
-        if fingerprint != demand.input_context_fingerprint:
-            cancel_synthesis_claim(
-                demand_id=demand.pk,
-                owner=demand.lease_owner,
-                fence=demand.lease_fence,
-                error_code="context_obsolete",
-                now=current,
-            )
-            cancelled += 1
-            continue
-        try:
-            response = synthesize_post(
-                post_id=str(demand.post_id),
-                context=context,
-                client=client,
-                config=config,
+    with ThreadPoolExecutor(
+        max_workers=config.concurrency, thread_name_prefix="post-synthesis"
+    ) as executor:
+        futures = {}
+        for demand in claimed:
+            context, fingerprint, _provenance = post_context(demand.post)
+            if fingerprint != demand.input_context_fingerprint:
+                cancel_synthesis_claim(
+                    demand_id=demand.pk,
+                    owner=demand.lease_owner,
+                    fence=demand.lease_fence,
+                    error_code="context_obsolete",
+                    now=current,
+                )
+                cancelled += 1
+                continue
+            future = executor.submit(
+                synthesize_post,
+                post_id=str(demand.post_id), context=context, client=client, config=config,
                 telemetry_context={"stage": "post_synthesis", "call_id": demand.pk},
             )
-            artifact = publish_claimed_synthesis(
-                demand_id=demand.pk,
-                owner=demand.lease_owner,
-                fence=demand.lease_fence,
-                response=response,
-                config=config,
-            )
-        except Exception as exc:  # noqa: BLE001 - provider boundary maps to safe state
-            fail_synthesis_claim(
-                demand_id=demand.pk,
-                owner=demand.lease_owner,
-                fence=demand.lease_fence,
-                error_code=synthesis_failure_code(exc),
-                config=config,
-            )
-            artifact = None
-        if artifact is None:
-            failed += 1
-        else:
-            succeeded += 1
+            futures[future] = demand
+        for future in as_completed(futures):
+            demand = futures[future]
+            try:
+                artifact = publish_claimed_synthesis(
+                    demand_id=demand.pk,
+                    owner=demand.lease_owner,
+                    fence=demand.lease_fence,
+                    response=future.result(),
+                    config=config,
+                )
+            except Exception as exc:  # noqa: BLE001 - isolate per-post provider failures
+                fail_synthesis_claim(
+                    demand_id=demand.pk,
+                    owner=demand.lease_owner,
+                    fence=demand.lease_fence,
+                    error_code=synthesis_failure_code(exc),
+                    config=config,
+                )
+                artifact = None
+            if artifact is None:
+                failed += 1
+            else:
+                succeeded += 1
     return {
         "status": "processed",
         "claimed": len(claimed),

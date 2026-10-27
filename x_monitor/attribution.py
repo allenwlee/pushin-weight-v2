@@ -3470,9 +3470,10 @@ _TWO_ROLE_MERGE_REVISION = "stage1-two-role-merge-v2"
 _TWO_ROLE_PREVIOUS_CONTENT_REVISION = "stage1-content-0731-v5"
 _TWO_ROLE_SELECTED_BRAND_REVISION = "stage1-brand-interpretation-0731-v5"
 _TWO_ROLE_PREVIOUS_MERGE_REVISION = "stage1-two-role-merge-0731-v5"
-_TWO_ROLE_SELECTED_CONTENT_REVISION = "stage1-content-0731-v6"
-_TWO_ROLE_SELECTED_MERGE_REVISION = "stage1-two-role-merge-0731-v6"
+_TWO_ROLE_SELECTED_CONTENT_REVISION = "stage1-content-0731-v7"
+_TWO_ROLE_SELECTED_MERGE_REVISION = "stage1-two-role-merge-0731-v7"
 _TWO_ROLE_ALLOWED_REVISION_TRIPLETS = frozenset({
+    ("stage1-content-0731-v6", _TWO_ROLE_SELECTED_BRAND_REVISION, "stage1-two-role-merge-0731-v6"),
     (
         _TWO_ROLE_CONTENT_REVISION,
         _TWO_ROLE_BRAND_REVISION,
@@ -4245,7 +4246,7 @@ def classify_batch_pragmatics_full(
     if kept:
         indexed_batches.append((indexes, kept))
 
-    def call_role(batch: list[dict[str, Any]], role: str, reservation: str | None = None) -> tuple[list[dict[str, Any]], str, dict[str, dict[str, Any]]]:
+    def prepare_role(batch: list[dict[str, Any]], role: str):
         fixed_contract = (
             _two_role_fixed_slot_payload(
                 batch,
@@ -4255,26 +4256,27 @@ def classify_batch_pragmatics_full(
             ) if selected_0731 else None
         )
         if selected_0731 and fixed_contract is None:
-            return batch, role, {}
+            return None
         payload = fixed_contract[0] if fixed_contract is not None else _two_role_payload(batch, role)
+        prompt = json.dumps(
+            fixed_contract[3] if fixed_contract is not None else payload,
+            ensure_ascii=False, separators=(",", ":"), sort_keys=not selected_0731,
+        )
+        system = (
+            _two_role_selected_system_prompt(role, decision_slots=fixed_contract[1], post_slots=fixed_contract[2])
+            if selected_0731 else
+            _TWO_ROLE_CONTENT_SYSTEM_PROMPT if role == "content" else _TWO_ROLE_BRAND_SYSTEM_PROMPT
+        )
+        return fixed_contract, payload, prompt, system
+
+    def call_role(batch: list[dict[str, Any]], role: str, reservation: str | None = None):
+        prepared = prepare_role(batch, role)
+        if prepared is None:
+            return batch, role, {}
+        fixed_contract, payload, prompt, system = prepared
         try:
             response = _call_signal_with_retry(
-                anthropic_client,
-                json.dumps(
-                    fixed_contract[3] if fixed_contract is not None else payload,
-                    ensure_ascii=False, separators=(",", ":"), sort_keys=not selected_0731,
-                ),
-                system=(
-                    _two_role_selected_system_prompt(
-                        role,
-                        decision_slots=fixed_contract[1],
-                        post_slots=fixed_contract[2],
-                    )
-                    if selected_0731 else (
-                        _TWO_ROLE_CONTENT_SYSTEM_PROMPT
-                        if role == "content" else _TWO_ROLE_BRAND_SYSTEM_PROMPT
-                    )
-                ),
+                anthropic_client, prompt, system=system,
                 model=model,
                 max_tokens=max_tokens,
                 temperature=1.0 if selected_0731 else 0,
@@ -4295,7 +4297,8 @@ def classify_batch_pragmatics_full(
                     "post_ids": [item["tweet_id"] for item in payload],
                     "stage": "classification", "role": role,
                     "input_fingerprints": {item["tweet_id"]: item["input_context_fingerprint"] for item in payload},
-                } if getattr(anthropic_client, "deferred_requests", False) else None),
+                } if (getattr(anthropic_client, "deferred_requests", False)
+                      or getattr(anthropic_client, "requires_request_context", False)) else None),
             )
             parsed = (
                 _two_role_parse_fixed_slots(
@@ -4325,7 +4328,25 @@ def classify_batch_pragmatics_full(
     reserve_pair = getattr(anthropic_client, "reserve_pair", None)
     for _, batch in indexed_batches:
         if callable(reserve_pair):
-            reservation = reserve_pair(attempts_per_role=_MAX_RETRIES)
+            pair_options = {}
+            if getattr(anthropic_client, "requires_pair_bounds", False):
+                bounds = []
+                for role in ("content", "brand_interpretation"):
+                    prepared = prepare_role(batch, role)
+                    if prepared is None:
+                        break
+                    _, _, prompt, system = prepared
+                    bounds.append({"model": model, "max_tokens": max_tokens, "system": system,
+                                   "messages": [{"role": "user", "content": prompt}]})
+                if len(bounds) != 2:
+                    continue
+                pair_options["request_bounds"] = bounds
+            try:
+                reservation = reserve_pair(attempts_per_role=_MAX_RETRIES, **pair_options)
+            except LLMCallBudgetExhausted as exc:
+                if on_batch_error is not None:
+                    on_batch_error(batch, exc)
+                continue
             if reservation is None:
                 continue
             content_token, brand_token = reservation
@@ -4345,7 +4366,7 @@ def classify_batch_pragmatics_full(
         ]
         if not tasks:
             return empty
-    with ThreadPoolExecutor(max_workers=min(3, max(1, max_workers), len(tasks))) as executor:
+    with ThreadPoolExecutor(max_workers=min(max(1, max_workers), len(tasks))) as executor:
         try:
             futures = [executor.submit(call_role, batch, role, reservation) for batch, role, reservation in tasks]
             for future in as_completed(futures):

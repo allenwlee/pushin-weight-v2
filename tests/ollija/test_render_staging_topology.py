@@ -36,6 +36,7 @@ def test_staging_blueprint_declares_one_resource_for_each_owned_role() -> None:
         "pushinweight-staging-web": "web",
         "pushinweight-staging-headlines": "worker",
         "pushinweight-staging-synthesis": "worker",
+        "pushinweight-staging-enrichment": "worker",
         "pushinweight-staging-harvest": "cron",
         "pushinweight-staging-jobs": "cron",
     }

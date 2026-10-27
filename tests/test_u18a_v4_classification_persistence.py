@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from datetime import timedelta
 
 import pytest
+from django.utils import timezone
 
 
 class _SelectedV4Transport:
@@ -134,6 +136,37 @@ def test_selected_v4_catalog_revision_is_stable_for_case_variant_aliases():
     assert _validated_tracked_brand_catalog_snapshot(catalog) == catalog
 
 
+def test_scheduled_result_discards_only_tracked_promotion_subjects():
+    from monitor.classification_persistence import discard_tracked_promotion_subjects
+
+    tracked = {
+        "name": "Tracked Product", "handle": None, "domain": None,
+        "account_handle": None, "evidence": "Try Tracked Product",
+    }
+    untracked = {
+        "name": "Example Harness", "handle": "example_harness", "domain": None,
+        "account_handle": None, "evidence": "Try Example Harness",
+    }
+    catalog = [{"brand_id": "brand-a", "products": ["Tracked Product"]}]
+    result = {
+        "by_brand": {"brand-a": {"outcome": "classified"}},
+        "untracked_brand_promotions": ["general"],
+        "promoted_subjects": [tracked, untracked],
+    }
+
+    mixed = discard_tracked_promotion_subjects(result, catalog)
+    assert mixed["promoted_subjects"] == [untracked]
+    assert mixed["untracked_brand_promotions"] == ["general"]
+    assert result["promoted_subjects"] == [tracked, untracked]
+    tracked_only = discard_tracked_promotion_subjects(
+        {**result, "promoted_subjects": [tracked]}, catalog
+    )
+    assert tracked_only["promoted_subjects"] == []
+    assert tracked_only["untracked_brand_promotions"] == []
+    malformed = {**result, "promoted_subjects": [{"name": "Tracked Product"}]}
+    assert discard_tracked_promotion_subjects(malformed, catalog) is malformed
+
+
 @pytest.mark.requires_postgres
 @pytest.mark.django_db(transaction=True)
 def test_v4_publisher_persists_isolated_axes_subject_evidence_and_never_touches_legacy_flags():
@@ -182,7 +215,10 @@ def test_v4_publisher_persists_isolated_axes_subject_evidence_and_never_touches_
     ]
     for brand in brands:
         PostBrand.objects.create(post=post, brand=brand)
-    PostEnrichmentState.objects.create(post=post, claim_run_id="u18a-v4-run")
+    PostEnrichmentState.objects.create(
+        post=post, claim_run_id="u18a-v4-run",
+        claimed_at=timezone.now(), claim_expires_at=timezone.now() + timedelta(minutes=10),
+    )
     # Existing legacy semantics remain historical, even when a v4 result is
     # explicitly an Untracked Brand Promotion.
     PostUnsanctionedFlag.objects.create(
@@ -289,7 +325,7 @@ def test_v4_publisher_persists_isolated_axes_subject_evidence_and_never_touches_
     promotion = PostUntrackedBrandPromotion.objects.get(post=post)
     assert promotion.promotion_keys == ["general"]
     assert promotion.provider_role == "content"
-    assert promotion.prompt_version == "stage1-content-0731-v6"
+    assert promotion.prompt_version == "stage1-content-0731-v7"
     evidence = UntrackedBrandPromotionEvidence.objects.get(promotion=promotion)
     assert evidence.exact_matched_account_id == author.pk
     assert evidence.handles == ["@example_promoter", "@exampleharness"]

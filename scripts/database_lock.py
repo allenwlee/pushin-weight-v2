@@ -62,6 +62,31 @@ def synthesis_coordination_lock_keys(environment: str) -> tuple[int, int]:
     return _coordination_lock_keys("synthesis", environment)
 
 
+@contextmanager
+def acquire_enrichment_coordination_lock(
+    database_url: str, *, environment: str, shared: bool = False,
+    connect: Callable[..., Connection] = psycopg.connect,
+) -> Iterator[Any]:
+    """Workers share this gate; database refresh must acquire it exclusively."""
+    keys = _coordination_lock_keys("enrichment", environment)
+    suffix = "_shared" if shared else ""
+    try:
+        with connect(**admin_connection_parameters(database_url), autocommit=True) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(f"SELECT pg_try_advisory_lock{suffix}(%s, %s)", list(keys))
+                if not cursor.fetchone()[0]:
+                    raise DatabaseLockError("enrichment_refresh_lock_unavailable")
+            try:
+                yield connection
+            finally:
+                with connection.cursor() as cursor:
+                    cursor.execute(f"SELECT pg_advisory_unlock{suffix}(%s, %s)", list(keys))
+    except DatabaseLockError:
+        raise
+    except Exception as exc:
+        raise DatabaseLockError("enrichment_refresh_lock_failed") from exc
+
+
 def _coordination_lock_keys(kind: str, environment: str) -> tuple[int, int]:
     """Build one namespace-separated, environment-specific advisory-lock key."""
 
