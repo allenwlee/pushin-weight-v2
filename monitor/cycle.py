@@ -3963,7 +3963,14 @@ class CycleRunner:
                             enrichment_cfg.long_post_budget_seconds
                             if short_tweets else enrichment_cfg.attempt_budget_seconds
                         )
-                        long_limit = 10 if source_collection_job_id is not None else 1
+                        # Continuous batches have their own bounded time and
+                        # provider allowance. Share the configured pool across
+                        # long posts instead of inheriting the cron's one-post
+                        # limit, which cannot keep up with long-post arrivals.
+                        long_limit = (
+                            len(long_tweets) if fair_queue
+                            else 10 if source_collection_job_id is not None else 1
+                        )
                         current_long = long_tweets[:long_limit]
                         chunk_options = {"chunk_size": 2_000} if self._backfill_context is not None or source_collection_job_id is not None else {}
                         cached = load_literal_translation_chunks(
@@ -3976,7 +3983,8 @@ class CycleRunner:
                             deadline=enrichment_cfg.start_attempt_deadline(
                                 monotonic=self._monotonic, budget_seconds=long_budget
                             ),
-                            max_workers=1, telemetry_context=telemetry,
+                            max_workers=(enrichment_cfg.translation_concurrency if fair_queue else 1),
+                            telemetry_context=telemetry,
                             **chunk_options,
                             cached_chunks=cached,
                             on_chunk_success=(lambda **kwargs: deferred_chunks.append(kwargs) or True)
