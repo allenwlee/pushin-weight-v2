@@ -426,6 +426,79 @@ def test_hourly_health_uses_endpoint_revision_even_when_values_unchanged():
 
 @pytest.mark.requires_postgres
 @pytest.mark.django_db
+def test_publication_times_preserve_validated_cross_run_contract_and_null_semantics():
+    from django.db import connection
+
+    from core.benchmark_metric_identity import configure_collection
+    from core.benchmark_metric_store import persist_source
+    from core.benchmark_opencode import publication_times
+    from core.models import CollectionObservationInput, CollectionRun
+
+    contract = configured()
+    mapping = contract.mappings.get()
+    other = configure_collection({
+        "taxonomy_version": str(contract.taxonomy_version_id),
+        "reviewed_by": "fixture",
+        "mappings": [{
+            "source": "opencode", "source_subject_kind": "model",
+            "identifier_scope": "", "external_identifier": mapping.external_identifier,
+            "identifier_metadata": mapping.identifier_metadata,
+            "subject_id": str(mapping.subject_id), "evidence_url": mapping.evidence_url,
+        }],
+        "source_configuration": {"opencode": {"metrics": ["tokens"]}},
+        "methodology": {"aggregation": "fixed_cohort"},
+    })
+    first = persist_source(contract, "opencode", "1" * 64, read(endpoint()))
+    newer = persist_source(
+        contract, "opencode", "2" * 64,
+        read(endpoint(updated="2026-10-07T12:59:18Z")),
+    )
+    persist_source(
+        other, "opencode", "3" * 64,
+        read(endpoint(updated="2026-10-07T13:00:00Z")),
+    )
+    marker = newer.observations.get(observation_kind="endpoint_check")
+    links = CollectionObservationInput.objects.filter(observation=marker)
+    assert set(links.values_list("input_observation__run_id", flat=True)) == {first.pk}
+
+    def assert_matches_original(expected):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """SELECT DISTINCT ON (p.external_identifier)
+                p.external_identifier,p.updated_at
+                FROM benchmark_endpoint_revisions p
+                JOIN collection_runs r ON r.id=p.run_id
+                JOIN collection_jobs j ON j.id=r.job_id
+                WHERE j.contract_id=%s
+                ORDER BY p.external_identifier,p.updated_at DESC LIMIT 101""",
+                [contract.pk],
+            )
+            original = cursor.fetchall()
+        actual = publication_times(contract)
+        assert list(actual.items()) == original == [(mapping.external_identifier, expected)]
+
+    old_time = datetime(2026, 10, 7, 12, 44, 18, tzinfo=UTC)
+    new_time = datetime(2026, 10, 7, 12, 59, 18, tzinfo=UTC)
+    assert_matches_original(new_time)
+    CollectionRun.objects.filter(pk=newer.pk).update(status="partial")
+    assert_matches_original(new_time)
+    CollectionRun.objects.filter(pk=newer.pk).update(status="failed")
+    assert_matches_original(old_time)
+    CollectionRun.objects.filter(pk=newer.pk).update(status="success")
+    # A malformed edge cannot advance freshness, even with a newer marker.
+    links.update(row_locator="2026-10-05")
+    assert_matches_original(old_time)
+    for link in links.select_related("input_observation"):
+        link.row_locator = link.input_observation.source_record_date.isoformat()
+        link.save(update_fields=["row_locator"])
+    marker.source_record_at = None
+    marker.save(update_fields=["source_record_at"])
+    # Keep PostgreSQL's existing DESC / NULLS FIRST semantics exactly.
+    assert_matches_original(None)
+
+
+@pytest.mark.requires_postgres
+@pytest.mark.django_db
 def test_real_command_chain_imports_source_rows_and_remains_inert_by_default():
     from io import StringIO
     from unittest.mock import patch
