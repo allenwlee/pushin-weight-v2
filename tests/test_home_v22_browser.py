@@ -42,6 +42,7 @@ from tests.v22_support import (
 pytestmark = pytest.mark.requires_postgres
 
 _HOME_CHART_BRAND_PRIORITY = (
+    "llama",
     "deepseek",
     "qwen",
     "minimax",
@@ -53,7 +54,6 @@ _HOME_CHART_BRAND_PRIORITY = (
     "stepfun",
     "ernie",
     "hunyuan",
-    "llama",
     "nemo_megatron",
     "doubao",
     "yi",
@@ -3992,6 +3992,40 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         self.assertEqual(response.status_code, 200)
         return response.json()
 
+    def test_localized_followers_match_initial_page_and_real_feed_refresh(self) -> None:
+        from core.models import Account
+
+        Account.objects.filter(author_id="v22-metadata-account-000").update(followers_count=29_799)
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                for locale, expected in (("en", "29.8k"), ("zh_cn", "2.9万"), ("zh_hans", "2.9万"), ("ja", "2.9万")):
+                    with self.subTest(locale=locale):
+                        context = self._anonymous_context(browser)
+                        try:
+                            page = context.new_page()
+                            errors = []
+                            page.on("pageerror", lambda error: errors.append(str(error)))
+                            page.goto(f"{self.live_server_url}/?locale={locale}", wait_until="networkidle")
+                            count = page.locator(f"[data-tweet-id='{self.fixture['replacement_id']}'] .follower-count")
+                            self.assertEqual(count.count(), 1)
+                            self.assertTrue(count.is_visible())
+                            self.assertEqual(count.inner_text(), expected)
+                            count.evaluate("node => node.dataset.initialCount = 'true'")
+                            with page.expect_response(lambda response: "/feed/?" in response.url and response.status == 200) as refreshed:
+                                page.evaluate("() => window.pwFilter.set('window', 7)")
+                            rows = refreshed.value.json()["rows"]
+                            row = next(row for row in rows if row["tweet_id"] == self.fixture["replacement_id"])
+                            self.assertEqual(row["engagement_pretty"]["followers"], expected)
+                            self.assertEqual(row["account"]["followers_pretty"], expected)
+                            page.wait_for_function("() => !document.querySelector('[data-initial-count]')")
+                            self.assertEqual(count.inner_text(), expected)
+                            self.assertEqual(errors, [])
+                        finally:
+                            context.close()
+            finally:
+                browser.close()
+
     def test_stepfun_is_single_nonempty_browser_identity(self) -> None:
         from django.utils import timezone
         from core.models import SearchQuery
@@ -6385,9 +6419,12 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             finally:
                 browser.close()
 
-    def test_live_brand_pills_follow_chart_order_and_remain_accessible(self) -> None:
+    @patch("monitor.views._tracked_home_brand_nicknames")
+    def test_live_brand_pills_follow_chart_order_and_remain_accessible(self, tracked) -> None:
         """Every live brand reaches the browser in the historical chart order."""
+        Brand.objects.create(nickname="llama", display_name="Meta", display_name_en="Meta")
         expected_brand_nicknames = _live_brand_nicknames()
+        tracked.return_value = tuple(expected_brand_nicknames)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -6452,8 +6489,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     self.assertEqual(projection["seriesOrder"], expected_series_order)
                     self.assertEqual(projection["legendOrder"], expected_series_order)
                     self.assertEqual(
-                        projection["order"][:5],
-                        ["deepseek", "qwen", "minimax", "moonshot_kimi", "ernie"],
+                        projection["order"][:6],
+                        ["llama", "deepseek", "qwen", "minimax", "moonshot_kimi", "ernie"],
                     )
                     self.assertEqual(projection["listItems"], len(expected_brand_nicknames))
                     self.assertEqual(projection["buttons"], len(expected_brand_nicknames))

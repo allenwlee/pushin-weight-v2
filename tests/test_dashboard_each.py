@@ -124,7 +124,7 @@ class DashboardEachTests(PostgreSQLV22TestCase):
         self.assertEqual(
             [(entry["key"], entry["color"]) for entry in chart["entries"]],
             [
-                ("__unclassified__", "#000000"), ("neutral", "#cbd5e1"),
+                ("__unclassified__", "#cbd5e1"), ("neutral", "#000000"),
                 ("mixed", "#8b5cf6"), ("negative", "#ef4444"),
                 ("positive", "#3b82f6"),
             ],
@@ -276,11 +276,13 @@ class DashboardEachTests(PostgreSQLV22TestCase):
             keys = [entry["key"] for entry in chart["entries"]]
             self.assertEqual(keys[:2], ["__unclassified__", "other"])
             self.assertLess(keys.index("releases_updates"), keys.index("opinions_reactions"))
-            self.assertEqual(chart["entries"][0]["color"], "#000000")
-            self.assertEqual(chart["entries"][1]["color"], "#cbd5e1")
+            self.assertEqual(chart["entries"][0]["color"], "#cbd5e1")
+            self.assertEqual(chart["entries"][1]["color"], "#000000")
         lang = _each_chart_payload(self.minimax.nickname, "lang", 7, "en", now=NOW)
         self.assertEqual([entry["key"] for entry in lang["entries"][:3]],
                          ["undetected", "other", "en"])
+        self.assertEqual([(entry["label"], entry["color"]) for entry in lang["entries"][:2]],
+                         [("Undetected", "#cbd5e1"), ("Other", "#000000")])
         self.assertLess(
             [entry["key"] for entry in lang["entries"]].index("ja"),
             [entry["key"] for entry in lang["entries"]].index("es"),

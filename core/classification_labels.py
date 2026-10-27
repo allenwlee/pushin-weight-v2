@@ -184,7 +184,7 @@ UNTRACKED_BRAND_PROMOTION_LABELS: dict[str, dict[str, str]] = {
 }
 
 UNTRACKED_BRAND_PROMOTION_FAMILY_LABELS: dict[str, str] = {
-    "en": "Untracked Brand Promotions",
+    "en": "3rd Party Brand Promotions",
     "zh-cn": "未跟踪品牌推广",
     "ja": "未追跡ブランドのプロモーション",
 }

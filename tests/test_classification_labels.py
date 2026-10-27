@@ -11,6 +11,8 @@ Run against prod via:
 from __future__ import annotations
 
 import pytest
+from datetime import timedelta
+from django.utils import timezone
 
 from core.classification_contract import (
     CANONICAL_POST_TYPE_KEYS,
@@ -268,7 +270,10 @@ def test_seed_command_restores_v1_aliases_and_supports_active_v4_writer():
     )
     brand = Brand.objects.create(nickname="seed-v4-writer", display_name="Seed V4")
     PostBrand.objects.create(post=post, brand=brand)
-    PostEnrichmentState.objects.create(post=post, claim_run_id="seed-v4-writer")
+    PostEnrichmentState.objects.create(
+        post=post, claim_run_id="seed-v4-writer",
+        claim_expires_at=timezone.now() + timedelta(minutes=5),
+    )
     classification = {
         "outcome": "classified",
         "post_types": list(writer_post_types),

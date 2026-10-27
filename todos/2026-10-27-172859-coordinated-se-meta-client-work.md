@@ -55,3 +55,12 @@ Execute native inline, starting with independent backend work. Reuse the permane
 - Scoped new-file Ruff passes. Seed retains two existing BLE001 findings; import check and scoped check excluding that preexisting rule pass. `git diff --check` passes.
 - Browser baseline: anonymous production root returned200 with visible Meta Llama, no page errors; screenshot/receipt at authoritative-root `.local/2026-10-27-coordinated-work/homepage-before-en.*`. Actual request used `lang=en` rather than the supported `locale=en`, so do not claim locale-specific baseline from it.
 - Bridgewright assurance validate/prescribe both clean,5028 declared obligations. Execution of those obligations remains pending.
+
+### 2026-10-27 — Server presentation prerequisites
+
+- W2/W4/W6/W8 implemented: Meta-first priority; Chinese/Japanese follower values truncated in both feed projections; missing-data gray/catch-all black; capitalized chart labels; separate public version context. W5 English copy implemented with actual stage-specific estimates and existing retry/terminal states retained. Chinese/Japanese wording still awaits owner review; no assumption of approval.
+- Verified 145 tests and41 subtests through the shared wrapper, including four-locale real Chromium initial-page/feed-refresh parity. Separate Meta-first/pulse browser check passed1 test/15 subtests. Required-test skips/errors:0. Full assurance gate still pending.
+- Corrected two stale verification fixtures: the classification writer requires a live claim lease; the order/browser fixture explicitly tracks its synthetic brands. No production behavior was weakened to satisfy these tests.
+- An initial browser attempt used a nonexistent homepage sort selector and was stopped; its leftover fixture caused one setup failure on the next run. Normal test teardown cleared it, then the corrected real filter interaction and clean reruns passed. No replacement database or schema reset was used.
+- Scoped Ruff reports21 existing findings in views/context processors; do not call that check clean. Diff whitespace check passes. Root/prototype files remain outside implementation commits.
+- Read-only production coverage receipt: `.local/2026-10-27-coordinated-work/harvest-coverage.*` in authoritative root. Latest inspected successful scheduled run has per-query searched bounds and complete coverage, but source_as_of is NULL; W3 must read actual query scopes.

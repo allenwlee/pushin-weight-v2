@@ -26,6 +26,7 @@ from project.staging import validate_staging_environment
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 APP_VERSION = distribution_version("x-monitor")
+PUBLIC_APP_VERSION = "1.0.0b1"
 
 # ============================================================================
 # Environment

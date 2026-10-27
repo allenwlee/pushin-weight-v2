@@ -97,7 +97,7 @@ def test_synthesis_demand_refresh_returns_one_complete_pending_projection():
     badges = created.json()["results"][0]["processing_badges"]
     assert len([badge for badge in badges if badge["state"] == "pending"]) == 1
     assert badges[0]["position"] == "language"
-    assert badges[0]["message"] == "Language detection, translation, analysis and commentary pending. Historical first-attempt translation average: about 5 minutes. Historical first-attempt analysis average: about 15 minutes. Historical first-attempt commentary average: about 1 minute."
+    assert badges[0]["message"] == "Language, translation, analysis and commentary pending (1-15 min. est.)"
 
     PostEnrichmentState.objects.filter(post=post).update(
         translation_status="failed", classification_status="succeeded"

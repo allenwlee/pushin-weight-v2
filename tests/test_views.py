@@ -50,7 +50,7 @@ def test_retired_step_filter_normalizes_only_exact_value(raw, expected):
 @pytest.mark.parametrize(
     ("locale", "translation", "analysis", "commentary"),
     [
-        ("en", "about 5 minutes", "about 15 minutes", "about 1 minute"),
+        ("en", "translation", "analysis", "commentary pending (1-15 min. est.)"),
         ("zh_cn", "约5分钟", "约15分钟", "约1分钟"),
         ("ja", "約5分", "約15分", "約1分"),
     ],
@@ -160,6 +160,14 @@ class TestDecodeCursor:
 
 
 class TestSerializeFeedRow:
+    def test_pending_summary_matches_owner_copy_without_inventing_commentary_work(self):
+        row = _serialize_feed_row(_make_post(
+            "100", "2026-07-20T10:00:00+00:00", lang_detected=None,
+            enrichment_stages={"translation": ("pending", 0), "classification": ("pending", 0)},
+            synthesis_status="ready",
+        ), "en")
+        assert row["processing_badges"][0]["message"] == "Language, translation and analysis pending (5-15 min. est.)"
+
     @pytest.mark.parametrize(("locale", "label"), [
         ("en", "local"), ("zh_cn", "本地"), ("ja", "現地"),
     ])
@@ -174,11 +182,11 @@ class TestSerializeFeedRow:
     @pytest.mark.parametrize(
         ("stages", "synthesis_status", "synthesis_attempts", "expected"),
         [
-            ({"translation": ("pending", 0), "classification": ("succeeded", 1)}, "ready", 0, [("pending", "pending", "Translation pending. Historical first-attempt translation average: about 5 minutes.")]),
-            ({"translation": ("pending", 1), "classification": ("succeeded", 1)}, "pending", 1, [("pending", "pending", "Translation and commentary pending. Translation is queued for another attempt. Commentary is queued for another attempt. Historical first-attempt translation average: about 5 minutes. Historical first-attempt commentary average: about 1 minute.")]),
+            ({"translation": ("pending", 0), "classification": ("succeeded", 1)}, "ready", 0, [("pending", "pending", "Translation pending (5 min. est.)")]),
+            ({"translation": ("pending", 1), "classification": ("succeeded", 1)}, "pending", 1, [("pending", "pending", "Translation and commentary pending (1-5 min. est.). Translation is queued for another attempt. Commentary is queued for another attempt.")]),
             ({"translation": ("failed", 3), "classification": ("succeeded", 1)}, "failed", 3, [("translation", "failed", "Translation failed. No more attempts are scheduled."), ("analysis", "failed", "Analysis failed. No more attempts are scheduled.")]),
-            ({}, "processing", 1, [("pending", "pending", "Commentary pending. Historical first-attempt commentary average: about 1 minute.")]),
-            ({}, "processing", 2, [("pending", "pending", "Commentary pending. Commentary is being retried. Historical first-attempt commentary average: about 1 minute.")]),
+            ({}, "processing", 1, [("pending", "pending", "Commentary pending (1 min. est.)")]),
+            ({}, "processing", 2, [("pending", "pending", "Commentary pending (1 min. est.). Commentary is being retried.")]),
             ({"translation": ("succeeded", 1), "classification": ("succeeded", 1)}, "cancelled", 1, []),
         ],
     )
@@ -214,7 +222,7 @@ class TestSerializeFeedRow:
         ), "en")
         assert row["processing_badges"] == [{
             "process": "pending", "state": "pending",
-            "message": "Language detection and translation pending. Historical first-attempt translation average: about 5 minutes.", "position": "language",
+            "message": "Language and translation pending (5 min. est.)", "position": "language",
         }]
         assert row["language_pending_badge"] == row["processing_badges"][0]
 
@@ -226,7 +234,7 @@ class TestSerializeFeedRow:
             synthesis_status="processing",
         ), "en")
         assert [(badge["position"], badge["message"]) for badge in row["processing_badges"]] == [
-            ("language", "Language detection, translation, analysis and commentary pending. Historical first-attempt translation average: about 5 minutes. Historical first-attempt analysis average: about 15 minutes. Historical first-attempt commentary average: about 1 minute."),
+            ("language", "Language, translation, analysis and commentary pending (1-15 min. est.)"),
         ]
         assert row["language_pending_badge"] == row["processing_badges"][0]
 
@@ -356,7 +364,26 @@ class TestSerializeFeedRow:
         assert row["engagement_pretty"]["followers"] == "12.8k"
 
         zh_row = _serialize_feed_row(post, "zh_cn")
-        assert zh_row["followers_label"] == "12.8k X 关注者"
+        assert zh_row["followers_label"] == "1.2万 X 关注者"
+
+    @pytest.mark.parametrize("locale", ["zh_cn", "zh_hans", "zh-CN", "ja"])
+    @pytest.mark.parametrize(("count", "expected"), [
+        (None, "0"), (0, "0"), (999, "999"), (4_407, "4,407"),
+        (9_999, "9,999"), (10_000, "1.0万"), (19_999, "1.9万"),
+        (29_799, "2.9万"), (99_999_999, "9999.9万"),
+        (100_000_000, "1.0亿"), (199_999_999, "1.9亿"),
+    ])
+    def test_localized_follower_counts_are_truncated_in_all_feed_fields(self, locale, count, expected):
+        if locale == "ja":
+            expected = expected.replace("亿", "億")
+        post = _make_post("100", "2026-07-20T10:00:00+00:00", account={
+            "handle": "@user", "followers_count": count, "followers_pretty": "stale English",
+        })
+        row = _serialize_feed_row(post, locale)
+        assert row["account"]["followers_pretty"] == expected
+        assert row["engagement_pretty"]["followers"] == expected
+        assert row["followers_label"].startswith(expected + " X ")
+        assert post["account"]["followers_pretty"] == "stale English"
 
     @pytest.mark.parametrize(
         ("followers", "expected"),

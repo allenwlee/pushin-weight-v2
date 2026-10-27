@@ -267,8 +267,8 @@ _DASHBOARD_LANG_DISPLAY_NAMES: dict[str, str] = {
     "id": "Bahasa Indonesia",
     "ar": "العربية",
     "pl": "Polski",
-    "undetected": "undetected",
-    "other": "other",
+    "undetected": "Undetected",
+    "other": "Other",
 }
 
 _DASHBOARD_LANG_DISPLAY_NAMES_ZH_CN: dict[str, str] = {
@@ -297,6 +297,7 @@ _HOME_CLOSED_BRAND_NICKNAMES: tuple[str, ...] = (
 # selectable-brand allowlist: remaining eligible brands are appended
 # alphabetically. Public homepage eligibility comes from configured tracking.
 _HOME_CHART_BRAND_PRIORITY: tuple[str, ...] = (
+    "llama",
     "deepseek",
     "qwen",
     "minimax",
@@ -308,7 +309,6 @@ _HOME_CHART_BRAND_PRIORITY: tuple[str, ...] = (
     "stepfun",
     "ernie",
     "hunyuan",
-    "llama",
     "nemo_megatron",
     "doubao",
     "yi",
@@ -534,10 +534,16 @@ def _synthesis_status_label(status: str, locale: str) -> str:
     }.get(status, "Analysis pending")
 
 
-def _pretty_followers(count: int | None) -> str:
-    """Format follower count with k/m suffix (e.g. 15234 -> '15.2k')."""
+def _pretty_followers(count: int | None, locale: str = "en") -> str:
+    """Keep English abbreviations; truncate Chinese/Japanese 万 and 亿/億."""
     if count is None:
         return ""
+    if _is_zh_locale(locale) or _is_ja_locale(locale):
+        if count < 10_000:
+            return f"{count:,}"
+        divisor, suffix = (100_000_000, "億" if _is_ja_locale(locale) else "亿") if count >= 100_000_000 else (10_000, "万")
+        tenths = count * 10 // divisor
+        return f"{tenths // 10}.{tenths % 10}{suffix}"
     if count >= 1_000_000:
         v = count / 1_000_000
         return f"{v:.1f}m" if v < 10 else f"{int(v)}m"
@@ -1268,8 +1274,7 @@ def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]
             return f"{name}首次成功处理的历史平均时间：约{minutes}分钟。"
         if language == "ja":
             return f"{name}の初回成功処理の過去平均：約{minutes}分。"
-        unit = "minute" if minutes == 1 else "minutes"
-        return f"Historical first-attempt {name} average: about {minutes} {unit}."
+        raise ValueError("English uses a combined estimate")
 
     badges: list[dict[str, str]] = []
     pending: set[str] = set()
@@ -1303,18 +1308,23 @@ def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]
         language_marker = language_pending and "translation" in pending
         ordered = [pending_names[language][key] for key in ("translation", "classification", "analysis") if key in pending]
         if language_marker:
-            ordered.insert(0, {"en": "language detection", "zh": "语言检测", "ja": "言語判定"}[language])
+            ordered.insert(0, {"en": "language", "zh": "语言检测", "ja": "言語判定"}[language])
         if language == "en":
             joined = ordered[0] if len(ordered) == 1 else " and ".join([", ".join(ordered[:-1]), ordered[-1]])
-            message = joined.capitalize() + " pending."
+            estimates = [_FIRST_ATTEMPT_PROCESSING_MINUTES[key] for key in pending]
+            low, high = min(estimates), max(estimates)
+            minutes = str(low) if low == high else f"{low}-{high}"
+            message = joined.capitalize() + f" pending ({minutes} min. est.)"
         else:
             joined = "、".join(ordered)
             if language == "ja" and len(ordered) > 1:
                 joined = "、".join(ordered[:-1]) + "と" + ordered[-1]
             message = joined + ("を待っています。" if language == "ja" else "待处理。")
         notes = [retry_notes[key] for key in ("translation", "classification", "analysis") if key in retry_notes]
-        notes.extend(average_note(key) for key in ("translation", "classification", "analysis") if key in pending)
-        message += " " + " ".join(notes)
+        if language != "en":
+            notes.extend(average_note(key) for key in ("translation", "classification", "analysis") if key in pending)
+        if notes:
+            message += (". " if language == "en" else " ") + " ".join(notes)
         badges.insert(0,
                       {"process": "pending", "state": "pending", "message": message,
                        "position": "language" if language_marker else "meta"})
@@ -1740,6 +1750,8 @@ def _v22_feed_display_fields(
         retweet_count or 0,
         reply_count or 0,
     )
+    if _is_zh_locale(locale) or _is_ja_locale(locale):
+        engagement_pretty["followers"] = _pretty_followers(followers_count, locale)
     followers_suffix = (
         "关注者" if _is_zh_locale(locale) else
         "フォロワー" if _is_ja_locale(locale) else "followers"
@@ -1899,7 +1911,7 @@ def _post_to_wire(
             "role": acc.get("role_key"),
             "role_label": acc.get("role_label") or "",
             "followers_count": acc.get("followers_count") or 0,
-            "followers_pretty": acc.get("followers_pretty") or "",
+            "followers_pretty": _pretty_followers(acc.get("followers_count") or 0, locale),
         }
         if include_geography:
             account_wire["geography"] = _feed_geography_wire(
@@ -1915,7 +1927,7 @@ def _post_to_wire(
             "role": None,
             "role_label": "",
             "followers_count": post.author.followers_count or 0,
-            "followers_pretty": _pretty_followers(post.author.followers_count),
+            "followers_pretty": _pretty_followers(post.author.followers_count, locale),
         }
         if include_geography:
             account_wire["geography"] = None
@@ -4045,12 +4057,12 @@ _EACH_FIXED_BOTTOM = {
     "product_labels": (_FILTER_UNCLASSIFIED, _FILTER_NO_PRODUCT_SIGNAL),
 }
 _EACH_FIXED_COLORS = {
-    _FILTER_UNCLASSIFIED: "#000000",
-    "undetected": "#000000",
-    "neutral": "#cbd5e1",
-    "other": "#cbd5e1",
-    _FILTER_NO_AUDIENCE_TOPIC: "#cbd5e1",
-    _FILTER_NO_PRODUCT_SIGNAL: "#cbd5e1",
+    _FILTER_UNCLASSIFIED: "#cbd5e1",
+    "undetected": "#cbd5e1",
+    "neutral": "#000000",
+    "other": "#000000",
+    _FILTER_NO_AUDIENCE_TOPIC: "#000000",
+    _FILTER_NO_PRODUCT_SIGNAL: "#000000",
     "mixed": "#8b5cf6",
     "negative": "#ef4444",
     "positive": "#3b82f6",
@@ -4622,6 +4634,8 @@ def _serialize_feed_row(
     ]
 
     account_wire = dict(post.get("account") or {})
+    if _is_zh_locale(locale) or _is_ja_locale(locale):
+        account_wire["followers_pretty"] = _pretty_followers(account_wire.get("followers_count") or 0, locale)
     geography_source = account_wire.pop("_geography_source", None)
     account_handle = account_wire.get("handle") or post.get("author_handle") or "@unknown"
     account_wire["handle"] = account_handle

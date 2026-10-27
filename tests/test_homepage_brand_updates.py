@@ -101,10 +101,14 @@ def test_conflicting_namespace_ownership_rolls_back_all_changes(meta_brand):
 
 @pytest.mark.parametrize("locale", ("en", "zh_cn", "zh_hans", "ja"))
 def test_updated_brand_reaches_real_home_and_chart_payloads(meta_brand, client, locale):
+    Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
     apply_updates(commit=True)
     _clear_home_pulse_cache()
     response = client.get("/", {"locale": locale}, secure=True)
     assert response.status_code == 200
+    assert response.context["brands"][0]["nickname"] == "llama"
+    assert response.context["public_app_version"] == "1.0.0b1"
+    assert response.context["app_version"] != response.context["public_app_version"]
     row = next(row for row in response.context["brands"] if row["nickname"] == "llama")
     assert row["display_name"] == "Meta"
     assert "Meta Llama" not in response.content.decode()
