@@ -158,8 +158,6 @@ relations:
     - job_listing_evidence
     - job_listings
     - job_listing_locations
-    - model_release_evidence
-    - model_releases
     - nationalism_keys
     - nationalism_labels
     - national_stance_keys
@@ -421,8 +419,6 @@ relations:
     - job_listing_locations
     - job_source_states
     - job_source_sync_runs
-    - model_release_evidence
-    - model_releases
     - opportunities
     - national_stance_keys
     - national_stance_labels
@@ -573,8 +569,6 @@ relations:
     - job_listings_id_seq
     - job_listing_locations_id_seq
     - job_source_sync_runs_id_seq
-    - model_release_evidence_id_seq
-    - model_releases_id_seq
     - opportunities_id_seq
     - post_synthesis_artifacts_id_seq
     - post_synthesis_daily_budgets_id_seq
@@ -698,8 +692,6 @@ relations:
     - job_listings_id_seq
     - job_listing_locations_id_seq
     - job_source_sync_runs_id_seq
-    - model_release_evidence_id_seq
-    - model_releases_id_seq
     - opportunities_id_seq
     - people_brand_affiliation_evidence_id_seq
     - people_brand_affiliations_id_seq
@@ -857,8 +849,6 @@ validation:
     - companies
     - company_labels
     - trend_narrative_subject_labels
-    - model_release_evidence
-    - model_releases
     - posts
     - posts_brands
     - posts_brands_products
