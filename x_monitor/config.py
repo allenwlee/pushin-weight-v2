@@ -270,9 +270,10 @@ class JevDecisionsConfig(BaseModel):
 
 
 class RareTypeSearchConfig(BaseModel):
-    """Disabled-by-default combined rare-type lane; U6 adds search wiring."""
+    """Shared search/decision limits; changing packs requires its own assessment."""
 
     enabled: bool = False
+    query_pack: Literal["legacy", "special-events-v1"] = "legacy"
     assessment_path: str = ""
     assessment_digest: str = Field(default="", pattern=r"^$|^[0-9a-f]{64}$")
     max_results: Literal[20] = 20

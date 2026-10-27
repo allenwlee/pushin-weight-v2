@@ -10,6 +10,7 @@ from typing import Any
 
 from django.db.models import Q
 
+from core.discovery import PAID_DISCOVERY_CALL_IDS
 from core.models import (
     BrandDiscoveryCandidateTokenEvidence,
     EventEvidence,
@@ -66,7 +67,7 @@ def build_rare_type_cycle_summary(summary: Mapping[str, Any]) -> dict[str, int |
     rare_calls = [
         row
         for row in (summary.get("calls") or [])
-        if isinstance(row, Mapping) and row.get("call_id") == "RARE_EXTRA"
+        if isinstance(row, Mapping) and row.get("call_id") in PAID_DISCOVERY_CALL_IDS
     ]
     if not rare_calls:
         return None

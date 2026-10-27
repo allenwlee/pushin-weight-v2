@@ -19,18 +19,20 @@ from x_monitor.rare_type_quality_gate import (
     runtime_assessment_identity,
     validate_assessment,
 )
+from x_monitor.special_events_search import CALL_IDS as SPECIAL_EVENT_CALL_IDS
+from x_monitor.special_events_search import QUERIES as SPECIAL_EVENT_QUERIES
+from x_monitor.special_events_search import QUERY_VERSION as SPECIAL_EVENT_QUERY_VERSION
+from x_monitor.special_events_search import assessment_query_pack
 
 _RUN_MODELS = {
     "jobs": JobDiscoveryRun,
     "personnel": PersonnelDiscoveryRun,
 }
 RARE_EXTRA_CALL_ID = "RARE_EXTRA"
+PAID_DISCOVERY_CALL_IDS = frozenset((RARE_EXTRA_CALL_ID, *SPECIAL_EVENT_CALL_IDS))
 
 
-def plan_rare_type_call(cfg: Config) -> PlannedCall | None:
-    lane = cfg.discovery.rare_types
-    if not lane.enabled:
-        return None
+def _validate_search_assessment(lane, *, query: str, version: str) -> None:
     path = Path(lane.assessment_path)
     try:
         assessment = json.loads(path.read_text(encoding="utf-8"))
@@ -41,10 +43,9 @@ def plan_rare_type_call(cfg: Config) -> PlannedCall | None:
     if assessment.get("assessment_digest") != lane.assessment_digest:
         raise ValueError("rare-types assessment digest does not match config")
     identity = assessment.get("identity")
-    query = planned_query_string()
     try:
         expected = runtime_assessment_identity(
-            query_version=QUERY_VERSION,
+            query_version=version,
             planner_query=query,
             config=lane.jev,
         )
@@ -66,6 +67,17 @@ def plan_rare_type_call(cfg: Config) -> PlannedCall | None:
         validate_assessment(assessment, expected_identity=identity)
     except QualityEvidenceError as exc:
         raise ValueError(str(exc)) from exc
+
+
+def plan_rare_type_call(cfg: Config) -> PlannedCall | None:
+    """Retain the exact legacy query for frozen recipes and explicit legacy use."""
+    lane = cfg.discovery.rare_types
+    if not lane.enabled:
+        return None
+    if lane.query_pack != "legacy":
+        raise ValueError("legacy rare search requires the legacy query pack")
+    query = planned_query_string()
+    _validate_search_assessment(lane, query=query, version=QUERY_VERSION)
     return PlannedCall(
         call_id=RARE_EXTRA_CALL_ID,
         call_kind="brand_wide",
@@ -86,6 +98,25 @@ def plan_rare_type_call(cfg: Config) -> PlannedCall | None:
         credits_per_result=15,
         minimum_credits_per_call=15,
     )
+
+
+def plan_special_event_calls(cfg: Config) -> list[PlannedCall]:
+    lane = cfg.discovery.rare_types
+    if not lane.enabled:
+        return []
+    if lane.query_pack != "special-events-v1":
+        raise ValueError("special-events requires the selected query pack")
+    _validate_search_assessment(lane, query=assessment_query_pack(), version=SPECIAL_EVENT_QUERY_VERSION)
+    return [PlannedCall(
+        call_id=call_id, call_kind="brand_wide", brand_id="*special-events", bucket=None,
+        query_string=query, query_length=len(query), discovery_lane="special-events",
+        query_family="general" if call_id == SPECIAL_EVENT_CALL_IDS[0] else "releases",
+        language="multilingual", query_pack_version=SPECIAL_EVENT_QUERY_VERSION,
+        cadence_minutes=15, max_lookback_hours=0.5, max_results=lane.max_results,
+        max_pages=lane.max_pages, max_per_page=lane.max_per_page,
+        daily_credit_ceiling=lane.daily_credit_ceiling, credits_per_result=15,
+        minimum_credits_per_call=15,
+    ) for call_id, query in SPECIAL_EVENT_QUERIES.items()]
 
 
 def remaining_discovery_result_capacity(
@@ -212,9 +243,12 @@ def plan_discovery_calls(
             now=now,
         ),
     ]
-    rare = plan_rare_type_call(cfg)
-    if rare is not None:
-        calls.append(rare)
+    if cfg.discovery.rare_types.query_pack == "special-events-v1":
+        calls.extend(plan_special_event_calls(cfg))
+    else:
+        rare = plan_rare_type_call(cfg)
+        if rare is not None:
+            calls.append(rare)
     return calls
 
 

@@ -91,13 +91,15 @@ class FakeApi:
         return b"{}", value, items, continuation, 0
 
 
-def test_checked_in_config_keeps_seven_call_lane_optional():
+def test_checked_in_config_keeps_discovery_lane_optional():
     cfg = load_config(REPO / "config.yaml")
     assert cfg.discovery.rare_types.enabled is False
     assert cfg.discovery.rare_types.product_verification_enabled is False
     assert cfg.discovery.rare_types.targeted_extraction_enabled is False
     assert cfg.targeted_extraction.enabled is False
-    assert len(CycleRunner(cfg=cfg)._plan_calls()) == 7
+    assert sorted(call.call_id for call in CycleRunner(cfg=cfg)._plan_calls()) == [
+        "A", "B1", "B2", "B3", "C1", "C2", "C3", "C4",
+    ]
     assert RARE_EXTRA_CALL_ID not in [
         call.call_id for call in plan_discovery_calls(cfg, list_id=42, now=NOW)
     ]
@@ -148,7 +150,9 @@ def test_production_runtime_activation_reaches_planner_without_old_packs(
     assert cfg.discovery.jobs.enabled is False
     assert cfg.discovery.personnel.enabled is False
     assert [call.call_id for call in calls[-1:]] == [RARE_EXTRA_CALL_ID]
-    assert len(calls) == 8
+    assert sorted(call.call_id for call in calls[:-1]) == [
+        "A", "B1", "B2", "B3", "C1", "C2", "C3", "C4",
+    ]
 
 
 @pytest.mark.parametrize("deployment", ["", "local", "preview"])

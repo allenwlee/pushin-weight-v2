@@ -36,6 +36,22 @@ support; a repeated source is not an additional independent confirmation.
 
 ## Data-source collection
 
+### Special-events searches
+
+Two optional searches collect candidates beyond ordinary tracked-brand queries:
+`SPECIALEVENTS1` covers personnel, jobs, events and opportunities;
+`SPECIALEVENTS2` covers product announcements and Hugging Face links. Each has its
+own search window and run identity, with one shared daily search allowance and
+the existing shared decision allowance. Collection does not establish a release.
+
+The new pack is selected by `discovery.rare_types.query_pack: special-events-v1`
+and requires assessment evidence matching both exact queries and the configured
+decision model. The default remains `legacy`; old `RARE_EXTRA` evidence cannot
+enable the new pack. Historical ledger/table names and frozen queries retain
+their original identities. See `x_monitor/special_events_search.py` for the exact
+queries and provider-length check. This configuration does not authorize new
+spending or production activation.
+
 ### X post backfill
 
 Explicit historical collection of X posts for a bounded publication-time window,

@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from core.discovery import RARE_EXTRA_CALL_ID
+from core.discovery import PAID_DISCOVERY_CALL_IDS, RARE_EXTRA_CALL_ID
 from monitor.post_enrichment import (
     ENRICHMENT_COUNT_KEYS,
     enrichment_fact_terminal_complete,
@@ -299,7 +299,7 @@ def _configure_rare_extra_assessment(
     return cfg
 
 
-def _validate_rare_extra_config(cfg: Config) -> None:
+def _validate_rare_extra_config(cfg: Config, call_id: str = RARE_EXTRA_CALL_ID) -> None:
     """Require the canonical planner to accept the pinned assessment tuple."""
 
     if not cfg.discovery.rare_types.enabled:
@@ -308,12 +308,15 @@ def _validate_rare_extra_config(cfg: Config) -> None:
         # This is the canonical, provider-free validation used by the shared
         # planner. Keeping it here prevents staging preflight and execution
         # from accepting different query/Jev/threshold fingerprints.
-        from core.discovery import plan_rare_type_call
+        from core.discovery import plan_rare_type_call, plan_special_event_calls
 
-        planned = plan_rare_type_call(cfg)
+        if call_id == RARE_EXTRA_CALL_ID:
+            planned = plan_rare_type_call(cfg)
+        else:
+            planned = next((call for call in plan_special_event_calls(cfg) if call.call_id == call_id), None)
     except (OSError, TypeError, ValueError) as exc:
         raise StagingAcceptanceError("rare_extra_assessment_mismatch") from exc
-    if planned is None or planned.call_id != RARE_EXTRA_CALL_ID:
+    if planned is None or planned.call_id != call_id:
         raise StagingAcceptanceError("rare_extra_assessment_mismatch")
 
 
@@ -390,7 +393,7 @@ def evaluate_staging_acceptance(
         {},
     )
     call_status = str(selected_call.get("status") or "missing")
-    is_rare_extra = prepared.profile.selected_call == RARE_EXTRA_CALL_ID
+    is_rare_extra = prepared.profile.selected_call in PAID_DISCOVERY_CALL_IDS
     if is_rare_extra:
         n_results = selected_call.get("normalized_count")
         totals = stats.get("totals")
@@ -626,9 +629,9 @@ def prepare_staging_acceptance(
     if environ.get(ACCEPTANCE_SERVICE_ENVIRONMENT) != EXPECTED_SERVICE_NAME:
         raise StagingAcceptanceError("configured_service_identity_mismatch")
 
-    if call_id == RARE_EXTRA_CALL_ID:
+    if call_id in PAID_DISCOVERY_CALL_IDS:
         cfg = _configure_rare_extra_assessment(cfg, environ)
-        _validate_rare_extra_config(cfg)
+        _validate_rare_extra_config(cfg, call_id)
         if not environ.get("TYPESAFE_API_KEY"):
             raise StagingAcceptanceError("provider_credential_missing:jev")
     elif call_id not in _configured_call_ids(cfg):
@@ -657,12 +660,12 @@ def prepare_staging_acceptance(
         environment=EXPECTED_DEPLOYMENT_ENVIRONMENT,
         database=database_name,
         role=role,
-        rare_extra=call_id == RARE_EXTRA_CALL_ID,
+        rare_extra=call_id in PAID_DISCOVERY_CALL_IDS,
     )
     return PreparedStagingAcceptance(
         profile=profile,
         config=_bounded_config(
-            cfg, rare_extra=call_id == RARE_EXTRA_CALL_ID
+            cfg, rare_extra=call_id in PAID_DISCOVERY_CALL_IDS
         ),
     )
 

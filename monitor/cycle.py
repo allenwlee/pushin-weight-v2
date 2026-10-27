@@ -57,6 +57,7 @@ from core.classification_contract import (
     parse_stage1_classifications,
 )
 from core.discovery import (
+    PAID_DISCOVERY_CALL_IDS,
     RARE_EXTRA_CALL_ID,
     plan_discovery_calls,
     record_discovery_run,
@@ -2871,7 +2872,11 @@ class CycleRunner:
     def _run_rare_type_search(
         self, call: PlannedCall, api: TwitterApiClient, *, now: datetime
     ) -> dict[str, Any]:
-        """Reserve and execute the one-page RARE_EXTRA slot exactly once."""
+        """Reserve one page per search identity against the shared allowance."""
+
+        from x_monitor.special_events_search import RUN_LANES
+
+        lane = RUN_LANES.get(call.call_id, "rare_types")
 
         query_hash = hashlib.sha256(call.query_string.encode()).hexdigest()
         slot_start = now.replace(
@@ -2882,15 +2887,16 @@ class CycleRunner:
                 query_id=f"{call.call_id}:{call.query_pack_version}:{query_hash}",
                 defaults={
                     "keywords": {
-                        "lane": "rare_types",
+                        "lane": lane,
                         "query": call.query_string,
                         "query_version": call.query_pack_version,
                     },
                     "plan_calls_run_id": "rare-type-scheduled",
+                    "query_text": call.query_string,
                 },
             )
             reservation = reserve_search_run(
-                lane="rare_types",
+                lane=lane,
                 slot_start=slot_start,
                 source_query=source_query,
                 query_string=call.query_string,
@@ -3015,6 +3021,9 @@ class CycleRunner:
     ) -> dict[str, int]:
         """Join Jev-kept durable hits to the normal Post/enrichment queue."""
 
+        from x_monitor.special_events_search import RUN_LANES
+
+        call_ids_by_lane = {lane: call_id for call_id, lane in RUN_LANES.items()}
         hits = list(
             kept_hits_pending_post(
                 limit=self.cfg.discovery.rare_types.jev.normal_decisions_per_cycle,
@@ -3027,8 +3036,9 @@ class CycleRunner:
             item = dict(hit.public_payload or {})
             item["id"] = str(hit.provider_post_id)
             item["tweet_id"] = str(hit.provider_post_id)
-            item["source_query_id"] = RARE_EXTRA_CALL_ID
-            item["_discovery_lane"] = "rare_types"
+            call_id = call_ids_by_lane.get(hit.run.lane, RARE_EXTRA_CALL_ID)
+            item["source_query_id"] = call_id
+            item["_discovery_lane"] = "special-events" if call_id != RARE_EXTRA_CALL_ID else "rare_types"
             item["_discovery_query_id"] = hit.run.source_query.query_id
             item["_rare_type_hit_id"] = hit.pk
             self._attribute_items(
@@ -5028,6 +5038,11 @@ class CycleRunner:
             summary["degraded"]["plan"] = str(exc)
             return self._finish_summary(summary, started_monotonic=t0)
 
+        if not calls and self._errors:
+            summary["status"] = "aborted"
+            summary["degraded"]["plan"] = "Call planning failed; see errors."
+            return self._finish_summary(summary, started_monotonic=t0)
+
         # Backfill batching: narrow to the requested call IDs.
         if self._backfill_call_ids:
             requested = set(self._backfill_call_ids)
@@ -5115,7 +5130,7 @@ class CycleRunner:
             # The separately reserved rare-type lane has its own durable
             # search run and hit records; this job owns the regular A/B/C calls.
             lineage_calls = [
-                call for call in calls if call.call_id != RARE_EXTRA_CALL_ID
+                call for call in calls if call.call_id not in PAID_DISCOVERY_CALL_IDS
             ]
             limits = {
                 "requests": sum(
@@ -5156,6 +5171,9 @@ class CycleRunner:
 
         kept_all: list[dict[str, Any]] = []
         first_page_max_ms = 0
+        last_paid_discovery_call_id = next(
+            (call.call_id for call in reversed(calls) if call.call_id in PAID_DISCOVERY_CALL_IDS), None
+        )
 
         for call in calls:
             call_t0 = self._monotonic()
@@ -5187,7 +5205,7 @@ class CycleRunner:
                     "daily_credit_ceiling": call.daily_credit_ceiling,
                 }
 
-            if call.call_id == RARE_EXTRA_CALL_ID and self._backfill_context is None:
+            if call.call_id in PAID_DISCOVERY_CALL_IDS and self._backfill_context is None:
                 rare_result = self._run_rare_type_search(
                     call, api, now=self._collection_window_end or self._wall_now()
                 )
@@ -5203,6 +5221,8 @@ class CycleRunner:
                     rare_result.get("provider_called", False)
                 )
                 summary["totals"]["n_results"] += rare_result.get("raw_count", 0)
+                if call.call_id != last_paid_discovery_call_id:
+                    continue
                 summary["rare_type_ingestion"] = self._drain_rare_type_hits(
                     run_id=run_id,
                     index=index,
@@ -5773,7 +5793,7 @@ class CycleRunner:
         summary["totals"]["n_attributed"] = self._posts_attributed
 
         if any(
-            call.get("call_id") == RARE_EXTRA_CALL_ID for call in summary["calls"]
+            call.get("call_id") in PAID_DISCOVERY_CALL_IDS for call in summary["calls"]
         ):
             try:
                 summary["rare_types"] = build_rare_type_cycle_summary(summary)

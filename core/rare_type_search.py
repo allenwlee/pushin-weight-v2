@@ -39,6 +39,11 @@ from core.models import (
 SEARCH_RESERVATION_CREDITS = 300
 SEARCH_DAILY_CREDIT_LIMIT = 6_000
 SEARCH_RESULT_CREDITS = 15
+# Preserve the existing day's spend and decision allowance across pack switches.
+SEARCH_BUDGET_LANES = {
+    "special-events/general": "rare_types",
+    "special-events/releases": "rare_types",
+}
 FIRST_WINDOW = timedelta(minutes=15)
 MAX_CATCHUP_WINDOW = timedelta(minutes=30)
 PAYLOAD_RETENTION = timedelta(days=30)
@@ -314,7 +319,7 @@ def reserve_search_run(
     usage_date = _utc_date(slot_start)
 
     with transaction.atomic():
-        budget = _ensure_daily_budget(lane=lane, usage_date=usage_date)
+        budget = _ensure_daily_budget(lane=SEARCH_BUDGET_LANES.get(lane, lane), usage_date=usage_date)
         existing = RareTypeSearchRun.objects.filter(
             lane=lane, slot_start=slot_start
         ).first()

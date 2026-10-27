@@ -435,7 +435,7 @@ def test_hf_drain_runs_after_post_persistence_and_classification_with_bound(
     }
 
 
-def test_feature_off_keeps_exact_seven_call_shape():
+def test_feature_off_keeps_exact_ordinary_call_shape():
     cfg = load_config(REPO / "config.yaml")
 
     assert cfg.discovery.rare_types.enabled is False
@@ -445,6 +445,7 @@ def test_feature_off_keeps_exact_seven_call_shape():
         "C1",
         "C2",
         "C3",
+        "C4",
         "B2",
         "B3",
     ]
