@@ -28,7 +28,7 @@ from core.models import (
     BrandDiscoveryCandidate,
     Company,
     CompanyAccount,
-    ModelRelease,
+    EventDossier,
     Post,
     PostBrandProduct,
     Product,
@@ -132,6 +132,16 @@ def source_repo_evidence(post: Post, candidate_repo_id: str) -> dict[str, Any]:
     }
 
 
+def _lock_proposal_dossier(proposal_id: int):
+    """Use the same dossier-before-proposal lock order as release intake."""
+    source_id = ProductVerificationProposal.objects.filter(pk=proposal_id).values_list(
+        "source_dossier_id", flat=True
+    ).first()
+    if source_id is not None:
+        EventDossier.objects.select_for_update().get(pk=source_id)
+    return source_id
+
+
 @transaction.atomic
 def decide_product_proposal(
     *,
@@ -152,9 +162,12 @@ def decide_product_proposal(
         raise ProductReviewError("reviewer and reason are required")
     if action not in {"approve", "reject"}:
         raise ProductReviewError("invalid review action")
+    locked_source_id = _lock_proposal_dossier(proposal_id)
     proposal = ProductVerificationProposal.objects.select_for_update().get(
         pk=proposal_id
     )
+    if proposal.source_dossier_id != locked_source_id:
+        raise ProductReviewError("proposal source changed; retry the decision")
     if proposal.review_status != "pending":
         if action == "reject" and proposal.review_status == "rejected":
             return proposal
@@ -238,11 +251,11 @@ def decide_product_proposal(
         repo_id = proposal.candidate_repo_id
 
     product = None
-    if proposal.source_release_id:
-        ModelRelease.objects.select_for_update().get(pk=proposal.source_release_id)
+    if proposal.source_dossier_id:
+        EventDossier.objects.select_for_update().get(pk=proposal.source_dossier_id)
         prior_product_id = (
             ProductVerificationProposal.objects.filter(
-                source_release_id=proposal.source_release_id,
+                source_dossier_id=proposal.source_dossier_id,
                 review_status="approved",
                 proposed_brand=brand,
                 resolved_product__isnull=False,
@@ -541,15 +554,15 @@ def _upsert_hf_product(
     hf_org: CompanyAccount | None,
     metadata: dict[str, Any],
     product_type: str,
-    source_release: ModelRelease | None = None,
+    source_dossier: EventDossier | None = None,
 ) -> Product:
     """Converge an exact repo with any approved X-only release Product."""
     product = None
-    if source_release is not None:
-        ModelRelease.objects.select_for_update().get(pk=source_release.pk)
+    if source_dossier is not None:
+        EventDossier.objects.select_for_update().get(pk=source_dossier.pk)
         prior_product_id = (
             ProductVerificationProposal.objects.filter(
-                source_release_id=source_release.pk,
+                source_dossier_id=source_dossier.pk,
                 review_status="approved",
                 proposed_brand=brand,
                 resolved_product__isnull=False,
@@ -609,7 +622,7 @@ def attach_verified_product(
     evidence: dict[str, Any],
     product_type: str,
     policy_version: str = POLICY_VERSION,
-    source_release: ModelRelease | None = None,
+    source_dossier: EventDossier | None = None,
 ) -> Product:
     if product_type not in {value for value, _label in product_type_choices()}:
         raise ValueError("invalid_product_type")
@@ -631,7 +644,7 @@ def attach_verified_product(
         hf_org=hf_org,
         metadata=metadata,
         product_type=product_type,
-        source_release=source_release,
+        source_dossier=source_dossier,
     )
     PostBrandProduct.objects.get_or_create(
         post=post,
@@ -773,13 +786,16 @@ def _finalize_new_publisher(
     model_payload: dict[str, Any],
     socials_payload: dict[str, Any],
 ) -> bool:
+    locked_source_id = _lock_proposal_dossier(proposal_id)
     proposal = (
         ProductVerificationProposal.objects.select_related(
-            "proposed_candidate", "account", "source_post", "source_release"
+            "proposed_candidate", "account", "source_post", "source_dossier"
         )
         .select_for_update(of=("self",))
         .get(pk=proposal_id)
     )
+    if proposal.source_dossier_id != locked_source_id:
+        return False
     if (
         proposal.verification_claim_token != claim_token
         or proposal.review_status != "pending"
@@ -869,7 +885,7 @@ def _finalize_new_publisher(
         hf_org=hf_org,
         metadata=model_payload,
         product_type=categories[0],
-        source_release=proposal.source_release,
+        source_dossier=proposal.source_dossier,
     )
     PostBrandProduct.objects.get_or_create(
         post=proposal.source_post,
@@ -905,6 +921,7 @@ def _finalize_known_publisher(
     claim_token: uuid.UUID,
     result: HFMetadataResult,
 ) -> bool:
+    locked_source_id = _lock_proposal_dossier(proposal_id)
     proposal = (
         ProductVerificationProposal.objects.select_related(
             "account", "proposed_brand", "source_post"
@@ -912,6 +929,8 @@ def _finalize_known_publisher(
         .select_for_update(of=("self",))
         .get(pk=proposal_id)
     )
+    if proposal.source_dossier_id != locked_source_id:
+        return False
     if (
         proposal.verification_claim_token != claim_token
         or proposal.review_status != "pending"
@@ -950,7 +969,7 @@ def _finalize_known_publisher(
                     evidence={"proposal_key": proposal.proposal_key},
                     product_type=categories[0],
                     policy_version=proposal.policy_version,
-                    source_release=proposal.source_release,
+                    source_dossier=proposal.source_dossier,
                 )
                 proposal.review_status = "approved"
                 proposal.review_reason = "automatic_known_publisher"

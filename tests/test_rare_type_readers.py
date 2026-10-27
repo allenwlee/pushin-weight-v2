@@ -6,36 +6,34 @@ from pathlib import Path
 
 import pytest
 
-from core.intelligence_readers import model_release_document, rare_type_post_document
+from core.intelligence_readers import product_release_document, rare_type_post_document
 from core.models import (
     Account,
     Brand,
     BrandDiscoveryCandidate,
-    ModelRelease,
-    ModelReleaseEvidence,
     Post,
     PostBrandProduct,
     Product,
     ProductVerificationProposal,
     RareTypeCategoryAssignment,
-    ReleaseMaturity,
 )
+from core.product_release_dossiers import record_release_report
 from tests.product_factory import product_type_fields
 
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
 CONTRACT = (
     Path(__file__).resolve().parents[1]
-    / "tests/fixtures/rare_type_intelligence_read_contract_v1.json"
+    / "tests/fixtures/rare_type_intelligence_read_contract_v2.json"
 )
 
 
 def test_versioned_rare_type_read_contract_pins_reader_and_command_shapes():
     contract = json.loads(CONTRACT.read_text())
 
-    assert contract["schema_version"] == "rare-type-intelligence-read-contract-v1"
+    assert contract["schema_version"] == "rare-type-intelligence-read-contract-v2"
     assert set(contract["documents"]) == {
-        "model_release_document",
+        "product_release_document",
         "rare_type_post_document",
         "rare_type_status",
         "rare_type_replay",
@@ -51,36 +49,23 @@ def test_release_reader_counts_canonical_record_evidence_and_posts_separately():
         Post.objects.create(tweet_id="release-source-1", text="MiniMax M3 released"),
         Post.objects.create(tweet_id="release-source-2", text="More M3 details"),
     ]
-    release = ModelRelease.objects.create(
-        brand=brand,
-        observed_model_name="M3",
-        version="3.0",
-        release_maturity_reference=ReleaseMaturity.objects.get(code="stable"),
-        release_value="2026-09-24",
-        release_precision="day",
-        release_identity="release-reader-m3",
-        first_seen_at=NOW,
-        last_seen_at=NOW,
-        extraction_version="release-extract-v1",
-    )
-    for index, post in enumerate(posts):
-        ModelReleaseEvidence.objects.create(
-            release=release,
-            source_post=post,
-            observed_at=NOW,
-            observed_claim={"model_name": "M3", "source": index},
-            evidence_hash=f"evidence-{index}",
+    for post in posts:
+        release, _, _ = record_release_report(
+            post=post, record={"model_name": "M3", "version": "3.0"},
+            release_identity="release-reader-m3", observed_name="M3",
+            source_url=None, brand=brand, maturity_code="stable",
+            release_value="2026-09-24", release_precision="day",
             extraction_version="release-extract-v1",
         )
 
-    document = model_release_document(release.pk)
+    document = product_release_document(release.pk)
 
     assert document["counts"] == {
-        "canonical_records": 1,
-        "evidence": 2,
+        "dossiers": 1,
+        "claims": 2,
         "posts": 2,
     }
-    assert [row["source_post_id"] for row in document["evidence"]] == [
+    assert [row["post_id"] for row in document["sources"]] == [
         "release-source-1",
         "release-source-2",
     ]

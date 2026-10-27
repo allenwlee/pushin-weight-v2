@@ -14,7 +14,7 @@ from django.utils import timezone as django_timezone
 
 from core.models import (
     Brand,
-    ModelRelease,
+    EventDossierClaim,
     Post,
     PostBrand,
     PostBrandSignal,
@@ -599,11 +599,11 @@ def test_replay_retries_targeted_extraction_for_already_classified_post(monkeypa
         "0",
     )
 
-    release = ModelRelease.objects.get()
+    release = EventDossierClaim.objects.get()
     selected_targeted.refresh_from_db()
     unrelated_targeted.refresh_from_db()
-    assert release.observed_model_name == "DeepSeek R2"
-    assert release.evidence.get().source_post_id == post.pk
+    assert release.assertion_text == "DeepSeek R2"
+    assert release.event_dossier_source.post_id == post.pk
     assert selected_targeted.status == "succeeded"
     assert selected_targeted.attempts == 2
     assert unrelated_targeted.status == "failed"

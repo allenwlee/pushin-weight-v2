@@ -16,11 +16,10 @@ from core.job_vocabulary import (
 )
 from core.models import (
     Event,
+    EventDossierClaim,
     EventEvidence,
     JobListing,
     JobListingEvidence,
-    ModelRelease,
-    ModelReleaseEvidence,
     Opportunity,
     Person,
     PersonAccount,
@@ -37,52 +36,22 @@ from core.models import (
 )
 
 
-def model_release_document(release_id: int) -> dict[str, Any]:
-    """Return one canonical release with source evidence and honest counts."""
-    release = (
-        ModelRelease.objects.select_related("brand", "brand_discovery_candidate")
-        .prefetch_related(
-            Prefetch(
-                "evidence",
-                queryset=ModelReleaseEvidence.objects.order_by("observed_at", "id"),
-            )
-        )
-        .get(pk=release_id)
-    )
-    evidence = list(release.evidence.all())
-    post_ids = sorted({row.source_post_id for row in evidence})
-    candidate = release.brand_discovery_candidate
+def product_release_document(dossier_id) -> dict[str, Any]:
+    """Return current typed evidence while keeping completed reviews explicit."""
+    from core.event_dossiers import read_current_evidence
+
+    evidence = read_current_evidence(dossier_id)
+    if evidence["dossier"]["event_kind"] != "product_release":
+        raise ValueError("Dossier is not a product release")
+    claims = evidence["claims"]
+    post_ids = {source["post_id"] for source in evidence["sources"] if source["post_id"]}
     return {
-        "id": release.pk,
-        "owner": {
-            "brand_id": release.brand_id,
-            "candidate_id": release.brand_discovery_candidate_id,
-            "observed_name": candidate.observed_name if candidate else None,
-            "reviewed_brand_id": candidate.reviewed_brand_id if candidate else None,
-        },
-        "observed_model_name": release.observed_model_name,
-        "version": release.version,
-        "channel": release.release_maturity_reference.code,
-        "release_date": _effective_date(
-            release.release_value, release.release_precision
-        ),
-        "review_status": release.review_status,
-        "counts": {
-            "canonical_records": 1,
-            "evidence": len(evidence),
-            "posts": len(post_ids),
-        },
-        "evidence": [
-            {
-                "id": row.pk,
-                "source_post_id": row.source_post_id,
-                "source_url": row.source_url,
-                "observed_at": _iso(row.observed_at),
-                "claim": row.observed_claim,
-                "extraction_version": row.extraction_version,
-            }
-            for row in evidence
-        ],
+        "id": str(dossier_id),
+        "review_id": evidence["current_review_id"],
+        "status": "reviewed" if evidence["current_review_id"] else "pending",
+        "counts": {"dossiers": 1, "claims": len(claims), "posts": len(post_ids)},
+        "claims": claims,
+        "sources": evidence["sources"],
     }
 
 
@@ -107,9 +76,10 @@ def rare_type_post_document(post_id: str) -> dict[str, Any]:
     classifications = PostBrandClassificationState.objects.filter(
         post_id=post_id
     ).order_by("brand_id")
-    release_ids = ModelReleaseEvidence.objects.filter(
-        source_post_id=post_id
-    ).values_list("release_id", flat=True)
+    release_ids = EventDossierClaim.objects.filter(
+        event_dossier_source__post_id=post_id,
+        event_dossier_source__event_dossier__event_kind_reference__code="product_release",
+    ).values_list("event_dossier_source__event_dossier_id", flat=True)
     event_ids = EventEvidence.objects.filter(source_post_id=post_id).values_list(
         "event_id", flat=True
     )
@@ -188,8 +158,8 @@ def rare_type_post_document(post_id: str) -> dict[str, Any]:
             for row in proposals
         ],
         "domain_records": {
-            "model_releases": [
-                model_release_document(release_id)
+            "product_releases": [
+                product_release_document(release_id)
                 for release_id in sorted(set(release_ids))
             ],
             "events": list(

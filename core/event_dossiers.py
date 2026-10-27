@@ -27,11 +27,11 @@ from core.models import (
     EventDossierReviewClaim,
     EventDossierSource,
     EventKind,
-    ModelReleaseDetail,
     PersonBrandAffiliation,
     PersonnelChangeDetail,
     PersonnelChangeType,
     Post,
+    ProductReleaseDetail,
     ReleaseAccessChannel,
     ReleaseAvailabilityState,
     ReleaseMaturity,
@@ -51,9 +51,9 @@ class ClaimDecision:
 
 
 @dataclass(frozen=True, kw_only=True)
-class ModelReleaseInput:
+class ProductReleaseInput:
     observed_name: str
-    native_identifier: str
+    native_identifier: str | None = None
     product_key: UUID | None = None
     version_label: str | None = None
     variant: str | None = None
@@ -265,7 +265,7 @@ def complete_review(
     actor: str,
     reason: str,
     claims: list[ClaimDecision],
-    model_release: ModelReleaseInput | None = None,
+    product_release: ProductReleaseInput | None = None,
     personnel_change: PersonnelChangeInput | None = None,
     significance_score: Decimal | None = None,
     ranking_method: str = "",
@@ -284,15 +284,15 @@ def complete_review(
         raise ValueError("A claim may occur only once in a review")
     if (significance_score is None) != (not ranking_method):
         raise ValueError("A ranking score requires its ranking method")
-    if event.event_kind_reference.code == "model_release":
+    if event.event_kind_reference.code == "product_release":
         if (
-            not isinstance(model_release, ModelReleaseInput)
+            not isinstance(product_release, ProductReleaseInput)
             or personnel_change is not None
         ):
             raise ValueError("Model release kind requires only model details")
     elif (
         not isinstance(personnel_change, PersonnelChangeInput)
-        or model_release is not None
+        or product_release is not None
     ):
         raise ValueError("Personnel kind requires only personnel details")
     decisions = sorted((asdict(c) for c in claims), key=lambda c: str(c["claim_id"]))
@@ -312,7 +312,7 @@ def complete_review(
             "event-dossier-review-v1",
             decision,
             decisions,
-            asdict(model_release) if model_release else None,
+            asdict(product_release) if product_release else None,
             asdict(personnel_change) if personnel_change else None,
             reviewed_at,
         ]
@@ -366,8 +366,8 @@ def complete_review(
                 reason=item.reason,
             )
         )
-    if model_release:
-        detail = asdict(model_release)
+    if product_release:
+        detail = asdict(product_release)
         detail["product_id"] = detail.pop("product_key")
         detail["release_maturity_reference"] = ReleaseMaturity.objects.get(
             code=detail.pop("release_channel")
@@ -375,7 +375,7 @@ def complete_review(
         detail["release_availability_reference"] = ReleaseAvailabilityState.objects.get(
             code=detail.pop("availability_state")
         )
-        _insert(ModelReleaseDetail(review=saved, **detail))
+        _insert(ProductReleaseDetail(review=saved, **detail))
     else:
         detail = asdict(personnel_change)
         detail["change_type_reference"] = PersonnelChangeType.objects.get(
@@ -427,6 +427,7 @@ def _personnel_columns(row):
 
 def _claim_columns(row):
     result = _columns(row)
+    result.pop("source_archive_id", None)
     result.pop("claim_kind_id")
     result["claim_kind"] = row.claim_kind_reference.code
     result.pop("event_timezone_id")
@@ -438,7 +439,34 @@ def _claim_columns(row):
         row.release_access_channel_reference.code
         if row.release_access_channel_reference_id else None
     )
+    result.pop("release_maturity_id")
+    result["release_maturity"] = (
+        row.release_maturity_reference.code
+        if row.release_maturity_reference_id else None
+    )
     return result
+
+
+def read_current_evidence(dossier_id) -> dict:
+    """Read pending or newer saved claims without inventing a completed review."""
+    event = EventDossier.objects.select_related("event_kind_reference").get(pk=dossier_id)
+    dossier = _columns(event)
+    dossier.pop("event_kind_id")
+    dossier["event_kind"] = event.event_kind_reference.code
+    claims = list(
+        EventDossierClaim.objects.filter(event_dossier_source__event_dossier=event)
+        .select_related(
+            "claim_kind_reference", "event_timezone_reference",
+            "release_access_channel_reference", "release_maturity_reference",
+        ).order_by("recorded_at", "id")
+    )
+    sources = list(event.sources.order_by("id"))
+    return {
+        "dossier": dossier,
+        "current_review_id": str(event.current_review_id) if event.current_review_id else None,
+        "claims": [_claim_columns(claim) for claim in claims],
+        "sources": [_columns(source) for source in sources],
+    }
 
 
 def read_dossier(dossier_id, *, review_id=None) -> dict:
@@ -458,13 +486,14 @@ def read_dossier(dossier_id, *, review_id=None) -> dict:
             "review": None,
             "claims": [],
             "sources": [],
-            "model_release": None,
+            "product_release": None,
             "personnel_change": None,
         }
     saved = event.reviews.get(pk=selected_id)
     decisions = saved.claim_decisions.select_related(
         "claim__event_dossier_source", "claim__claim_kind_reference",
         "claim__event_timezone_reference", "claim__release_access_channel_reference",
+        "claim__release_maturity_reference",
     ).order_by("claim_id")
     claims, sources = [], {}
     for decision in decisions:
@@ -482,6 +511,6 @@ def read_dossier(dossier_id, *, review_id=None) -> dict:
         "review": _columns(saved),
         "claims": claims,
         "sources": [sources[key] for key in sorted(sources)],
-        "model_release": _release_columns(getattr(saved, "model_release", None)),
+        "product_release": _release_columns(getattr(saved, "product_release", None)),
         "personnel_change": _personnel_columns(getattr(saved, "personnel_change", None)),
     }
