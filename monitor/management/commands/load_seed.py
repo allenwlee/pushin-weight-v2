@@ -24,6 +24,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
+from core.brand_presentation import BRAND_ACCENT_COLORS, META_BRAND_NAMES
 from core.company_labels import set_company_label
 from core.geolocation_resolution import resolve_geolocation
 from core.models import Account, Brand, BrandAccount, BrandCompany, Company, Role
@@ -71,7 +72,7 @@ BRAND_DISPLAY: dict[str, str] = {
     "stepfun":       "StepFun",
     "ernie":         "ERNIE",
     "hunyuan":       "Hunyuan",
-    "llama":         "Llama",
+    "llama":         "Meta",
     "nemo_megatron": "NeMo / Megatron",
     "doubao":        "Doubao",
     "yi":            "Yi",
@@ -269,10 +270,12 @@ class Command(BaseCommand):
                         f"display_name={display_name})"
                     )
                 else:
-                    Brand.objects.update_or_create(
-                        nickname=brand_nickname,
-                        defaults={"display_name": display_name, "is_sentinel": False},
-                    )
+                    defaults = {"display_name": display_name, "is_sentinel": False}
+                    if brand_nickname in BRAND_ACCENT_COLORS:
+                        defaults["accent_color"] = BRAND_ACCENT_COLORS[brand_nickname]
+                    if brand_nickname == "llama":
+                        defaults.update(META_BRAND_NAMES)
+                    Brand.objects.update_or_create(nickname=brand_nickname, defaults=defaults)
                 stats["brands"] += 1
 
                 # Upsert company (only once per unique company)

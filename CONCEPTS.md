@@ -211,6 +211,16 @@ The codes partition into three shapes by intent: `A` is a curated-list pull, the
 
 *Avoid:* query id, query_id — these were the legacy names that carried `Q`-string ids before the planner adopted the current short-code scheme.
 
+### Meta brand identity
+
+Meta uses the retained internal brand key `llama`, linked to company `meta`.
+Its visible name is Meta; the key covers Llama and Muse product families.
+Hugging Face publishers remain distinct account identities linked to the same
+company, including `meta-llama` and `meta-models`. Product and repository names
+retain their own identities. The `apply_homepage_brand_updates` command previews
+curated names, recognition aliases, publisher ownership and colors; `--commit`
+applies those data changes without importing models or calling providers.
+
 ### Brand keyword
 
 A token (or token OR-chain) associated with a single brand, used by the pipeline's keyword index to match candidate posts. Each brand has one primary keyword chain used by default, and may carry additional non-primary chains.
