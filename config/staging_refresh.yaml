@@ -208,6 +208,8 @@ relations:
     - untracked_brand_promotion_keys
     - untracked_brand_promotion_labels
   excluded_tables:
+    # Spending allowances are provisioned separately in each environment.
+    - enrichment_budget_windows
     # Scope links cannot be copied when their rare-hit inbox parent is excluded.
     - collection_scope_rare_hits
     # Publication state is valid only for the local materialized view.
@@ -281,6 +283,7 @@ relations:
     - twitter_list_memberships
     - twitter_list_sync_state
   optional_source_tables:
+    - enrichment_budget_windows
     # Pre-0132 snapshots lack the shared job vocabulary and assignments.
     - currencies
     - salary_periods
@@ -726,6 +729,7 @@ relations:
 
 scrub:
   truncate_tables:
+    - enrichment_budget_windows
     - collection_scope_rare_hits
     - materialization_state
     - provider_batches
