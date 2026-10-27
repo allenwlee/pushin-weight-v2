@@ -31,6 +31,8 @@ SOURCE_COLUMNS = {
     "account_based_in_mappings": {"country_code", "region_key"},
 }
 CATALOGUES = frozenset({"geolocations", "geolocation_alternate_names", "geolocation_policies", "django_migrations"})
+# Spending authority belongs to owner-connected enrichment processes, never web.
+OWNER_ONLY_TABLES = frozenset({"enrichment_budget_windows"})
 SERVING_VIEWS = frozenset({
     "trend_narrative_versions", "brand_trend_narratives", "editorial_pictures",
     "trend_narrative_provider_calls", "trend_narrative_runs", "trend_narrative_visible_runs",
@@ -69,6 +71,7 @@ def verify_serving_access(connection, *, schema="public"):
         cursor.execute("SELECT has_schema_privilege(current_user,%s,'CREATE')", [schema])
         if cursor.fetchone()[0]:
             raise ValueError("Web database login has schema creation privileges")
+        verify_owner_only_tables(cursor, role, schema=schema)
         for table, columns in SOURCE_COLUMNS.items():
             cursor.execute("""SELECT a.attname FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
                 JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=%s AND c.relname=%s
@@ -79,12 +82,26 @@ def verify_serving_access(connection, *, schema="public"):
     return role
 
 
+def verify_owner_only_tables(cursor, role, *, schema):
+    """Also reject privileges inherited through PUBLIC or column-only grants."""
+    cursor.execute("""SELECT c.relname FROM pg_class c
+        JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname=%s AND c.relname=ANY(%s) AND (
+            has_table_privilege(%s,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+            OR has_any_column_privilege(%s,c.oid,'SELECT,INSERT,UPDATE,REFERENCES'))
+        LIMIT 1""", [schema, list(OWNER_ONLY_TABLES), role, role])
+    found = cursor.fetchone()
+    if found:
+        raise ValueError("Serving login has access to owner-only table: " + found[0])
+
+
 def canonical_serving_columns():
     columns = {
         model._meta.db_table: {field.column for field in model._meta.local_concrete_fields}
         - SOURCE_COLUMNS.get(model._meta.db_table, set())
         for model in apps.get_models(include_auto_created=True)
         if model._meta.managed and not model._meta.proxy
+        and model._meta.db_table not in OWNER_ONLY_TABLES
     }
     columns["django_migrations"] = {"id", "app", "name", "applied"}
     return columns
@@ -163,7 +180,8 @@ def apply_serving_grants(connection, role, *, schema="public"):
                     JOIN pg_class origin ON origin.oid=d.refobjid
                     JOIN pg_attribute a ON a.attrelid=origin.oid AND a.attnum=d.refobjsubid
                     WHERE r.ev_class=%s::regclass AND d.refobjsubid>0""", [f'{schema}.{table}'])
-                if any(column in SOURCE_COLUMNS.get(origin, ()) for origin, column in cursor.fetchall()):
+                if any(origin in OWNER_ONLY_TABLES or column in SOURCE_COLUMNS.get(origin, ())
+                       for origin, column in cursor.fetchall()):
                     raise ValueError("Serving view exposes source evidence: " + table)
                 cursor.execute(sql.SQL("GRANT SELECT ON {} TO {}").format(relation, identifier))
                 continue
@@ -181,6 +199,7 @@ def apply_serving_grants(connection, role, *, schema="public"):
             if table not in SOURCE_COLUMNS and table not in CATALOGUES:
                 cursor.execute(sql.SQL("GRANT DELETE ON {} TO {}").format(relation, identifier))
         cursor.execute(sql.SQL("GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA {} TO {}").format(namespace, identifier))
+        verify_owner_only_tables(cursor, role, schema=schema)
         for table, _kind, columns in relations:
             for column in SOURCE_COLUMNS.get(table, set()).intersection(columns):
                 cursor.execute("SELECT has_column_privilege(%s,%s,%s,'SELECT')", [role, f'{schema}.{table}', column])
