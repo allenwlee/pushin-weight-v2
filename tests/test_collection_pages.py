@@ -6,13 +6,12 @@ from types import SimpleNamespace
 import pytest
 from django.db import IntegrityError, transaction
 
+from core.collection_capture import archive_legacy, read_document
 from core.collection_pages import (
-    adopt_unprojected_page_receipts,
     append_page_receipt,
     copy_continuation_scopes,
-    page_receipt_parity_batch,
     page_receipts,
-    project_page_receipts_batch,
+    project_page_receipts,
 )
 from core.collection_state import claim_job, import_scope_checkpoints
 from core.models import (
@@ -29,11 +28,13 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 
 
 @pytest.fixture
-def scope():
+def scope(request):
+    if "migration_rehearsal_schema" in request.fixturenames:
+        request.getfixturevalue("migration_rehearsal_schema")
     job = ready_job()
-    claim = claim_job(job.pk, invocation_id="typed-page-fixture", manual_authorized=True)
+    claim = claim_job(job.pk, invocation_id="typed-page-fixture", manual_authorized=True, typed=True)
     import_scope_checkpoints(claim, definition_sha256=job.definition_sha256,
-                             scopes=job.scope["units"], provenance={"format": "fixture"})
+                             scopes=job.scope["units"], provenance={"format": "fixture"}, typed=True)
     return CollectionScopeRun.objects.get(run_id=claim.run_id, scope_kind="x_query")
 
 
@@ -56,8 +57,8 @@ def test_ordered_grouped_checkpoint_preserves_duplicates_and_null_vs_empty_ids(s
     child = append_page_receipt(scope, envelope, cursor="known-checkpoint")
     assert child.pages_received == 3 and child.cursor == "known-checkpoint"
     assert CollectionRequest.objects.count() == 0
-    scope.envelopes = [{"deliberately": "unusable legacy state"}]
-    scope.save(update_fields=["envelopes"])
+    scope.legacy_archive = archive_legacy({"envelopes": [{"deliberately": "unusable legacy state"}]})
+    scope.save(update_fields=["legacy_archive"])
     restored = page_receipts(scope)[0]
     for key, value in envelope.items():
         assert restored[key] == value
@@ -73,14 +74,14 @@ def test_page_checkpoint_uses_typed_prefix_with_unusable_retired_payload(failed)
     from monitor.backfill_collection import PageCheckpoint
 
     job = ready_job()
-    claim = claim_job(job.pk, invocation_id="typed-checkpoint-call", manual_authorized=True)
+    claim = claim_job(job.pk, invocation_id="typed-checkpoint-call", manual_authorized=True, typed=True)
     import_scope_checkpoints(claim, definition_sha256=job.definition_sha256,
-                             scopes=job.scope["units"], provenance={"format": "fixture"})
+                             scopes=job.scope["units"], provenance={"format": "fixture"}, typed=True)
     scope = CollectionScopeRun.objects.get(run_id=claim.run_id, scope_kind="x_query")
     append_page_receipt(scope, {"post_ids": [], "raw_count": 0, "received_post_ids": []})
     retired = [{"deliberately": "unusable retired receipt"}]
-    scope.envelopes = retired
-    scope.save(update_fields=["envelopes"])
+    scope.legacy_archive = archive_legacy({"envelopes": retired})
+    scope.save(update_fields=["legacy_archive"])
     budget = SimpleNamespace(snapshot=lambda: {"api_responses": [{"raw_results": 0}]})
     checkpoint = PageCheckpoint(claim, scope, budget)
     if failed:
@@ -91,25 +92,26 @@ def test_page_checkpoint_uses_typed_prefix_with_unusable_retired_payload(failed)
         }}]})
     scope.refresh_from_db()
     receipts = page_receipts(scope)
-    assert scope.envelopes == retired
+    assert read_document(scope.legacy_archive)["envelopes"] == retired
     assert len(receipts) == 2 and receipts[0]["raw_count"] == 0
     assert receipts[-1]["pages_received"] == (0 if failed else 1)
     assert scope.enumeration_complete is not failed
 
 
 def test_unknown_old_timestamp_and_empty_page_remain_distinct(scope):
-    scope.envelopes = [{"post_ids": [], "collection_drained": True}]
-    scope.save(update_fields=["envelopes"])
-    assert project_page_receipts_batch(after_id=scope.pk - 1).inserted == 1
-    assert project_page_receipts_batch(after_id=scope.pk - 1).inserted == 0
-    assert page_receipt_parity_batch(after_id=scope.pk - 1).mismatched == 0
+    envelopes = [{"post_ids": [], "collection_drained": True}]
+    project_page_receipts(scope, envelopes)
+    original = list(scope.child_scopes.values_list("pk", flat=True))
+    project_page_receipts(scope, envelopes)
+    assert list(scope.child_scopes.values_list("pk", flat=True)) == original
     append_page_receipt(scope, {"post_ids": [], "received_post_ids": [], "raw_count": 0,
                                "pages_received": 1, "collection_drained": True})
     old, empty = page_receipts(scope)
     assert "observed_at" not in old and "raw_count" not in old and "received_post_ids" not in old
     assert empty["raw_count"] == 0 and empty["received_post_ids"] == []
     assert scope.child_scopes.count() == 2 and not CollectionRequest.objects.exists()
-    assert page_receipt_parity_batch(after_id=scope.pk - 1).mismatched == 1
+    with pytest.raises(ValueError, match="exceed the supplied checkpoint"):
+        project_page_receipts(scope, envelopes)
 
 
 def test_legacy_migration_adoption_preserves_membership_set_and_exact_archive_sequence(scope):
@@ -120,11 +122,11 @@ def test_legacy_migration_adoption_preserves_membership_set_and_exact_archive_se
     with transaction.atomic():
         record_post_membership(scope.run, scope, ["a", "b"])
     envelope = {"post_ids": ["b", "a", "b"], "collection_drained": True}
-    scope.envelopes = [envelope]
-    scope.legacy_archive = archive_legacy({"envelopes": [envelope], "ownership": scope.ownership})
-    scope.save(update_fields=["envelopes", "legacy_archive"])
+    scope.legacy_archive = archive_legacy({"envelopes": [envelope], "ownership": {}})
+    scope.save(update_fields=["legacy_archive"])
     with transaction.atomic():
-        adopt_unprojected_page_receipts(scope)
+        project_page_receipts(scope, read_document(scope.legacy_archive)["envelopes"],
+                              legacy_archive=scope.legacy_archive)
     child = scope.child_scopes.get()
     assert child.legacy_archive_id == scope.legacy_archive_id
     assert read_document(child.legacy_archive)["envelopes"][0]["post_ids"] == ["b", "a", "b"]
@@ -132,12 +134,12 @@ def test_legacy_migration_adoption_preserves_membership_set_and_exact_archive_se
 
 
 def test_unresolved_legacy_membership_fails_before_replacing_old_envelopes(scope):
-    scope.envelopes = [{"post_ids": ["missing"]}]
-    scope.save(update_fields=["envelopes"])
+    scope.legacy_archive = archive_legacy({"envelopes": [{"post_ids": ["missing"]}]})
+    scope.save(update_fields=["legacy_archive"])
     with pytest.raises(ValueError, match="membership is missing"), transaction.atomic():
-        adopt_unprojected_page_receipts(scope)
+        project_page_receipts(scope, read_document(scope.legacy_archive)["envelopes"])
     scope.refresh_from_db()
-    assert scope.envelopes == [{"post_ids": ["missing"]}]
+    assert read_document(scope.legacy_archive)["envelopes"] == [{"post_ids": ["missing"]}]
     assert not scope.child_scopes.exists()
 
 
@@ -145,38 +147,36 @@ def test_historical_page_can_reference_post_credited_to_another_query(scope):
     Post.objects.create(tweet_id="shared-query-post", text="captured")
     other = CollectionScopeRun.objects.create(
         run=scope.run, scope_kind="x_query", scope_key="other-query",
-        ownership=scope.ownership,
     )
     with transaction.atomic():
         record_post_membership(scope.run, other, ["shared-query-post"])
-    scope.envelopes = [{"post_ids": ["shared-query-post"], "collection_drained": True}]
-    scope.save(update_fields=["envelopes"])
-    result = project_page_receipts_batch(after_id=scope.pk - 1, batch_size=1)
-    assert result.scanned == result.inserted == 1
-    assert page_receipt_parity_batch(after_id=scope.pk - 1, batch_size=1).mismatched == 0
+    project_page_receipts(scope, [{"post_ids": ["shared-query-post"], "collection_drained": True}])
+    assert scope.child_scopes.count() == 1
+    assert page_receipts(scope)[0]["post_ids"] == ["shared-query-post"]
     marker = scope.child_scopes.get(scope_kind="x_page_checkpoint").observations.get(
         observation_kind="x_page_checkpoint",
     )
     assert marker.inputs.get(input_role="retained_post").input_observation.scope_run_id == other.pk
 
 
-def test_migration_adoption_rejects_changed_or_extra_typed_receipts_but_allows_cleared_json(scope):
+def test_supplied_checkpoint_rejects_changed_or_extra_typed_receipts(scope):
     envelope = {"post_ids": [], "received_post_ids": [], "raw_count": 0, "collection_drained": False}
     child = append_page_receipt(scope, envelope)
-    scope.envelopes = [envelope]
     CollectionScopeRun.objects.filter(pk=child.pk).update(enumeration_complete=True)
     with pytest.raises(ValueError, match="differs from its saved checkpoint"):
-        adopt_unprojected_page_receipts(scope)
+        project_page_receipts(scope, [envelope])
     CollectionScopeRun.objects.filter(pk=child.pk).update(enumeration_complete=False)
     append_page_receipt(scope, envelope)
     with pytest.raises(ValueError, match="exceed the supplied checkpoint"):
-        adopt_unprojected_page_receipts(scope)
-    scope.envelopes = []
-    adopt_unprojected_page_receipts(scope)
+        project_page_receipts(scope, [envelope])
+    # Typed readers need no legacy archive after successful projection.
+    assert scope.legacy_archive_id is None
     assert len(page_receipts(scope)) == 2
 
 
-def test_retiring_column_archive_sweeps_preserve_typed_page_source_archive(scope):
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0200_merge_rg6_enrichment_budget_contract")], indirect=True)
+def test_retiring_column_archive_sweeps_preserve_typed_page_source_archive(migration_rehearsal_schema, scope):
+    # This one-time copier proof belongs to the pre-DROP physical schema.
     from core.collection_storage_migration import (
         archive_legacy_batch,
         stale_legacy_archive_count,
@@ -201,8 +201,12 @@ def test_retiring_column_archive_sweeps_preserve_typed_page_source_archive(scope
     assert not child.observations.exclude(pk=marker.pk).filter(legacy_archive__isnull=False).exists()
 
 
-def test_continuation_copies_typed_receipts_and_remaps_sibling_scopes(scope):
-    from core.collection_capture import archive_legacy
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0200_merge_rg6_enrichment_budget_contract")], indirect=True)
+def test_continuation_copies_typed_receipts_and_remaps_sibling_scopes(migration_rehearsal_schema, scope):
+    from tests.test_rg6_retirement import authorization, retire
+
+    with authorization():
+        retire()  # Physical absence in the isolated schema, never public.
 
     observed = datetime(2026, 8, 9, 0, 1, tzinfo=UTC).isoformat()
     request = CollectionRequest.objects.create(
@@ -216,12 +220,13 @@ def test_continuation_copies_typed_receipts_and_remaps_sibling_scopes(scope):
                                "exclusions": [{"appearance": i, "post_id": None, "reason": "missing_native_id"}
                                               for i in range(2)], "collection_drained": False}, cursor="next")
     numeric_parent = CollectionScopeRun.objects.create(run=scope.run, scope_kind="numeric_projection",
-                                                       scope_key="projection", ownership={})
+                                                       scope_key="projection")
     resource = scope.child_scopes.get().observations.get(observation_kind="x_page_checkpoint")
     CollectionScopeRun.objects.create(run=scope.run, scope_kind="projection_input", scope_key="input",
                                       parent_scope=numeric_parent, prerequisite_scope=scope,
-                                      resource_observation=resource, ownership={})
-    CollectionScopeRun.objects.filter(run=scope.run).update(envelopes=[{"deliberately": "unusable retired receipt"}])
+                                      resource_observation=resource)
+    retired = archive_legacy({"envelopes": [{"deliberately": "unusable retired receipt"}]})
+    CollectionScopeRun.objects.filter(run=scope.run, scope_kind="x_query").update(legacy_archive=retired)
     previous = scope.run
     run = CollectionRun.objects.get(pk=previous.pk)
     run.pk = None
@@ -232,7 +237,7 @@ def test_continuation_copies_typed_receipts_and_remaps_sibling_scopes(scope):
     with transaction.atomic():
         copy_continuation_scopes(previous, run)
     copied = run.scopes.get(scope_kind="x_query")
-    assert copied.envelopes == []
+    assert not hasattr(copied, "envelopes")
     assert page_receipts(copied) == page_receipts(scope)
     assert copied.child_scopes.get().cursor == "next"
     input_scope = run.scopes.get(scope_kind="projection_input")

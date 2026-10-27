@@ -3,8 +3,9 @@
 The 17 one-time copier test functions (21 cases) live in immutable pre-detachment
 commit 8785ea769c14b19e574f8197499e34f6bdf8850f, where their historical-schema
 checks were run before detachment. They cover the retired conversion, not the
-current runtime. Keep that evidence scoped to its revision; tests here require
-the detached ORM and do not restore the removed fields or run historical copiers.
+current runtime. Keep that evidence scoped to its revision. Current tests require
+the detached ORM; the later NULL-phase archive regression explicitly rehearses
+its one-time copier in an isolated pre-DROP schema.
 """
 
 import hashlib
@@ -44,7 +45,8 @@ def execution(*, purpose="catalog"):
     return run, run.attempts.get(), scope
 
 
-def test_archive_sweep_includes_null_phase_legacy_scope_beside_typed_scope():
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0200_merge_rg6_enrichment_budget_contract")], indirect=True)
+def test_archive_sweep_includes_null_phase_legacy_scope_beside_typed_scope(migration_rehearsal_schema):
     from core.collection_storage_migration import archive_legacy_batch
 
     run, _, legacy = execution()

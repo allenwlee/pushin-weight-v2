@@ -540,7 +540,8 @@ def test_each_selected_model_has_a_durable_source_gap_without_synthetic_values()
     assert MetricValue.objects.count() == 0
 
 
-def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time():
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0200_merge_rg6_enrichment_budget_contract")], indirect=True)
+def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time(migration_rehearsal_schema):
     contract = configured()
     source = DataSource.objects.get(pk="hf")
     source.enabled, source.adapter_key = True, "hf-engagement-v1"
@@ -574,7 +575,7 @@ def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time
         },
     )
     set_job_state(obj.pk, "ready")
-    claim = claim_job(obj.pk)
+    claim = claim_job(obj.pk, typed=True)
     imported = import_selected_history(claim, manifest(contract))
     assert imported.purpose == "metric" and imported.contract_id == contract.pk
     assert imported.observations.count() == 2 and MetricValue.objects.count() == 4
@@ -594,37 +595,47 @@ def test_reviewed_archive_import_retains_sparse_snapshots_and_reported_flow_time
     )
     assert imported_scope.result_run_id == imported.pk
     assert imported_scope.phase == "typed-archive-import-v1"
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+
     from core.collection_storage_migration import project_archive_import_links_batch
     from core.measurement_taxonomy import digest
+    from tests.collection_fixtures import historical_fixture_models
 
-    historical_manifest = manifest(contract)
-    CollectionScopeRun.objects.filter(pk=imported_scope.pk).update(
-        result_run=None, phase=None,
-        ownership={
-            "dataset_id": historical_manifest["dataset_id"],
-            "contract_id": str(contract.pk),
-        },
-        envelopes=[{
-            "selected_manifest_sha256": digest(historical_manifest),
-            "numeric_run_id": str(imported.pk),
-        }],
-    )
-    CollectionRun.objects.filter(pk=claim.run_id).update(
-        report={"numeric_run_ids": [str(imported.pk)]},
-    )
-    with pytest.raises(ValueError, match="result link is missing"):
-        project_archive_import_links_batch(
-            after_id=imported_scope.pk - 1, batch_size=1, verify_only=True,
+    # The one-time copier needs its original ORM fields. Its isolated 0200
+    # physical schema retains them; only this subsection binds the 0195 models.
+    historical = MigrationExecutor(connection).loader.project_state([
+        ("core", "0195_rg6_archive_import_scope_guard"),
+    ]).apps
+    with historical_fixture_models(historical):
+        historical_manifest = manifest(contract)
+        CollectionScopeRun.objects.filter(pk=imported_scope.pk).update(
+            result_run=None, phase=None,
+            ownership={
+                "dataset_id": historical_manifest["dataset_id"],
+                "contract_id": str(contract.pk),
+            },
+            envelopes=[{
+                "selected_manifest_sha256": digest(historical_manifest),
+                "numeric_run_id": str(imported.pk),
+            }],
         )
-    copied = project_archive_import_links_batch(
-        after_id=imported_scope.pk - 1, batch_size=1,
-    )
-    assert (copied.scanned, copied.updated) == (1, 1)
-    assert project_archive_import_links_batch(
-        after_id=imported_scope.pk - 1, batch_size=1, verify_only=True,
-    ).updated == 0
-    imported_scope.refresh_from_db()
-    assert imported_scope.result_run_id == imported.pk
+        CollectionRun.objects.filter(pk=claim.run_id).update(
+            report={"numeric_run_ids": [str(imported.pk)]},
+        )
+        with pytest.raises(ValueError, match="result link is missing"):
+            project_archive_import_links_batch(
+                after_id=imported_scope.pk - 1, batch_size=1, verify_only=True,
+            )
+        copied = project_archive_import_links_batch(
+            after_id=imported_scope.pk - 1, batch_size=1,
+        )
+        assert (copied.scanned, copied.updated) == (1, 1)
+        assert project_archive_import_links_batch(
+            after_id=imported_scope.pk - 1, batch_size=1, verify_only=True,
+        ).updated == 0
+        imported_scope.refresh_from_db()
+        assert imported_scope.result_run_id == imported.pk
 
 
 def test_shared_openrouter_window_is_fetched_once_and_other_never_fills_missing_model():

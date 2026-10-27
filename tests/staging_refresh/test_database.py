@@ -730,13 +730,15 @@ def test_shared_collection_scrub_preserves_numeric_evidence():
 
     numeric = persist_source(configured(), "hf", "9" * 64, payload())
     value_ids = list(MetricValue.objects.values_list("pk", flat=True))
+    numeric_scopes = set(numeric.scopes.values_list("pk", flat=True))
+    assert numeric_scopes
     catalog = CollectionRun.objects.create(
         job=evidence_job(source_id="hf", purpose="catalog"),
         ingestion_key="8" * 64,
         status="pending",
     )
     scope = CollectionScopeRun.objects.create(
-        run=catalog, scope_key="publisher", ownership={}
+        run=catalog, scope_key="publisher"
     )
     CollectionObservation.objects.create(
         run=catalog,
@@ -759,7 +761,8 @@ def test_shared_collection_scrub_preserves_numeric_evidence():
         scrub_candidate_data(cursor, policy)
     assert CollectionRun.objects.filter(pk=numeric.pk).exists()
     assert not CollectionRun.objects.filter(job__purpose="catalog").exists()
-    assert not CollectionScopeRun.objects.exists()
+    assert set(CollectionScopeRun.objects.values_list("pk", flat=True)) == numeric_scopes
+    assert not CollectionScopeRun.objects.filter(run=catalog).exists()
     assert list(MetricValue.objects.values_list("pk", flat=True)) == value_ids
 
 

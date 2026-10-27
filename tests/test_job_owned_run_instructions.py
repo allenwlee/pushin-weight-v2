@@ -201,9 +201,15 @@ def test_legacy_updates_cannot_change_instruction_copies(column, value):
     assert run.scope == {"retained": [False, 0]}
 
 
-def test_compatibility_views_keep_old_order_and_base_columns_writable():
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0200_merge_rg6_enrichment_budget_contract")], indirect=True)
+@pytest.mark.parametrize("retired", [False, True])
+def test_compatibility_views_keep_order_and_retained_columns_writable(migration_rehearsal_schema, retired):
     from core.benchmark_metric_store import persist_source
 
+    if retired:
+        from tests.test_rg6_retirement import retire
+
+        retire()  # Empty isolated schema; public remains at0200.
     run = persist_source(configured(), "hf", "a" * 64, payload())
     expected = [
         "id",
@@ -232,17 +238,23 @@ def test_compatibility_views_keep_old_order_and_base_columns_writable():
         "report",
         "updated_at",
     ]
+    if retired:
+        expected = [column for column in expected if column not in {
+            "request_params", "source_metadata", "raw_payload", "invocations", "report",
+        }]
     with connection.cursor() as cursor:
         cursor.execute("SELECT * FROM metric_collection_runs WHERE id = %s", [run.pk])
         assert [column.name for column in cursor.description] == expected
         cursor.execute(
-            "UPDATE metric_collection_runs SET report = %s WHERE id = %s",
-            ['{"view": true}', run.pk],
+            "UPDATE metric_collection_runs SET error_code = %s WHERE id = %s"
+            if retired else "UPDATE metric_collection_runs SET report = %s WHERE id = %s",
+            ["compatibility_test" if retired else '{"view": true}', run.pk],
         )
         assert cursor.rowcount == 1
         cursor.execute(
-            "UPDATE metric_observations SET source_metadata = %s WHERE run_id = %s",
-            ['{"view": true}', run.pk],
+            "UPDATE metric_observations SET processing_outcome = %s WHERE run_id = %s"
+            if retired else "UPDATE metric_observations SET source_metadata = %s WHERE run_id = %s",
+            ["compatibility_test" if retired else '{"view": true}', run.pk],
         )
         assert cursor.rowcount == 1
         cursor.execute("""
@@ -266,7 +278,13 @@ def test_compatibility_views_keep_old_order_and_base_columns_writable():
                 [run.pk],
             )
     run.refresh_from_db()
-    assert run.report == {"view": True}
+    if retired:
+        assert run.error_code == "compatibility_test"
+        assert run.observations.get().processing_outcome == "compatibility_test"
+    else:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT report->>'view' FROM collection_runs WHERE id=%s", [run.pk])
+            assert cursor.fetchone() == ("true",)
 
 
 def test_stale_direct_object_cannot_replace_a_new_job_identity():

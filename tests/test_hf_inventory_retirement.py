@@ -132,7 +132,9 @@ def test_historical_listing_resume_uses_archived_object_without_provider_refetch
         assert run_report_document(resumed)["total_committed_items"] == 2
 
 
-def test_archive_sweep_preserves_typed_inventory_evidence_and_copies_legacy_neighbor(capture_only):
+@pytest.mark.parametrize("migration_rehearsal_schema", [("core", "0200_merge_rg6_enrichment_budget_contract")], indirect=True)
+def test_archive_sweep_preserves_typed_inventory_evidence_and_copies_legacy_neighbor(migration_rehearsal_schema, capture_only):
+    # Keep the one-time copier proof on its pre-DROP physical schema.
     from core.collection_storage_migration import (
         archive_legacy_batch,
         stale_legacy_archive_count,
