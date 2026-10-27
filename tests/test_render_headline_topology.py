@@ -134,7 +134,9 @@ def test_enrichment_worker_has_one_process_and_no_collection_credentials():
         assert worker["numInstances"] == 1
         assert worker["maxShutdownDelaySeconds"] == 120
         assert worker["startCommand"] == "python manage.py run_enrichment_worker --json"
-        assert environment["X_MONITOR_ENRICHMENT_PROVIDER_CALLS_ACTIVE"]["value"] == "False"
+        assert environment["X_MONITOR_ENRICHMENT_PROVIDER_CALLS_ACTIVE"] == {
+            "key": "X_MONITOR_ENRICHMENT_PROVIDER_CALLS_ACTIVE", "sync": False,
+        }
         assert "schedule" not in worker
         assert not {"TWITTERAPI_IO_SCHEDULED_API_KEY", "TWITTERAPI_IO_ON_DEMAND_API_KEY", "CELERY_BROKER_URL"} & set(environment)
 
@@ -189,6 +191,20 @@ def test_enrichment_workers_preserve_production_processing_configuration(monkeyp
     harvest = effective("render.yaml", "pushinweight-harvest")
     for path, name in [("render.yaml", "pushinweight-enrichment"), ("render-staging.yaml", "pushinweight-staging-enrichment")]:
         worker = effective(path, name)
+        assert worker.harvest.enrichment.provider_calls_active is False
         assert worker.llm == harvest.llm
         assert worker.targeted_extraction == harvest.targeted_extraction
         assert worker.discovery.rare_types == harvest.discovery.rare_types
+
+
+def test_enrichment_activation_survives_later_blueprint_sync(monkeypatch):
+    from x_monitor.config import load_config
+
+    for filename, name in [("render.yaml", "pushinweight-enrichment"), ("render-staging.yaml", "pushinweight-staging-enrichment")]:
+        service = next(row for row in yaml.safe_load(Path(filename).read_text())["services"] if row["name"] == name)
+        with monkeypatch.context() as env:
+            env.setenv("X_MONITOR_ENRICHMENT_PROVIDER_CALLS_ACTIVE", "True")
+            for row in service["envVars"]:
+                if "value" in row:
+                    env.setenv(row["key"], str(row["value"]))
+            assert load_config(Path("config.yaml")).harvest.enrichment.provider_calls_active is True

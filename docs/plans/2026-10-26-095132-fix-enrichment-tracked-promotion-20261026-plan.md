@@ -368,6 +368,10 @@ Browser scope is backend-only: no route, template, static asset, or browser inte
 
 ## Verification Contract
 
+### Activation persistence correction, October27 10:23JST
+
+Production e3624624/schema0199 deployed with the worker still idle. Before paid activation, identified that the Blueprint's hard-coded callsFalse would overwrite manual activation on subsequent syncs. Change only that variable to sync:false in both Blueprints; config.yaml retains the false default for new environments, and an explicit operator value survives future syncs. This matches [Render's documented existing-Blueprint behavior](https://render.com/docs/blueprint-spec#prompting-for-secret-values). Reproduced the old declaration resetting True to False and added a real load_config/Blueprint regression for retained activation plus default-idle coverage. All44 topology/Ollija checks pass, zero skips/errors; no database test is invalidated by this declaration-only change. Reuse all processing/pilot/schema evidence unchanged; stage and promote this configuration-only correction before activation. Owner also explicitly confirmed both field corrections in G2 (yes to both); no schema approval remains outstanding.
+
 ### Six-slot screen and forward schema correction, October27 10:06JST
 
 Post-correction verification:54 focused PostgreSQL tests passed, zero skips/errors, covering budget reservations/denials, invalid kind/fingerprint bulk writes and updates, restricted serving login/page reads, and exact recovery behavior. Core models match the complete migration state with no pending core changes. Shared local0199/0200 advancement was explicit and coordinated;0199 hash `686f6221d957fd8d0fef02b3f91dc7d8f6eb6ba76e3ac2f3e230bc2ad0f1a84e`. The existing third-party model-state drift is outside this core schema correction.
