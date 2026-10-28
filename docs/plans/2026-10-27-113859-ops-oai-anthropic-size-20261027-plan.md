@@ -60,6 +60,11 @@ Target is not authorized until the owner selects it. Wait for a later explicit r
 - 2026-10-28: the owner invoked `/lfg` on this plan. That run's endpoint is an open pull request with CI decided; it does not include a merge, staging or production delivery.
   - The paid launch (U9 from the owner "go" onward) and U10 still wait for the owner's go after the preflight report.
   - The pull request carries this branch's `config.yaml` and `config/harvest_policy.yaml` edits, which must never merge to `main`.
+- 2026-10-29 (JST): after the `/lfg` close-out listed the pre-launch items (rollback proof, keyword-check record, exact undo in place of `is_sentinel`, preflight report), the owner replied "go".
+  - Read as: complete the pre-launch items, then run U9 if every preflight check passes; any failed check stops the run and goes back to the owner. U10 follows the delivered report.
+  - The owner's go also confirms the exact undo for KTD10/R9/U10 (recommended in the close-out); KTD10, R9, U10 and the flowchart below now say so.
+  - Database-backed proof method changed from a rollback run on xbackfiller to CI on a fresh PostgreSQL at schema 0183 (KTD12 records why).
+  - Window date: 2026-10-28 Pacific, the most recent complete weekday at launch; production's 2026-10-27 day is missing about 1,180 saved posts from a schedule hold (U9 step 3).
 
 # OpenAI and Anthropic Collection Size Test - Plan
 
@@ -120,7 +125,7 @@ Search spend is roughly $5, capped at $21.
   - evidence shows the run would alter production or July's frozen manifests.
 - **Execution profile:**
   - Code and tests are written on `ops/oai-anthropic-size-20261027` (U1–U8).
-  - Database-backed proofs run as rollback proofs against xbackfiller (KTD12).
+  - Database-backed proofs run in CI on a fresh PostgreSQL at schema 0183 (KTD12).
   - The run itself is a Render one-off from this branch's checksummed archive (U9).
   - The branch's configuration edits never merge to `main`.
 - **Who finishes:**
@@ -157,7 +162,7 @@ The owner is deciding whether to track OpenAI and Anthropic. Their X volume is f
 - R6. All writes go to xbackfiller (`dpg-dbfemu2vcj2c73fsafe0-a`, database and user `xbackfiller`) under the test's own CollectionJob. The test job is never promoted to production.
 - R7. Production receives no writes or configuration changes, and its 15-minute harvest keeps saving posts throughout the test.
 - R8. No July historical run executes from preflight until switch-off. July's saved manifests, jobs and scope rows are unchanged when it resumes.
-- R9. Before July resumes, OpenAI and Anthropic are out of xbackfiller's classifier catalog and brand registry, and the test's stored data remains intact.
+- R9. Before July resumes, xbackfiller's classifier catalog and brand registry are back exactly as they were before the seed, which is how production has them. `openai` and `anthropic` return to alias-only rows, and the seeded keywords, account roles and list memberships are removed. The test's stored data remains intact.
 
 **Spend limits**
 
@@ -233,6 +238,7 @@ The owner is deciding whether to track OpenAI and Anthropic. Their X volume is f
   - Official: @OpenAI, @OpenAIDevs, @OpenAINewsroom, @AnthropicAI, @claudeai, @ClaudeDevs, @claude_code.
   - Staff: every other member of the two lists (26 OpenAI, 15 Anthropic), including @karpathy and @addyosmani as Anthropic staff.
 - **Switch OpenAI and Anthropic off in xbackfiller before July resumes.** Governs R9. (session-settled: user-approved — chosen over classifying July with a 23-brand catalog, or deleting the test data)
+  - Method (owner go, 2026-10-29): switch-off undoes exactly what the seed created or changed, from the seed's undo receipt, instead of setting `is_sentinel`. Both brands already exist in production and xbackfiller as non-sentinel, alias-only rows that the classifier catalog includes, so `is_sentinel` would leave July with a catalog different from production's.
 - **"Every post saved" means kept posts are stored and classified, and dropped posts are counted by reason.** Governs R13, R14. Storing unattributed posts would need new code and is not how production behaves.
 - **Keep production's matcher as it is, including its Latin-plus-CJK and katakana word-boundary miss.** Governs R4. The size answer must match what production would actually keep. The pilot's drop analysis explains the miss.
 
@@ -353,10 +359,11 @@ The owner is deciding whether to track OpenAI and Anthropic. Their X volume is f
   - The 72-hour default deadline is kept. The estimated duration fits it about three times over.
 - KTD8. **Treat HTTP 520 as transient** in `monitor/backfill_retry.py`, keeping the existing cooldowns. The request limit and deadline bound repeated retries. (session-settled: user-directed — chosen over waiting for the July session's fix: the test must survive a 520)
 - KTD9. **Run with `--collection-concurrency 20`, `--enrichment-concurrency 32` and `--evaluate-at-end`.** These are July's tested collection concurrency and October's enrichment concurrency. Evaluate-at-end stops one failed model call from halting every resume (spec-flow G1). It does not relax R13: deferred posts are retried before the run counts as complete (U9).
-- KTD10. **Switch-off sets `is_sentinel=True` on the `openai` and `anthropic` Brand rows in xbackfiller.** This instantiates the switch-off decision governing R9 (session-settled: user-approved — chosen over deleting the rows).
-  - The classifier catalog and the brand registry exclude sentinels (`monitor/cycle.py:165-215,4110-4141`), and the change is reversible.
-  - Deletion is blocked by PROTECT foreign keys from classification tables such as `PostBrandClassificationState` and `PostBrandMention`, and would destroy the test data.
-  - The flag has no other effect on July: July's brand index is limited to its frozen 21 brands, and xbackfiller serves no web pages.
+- KTD10. **Switch-off undoes exactly what the seed created or changed, from the seed's undo receipt.** This instantiates the switch-off decision governing R9 (session-settled: user-approved — chosen over deleting the rows; owner go 2026-10-29 for the exact undo over `is_sentinel`).
+  - `python -m scripts.backfill_size_seed switch-off --undo-receipt <receipt>` refuses while any historical run holds a live lease, reverses only the receipt's rows, and rolls back unless the classifier catalog revision equals the pre-seed value recorded in the receipt.
+  - Superseded: setting `is_sentinel=True`. The `openai` and `anthropic` Brand rows already exist, in production and xbackfiller, as non-sentinel alias-only rows. The classifier catalog includes every non-sentinel brand (`monitor/cycle.py:165-215,4110-4141`), so the flag would make July's catalog differ from production's.
+  - Deletion stays rejected: PROTECT foreign keys from classification tables such as `PostBrandClassificationState` and `PostBrandMention` block it, and it would destroy the test data.
+  - Left in place, outside the catalog: Account rows the seed created, and the test's PostBrand rows.
 - KTD11. **The report is a read-only script over the test job's records.** It reads:
   - `CollectionObservation`;
   - the last successful run's `CollectionScopeRun` envelopes;
@@ -365,14 +372,10 @@ The owner is deciding whether to track OpenAI and Anthropic. Their X volume is f
   - `OriginalContentCall` through `provider_batch__source_collection_job`.
 
   It dedupes by post ID across copied scope rows (`core/collection_state.py:406-425`).
-- KTD12. **Prove database-backed behaviour with rollback proofs on xbackfiller.** The shared test database refuses schema 0183. The pattern is the machine-local `~/.local/share/render-operations/2026-10-27-backfill-enrichment/enrichment-proof.py`:
-  - assert `xbackfiller` identity;
-  - forbid outbound HTTP;
-  - import the real test functions;
-  - run each test in a rolled-back transaction;
-  - assert no rows remain.
-
-  Pure-Python tests run through `scripts/pytest-local`.
+- KTD12. **Prove database-backed behaviour on a fresh PostgreSQL at schema 0183 in CI.** The shared test database refuses schema 0183.
+  - Superseded (2026-10-29): rollback proofs on xbackfiller. A harness that runs every test inside one rolled-back transaction, with read-only sessions by default and outbound network blocked, ran four tests from fuchitalee against xbackfiller and left the 13 core tables' row counts unchanged. But the tests it must prove fail by design inside a wrapping transaction: the backfill fakes assert `not connection.in_atomic_block` before every provider call, and the modules use `django_db(transaction=True)`, which under pytest-django would flush xbackfiller.
+  - Method: two temporary branches change only `.github/workflows/backfill.yml` to run `pytest -m requires_postgres` over the size-test modules (`tests/test_backfill_staging_retry.py`, `test_backfill_collection.py`, `test_run_backfill_command.py`, `test_call_a_role_routing.py`, `test_backfill_direct_enrichment.py`, `test_backfill_native_enrichment.py`, `test_backfill_size_seed.py`, `test_backfill_campaign.py`): one at this branch's code, one at base `ccf10e1b`. Each runs on CI's own PostgreSQL, migrated to this revision's schema. Both branches are deleted after the runs.
+  - Pure-Python tests run through `scripts/pytest-local`.
 
 ### Sizing Assumptions
 
@@ -405,7 +408,7 @@ flowchart TB
   E -->|$30 settled spend| X
   E --> W[verify_window]
   W --> R[U8 report from DB records + after-size snapshot]
-  R --> O[U10 switch-off: is_sentinel on openai, anthropic]
+  R --> O[U10 switch-off: exact undo from the seed receipt]
   O --> D{catalog digest equals pre-seed digest?}
   D -->|yes| J[July may resume]
   D -->|no| X
@@ -510,6 +513,22 @@ flowchart TB
   4. Do the offline keyword check against the pilot's `tweets.jsonl`, using `x_monitor.attribution.compile_keyword_index`:
      - report the keep rate per route;
      - report tags added to production-route posts.
+
+     Result (implementation run, 2026-10-28; pilot `tweets.jsonl`, production's 235 keyword rows plus the new table, branch policy gating):
+
+     | Route | Keep rate |
+     |---|---|
+     | OAI_1 | 67.5% |
+     | OAI_2 | 72.2% |
+     | OAI_3 | 71.3% |
+     | B_OAI | 97.3% |
+     | ANT_1 | 74.8% |
+     | ANT_2 | 97.7% |
+     | ANT_3 | 90.2% |
+     | B_ANT | 100% |
+
+     - Net-new posts: 4,752 fetched, 3,342 kept (70.3%).
+     - Production-route posts: of 972, 134 gain an `openai` or `anthropic` tag, and the kept count rises from 699 to 710.
 - **Patterns to follow:** `monitor/management/commands/onboard_brand.py:651-765`; `scripts/backfill_database.py:277-288` for the brand tables xbackfiller carries.
 - **Test scenarios:**
   - "Sol is out" does not attribute to openai, and "Sol AI model" does.
@@ -601,7 +620,7 @@ flowchart TB
   - After five consecutive 520s, the cooldown applies.
   - A 400 still fails permanently (`:188-193`).
   - With 20 concurrent scopes, one 520 does not stop the others.
-- **Verification:** the staging retry module passes in the U9 rollback proof.
+- **Verification:** the staging retry module passes in the CI database proof (KTD12).
 
 ### U7. Read-only preflight
 
@@ -666,9 +685,11 @@ flowchart TB
 - **Dependencies:** U1–U8.
 - **Files:** machine-local receipts under `~/.local/share/render-operations/YYYY-MM-DD-oai-anthropic-size-test/` (proof script, preflight output, manifest and its sha256, launch payload, logs).
 - **Approach:**
-  1. Run the rollback proof on xbackfiller covering the U2–U5 database-backed tests.
+  1. Run the CI database proof (KTD12) covering the U2–U5 database-backed tests, at this branch and at base `ccf10e1b`.
   2. Run U7 against xbackfiller.
   3. Compute the window's UTC bounds from America/Los_Angeles for the most recent complete weekday. Example: 2026-10-27 is 19:00Z to 01:00Z.
+     - Chosen (2026-10-29 JST): 2026-10-28, 19:00Z to 2026-10-29 01:00Z. Collection starts after the window has closed.
+     - Not 2026-10-27: production held its schedule from 04:48Z to 08:30Z that day, so the Pacific day 2026-10-27 lacks about 1,180 saved posts (UTC hours 07 and 08), and R21's window share would be overstated by about 8%.
   4. Present the preflight report and get the owner's "go".
   5. Run `seed`, then re-run U7 so checks 5–6 pass.
   6. Build and save the manifest once.
@@ -676,7 +697,26 @@ flowchart TB
   8. Watch it until it reaches a terminal state. During enrichment, run the U8 watch every 15 minutes. If the R24 trigger holds, cancel the one-off (progress stays saved and resumes from the same manifest) and report spend, classified posts and cost per post to the owner.
   9. If evaluate-at-end deferred any kept posts, re-run the enrich phase from the same saved manifest until none remain. If some still cannot be classified, stop and report them to the owner before the report is final and before U10.
   10. Read production read-only once during the run to confirm a freshly saved post.
-- **Test expectation:** none — this is an operational unit. Its proof is the rollback-proof receipts and the run's verification outcomes.
+- **Execution record** (receipts in `~/.local/share/render-operations/2026-10-29-oai-anthropic-size-test/`, machine-local on fuchitalee):
+  - Step 1, CI database proof (`ci-proof-receipt.json`):
+    - branch (run 40769414567, code `47f8b721`): 181 passed and 3 failed of 184 required, none skipped;
+    - base (run 40769414903, code `ccf10e1b`): 161 passed and 3 failed of 164;
+    - the same 3 tests fail on both (two `test_arbitrary_ranges_need_no_source_edits_or_paid_requests` cases and `test_explicit_campaign_all_routes_whole_range_to_phase_runner`, which predate this plan);
+    - no shared test changes outcome, and all 20 new PostgreSQL tests pass, including the 520 recovery case;
+    - both temporary branches are deleted.
+  - Step 2, U7 pre-seed (`preflight-pre-seed.json`): PASS; checks 5–6 pending as designed. TwitterAPI on-demand balance 16,531,104 credits; DeepInfra HTTP 200.
+  - Step 5, seed (`seed-result.json`, undo receipt `seed-undo-receipt.json`):
+    - 178 BrandKeyword rows, 40 accounts, 48 lab-list roles and 48 lab-list memberships;
+    - from production's read-only main-list export (208 members, 232 roles; `main-list-production.json`): 208 main-list memberships, 60 accounts, 130 roles created and 62 already present;
+    - catalog revision `44ab32ab…` before (switch-off must restore it) and `874988d1…` after.
+  - Step 5, U7 post-seed (`preflight-post-seed.json`, also the R18 before-snapshot): PASS on all nine checks.
+  - Step 6, manifest (`manifest.json`, sha256 `6079016a0911381e40b1c6a4339b509d0f55965ec16b6350503ea20b161397e0`):
+    - built by the plan's dry run in a read-only Render one-off from source `47f8b721`, on image `e5edf737`;
+    - 1,296 units, 256 author contexts over 3 lists, deadline 2026-10-31T21:39Z.
+  - One-off environment: production's rare-types variables (`e5edf737`) name a special-events assessment that source `47f8b721` lacks. The one-offs replace them with this revision's own `render.yaml` harvest values: the 2026-09-24 assessment, with targeted extraction on.
+    - RARE_EXTRA still does not run, because the window's `call_ids` exclude it.
+    - The run job also drops the scheduled and legacy TwitterAPI keys and the TypeSafe key.
+- **Test expectation:** none — this is an operational unit. Its proof is the CI database proof and the run's verification outcomes.
 - **Verification:**
   - `verify_collection_window` returns verified;
   - `verify_window` returns verified with zero deferred kept posts;
@@ -689,12 +729,12 @@ flowchart TB
 - **Dependencies:** U9 complete with zero deferred kept posts, and the delivered U8 report. Classifying a post after switch-off would use the 21-brand catalog.
 - **Files:** `scripts/backfill_size_seed.py` (`switch-off` subcommand, guarded like `seed`), `tests/test_backfill_size_seed.py`.
 - **Approach:**
-  1. Set `is_sentinel=True` on `openai` and `anthropic`.
-  2. Recompute the catalog digest and compare it with the U7 pre-seed digest.
+  1. Run `python -m scripts.backfill_size_seed switch-off --undo-receipt <receipt>` (KTD10): it undoes exactly the receipt's rows.
+  2. The same command recomputes the catalog revision and rolls back unless it equals the pre-seed value in the receipt.
   3. Re-snapshot July's job, run and scope counts against the U7 snapshot.
   4. Write a handback receipt for the July session.
 - **Test scenarios:**
-  - After switch-off, `_classification_tracked_brand_catalog()` omits both brands and its digest equals the pre-seed digest. Covers AE6.
+  - After switch-off, `_classification_tracked_brand_catalog()` has the pre-seed revision again, with both brands back to their alias-only rows. Covers AE6.
   - Their PostBrand rows remain.
   - Switch-off refuses to run while a historical lease is live.
 - **Verification:** the digests are equal, July's snapshot is unchanged, and the receipt exists.
@@ -706,7 +746,7 @@ flowchart TB
 | Gate | Command or method | Proves |
 |---|---|---|
 | Pure-Python tests | `scripts/pytest-local tests/test_backfill_campaign.py tests/test_backfill_month.py tests/test_harvest_policy_regression_net.py tests/test_specs_from_policy.py tests/test_attribution.py tests/test_backfill_size_seed.py tests/test_backfill_size_preflight.py tests/test_backfill_size_report.py` plus `tests/test_query_plan_*.py` | U1, U2, U6–U8 logic; production query text unchanged |
-| Database-backed tests | Rollback proof on xbackfiller importing `tests.test_backfill_staging_retry`, `tests.test_backfill_collection`, `tests.test_run_backfill_command`, `tests.test_call_a_role_routing`, `tests.test_backfill_direct_enrichment`, `tests.test_backfill_native_enrichment` (KTD12) | U2–U5 call chains; no rows left behind |
+| Database-backed tests | CI database proof (KTD12): `pytest -m requires_postgres` over `tests/test_backfill_staging_retry.py`, `test_backfill_collection.py`, `test_run_backfill_command.py`, `test_call_a_role_routing.py`, `test_backfill_direct_enrichment.py`, `test_backfill_native_enrichment.py`, `test_backfill_size_seed.py` and `test_backfill_campaign.py`, at this branch and at base `ccf10e1b` | U2–U5 call chains; every failure also fails on the base |
 | Django checks | `python manage.py check` | Configuration loads with the branch configuration |
 | Manifest dry run | `python manage.py run_backfill --windows <window.json> --response-storage database` (no `--execute`); its output is saved as the manifest | 1,296 units, ceilings, route metadata, frozen texts |
 | Preflight | `python scripts/backfill_size_preflight.py` | U7 checks 1–9 |
@@ -739,7 +779,7 @@ Per unit:
 | U2 | 1,296-unit manifest with route metadata; AE1 and AE4 tests pass |
 | U3 | Frozen author scope covers 3 lists and 48 lab members; AE5 test passes |
 | U4 | Settled-basis cases and AE2 pass; reservation basis unchanged |
-| U5 | 520 recovery passes in the rollback proof |
+| U5 | 520 recovery passes in the CI database proof |
 | U7 | All checks pass before launch |
 | U8 | Fixture figures equal hand-computed values; real report written |
 | U9 | Both verifications pass with zero deferred kept posts, and receipts are saved |
