@@ -2752,8 +2752,12 @@ class CycleRunner:
             if len(selected) != 1:
                 raise ValueError("a historical query override requires exactly one call")
             query = self._backfill_context.query_override
+            # A named historical route hosted on this call brings its own
+            # exclusion words, which replace (never extend) the host's list.
+            route_not_include = getattr(self._backfill_context, "route_not_include", None)
+            route = {} if route_not_include is None else {"not_include": list(route_not_include)}
             calls = [
-                replace(call, query_string=query, query_length=len(query))
+                replace(call, query_string=query, query_length=len(query), **route)
                 if call.call_id == selected[0] else call for call in calls
             ]
         logger.info(

@@ -1037,3 +1037,156 @@ def test_backfill_provider_entities_reach_shared_post_writer(pipeline, provider_
         compiled_keyword_index=(None, {}), search_query=[], brand_search_terms={},
     )
     assert {(m.brand_id, m.source) for m in mentions} == {("qwen", "user_mention"), ("qwen", "hashtag")}
+
+
+LAB_LIST = 2067500935769895374
+SECOND_LAB_LIST = 2067501173402460553
+
+
+def _reregister(job, key, definition):
+    source = job.source
+    job.delete()
+    job = register_job(job_key=key, source=source, purpose="content", operation="x_backfill",
+                       mode="historical", definition=definition)
+    return set_job_state(job.pk, "ready")
+
+
+def test_route_exclusions_replace_the_host_list_only_on_route_units(pipeline, monkeypatch):
+    """AE4 call chain: a named route on B1 drops its own words; B1's production unit keeps B1's."""
+    import copy
+    from dataclasses import replace
+
+    from monitor import cycle
+    original = cycle.plan_calls_for_cycle
+    monkeypatch.setattr(cycle, "plan_calls_for_cycle", lambda *args, **kwargs: [
+        replace(call, not_include=["forbidden"]) if call.call_id == "B1" else call
+        for call in original(*args, **kwargs)
+    ])
+    job = ready_job(requests=2)
+    definition = copy.deepcopy(job.definition)
+    route = copy.deepcopy(definition["scope"]["units"][0])
+    route["scope_key"] = "OAI_3:1786233600:1786234500"
+    route["ownership"]["query"] = "Qwen OR Sol"
+    definition["scope"]["units"].append(route)
+    definition["scope"]["route_metadata"] = {
+        route["scope_key"]: {"name": "OAI_3", "host_call_id": "B1", "not_include": ["Solana"]},
+    }
+    job = _reregister(job, "route-exclusions", definition)
+
+    def body(prefix):
+        value = page(f"{prefix}-solana")
+        extra = page(f"{prefix}-forbidden")["tweets"][0]
+        value["tweets"][0]["text"] = "Qwen ships on Solana"
+        extra["text"] = "Qwen forbidden"
+        value["tweets"].append(extra)
+        return value
+
+    pipeline.responses.extend([body("production"), body("route")])
+    report = run(job)
+    attempt = CollectionRun.objects.get(pk=report["run_id"])
+    production = attempt.scopes.get(scope_key="B1:aug09").envelopes[-1]
+    routed = attempt.scopes.get(scope_key=route["scope_key"]).envelopes[-1]
+    assert production["post_ids"] == ["production-solana"]
+    assert [(e["post_id"], e["reason"]) for e in production["exclusions"]] == [("production-forbidden", "not_include")]
+    assert routed["post_ids"] == ["route-forbidden"]
+    assert [(e["post_id"], e["reason"]) for e in routed["exclusions"]] == [("route-solana", "not_include")]
+    assert pipeline.requests[1]["query"].startswith("Qwen OR Sol since_time:")
+    assert not Post.objects.filter(pk__in=["production-forbidden", "route-solana"]).exists()
+
+
+@pytest.mark.parametrize(
+    "metadata,code",
+    [
+        ({"missing": {"name": "OAI_3", "host_call_id": "B1", "not_include": []}}, "unknown scope"),
+        ({"B1:aug09": {"name": "OAI_3", "host_call_id": "A", "not_include": []}}, "host"),
+        ({"B1:aug09": {"name": "OAI_3", "host_call_id": "B1", "not_include": "Solana"}}, "exclusions"),
+    ],
+)
+def test_saved_route_metadata_mismatch_is_rejected_before_claim(pipeline, metadata, code):
+    import copy
+
+    job = ready_job()
+    definition = copy.deepcopy(job.definition)
+    definition["scope"]["route_metadata"] = metadata
+    job = _reregister(job, "tampered-route", definition)
+    with pytest.raises((ValueError, CommandError), match=code):
+        run(job)
+    assert not CollectionRun.objects.exists() and not pipeline.requests
+
+
+def _member(author_id, *lists, edges=()):
+    from core.models import Account, Brand, BrandAccount, Role, TwitterListMembership
+
+    account = Account.objects.create(author_id=author_id, handle=author_id)
+    for list_id in lists:
+        TwitterListMembership.objects.create(list_id=list_id, account=account, active=True,
+                                             source="snapshot", source_run_id=f"snapshot-{list_id}")
+    for brand_id, role_id in edges:
+        Brand.objects.get_or_create(nickname=brand_id)
+        Role.objects.get_or_create(key=role_id)
+        BrandAccount.objects.create(brand_id=brand_id, account=account, role_id=role_id)
+    return account
+
+
+def test_plan_freezes_the_union_of_main_and_lab_list_author_contexts():
+    from monitor.backfill_collection import plan_job_definition
+    from monitor.cycle import _resolve_x_monitor_list_id
+
+    cfg = load_config(Path("config.yaml"))
+    main = _resolve_x_monitor_list_id(cfg)
+    _member("both", main, LAB_LIST, edges=[("openai", "official"), ("deepseek", "staff")])
+    _member("lab-official", LAB_LIST, edges=[("openai", "official")])
+    _member("lab-staff", SECOND_LAB_LIST, edges=[("anthropic", "staff")])
+    _member("roleless", LAB_LIST)
+    _member("elsewhere", 42, edges=[("openai", "official")])
+    definition = plan_job_definition(
+        cfg=cfg, since_epoch=1786233600, until_epoch=1786234500, brands=["qwen"], requests=3,
+        model_requests=60, seconds=300, maximum_requests=20, maximum_models=100,
+        call_ids=["A"], author_list_ids=[LAB_LIST, SECOND_LAB_LIST],
+    )
+    author_scope = definition["scope"]["author_scope"]
+    assert author_scope["list_id"] == main
+    assert author_scope["list_ids"] == [main, LAB_LIST, SECOND_LAB_LIST]
+    contexts = author_scope["contexts"]
+    assert set(contexts) == {"both", "lab-official", "lab-staff", "roleless"}
+    assert (contexts["both"]["official_brands"], contexts["both"]["staff_brands"]) == (["openai"], ["deepseek"])
+    assert contexts["both"]["membership_run_id"] == f"snapshot-{main}"
+    assert contexts["lab-official"]["official_brands"] == ["openai"]
+    assert contexts["lab-staff"]["staff_brands"] == ["anthropic"]
+    assert contexts["roleless"]["official_brands"] == contexts["roleless"]["staff_brands"] == []
+    assert "missing_brand_role:roleless" in author_scope["degraded"]
+
+
+def test_lab_list_route_on_call_a_keeps_official_author_without_keyword(pipeline, monkeypatch, tmp_path):
+    """R5 call chain: a lab-list member's frozen official role attributes on its A-hosted route."""
+    from core.models import PostBrandMention, TwitterListMembership
+    from monitor.backfill_collection import plan_job_definition
+    from tests.test_call_a_role_routing import _seed_author
+
+    account = _seed_author(edges=[("qwen", "official")])
+    TwitterListMembership.objects.filter(account=account).update(list_id=LAB_LIST)
+    cfg = load_config(Path("config.yaml"))
+    monkeypatch.setattr("monitor.backfill_collection.load_config", lambda path: cfg)
+    definition = plan_job_definition(
+        cfg=cfg, since_epoch=1786233600, until_epoch=1786234500, brands=["qwen"], requests=3,
+        model_requests=60, seconds=300, maximum_requests=20, maximum_models=100,
+        call_ids=["A"], author_list_ids=[LAB_LIST],
+    )
+    scope = definition["scope"]
+    assert scope["author_scope"]["contexts"]["author-1"]["official_brands"] == ["qwen"]
+    scope["units"][0].update(outcome="complete", enumeration_complete=True)
+    key = "A_LAB:1786233600:1786234500"
+    scope["units"].append({"scope_key": key, "scope_kind": "x_query", "ownership": {
+        "call_id": "A", "query": f"(list:{LAB_LIST}) min_faves:0", "since_epoch": 1786233600,
+        "until_epoch": 1786234500}})
+    scope["route_metadata"] = {key: {"name": "A_LAB", "host_call_id": "A", "not_include": []}}
+    source, _ = DataSource.objects.get_or_create(id="x", defaults={"name": "X", "source_type": "social"})
+    job = set_job_state(register_job(job_key="lab-route", source=source, purpose="content", operation="x_backfill",
+                                     mode="historical", definition=definition).pk, "ready")
+    body = page("1")
+    body["tweets"][0]["text"] = "A release announcement without any tracked keyword"
+    pipeline.responses.append(body)
+    report = run(job)
+    assert report["collection_drained"] and report["recovered_post_ids"] == ["1"]
+    assert pipeline.requests[0]["query"].startswith(f"(list:{LAB_LIST}) min_faves:0 since_time:")
+    assert PostBrandMention.objects.filter(post_id="1", brand_id="qwen", source="author_account").exists()

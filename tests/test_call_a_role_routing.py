@@ -229,3 +229,41 @@ def test_official_commits_before_first_staff_relevance_request():
     runner._route_and_persist(_call(), kept)
     assert events == ["relevance"]
     assert Post.objects.filter(tweet_id="staff-second").exists()
+
+
+def test_frozen_union_of_two_lists_keeps_official_precedence_for_backfill():
+    from monitor.backfill_collection import (
+        _freeze_author_contexts,
+        union_author_contexts,
+    )
+    from monitor.backfill_resources import BackfillBudget, BackfillContext
+    from monitor.list_membership import resolve_call_a_author_contexts
+
+    both = _seed_author(edges=[("minimax", "official"), ("deepseek", "staff")])
+    TwitterListMembership.objects.create(list_id=43, account=both, active=True,
+                                         source="snapshot", source_run_id="snapshot-43")
+    lab_staff = _seed_author(author_id="lab-staff", edges=[("minimax", "staff")])
+    TwitterListMembership.objects.filter(account=lab_staff).update(list_id=43)
+    resolved = []
+    for list_id in (42, 43):
+        members = TwitterListMembership.objects.filter(list_id=list_id, active=True)
+        resolved.append(resolve_call_a_author_contexts(
+            list_id=list_id, items=[{"author_id": m.account.author_id} for m in members],
+        ))
+    contexts, degraded = union_author_contexts(resolved)
+    assert degraded == []
+    frozen = _freeze_author_contexts(contexts)
+    assert frozen["author-1"]["membership_run_id"] == "snapshot-1"
+    runner = CycleRunner(
+        cfg=Config(enabled_models=["minimax", "deepseek"], daily_ceiling=100), cycle_kind="backfill",
+        _backfill_context=BackfillContext(
+            budget=BackfillBudget(max_api_requests=1, max_llm_calls=0, run_seconds=60),
+            author_contexts=frozen,
+        ),
+    )
+    items = [_tweet("both-roles"), _tweet("lab-staff-post", author_id="lab-staff")]
+    runner._prepare_call_a_roles(items, list_id=42)
+    assert (items[0]["_author_seed_brands"], items[0]["_author_staff_brands"],
+            items[0]["_call_a_staff_candidate"]) == (["minimax"], [], False)
+    assert (items[1]["_author_seed_brands"], items[1]["_author_staff_brands"],
+            items[1]["_call_a_staff_candidate"]) == ([], ["minimax"], True)

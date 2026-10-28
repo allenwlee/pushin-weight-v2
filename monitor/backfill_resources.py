@@ -125,6 +125,9 @@ class BackfillContext:
     match_scheduled_policy: bool = False
     rare_page_writer: Callable[..., Any] | None = None
     captured_pages: Any = None
+    # A named route's frozen exclusion words. When set, they replace the host
+    # call's own not_include for this unit; None keeps the host's list.
+    route_not_include: tuple[str, ...] | None = None
 
 
 def bounded_backfill_config(cfg: Any, *, enrichment_limit: int, collection_policy: bool = False) -> Any:

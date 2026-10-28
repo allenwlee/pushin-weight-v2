@@ -425,3 +425,61 @@ def test_manifest_without_new_window_fields_keeps_its_july_shape(monkeypatch):
         "model_reservation_ceiling_usd": "6.25", "direct_concurrency": 32,
         "credential_purpose": "on-demand",
     }
+
+
+@pytest.mark.parametrize("window_basis,expected", [(None, {}), ("settled", {"spend_basis": "settled"})])
+def test_saved_spend_basis_reaches_the_enrichment_policy_only_when_present(monkeypatch, window_basis, expected):
+    from types import SimpleNamespace
+
+    from scripts import backfill_campaign as campaign
+
+    job = SimpleNamespace(pk="existing", provider_batches=SimpleNamespace(order_by=lambda *a: SimpleNamespace(first=lambda: None)))
+    monkeypatch.setattr(campaign, "_window_job", lambda *a: job)
+    monkeypatch.setattr(campaign, "verify_collection_window", lambda *a, **kw: {"status": "verified"})
+    monkeypatch.setattr(campaign, "verify_window", lambda *a, **kw: {"status": "verified"})
+    monkeypatch.setattr(campaign, "prepare_current_contract", lambda *a: None)
+    policies = []
+    monkeypatch.setattr(campaign, "policy_snapshot", lambda **kw: policies.append(kw) or {})
+    monkeypatch.setattr(campaign, "resolve_api_key", lambda *a: "test")
+    monkeypatch.setattr(campaign, "assert_no_provider_failure", lambda *a: None)
+    monkeypatch.setattr(campaign, "_phase_receipt", lambda job, phase, result, **kw: result)
+    monkeypatch.setattr(campaign, "OriginalContentCall", SimpleNamespace(objects=SimpleNamespace(
+        filter=lambda **kw: SimpleNamespace(aggregate=lambda **kw: {}))))
+    monkeypatch.setattr(campaign, "execute_enrichment", lambda *a, **kw: {"status": "completed"})
+    monkeypatch.setattr(campaign, "advance_targeted", lambda *a, **kw: {"status": "completed"})
+    frozen = {"direct_concurrency": 32, "deadline": "2099-01-01T00:00:00+00:00"}
+    window = {"max_usd": "30", "maximum_model_requests": 100000}
+    if window_basis is not None:
+        window["spend_basis"] = window_basis
+    assert campaign.enrich_window(window, frozen=frozen, cfg=None)["status"] == "verified"
+    assert policies == [{
+        "max_usd": "30", "deadline": datetime(2099, 1, 1, tzinfo=UTC),
+        "max_model_requests": 100000, "max_control_requests": 5000, **expected,
+    }]
+
+
+def test_overridden_request_ceiling_stops_collection_with_allowance_exhausted(monkeypatch):
+    from types import SimpleNamespace
+
+    from scripts import backfill_campaign as campaign
+
+    job = SimpleNamespace(
+        pk="job", state="ready", next_retry_at=None, refresh_from_db=lambda: None,
+        last_attempt=SimpleNamespace(scopes=SimpleNamespace(filter=lambda **kw: SimpleNamespace(exists=lambda: False))),
+    )
+    monkeypatch.setattr(campaign, "resolve_api_key", lambda *a: "test")
+    monkeypatch.setattr(campaign, "CollectionJob", SimpleNamespace(objects=SimpleNamespace(
+        filter=lambda **kw: SimpleNamespace(first=lambda: None))))
+    monkeypatch.setattr(campaign, "DataSource", SimpleNamespace(objects=SimpleNamespace(get=lambda **kw: "x")))
+    monkeypatch.setattr(campaign, "register_job", lambda **kw: job)
+    monkeypatch.setattr(campaign, "emit", lambda *a: None)
+    monkeypatch.setattr(campaign, "_wait", lambda seconds: None)
+    reports = [{"cumulative_api_requests": 6999, "usage": {"api_requests": 1}},
+               {"cumulative_api_requests": 7000, "usage": {"api_requests": 1}}]
+    monkeypatch.setattr(campaign, "execute_job", lambda job_id, **kw: reports.pop(0))
+    window = {"index": 1, "maximum_api_requests": 7000, "collection_definition": {"scope": {}}}
+    frozen = {"instruction_format": "x-backfill-campaign/v2", "campaign": "size",
+              "deadline": "2099-01-01T00:00:00+00:00", "windows": [window]}
+    with pytest.raises(RuntimeError, match="collection_request_allowance_exhausted"):
+        campaign._collect_window(window, frozen=frozen, cfg=None)
+    assert reports == []

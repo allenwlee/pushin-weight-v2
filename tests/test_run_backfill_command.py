@@ -236,3 +236,45 @@ def test_phase_preferences_do_not_rewrite_saved_campaign(planned, tmp_path, monk
     assert seen[0][1]["collection_concurrency"] == 4
     assert json.loads(saved.read_text()) == frozen
     assert not CollectionJob.objects.exists() and not OriginalContentCall.objects.exists()
+
+
+SIZE_WINDOW = {
+    "since": "2026-10-26T19:00:00+00:00", "until": "2026-10-27T01:00:00+00:00",
+    "call_ids": ["A", "B1", "B2", "B3", "C1", "C2", "C3", "C4"], "slice_seconds": 300,
+    "routes": [
+        {"name": "A_LAB", "host_call_id": "A", "query": "(list:2067500935769895374) min_faves:0",
+         "not_include": []},
+        {"name": "LAB_1", "host_call_id": "B1", "query": "(OpenAI OR Sora) min_faves:0",
+         "not_include": ["Solana", "$SOL"]},
+    ],
+    "author_list_ids": [2067500935769895374],
+    "ceilings": {"maximum_api_requests": 7000, "max_usd": "30", "maximum_model_requests": 100000},
+    "spend_basis": "settled",
+}
+
+
+def test_size_window_fields_plan_named_sliced_routes_without_jobs(planned, tmp_path):
+    path = tmp_path / "size.json"
+    path.write_text(json.dumps({"name": "size-test", "windows": [SIZE_WINDOW]}))
+    output = StringIO()
+    call_command("run_backfill", windows=path, stdout=output)
+    window = json.loads(output.getvalue())["windows"][0]
+    scope = window["collection_definition"]["scope"]
+    keys = [unit["scope_key"] for unit in scope["units"]]
+    assert len(keys) == len(set(keys)) == 10 * 72
+    assert "RARE_EXTRA" not in {unit["ownership"]["call_id"] for unit in scope["units"]}
+    assert sorted(scope["selected_call_ids"]) == sorted(SIZE_WINDOW["call_ids"])
+    assert len(scope["route_metadata"]) == 2 * 72
+    assert {meta["name"] for meta in scope["route_metadata"].values()} == {"A_LAB", "LAB_1"}
+    assert scope["author_scope"]["list_ids"][1:] == [2067500935769895374]
+    assert (window["maximum_api_requests"], window["max_usd"], window["maximum_model_requests"],
+            window["spend_basis"]) == (7000, "30", 100000, "settled")
+    assert not CollectionJob.objects.exists() and not OriginalContentCall.objects.exists()
+
+
+def test_unknown_size_window_field_is_rejected_without_jobs(planned, tmp_path):
+    path = tmp_path / "size.json"
+    path.write_text(json.dumps({"windows": [SIZE_WINDOW | {"slices": 72}]}))
+    with pytest.raises(CommandError, match="unknown_window_field"):
+        call_command("run_backfill", windows=path, stdout=StringIO())
+    assert not CollectionJob.objects.exists() and not OriginalContentCall.objects.exists()
