@@ -90,6 +90,11 @@ class DispatchGuard:
         self.cfg = cfg
         self.lease = lease
         self.scope = scope
+        # Only the continuous command opts out of a launch allowance. Manual
+        # callers keep the default scheduled scope and its existing checks.
+        self.window_id = (
+            cfg.harvest.enrichment.budget_window_id if scope != "continuous" else ""
+        )
         self.stop_event = stop_event or threading.Event()
         self.fingerprint = config_fingerprint(cfg)
         self.calls = 0
@@ -128,7 +133,7 @@ class DispatchGuard:
                     return
                 if self.calls >= self.cfg.harvest.enrichment.max_calls_per_batch:
                     raise LLMCallBudgetExhausted("enrichment_batch_budget_exhausted")
-                window_id = self.cfg.harvest.enrichment.budget_window_id
+                window_id = self.window_id
                 if window_id:
                     reserve_request(
                         window_id=window_id,
@@ -136,7 +141,10 @@ class DispatchGuard:
                         request=request,
                         scope=self.scope,
                     )
-                elif self.cfg.harvest.enrichment.mode == "worker":
+                elif self.scope == "pilot" or (
+                    self.scope != "continuous"
+                    and self.cfg.harvest.enrichment.mode == "worker"
+                ):
                     raise LLMCallBudgetExhausted("enrichment_budget_missing")
                 self.calls += 1
             except LLMCallBudgetExhausted as exc:
@@ -160,7 +168,7 @@ class DispatchGuard:
                     > self.cfg.harvest.enrichment.max_calls_per_batch
                 ):
                     raise LLMCallBudgetExhausted("enrichment_batch_budget_exhausted")
-                window_id = self.cfg.harvest.enrichment.budget_window_id
+                window_id = self.window_id
                 if window_id:
                     with transaction.atomic():
                         for request in requests:
@@ -171,7 +179,10 @@ class DispatchGuard:
                                     request=request,
                                     scope=self.scope,
                                 )
-                elif self.cfg.harvest.enrichment.mode == "worker":
+                elif self.scope == "pilot" or (
+                    self.scope != "continuous"
+                    and self.cfg.harvest.enrichment.mode == "worker"
+                ):
                     raise LLMCallBudgetExhausted("enrichment_budget_missing")
                 self.calls += required
                 self.prepaid += required

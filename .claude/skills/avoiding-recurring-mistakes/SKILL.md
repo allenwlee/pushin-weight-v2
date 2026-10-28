@@ -405,7 +405,7 @@ The translator batch-limits probe (`scripts/probes/translator_batch_limits/probe
 
 ---
 
-## M19 — Inspect existing storage before adding tables
+## M19 — Inspect storage before choosing tables and field types
 
 **Pattern.** A new feature or source gets another table while existing entities
 already represent its identity, evidence or collection lifecycle. Older redundant
@@ -426,6 +426,44 @@ where a new field belongs:
 4. In the existing plan or change description, identify the chosen storage and
    explain any remaining gap, new-table purpose and table additions/retirements.
    Do not create another planning artifact or permission gate for this check.
+
+Review every proposed `CharField`/`TextField` and equivalent SQL varchar/text column. Record its meaning, owner, cardinality, readers/writers and constraints. Reuse existing shared entities or lookup tables when the meaning is shared; identical spelling alone does not prove shared identity. Keep genuine prose, source-native identities, hashes and necessary frozen evidence as justified text. Ask the owner before settling unresolved string storage, and reuse an existing explicit decision instead of asking again. General names such as language and timezone must use a shared definition/reference contract; independent meanings need distinct descriptive names.
+
+Apply this review to fields as well as tables. For each proposed JSON column,
+record in the existing plan what one value means, which record owns its facts,
+whether it contains several independently referenced items, and how it is read,
+validated and versioned. Compare it with existing columns and related rows.
+Future flexibility, an agent's JSON response or a desire for fewer tables is not
+sufficient justification. Source membership, extracted assertions and historical
+assessment inputs have different meanings even when supplied in one response.
+
+The owner-selected field test is: **Is this truly variable-schema data, or just
+an unmodeled entity?** A PR adding a json/jsonb column needs explicit owner/team
+approval, representative shape variations, typed alternatives and a documented
+versioned strict schema. Enforce it at the database or every application write
+boundary (including jobs/bulk paths), with invalid-value tests; an unused ORM
+validator is not enforcement. Define unknown-key, required/type/range and evolution
+rules. Verify pg_jsonschema availability before depending on jsonb_matches_schema;
+that function is extension-provided, not built into PostgreSQL. This narrow
+approval requirement is explicit owner policy, not an inferred extra gate.
+
+Use representative application queries and invariants to judge the design:
+for example, find every assessment using a Post, enforce subject/source links,
+filter contracts by issuer/period, and reproduce the evidence known at a cutoff.
+Identify what the database enforces versus what a writer must validate. A gallery
+rendering or internally consistent sample proves neither query support nor
+referential integrity. Do not claim performance or deployed behavior from it.
+
+JSON remains a legitimate choice when actual shape variation or externally
+dictated document semantics justify a bounded, strictly validated document treated
+as a unit. An immutable diagnostic/research packet still has to pass the owner's
+variable-schema-versus-unmodeled-entity test. Ordinary columns and
+related rows can also preserve history. Do not convert "JSON is not strictly
+necessary" into "zero JSON is optimal," or replace it with speculative generic
+tables merely to reach a count. Mark unresolved subject/outcome/rule shapes as
+open decisions, then reconcile affected links, readers, writers and table counts
+in the same proposal when they are settled. This is design review, not a new
+approval requirement or authority to migrate data.
 
 Existing repetition is not design authority. This rule does not mandate putting
 every provider field into one wide table or unstructured JSON, and does not
@@ -455,7 +493,7 @@ authorize retiring tables or migrating business data without task scope.
 | M16 | Inventing API surface | `context7` / WebSearch before guessing external APIs |
 | M17 | Inferring pause authority from an anomaly | Diagnose read-only; pause/resume only with current explicit owner authorization |
 | M18 | Function-only regression net | Pin the production call chain end-to-end (fake client + captured kwargs); function-level tests stay green while production breaks |
-| M19 | New tables copied from redundant schema patterns | Read schema and writers/readers; justify reuse, extension or a distinct new table |
+| M19 | Schema chosen by analogy or table/JSON counts | Inspect storage; justify reuse, shared references, field types, relationships, queries and constraints |
 
 ---
 

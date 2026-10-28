@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from collections.abc import Callable
@@ -19,11 +20,42 @@ from core.official_company_accounts import x_account_identifier
 
 
 class XListError(RuntimeError):
-    def __init__(self, code, *, auth=False, unknown=False, retry_at=None):
+    def __init__(self, code, *, auth=False, unknown=False, retry_at=None, write_refused=False):
         super().__init__(code)
         self.auth = auth
         self.unknown = unknown
         self.retry_at = retry_at
+        self.write_refused = write_refused
+
+
+def _forbidden_reason(response, access_token):
+    """Keep a machine-readable reason, never a raw body, detail or echoed token."""
+    try:
+        payload = response.json()
+    except (ValueError, TypeError):
+        return "unspecified"
+    if not isinstance(payload, dict):
+        return "unspecified"
+    candidates = []
+    problem_type = payload.get("type")
+    if isinstance(problem_type, str):
+        for prefix in ("https://api.x.com/2/problems/", "https://api.twitter.com/2/problems/"):
+            if problem_type.startswith(prefix):
+                candidates.append(problem_type.removeprefix(prefix))
+    candidates.append(payload.get("reason"))
+    for candidate in candidates:
+        if (
+            isinstance(candidate, str)
+            and re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", candidate)
+            and (not access_token or access_token not in candidate)
+        ):
+            return candidate
+    errors = payload.get("errors")
+    if isinstance(errors, list) and errors and isinstance(errors[0], dict):
+        code = errors[0].get("code")
+        if type(code) is int and 0 <= code <= 99999:
+            return f"code-{code}"
+    return "unspecified"
 
 
 def _rate_limit_retry_at(response):
@@ -73,8 +105,15 @@ class XOwnerListClient:
             self._refreshed = True
             self.access_token = self.refresh()
             return self._call(method, path, **kwargs)
-        if response.status_code in {401, 403}:
+        if response.status_code == 401:
             raise XListError("owner_auth_denied", auth=True)
+        if response.status_code == 403:
+            refused = method == "POST" and path == f"/lists/{self.list_id}/members"
+            raise XListError(
+                "http_403:" + _forbidden_reason(response, self.access_token),
+                auth=not refused,
+                write_refused=refused,
+            )
         if response.status_code == 429:
             raise XListError("http_429", retry_at=_rate_limit_retry_at(response))
         if response.status_code >= 300:
@@ -180,7 +219,7 @@ def _claim(intent_id):
         return intent
 
 
-def _complete(claim, status, error="", *, retry_at=None):
+def _complete(claim, status, error="", *, retry_at=None, consume_attempt=True):
     from monitor.list_membership import _upsert_membership
 
     with transaction.atomic():
@@ -200,12 +239,12 @@ def _complete(claim, status, error="", *, retry_at=None):
         intent.last_error = error
         intent.claim_token = ""
         intent.claim_expires_at = None
-        intent.next_attempt_at = (
-            retry_at or now + timedelta(minutes=15)
+        intent.next_attempt_at = retry_at or (
+            now + timedelta(minutes=15)
             if status in {"retry_due", "verify_needed"}
             else None
         )
-        if error == "http_429":
+        if error == "http_429" or not consume_attempt:
             # A provider cooldown is not an account-specific delivery failure.
             intent.attempts = max(0, intent.attempts - 1)
         if status == "confirmed":
@@ -234,19 +273,23 @@ def sync_intents(*, cfg, client, deadline=None):
     # Claims, reads and writes are bounded independently of queue size. An expired
     # claim is always read back before a new POST, including a crash after POST.
     now = timezone.now()
-    rate_pause = (
+    pause = (
         OfficialCompanyListIntent.objects.filter(
             list_id=int(cfg.list_id),
-            status__in=["retry_due", "verify_needed"],
-            last_error="http_429",
+            status__in=["retry_due", "verify_needed", "review_needed"],
             next_attempt_at__gt=now,
         )
+        .filter(Q(last_error="http_429") | Q(last_error__startswith="http_403:"))
         .order_by("-next_attempt_at")
-        .values_list("next_attempt_at", flat=True)
+        .values("next_attempt_at", "last_error")
         .first()
     )
-    if rate_pause:
-        result.update(status="deferred_rate_limit", retry_at=rate_pause.isoformat())
+    if pause:
+        result.update(
+            status="deferred_rate_limit" if pause["last_error"] == "http_429" else "deferred_write_refused",
+            retry_at=pause["next_attempt_at"].isoformat(),
+            error=pause["last_error"],
+        )
         return result
     removed_ids = list(
         OfficialCompanyListIntent.objects.filter(
@@ -300,6 +343,7 @@ def sync_intents(*, cfg, client, deadline=None):
             "deferred_rate_limit" if isinstance(exc, XListError) and str(exc) == "http_429"
             else "deferred"
         )
+        result["error"] = str(exc) if isinstance(exc, XListError) else type(exc).__name__
         return result
     for position, claim in enumerate(claims):
         try:
@@ -334,6 +378,23 @@ def sync_intents(*, cfg, client, deadline=None):
             )
             result["confirmed"] += int(_complete(claim, "confirmed"))
         except Exception as exc:  # noqa: BLE001
+            if isinstance(exc, XListError) and exc.write_refused:
+                retry_at = timezone.now() + timedelta(hours=min(24, 2 ** claim.attempts))
+                _complete(
+                    claim,
+                    "review_needed" if claim.attempts >= 5 else "verify_needed",
+                    str(exc), retry_at=retry_at,
+                )
+                for paused in claims[position + 1:]:
+                    _complete(
+                        paused, "verify_needed", str(exc), retry_at=retry_at,
+                        consume_attempt=False,
+                    )
+                result.update(
+                    status="deferred_write_refused", error=str(exc),
+                    retry_at=retry_at.isoformat(),
+                )
+                return result
             if isinstance(exc, XListError) and str(exc) == "http_429":
                 retry_at = exc.retry_at or timezone.now() + timedelta(minutes=15)
                 for paused in claims[position:]:
@@ -341,15 +402,21 @@ def sync_intents(*, cfg, client, deadline=None):
                 result.update(status="deferred_rate_limit", retry_at=retry_at.isoformat())
                 return result
             auth = isinstance(exc, XListError) and exc.auth
+            if auth:
+                for paused in claims[position:]:
+                    _complete(
+                        paused, "blocked_auth", str(exc),
+                        consume_attempt=paused.pk == claim.pk,
+                    )
+                result.update(status="blocked_auth", error=str(exc))
+                return result
             terminal = isinstance(exc, XListError) and str(exc) in {
                 "http_400",
                 "http_404",
             }
             _complete(
                 claim,
-                "blocked_auth"
-                if auth
-                else ("review_needed" if terminal else "verify_needed"),
+                "review_needed" if terminal else "verify_needed",
                 str(exc) if isinstance(exc, XListError) else type(exc).__name__,
             )
     result["status"] = "complete" if result["confirmed"] == len(claims) else "deferred"
@@ -387,7 +454,12 @@ def build_owner_list_client(cfg):
                 raise
 
         def members(self):
-            return self._client.members()
+            try:
+                return self._client.members()
+            except XListError as exc:
+                if exc.auth:
+                    self._store.block()
+                raise
 
         def add(self, identifier):
             try:

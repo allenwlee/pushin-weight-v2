@@ -186,7 +186,7 @@ def test_budget_database_rejects_invalid_kind_and_fingerprint_updates():
             EnrichmentBudgetWindow.objects.filter(pk=window.pk).update(**changes)
 
 
-def test_classifier_pair_budget_denial_reserves_neither_role_and_spends_no_attempt():
+def test_pilot_classifier_pair_budget_denial_reserves_neither_role_and_spends_no_attempt():
     from types import SimpleNamespace
 
     from monitor.cycle import CycleRunner
@@ -199,7 +199,7 @@ def test_classifier_pair_budget_denial_reserves_neither_role_and_spends_no_attem
     cfg.llm.classifier_model = DEEPSEEK_0731_MODEL
     now = timezone.now()
     window = EnrichmentBudgetWindow.objects.create(
-        enrichment_window_kind="scheduled",
+        enrichment_window_kind="pilot",
         starts_at=now,
         ends_at=now + timedelta(hours=1),
         request_limit=1,
@@ -210,7 +210,9 @@ def test_classifier_pair_budget_denial_reserves_neither_role_and_spends_no_attem
     cfg.harvest.enrichment.mode = "worker"
     state.translation_status = "succeeded"
     state.save(update_fields=["translation_status"])
-    guard = DispatchGuard(cfg=cfg, lease=SimpleNamespace(assert_held=lambda: None))
+    guard = DispatchGuard(
+        cfg=cfg, lease=SimpleNamespace(assert_held=lambda: None), scope="pilot"
+    )
     client = FixedSlotTransport()
     runner = CycleRunner(
         cfg=cfg, _post_fetch_clients={"translation": None, "classification": client}
@@ -223,6 +225,159 @@ def test_classifier_pair_budget_denial_reserves_neither_role_and_spends_no_attem
     assert window.reserved_usd == 0
     assert state.classification_attempts == 0
     assert state.classification_status == "pending"
+
+
+@pytest.mark.parametrize("allowance", ["absent", "expired", "exhausted"])
+def test_continuous_command_enriches_without_a_launch_allowance(monkeypatch, allowance):
+    """The real command and publishers use the provider key after launch limits end."""
+    import json
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from core.models import PostBrandSignal
+    from monitor.management.commands import run_enrichment_worker as worker
+    from tests.test_literal_translation_plaintext import PlaintextClient, TextResponse
+    from tests.test_u18_runtime_0731 import FixedSlotTransport
+    from x_monitor import reattribute
+    from x_monitor.config import DEEPSEEK_0731_MODEL
+
+    call_command("seed_i18n_labels", verbosity=0)
+    state = _state(f"continuous-{allowance}")
+    state.post.lang = "en"
+    state.post.save(update_fields=["lang"])
+    cfg = _cfg()
+    cfg.llm.literal_translation_v2_enabled = True
+    cfg.llm.classifier_model = DEEPSEEK_0731_MODEL
+    cfg.harvest.enrichment.mode = "worker"
+    cfg.harvest.enrichment.provider_calls_active = True
+    window = None
+    if allowance != "absent":
+        now = timezone.now()
+        window = EnrichmentBudgetWindow.objects.create(
+            enrichment_window_kind="scheduled",
+            starts_at=now - timedelta(hours=2),
+            ends_at=now + timedelta(hours=-1 if allowance == "expired" else 1),
+            request_limit=1,
+            reserved_requests=1,
+            usd_limit=Decimal(1),
+            reserved_usd=Decimal(1),
+            config_fingerprint=config_fingerprint(cfg),
+        )
+        cfg.harvest.enrichment.budget_window_id = str(window.pk)
+    translator = PlaintextClient(
+        [TextResponse("深度求索发布"), TextResponse("DeepSeekのリリース")]
+    )
+    classifier = FixedSlotTransport()
+
+    def translator_factory(config, **kwargs):
+        assert config is cfg and kwargs == {}  # normal DEEPINFRA_API_KEY route
+        return translator
+
+    def classifier_factory(config, **kwargs):
+        assert config is cfg and kwargs == {}
+        return classifier
+
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "production")
+    monkeypatch.setattr(worker, "load_config", lambda path: cfg)
+    monkeypatch.setattr(reattribute, "build_translator_client_from_env", translator_factory)
+    monkeypatch.setattr(reattribute, "build_classifier_client_from_env", classifier_factory)
+    output = StringIO()
+    call_command("run_enrichment_worker", once=True, stdout=output)
+    assert json.loads(output.getvalue().splitlines()[0])["funding_mode"] == "provider_key"
+    result = json.loads(output.getvalue().splitlines()[-1])
+    state.refresh_from_db()
+    assert state.translation_status == state.classification_status == "succeeded"
+    assert state.translation_attempts == state.classification_attempts == 1
+    assert not state.claim_run_id
+    assert len(translator.calls) == len(classifier.calls) == 2
+    assert PostBrandSignal.objects.filter(post_id=state.pk).exists()
+    assert result["n_enrichment_succeeded"] == 1
+    assert not result["enrichment_stop_reason"]
+    if window:
+        window.refresh_from_db()
+        assert window.reserved_requests == window.reserved_usd == 1
+
+
+def test_continuous_classifier_pair_still_respects_the_batch_call_limit():
+    from types import SimpleNamespace
+
+    from monitor.enrichment_worker import DispatchGuard
+
+    cfg = _cfg()
+    cfg.harvest.enrichment.mode = "worker"
+    cfg.harvest.enrichment.max_calls_per_batch = 2
+    guard = DispatchGuard(
+        cfg=cfg, lease=SimpleNamespace(assert_held=lambda: None), scope="continuous"
+    )
+    guard.reserve_pair([{}, {}], attempts_per_role=1)
+    for _ in range(2):
+        guard({"_enrichment_budget_prepaid": True})
+    with pytest.raises(LLMCallBudgetExhausted, match="batch_budget_exhausted"):
+        guard({})
+    assert guard.calls == 2
+    assert guard.prepaid == 0
+
+
+def test_manual_enrichment_keeps_its_expired_allowance_and_spends_no_attempt():
+    from monitor.cycle import CycleRunner
+    from tests.test_literal_translation_plaintext import PlaintextClient, TextResponse
+
+    state = _state("manual-expired")
+    state.post.lang = "en"
+    state.post.save(update_fields=["lang"])
+    state.classification_next_attempt_at = timezone.now() + timedelta(hours=1)
+    state.save(update_fields=["classification_next_attempt_at"])
+    cfg = _cfg()
+    cfg.harvest.enrichment.mode = "worker"
+    cfg.llm.literal_translation_v2_enabled = True
+    cfg.llm.translator_model = "google/gemma-4-31B-it-turbo"
+    now = timezone.now()
+    window = EnrichmentBudgetWindow.objects.create(
+        enrichment_window_kind="scheduled",
+        starts_at=now - timedelta(hours=2),
+        ends_at=now - timedelta(hours=1),
+        request_limit=10,
+        usd_limit=Decimal(1),
+        config_fingerprint=config_fingerprint(cfg),
+    )
+    cfg.harvest.enrichment.budget_window_id = str(window.pk)
+    client = PlaintextClient(
+        [TextResponse("深度求索发布"), TextResponse("DeepSeekのリリース")]
+    )
+    result = CycleRunner(
+        cfg=cfg, cycle_kind="manual",
+        _post_fetch_clients={"translation": client, "classification": None},
+    )._run_post_fetch([], run_id="manual-expired")
+    state.refresh_from_db()
+    window.refresh_from_db()
+    assert client.calls == []
+    assert state.translation_attempts == 0
+    assert state.translation_status == "pending"
+    assert window.reserved_requests == 0
+    assert result["enrichment_stop_reason"] == "enrichment_budget_expired"
+
+
+def test_pilot_command_requires_its_own_allowance(monkeypatch, tmp_path):
+    from django.core.management import call_command
+    from django.core.management.base import CommandError
+
+    from monitor.management.commands import run_enrichment_worker as worker
+    from x_monitor import reattribute
+
+    cfg = _cfg()
+    cfg.harvest.enrichment.mode = "worker"
+    cfg.harvest.enrichment.provider_calls_active = True
+    monkeypatch.setenv("X_MONITOR_DEPLOYMENT_ENVIRONMENT", "staging")
+    monkeypatch.setattr(worker, "load_config", lambda path: cfg)
+    monkeypatch.setattr(
+        reattribute, "build_translator_client_from_env",
+        lambda *a, **k: pytest.fail("pilot constructed a client without an allowance"),
+    )
+    ids = tmp_path / "pilot-ids.json"
+    ids.write_text('["pilot-post"]')
+    with pytest.raises(CommandError, match="pilot requires an explicit budget window"):
+        call_command("run_enrichment_worker", pilot=True, post_ids_file=ids, max_batches=1)
 
 
 def test_worker_mode_collection_does_not_claim_or_construct_providers(monkeypatch):

@@ -46,12 +46,10 @@ class Command(BaseCommand):
             raise CommandError(
                 "pilot requires at most 200 exact post IDs and --max-batches"
             )
-        if control.provider_calls_active and (
-            control.mode != "worker" or not control.budget_window_id
-        ):
-            raise CommandError(
-                "active worker requires worker mode and an explicit budget window"
-            )
+        if control.provider_calls_active and control.mode != "worker":
+            raise CommandError("active worker requires worker mode")
+        if options["pilot"] and not control.budget_window_id:
+            raise CommandError("pilot requires an explicit budget window")
         if cfg.synthesis.concurrency > control.other_gemma_concurrency:
             raise CommandError(
                 "commentary concurrency exceeds its declared Gemma allowance"
@@ -77,6 +75,8 @@ class Command(BaseCommand):
                         "process_limit": control.max_worker_processes,
                         "translation_slots": control.translation_concurrency,
                         "classification_slots": control.classification_concurrency,
+                        "funding_mode": "fixed_pilot_allowance"
+                        if options["pilot"] else "provider_key",
                     },
                     sort_keys=True,
                 )
@@ -112,7 +112,7 @@ class Command(BaseCommand):
                     run_id=f"enrichment-{uuid.uuid4().hex}",
                     fair_queue=True,
                     post_ids=ids,
-                    scope="pilot" if options["pilot"] else "scheduled",
+                    scope="pilot" if options["pilot"] else "continuous",
                     stop_event=stopped,
                 )
                 batches += 1

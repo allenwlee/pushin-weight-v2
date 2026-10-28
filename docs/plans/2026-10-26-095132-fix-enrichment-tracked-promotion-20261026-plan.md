@@ -10,12 +10,27 @@ ollija:
   delivery_target: production
   delivery_selected_by_user: true
   delivery_route: staged
-  delivery_route_selected_by_user: false
-  staging_transport: branch
+  delivery_route_selected_by_user: true
+  staging_transport: commit
 ---
 # Fix enrichment capacity and recover the October 21 backlog
 
 ## Plain-English Summary
+
+**October 28 combined repair and delivery:** The owner adds the selected `x-list-credential-403-block.md` handoff and explicitly orders “commit push and deploy”, continuing the exact-commit staging route proposed immediately before this request. Deploy the combined enrichment and list-refusal repair on the existing staging services without moving the independent special-events branch, then promote the same candidate to production. This current instruction supersedes the handoff's undecided delivery endpoint and the earlier pending route selection. Do not pause harvesting or add a collection probe. Internal GPT review remains selected.
+
+The added fix distinguishes a refused list-add POST from rejected authentication. Keep single-use token rotation and true credential failures fail-closed. Preserve a compact safe provider reason, pause the list after a refused write, back off from two hours to at most 24 hours, and send an account to review after five attempted refusals. Unsent accounts do not consume attempts. Existing HTTP 429 behavior remains unchanged. Existing `OfficialCompanyListIntent` status, last_error, next_attempt_at and attempts fields provide the record; credential status remains in `OfficialCompanyOwnerCredential`. Inspected models, migrations 0066/0067 and both writer/reader paths: zero tables/columns added or retired; no new JSON storage.
+
+Regression net: real `sync_intents` → stored credential client → HTTP adapter with fake transport and real encrypted PostgreSQL state, proving 403 add does not block credentials, cooldown persists across calls, later claims are released without spending attempts, provider reasons remain bounded and omit tokens, membership readback avoids duplicate writes, and repeated refusals terminate for review. Pin persistent 401 after one refresh, owner mismatch, failed refresh and HTTP 429. Reuse unchanged enrichment test evidence and run the combined affected suite plus Ollija. Apply internal GPT findings before committing.
+
+After exact-SHA production deployment, restore only the incident's known false block with guarded revision/status/evidence checks: credential `x-owner-17456158-list-2067062923525275922` at the observed revision, and intent 135 if still `blocked_auth/owner_auth_denied` for @LTX_io. Preserve encrypted tokens; never use stale local token pairs. Let the normal scheduled lane refresh and verify membership. If current evidence no longer matches, inspect rather than broadly resetting credentials/intents. A failed real refresh remains blocked and requires replacement credentials; never repeat an uncertain refresh. Observe a scheduled cycle and persisted membership, plus enrichment's latest-20 exact-cohort follow-up.
+
+**October 28 review route correction:** The owner directs review through internal GPT access, superseding the external Claude/Grok route for this work. Claude returned HTTP 402 without a review; the Grok fallback was stopped at owner direction and its result is not consumed. Use the internal GPT reviewer only; preserve separate-context versus cross-model independence honestly. External route retries and dependent steps are retired.
+
+**October28 owner correction — continuous provider-key operation:** The owner states, “continuous should be linked to our deepinfra key.” Scheduled continuous enrichment must use the existing `DEEPINFRA_API_KEY` and remain independent of the temporary launch/recovery allowance. This supersedes fixed-window expiry/spend limits for the continuous scheduled lane only, including the earlier requirement to renew that allowance. Keep provider activation, explicit model/key selection, six translation/three classifier slots, two commentary slots, one process, request/stage deadlines, per-batch call bounds, per-post retries, queue ownership and fresh/recovery fairness. Pilots retain their explicit fixed allowance and on-demand credential; historical collection budgets are unchanged. Preserve historical allowance rows without new schema (zero tables/columns added or retired).
+
+Implement in `monitor/enrichment_worker.py` and `monitor/management/commands/run_enrichment_worker.py`, covering both individual translation/extraction dispatch and paired classifier admission. Regression first: run the actual command through real queue claims, translator/classifier parsing and persistence with fake provider transports, for absent, expired and exhausted launch windows; verify successful publication and untouched historical allowance. Retain pilot denial/no-attempt behavior, missing credential failure, per-batch bounds and process/claim fencing. Reuse the permanent shared PostgreSQL database. Source is refreshed from deployedb0d53904, independently of the special-events candidatec458b9bd. Complete review and compatible staging observation before the existing authorized production endpoint; the staging branch currently contains that separate unreleased candidate, so its failed special-events acceptance is not evidence about this worker repair. Production proof requires exact revision, provider-key route, observed successful stored-queue processing and persisted latest20/exact30-minute follow-up; do not relabel existing failed checks.
+
 
 Restore timely classification and translation for every tracked brand, then recover the posts missed since October 21. Collection now brings in more posts than the enrichment step can finish. The fixed limit, shared runtime, repeated failed answers, and 24-hour expiry turn a busy queue into permanent dashboard gaps.
 
@@ -366,6 +381,24 @@ The staged pilot is frozen as200 actual stored posts spanning21 brands, includin
 
 Browser scope is backend-only: no route, template, static asset, or browser interaction changes. Exercise commentary's existing demand/poll/publication API through its PostgreSQL integration tests; record browser route coverage as not applicable rather than claiming a browser pass. The already-deployed dashboard chart/pills change is outside this candidate.
 
+## October 28 combined list-refusal release verification
+
+Added the X list-refusal repair under the owner's commit/push/deploy instruction. The new production-call-chain regressions failed before the fix (9 failures, 17 passes). The initial corrected list/credential suite passed all 26 cases. Added preflight permission/owner guards, then ran the full combined affected suite: **178 passed, 21 failed; 128 required PostgreSQL tests executed, zero skipped/errors**. All 21 failures reproduce identically with the deployed `b0d53904` production source: two old cycle assertions expect seven planned calls instead of the deployed eight, and nineteen account-evidence fixtures omit `verified_type` after the prior vocabulary refactor. These are baseline failures, not passed checks. Candidate source hashes were restored exactly after baseline verification. Logs: `.local/enrichment-release/combined-regression.log`, `combined-baseline.log`, and `baseline-source-check.json`. Changed production modules and the list-sync tests pass Ruff; whitespace checks pass.
+
+Internal GPT reviewed the new list credential call chain, refusal bounds, cooldown persistence, authentication, single-use renewal and safe error handling; no actionable introduced defects. New review: `/tmp/compound-engineering-501/ce-code-review/20261028-enrichment-provider-key/internal-gpt-list.json`; combined follow-up records coverage and baseline failures. No external review calls were made for this addition.
+
+Production read-only preflight still matches the handoff: the exact credential is blocked at revision 25, last token save `2026-10-18T03:36:46.012265Z`; intent 135 is the only `blocked_auth` row, for native account `1757373753829253120`, with matching registered evidence and one attempt. The production repair will compare this exact state and use the normal writer locks; it will not reset other credentials or pending accounts. Staging web/enrichment have no active deployment or one-off job, and staging provider activation remains false. Use the staging enrichment service for the rollback-only list fixture smoke and an empty exact-ID worker command; no real provider call, real-post fake output or stage jobs cron deployment is needed. The staging branch remains unchanged, and exact live revision checks before smoke and promotion fence automatic deployment races.
+
+## October 28 provider-key repair verification
+
+The internal GPT review found that the first implementation exempted all callers using the default `scheduled` scope, including manual repair commands. Applied finding #1 by introducing an explicit `continuous` scope selected only by the non-pilot worker command. Default manual callers and pilots retain their existing allowance checks. No other review finding remains. Review evidence: `/tmp/compound-engineering-501/ce-code-review/20261028-enrichment-provider-key/review.json`; caller follow-up records the fix without replacing the original review.
+
+Tests first reproduced the absent, expired and exhausted launch-window failures through the real management command, queue, parsers and publishers with fake provider transports. The review follow-up also reproduced manual dispatch bypass before fixing it. Final verification on the permanent shared PostgreSQL database: **123 passed**, including all **73 required PostgreSQL tests**, zero skips/errors. Scope: `test_enrichment_worker`, budget command, recovery, post-enrichment queue, bounded classifier, DeepInfra factory routing and `tests/ollija`. Log: `.local/enrichment-release/provider-key-final-regression.log`. Both changed production modules pass Ruff; `git diff --check` passes.
+
+The earlier broader run had 128 passes and one pre-existing activation-control assertion failure (configured targeted-extraction limit 20 versus expected 0). That failure is not passed or fixed by this repair and is not included in the final focused run. The worker test file's existing import-order lint warning also reproduces on the deployed base. Preserve both baseline findings without unrelated edits.
+
+Read-only preflight confirms production enrichment is active and has `DEEPINFRA_API_KEY` configured; the service still runs `b0d53904`. Staging web/enrichment/jobs are idle at the independent special-events candidate `c458b9bd`, with no active jobs. Production harvest remains on its normal 15-minute schedule. Local tests do not establish live provider throughput or backlog recovery. The exact-commit staging route has been proposed to the owner; its selection remains pending. Do not move the occupied staging branch or change its separate special-events acceptance result.
+
 ## Verification Contract
 
 ### Active production worker, bounded recovery, and receipt correction, October27 10:57JST
@@ -487,6 +520,10 @@ The owner's later capacity decision supersedes the original single-process-only 
 
 ## Delivery Exceptions
 
+**October 28 current scope:** The owner adds the X list-refusal handoff and orders commit, push and deploy after the proposed exact-commit staging route. Record `staging_transport: commit` and keep the occupied staging branch unchanged. Include bounded recovery of the handoff's known false credential block, guarded by current state; no harvest pause, local token rotation, new paid probe or unrelated special-events activation.
+
+**October 28 review and route:** Use internal GPT review only, as explicitly directed by the owner. The review is complete and its one finding is applied. Production delivery remains authorized. The staging branch contains an independent unreleased candidate; an owner choice of `staging_transport: commit` is still pending under the repository's route-selection rule. Commit and push this tested repair independently while preserving that branch. No additional paid pilot or TwitterAPI collection is authorized by this route proposal.
+
 **October27 09:16JST continuation:** owner says `deploy` directly after the proposed $5 pilot/$100 recovery limits. This supplies the pending numeric operating selection and reaffirms the existing production endpoint. Execute the bounded pilot and authorized release without asking again. Current read-only observations still show production8785ea76/schema0195 and staging1a89457e/schema0197; coordinate the production interval with G2, preserving its copy jobs and the staged cohort.
 
 **Current owner instruction, October 27:** `compound-engineering:lfg to deployment` explicitly resumes the entire incident release, superseding the capacity-review pause described in the history below. Reuse this plan and canonical branch, retain the staged route, and carry production authorization through implementation, review and delivery. G2 has since shipped schema `0195` and production code through `8785ea76`; refresh the candidate against current main before implementation. The shared test database currently has an additional G2 ORM-detachment migration `0196` (physical columns retained); preserve its schema and coordinate compatibility without resetting it. Earlier test receipts remain historical evidence for their named revisions, not automatic verification of the advanced source.
@@ -530,10 +567,10 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
+4. Inspect staging service/database occupancy. Do not interrupt another release.
+5. Use the project's deployment interface to deploy the exact candidate commit to staging without moving its branch. Account for automatic deployment races.
+6. Verify the staging service reports that candidate SHA.
+7. Run the applicable, unwaived staging checks. Diagnose a failure before retrying.
 8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
 9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
 10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.

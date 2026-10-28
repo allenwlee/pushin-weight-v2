@@ -17,7 +17,25 @@ table needs a distinct record meaning and a concrete explanation of why existing
 storage is unsuitable; record its relationships and table additions/retirements
 in the existing plan or change description. Apply M19 in the
 [avoiding-recurring-mistakes skill](.claude/skills/avoiding-recurring-mistakes/SKILL.md).
-This is a schema-review rule, not a blanket ban on new tables or an approval gate.
+Apply the same review to field types: identify ownership, cardinality, expected
+queries and constraints. Justify JSON against typed columns and relationships;
+future flexibility or fewer tables alone is insufficient. Review representative
+reads/writes and invariants before calling a schema implementation-ready.
+Example-record consistency does not establish design fitness. Neither table
+count nor zero JSON is the design goal; record decisions in the existing plan.
+The core field test is: **Is this truly variable-schema data, or just an
+unmodeled entity?** Prefer explicit entities/columns/relationships for the latter.
+Owner-selected JSON exception policy: a PR introducing a `json`/`jsonb` column
+requires explicit owner/team approval and a written answer to that test, examples
+of legitimate shape variation, and why typed storage is unsuitable. Necessary
+JSON must have a versioned strict schema and enforced validation at the database
+or application write boundary, including background/bulk writers; merely defining
+an ORM validator or calling `Model.clean()` on one path is insufficient. Record
+unknown-key, required-field, type/range and schema-evolution policy plus negative
+tests. `jsonb_matches_schema` requires the pg_jsonschema extension; verify target
+support before proposing it, or use a strict application schema on every writer.
+This JSON-specific approval rule comes from the owner; the general schema review
+is not a blanket ban on new tables or an additional approval gate.
 <!-- END SCHEMA FIRST -->
 
 For reference-document work, read and follow
