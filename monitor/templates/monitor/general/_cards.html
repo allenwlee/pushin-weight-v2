@@ -3,7 +3,7 @@
 <article class="feed-item{% if item.person %} people-item{% endif %}" data-post-id="{{ item.id }}">
   {% if item.person %}<div class="person-initials" aria-hidden="true">{{ item.person.initials }}</div>{% endif %}
   <div class="feed-copy">
-    <div class="brand-pills">{% for brand in item.brands %}<a class="brand-pill" href="{{ brand.url }}">#{{ brand.name }}</a>{% endfor %}</div>
+    <div class="brand-pills">{% for brand in item.brands %}<a class="brand-pill" href="{{ brand.url }}">{% if brand.logo %}<img class="pw-pill-logo" src="{{ brand.logo }}" alt="" width="11" height="11">{% endif %}#{{ brand.name }}</a>{% endfor %}</div>
     {% if item.person %}<h3 class="person-name"><a href="{{ item.share_url }}">{{ item.person.name }}</a></h3><p class="person-role">{{ item.person.title }} · {{ item.person.organization }} · {{ item.person.relationship }}{% if not item.person.confirmed %} · {% translate "Unconfirmed" %}{% endif %}</p>{% endif %}
     <a class="card-link" href="{{ item.share_url }}" lang="{{ item.commentary.locale|default:feed.locale }}">{{ item.display_text }}</a>
     <div class="card-meta">

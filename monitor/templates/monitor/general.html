@@ -1,8 +1,7 @@
 {% load static i18n %}<!doctype html>
 <html lang="{{ locale }}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>走个量 · Pushin' Weight</title><link rel="icon" href="{% static 'favicon.svg' %}">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;550;600;650;700&amp;family=Newsreader:opsz,wght@6..72,450;6..72,550&amp;family=VT323&amp;display=swap" rel="stylesheet">
+<title>PUSHINWEIGHT</title><link rel="icon" href="{% static 'favicon.svg' %}">
+<link rel="stylesheet" href="{% static 'fonts/pw-fonts.css' %}">
 <link rel="stylesheet" href="{% static 'monitor/general.css' %}"><script src="{% static 'monitor/general.js' %}" defer></script>
 </head><body class="general-page" data-audience="{{ state.audience }}" data-nav="rail" data-preferences-namespace="{{ preferences_namespace }}">
 {% include 'monitor/_cyber_quan_sprite.html' %}
@@ -11,7 +10,7 @@
 <div class="general-shell">
 <header><div class="masthead">
   <button type="button" class="mobile-nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="left-navigation" aria-label="{% translate 'Toggle navigation' %}">☰</button>
-  <a class="logo" href="/general/?lang={{ locale }}"><svg class="app-mark" aria-hidden="true"><use href="#mark-quiet"></use></svg><span class="zh">走个量</span><span class="en">Pushin'<br>Weight</span></a>
+  <a class="logo" href="/general/?lang={{ locale }}" aria-label="PUSHINWEIGHT"><svg class="app-mark" aria-hidden="true"><use href="#mark-quiet"></use></svg><span class="pw-wordmark" aria-hidden="true"><span class="pw-wm-pushin">Pushin</span><span class="pw-wm-weight">Weight</span></span></a>
   <div class="chat-anchor"><div class="chat-launcher"><input placeholder="{% translate 'Ask what’s happening…' %}" aria-label="{% translate 'Page assistant is unavailable' %}" disabled><button type="button" aria-label="{% translate 'Page assistant is unavailable' %}" disabled>↵</button></div></div>
   <div class="primary-settings">
     {% include 'monitor/general/_weights.html' %}

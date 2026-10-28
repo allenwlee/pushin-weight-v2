@@ -45,8 +45,6 @@ body[data-nav="expanded"] .nav-label { display: inline; }
 .masthead { height: 48.5px; max-width: 1440px; margin: auto; padding: 0 36px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--line); }
 .logo { display: flex; align-items: center; gap: 6px; flex-shrink: 0; color: var(--ink); }
 .app-mark { width: 24px; height: 29px; }
-.logo .zh { font-size: 23px; font-weight: 700; letter-spacing: -1px; }
-.logo .en { font-size: 10px; font-weight: 700; line-height: 1.05; }
 .chat-anchor { flex: 1 1 140px; min-width: 95px; max-width: 265px; }
 .chat-launcher { height: 29px; display: flex; border: 1px solid var(--line); border-radius: 9px; background: #f9fafc; }
 .chat-launcher input { min-width: 0; width: 100%; padding: 5px 9px; border: 0; background: transparent; font-size: 10px; }
@@ -164,7 +162,6 @@ body[data-audience="agent"] .chat-launcher, body[data-audience="agent"] a[aria-c
   body, body[data-nav="expanded"] { --nav-width: 0px; }
   .general-shell { margin-left: 0; }
   .masthead { height: 91px; padding: 8px 14px; flex-wrap: wrap; gap: 8px; }
-  .logo .zh { font-size: 21px; }
   .chat-anchor { flex: 1; }
   .primary-settings { order: 5; width: 100%; margin: 0; justify-content: space-between; }
   .mobile-preferences { margin-left: auto; }
@@ -188,3 +185,21 @@ body[data-audience="agent"] .chat-launcher, body[data-audience="agent"] a[aria-c
   .atomic-detail { padding: 24px 18px 60px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; } }
+
+/* General-style restyle: the human view sits on a gray page behind
+   white panels, masthead and rail; the Agent view keeps its own palette. */
+body.general-page[data-audience="human"] { background: #f0f2f5; }
+body.general-page[data-audience="human"] .general-shell > header { background: #fff; }
+body.general-page[data-audience="human"] .left-nav { background: #fff; }
+/* The masthead line spans the full width in both views, so switching Human and
+   Agent never moves a panel. */
+body.general-page[data-audience] .general-shell > header { border-bottom: 1px solid var(--line); }
+body.general-page[data-audience] .masthead { border-bottom: 0; }
+/* Post detail pages share this stylesheet without data-audience and stay unchanged. */
+body[data-audience] .logo { gap: 8px; }
+body[data-audience] .logo .pw-wordmark { font: italic 500 15px/1 'DM Sans', system-ui, sans-serif; letter-spacing: 0; text-transform: uppercase; color: var(--ink); white-space: nowrap; }
+body[data-audience] .logo .pw-wm-pushin { letter-spacing: 0.06em; }
+body[data-audience] .logo .pw-wm-weight { font-weight: 800; }
+body[data-audience] .brand-pill { display: inline-flex; align-items: center; gap: 3px; }
+body[data-audience] .brand-pill .pw-pill-logo { width: 11px; height: 11px; flex: 0 0 auto; border-radius: 2px; object-fit: contain; }
+body[data-audience="agent"] .brand-pill .pw-pill-logo { filter: grayscale(1) brightness(1.6); }

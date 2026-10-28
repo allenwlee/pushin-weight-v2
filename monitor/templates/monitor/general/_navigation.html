@@ -1,7 +1,7 @@
 {% load i18n %}
 <button class="nav-backdrop" data-close-nav aria-label="{% translate 'Close navigation' %}" hidden></button>
 <aside class="left-nav" id="left-navigation" aria-label="{% translate 'Navigation' %}">
-  <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="left-navigation" aria-label="{% translate 'Toggle navigation' %}">☰<span class="nav-label">Pushin' Weight</span></button>
+  <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-controls="left-navigation" aria-label="{% translate 'Toggle navigation' %}">☰<span class="nav-label">PUSHINWEIGHT</span></button>
   <nav>
     <a href="/general/?lang={{ locale }}" title="{% translate 'General' %}"><svg class="icon" aria-hidden="true"><use href="#mark-quiet"></use></svg><span class="nav-label">{% translate "General" %}</span></a>
     {% for key, panel in panels.items %}<a href="#{{ key }}" title="{{ panel.title }}"><svg class="icon" aria-hidden="true"><use href="#{{ panel.glyph }}"></use></svg><span class="nav-label">{{ panel.title }}</span></a>{% endfor %}

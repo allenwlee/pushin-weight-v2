@@ -14,6 +14,7 @@ from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.db.models.functions import Collate
 from django.utils import timezone
 
+from core.brand_presentation import brand_logo_urls
 from core.classification_contract import (
     CANONICAL_TAXONOMY_VERSION,
     CONTRACT_VERSION,
@@ -119,6 +120,7 @@ def post_documents(posts, *, locale="en", section=None):
     if section:
         signals = signals.filter(post_type_id=SECTIONS[section])
     brands = {post_id: {} for post_id in post_ids}
+    logo_urls = brand_logo_urls()
     for signal in signals.order_by("brand_id"):
         brand = signal.brand
         name = (
@@ -130,6 +132,7 @@ def post_documents(posts, *, locale="en", section=None):
             "id": brand.pk,
             "name": name,
             "url": f"/brands/{quote(brand.pk, safe='')}/",
+            "logo": logo_urls.get(brand.pk),
         }
     documents = {}
     for post in posts:
