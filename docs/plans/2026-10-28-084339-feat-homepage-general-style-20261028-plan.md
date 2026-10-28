@@ -10,8 +10,11 @@ ollija:
   change_id: feat-homepage-general-style-20261028-2026-10-28-084339
   branch: feat/homepage-general-style-20261028
   workflow: plan
-  delivery_target: on-request
-  delivery_selected_by_user: false
+  delivery_target: staging
+  delivery_selected_by_user: true
+  delivery_route: staged
+  delivery_route_selected_by_user: false
+  staging_transport: branch
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -39,10 +42,17 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `on-request`
-- Owner selection recorded: `false`
+- Delivery target: `staging`
+- Owner selection recorded: `true`
 
-Target is not authorized until the owner selects it. Wait for a later explicit release request; do not commit, push, stage, or promote on this guide alone.
+1. Complete implementation and the plan's verification contract.
+2. Run the configured focused checks:
+   - `pytest tests/ollija`
+3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
+4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
+5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
+6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
+7. Run staging checks. Stop here if they fail.
 
 ### Failure handling
 
@@ -59,6 +69,7 @@ Target is not authorized until the owner selects it. Wait for a later explicit r
 ## Delivery Exceptions
 
 - 2026-10-28 owner: "deployed commit is e5edf737, lfg with our updates to general, homepage, dashboard", then "actually /compound-engineering:lfg this". This LFG request authorizes local commits on `feat/homepage-general-style-20261028`, a push of that branch, an open pull request against `main`, and watching CI to a decided state. It does not authorize merge, staging, production deployment, production data writes (including `apply_homepage_brand_updates --commit`), provider calls or harvester changes. `delivery_target` stays `on-request`.
+- 2026-10-28 owner, during the PR #73 CI watch: "will u push to https://pushinweight-staging-web.onrender.com/?", then "dploy to staging". This adds staging delivery: after PR CI is decided, fast-forward the exact candidate SHA of this branch to `staging` (default staged route, branch transport; `staging` was at base `e5edf737`) and verify that `pushinweight-staging-web` serves that SHA. `delivery_target` is now `staging`, superseding the note above. Merge, production deployment and production data writes (including `apply_homepage_brand_updates --commit`) remain unauthorized. The outstanding candidate performance measurement is not waived.
 
 # Homepage, General and Dashboard in General Style - Plan
 
