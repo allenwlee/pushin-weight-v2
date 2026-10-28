@@ -1,0 +1,84 @@
+---
+title: RG6 production harvest gap — incident and review analysis
+date: 2026-10-28
+status: read-only investigation
+source: docs/brainstorms/2026-10-28-070318-rg6-harvester-gap-handoff.md
+---
+
+# RG6 production harvest gap — incident and review analysis
+
+## Executive finding
+
+On October 27, RG6 temporarily changed the production X harvester from every 15 minutes to once daily while it copied and verified historical collection data. That hold skipped the 14:00–17:15 JST scheduled runs. A Blueprint sync briefly restored the schedule, allowing one run at 17:30; RG6 held it again until after the schema release, skipping the 17:45, 18:00, and 18:15 ticks. Production has zero raw posts with publication times in each of the 14:00, 15:00, and 16:00 JST hours. This was a collection interruption, not evidence that migration `0201` deleted posts: the main blank predates that migration, and all 454 selected surrounding run/post references checked by the investigator are still present. These 454 references are not an exhaustive deletion audit.
+
+Normal harvesting resumed, but its 15-minute lookback discarded the older interval from ordinary search. The existing recovery backlog contained no window intersecting 13:30–18:30 JST when inspected. RG6's final verification established that the new schema, pages, and next natural harvest worked; it did not establish continuity for time skipped while harvesting was intentionally held. The end-group `ce-compound` review captured Blueprint configuration drift and how to prevent that drift in future releases. It missed the coverage loss because neither the release gate nor the learning checked scheduled-tick continuity or required a recovery record for time spent on hold.
+
+This report is a read-only analysis of saved production evidence and release artifacts. It does not initiate recovery or change production settings.
+
+## Evidence and confidence
+
+The [investigation handoff](../brainstorms/2026-10-28-070318-rg6-harvester-gap-handoff.md) contains the original production read-only findings from approximately 05:55–06:10 JST on October 28. Its machine-local evidence is in `/Users/fuchitalee/.local/share/render-operations/2026-10-28-harvest-gap/`, including `diagnosis.json`, `gap-logs.json`, `quiet-window-logs.json`, `logged-post-preservation.sql/.txt`, `recent-harvest.json`, and `enrichment-recent.json`. I rechecked the handoff against those saved facts, the RG6 release receipts in `.worktrees/refactor/global-shared-vocabulary-20261021/.local/rg6-20261026/`, the [RG6 plan](/Users/fuchitalee/development/pushin-weight-v2/.worktrees/refactor/global-shared-vocabulary-20261021/docs/plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md), the [committed compound learning](/Users/fuchitalee/development/pushin-weight-v2/.worktrees/refactor/global-shared-vocabulary-20261021/docs/solutions/workflow-issues/2026-10-27-184738-render-blueprint-sync-overwrites-release-holds.md), and current source in that worktree.
+
+The schedule changes, selected run outcomes, hourly database counts, and selected-ID preservation are directly observed. The precise number of posts that would have been collected without the hold is **unknown**. A zero row count is evidence of missing stored coverage for those publication hours; it is not a count of all X posts that existed or matched the queries. The exact instant at which Blueprint sync restored the schedule is also unknown; a 17:29:16 readback proves it had happened by then.
+
+## Timeline and impact
+
+All times below are **October 27, 2026, Japan time (JST, UTC+9)**.
+
+| Time | Observation | Source |
+|---|---|---|
+| 13:45:18–13:46:34 | Last scheduled pre-hold run completed, reporting 135 inserts and zero persistence failures. Latest pre-hold `posts.fetched_at` was 13:45:58.645402. | `gap-logs.json`; handoff |
+| 13:48:08 | RG6 changed harvest schedule from `*/15 * * * *` to `0 0 * * *` to freeze historical-copy state. | `prod-harvest-temporary-schedule-hold.json` |
+| 14:00–17:15 | No scheduled harvest runs were recorded. The narrower 13:50–17:29 log query returned no harvest messages. | `quiet-window-logs.json`; handoff |
+| By 17:29:16 | Readback found the 15-minute schedule restored by production Blueprint sync during a `main` push. | `runner-prod-main-push-control-drift.json`; RG6 plan |
+| 17:30:32 | RG6 re-applied the daily hold. | `runner-prod-rehold-harvest-result.json` |
+| 17:30:43 | One interim cycle ran on old revision `70fb5f6e`, finishing nine ordinary calls and reporting 167 ordinary inserts; rare processing added two posts. Its scheduler queueing instant is unproven. First post insert after the gap was at 17:30:50.425534. | `gap-logs.json`; handoff |
+| 17:45–18:15 | The second hold skipped three more scheduled ticks. | hold and restoration receipts; handoff |
+| 18:14:11 | Migration `0201_rg6_remove_legacy_collection_json` applied in production, **after** the main blank interval. | handoff; RG6 final release records |
+| 18:25:15–18:30:30 | RG6 restored `*/15 * * * *` and read the schedule back. | `runner-prod-restore-harvest-intent.json`, `runner-prod-restored-schedules-preharvest.json` |
+| 18:31:20 | First natural post-release run on revision `00dcf8c4` completed all nine calls, inserted 202 posts, updated four, and reported zero persistence failures. | `runner-prod-rg6-final-report.json` |
+
+The raw `posts` table had **432** rows published in 13:00–14:00 JST, **0** in 14:00–15:00, **0** in 15:00–16:00, **0** in 16:00–17:00, **169** in 17:00–18:00, and **511** in 18:00–19:00. The 17:00 hour contains the interim run, so its nonzero count does not imply uninterrupted collection. The investigator's exact-ID query found 150/150, 137/137, and 167/167 logged post references from the 13:30, 13:45, and 17:30 runs still present, respectively. These are **run/post references**, not necessarily 454 distinct new posts. [Preservation query result](/Users/fuchitalee/.local/share/render-operations/2026-10-28-harvest-gap/logged-post-preservation.txt).
+
+The evidence strongly attributes the gap to the explicit release holds. It does not prove there was no unrelated deletion elsewhere; the selected-ID check and timing make deletion an unsupported explanation for this particular blank. The 15-minute buckets at the edges include a few posts, so the exact missing-publication boundary cannot be defined solely by hourly counts. A conservative recovery envelope is **13:45–18:30 JST** (04:45–09:30 UTC), with deduplication against the interim run; this is a proposed envelope, not a completed recovery or a guarantee of historical provider recall.
+
+## Mechanism: why resumption did not recover the hours
+
+`config.yaml` sets `cycle.max_lookback_hours: 0.25` for scheduled collection. In `monitor/cycle.py`, `_read_cursor_since` returns the later of the old cursor minus overlap and `now - max_lookback_hours`. After a multi-hour pause, the 15-minute floor wins. `_resolve_window` uses that bounded start before the provider call. A successful call then advances the live cursor to the queried upper bound. The saved 17:30 call windows confirm a 900-second search, for example 17:15:43–17:30:43 JST. The earlier hours were outside those requests. The recovery backlog is populated for defined incomplete/truncated windows in the live flow; merely pausing a schedule does not create backlog rows. The investigator found **zero** `harvest_backlog_windows` rows overlapping 13:30–18:30 at inspection.
+
+This 15-minute clamp is existing harvester behavior, not an RG6 schema change. It limits ordinary replay after an extended interruption. RG6 created the unusual interruption by holding the schedule, but its release procedure did not pair the hold with explicit missed-window capture or a bounded catch-up step. Restoring the cron expression restarted future collection; it did not reconstruct the past. The successful 18:31 natural run proves the current writer path, not historical coverage.
+
+## Why the compound review missed it
+
+1. **The review was aimed at a different observed failure.** The learning created in commit `78116153` at 18:52 JST and cited by the RG6 close-out in commit `ae6420b2` at 20:39 JST is titled *Render Blueprint sync can undo temporary production release holds*. It explains how a Blueprint push reset manually held settings and how the interim old-code writer changed the archive high-water mark. Its checks concern preserved archive parity, exact service settings, and the next natural writer. It does not discuss skipped harvest ticks, post-publication counts, or backlog recovery. This is an inspected omission in that artifact, not evidence that the author consciously rejected a coverage check.
+2. **The release proof used the wrong unit for this risk.** The frozen-copy parity compared historical rows that already existed; the bounded delta compared rows a later old writer actually created. Neither can discover posts that were never fetched. The final `natural_writer.passed=true` in `runner-prod-rg6-final-report.json` means nine calls, 202 new posts, typed memberships, request archives, and zero persistence failures on the released revision. It does not mean every expected 15-minute tick ran. The plan's close-out reports schedule restoration and the next natural writer, but no gap ledger or query of uncovered time.
+3. **The hold had no coverage accounting contract.** The plan recorded the original cron expressions and restoration receipts so infrastructure could be returned to its prior settings. It did not record `held_from`, `held_until`, per-call missing windows, or an explicit choice to recover or accept that data loss. The deliberate hold was therefore treated as a release-control detail, even though it changed the product's collection completeness. This is the central process omission.
+4. **The Blueprint incident diverted attention toward an in-flight writer.** When sync briefly resumed the harvester, RG6 correctly noticed new rows outside the frozen cohort and independently archived the relevant delta before deletion. That repair addressed the risk of deleting old storage while newer legacy rows lacked archives. It did not address the larger, opposite problem: hours in which no writer ran. The final compound learning perpetuated the control-restoration lesson but did not add a time-coverage lesson to RG7's execution guard.
+
+`ce-compound` is a mechanism for recording a solved problem; it is not automatically an anomaly detector across product metrics. The actionable failure here was the absence of a collection-continuity acceptance check at the release boundary, followed by a compound artifact that summarized only the already recognized Blueprint issue. The review was **not** false about schema integrity or the next harvest; its coverage was narrower than the operational effect of holding a recurring collector. RG7's later release checks likewise should not be read as retrospective proof of RG6's skipped hours unless they explicitly examine those hours.
+
+## Separate enrichment observation
+
+At the October 28 inspection, eight recent scheduled X cycles from 04:00 through 05:45 JST finished all nine calls with zero persistence failures, so ordinary collection was running. The enrichment worker separately logged six `CommandError: enrichment_budget_expired` exits between 05:25 and 05:53 JST. The latest-20 health check found 0 complete, 20 fresh-pending, 0 unhealthy; acceptance failed and regression was inconclusive. All 4,163 newly inserted posts inspected since midnight had language unset at that snapshot. The exact cause of the allowance expiry was **not established**. This observed `expired` code differs from the earlier RG6 close-out's `enrichment_budget_exhausted`; the two should not be silently equated. Neither explains why raw posts were absent during the October 27 schedule hold. No budget, worker, or provider setting was changed in this investigation.
+
+## Corrective actions recommended
+
+| Priority | Action | Proof of completion |
+|---|---|---|
+| Immediate | Add the October 27 interval to the incident/release record as **unrecovered coverage debt**. Assess a bounded backfill using existing X collection paths and the on-demand credential, without interrupting the healthy scheduled harvester. Preserve source post IDs, recorded query windows, deduplication and partial-recall limits. | A receipt lists exact attempted windows per call, provider outcomes, persisted IDs, remaining uncovered windows, and spend. Never infer full historical recall from a successful request. |
+| Immediate, separate | Inspect the enrichment allowance deadline and current worker invocation to explain `enrichment_budget_expired`; address it under its own authority and spending decision. | Fresh pending cohort progresses or an explicit unresolved operational limitation is recorded. |
+| Before another planned collector hold | Treat the hold as both a release-control change and a coverage event. Record the scheduled ticks and per-call time windows that will be missed; either queue replay before normal cursor advancement or record an explicit, visible decision to accept the loss. Keep the normal 15-minute clamp unless a tested design changes it. | A hold/resume rehearsal with a multi-hour fake-provider gap shows no silent window loss, and a release receipt reconciles held time, returned schedule, successful calls, and backlog/recovery state. |
+| End-group review | Add a collection-continuity check whenever a release changes or pauses a recurring collector. Compare expected ticks with actual run receipts, inspect publication/ingestion buckets around the hold, and compare missing windows with backlog/recovery receipts. Carry any identified gap into the compound learning and next-group plan amendment. | The close-out states either complete coverage for the defined interval or exact remaining debt. Successful deployment and successful next run are reported separately. |
+
+The suggested recovery envelope and checks do not authorize paid X calls or production mutation by themselves. A later implementation should use the repo's `change-harvester` and `avoiding-recurring-mistakes` procedures and preserve the current live schedule.
+
+## Source index
+
+- [Original read-only handoff](../brainstorms/2026-10-28-070318-rg6-harvester-gap-handoff.md), including production query method, hour counts and uncertainty.
+- [Diagnosis summary](/Users/fuchitalee/.local/share/render-operations/2026-10-28-harvest-gap/diagnosis.json), [boundary logs](/Users/fuchitalee/.local/share/render-operations/2026-10-28-harvest-gap/gap-logs.json), [selected-ID preservation result](/Users/fuchitalee/.local/share/render-operations/2026-10-28-harvest-gap/logged-post-preservation.txt), [recent harvest evidence](/Users/fuchitalee/.local/share/render-operations/2026-10-28-harvest-gap/recent-harvest.json), and [enrichment evidence](/Users/fuchitalee/.local/share/render-operations/2026-10-28-harvest-gap/enrichment-recent.json). These machine-local files remain on fuchitalee.
+- [RG6 release plan](/Users/fuchitalee/development/pushin-weight-v2/.worktrees/refactor/global-shared-vocabulary-20261021/docs/plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md): first Plain-English Summary entries, RG7 guard and Definition of Done.
+- [RG6 compound learning](/Users/fuchitalee/development/pushin-weight-v2/.worktrees/refactor/global-shared-vocabulary-20261021/docs/solutions/workflow-issues/2026-10-27-184738-render-blueprint-sync-overwrites-release-holds.md), committed as `78116153`; RG6 close-out committed as `ae6420b2`.
+- [Final release receipt](/Users/fuchitalee/development/pushin-weight-v2/.worktrees/refactor/global-shared-vocabulary-20261021/.local/rg6-20261026/runner-prod-rg6-final-report.json), [first hold](/Users/fuchitalee/development/pushin-weight-v2/.worktrees/refactor/global-shared-vocabulary-20261021/.local/rg6-20261026/prod-harvest-temporary-schedule-hold.json), [second hold](/Users/fuchitalee/development/pushin-weight-v2/.worktrees/refactor/global-shared-vocabulary-20261021/.local/rg6-20261026/runner-prod-rehold-harvest-result.json), and [restored-control readback](/Users/fuchitalee/development/pushin-weight-v2/.worktrees/refactor/global-shared-vocabulary-20261021/.local/rg6-20261026/runner-prod-restored-schedules-preharvest.json).
+- [Cursor/window code](/Users/fuchitalee/development/pushin-weight-v2/.worktrees/refactor/global-shared-vocabulary-20261021/monitor/cycle.py:1473) and [15-minute configuration](/Users/fuchitalee/development/pushin-weight-v2/.worktrees/refactor/global-shared-vocabulary-20261021/config.yaml:258).
+
+No fresh production query, paid provider call, deployment, schema change, or recovery operation was performed for this report. The latest live-state claims remain the October 28 inspection snapshot in the handoff.
