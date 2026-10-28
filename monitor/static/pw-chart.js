@@ -137,14 +137,6 @@
       : (entry.display_name_en || entry.display_name || entry.nickname);
   }
 
-  function hexToRgba(hex, alpha) {
-    var match = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
-    if (!match) return hex;
-    var value = parseInt(match[1], 16);
-    return 'rgba(' + (value >> 16 & 255) + ',' + (value >> 8 & 255) + ',' + (value & 255) + ',' +
-      alpha.toFixed(3) + ')';
-  }
-
   function easeOut(progress) {
     // CSS ease-out, cubic-bezier(0, 0, 0.58, 1), solved for x.
     var low = 0;
@@ -256,11 +248,11 @@
     ctx.save();
     if (!reducedMotion && phase !== null) {
       var eased = easeOut(phase);
-      ctx.fillStyle = hexToRgba(dataset.borderColor, alpha * 0.6 * (1 - eased));
+      ctx.fillStyle = colorWithAlpha(dataset.borderColor, alpha * 0.6 * (1 - eased));
       shapePath(ctx, shape, position.x, position.y, 4 * (1 + 3 * eased));
       ctx.fill();
     }
-    ctx.fillStyle = hexToRgba(dataset.borderColor, alpha);
+    ctx.fillStyle = colorWithAlpha(dataset.borderColor, alpha);
     shapePath(ctx, shape, position.x, position.y, 4);
     ctx.fill();
     ctx.restore();
@@ -1122,8 +1114,10 @@
     var raw = document.body && typeof document.body.getAttribute === 'function'
       ? document.body.getAttribute('data-pw-brand-logos')
       : null;
-    try { return isObject(JSON.parse(raw || '{}')) ? JSON.parse(raw || '{}') : {}; }
-    catch (error) { return {}; }
+    try {
+      var parsed = JSON.parse(raw || '{}');
+      return isObject(parsed) ? parsed : {};
+    } catch (error) { return {}; }
   }
 
   function renderLegend(region, payload) {

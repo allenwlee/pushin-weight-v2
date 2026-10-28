@@ -55,12 +55,12 @@ def test_new_copy_renders_and_retired_copy_is_gone(client, home_data, locale, pa
         assert re.search(rf'data-lens="closed"[^>]*><span data-i18n="lens_closed">{giant}</span>', html)
         assert f'<span class="title" data-i18n="pill_lang">{expected["lang"]}</span>' in html
         # The geopolitical help trigger keeps its explanation but loses the globe icon.
-        trigger = re.search(r'<span class="filter-help-trigger[^>]*>(.*?)</span>', html, re.S)
+        trigger = re.search(r'<span class="filter-help-trigger[^>]*>(.*?)</span>', html, re.DOTALL)
         assert trigger is not None
         assert trigger.group(1) == ""
     else:
-        tabs = re.findall(r'data-each-tab="(\w+)"[^>]*>\s*(.*?)\s*</button>', html, re.S)
-        labels = dict((tab, re.sub(r"\s+", " ", label)) for tab, label in tabs)
+        tabs = re.findall(r'data-each-tab="(\w+)"[^>]*>\s*(.*?)\s*</button>', html, re.DOTALL)
+        labels = {tab: re.sub(r"\s+", " ", label) for tab, label in tabs}
         assert labels["lang"] == expected["lang"]
         assert labels["untracked_brand_promotions"] == expected["promotions"]
 

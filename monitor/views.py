@@ -1302,16 +1302,15 @@ def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]
             ordered.insert(0, {"en": "language", "zh": "语言", "ja": "言語"}[language])
         estimates = [_FIRST_ATTEMPT_PROCESSING_MINUTES[key] for key in pending]
         low, high = min(estimates), max(estimates)
+        range_separator = "〜" if language == "ja" else "-"
+        minutes = str(low) if low == high else f"{low}{range_separator}{high}"
         if language == "en":
             joined = ordered[0] if len(ordered) == 1 else " and ".join([", ".join(ordered[:-1]), ordered[-1]])
-            minutes = str(low) if low == high else f"{low}-{high}"
             message = joined.capitalize() + f" pending ({minutes} min. est.)"
         elif language == "zh":
             joined = ordered[0] if len(ordered) == 1 else "、".join(ordered[:-1]) + "和" + ordered[-1]
-            minutes = str(low) if low == high else f"{low}-{high}"
             message = joined + f"待处理（预计{minutes}分钟）"
         else:
-            minutes = str(low) if low == high else f"{low}〜{high}"
             message = "・".join(ordered) + f"待ち（目安{minutes}分）"
         notes = [retry_notes[key] for key in ("translation", "classification", "analysis") if key in retry_notes]
         if notes:

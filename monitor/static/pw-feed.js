@@ -257,15 +257,22 @@
       document.body.classList.contains('pw-general'));
   }
 
+  // Every rendered row reads the page's logo map; parse each attribute value once.
+  var parsedBrandLogos = { raw: undefined, urls: {} };
+
   function brandLogoUrls() {
     var body = typeof document !== 'undefined' ? document.body : null;
     var raw = body && body.getAttribute ? body.getAttribute('data-pw-brand-logos') : null;
+    if (raw === parsedBrandLogos.raw) return parsedBrandLogos.urls;
+    var urls = {};
     try {
       var parsed = JSON.parse(raw || '{}');
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) urls = parsed;
     } catch (_error) {
-      return {};
+      urls = {};
     }
+    parsedBrandLogos = { raw: raw, urls: urls };
+    return urls;
   }
 
   // Logos of every brand a post is about, above its sentiment signals; the

@@ -173,7 +173,7 @@ class ProShellBrowserTests(StaticLiveServerTestCase):
                         self.assertFalse(page.locator("#pw-rail").is_visible())
                         self.assertEqual(horizontal_overflow(page), 0)
 
-                        def open_drawer() -> None:
+                        def open_drawer(page=page, opener=opener, backdrop=backdrop) -> None:
                             opener.click()
                             page.wait_for_function(
                                 "() => document.getElementById('pw-rail').getBoundingClientRect().left >= -0.5"
@@ -185,7 +185,9 @@ class ProShellBrowserTests(StaticLiveServerTestCase):
                                 True,
                             )
 
-                        def assert_closed(*, focus_returns: bool = True) -> None:
+                        def assert_closed(
+                            *, focus_returns: bool = True, page=page, opener=opener, backdrop=backdrop
+                        ) -> None:
                             page.wait_for_function(
                                 "() => document.body.getAttribute('data-pw-nav') === null"
                             )

@@ -33,10 +33,10 @@ PW_CHART = Path(__file__).resolve().parents[1] / "monitor/static/pw-chart.js"
 def test_brand_style_table_gives_every_tracked_brand_its_own_pair() -> None:
     source = PW_CHART.read_text(encoding="utf-8")
     body = source[source.index("var BRAND_STYLE = {") : source.index("};", source.index("var BRAND_STYLE = {"))]
-    pairs = dict(
-        (nickname, (dash, shape))
+    pairs = {
+        nickname: (dash, shape)
         for nickname, dash, shape in re.findall(r"(\w+): \['(\w+)', '(\w+)'\]", body)
-    )
+    }
     assert set(pairs) == set(BRAND_LOGO_FILES)
     assert len(set(pairs.values())) == len(pairs), "two brands share a line pattern and shape"
     assert {dash for dash, _shape in pairs.values()} <= {"solid", "dashed", "dotted", "dashdot"}

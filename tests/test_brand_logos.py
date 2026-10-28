@@ -9,7 +9,11 @@ from unittest.mock import patch
 from django.contrib.staticfiles import finders
 from django.test import RequestFactory, SimpleTestCase
 
-from core.brand_presentation import BRAND_ACCENT_COLORS, BRAND_LOGO_FILES, brand_logo_urls
+from core.brand_presentation import (
+    BRAND_ACCENT_COLORS,
+    BRAND_LOGO_FILES,
+    brand_logo_urls,
+)
 from core.context_processors import i18n_context
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +44,7 @@ class BrandLogoTests(SimpleTestCase):
         request = RequestFactory().get("/")
         with patch("core.context_processors._get_brands", return_value=[]):
             context = i18n_context(request)
-        self.assertEqual(json.loads(context["brand_logo_urls_json"]), context["brand_logo_urls"])
+        # Both values are lazy; they resolve when a template renders them.
+        self.assertEqual(json.loads(str(context["brand_logo_urls_json"])), dict(context["brand_logo_urls"]))
         self.assertEqual(context["brand_logo_urls"]["llama"], "/static/brand-logos/llama.svg")
 

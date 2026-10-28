@@ -45,7 +45,6 @@
     };
   }
 
-
   // General-style pages show English times on the 12-hour clock ("8:17pm") and
   // Chinese and Japanese on the 24-hour clock ("20:17"). Other pages keep the
   // 24-hour clock everywhere.
@@ -60,6 +59,7 @@
   }
 
   var clockFormatters = Object.create(null);
+  var dateFormatters = Object.create(null);
 
   function clockText(date, locale, timeZone, twelveHour) {
     var instant = date instanceof Date ? date : new Date(date);
@@ -117,10 +117,14 @@
     var instant = Date.parse(String(isoDay) + 'T00:00:00Z');
     if (!Number.isFinite(instant)) return '';
     var cjk = dateLocale(locale);
-    var options = yearly
-      ? { year: 'numeric', month: cjk ? 'long' : 'short', timeZone: 'UTC' }
-      : { month: cjk ? 'long' : 'short', day: 'numeric', timeZone: 'UTC' };
-    return new Intl.DateTimeFormat(cjk || 'en-US', options).format(instant);
+    var cacheKey = (cjk || 'en-US') + (yearly ? '|month' : '|day');
+    if (!dateFormatters[cacheKey]) {
+      var options = yearly
+        ? { year: 'numeric', month: cjk ? 'long' : 'short', timeZone: 'UTC' }
+        : { month: cjk ? 'long' : 'short', day: 'numeric', timeZone: 'UTC' };
+      dateFormatters[cacheKey] = new Intl.DateTimeFormat(cjk || 'en-US', options);
+    }
+    return dateFormatters[cacheKey].format(instant);
   }
 
   // Tick indices for date axes: the latest day plus every day (7 days), every
@@ -142,7 +146,6 @@
 
   var axisHelpers = {
     clockText: clockText,
-    usesTwelveHourClock: usesTwelveHourClock,
     oneDayTicks: oneDayTicks,
     dateLabel: dateLabel,
     dateTickIndices: dateTickIndices,

@@ -14,8 +14,7 @@ import html
 import json
 import os
 import re
-from datetime import datetime
-from datetime import timezone as dt_timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -29,7 +28,7 @@ from tests.v22_support import fixture_from_oracle, seed_real_home_orm
 pytestmark = [pytest.mark.django_db, pytest.mark.requires_postgres]
 
 BASELINE_DIR = Path(__file__).parent / "fixtures" / "general_style_baseline"
-FIXED_NOW = datetime(2026, 10, 27, 12, 2, 30, tzinfo=dt_timezone.utc)
+FIXED_NOW = datetime(2026, 10, 27, 12, 2, 30, tzinfo=UTC)
 LOCALES = ("en", "zh_cn", "ja")
 WINDOWS = (1, 7, 30, 365)
 EACH_BRAND = "deepseek"

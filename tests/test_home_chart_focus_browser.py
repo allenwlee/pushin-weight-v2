@@ -8,6 +8,7 @@ tooltip box) instead of guessing from pixels.
 from __future__ import annotations
 
 from datetime import timedelta
+from itertools import pairwise
 
 import pytest
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
@@ -17,7 +18,6 @@ from playwright.sync_api import Page, sync_playwright
 
 from core.models import Post, PostBrand
 from monitor.views import _clear_home_pulse_cache
-
 from tests.general_style_browser import (
     DESKTOP,
     PHONE,
@@ -511,7 +511,7 @@ class HomeChartFocusBrowserTests(StaticLiveServerTestCase):
                     busiest,
                 )
                 self.assertTrue(labels)
-                for left, right in zip(labels, labels[1:]):
+                for left, right in pairwise(labels):
                     self.assertLessEqual(left["x"] + left["width"] / 2, right["x"] - right["width"] / 2)
                 run.context.close()
             finally:
