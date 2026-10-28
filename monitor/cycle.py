@@ -5827,6 +5827,15 @@ class CycleRunner:
                 client=client,
                 allowance=self._optional_calls_remaining,
             )
+            if "list_sync" in result:
+                # The canonical harvest summary omits this optional lane.
+                # Keep its bounded status/reason visible without provider payloads.
+                list_status = result["list_sync"]
+                logger.info("OFFICIAL_COMPANY_LIST_SYNC %s", json.dumps({
+                    key: list_status[key]
+                    for key in ("status", "error", "retry_at", "claimed", "confirmed", "writes")
+                    if key in list_status
+                }, sort_keys=True))
             self._optional_calls_remaining -= result.get("attempted", 0)
             if call is None:
                 result["status"] = "model_unavailable"
