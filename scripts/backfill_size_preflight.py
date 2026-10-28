@@ -65,6 +65,7 @@ from scripts.backfill_size_report import (
     FROZEN_QUERIES_SHA256,
     NO_BODY_MAX_CREDITS,
     SEARCH_REQUEST_LIMIT,
+    XBACKFILLER_DATABASE,
     XBACKFILLER_FORMAT,
     load_document,
     render_sql,
@@ -73,6 +74,7 @@ from scripts.backfill_size_report import (
 from scripts.backfill_size_seed import (
     BRANDS,
     LAB_LISTS,
+    MAIN_LIST,
     KeywordRow,
     RosterRow,
     SeedRefused,
@@ -90,7 +92,7 @@ RESULT_FORMAT = "oai-anthropic-size-preflight-result/v1"
 STAGES = ("pre-seed", "post-seed")
 
 # R6: the dedicated backfill database (Render ID, database and role name).
-XBACKFILLER = "xbackfiller"
+XBACKFILLER = XBACKFILLER_DATABASE
 XBACKFILLER_IDENTITY = {"name": XBACKFILLER, "user": XBACKFILLER}
 XBACKFILLER_RENDER_ID = "dpg-dbfemu2vcj2c73fsafe0-a"
 CREDENTIAL_PURPOSE = "on-demand"
@@ -102,7 +104,6 @@ JULY_HELD_STATES = frozenset({"paused", "completed", "cancelled"})
 DEFAULT_MAX_SNAPSHOT_AGE = timedelta(minutes=60)
 
 # KTD4: the main list (config.yaml x_monitor_list_id); lab lists come from the seed.
-MAIN_LIST_ID = 2067062923525275922
 
 # R2: X advanced search counts characters, suffix included.
 QUERY_CHARACTER_LIMIT = 512
@@ -536,7 +537,7 @@ def check_roster(stage: str, roster: list[RosterRow], manifest: Mapping[str, Any
     members: dict[str, set[str]] = {}
     for row in doc.get("list_memberships") or []:
         members.setdefault(str(row.get("list_id")), set()).add(str(row.get("author_id")))
-    main_members = members.get(str(MAIN_LIST_ID), set())
+    main_members = members.get(str(MAIN_LIST), set())
     problems, warnings = [], []
     for brand, list_id in LAB_LISTS.items():
         if list_id not in list_ids:
@@ -571,7 +572,7 @@ def check_roster(stage: str, roster: list[RosterRow], manifest: Mapping[str, Any
         warnings.append(message)
         problems.append(message)
     if not main_members:
-        warnings.append(f"xbackfiller has no active memberships for the main list {MAIN_LIST_ID}, so a manifest "
+        warnings.append(f"xbackfiller has no active memberships for the main list {MAIN_LIST}, so a manifest "
                         "built there freezes no main-list author roles")
     lab_missing = {brand: sorted(row.author_id for row in roster if row.brand == brand
                                  and row.author_id not in members.get(str(list_id), set()))

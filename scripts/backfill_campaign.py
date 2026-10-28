@@ -35,6 +35,7 @@ from core.models import (
     PostEnrichmentState,
 )
 from core.provider_batches import (
+    SPEND_BASES,
     BatchAdmissionError,
     enrichment_control_status,
     own_historical_posts,
@@ -148,7 +149,7 @@ def _window_input(item):
                 dollars = None
             if dollars is None or not dollars.is_finite() or dollars <= 0:
                 raise ValueError("invalid_ceilings")
-    if "spend_basis" in options and options["spend_basis"] not in {"reservation", "settled"}:
+    if "spend_basis" in options and options["spend_basis"] not in SPEND_BASES:
         raise ValueError("invalid_spend_basis")
     if "routes" in options:
         routes = options["routes"]
@@ -237,9 +238,8 @@ def manifest(
     validate_concurrency(direct_concurrency)
     deadline = deadline or timezone.now() + timedelta(hours=72)
     planned = plan_calls_for_cycle(cfg, scheduled_exclusions=True)
-    admitted = ADMITTED_CALL_IDS
     if not planned or not any(c.call_id == "A" for c in planned) or any(
-        c.call_id not in admitted for c in planned
+        c.call_id not in ADMITTED_CALL_IDS for c in planned
     ):
         raise ValueError("current_collection_route_missing_or_unsupported")
     queries = [(c.call_id, c.query_string) for c in planned]
@@ -258,7 +258,7 @@ def manifest(
             raise ValueError("windows_must_be_ordered_and_nonoverlapping")
         previous_upper = upper
         if any(
-            call not in admitted
+            call not in ADMITTED_CALL_IDS
             or not isinstance(query, str)
             or not query.strip()
             or len(f"{query} since_time:{lower} until_time:{upper}") > 512

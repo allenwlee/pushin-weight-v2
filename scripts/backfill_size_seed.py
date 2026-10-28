@@ -54,9 +54,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from scripts.backfill_size_report import FROZEN_QUERIES_SHA256
 from x_monitor.harvest_policy import normalize_policy_token
 
-FROZEN_QUERIES_SHA256 = "3d2c9c17114bd3de7a7070c60e35ad14eb54236fbf2efd048f657e804c994dec"
 BRANDS = ("openai", "anthropic")
 ROUTES = {
     "openai": ("A_OAI", "OAI_1", "OAI_2", "OAI_3", "B_OAI"),
@@ -581,11 +581,6 @@ def _sha256(path: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Subcommands
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
 # Undo receipt: the exact catalog-relevant rows a seed creates or changes
 # ---------------------------------------------------------------------------
 
@@ -656,7 +651,7 @@ def scope_author_ids(roster: list[RosterRow], export: dict[str, Any]) -> list[st
     return sorted({row.author_id for row in roster} | {str(m["author_id"]) for m in export["members"]})
 
 
-def seed_state(author_ids: list[str] = ()) -> dict[str, Any]:
+def seed_state(author_ids: tuple[str, ...] | list[str] = ()) -> dict[str, Any]:
     """Catalog-relevant rows the seed may touch, as primary keys and values.
 
     Brand-scoped rows for the two brands, every account-brand role of the
@@ -738,12 +733,32 @@ def _restore_undo(plan: dict[str, Any]) -> dict[str, int]:
     return deleted
 
 
+# ---------------------------------------------------------------------------
+# Subcommands
+# ---------------------------------------------------------------------------
+
+
+def _ensure_membership(*, list_id: int, account: Any, now: Any, source: str, source_run_id: str) -> str:
+    """Activate one list membership; return "unchanged", "created" or "reactivated"."""
+    from core.models import TwitterListMembership
+    from monitor.list_membership import _upsert_membership
+
+    existing = TwitterListMembership.objects.filter(list_id=list_id, account=account).first()
+    if existing is not None and existing.active:
+        return "unchanged"
+    _membership, created, _was_active = _upsert_membership(
+        list_id=list_id, account=account, observed_at=now, source=source,
+        source_run_id=source_run_id, complete=False,
+    )
+    return "created" if created else "reactivated"
+
+
 def _write_main_list(export: dict[str, Any], roster: list[RosterRow], *, export_sha256: str) -> dict[str, Any]:
     """Copy production's main-list members and the seeded authors' roles; never edit an existing account."""
     from django.utils import timezone
 
-    from core.models import Account, Brand, BrandAccount, Role, TwitterListMembership
-    from monitor.list_membership import _upsert_account, _upsert_membership
+    from core.models import Account, Brand, BrandAccount, Role
+    from monitor.list_membership import _upsert_account
 
     now = timezone.now()
     counts = {"main_list_accounts_created": 0, "main_list_memberships_created": 0,
@@ -759,15 +774,9 @@ def _write_main_list(export: dict[str, Any], roster: list[RosterRow], *, export_
                                                 degraded=[], observed_at=now)
             counts["main_list_accounts_created"] += 1
         accounts[author_id] = account
-        existing = TwitterListMembership.objects.filter(list_id=MAIN_LIST, account=account).first()
-        if existing is not None and existing.active:
-            counts["main_list_memberships_unchanged"] += 1
-            continue
-        _membership, created, _was_active = _upsert_membership(
-            list_id=MAIN_LIST, account=account, observed_at=now, source=MAIN_LIST_SOURCE,
-            source_run_id=f"production-export-sha256:{export_sha256}", complete=False,
-        )
-        counts["main_list_memberships_created" if created else "main_list_memberships_reactivated"] += 1
+        outcome = _ensure_membership(list_id=MAIN_LIST, account=account, now=now, source=MAIN_LIST_SOURCE,
+                                     source_run_id=f"production-export-sha256:{export_sha256}")
+        counts[f"main_list_memberships_{outcome}"] += 1
     scope = set(scope_author_ids(roster, export))
     brands = set(Brand.objects.values_list("nickname", flat=True))
     role_keys = set(Role.objects.values_list("key", flat=True))
@@ -797,9 +806,8 @@ def _write_seed(keywords, roster, *, roster_sha256, config_path, policy_path) ->
     from django.db import transaction
     from django.utils import timezone
 
-    from core.models import Account, TwitterListMembership
+    from core.models import Account
     from monitor.cycle import _build_brand_index
-    from monitor.list_membership import _upsert_membership
     from monitor.management.commands.onboard_brand import CSV_FIELDS
     from x_monitor.attribution import detect_brand_mentions
     from x_monitor.config import load_config
@@ -820,15 +828,9 @@ def _write_seed(keywords, roster, *, roster_sha256, config_path, policy_path) ->
         now = timezone.now()
         for row in roster:
             account = Account.x.get(author_id=row.author_id)
-            existing = TwitterListMembership.objects.filter(list_id=row.list_id, account=account).first()
-            if existing is not None and existing.active:
-                counts["memberships_unchanged"] += 1
-                continue
-            _membership, created, _was_active = _upsert_membership(
-                list_id=row.list_id, account=account, observed_at=now, source=MEMBERSHIP_SOURCE,
-                source_run_id=f"roster-sha256:{roster_sha256}", complete=False,
-            )
-            counts["memberships_created" if created else "memberships_reactivated"] += 1
+            outcome = _ensure_membership(list_id=row.list_id, account=account, now=now, source=MEMBERSHIP_SOURCE,
+                                         source_run_id=f"roster-sha256:{roster_sha256}")
+            counts[f"memberships_{outcome}"] += 1
         # Production attribution path: the live index must build and honour gating.
         index = _build_brand_index(list(load_config(Path(config_path)).enabled_models))
         for text, expected in (("OpenAI", {"openai"}), ("Anthropic", {"anthropic"}),

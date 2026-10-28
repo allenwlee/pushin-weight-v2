@@ -35,7 +35,7 @@ ROSTER = read_roster_csv(ROSTER_PATH)
 NOW = datetime(2026, 10, 28, 10, 0, tzinfo=UTC)
 LOWER = int(datetime(2026, 10, 27, 19, tzinfo=UTC).timestamp())
 SLICES = [(LOWER, LOWER + 300), (LOWER + 300, LOWER + 600)]
-MAIN_LIST = preflight.MAIN_LIST_ID
+MAIN_LIST = preflight.MAIN_LIST
 OAI_LIST, ANT_LIST = 2067500935769895374, 2067501173402460553
 XB_HOST = "dpg-dbfemu2vcj2c73fsafe0-a"
 MAIN_AUTHORS = ("900001", "900002", "900003")
