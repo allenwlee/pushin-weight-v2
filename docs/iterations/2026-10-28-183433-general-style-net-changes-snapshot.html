@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Homepage Net Changes</title>
+<style>
+  body { font: 15px/1.55 -apple-system, system-ui, sans-serif; color: #18212d; background: #fff; max-width: 820px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 28px 0 6px; border-bottom: 1px solid #e6eaf1; padding-bottom: 4px; }
+  p.note { color: #687589; margin: 0 0 8px; }
+  li { margin: 3px 0; }
+  code { font-size: 13px; background: #f0f2f5; padding: 0 3px; border-radius: 3px; }
+  table { border-collapse: collapse; font-size: 14px; }
+  td { padding: 2px 12px 2px 0; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; margin-right: 6px; }
+</style>
+</head>
+<body>
+<h1>Homepage in General's style: net changes for production</h1>
+<p class="note">Final state only. Changes that were tried and then reversed are left out (bronze/LinkedIn colors, removing every heading, the bronze logo, the glow, the automatic glow cycle, the Christmas-light animation). Source: <code>docs/brainstorms/2026-10-22-184545-homepage-general-style-owner-requests.md</code>. This file is updated after every prototype change. Last updated 2026-10-27 (owner item 36).</p>
+
+<h2>1. Layout and look</h2>
+<ol>
+  <li>Use General's styling: DM Sans text, Newsreader headlines, blue <code>#4378ff</code>, ink <code>#18212d</code>, 18px rounded panels, General's breakpoints, 1440px max width.</li>
+  <li>Page background is Facebook gray <code>#f0f2f5</code>. Panels, cards, chips, filter buttons and the side rail stay white.</li>
+  <li>Left icon rail as on General (General link, Trending, Posts by brand, Trend summary, Latest, Pro), with black icons. It becomes a slide-out drawer on phones.</li>
+  <li>Masthead: white, full width, then labelled Window, Clock and Language controls. Logo: the line-traced ten-sided weight drawn with 1 px lines, also used for the rail's General icon and the browser-tab icon (owner item 30). Where each handle leg meets the top of the weight, the seam is curved (front half of an ellipse) so the round handle reads as attached (owner item 39). To its right, PUSHINWEIGHT on one line in italic DM Sans capitals, 15px, all ink: PUSHIN medium (500, letter spacing 0.06em), WEIGHT extra-bold (800); no apostrophe and 走个量 removed (owner items 31–36, locked in by item 39). The browser-tab title and the side drawer label are PUSHINWEIGHT. This logo is final (owner item 40). The SVG is in <code>.context/compound-engineering/ce-prototype/2026-10-26-decagon-line-logo/assets/</code>.</li>
+  <li>Trending models bar is a white panel with no heading.</li>
+  <li>Filters row is labelled "Filters", with General-style pill buttons and dropdowns.</li>
+  <li>Main grid: Trend summary on the left in General's story style, the wider "Posts by brand" chart panel keeps its heading. On narrow screens: chart, then summary, then feed.</li>
+  <li>Feed is a panel that keeps its heading, with posts as a grid of white cards.</li>
+  <li>No bronze anywhere. Former amber/bronze status labels become muted gray. Mixed-sentiment and official-role icons use amber <code>#d97706</code>.</li>
+  <li>Public launch version <code>1.0.0b1</code> with the internal version in parentheses: footer "Made with ❤️ in Yokohama. v1.0.0b1 (0.3.0)." The public version is a separate product label; the internal version stays the package version (<code>pyproject.toml</code>, git tags) and keeps its own sequence from <code>0.2.0b1</code>. <em>Next internal number not yet chosen (0.3.0 is an example).</em> Update the footer, README and footer test. A "Beta" badge beside the masthead logo is recommended; <em>wording not yet confirmed.</em></li>
+</ol>
+
+<h2>2. Brand colors and logos</h2>
+<ol start="11">
+  <li>Brand colors adopted from Artificial Analysis, used for chart lines, legend dots and trending-chip dots:
+    <table>
+      <tr><td><span class="sw" style="background:#2243e6"></span>DeepSeek</td><td><code>#2243e6</code></td><td><span class="sw" style="background:#ff7018"></span>Qwen</td><td><code>#ff7018</code></td></tr>
+      <tr><td><span class="sw" style="background:#eb3568"></span>MiniMax</td><td><code>#eb3568</code></td><td><span class="sw" style="background:#1c7ff8"></span>Zhipu GLM</td><td><code>#1c7ff8</code></td></tr>
+      <tr><td><span class="sw" style="background:#ff6900"></span>Xiaomi MiMo</td><td><code>#ff6900</code></td><td><span class="sw" style="background:#047afe"></span>Moonshot Kimi</td><td><code>#047afe</code></td></tr>
+      <tr><td><span class="sw" style="background:#4fb5ff"></span>InclusionAI</td><td><code>#4fb5ff</code></td><td><span class="sw" style="background:#f32e02"></span>Mistral</td><td><code>#f32e02</code></td></tr>
+      <tr><td><span class="sw" style="background:#00f5e7"></span>StepFun</td><td><code>#00f5e7</code></td><td><span class="sw" style="background:#2436d8"></span>Baidu ERNIE</td><td><code>#2436d8</code></td></tr>
+      <tr><td><span class="sw" style="background:#5cb9ff"></span>Tencent Hunyuan</td><td><code>#5cb9ff</code></td><td><span class="sw" style="background:#0089f4"></span>Meta</td><td><code>#0089f4</code></td></tr>
+      <tr><td><span class="sw" style="background:#76b900"></span>NVIDIA NeMo</td><td><code>#76b900</code></td><td><span class="sw" style="background:#3c8bff"></span>ByteDance Doubao</td><td><code>#3c8bff</code></td></tr>
+      <tr><td><span class="sw" style="background:#df3b8a"></span>LG EXAONE</td><td><code>#df3b8a</code></td><td><span class="sw" style="background:#489034"></span>Kuaishou</td><td><code>#489034</code></td></tr>
+      <tr><td><span class="sw" style="background:#7c59f5"></span>Upstage</td><td><code>#7c59f5</code></td><td><span class="sw" style="background:#001a12"></span>01.AI Yi</td><td><code>#001a12</code></td></tr>
+      <tr><td><span class="sw" style="background:#e83020"></span>SenseChat</td><td><code>#e83020</code></td><td><span class="sw" style="background:#e00000"></span>Sakana AI</td><td><code>#e00000</code></td></tr>
+      <tr><td><span class="sw" style="background:#ff2442"></span>rednote dots</td><td><code>#ff2442</code></td><td></td><td></td></tr>
+    </table>
+    The brand "Meta Llama" is shown as just "Meta" everywhere it is a label, in every language: chart legend, trending chip, brand filter, post logo popup, the brand name in popups and status text, and the page's brand data (<code>display_name</code>, <code>display_name_en</code>, <code>display_name_zh_cn</code>). Post text such as "Meta's Llama" or "Llama-3.1" is not a label and stays. Collection already covers Meta and Muse posts under this brand (production since 2026-10-25, harvester change <code>f4536c2f</code>), so only the visible name changes here. <em>Open (owner item 27): whether other product-named brands (Kimi, GLM, ERNIE, Hunyuan, Doubao, NeMo) also become maker-level.</em>
+  </li>
+  <li>Brand order: Meta first, then the existing fixed order (DeepSeek, Qwen, MiniMax, GLM, …), for the trending chips, chart legend, chart lines and brand filter. Change the fixed list <code>_HOME_CHART_BRAND_PRIORITY</code> in <code>monitor/views.py</code> and its order test. The order stays fixed, not ranked by volume.</li>
+  <li>Brand logos in the chart legend (pattern swatch, 14px logo, name) and on each post (item 40). Not in the trending bar.</li>
+  <li>Each brand also has its own line pattern (solid, dashed, dotted or dash-dot) and beacon shape (circle, square, triangle, diamond, star or cross), fixed per brand so it doesn't change as rankings move. Similar blues get different pairs, and no two brands share a pair. The legend swatch shows a short line in the brand's pattern ending in its shape, replacing the color dot.</li>
+</ol>
+
+<h2>3. Filter dropdowns</h2>
+<ol start="15">
+  <li>Options without an icon keep an icon-sized gap, so all option text lines up.</li>
+  <li>Geopolitical: new header "Geopolitical Framing"; "National Stance" capitalized, with a line of space above each; the globe help icon removed.</li>
+  <li>"Untracked Brand Promotions" renamed "3rd Party Brand Promotions".</li>
+  <li>Brands tabs "Open / Closed" renamed "Others / Giant" (Giant = OpenAI, Anthropic, Google Gemini, SpaceXAI; empty until those brands are collected).</li>
+  <li>"Lang" filter pill reads "Language" in English.</li>
+  <li>Chinese and Japanese translations of the new labels need review (zh 地缘政治框架 / 第三方品牌推广 / 其他 / 巨头; ja 地政学的フレーミング / サードパーティのブランドプロモーション / その他 / 大手).</li>
+</ol>
+
+<h2>4. Posts-by-brand chart</h2>
+<ol start="21">
+  <li>No hover tooltip.</li>
+  <li>Hovering a legend entry or anywhere along a line focuses that brand: bold name, its post counts drawn above its points, other lines dimmed to 24% and other legend entries to 56%. Keyboard focus does the same.</li>
+  <li>Desktop: click a line or legend entry to pin the focus; click elsewhere to release. Phones: tap to focus, tap again or elsewhere to clear.</li>
+  <li>Beacons on every line from page load, never stopping: at each line's current point (the latest time slot; on 1 day, 0 at the right edge when the latest 5 minutes had no posts), a solid shape in the brand's beacon shape plus a copy that expands 1&times; to 4&times; while fading, repeating every 2.25 s with no pause. Dimmed brands' beacons keep pulsing at 24%. Still shape only for viewers who prefer reduced motion. The focused brand's legend shape pings in the same rhythm.</li>
+  <li>Y axis on the right, with no axis line.</li>
+  <li>Lines end 16px short of the right axis so the latest point and beacon are clear.</li>
+  <li>Smooth monotone curves on every view.</li>
+  <li>No point markers. Clicking the 1-day chart still narrows the feed to a 5-minute slot.</li>
+  <li>Lighter dotted gridlines (1px dots, 3px gaps, <code>#dfe4ec</code>).</li>
+  <li>1-day lines are at least 1.75px wide so the patterns show. The live "today is partial" dashed last segment on 7/30/365 days is kept only for solid-pattern brands.</li>
+  <li>The canvas gets its own fixed-height box (300px desktop / 240px / 200px phone) instead of the forced 220px height.</li>
+  <li>1-day lines end at the last 5-minute bucket the harvest has fully searched, so the end points and beacons show real counts instead of the empty, not-yet-searched final minutes. The axis's last tick is that bucket's end. Needs the last harvest time in the chart payload (not there today). 7/30/365-day views unchanged.</li>
+  <li>The focused line (hovered, pinned or keyboard-focused) draws solid whatever its resting pattern, including the partial last day, and returns to its pattern when focus clears. The legend swatch keeps the resting pattern.</li>
+</ol>
+
+<h2>5. Axis, times, numbers and copy by language</h2>
+<ol start="34">
+  <li>1-day axis ends at the time of the latest fetch (the chart payload's <code>fetched_at</code>) and steps back whole hours from it (10:03pm, 8:03pm, …): every hour when the chart is wide enough, otherwise every 2 hours (at 1440px desktop width it is every 2 hours). Each 5-minute bucket is drawn at its end time, so the line's last point is the fetch time. The California/Beijing row uses the same positions. The row labels read "Local" and "CA".</li>
+  <li>7/30/365-day axis dates per language: English "Oct 18" (7d, 30d) and "Dec 2025" (365d); Chinese and Japanese "10月18日" and "2025年12月". The last tick is the latest day; the others step back from it (every day on 7d, every 5 days on 30d, every other month start on 365d).</li>
+  <li>English uses a 12-hour clock: <code>5:36am</code> in the masthead, <code>(5:31am local)</code> in the feed, chart axis and popover, feed hover text. Chinese and Japanese keep 24-hour (<code>05:36</code>, <code>22:03</code>). The clock pill reads "Local" (capitalized) in English.</li>
+  <li>Chinese and Japanese follower counts: exact below 10,000 (<code>4,407</code>), then 万 (<code>2.9万</code>), then 亿 / 億 from 100 million. Truncated, never rounded up. Also in hover and screen-reader labels. English stays <code>29.7k</code>. Formatted on the server.</li>
+  <li>Shorter pending message: "Language, translation and analysis pending (5-15 min. est.)" (zh 语言、翻译和分析待处理（预计5-15分钟）; ja 言語・翻訳・分析待ち（目安5〜15分）). The retry variant becomes "Analysis pending, retry queued (15 min. est.)" (zh 分析待处理，等待重试（预计15分钟）; ja 分析待ち・再試行待ち（目安15分）). Applies wherever the server sends it: homepage, feed and post-analysis status responses. The zh/ja wording and the retry variant were chosen by the agent and need review.</li>
+  <li>"Audience topic" reads "Audience Topic" everywhere (for example the hover text "DeepSeek Audience Topic: Cost &amp; Performance").</li>
+</ol>
+
+<h2>6. Feed posts</h2>
+<ol start="40">
+  <li>Above each post's sentiment signals, a row of the logos of every brand the post is about. Hovering or tapping a logo shows the brand name in the homepage's usual popup. Production can render this from each post's <code>brand_nicknames</code>; server-rendered rows don't carry the list today.</li>
+</ol>
+
+<h2>7. Flags</h2>
+<ol start="41">
+  <li>Faint hairline edge on flags so white flags (Japan) show on white cards. Feed and filter dropdowns.</li>
+  <li>Flags drawn at 3:2 instead of the sprite's stretched 16:9. <em>Pending: owner choice of A (live pixel art), B (squeezed pixel art, prototype now) or C (accurate vector flags).</em></li>
+</ol>
+
+<h2>8. Live-site defects to fix</h2>
+<ol start="43">
+  <li>Flags missing in rows loaded by scrolling: <code>pw-feed.js</code> rejects the hashed sprite name <code>country-flags.e1ef2c1d1cff.svg</code>. Accept <code>/country-flags(\.[0-9a-f]+)?\.svg$/</code> and add a test.</li>
+  <li>Japanese chart popover shows 12-hour English times; set the hour format per page language.</li>
+  <li>Chart drawing squeezed and pointer positions ~20% off, because the canvas height is forced while Chart.js measures the parent (covered by item 31).</li>
+  <li>Chart legend shows raw brand codes (<code>glm</code>, <code>mimo</code>, <code>llama</code>, <code>stepfun</code>, …) for most brands: <code>pw-chart.js</code> has its own short name list (<code>BRAND_NAMES</code>) that covers only a few brands. Use the brand's display name from the payload instead, as the trending bar does.</li>
+</ol>
+<h2>9. General page (owner item 41)</h2>
+<p class="note">The same changes, applied to <code>/general/</code> where General has the matching element. Chart items carry over when General's Pulse chart ships.</p>
+<ol start="47">
+  <li>Page background <code>#f0f2f5</code> behind white panels, cards and rail; white full-width masthead. Human view only; the Agent view keeps its dark palette.</li>
+  <li>The locked logo: line mark (curved seams) in the masthead and the rail's General icon, line browser-tab icon, PUSHINWEIGHT wordmark in place of 走个量 and "Pushin' Weight", tab title and drawer label PUSHINWEIGHT.</li>
+  <li>"#Meta Llama" brand pills read "#Meta", including in refreshed feed items.</li>
+  <li>Brand pills for the 21 tracked brands show the brand's logo before the name; other organizations keep text only.</li>
+  <li>The shorter pending message and "Audience Topic" apply on General too, wherever the server sends them. <em>Open: whether General's "Weights: Open | Closed" should follow the homepage's Others / Giant rename.</em></li>
+</ol>
+<h2>10. /dashboard/each (owner item 42)</h2>
+<p class="note">This page is built from the homepage, so items 1–46 apply to it as they do to the homepage, except the brand-chart items below.</p>
+<ol start="52">
+  <li>Its per-brand chart sits in the same white panel. The tabs (Sentiment, Post Type, Language, Role, Audience Topics, Geopolitical, Product, 3rd Party Brand Promotions) are General-style pills, and the chart area is light.</li>
+  <li>Tab labels follow the homepage: "Lang" reads "Language" in English; "Untracked Brand Promotions" reads "3rd Party Brand Promotions" (zh 第三方品牌推广, ja サードパーティのブランドプロモーション).</li>
+  <li>The chart takes the shared chart styling (items 25–27, 29, 31) and the localized time axes (items 34–35), with the 1-day view ending at the last fully harvested bucket (item 32). Build the axis from the payload's dates, not the pre-formatted labels, and keep the newest tick. It does not take the brand-line items (patterns, beacons, focus, hover-to-solid, swatches): its lines are categories. Its hover tooltip stays.</li>
+  <li>Category colors swapped for the light page: Unclassified and Undetected are light gray <code>#cbd5e1</code>; Neutral, Other, No assigned topic and No product signal are black <code>#000000</code>. Area outlines are 1 px. English category labels start with a capital ("Undetected", "Other").</li>
+</ol>
+</body>
+</html>

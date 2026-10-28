@@ -6,6 +6,8 @@ configuration:
   authorities:
     approved_mockup: docs/ideation/mockups/v24.html
     approved_product_intent:
+      - docs/iterations/2026-10-28-183433-general-style-bridgewright-target.md
+      - docs/iterations/2026-10-28-183433-general-style-owner-requests-snapshot.md
       - docs/plans/2026-10-02-060108-feat-g5-general-page-plan.md
       - docs/iterations/2026-09-21-155037-ui-glyphs-footer-filters-locale-chart-bridgewright-target.md
       - docs/iterations/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md
@@ -28,7 +30,7 @@ configuration:
       - monitor/views.py
       - project
     adapter: .bridgewright/adapter.yaml
-    last_approved_contract: docs/iterations/2026-09-21-155037-ui-glyphs-footer-filters-locale-chart-bridgewright-target.md
+    last_approved_contract: docs/iterations/2026-10-28-183433-general-style-bridgewright-target.md
   assurance:
     profile: stateful-ui-assurance/v1
     declaration: tests/fixtures/ui_assurance/declaration.json
@@ -66,6 +68,8 @@ configuration:
       description: Owner-approved Stage 1 replacement of active discourse UI with ten post types and five independent product labels.
     - key: production.home.ui-glyphs-footer-filters-locale-chart
       description: Owner-approved taxonomy glyphs, runtime footer, residual filter actions, locale autonyms, and incomplete-day chart delta.
+    - key: production.home.general-style
+      description: Owner-approved General-style homepage, General page and dashboard delta with locked logo, brand focus and beacons, and localized time axes.
     - key: trend.headline
       description: Shared analytical trend narrative surface.
   scenarios: []

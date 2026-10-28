@@ -17,6 +17,8 @@ HOVER_FREEZE_CONTRACT = "docs/iterations/2026-08-28-181416-chart-hover-freeze-br
 GEOGRAPHY_CONTRACT = "docs/iterations/2026-08-31-221955-feed-country-geography-bridgewright-target.md"
 FEED_INSPECTION_CONTRACT = "docs/iterations/2026-09-01-114311-feed-inspection-pagination-bridgewright-target.md"
 UI_POLISH_CONTRACT = "docs/iterations/2026-09-21-155037-ui-glyphs-footer-filters-locale-chart-bridgewright-target.md"
+GENERAL_STYLE_CONTRACT = "docs/iterations/2026-10-28-183433-general-style-bridgewright-target.md"
+GENERAL_STYLE_RECORD = "docs/iterations/2026-10-28-183433-general-style-owner-requests-snapshot.md"
 STAGE1_PLAN = "docs/plans/2026-09-08-134925-feat-ai-enrichment-stage1-plan.md"
 
 
@@ -26,7 +28,9 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     authorities = manifest["configuration"]["authorities"]
 
     assert authorities["approved_mockup"] == V24_MOCKUP
-    assert authorities["last_approved_contract"] == UI_POLISH_CONTRACT
+    assert authorities["last_approved_contract"] == GENERAL_STYLE_CONTRACT
+    assert GENERAL_STYLE_CONTRACT in authorities["approved_product_intent"]
+    assert GENERAL_STYLE_RECORD in authorities["approved_product_intent"]
     assert UI_POLISH_CONTRACT in authorities["approved_product_intent"]
     assert FEED_INSPECTION_CONTRACT in authorities["approved_product_intent"]
     assert GEOGRAPHY_CONTRACT in authorities["approved_product_intent"]
@@ -89,6 +93,10 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
         {
             "key": "production.home.ui-glyphs-footer-filters-locale-chart",
             "description": "Owner-approved taxonomy glyphs, runtime footer, residual filter actions, locale autonyms, and incomplete-day chart delta.",
+        },
+        {
+            "key": "production.home.general-style",
+            "description": "Owner-approved General-style homepage, General page and dashboard delta with locked logo, brand focus and beacons, and localized time axes.",
         },
         {
             "key": "trend.headline",
@@ -194,3 +202,20 @@ def test_bridgewright_uses_v24_and_its_partial_target_contract() -> None:
     assert "only control that opens the exact original post" in feed_inspection_contract
     assert "no cumulative 500-row ceiling" in feed_inspection_contract
     assert "stroke `4 / 3`" in feed_inspection_contract
+
+
+def test_general_style_contract_binds_its_baseline_and_record() -> None:
+    import hashlib
+
+    contract = (REPO_ROOT / GENERAL_STYLE_CONTRACT).read_text(encoding="utf-8")
+    assert "Approval status: APPROVED" in contract
+    assert "e5edf737fd29666ec470ae55da5aefd69d4f0211" in contract
+    assert HOVER_FREEZE_CONTRACT in contract
+    assert "Only the tooltip display is superseded" in contract
+    for snapshot in (
+        GENERAL_STYLE_RECORD,
+        "docs/iterations/2026-10-28-183433-general-style-net-changes-snapshot.html",
+    ):
+        digest = hashlib.sha256((REPO_ROOT / snapshot).read_bytes()).hexdigest()
+        assert snapshot in contract
+        assert digest in contract
