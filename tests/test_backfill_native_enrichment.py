@@ -205,6 +205,35 @@ def test_native_submit_restart_import_and_publish_without_duplicate_model_calls(
     assert third["model_requests_sent"] == 6 and len(NativeProvider.submissions) == 2
 
 
+@pytest.mark.parametrize(
+    ("frozen", "resumed"),
+    [(None, "settled"), ("settled", None), ("reservation", "settled")],
+)
+def test_spend_basis_is_frozen_on_the_first_provider_batch(native, frozen, resumed):
+    from core.provider_batches import BatchAdmissionError
+
+    job, cfg, delegates, policy = native
+    if frozen is not None:
+        policy["spend_basis"] = frozen
+    advance(native, initial=True)
+    submissions = list(NativeProvider.submissions)
+    changed = {k: v for k, v in policy.items() if k != "spend_basis"}
+    if resumed is not None:
+        changed["spend_basis"] = resumed
+    with pytest.raises(BatchAdmissionError, match="enrichment_policy_changed"):
+        execute_enrichment(
+            job.pk,
+            cfg=cfg,
+            delegates=delegates,
+            policy=changed,
+            api_key="test",
+            client_factory=NativeProvider,
+        )
+    assert NativeProvider.submissions == submissions
+    for group in ProviderBatch.objects.filter(source_collection_job=job):
+        assert group.policy.get("spend_basis") == frozen
+
+
 def test_real_management_command_uses_only_native_provider_and_read_only_status(
     native, monkeypatch
 ):
