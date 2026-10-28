@@ -14,7 +14,8 @@ def transient(error, status):
     # Missing/malformed replies and unknown sends are not transport failures.
     # An operator-approved recheck of a previously working key uses the same
     # credentials. Repeated rejection enters increasingly slow retries.
-    return status in {401, 403, 429, 500, 502, 503, 504} or (
+    # 520 is the provider edge's unknown-origin error; July stopped on one.
+    return status in {401, 403, 429, 500, 502, 503, 504, 520} or (
         status is None and error in {"Timeout", "ConnectionError"}
     )
 
