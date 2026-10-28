@@ -73,6 +73,9 @@ def initial_state() -> dict[str, Any]:
         "feed_pagination": "first",
         "chart_hover_freeze": "idle",
         "freeze_point": "none",
+        "chart_focus": "idle",
+        "focus_brand": "none",
+        "rail": "collapsed",
         "latest_generation": 0,
         "committed_generation": 0,
     }
@@ -113,8 +116,20 @@ def set_control(state: dict[str, Any], control: str, value: Any) -> dict[str, An
         "feed_pagination",
         "chart_hover_freeze",
         "freeze_point",
+        "rail",
     }:
         next_state[control] = value
+    elif control == "chart_focus":
+        # Hover, keyboard, pin or tap focuses a brand that is on the chart;
+        # releasing focus leaves no focused brand.
+        next_state[control] = value
+        next_state["focus_brand"] = "none" if value == "idle" else "present"
+    elif control == "focus_brand":
+        # A refresh that keeps the focused brand keeps the focus; one that
+        # removes it (or a reset) releases the focus.
+        next_state[control] = value
+        if value != "present":
+            next_state["chart_focus"] = "idle"
     else:
         raise KeyError(f"unknown UI assurance control: {control}")
     return next_state
@@ -291,6 +306,15 @@ def projection(fixture: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]
             "metadata_order": metadata_order,
             "chart_hover_freeze": state["chart_hover_freeze"],
             "freeze_point": state["freeze_point"],
+            "chart_focus": state["chart_focus"],
+            "focus_brand": state["focus_brand"],
+            "focused_legend_entries": 0 if state["chart_focus"] == "idle" else 1,
+            "legend_pressed": 1 if state["chart_focus"] == "pinned" else 0,
+            "lines_dimmed": state["chart_focus"] != "idle",
+            "chart_tooltip": "none",
+            "rail": state["rail"],
+            "rail_labels_visible": state["rail"] in {"expanded", "drawer_open"},
+            "drawer_backdrop": state["rail"] == "drawer_open",
             "locale_selected": [] if hover_freeze_active else [state["locale"]],
             "feed_title": "bucket_datetime" if hover_freeze_active else "default",
             "locale_labels": ["en", "中文", "日本語"],

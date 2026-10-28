@@ -36,7 +36,10 @@
     {"id":"feed_navigation","kind":"single_select","values":["row","x"],"initial_value":"row","reversible":true},
     {"id":"feed_pagination","kind":"single_select","values":["first","over500","exhausted"],"initial_value":"first","reversible":true},
     {"id":"chart_hover_freeze","kind":"single_select","values":["idle","hovered","frozen","released"],"initial_value":"idle","reversible":true},
-    {"id":"freeze_point","kind":"single_select","values":["none","first","same","other","empty"],"initial_value":"none","reversible":true}
+    {"id":"freeze_point","kind":"single_select","values":["none","first","same","other","empty"],"initial_value":"none","reversible":true},
+    {"id":"chart_focus","kind":"single_select","values":["idle","hover","pinned","touch"],"initial_value":"idle","reversible":true},
+    {"id":"focus_brand","kind":"single_select","values":["none","present","removed"],"initial_value":"none","reversible":true},
+    {"id":"rail","kind":"single_select","values":["collapsed","expanded","drawer_open","drawer_closed"],"initial_value":"collapsed","reversible":true}
   ],
   "coverage_groups": [
     {"id":"filter-core","controls":["brands","sentiment","post_type","audience_topics"],"strength":2},
@@ -51,7 +54,9 @@
     {"id":"geography-disclosure-risk","controls":["locale","headline_detail","role_badge","account_geography"],"strength":2},
     {"id":"feed-inspection-risk","controls":["locale","account_geography","feed_inspection","feed_navigation"],"strength":2},
     {"id":"feed-pagination-risk","controls":["brands","window","feed_pagination"],"strength":3},
-    {"id":"hover-freeze-risk","controls":["brands","sentiment","locale","window","chart_hover_freeze","freeze_point"],"strength":2}
+    {"id":"hover-freeze-risk","controls":["brands","sentiment","locale","window","chart_hover_freeze","freeze_point"],"strength":2},
+    {"id":"chart-focus-risk","controls":["chart_focus","focus_brand","window","locale"],"strength":2},
+    {"id":"rail-risk","controls":["rail","locale","window"],"strength":2}
   ],
   "ordered_groups": [
     {"id":"chart-intent-order","actions":["brands:mimo","window:7","window:1"],"strength":3},
@@ -65,7 +70,11 @@
     {"id":"feed-navigation-order","actions":["feed_navigation:row","feed_navigation:x"],"strength":2},
     {"id":"feed-pagination-order","actions":["feed_pagination:first","feed_pagination:over500","feed_pagination:exhausted"],"strength":3},
     {"id":"hover-freeze-state-order","actions":["chart_hover_freeze:idle","chart_hover_freeze:hovered","chart_hover_freeze:frozen","chart_hover_freeze:released"],"strength":3},
-    {"id":"hover-freeze-point-order","actions":["freeze_point:first","freeze_point:same","freeze_point:other","freeze_point:empty"],"strength":2}
+    {"id":"hover-freeze-point-order","actions":["freeze_point:first","freeze_point:same","freeze_point:other","freeze_point:empty"],"strength":2},
+    {"id":"pin-refresh-order","actions":["chart_focus:pinned","window:7","focus_brand:present"],"strength":3},
+    {"id":"pin-filter-removal-order","actions":["chart_focus:pinned","focus_brand:present","focus_brand:removed"],"strength":3},
+    {"id":"tap-toggle-order","actions":["chart_focus:touch","chart_focus:idle","chart_focus:touch"],"strength":3},
+    {"id":"rail-drawer-order","actions":["rail:drawer_open","rail:drawer_closed","rail:expanded","rail:collapsed"],"strength":2}
   ],
   "constraints": [],
   "invariants": [
@@ -83,7 +92,9 @@
     {"id":"hover-freeze-agrees","projections":["controls","accessibility","feed","chart","network"]},
     {"id":"stage1-classification-states-stay-distinct","projections":["feed","counts"]},
     {"id":"residual-filter-partitions-stay-distinct","projections":["feed","counts","controls"]},
-    {"id":"ui-polish-contract-agrees","projections":["accessibility","chart"]}
+    {"id":"ui-polish-contract-agrees","projections":["accessibility","chart"]},
+    {"id":"chart-focus-agrees","projections":["accessibility","chart"]},
+    {"id":"focus-never-survives-absent-brand","projections":["accessibility","chart"]}
   ],
   "races": [
     {"id":"old-seven-day-after-new-one-day","older_action":"window:7","newer_action":"window:1","fault":"out_of_order"},
@@ -103,7 +114,9 @@
     {"id":"inspection-transfer-keeps-x-exclusive","actions":["feed_inspection:preview","feed_inspection:pinned","feed_inspection:transferred","feed_navigation:row","feed_navigation:x"],"invariants":["feed-inspection-agrees","feed-navigation-agrees"]},
     {"id":"pagination-crosses-500-and-exhausts","actions":["window:7","feed_pagination:first","feed_pagination:over500","feed_pagination:exhausted"],"invariants":["feed-pagination-complete"]},
     {"id":"stage1-empty-products-and-statuses-remain-visible","actions":["product_labels:bug","product_labels:__all__"],"invariants":["feed-oracle-agrees","stage1-classification-states-stay-distinct"]},
-    {"id":"other-only-keeps-residual-states-distinct","actions":["bulk_action:other_only","bulk_action:all"],"invariants":["feed-oracle-agrees","residual-filter-partitions-stay-distinct","ui-polish-contract-agrees"]}
+    {"id":"other-only-keeps-residual-states-distinct","actions":["bulk_action:other_only","bulk_action:all"],"invariants":["feed-oracle-agrees","residual-filter-partitions-stay-distinct","ui-polish-contract-agrees"]},
+    {"id":"pin-survives-refresh","actions":["window:7","chart_focus:pinned","focus_brand:present"],"invariants":["chart-focus-agrees"]},
+    {"id":"pin-clears-when-brand-removed","actions":["chart_focus:pinned","focus_brand:removed"],"invariants":["focus-never-survives-absent-brand"]}
   ],
   "environments": [{"id":"desktop-chromium","browser_runtime":"playwright-chromium","required":true}],
   "gates": [

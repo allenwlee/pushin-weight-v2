@@ -131,10 +131,43 @@ def _check_tway(fixture: dict[str, Any], assignments: list[str]) -> None:
             "feed_pagination",
             "chart_hover_freeze",
             "freeze_point",
+            "rail",
         }:
             assert observed["accessibility"][control] == value
+        elif control in {"chart_focus", "focus_brand"}:
+            # A later assignment can release focus (focus_brand=removed), so
+            # check the settled pair rather than the raw assignment.
+            _assert_focus_consistent(observed["accessibility"])
         else:
             assert observed["persistence"][control] == value
+
+
+def _assert_focus_consistent(accessibility: dict[str, Any]) -> None:
+    focused = accessibility["chart_focus"] != "idle"
+    # Focus never outlives its brand on the chart.
+    if focused:
+        assert accessibility["focus_brand"] == "present"
+    assert accessibility["lines_dimmed"] is focused
+    assert accessibility["focused_legend_entries"] == (1 if focused else 0)
+    assert accessibility["legend_pressed"] == (
+        1 if accessibility["chart_focus"] == "pinned" else 0
+    )
+    assert accessibility["chart_tooltip"] == "none"
+
+
+def _expected_focus(actions: list[str]) -> tuple[str, str]:
+    """Independent replay of focus intents: (chart_focus, focus_brand)."""
+    focus, brand = "idle", "none"
+    for action in actions:
+        control, _, value = action.partition(":")
+        if control == "chart_focus":
+            focus = value
+            brand = "none" if value == "idle" else "present"
+        elif control == "focus_brand":
+            brand = value
+            if value != "present":
+                focus = "idle"
+    return focus, brand
 
 
 def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
@@ -362,6 +395,29 @@ def _check_invariant(fixture: dict[str, Any], invariant_id: str) -> None:
             "p04",
             "p05",
         }
+    elif invariant_id == "chart-focus-agrees":
+        idle = projection(fixture, initial_state())["accessibility"]
+        assert idle["lines_dimmed"] is False and idle["legend_pressed"] == 0
+        assert idle["chart_tooltip"] == "none"
+        for kind in ("hover", "pinned", "touch"):
+            focused = projection(
+                fixture, set_control(initial_state(), "chart_focus", kind)
+            )["accessibility"]
+            _assert_focus_consistent(focused)
+            assert focused["lines_dimmed"] is True
+        pinned = set_control(initial_state(), "chart_focus", "pinned")
+        refreshed = set_control(set_control(pinned, "window", 7), "focus_brand", "present")
+        observed = projection(fixture, refreshed)["accessibility"]
+        assert observed["chart_focus"] == "pinned"
+        assert observed["legend_pressed"] == 1
+    elif invariant_id == "focus-never-survives-absent-brand":
+        for kind in ("hover", "pinned", "touch"):
+            state = set_control(initial_state(), "chart_focus", kind)
+            state = set_control(state, "focus_brand", "removed")
+            observed = projection(fixture, state)["accessibility"]
+            assert observed["chart_focus"] == "idle"
+            assert observed["lines_dimmed"] is False
+            assert observed["legend_pressed"] == 0
     elif invariant_id == "ui-polish-contract-agrees":
         one_day = projection(fixture, initial_state())
         seven_day = projection(fixture, set_control(initial_state(), "window", 7))
@@ -507,6 +563,21 @@ def _check_seed(fixture: dict[str, Any], seed_id: str) -> None:
             state = bulk_action(state, control, "other_only")
             assert state["filters"][control] == RESIDUAL_VALUES[control]
         _check_invariant(fixture, "residual-filter-partitions-stay-distinct")
+    elif seed_id == "pin-survives-refresh":
+        state = set_control(initial_state(), "window", 7)
+        state = set_control(state, "chart_focus", "pinned")
+        state = set_control(state, "focus_brand", "present")
+        observed = projection(fixture, state)["accessibility"]
+        assert observed["chart_focus"] == "pinned"
+        assert observed["legend_pressed"] == 1
+        assert observed["lines_dimmed"] is True
+    elif seed_id == "pin-clears-when-brand-removed":
+        state = set_control(initial_state(), "chart_focus", "pinned")
+        state = set_control(state, "focus_brand", "removed")
+        observed = projection(fixture, state)["accessibility"]
+        assert observed["chart_focus"] == "idle"
+        assert observed["legend_pressed"] == 0
+        assert observed["lines_dimmed"] is False
     else:
         raise AssertionError(f"unimplemented seed: {seed_id}")
 
@@ -583,6 +654,18 @@ def _check_ordered(fixture: dict[str, Any], group_id: str, actions: list[str]) -
         )
     elif group_id == "hover-freeze-point-order":
         assert observed["accessibility"]["freeze_point"] == last_value("freeze_point")
+    elif group_id in {"pin-refresh-order", "pin-filter-removal-order", "tap-toggle-order"}:
+        focus, brand = _expected_focus(actions)
+        assert observed["accessibility"]["chart_focus"] == focus
+        assert observed["accessibility"]["focus_brand"] == brand
+        _assert_focus_consistent(observed["accessibility"])
+        window = last_value("window")
+        if window is not None:
+            assert observed["chart"]["window"] == int(window)
+    elif group_id == "rail-drawer-order":
+        rail = last_value("rail")
+        assert observed["accessibility"]["rail"] == rail
+        assert observed["accessibility"]["drawer_backdrop"] is (rail == "drawer_open")
     else:
         raise AssertionError(f"unimplemented ordered group: {group_id}")
 

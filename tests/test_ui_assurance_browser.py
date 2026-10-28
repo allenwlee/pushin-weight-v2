@@ -62,6 +62,11 @@ PRESENTATION_CONTROLS = {
     "feed_pagination",
     "chart_hover_freeze",
     "freeze_point",
+    # Chart focus and the rail are page-local presentation state; the
+    # General-style browser tests drive them on the real page.
+    "chart_focus",
+    "focus_brand",
+    "rail",
 }
 STATEFUL_ACTIONS = [
     (control, value)

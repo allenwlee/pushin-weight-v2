@@ -52,12 +52,35 @@ FOCUSED_TESTS = [
     "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_hover_freeze_feed_range_rejects_invalid_or_out_of_horizon_values",
     "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_hover_freeze_click_persists_then_restores_the_mobile_home",
     "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_hover_freeze_zh_cn_datetime_and_restore_at_320px",
+    # General-style homepage, General and /dashboard/each
+    # (docs/iterations/2026-10-28-183433-general-style-bridgewright-target.md).
+    "tests/test_home_chart_focus_browser.py",
+    "tests/test_home_chart_style_browser.py",
+    "tests/test_pro_shell_browser.py",
+    "tests/test_pro_general_style_browser.py",
+    "tests/test_feed_brand_logos_browser.py",
+    "tests/test_feed_flags_hashed_static.py",
+    "tests/test_general_style_copy.py",
+    "tests/test_general_style_source_hygiene.py",
+    "tests/test_general_style_regression_net.py",
+    "tests/test_brand_logos.py",
+    "tests/test_favicon.py",
 ]
 FULL_ADDITIONAL_TESTS = [
     "tests/test_home_chart_pulse.py",
     "tests/test_home_v22_topbar_layout.py",
     "tests/test_ui_assurance_brand_inventory.py",
     "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_anonymous_filters_window_and_pulse_share_one_request_state",
+    "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_locale_autonyms_footer_and_legacy_original_normalization",
+    "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_v24_locale_and_window_controls_keep_geometry_and_copy",
+    "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_mobile_locale_toggle_stays_inside_title_row",
+    "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_one_day_chart_uses_dual_time_axes_and_full_width",
+    "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_v24_timezone_pill_keeps_both_clocks_and_geometry",
+    "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_california_browser_compares_against_localized_beijing_time",
+    "tests/test_home_v22_browser.py::HomeV22BrowserTests::test_fixture_root_route_matches_mockup_in_browser",
+    "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_polish_controls_and_rows_survive_refresh_in_all_locales_and_sizes",
+    "tests/test_home_v22_browser.py::HomeV22MetadataParityBrowserTests::test_japanese_processing_language_and_hover_visuals_survive_feed_replacement",
+    "tests/test_home_v22_mockup_diff.py",
 ]
 
 

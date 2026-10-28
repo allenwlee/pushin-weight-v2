@@ -134,6 +134,11 @@ def test_declaration_inventory_matches_the_production_control_vocabulary() -> No
     assert controls["feed_pagination"]["values"] == [
         "first", "over500", "exhausted"
     ]
+    assert controls["chart_focus"]["values"] == ["idle", "hover", "pinned", "touch"]
+    assert controls["focus_brand"]["values"] == ["none", "present", "removed"]
+    assert controls["rail"]["values"] == [
+        "collapsed", "expanded", "drawer_open", "drawer_closed"
+    ]
 
 
 def test_fixture_digest_and_declared_brands_are_exact() -> None:
@@ -171,4 +176,6 @@ def test_escaped_regressions_are_named_permanent_seeds() -> None:
         "pagination-crosses-500-and-exhausts",
         "stage1-empty-products-and-statuses-remain-visible",
         "other-only-keeps-residual-states-distinct",
+        "pin-survives-refresh",
+        "pin-clears-when-brand-removed",
     }
