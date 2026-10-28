@@ -64,7 +64,7 @@ Target is not authorized until the owner selects it. Wait for a later explicit r
   - Read as: complete the pre-launch items, then run U9 if every preflight check passes; any failed check stops the run and goes back to the owner. U10 follows the delivered report.
   - The owner's go also confirms the exact undo for KTD10/R9/U10 (recommended in the close-out); KTD10, R9, U10 and the flowchart below now say so.
   - Database-backed proof method changed from a rollback run on xbackfiller to CI on a fresh PostgreSQL at schema 0183 (KTD12 records why).
-  - Window date: 2026-10-28 Pacific, the most recent complete weekday at launch; production's 2026-10-27 day is missing about 1,180 saved posts from a schedule hold (U9 step 3).
+  - Window date: first set to 2026-10-28 Pacific, because production's 2026-10-27 day is missing about 1,180 saved posts from a schedule hold. At 15:14 PDT on 2026-10-28, with that window still open, the owner said "run it now", so the run uses 2026-10-27, the most recent complete weekday window (U9 step 3).
 
 # OpenAI and Anthropic Collection Size Test - Plan
 
@@ -688,8 +688,8 @@ flowchart TB
   1. Run the CI database proof (KTD12) covering the U2–U5 database-backed tests, at this branch and at base `ccf10e1b`.
   2. Run U7 against xbackfiller.
   3. Compute the window's UTC bounds from America/Los_Angeles for the most recent complete weekday. Example: 2026-10-27 is 19:00Z to 01:00Z.
-     - Chosen (2026-10-29 JST): 2026-10-28, 19:00Z to 2026-10-29 01:00Z. Collection starts after the window has closed.
-     - Not 2026-10-27: production held its schedule from 04:48Z to 08:30Z that day, so the Pacific day 2026-10-27 lacks about 1,180 saved posts (UTC hours 07 and 08), and R21's window share would be overstated by about 8%.
+     - Chosen: 2026-10-27, 19:00Z to 2026-10-28 01:00Z (owner: "run it now" at 15:14 PDT on 2026-10-28, while the 2026-10-28 window was still open).
+     - Caveat for R21: production held its schedule from 04:48Z to 08:30Z on 2026-10-27, so the Pacific day 2026-10-27 lacks about 1,180 saved posts (UTC hours 07 and 08). The production-route window share is overstated by about 8%, and the report must say so. The window itself (19:00Z to 01:00Z) was harvested normally; `SPECIALEVENTS1/2` were not live yet.
   4. Present the preflight report and get the owner's "go".
   5. Run `seed`, then re-run U7 so checks 5–6 pass.
   6. Build and save the manifest once.
@@ -709,10 +709,16 @@ flowchart TB
     - 178 BrandKeyword rows, 40 accounts, 48 lab-list roles and 48 lab-list memberships;
     - from production's read-only main-list export (208 members, 232 roles; `main-list-production.json`): 208 main-list memberships, 60 accounts, 130 roles created and 62 already present;
     - catalog revision `44ab32ab…` before (switch-off must restore it) and `874988d1…` after.
-  - Step 5, U7 post-seed (`preflight-post-seed.json`, also the R18 before-snapshot): PASS on all nine checks.
-  - Step 6, manifest (`manifest.json`, sha256 `6079016a0911381e40b1c6a4339b509d0f55965ec16b6350503ea20b161397e0`):
+  - Step 5, U7 post-seed against the unused 2026-10-28 manifest (`unused-20261028-window/preflight-post-seed.json`): PASS on all nine checks.
+  - Step 6, manifest (`manifest-20261027.json`, sha256 `9f93103e1709868f200841f92b62e3351b82283474cb87d90d852815b7815349`):
     - built by the plan's dry run in a read-only Render one-off from source `47f8b721`, on image `e5edf737`;
-    - 1,296 units, 256 author contexts over 3 lists, deadline 2026-10-31T21:39Z.
+    - 1,296 units, 256 author contexts over 3 lists, deadline 2026-10-31T22:15Z;
+    - a 2026-10-28 manifest built earlier was never launched (`unused-20261028-window/`).
+  - Launch preflight (`preflight-launch.json`, also the R18 before-snapshot): PASS on all nine checks against the 2026-10-27 manifest.
+  - Step 7, launch: Render one-off `job-dbh78kd9el5s73cvjm7g` on `crn-d9gv94o4n6ts739tqaug` at 2026-10-28T22:16:49Z.
+    - Arguments: `--phase all --execute --evaluate-at-end --collection-concurrency 20 --collection-starts-per-second 20 --enrichment-concurrency 32`.
+    - Test CollectionJob `dd6a88f2-c98f-4efa-b33b-22af3a5208f2` (`oai-anthropic-size-20261027/1`).
+  - Step 10, production continuity: at 22:19:57Z production's newest saved post was 4 minutes old, with 239 saved in the past 30 minutes (`production-continuity-1.txt`).
   - One-off environment: production's rare-types variables (`e5edf737`) name a special-events assessment that source `47f8b721` lacks. The one-offs replace them with this revision's own `render.yaml` harvest values: the 2026-09-24 assessment, with targeted extraction on.
     - RARE_EXTRA still does not run, because the window's `call_ids` exclude it.
     - The run job also drops the scheduled and legacy TwitterAPI keys and the TypeSafe key.
