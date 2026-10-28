@@ -147,6 +147,8 @@ All1013 positions have an evidence-backed disposition or an explicit owner decis
 
 ## Sources
 
+Authoritative origin close-out: [delivered RG1–RG7 scope at0a8ac05f](https://github.com/allenwlee/pushin-weight-v2/blob/0a8ac05f/docs/plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md). This follow-up retains the older origin copy for source history; its scope comes from the owner-selected closure recorded at that commit.
+
 - Origin: `docs/plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md`.
 - `docs/analysis/2026-10-28-093000-global-schema-closure-reconciliation.md` and its ledger CSV/summary.
 - `docs/analysis/2026-10-20-160626-entire-database-field-decisions.csv` and later owner scope decisions.
