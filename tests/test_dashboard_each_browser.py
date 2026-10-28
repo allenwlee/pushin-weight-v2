@@ -250,3 +250,193 @@ class DashboardEachBrowserTests(StaticLiveServerTestCase):
                 context.close()
             finally:
                 browser.close()
+
+
+EACH_CHART_STATE = """() => {
+  const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+  const x = chart.scales.x;
+  const y = chart.scales.y;
+  return {
+    tab: document.querySelector('[data-each-tab][aria-selected="true"]').dataset.eachTab,
+    yPosition: y.options.position,
+    yBorder: y.options.border.display,
+    gridDash: y.options.border.dash,
+    yMax: chart.options.scales.y.max ?? null,
+    tooltip: chart.options.plugins.tooltip.enabled !== false,
+    datasets: chart.data.datasets.map((dataset) => ({
+      label: dataset.label,
+      color: String(dataset.borderColor).toLowerCase(),
+      borderWidth: dataset.borderWidth,
+      pointRadius: dataset.pointRadius,
+      monotone: dataset.cubicInterpolationMode,
+    })),
+    labels: chart.data.labels.length,
+    lastTick: x.ticks.length ? x.ticks[x.ticks.length - 1].value : null,
+    tickCount: x.ticks.length,
+    legend: [...document.querySelectorAll('[data-each-legend] > *')].map((node) => node.textContent.trim()),
+  };
+}"""
+
+FIXED_COLORS = {
+    "#cbd5e1": ("Unclassified", "Undetected"),
+    "#000000": ("Neutral", "Other", "No assigned topic", "No product signal"),
+}
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class DashboardEachGeneralStyleBrowserTests(StaticLiveServerTestCase):
+    def setUp(self):
+        super().setUp()
+        seed_real_home_orm(fixture_from_oracle())
+        from django.utils import timezone
+
+        from tests.test_chart_harvest_coverage import record_harvest
+
+        now = timezone.now()
+        record_harvest(now, finished_at=now, staggered=False)
+        _clear_home_pulse_cache()
+
+    def _context(self, browser):
+        from tests.general_style_browser import open_page
+
+        return open_page(browser, self.live_server_url).context
+
+    def _wait_for_chart(self, page, tab=None):
+        page.wait_for_function(
+            """tab => {
+              const canvas = document.querySelector('[data-each-canvas]');
+              const chart = canvas && window.Chart && Chart.getChart(canvas);
+              const selected = document.querySelector('[data-each-tab][aria-selected="true"]');
+              return Boolean(chart && chart.data.datasets.length && (!tab || selected.dataset.eachTab === tab));
+            }""",
+            arg=tab,
+        )
+
+    def test_every_tab_uses_the_shared_axis_and_area_style(self):
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context(browser)
+                page = context.new_page()
+                errors = []
+                page.on("pageerror", lambda error: errors.append(str(error)))
+                page.goto(
+                    f"{self.live_server_url}/dashboard/each?brand=deepseek&locale=en&window=7",
+                    wait_until="networkidle",
+                )
+                tabs = page.locator("[data-each-tab]")
+                labels = [text.strip() for text in tabs.all_inner_texts()]
+                self.assertIn("Language", labels)
+                self.assertIn("3rd Party Brand Promotions", labels)
+                for index in range(tabs.count()):
+                    tab = tabs.nth(index).get_attribute("data-each-tab")
+                    with self.subTest(tab=tab):
+                        tabs.nth(index).click()
+                        self._wait_for_chart(page, tab)
+                        state = page.evaluate(EACH_CHART_STATE)
+                        self.assertEqual(state["yPosition"], "right")
+                        self.assertIs(state["yBorder"], False)
+                        self.assertEqual(state["gridDash"], [1, 3])
+                        self.assertTrue(state["tooltip"], "the category tooltip stays")
+                        for dataset in state["datasets"]:
+                            self.assertEqual(dataset["borderWidth"], 1, dataset)
+                            self.assertEqual(dataset["pointRadius"], 0, dataset)
+                            self.assertEqual(dataset["monotone"], "monotone", dataset)
+                            self.assertTrue(dataset["label"][:1].isupper(), dataset)
+                            for color, names in FIXED_COLORS.items():
+                                if dataset["label"] in names:
+                                    self.assertEqual(dataset["color"], color, dataset)
+                        self.assertTrue(all(text[:1].isupper() for text in state["legend"] if text), state["legend"])
+                        # Percent mode caps the stack at 100; volume mode leaves it open.
+                        self.assertEqual(state["yMax"], 100)
+                        page.locator('[data-each-mode="volume"]').check()
+                        self.assertIsNone(page.evaluate(EACH_CHART_STATE)["yMax"])
+                        page.locator('[data-each-mode="percent"]').check()
+
+                # The category tooltip still appears on hover.
+                tabs.first.click()
+                self._wait_for_chart(page)
+                point = page.evaluate(
+                    """() => {
+                      const chart = Chart.getChart(document.querySelector('[data-each-canvas]'));
+                      const rect = chart.canvas.getBoundingClientRect();
+                      const last = chart.getDatasetMeta(0).data.at(-1);
+                      return {x: rect.left + last.x - 2, y: rect.top + (chart.chartArea.top + chart.chartArea.bottom) / 2};
+                    }"""
+                )
+                page.mouse.move(point["x"], point["y"])
+                page.wait_for_function(
+                    "() => Chart.getChart(document.querySelector('[data-each-canvas]')).tooltip.opacity > 0"
+                )
+                self.assertEqual(errors, [])
+                context.close()
+            finally:
+                browser.close()
+
+    def test_newest_tick_is_kept_in_every_window_and_language(self):
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context(browser)
+                page = context.new_page()
+                fetched = []
+                page.on(
+                    "response",
+                    lambda response: fetched.append(response.json())
+                    if "/dashboard/each/chart/" in response.url and response.status == 200
+                    else None,
+                )
+                for locale in ("en", "zh_cn"):
+                    for window in (1, 7, 30, 365):
+                        with self.subTest(locale=locale, window=window):
+                            fetched.clear()
+                            page.goto(
+                                f"{self.live_server_url}/dashboard/each?brand=deepseek&locale={locale}&window={window}",
+                                wait_until="networkidle",
+                            )
+                            self._wait_for_chart(page)
+                            state = page.evaluate(EACH_CHART_STATE)
+                            days = (
+                                fetched[-1]["days"]
+                                if fetched
+                                else page.evaluate(
+                                    "() => JSON.parse(document.getElementById('each-initial-chart').textContent).days"
+                                )
+                            )
+                            self.assertEqual(len(days), state["labels"])
+                            # Date axes end on the latest day; the 365-day axis labels month
+                            # starts, so its newest tick is the latest month start.
+                            newest = (
+                                max(index for index, day in enumerate(days) if day.endswith("-01"))
+                                if window == 365
+                                else len(days) - 1
+                            )
+                            self.assertEqual(state["lastTick"], newest)
+                            self.assertGreaterEqual(state["tickCount"], 2)
+                            if window == 1:
+                                self.assertLessEqual(state["tickCount"], 8)
+                context.close()
+            finally:
+                browser.close()
+
+    def test_tab_labels_are_localized(self):
+        expected = {
+            "zh_cn": ("语言", "第三方品牌推广"),
+            "ja": ("言語", "サードパーティのブランドプロモーション"),
+        }
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                context = self._context(browser)
+                page = context.new_page()
+                for locale, labels in expected.items():
+                    page.goto(
+                        f"{self.live_server_url}/dashboard/each?brand=deepseek&locale={locale}",
+                        wait_until="networkidle",
+                    )
+                    texts = [text.strip() for text in page.locator("[data-each-tab]").all_inner_texts()]
+                    for label in labels:
+                        self.assertIn(label, texts)
+                context.close()
+            finally:
+                browser.close()

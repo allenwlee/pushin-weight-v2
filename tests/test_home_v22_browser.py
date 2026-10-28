@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import shutil
 import threading
 from collections.abc import Iterator
@@ -101,12 +102,13 @@ LOCALES = ("zh_cn", "en")
 PRODUCT_LOCALES = ("zh_cn", "en", "ja")
 REGION_SELECTORS = dict(AUTHORED_REGIONS)
 STYLE_PROPERTIES = ("display", "boxSizing", "fontFamily", "lineHeight")
-# The threshold is intentionally below a wholly unrelated frame.  It is not a
-# checked-in image baseline: every run compares fresh captures to the mockup.
-# Initial reports against the canonical fixture landed at 0.25 (desktop) and
-# 0.40 (mobile).  0.45 leaves rendering tolerance without accepting a new
-# frame or a materially rearranged shell.
-MAX_CHANGED_PIXEL_FRACTION = 0.45
+# Paired captures and a changed-pixel report are kept for review.  The former
+# 0.45 changed-pixel ceiling against the dark v22 mockup is retired: the
+# approved General-style target
+# (docs/iterations/2026-10-28-183433-general-style-bridgewright-target.md)
+# replaces the mockup as the homepage's visual oracle, so a light re-skin
+# differs on nearly every pixel.  Structure, regions and geometry are still
+# asserted; the reviewed Cyber-Quan candidate goldens are the pixel check.
 PIXEL_DELTA = 32
 DEFAULT_BROWSER_ARTIFACT_RETENTION = 10
 DEFAULT_BROWSER_REPORT_ROOT = Path(__file__).resolve().parents[1] / ".pytest-tmp" / "browser-artifacts"
@@ -204,6 +206,14 @@ def _freeze_clock(context: BrowserContext) -> None:
         })();
         """
     )
+
+
+def _record_current_harvest() -> None:
+    """Certify scheduled coverage through now; the 1-day chart ends at coverage."""
+    from tests.test_chart_harvest_coverage import record_harvest
+
+    now = datetime.now(UTC)
+    record_harvest(now, finished_at=now, staggered=False)
 
 
 def _cookie_payload(client: Client, base_url: str) -> list[dict[str, str]]:
@@ -505,6 +515,7 @@ class PublicTrackedBrandsBrowserTests(StaticLiveServerTestCase):
         _clear_home_pulse_cache()
 
     def test_anonymous_menus_pulse_and_window_switches_use_configured_subjects(self):
+        _record_current_harvest()
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -1065,7 +1076,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 footer = page.locator(".site-footer")
                                 self.assertEqual(
                                     footer.inner_text(),
-                                    "Made with ❤️ in Yokohama. v0.2.0b1.",
+                                    "Made with ❤️ in Yokohama. v1.0.0b1 (0.2.0b1).",
                                 )
                                 footer.scroll_into_view_if_needed()
                                 box = footer.bounding_box()
@@ -1169,7 +1180,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 self.assertTrue(page.evaluate(
                     """() => Chart.getChart(document.querySelector('canvas.home-chart'))
                       .data.datasets.filter(dataset => dataset._isTotalLine)
-                      .every(dataset => !dataset.segment)"""
+                      .every(dataset => !dataset.segment ||
+                        dataset.segment.borderDash({p1DataIndex: dataset.data.length - 1}) === undefined)"""
                 ))
                 with page.expect_response(lambda response: "/chart.html?" in response.url) as response_info:
                     page.locator('[data-pw-window-btn="7"]').click()
@@ -1195,7 +1207,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         finalLabel: chart.data.labels[last],
                         expectedToday: `${values.year}-${values.month}-${values.day}`,
                         segments: chart.data.datasets.filter(dataset => dataset._isTotalLine).map(dataset => ({
-                          final: dataset.segment.borderDash({p1DataIndex: last}),
+                          solid: !dataset.borderDash || dataset.borderDash.length === 0,
+                          final: dataset.segment.borderDash({p1DataIndex: last}) || null,
                           prior: dataset.segment.borderDash({p1DataIndex: last - 1}) || null,
                         })),
                       };
@@ -1204,7 +1217,13 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 self.assertEqual(result["timezone"], "Asia/Tokyo")
                 self.assertEqual(result["finalLabel"], result["expectedToday"])
                 self.assertGreater(len(result["segments"]), 0)
-                self.assertTrue(all(row["final"] == [4, 4] for row in result["segments"]))
+                # Owner item 25: the partial-day dash stays only on solid-pattern lines.
+                self.assertTrue(any(row["solid"] for row in result["segments"]))
+                self.assertTrue(any(not row["solid"] for row in result["segments"]))
+                self.assertTrue(all(
+                    row["final"] == ([4, 4] if row["solid"] else None)
+                    for row in result["segments"]
+                ))
                 self.assertTrue(all(row["prior"] is None for row in result["segments"]))
             finally:
                 context.close()
@@ -1309,7 +1328,9 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     const rect = element.getBoundingClientRect();
                                     return {left: rect.left, right: rect.right, width: rect.width, height: rect.height};
                                   };
-                                  const row = document.querySelector('.topbar-title-row').getBoundingClientRect();
+                                  // General-style masthead: the title row is display:contents, so the
+                                  // topbar is the box the logo and locale toggle must stay inside.
+                                  const row = document.querySelector('.topbar').getBoundingClientRect();
                                   const appName = document.querySelector('h1.app-name').getBoundingClientRect();
                                   const locale = document.querySelector('.locale-toggle').getBoundingClientRect();
                                   const topbar = document.querySelector('.topbar').getBoundingClientRect();
@@ -1351,7 +1372,9 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 boxes["locale"]["right"],
                                 boxes["viewport"] + 0.5,
                             )
-                            for control_name in ("controls", "timeWindow", "timezone"):
+                            # The controls row is display:contents in the General-style
+                            # masthead, so only its two controls have boxes.
+                            for control_name in ("timeWindow", "timezone"):
                                 self.assertGreater(boxes[control_name]["width"], 0)
                                 self.assertGreaterEqual(
                                     boxes[control_name]["left"],
@@ -1462,6 +1485,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
     def test_one_day_chart_uses_dual_time_axes_and_full_width(self) -> None:
         """The production canvas exposes the owner-approved 1d geometry contract."""
+        _record_current_harvest()
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -1510,19 +1534,14 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     .filter((nickname) => Object.hasOwn(payload.series, nickname));
                                   const chartOnly = Object.keys(payload.series)
                                     .filter((nickname) => !pulseOrder.includes(nickname));
-                                  const firstHour = new Date(payload.days[0]);
-                                  firstHour.setMinutes(0, 0, 0);
-                                  firstHour.setHours(firstHour.getHours() + 1);
-                                  const instants = Array.from(
-                                    {length: 24},
-                                    (_, index) => new Date(firstHour.getTime() + index * 60 * 60 * 1000)
-                                  );
-                                  const californiaHour = new Intl.DateTimeFormat('en-US', {
-                                    timeZone: 'America/Los_Angeles',
-                                    hour: 'numeric',
-                                    hourCycle: 'h23',
-                                  });
+                                  // General style: ticks end at the last harvested bucket and step
+                                  // back whole hours (owner items 19 and 29).
+                                  const bucketMs = Date.parse(payload.days[1]) - Date.parse(payload.days[0]);
+                                  const coverageEnd = Date.parse(payload.days.at(-1)) + bucketMs;
+                                  const instants = window.pwTime.oneDayTicks(payload.days, chart.scales.x.width)
+                                    .map((tick) => tick.instant);
                                   const tickLabels = (scale) => scale.ticks.map((tick) => String(tick.label));
+                                  const tickPixels = chart.scales.x.ticks.map((_, index) => chart.scales.x.getPixelForTick(index));
                                   return {
                                     scaleKeys: Object.keys(chart.scales).sort(),
                                     localPosition: chart.scales.x?.position,
@@ -1534,14 +1553,12 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     comparisonLabels: chart.scales.xComparison
                                       ? tickLabels(chart.scales.xComparison)
                                       : [],
-                                    expectedLocal: instants.map((instant) => {
-                                      const hour = instant.getHours();
-                                      return hour % 2 === 0 ? `${hour}:00` : '';
-                                    }),
-                                    expectedCalifornia: instants.map((instant) => {
-                                      const hour = Number(californiaHour.format(instant));
-                                      return hour % 2 === 0 ? `${hour}:00` : '';
-                                    }),
+                                    expectedLocal: instants.map((instant) => window.pwTime.clockText(instant, 'en')),
+                                    expectedCalifornia: instants.map(
+                                      (instant) => window.pwTime.clockText(instant, 'en', 'America/Los_Angeles')
+                                    ),
+                                    tickOffsetsFromEnd: instants.map((instant) => (coverageEnd - Number(instant)) / 3600000),
+                                    minTickGap: Math.min(...tickPixels.slice(1).map((pixel, index) => pixel - tickPixels[index])),
                                     localColor: chart.scales.x?.options.ticks.color,
                                     defaultColor: Chart.defaults.color,
                                     comparisonColor: chart.scales.xComparison?.options.ticks.color,
@@ -1588,12 +1605,21 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 runtime["comparisonLabels"],
                                 runtime["expectedCalifornia"],
                             )
-                            self.assertEqual(len(runtime["localLabels"]), 24)
-                            self.assertEqual(len(runtime["comparisonLabels"]), 24)
-                            self.assertEqual(runtime["localColor"], runtime["defaultColor"])
+                            self.assertGreaterEqual(len(runtime["localLabels"]), 4)
+                            self.assertTrue(
+                                all(re.fullmatch(r"\d{1,2}:\d{2}[ap]m", label) for label in runtime["localLabels"]),
+                                runtime["localLabels"],
+                            )
+                            self.assertEqual(runtime["tickOffsetsFromEnd"][-1], 0)
+                            self.assertTrue(
+                                all(float(offset).is_integer() for offset in runtime["tickOffsetsFromEnd"]),
+                                runtime["tickOffsetsFromEnd"],
+                            )
+                            self.assertGreaterEqual(runtime["minTickGap"], 42)
+                            self.assertEqual(runtime["localColor"].lower(), "#687589")
                             self.assertEqual(
                                 runtime["comparisonColor"].replace(" ", ""),
-                                "rgba(251,191,36,0.45)",
+                                "rgba(104,117,137,0.55)",
                             )
                             self.assertEqual(runtime["localTitle"], "local")
                             self.assertEqual(runtime["comparisonTitle"], "CA")
@@ -1612,7 +1638,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             )
                             self.assertGreaterEqual(runtime["plotWidthRatio"], 0.85)
                             self.assertLessEqual(runtime["firstPointOffset"], 1)
-                            self.assertLessEqual(runtime["lastPointOffset"], 1)
+                            # The latest point stops 16px before the right-hand y axis.
+                            self.assertAlmostEqual(runtime["lastPointOffset"], 16, delta=1)
                             self.assertLessEqual(runtime["canvasLeftInset"], 2)
                             self.assertEqual(runtime["yTitle"], "posts / 5min")
                             self.assertFalse(runtime["overflow"])
@@ -1773,39 +1800,33 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                         "computedAt => JSON.parse(document.querySelector('canvas.home-chart').dataset.home).computed_at === computedAt",
                         arg=fixture_computed_at,
                     )
+                    # General-style axis (owner items 19, 25): ticks are real instants that
+                    # step back whole hours from the last bucket's end, labelled on the
+                    # English 12-hour clock in each row's own zone, so the CA fall-back
+                    # repeats a wall-clock hour instead of dropping an instant.
                     california_axis = page.evaluate(
                         """() => {
                           const canvas = document.querySelector('canvas.home-chart');
                           const chart = Chart.getChart(canvas);
-                          const formatter = new Intl.DateTimeFormat('en-US', {
-                            timeZone: 'America/Los_Angeles',
-                            hour: 'numeric',
-                            hourCycle: 'h23',
-                          });
+                          const start = Date.parse(chart.data.labels[0]);
+                          const step = Date.parse(chart.data.labels[1]) - start;
                           const ticks = chart.scales.xComparison.ticks;
-                          const firstHour = new Date(chart.data.labels[0]);
-                          firstHour.setMinutes(0, 0, 0);
-                          firstHour.setHours(firstHour.getHours() + 1);
-                          const hours = ticks.map((_, index) => Number(
-                            formatter.format(new Date(
-                              firstHour.getTime() + index * 60 * 60 * 1000
-                            ))
-                          ));
+                          const instants = ticks.map((tick) => start + (tick.value + 1) * step);
                           return {
                             labels: ticks.map((tick) => String(tick.label)),
-                            hours,
+                            expected: instants.map((instant) =>
+                              window.pwTime.clockText(new Date(instant), 'en', 'America/Los_Angeles')),
+                            gaps: instants.slice(1).map((instant, index) => instant - instants[index]),
+                            lastEnd: instants[instants.length - 1],
+                            payloadEnd: Date.parse(chart.data.labels[chart.data.labels.length - 1]) + step,
                           };
                         }"""
                     )
-                    self.assertEqual(len(california_axis["labels"]), 24)
-                    self.assertEqual(california_axis["hours"].count(1), 2)
-                    self.assertEqual(
-                        california_axis["labels"],
-                        [
-                            f"{hour}:00" if hour % 2 == 0 else ""
-                            for hour in california_axis["hours"]
-                        ],
-                    )
+                    self.assertGreaterEqual(len(california_axis["labels"]), 6)
+                    self.assertEqual(california_axis["labels"], california_axis["expected"])
+                    self.assertEqual(len(set(california_axis["gaps"])), 1)
+                    self.assertEqual(california_axis["gaps"][0] % (60 * 60 * 1000), 0)
+                    self.assertEqual(california_axis["lastEnd"], california_axis["payloadEnd"])
                     self.assertEqual(console_errors, [])
                     self.assertEqual(page_errors, [])
                 finally:
@@ -2455,7 +2476,8 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                     state = page.locator("[data-pw-headline-state]")
                     body = page.locator("[data-pw-headline-body]")
                     fallback = page.locator("[data-pw-headline-empty]")
-                    self.assertEqual(state.inner_text(), "DISABLED")
+                    # General style keeps the state label in sentence case (no uppercase transform).
+                    self.assertEqual(state.inner_text(), "Disabled")
                     self.assertEqual(body.inner_text(), "Trend summary is unavailable.")
                     self.assertFalse(body.is_visible())
                     self.assertEqual(
@@ -2925,7 +2947,12 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                 browser.close()
 
     def test_v24_locale_and_window_controls_keep_geometry_and_copy(self) -> None:
-        """V24 control labels change without moving or resizing the controls."""
+        """Control labels change per language without moving the controls.
+
+        The General-style segmented controls size each button to its label (the
+        approved prototype's ``width: auto``), so widths are no longer equal; the
+        buttons keep one height in every language and stay inside the masthead.
+        """
         cookies_by_locale = {
             locale: self._anonymous_cookies(locale) for locale in PRODUCT_LOCALES
         }
@@ -2962,10 +2989,12 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                         const box = element.getBoundingClientRect();
                                         return {x: box.x, y: box.y, top: box.top, left: box.left, width: box.width, height: box.height, right: box.right, bottom: box.bottom};
                                       };
-                                      const controls = document.querySelector('.topbar-controls');
+                                      // General-style masthead: the controls row is display:contents,
+                                      // so the topbar is the container; the wordmark replaces the
+                                      // two-line Pushin' Weight title.
+                                      const controls = document.querySelector('.topbar');
                                       const appName = document.querySelector('.app-name');
-                                      const zhTitle = appName.querySelector('.zh');
-                                      const enTitle = appName.querySelector('.en');
+                                      const wordmark = appName.querySelector('.pw-wordmark');
                                       return {
                                         controls: rect(controls),
                                         locale: [...document.querySelectorAll('[data-pw-locale-btn]')].map(rect),
@@ -2973,25 +3002,17 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                         timezone: rect(document.querySelector('[data-tz-widget]')),
                                         title: {
                                           app: rect(appName),
-                                          zh: rect(zhTitle),
-                                          en: rect(enTitle),
-                                          lines: [...enTitle.querySelectorAll('.en-line')].map((line) => ({...rect(line), text: line.textContent})),
+                                          wordmark: rect(wordmark),
+                                          text: wordmark.innerText,
+                                          legacyLettering: appName.querySelectorAll('.zh, .en').length,
                                         },
                                       };
                                     }"""
                                 )
-                                locale_widths = [
-                                    item["width"] for item in geometry["locale"]
-                                ]
-                                window_widths = [
-                                    item["width"] for item in geometry["windows"]
-                                ]
-                                self.assertLessEqual(
-                                    max(locale_widths) - min(locale_widths), 0.5
-                                )
-                                self.assertLessEqual(
-                                    max(window_widths) - min(window_widths), 0.5
-                                )
+                                for group in ("locale", "windows"):
+                                    heights = [item["height"] for item in geometry[group]]
+                                    self.assertLessEqual(max(heights) - min(heights), 0.5)
+                                    self.assertTrue(all(item["width"] > 0 for item in geometry[group]))
                                 self.assertLessEqual(
                                     geometry["timezone"]["right"],
                                     geometry["controls"]["right"] + 0.5,
@@ -3000,10 +3021,16 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                     geometry["windows"][0]["left"],
                                     geometry["controls"]["left"] - 0.5,
                                 )
-                                self.assertLessEqual(
-                                    geometry["windows"][-1]["right"],
-                                    geometry["timezone"]["left"] + 0.5,
-                                )
+                                if geometry["timezone"]["top"] >= geometry["windows"][-1]["bottom"] - 0.5:
+                                    # Phone widths: the clock pill takes its own row (prototype).
+                                    self.assertGreaterEqual(
+                                        geometry["timezone"]["left"], geometry["controls"]["left"] - 0.5
+                                    )
+                                else:
+                                    self.assertLessEqual(
+                                        geometry["windows"][-1]["right"],
+                                        geometry["timezone"]["left"] + 0.5,
+                                    )
                                 self.assertEqual(
                                     page.locator("[data-pw-window-btn]").all_inner_texts(),
                                     expected_labels[locale],
@@ -3012,25 +3039,16 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                 self.assertGreater(
                                     page.locator("[data-pw-pulse-entry]").count(), 0
                                 )
-                                self.assertEqual(
-                                    [line["text"] for line in geometry["title"]["lines"]],
-                                    ["Pushin'", "Weight"],
-                                )
-                                self.assertGreater(
-                                    geometry["title"]["lines"][1]["y"],
-                                    geometry["title"]["lines"][0]["y"],
-                                )
+                                self.assertEqual(geometry["title"]["text"], "PUSHINWEIGHT")
+                                self.assertEqual(geometry["title"]["legacyLettering"], 0)
+                                self.assertLessEqual(geometry["title"]["wordmark"]["height"], 20)
                                 self.assertGreaterEqual(
-                                    geometry["title"]["en"]["left"],
+                                    geometry["title"]["wordmark"]["left"],
                                     geometry["title"]["app"]["left"] - 0.5,
                                 )
                                 self.assertLessEqual(
-                                    geometry["title"]["en"]["right"],
+                                    geometry["title"]["wordmark"]["right"],
                                     geometry["title"]["app"]["right"] + 0.5,
-                                )
-                                self.assertLessEqual(
-                                    geometry["title"]["en"]["height"],
-                                    geometry["title"]["zh"]["height"] + 1,
                                 )
                                 signature = {
                                     "controls": geometry["controls"],
@@ -3046,17 +3064,16 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                             signature[group], baseline[group], strict=True
                                         ):
                                             self.assertAlmostEqual(
-                                                actual["width"], expected["width"], delta=0.5
+                                                actual["top"], expected["top"], delta=0.5
                                             )
                                             self.assertAlmostEqual(
                                                 actual["height"], expected["height"], delta=0.5
                                             )
-                                    for key in ("width", "height"):
-                                        self.assertAlmostEqual(
-                                            signature["timezone"][key],
-                                            baseline["timezone"][key],
-                                            delta=0.5,
-                                        )
+                                    self.assertAlmostEqual(
+                                        signature["timezone"]["height"],
+                                        baseline["timezone"]["height"],
+                                        delta=0.5,
+                                    )
                             finally:
                                 context.close()
             finally:
@@ -3506,11 +3523,15 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                           probe.remove();
                           return {
                             expected,
-                            actual: getComputedStyle(element).borderLeftColor,
+                            // General style: the brand color is the chip's leading dot; a
+                            // selected chip takes the General blue outline.
+                            actual: getComputedStyle(element, '::before').backgroundColor,
+                            border: getComputedStyle(element).borderLeftColor,
                           };
                         }"""
                     )
                     self.assertEqual(selected_edge["actual"], selected_edge["expected"])
+                    self.assertEqual(selected_edge["border"], "rgb(67, 120, 255)")
 
                     chart_runtime = page.evaluate(
                         """() => {
@@ -3544,6 +3565,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
     def test_v24_timezone_pill_keeps_both_clocks_and_geometry(self) -> None:
         """The split pill toggles selection while feed timestamps follow it."""
+        _record_current_harvest()
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -3570,13 +3592,14 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             ca_choice = pill.locator('[data-tz-choice="ca"]')
                             self.assertEqual(local_choice.count(), 1)
                             self.assertEqual(ca_choice.count(), 1)
+                            # English clocks use the 12-hour lowercase form (owner item 19).
                             self.assertRegex(
                                 pill.locator("[data-tz-local-time]").inner_text(),
-                                r"^\d{2}:\d{2}$",
+                                r"^\d{1,2}:\d{2}[ap]m$",
                             )
                             self.assertRegex(
                                 pill.locator("[data-tz-ca-time]").inner_text(),
-                                r"^\d{2}:\d{2}$",
+                                r"^\d{1,2}:\d{2}[ap]m$",
                             )
                             self.assertTrue(local_choice.evaluate("element => element.classList.contains('is-selected')"))
                             self.assertFalse(ca_choice.evaluate("element => element.classList.contains('is-selected')"))
@@ -3622,14 +3645,13 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                   };
                                 }"""
                             )
+                            # General style: the active clock's row uses the axis text color
+                            # and the other row dims it, with no amber accent.
                             self.assertEqual(
                                 axis_colors["local"].replace(" ", ""),
-                                "rgba(102,102,102,0.55)",
+                                "rgba(104,117,137,0.55)",
                             )
-                            self.assertEqual(
-                                axis_colors["comparison"].replace(" ", ""),
-                                "rgba(251,191,36,1)",
-                            )
+                            self.assertEqual(axis_colors["comparison"].lower(), "#687589")
                         finally:
                             context.close()
             finally:
@@ -3699,6 +3721,7 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
 
     def test_california_browser_compares_against_localized_beijing_time(self) -> None:
         """California-local browsers get the Beijing comparison contract."""
+        _record_current_harvest()
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
@@ -3737,19 +3760,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                                   const canvas = document.querySelector('canvas.home-chart');
                                   const chart = Chart.getChart(canvas);
                                   const payload = JSON.parse(canvas.dataset.home);
-                                  const firstHour = new Date(payload.days[0]);
-                                  firstHour.setMinutes(0, 0, 0);
-                                  firstHour.setHours(firstHour.getHours() + 1);
-                                  const formatter = new Intl.DateTimeFormat('en-US', {
-                                    timeZone: 'Asia/Shanghai',
-                                    hour: 'numeric',
-                                    hourCycle: 'h23',
-                                  });
-                                  const expected = Array.from({length: 24}, (_, index) => {
-                                    const instant = new Date(firstHour.getTime() + index * 60 * 60 * 1000);
-                                    const hour = Number(formatter.format(instant));
-                                    return hour % 2 === 0 ? `${hour}:00` : '';
-                                  });
+                                  const locale = document.body.dataset.pwLocale;
+                                  // The Beijing row labels the same hour-stepped ticks as the local row.
+                                  const expected = window.pwTime.oneDayTicks(payload.days, chart.scales.x.width)
+                                    .map((tick) => window.pwTime.clockText(tick.instant, locale, 'Asia/Shanghai'));
                                   return {
                                     timezone: window.__pwTz.getComparison().timezone,
                                     localTitle: chart.scales.x.options.title.text,
@@ -3762,8 +3776,17 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             self.assertEqual(chart_state["timezone"], "Asia/Shanghai")
                             self.assertEqual(chart_state["localTitle"], expected_local)
                             self.assertEqual(chart_state["title"], expected_title)
-                            self.assertEqual(len(chart_state["labels"]), 24)
+                            self.assertGreaterEqual(len(chart_state["labels"]), 4)
                             self.assertEqual(chart_state["labels"], chart_state["expected"])
+                            self.assertTrue(
+                                all(
+                                    re.fullmatch(
+                                        r"\d{1,2}:\d{2}[ap]m" if locale == "en" else r"\d{2}:\d{2}", label
+                                    )
+                                    for label in chart_state["labels"]
+                                ),
+                                chart_state["labels"],
+                            )
                         finally:
                             context.close()
             finally:
@@ -3875,12 +3898,15 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             self.assertFalse(reference_geometry.get("__root_missing__"), "Mockup phone landmark missing")
                             # These relationships survive changing fixture copy and catch
                             # shell layout regressions more reliably than absolute pixels.
-                            self.assertAlmostEqual(actual_geometry["topbar"]["x"], actual_geometry["filters"]["x"], delta=0.02)
-                            self.assertAlmostEqual(actual_geometry["topbar"]["width"], actual_geometry["filters"]["width"], delta=0.02)
-                            if viewport_name == "desktop":
-                                self.assertLess(actual_geometry["chart"]["x"], actual_geometry["feed"]["x"])
-                            else:
-                                self.assertLess(actual_geometry["chart"]["y"], actual_geometry["feed"]["y"])
+                            # General style (docs/iterations/2026-10-28-183433-general-style-bridgewright-target.md):
+                            # the masthead spans the page and the sections keep an equal inset on both sides.
+                            self.assertAlmostEqual(actual_geometry["topbar"]["x"], 0, delta=0.02)
+                            self.assertAlmostEqual(actual_geometry["topbar"]["width"], 1, delta=0.02)
+                            self.assertAlmostEqual(
+                                actual_geometry["filters"]["x"] * 2 + actual_geometry["filters"]["width"], 1, delta=0.02
+                            )
+                            # The General-style feed is a card grid below the chart at every width.
+                            self.assertLess(actual_geometry["chart"]["y"], actual_geometry["feed"]["y"])
 
                             tz = page.locator("[data-tz-widget]")
                             feed_stamp = page.locator(".feed-row[data-created-at-iso] .ts-abs").first
@@ -3891,7 +3917,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             )
                             initial_feed_stamp = feed_stamp.text_content()
                             initial_time = tz.locator("[data-tz-time]").text_content()
-                            self.assertRegex(initial_time or "", r"^\d{2}:\d{2}$")
+                            self.assertRegex(
+                                initial_time or "",
+                                r"^\d{1,2}:\d{2}[ap]m$" if locale == "en" else r"^\d{2}:\d{2}$",
+                            )
                             self.assertNotEqual(initial_time, "00:00", "timezone runtime left its authored placeholder unchanged")
                             tz.click()
                             page.wait_for_function("() => window.__pwTz?.mode === 'ca'")
@@ -3959,11 +3988,10 @@ class HomeV22BrowserTests(StaticLiveServerTestCase):
                             }
                             (artifacts / f"{stem}.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
                             reports.append(report)
-                            self.assertLessEqual(
-                                float(pixels["changed_fraction"]),
-                                MAX_CHANGED_PIXEL_FRACTION,
-                                f"v22 screenshot threshold exceeded; report={artifacts / f'{stem}.json'}; "
-                                f"changed_fraction={pixels['changed_fraction']}; threshold={MAX_CHANGED_PIXEL_FRACTION}",
+                            self.assertEqual(
+                                (pixels["width"], pixels["height"]),
+                                (pixels["reference_width"], pixels["reference_height"]),
+                                f"paired captures differ in size; report={artifacts / f'{stem}.json'}",
                             )
                         finally:
                             context.close()
@@ -4065,6 +4093,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 browser.close()
 
     def test_stepfun_is_single_nonempty_browser_identity(self) -> None:
+        _record_current_harvest()
         from django.utils import timezone
         from core.models import SearchQuery
 
@@ -4078,7 +4107,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
             text="StepFun browser evidence",
             text_en="StepFun browser evidence",
             lang_detected="en",
-            created_at=timezone.now() - timedelta(minutes=2),
+            # Before the latest closed five-minute harvest boundary.
+            created_at=timezone.now() - timedelta(minutes=10),
         )
         PostBrand.objects.create(post=post, brand=brand)
         with sync_playwright() as playwright:
@@ -4685,8 +4715,10 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                   };
                                 }"""
                             )
+                            # The General card grid is narrower than the old single-column
+                            # list, so a regular card is taller; Stage 1 rows still add none.
                             self.assertLessEqual(
-                                height_metrics["regular"]["actual"], 150
+                                height_metrics["regular"]["actual"], 200
                             )
                             self.assertEqual(
                                 height_metrics["regular"]["delta"], 0
@@ -4721,7 +4753,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                         '[data-tweet-id="v22-metadata-004"] '
                                         '.enrichment-status-pending[data-process="pending"]'
                                     ).get_attribute("data-pw-inspection"),
-                                    "分析、评论待处理。 分析首次成功处理的历史平均时间：约15分钟。 评论首次成功处理的历史平均时间：约1分钟。",
+                                    "分析和评论待处理（预计1-15分钟）",
                                 )
                                 self.assertEqual(
                                     page.locator(
@@ -5025,27 +5057,16 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                           const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
                           return chart.getActiveElements().some(item => item.index === index)
                             && chart.tooltip.getActiveElements().some(item => item.index === index)
-                            && chart.tooltip.opacity === 1
+                            && chart.options.plugins.tooltip.enabled === false
                             && chart.tooltip.title.some(line => line.startsWith('Local: '))
                             && chart.tooltip.title.some(line => line.startsWith('Beijing: '));
                         }""",
                         point["index"],
                     )
                 )
-                tooltip_clearance = page.evaluate(
-                    """point => {
-                      const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
-                      const canvas = chart.canvas.getBoundingClientRect();
-                      const tip = chart.tooltip;
-                      const box = {left: canvas.left + tip.x, top: canvas.top + tip.y,
-                        right: canvas.left + tip.x + tip.width,
-                        bottom: canvas.top + tip.y + tip.height};
-                      return Math.max(box.left - point.x, point.x - box.right,
-                        box.top - point.y, point.y - box.bottom);
-                    }""",
-                    point,
-                )
-                self.assertGreaterEqual(tooltip_clearance, 11.5)
+                # Owner items 10 and 19: no tooltip is drawn; the feed title carries the
+                # slot on the English 12-hour clock.
+                self.assertRegex(frozen_title, r"Local: .+ \d{1,2}:\d{2}[ap]m")
                 point_anchor = page.evaluate(
                     """() => {
                       const chart = Chart.getChart(document.querySelector('canvas.home-chart'));
@@ -5184,13 +5205,15 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             active: chart.getActiveElements().map(item => item.index),
                             tooltipActive: chart.tooltip.getActiveElements().map(item => item.index),
                             title: chart.tooltip.title,
-                            opacity: chart.tooltip.opacity,
+                            enabled: chart.options.plugins.tooltip.enabled,
                           };
                         }""",
                     )
                 self.assertIn(point["index"], tooltip_state["active"])
                 self.assertIn(point["index"], tooltip_state["tooltipActive"])
-                self.assertEqual(tooltip_state["opacity"], 1)
+                # Owner item 10: the chart draws no tooltip; the feed title shows the slot.
+                self.assertFalse(tooltip_state["enabled"])
+                self.assertRegex(frozen_title, r"本地 \S+ \d{2}:\d{2}")
                 self.assertTrue(
                     any(line.startswith("本地 ") for line in tooltip_state["title"]),
                     tooltip_state,
@@ -5581,12 +5604,17 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             self.assertEqual(
                                 initial["country"]["geography"]["width"], "14px"
                             )
+                            # Owner items 21-22: a hairline edge keeps white-field flags
+                            # visible on the white General cards, at full opacity.
                             self.assertEqual(
                                 initial["country"]["geography"]["filter"],
-                                "saturate(0.72) brightness(0.9)",
+                                "drop-shadow(rgba(24, 33, 45, 0.22) 0.5px 0px 0px) "
+                                "drop-shadow(rgba(24, 33, 45, 0.22) -0.5px 0px 0px) "
+                                "drop-shadow(rgba(24, 33, 45, 0.22) 0px 0.5px 0px) "
+                                "drop-shadow(rgba(24, 33, 45, 0.22) 0px -0.5px 0px)",
                             )
                             self.assertEqual(
-                                initial["country"]["geography"]["opacity"], "0.9"
+                                initial["country"]["geography"]["opacity"], "1"
                             )
                             self.assertAlmostEqual(
                                 initial["country"]["geography"]["flagCenters"][0],
@@ -5758,7 +5786,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 country_flag.get_attribute("aria-expanded"), "true"
                             )
                             signal = country_row.locator(
-                                ".feed-signals .pw-inspection-trigger"
+                                ".feed-signals .pw-inspection-trigger:not(.pw-post-brand)"
                             ).first
                             self.assertGreater(signal.count(), 0)
                             self.assertEqual(
@@ -5804,6 +5832,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                 browser.close()
 
     def test_japanese_processing_language_and_hover_visuals_survive_feed_replacement(self) -> None:
+        _record_current_harvest()
         from django.core.management import call_command
         from django.utils import timezone
 
@@ -5845,13 +5874,14 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         if initial:
                             active = page.locator('[data-tweet-id="v22-metadata-001"] [data-process="pending"]')
                             self.assertIn('翻訳', active.get_attribute('data-pw-inspection') or '')
-                            self.assertIn('約5分', active.get_attribute('data-pw-inspection') or '')
+                            self.assertIn('目安', active.get_attribute('data-pw-inspection') or '')
+                            self.assertIn('5分', active.get_attribute('data-pw-inspection') or '')
                         row = page.locator(f'[data-tweet-id="{self.fixture["replacement_id"]}"]')
                         self.assertEqual(row.locator('.processing-armillary').count(), 1)
                         self.assertEqual(row.locator('.processing-status[data-process="translation"]').count(), 0)
                         self.assertEqual(
                             row.locator('.post-language-tag.processing-status').get_attribute('data-pw-inspection'),
-                            '言語判定、翻訳と解説を待っています。 翻訳の初回成功処理の過去平均：約5分。 解説の初回成功処理の過去平均：約1分。',
+                            '言語・翻訳・解説待ち（目安1〜5分）',
                         )
                         self.assertEqual(
                             row.locator('.meta .processing-status[data-process="pending"]').count(),
@@ -5862,12 +5892,13 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                             '分類に失敗しました。再試行の予定はありません。',
                         )
                         globe = row.locator('.post-language-tag.processing-status')
-                        self.assertEqual(globe.evaluate('node => getComputedStyle(node).color'), 'rgba(245, 158, 11, 0.58)')
-                        self.assertEqual(globe.get_attribute('data-pw-inspection'), '言語判定、翻訳と解説を待っています。 翻訳の初回成功処理の過去平均：約5分。 解説の初回成功処理の過去平均：約1分。')
+                        # General style mutes the pending language tag (prototype rule).
+                        self.assertEqual(globe.evaluate('node => getComputedStyle(node).color'), 'rgb(104, 117, 137)')
+                        self.assertEqual(globe.get_attribute('data-pw-inspection'), '言語・翻訳・解説待ち（目安1〜5分）')
                         self.assertIn('#icon-pending-armillary-frame', globe.locator('use').get_attribute('href'))
                         globe.hover()
                         popover = page.locator('#pw-feed-inspection-popover')
-                        self.assertEqual(popover.locator('.inspection-words').inner_text(), '言語判定、翻訳と解説を待っています。 翻訳の初回成功処理の過去平均：約5分。 解説の初回成功処理の過去平均：約1分。')
+                        self.assertEqual(popover.locator('.inspection-words').inner_text(), '言語・翻訳・解説待ち（目安1〜5分）')
                         trigger_rect = globe.bounding_box()
                         popover_rect = popover.bounding_box()
                         self.assertIsNotNone(trigger_rect)
@@ -5887,7 +5918,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                         follower.hover()
                         self.assertEqual(popover.locator('.inspection-words .feed-x-icon').count(), 1)
                         self.assertEqual(follower.get_attribute('aria-label'), '500 X フォロワー')
-                        self.assertEqual(row.locator('.account-geography-flag').first.get_attribute('data-pw-inspection'), 'アメリカ合衆国')
+                        # Japanese place name from the shared places fixture (tests/geolocation_factory.py).
+                        self.assertEqual(row.locator('.account-geography-flag').first.get_attribute('data-pw-inspection'), '米国')
                         sentiment = row.locator('.sig-sentiment .signal-inspection-trigger').first
                         self.assertIn('感情', sentiment.get_attribute('data-pw-inspection'))
                         sentiment.hover()
@@ -5925,10 +5957,10 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch()
             try:
-                for locale, product, countries, stance in (
-                    ('en', 'Product', ('China', 'U.S.'), 'national stance'),
-                    ('ja', '製品', ('中国', '米国'), '国家的立場'),
-                    ('zh_hans', '产品', ('中国', '美国'), '国家立场'),
+                for locale, product, countries, stance, framing in (
+                    ('en', 'Product', ('China', 'U.S.'), 'National Stance', 'Geopolitical Framing'),
+                    ('ja', '製品', ('中国', '米国'), '国家的立場', '地政学的フレーミング'),
+                    ('zh_hans', '产品', ('中国', '美国'), '国家立场', '地缘政治框架'),
                 ):
                     for size in ('desktop', 'mobile'):
                         with self.subTest(locale=locale, size=size):
@@ -5941,17 +5973,23 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                 geopolitical = page.locator('.filter-pill[data-group="geopolitical_modes"]')
                                 help_trigger = geopolitical.locator('.filter-help-trigger')
                                 self.assertEqual(help_trigger.inner_text(), '')
-                                self.assertTrue(help_trigger.locator('svg').is_visible())
-                                self.assertIn('#icon-language-globe', help_trigger.locator('use').get_attribute('href'))
+                                # Owner item 7: the globe icon is removed; the help trigger stays.
+                                self.assertEqual(help_trigger.locator('svg').count(), 0)
                                 help_trigger.focus()
                                 popover = page.locator('#pw-feed-inspection-popover')
                                 self.assertTrue(popover.is_visible())
                                 self.assertGreater(len(popover.locator('.inspection-words').inner_text()), 10)
-                                self.assertEqual(popover.locator('.inspection-visual svg').count(), 1)
+                                # The popover's visual copied the removed globe; the owner kept
+                                # the empty trigger and its explanation as they are.
+                                self.assertEqual(popover.locator('.inspection-visual svg').count(), 0)
                                 page.keyboard.press('Escape')
                                 self.assertFalse(popover.is_visible())
                                 geopolitical.locator('.title').click()
-                                subtitles = page.locator('.filter-dropdown.is-portaled .dd-subtitle')
+                                self.assertEqual(
+                                    page.locator('.filter-dropdown.is-portaled .dd-subtitle.pw-dd-header').all_inner_texts(),
+                                    [framing],
+                                )
+                                subtitles = page.locator('.filter-dropdown.is-portaled .dd-subtitle:not(.pw-dd-header)')
                                 self.assertEqual(subtitles.all_inner_texts(), [stance, stance])
                                 for index, country in enumerate(countries):
                                     flag = subtitles.nth(index).locator('svg')
@@ -6146,16 +6184,21 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                                   return {iconHeight: iconBox.height, markHeight: markBox.height};
                                 }"""
                             )
-                            self.assertAlmostEqual(
+                            # The locked line mark's drawn outline stops just short of its
+                            # viewBox edge, so it fills at least 98% of the icon height.
+                            self.assertGreaterEqual(
                                 mark_geometry["markHeight"],
-                                mark_geometry["iconHeight"],
-                                delta=0.02,
+                                mark_geometry["iconHeight"] * 0.98,
+                            )
+                            self.assertLessEqual(
+                                mark_geometry["markHeight"],
+                                mark_geometry["iconHeight"] + 0.02,
                             )
                             self.assertEqual(
                                 page.locator(".app-name").evaluate(
                                     "node => [...node.children].map(child => child.classList[0])"
                                 ),
-                                ["pw-icon", "zh", "en"],
+                                ["pw-icon", "pw-wordmark"],
                             )
                             self.assertEqual(page.locator(".filter-pill .carat use").count(), 9)
                             self.assertEqual(
@@ -6397,7 +6440,7 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                     text.click()
                     self.assertEqual(text.get_attribute("data-layer-key"), "synthesis")
 
-                    page.locator(".feed-strip > h3").click()
+                    page.locator(".feed-strip [data-pw-feed-title]").click()
                     self.assertFalse(text.evaluate("element => element.classList.contains('is-expanded')"))
 
                     page.evaluate(
@@ -6660,7 +6703,8 @@ class HomeV22MetadataParityBrowserTests(StaticLiveServerTestCase):
                           return {
                             bin: [...lead.classList].find(name => name.startsWith('follower-bin-')),
                             leadWidth: lead.getBoundingClientRect().width,
-                            bodyLeft: body.getBoundingClientRect().left,
+                            // Cards sit in a grid, so measure the body from its own card edge.
+                            bodyLeft: body.getBoundingClientRect().left - row.getBoundingClientRect().left,
                             glyphSize: glyph.getBoundingClientRect().width,
                             glyphSymbol: glyph.querySelector('use')?.getAttribute('href'),
                             count: row.querySelector('.follower-count').textContent.trim(),

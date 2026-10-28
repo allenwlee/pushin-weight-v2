@@ -583,6 +583,72 @@ assertEq(gate.isCurrent(frozenTicket), false, 'a released frozen response cannot
 assertEq(clearedTimers.includes(3), true, 'freeze release clears the active timeout');
 assertEq(gate.cancel(), false, 'cancel is idempotent when no request remains');
 
+console.log('\n--- General-style feed rows (owner items 23, 25) ---');
+const { countryFlagSpriteUrl, postBrandsHtml } = sandbox.exports;
+function generalBody(attrs) {
+  return {
+    classList: { contains: (name) => name === 'pw-general' },
+    getAttribute: (name) => Object.prototype.hasOwnProperty.call(attrs, name) ? attrs[name] : null,
+  };
+}
+for (const [url, expected] of [
+  ['/static/country-flags.svg', '/static/country-flags.svg'],
+  ['/static/country-flags.e1ef2c1d1cff.svg', '/static/country-flags.e1ef2c1d1cff.svg'],
+  ['/static/country-flags.e1ef2c1d1cff.svg?v=1', '/static/country-flags.e1ef2c1d1cff.svg?v=1'],
+  ['/static/other-flags.svg', ''],
+  ['/static/country-flags.svg.bak', ''],
+]) {
+  global.document = { querySelector: () => null, body: generalBody({ 'data-pw-country-flag-sprite-url': url }) };
+  assertEq(countryFlagSpriteUrl(), expected, 'sprite URL ' + url);
+}
+global.document = {
+  querySelector: () => null,
+  body: generalBody({
+    'data-pw-locale': 'en',
+    'data-pw-country-flag-sprite-url': '/static/country-flags.e1ef2c1d1cff.svg',
+    'data-pw-country-flag-codes': '["JP"]',
+    'data-pw-brand-logos': '{"llama":"/static/brand-logos/llama.0123456789ab.svg"}',
+  }),
+};
+const brandsHtml = postBrandsHtml({
+  brands: [
+    { nickname: 'llama', display_name: 'Meta', display_name_en: 'Meta', display_name_zh_cn: 'Meta' },
+    { nickname: 'llama', display_name: 'Meta', display_name_en: 'Meta', display_name_zh_cn: 'Meta' },
+    { nickname: 'untracked', display_name: 'Untracked <Co>' },
+  ],
+});
+assertEq(
+  brandsHtml,
+  '<div class="sig-row pw-post-brands" data-sig-brands>' +
+    '<button type="button" class="pw-inspection-trigger pw-post-brand" data-pw-inspection="Meta" aria-label="Meta" aria-expanded="false">' +
+    '<img src="/static/brand-logos/llama.0123456789ab.svg" alt="" width="14" height="14"></button>' +
+    '<button type="button" class="pw-inspection-trigger pw-post-brand" data-pw-inspection="Untracked &lt;Co&gt;" aria-label="Untracked &lt;Co&gt;" aria-expanded="false">' +
+    '<span>Untracked &lt;Co&gt;</span></button></div>',
+  'post logo row: one button per brand with logo or escaped name'
+);
+assertEq(postBrandsHtml({ brands: [] }), '', 'post without brands has no logo row');
+const rowWithFlag = renderRowHtml({
+  tweet_id: '9', account: {
+    handle: '@a', geography: {
+      kind: 'country', accessible_label: 'Japan', label: 'Japan', text: '',
+      flags: [{ code: 'JP', symbol_id: 'flag-jp', label: 'Japan' }],
+    },
+  },
+  brands: [{ nickname: 'llama', display_name_en: 'Meta' }],
+});
+assertEq(rowWithFlag.includes('href="/static/country-flags.e1ef2c1d1cff.svg#flag-jp"'), true,
+  'scroll-loaded rows keep flags under a hashed sprite name');
+assertEq(rowWithFlag.indexOf('pw-post-brands') < rowWithFlag.indexOf('sig-sentiment'), true,
+  'logo row sits above the sentiment signals');
+global.window.pwTime = require('../monitor/static/pw-tz.js');
+global.document = { querySelector: () => null, body: generalBody({ 'data-pw-locale': 'en' }) };
+const englishTitle = formatLocalTooltip('2026-07-15T21:05:00+00:00', 'en');
+assertEq(/ 9:05pm$/.test(englishTitle), true, 'English hover title ends with the 12-hour clock: ' + englishTitle);
+global.document = { querySelector: () => null, body: generalBody({ 'data-pw-locale': 'ja' }) };
+const japaneseTitle = formatLocalTooltip('2026-07-15T21:05:00+00:00', 'ja');
+assertEq(/ 21:05$/.test(japaneseTitle), true, 'Japanese hover title ends with the 24-hour clock: ' + japaneseTitle);
+delete global.window.pwTime;
+
 console.log('\n--- summary ---');
 console.log(passed + ' passed, ' + failed + ' failed');
 process.exit(failed > 0 ? 1 : 0);

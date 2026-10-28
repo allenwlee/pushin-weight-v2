@@ -51,8 +51,9 @@ def test_retired_step_filter_normalizes_only_exact_value(raw, expected):
     ("locale", "translation", "analysis", "commentary"),
     [
         ("en", "translation", "analysis", "commentary pending (1-15 min. est.)"),
-        ("zh_cn", "约5分钟", "约15分钟", "约1分钟"),
-        ("ja", "約5分", "約15分", "約1分"),
+        # Owner item 25: one short combined estimate instead of per-stage averages.
+        ("zh_cn", "翻译", "分析", "评论待处理（预计1-15分钟）"),
+        ("ja", "翻訳", "分析", "解説待ち（目安1〜15分）"),
     ],
 )
 def test_pending_averages_are_localized_and_lifecycle_specific(
@@ -201,6 +202,27 @@ class TestSerializeFeedRow:
         ), "en")
         assert [(badge["process"], badge["state"], badge["message"])
                 for badge in row["processing_badges"]] == expected
+
+    @pytest.mark.parametrize(
+        ("locale", "stages", "synthesis_status", "synthesis_attempts", "expected"),
+        [
+            ("zh_cn", {"translation": ("pending", 0), "classification": ("succeeded", 1)}, "ready", 0, "翻译待处理（预计5分钟）"),
+            ("zh_cn", {"translation": ("pending", 1), "classification": ("succeeded", 1)}, "pending", 1, "翻译和评论待处理（预计1-5分钟）。翻译等待重试。评论等待重试。"),
+            ("ja", {"translation": ("pending", 0), "classification": ("pending", 0)}, "ready", 0, "翻訳・分析待ち（目安5〜15分）"),
+            ("ja", {}, "processing", 2, "解説待ち（目安1分）。解説を再試行しています。"),
+        ],
+    )
+    def test_processing_badges_use_short_chinese_and_japanese_copy(
+        self, locale, stages, synthesis_status, synthesis_attempts, expected
+    ):
+        """Owner item 25: the short pending message in every language."""
+        row = _serialize_feed_row(_make_post(
+            "100", "2026-07-20T10:00:00+00:00",
+            enrichment_stages=stages,
+            synthesis_status=synthesis_status,
+            synthesis_attempts=synthesis_attempts,
+        ), locale)
+        assert [badge["message"] for badge in row["processing_badges"]] == [expected]
 
     def test_basic_shape(self):
         post = _make_post("100", "2026-07-20T10:00:00+00:00")
@@ -794,7 +816,7 @@ class TestFeedViewIntegration:
         assert '<canvas class="home-chart"' in chart_region
 
     @pytest.mark.requires_postgres
-    @override_settings(APP_VERSION="9.9.9")
+    @override_settings(APP_VERSION="9.9.9", PUBLIC_APP_VERSION="1.2.3b4")
     def test_owned_full_pages_share_the_runtime_version_footer(
         self, client, django_user_model
     ):
@@ -807,8 +829,9 @@ class TestFeedViewIntegration:
             nickname="footer-brand", defaults={"display_name": "Footer Brand"}
         )
         client.force_login(user)
-        expected = "Made with ❤️ in Yokohama. v9.9.9."
-        for route in ("/", "/internal/", "/brands/footer-brand/"):
+        # The public version leads; the installed package version follows (R22).
+        expected = "Made with ❤️ in Yokohama. v1.2.3b4 (9.9.9)."
+        for route in ("/", "/dashboard/each", "/internal/", "/brands/footer-brand/"):
             response = client.get(route, secure=True)
             assert response.status_code == 200
             html = response.content.decode("utf-8")

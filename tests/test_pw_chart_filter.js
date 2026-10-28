@@ -11,6 +11,17 @@ const src = fs.readFileSync(
   path.join(__dirname, '..', 'monitor', 'static', 'pw-chart.js'),
   'utf8'
 );
+const timeModule = { exports: {} };
+vm.runInNewContext(
+  fs.readFileSync(path.join(__dirname, '..', 'monitor', 'static', 'pw-tz.js'), 'utf8'),
+  {
+    console, Date, Intl, Number, Math, Object, Array, String,
+    module: timeModule,
+    document: { querySelector() { return null; } },
+    window: { Intl },
+  }
+);
+const pwTime = timeModule.exports;
 
 let passed = 0;
 let failed = 0;
@@ -458,6 +469,7 @@ function makeSandbox(options = {}) {
       if (intervals[id - 1]) intervals[id - 1].cleared = true;
     },
     window: {
+      pwTime,
       pwFilter: { get() { return JSON.parse(JSON.stringify(filters)); } },
       pwIcon: {
         render(symbolId, className) {
@@ -541,13 +553,12 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     status: 'numeric',
     direction: 'up',
   }));
-  const axis = makeSandbox({ initial: oneDay });
+  // /internal/ and /brands/ keep the pre-General chart contract.
+  const axis = makeSandbox({ initial: oneDay, legacy: true });
   const scales = axis.charts[0].config.options.scales;
   const oneDayTotal = axis.charts[0].config.data.datasets[0];
-  assert(oneDayTotal.borderWidth === 4 / 3,
-    'one-day total-series stroke is reduced by exactly one third');
-  assert(oneDayTotal.pointRadius === 1,
-    'one-day total-series point radius is reduced by exactly one third');
+  assert(oneDayTotal.borderWidth === 2 && oneDayTotal.pointRadius === 1.5,
+    'legacy one-day total-series stroke and points are unchanged');
   assert(oneDayTotal.pointHitRadius === 8,
     'one-day point hit radius remains unchanged');
   assert(JSON.stringify(Object.keys(scales).sort()) === JSON.stringify(['x', 'xComparison', 'y']),
@@ -589,13 +600,14 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   assert(scales.x.ticks.color === '#666666' && scales.xComparison.ticks.color === 'rgba(251, 191, 36, 0.45)',
     'local mode keeps local fully opaque and dims the comparison row');
 
-  const comparisonMode = makeSandbox({ initial: oneDay, tzMode: 'ca' });
+  const comparisonMode = makeSandbox({ initial: oneDay, tzMode: 'ca', legacy: true });
   const comparisonModeScales = comparisonMode.charts[0].config.options.scales;
   assert(comparisonModeScales.x.ticks.color === 'rgba(102, 102, 102, 0.55)' &&
     comparisonModeScales.xComparison.ticks.color === 'rgba(251, 191, 36, 1)',
     'comparison mode makes its row fully opaque and dims local lettering');
 
   const beijing = makeSandbox({
+    legacy: true,
     initial: oneDay,
     locale: 'zh_cn',
     comparison: {
@@ -624,7 +636,7 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   dstPayload.days = Array.from({ length: 288 }, (_, index) =>
     new Date(dstEnd - (288 - index) * 5 * 60 * 1000).toISOString());
   dstPayload.series.qwen = dstPayload.days.map(() => 1);
-  const dst = makeSandbox({ initial: dstPayload });
+  const dst = makeSandbox({ initial: dstPayload, legacy: true });
   const dstScale = dst.charts[0].config.options.scales.xComparison;
   const dstRuntime = { ticks: [] };
   dstScale.afterBuildTicks(dstRuntime);
@@ -633,7 +645,7 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
   assert(dstLabels.length === 24 && dstLabels.filter((label) => label === '').length >= 12,
     'California fall-back keeps 24 real tick instants while suppressing odd-hour labels');
 
-  const sevenDay = makeSandbox({ initial: payload(7, 4, 'qwen') });
+  const sevenDay = makeSandbox({ initial: payload(7, 4, 'qwen'), legacy: true });
   const sevenDayTotal = sevenDay.charts[0].config.data.datasets[0];
   assert(sevenDayTotal.borderWidth === 2 && sevenDayTotal.pointRadius === 0,
     'non-one-day total-series stroke and point radius remain unchanged');
@@ -645,6 +657,88 @@ function flush() { return new Promise((resolve) => setTimeout(resolve, 10)); }
     'multi-day totals dot only the final segment into today');
   assert(!oneDayTotal.segment,
     'one-day totals keep the existing intraday line treatment');
+
+
+  console.log('--- General-style public chart (owner items 10-37) ---');
+  const general = makeSandbox({ initial: oneDay });
+  const generalChart = general.charts[0];
+  const generalScales = generalChart.config.options.scales;
+  const generalTotal = generalChart.config.data.datasets[0];
+  assert(generalTotal.borderWidth === 1.75 && generalTotal.pointRadius === 0 &&
+    generalTotal.pointHoverRadius === 0 && generalTotal.pointHitRadius === 8,
+    'one-day lines are 1.75px with no point markers but an 8px hit radius');
+  assert(generalChart.config.data.datasets.filter((dataset) => dataset._isTotalLine)
+    .every((dataset) => dataset.cubicInterpolationMode === 'monotone' && dataset.borderCapStyle === 'round'),
+    'every brand line is a monotone curve with round caps');
+  assert(JSON.stringify(generalTotal.borderDash) === JSON.stringify([]) &&
+    JSON.stringify(generalChart.config.data.datasets.find((dataset) => dataset.label === 'minimax (total)').borderDash) === JSON.stringify([7, 4]),
+    'brand line patterns come from the fixed brand table');
+  assert(generalChart.config.options.plugins.tooltip.enabled === false,
+    'the public chart shows no tooltip');
+  assert(generalChart.config.plugins.some((plugin) => plugin.id === 'pwBrandFocus') &&
+    generalChart.config.options.plugins.pwBrandFocus.enabled === true,
+    'brand focus, count labels and beacons are registered on the public chart');
+  assert(generalScales.y.position === 'right' && generalScales.y.border.display === false &&
+    JSON.stringify(generalScales.y.border.dash) === JSON.stringify([1, 3]) &&
+    generalScales.y.grid.color === '#dfe4ec',
+    'value axis sits on the right with dotted light gridlines and no axis line');
+  assert(generalChart.config.options.plugins.pwTimezoneRowLabels.placement === 'right',
+    'Local and comparison row labels sit under the right-hand axis');
+  const generalLocal = { ticks: [], width: 840 };
+  generalScales.x.afterBuildTicks(generalLocal);
+  const generalLabels = generalLocal.ticks.map((tick, index, ticks) =>
+    generalScales.x.ticks.callback.call(generalLocal, tick.value, index, ticks));
+  const lastBucketEnd = Date.parse(oneDay.days[oneDay.days.length - 1]) + 5 * 60 * 1000;
+  assert(generalLocal.ticks.length === 12 &&
+    generalLocal.ticks[generalLocal.ticks.length - 1].value === oneDay.days.length - 1,
+    'at 840px the one-day axis steps back every 2 hours from the last bucket');
+  assert(generalLabels[generalLabels.length - 1] === pwTime.clockText(new Date(lastBucketEnd), 'en') &&
+    generalLabels.every((label) => /^\d{1,2}:\d{2}[ap]m$/.test(label)),
+    'English one-day ticks use the 12-hour lowercase clock and end at the last bucket');
+  const jaGeneral = makeSandbox({ initial: oneDay, locale: 'ja' });
+  const jaLocal = { ticks: [], width: 840 };
+  jaGeneral.charts[0].config.options.scales.x.afterBuildTicks(jaLocal);
+  const jaLabels = jaLocal.ticks.map((tick, index, ticks) =>
+    jaGeneral.charts[0].config.options.scales.x.ticks.callback.call(jaLocal, tick.value, index, ticks));
+  assert(jaLabels.every((label) => /^\d{2}:\d{2}$/.test(label)),
+    'Japanese one-day ticks use the 24-hour clock');
+  assert(general.legend.innerHTML.includes('<button type="button" data-pw-chart-brand="deepseek" aria-pressed="false">') &&
+    general.legend.innerHTML.includes('class="pw-swatch"') &&
+    general.legend.innerHTML.includes('<span class="pw-legend-name">deepseek</span>') &&
+    general.legend.innerHTML.includes('<span class="pw-legend-name">chart_only</span>'),
+    'legend entries are buttons with a pattern swatch and the payload display name');
+  const metaPayload = payload(7, 3, 'llama');
+  metaPayload.series = { llama: metaPayload.series.qwen };
+  metaPayload.stacked = { llama: {} };
+  metaPayload.colors = { llama: '#0089f4' };
+  metaPayload.totals = { llama: 3 };
+  metaPayload.pulse.entries[0].display_name_en = 'Meta';
+  metaPayload.pulse.entries[0].display_name_zh_cn = 'Meta';
+  const meta = makeSandbox({ initial: metaPayload });
+  assert(meta.legend.innerHTML.includes('<span class="pw-legend-name">Meta</span>') &&
+    !meta.legend.innerHTML.includes('>llama<'),
+    'the legend shows the localized display name instead of the raw brand code');
+  const generalSeven = makeSandbox({ initial: payload(7, 4, 'qwen') });
+  const sevenTotal = generalSeven.charts[0].config.data.datasets[0];
+  assert(JSON.stringify(sevenTotal.segment.borderDash({ p1DataIndex: 6 })) === JSON.stringify([4, 4]) &&
+    sevenTotal.segment.borderDash({ p1DataIndex: 5 }) === undefined,
+    'a solid-pattern brand keeps the dashed partial last day');
+  const dashedSeven = payload(7, 4, 'minimax');
+  dashedSeven.series = { minimax: dashedSeven.series.qwen };
+  dashedSeven.stacked = { minimax: {} };
+  dashedSeven.colors = { minimax: '#eb3568' };
+  dashedSeven.totals = { minimax: 4 };
+  const dashedTotal = makeSandbox({ initial: dashedSeven }).charts[0].config.data.datasets[0];
+  assert(dashedTotal.segment.borderDash({ p1DataIndex: 6 }) === undefined,
+    'a patterned brand draws no extra partial-day dash');
+  const sevenScale = generalSeven.charts[0].config.options.scales.x;
+  const sevenRuntime = { ticks: [] };
+  sevenScale.afterBuildTicks(sevenRuntime);
+  const sevenDays = payload(7, 4, 'qwen').days;
+  assert(sevenRuntime.ticks.length === 7 &&
+    sevenScale.ticks.callback(6) === pwTime.dateLabel(sevenDays[6], 'en', false) &&
+    /^[A-Z][a-z]{2} \d{1,2}$/.test(sevenScale.ticks.callback(6)),
+    'seven-day ticks are localized "Oct 18" dates ending on the latest day');
 
   console.log('--- one-day hover freeze lifecycle ---');
   const freezePayload = payload(1, 9, 'qwen');

@@ -42,6 +42,83 @@ class GeneralBrowserTests(StaticLiveServerTestCase):
             **({"executable_path": executable} if executable else {})
         )
 
+    def test_general_style_palette_lockup_fonts_and_pill_logos(self):
+        """Owner item 41: human view on a gray page; agent palette kept; locked lockup."""
+        # A brand with no logo file keeps a text-only pill.
+        saved_commentary(classified_post("6190", "events", brand="nologolab"))
+        state_js = """() => {
+          const box = (node) => node ? node.getBoundingClientRect() : {width: 0, height: 0};
+          const pills = [...document.querySelectorAll('.brand-pill')].map((pill) => {
+            const logo = pill.querySelector('img.pw-pill-logo');
+            return {text: pill.textContent.trim(), logo: logo ? [box(logo).width, logo.naturalWidth] : null};
+          });
+          return {
+            title: document.title,
+            body: getComputedStyle(document.body).backgroundColor,
+            header: getComputedStyle(document.querySelector('.general-shell > header')).backgroundColor,
+            panel: getComputedStyle(document.querySelector('.panel')).backgroundColor,
+            wordmark: document.querySelector('.logo .pw-wordmark').innerText,
+            wordmarkWidth: box(document.querySelector('.logo .pw-wordmark')).width,
+            mark: box(document.querySelector('.logo .app-mark')).width,
+            legacy: document.querySelectorAll('.logo .zh, .logo .en').length,
+            navLabel: document.querySelector('.nav-toggle .nav-label').textContent.trim(),
+            pills,
+            overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          };
+        }"""
+        with sync_playwright() as pw:
+            browser = self.browser(pw)
+            try:
+                for viewport in ({"width": 1440, "height": 900}, {"width": 1100, "height": 900}, {"width": 390, "height": 844}):
+                    for locale in ("en", "zh-cn", "ja"):
+                        with self.subTest(viewport=viewport, locale=locale):
+                            context = browser.new_context(viewport=viewport)
+                            external = []
+                            context.on("request", lambda request, external=external: external.append(request.url)
+                                       if not request.url.startswith(self.live_server_url) else None)
+                            page = context.new_page()
+                            response = page.goto(f"{self.live_server_url}/general/?lang={locale}", wait_until="networkidle")
+                            self.assertEqual(response.status, 200)
+                            state = page.evaluate(state_js)
+                            self.assertEqual(state["title"], "PUSHINWEIGHT")
+                            self.assertEqual(state["body"], "rgb(240, 242, 245)")
+                            self.assertEqual(state["header"], "rgb(255, 255, 255)")
+                            self.assertEqual(state["panel"], "rgb(255, 255, 255)")
+                            self.assertEqual(state["wordmark"], "PUSHINWEIGHT")
+                            self.assertGreater(state["wordmarkWidth"], 0)
+                            self.assertGreater(state["mark"], 0)
+                            self.assertEqual(state["legacy"], 0)
+                            self.assertEqual(state["navLabel"], "PUSHINWEIGHT")
+                            self.assertEqual(state["overflow"], 0)
+                            logos = [pill for pill in state["pills"] if pill["logo"]]
+                            self.assertTrue(logos, state["pills"])
+                            for pill in logos:
+                                self.assertTrue(pill["text"].startswith("#"), pill)
+                                self.assertGreater(pill["logo"][0], 0, pill)
+                                self.assertGreater(pill["logo"][1], 0, f"logo did not load: {pill}")
+                            plain = [pill for pill in state["pills"] if pill["text"] == "#Nologolab"]
+                            self.assertTrue(plain and plain[0]["logo"] is None, state["pills"])
+                            self.assertEqual(external, [])
+                            context.close()
+
+                context = browser.new_context(viewport={"width": 1440, "height": 900})
+                fonts = []
+                external = []
+                context.on("request", lambda request: (fonts if "/static/fonts/" in request.url else external).append(request.url)
+                           if "/static/fonts/" in request.url or not request.url.startswith(self.live_server_url) else None)
+                page = context.new_page()
+                page.goto(f"{self.live_server_url}/general/?lang=en&audience=agent", wait_until="networkidle")
+                page.evaluate("() => document.fonts.ready")
+                agent = page.evaluate(state_js)
+                self.assertEqual(agent["body"], "rgb(1, 5, 3)")
+                self.assertEqual(agent["wordmark"], "PUSHINWEIGHT")
+                self.assertTrue(page.evaluate("() => document.fonts.check('23px VT323')"))
+                self.assertTrue(any("vt323" in url for url in fonts), fonts)
+                self.assertEqual(external, [])
+                context.close()
+            finally:
+                browser.close()
+
     def test_populated_calendar_and_free_cards_render_after_timezone_cutover(self):
         TimeZone.objects.get_or_create(code="Asia/Tokyo")
         Event.objects.create(

@@ -1,4 +1,12 @@
-"""Deterministic picture regression for the icon-only Cyber-Quan delta."""
+"""Deterministic picture regression for the homepage chrome.
+
+The goldens were recaptured for the General-style homepage
+(docs/iterations/2026-10-28-183433-general-style-bridgewright-target.md), which
+supersedes the icon-only Cyber-Quan delta. Its prechange-to-candidate icon
+comparison is retired; ``prechange-*.png`` and ``mask-*.png`` remain only as the
+evidence recorded by docs/iterations/2026-08-28-134649-cyber-quan-icons-bridgewright-target.md.
+Recapture with ``CYBER_QUAN_CAPTURE_ONLY=candidate``.
+"""
 
 from __future__ import annotations
 
@@ -27,12 +35,6 @@ STATES = (
     ("desktop-en", {"width": 1440, "height": 960}, "en"),
     ("mobile-zh-cn", {"width": 390, "height": 844}, "zh_cn"),
 )
-# Bounds of the headline cards in the immutable reviewed PNGs. Removing the
-# voices shortens these cards; compare both their old and current footprints.
-REVIEWED_HEADLINE_RECTS = {
-    (1440, 960): [182, 519, 611, 112],
-    (390, 844): [12, 445, 366, 130],
-}
 
 
 def _outside_mask_report(
@@ -40,21 +42,20 @@ def _outside_mask_report(
     before: bytes,
     after: bytes,
     mask: bytes,
-    extra_mask: bytes | None = None,
 ) -> dict[str, object]:
     def encode(value: bytes) -> str:
         return "data:image/png;base64," + base64.b64encode(value).decode("ascii")
 
     return page.evaluate(
-        """async ({before, after, mask, extraMask}) => {
+        """async ({before, after, mask}) => {
           const decode = source => new Promise((resolve, reject) => {
             const image = new Image();
             image.onload = () => resolve(image);
             image.onerror = reject;
             image.src = source;
           });
-          const [left, right, allowed, extraAllowed] = await Promise.all(
-            [before, after, mask, extraMask || mask].map(decode)
+          const [left, right, allowed] = await Promise.all(
+            [before, after, mask].map(decode)
           );
           if (left.width !== right.width || left.height !== right.height ||
               left.width !== allowed.width || left.height !== allowed.height) {
@@ -72,7 +73,6 @@ def _outside_mask_report(
           const a = pixels(left);
           const b = pixels(right);
           const m = pixels(allowed);
-          const x = pixels(extraAllowed);
           let outsideChanged = 0;
           let outsidePixels = 0;
           let minX = left.width;
@@ -82,10 +82,7 @@ def _outside_mask_report(
           const bands = new Map();
           const samples = [];
           for (let index = 0; index < a.length; index += 4) {
-            const isAllowed = (
-              m[index] > 127 || m[index + 1] > 127 || m[index + 2] > 127 ||
-              x[index] > 127 || x[index + 1] > 127 || x[index + 2] > 127
-            );
+            const isAllowed = m[index] > 127 || m[index + 1] > 127 || m[index + 2] > 127;
             if (isAllowed) continue;
             outsidePixels += 1;
             if (Math.max(
@@ -120,57 +117,14 @@ def _outside_mask_report(
             "before": encode(before),
             "after": encode(after),
             "mask": encode(mask),
-            "extraMask": encode(extra_mask) if extra_mask is not None else None,
         },
     )
 
 
-def _icon_mask(page: Page) -> bytes:
+def _data_surface_mask(page: Page) -> bytes:
+    """Mask the data-driven surfaces; the static chrome around them is compared."""
     data_url = page.evaluate(
         """() => {
-          const canvas = document.createElement('canvas');
-          canvas.width = innerWidth;
-          canvas.height = innerHeight;
-          const context = canvas.getContext('2d');
-          context.fillStyle = '#000';
-          context.fillRect(0, 0, canvas.width, canvas.height);
-          context.fillStyle = '#fff';
-          const paint = (selector, pad = 3, leadingWidth = null) => {
-            document.querySelectorAll(selector).forEach(node => {
-              const rect = node.getBoundingClientRect();
-              if (rect.bottom < 0 || rect.top > innerHeight) return;
-              const width = leadingWidth == null ? rect.width : Math.min(rect.width, leadingWidth);
-              context.fillRect(
-                Math.floor(rect.left - pad),
-                Math.floor(rect.top - pad),
-                Math.ceil(width + pad * 2),
-                Math.ceil(rect.height + pad * 2)
-              );
-            });
-          };
-          paint('.app-name', 3);
-          // The selected timezone choice keeps an identical box, but Chromium
-          // rasterizes its two-pixel rounded leading edge differently when the
-          // emoji text node becomes SVG. Keep that antialias seam explicit.
-          paint('.tz-choice.is-selected', 0, 2);
-          paint('.tz-emoji, [data-tz-comparison-icon]', 3);
-          paint('.pulse-chip .delta', 3);
-          paint('.filter-pill .carat', 3);
-          paint('.headline-meta', 3, 17);
-          paint('.voice-star', 3);
-          paint('.follower-glyph', 3);
-          paint('.engagement > span', 3, 19);
-          paint('.sig-row:not(.is-empty)', 3);
-          return canvas.toDataURL('image/png');
-        }"""
-    )
-    return base64.b64decode(data_url.split(",", 1)[1])
-
-
-def _release_a_mask(page: Page) -> bytes:
-    """Mask only later owner-approved feed, headline, and chart surfaces."""
-    data_url = page.evaluate(
-        """reviewedHeadline => {
           const canvas = document.createElement('canvas');
           canvas.width = innerWidth;
           canvas.height = innerHeight;
@@ -188,29 +142,16 @@ def _release_a_mask(page: Page) -> bytes:
               Math.ceil(rect.height + pad * 2)
             );
           };
-          // U7 intentionally moved the pulse inventory from the retired
-          // Python registry to live non-sentinel Brand rows.  This older
-          // Cyber-Quan-only golden therefore does not own pulse-strip pixels.
+          // Pulse inventory, activation-gated taxonomy filters, the animated
+          // chart, narratives and feed rows follow live fixture data.
           document.querySelectorAll('.pulse-bar-wrap, .filter-bar, .home-chart-wrap, .headline-strip, .feed-strip')
             .forEach(node => paint(node));
-          context.fillRect(...reviewedHeadline);
-          // Stage 1 and U18A replace, add, and activation-gate taxonomy
-          // controls. Removed controls leave no current DOM box to mask, so
-          // the filter row is the smallest complete intentional surface.
-          // Fixed locale autonyms and the Japanese replacement change the
-          // switcher's width and therefore reposition its sibling controls.
-          // Mask the containing title row so both newly occupied and vacated
-          // pixels are covered when the sibling controls move.
-          document.querySelectorAll('.topbar-title-row')
-            .forEach(node => paint(node));
-          // Preserve the same known Chromium rounded-edge seam allowance as
-          // the reviewed icon mask above. This is a two-pixel raster boundary,
-          // not an additional owner-approved product surface.
+          // Chromium rasterizes the selected clock choice's two-pixel rounded
+          // leading edge inconsistently; this is a raster seam, not a surface.
           document.querySelectorAll('.tz-choice.is-selected')
             .forEach(node => paint(node, 0, 2));
           return canvas.toDataURL('image/png');
-        }""",
-        REVIEWED_HEADLINE_RECTS[(page.viewport_size['width'], page.viewport_size['height'])],
+        }"""
     )
     return base64.b64decode(data_url.split(",", 1)[1])
 
@@ -239,9 +180,9 @@ class CyberQuanVisualRegressionTests(StaticLiveServerTestCase):
         _freeze_clock(context)
         return context
 
-    def test_candidate_matches_reviewed_goldens_and_prechange_diff_masks(self) -> None:
+    def test_candidate_matches_reviewed_goldens(self) -> None:
         capture_kind = os.environ.get("CYBER_QUAN_CAPTURE_ONLY") or None
-        self.assertIn(capture_kind, (None, "candidate", "prechange"))
+        self.assertIn(capture_kind, (None, "candidate"))
         capture_root = Path(os.environ.get("CYBER_QUAN_CAPTURE_DIR", GOLDEN_ROOT))
 
         with sync_playwright() as playwright:
@@ -259,35 +200,17 @@ class CyberQuanVisualRegressionTests(StaticLiveServerTestCase):
                             self.assertEqual(page_errors, [])
                             if capture_kind:
                                 capture_root.mkdir(parents=True, exist_ok=True)
-                                capture_name = f"{stem}.png" if capture_kind == "candidate" else f"{capture_kind}-{stem}.png"
-                                (capture_root / capture_name).write_bytes(actual)
-                                if capture_kind == "candidate":
-                                    (capture_root / f"mask-{stem}.png").write_bytes(_icon_mask(page))
+                                (capture_root / f"{stem}.png").write_bytes(actual)
                                 continue
 
                             candidate_path = GOLDEN_ROOT / f"{stem}.png"
-                            prechange_path = GOLDEN_ROOT / f"prechange-{stem}.png"
-                            mask_path = GOLDEN_ROOT / f"mask-{stem}.png"
-                            candidate = candidate_path.read_bytes()
                             candidate_report = _outside_mask_report(
-                                page, candidate, actual, _release_a_mask(page)
+                                page, candidate_path.read_bytes(), actual, _data_surface_mask(page)
                             )
                             self.assertEqual(
                                 candidate_report["outside_changed"],
                                 0,
-                                f"Release A drift escaped approved feed/headline surfaces relative to {candidate_path}: {candidate_report}",
-                            )
-                            mask_report = _outside_mask_report(
-                                page,
-                                prechange_path.read_bytes(),
-                                candidate,
-                                mask_path.read_bytes(),
-                                _release_a_mask(page),
-                            )
-                            self.assertEqual(
-                                mask_report["outside_changed"],
-                                0,
-                                f"prechange-to-candidate pixels escaped exact icon masks: {mask_report}",
+                                f"drift escaped the data-driven feed, headline and chart surfaces relative to {candidate_path}: {candidate_report}",
                             )
                         finally:
                             context.close()

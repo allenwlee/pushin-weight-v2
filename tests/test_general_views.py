@@ -15,13 +15,22 @@ from tests.general_helpers import NOW, classified_post, saved_commentary
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
-@pytest.mark.parametrize("locale", ["en", "zh_cn", "zh_hans", "ja"])
-def test_home_omits_general_navigation_but_direct_general_route_remains(client, locale):
+@pytest.mark.parametrize(
+    "locale,lang", [("en", "en"), ("zh_cn", "zh-cn"), ("zh_hans", "zh-cn"), ("ja", "ja")]
+)
+def test_home_links_general_only_from_the_rail(client, locale, lang):
+    """The General-style rail links General (owner record item 1, 2026-10-22..27).
+
+    This supersedes the 2026-10-14 removal of the masthead's ``data-general-link``
+    anchor (30ebc2ae); that anchor stays removed and the rail is the only link.
+    """
     response = client.get(f"/?locale={locale}", secure=True)
     assert response.status_code == 200
-    assert 'data-general-link' not in response.content.decode()
-    assert 'href="/general/' not in response.content.decode()
-    assert client.get("/general/?lang=en", secure=True).status_code == 200
+    html = response.content.decode()
+    assert "data-general-link" not in html
+    assert html.count('href="/general/') == 1
+    assert f'<a href="/general/?lang={lang}" title=' in html
+    assert client.get(f"/general/?lang={lang}", secure=True).status_code == 200
 
 
 def test_general_route_exposes_its_actual_deployment_revision(client, monkeypatch):

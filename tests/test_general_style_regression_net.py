@@ -34,7 +34,11 @@ LOCALES = ("en", "zh_cn", "ja")
 WINDOWS = (1, 7, 30, 365)
 EACH_BRAND = "deepseek"
 CAPTURE = os.environ.get("GENERAL_STYLE_BASELINE_CAPTURE") == "1"
-VOLATILE_KEYS = frozenset({"id", "pk", "post_id", "account_id", "run_id"})
+# Row-relative time text ("16h", "(09:30 local)") is computed against the wall
+# clock, not the patched one, so it is excluded with the per-run identifiers.
+VOLATILE_KEYS = frozenset(
+    {"id", "pk", "post_id", "account_id", "run_id", "meta_text", "ts_abs_text"}
+)
 
 # Exact replacements the port makes on purpose: {baseline string: new string}.
 INTENDED_CHANGES: dict[str, str] = {}
@@ -45,12 +49,31 @@ _DATA_HOME = re.compile(r"data-home='([^']*)'")
 def _normalize(value: Any) -> Any:
     if isinstance(value, dict):
         return {
-            key: _normalize(item)
+            key: _normalize(_unordered(key, item))
             for key, item in sorted(value.items())
             if key not in VOLATILE_KEYS
         }
     if isinstance(value, list):
         return [_normalize(item) for item in value]
+    return value
+
+
+# Per-brand classification lists the feed reads with queries that have no
+# ORDER BY (``monitor.views`` at the protected baseline): their order follows
+# table state, not code.
+DATABASE_ORDERED_LISTS = frozenset(
+    {"post_types", "product_labels", "audience_topics", "geopolitical_modes"}
+)
+
+
+def _unordered(key: str, value: Any) -> Any:
+    """Remove order the database chooses; the inspection JSON inherits it."""
+    if key in DATABASE_ORDERED_LISTS and isinstance(value, list) and all(
+        isinstance(item, dict) and "key" in item for item in value
+    ):
+        return sorted(value, key=lambda item: item["key"])
+    if key == "signal_inspections_json" and isinstance(value, str):
+        return json.loads(value)
     return value
 
 
@@ -143,5 +166,7 @@ def test_server_outputs_match_the_pre_port_baseline(client, frozen_home):
     stored = sorted(path.stem for path in BASELINE_DIR.glob("*.json"))
     assert stored == sorted(captures), "baseline set differs from the captured surfaces"
     for name, value in captures.items():
-        baseline = json.loads((BASELINE_DIR / f"{name}.json").read_text(encoding="utf-8"))
+        baseline = _normalize(
+            json.loads((BASELINE_DIR / f"{name}.json").read_text(encoding="utf-8"))
+        )
         assert value == _apply_intended(baseline), f"{name} changed outside the intended edits"

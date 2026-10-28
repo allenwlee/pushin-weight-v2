@@ -137,6 +137,7 @@ def _is_direct_chart_runtime_projection(node: dict[str, Any]) -> bool:
     tag = node.get("tag")
     return (
         (tag in {"canvas", "svg"} and _has_class(node, "home-chart"))
+        or (tag == "div" and _has_class(node, "pw-canvas-box"))
         or (tag == "div" and _has_class(node, "legend"))
         or (tag == "p" and _has_class(node, "chart-state"))
     )

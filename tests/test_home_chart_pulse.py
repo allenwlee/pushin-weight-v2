@@ -767,7 +767,8 @@ class HomeChartPulseTests(PostgreSQLV22TestCase):
 
         parser = _ChartFragmentParser()
         parser.feed(response.content.decode("utf-8"))
-        self.assertEqual(parser.tags, ["canvas", "p"])
+        # The canvas sits in the General-style fixed-height box (div.pw-canvas-box).
+        self.assertEqual(parser.tags, ["div", "canvas", "p"])
         self.assertEqual(len(parser.canvas_attrs), 1)
         self.assertEqual(
             set(parser.canvas_attrs[0]),
