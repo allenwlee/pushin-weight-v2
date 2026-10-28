@@ -2,6 +2,31 @@
 
 Append-only log of every pause/resume event. Entries are never edited; corrections are appended.
 
+## Continuity and coverage rule
+
+Production harvesting and other live collection/worker operations must keep
+running through routine schema refactors and deployments. Do not suspend the
+harvester or change its schedule to freeze a historical-copy cohort. Use online
+copying and bounded final-delta checks while writers remain active. If that
+cannot be done safely, stop the release work and redesign it; do not create a
+planned collection gap. `AGENTS.md` holds this project-wide invariant.
+
+If an exceptional stop is explicitly ordered by the owner, or an unplanned
+outage occurs, record its actual start/end times, effective schedule and
+Blueprint changes, last completed cycle, expected skipped ticks, and uncovered
+per-call search windows. After service restoration, verify the next natural
+run **and separately** account for the missing time: either a bounded recovery
+receipt with exact attempted windows and remaining limits, or an explicit
+unresolved coverage-debt record. The live cursor has a 15-minute maximum
+lookback (`config.yaml`, `cycle.max_lookback_hours: 0.25`); one healthy run
+after restoration cannot replay hours of missed searches. Do not claim coverage
+from schema parity, old-post preservation, or current insert counts.
+
+The [RG6 incident review](../analysis/2026-10-28-070730-rg6-harvest-gap-incident-review.md)
+records the October 27, 2026 counterexample. Recovery that spends provider
+credits or writes production requires its own task authority. Preserve healthy
+live harvesting while investigating historical gaps.
+
 ## Service inventory (as of 2026-07-30)
 
 | Service | Type | ID |

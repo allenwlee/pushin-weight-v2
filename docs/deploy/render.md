@@ -156,6 +156,12 @@ No production suspension, schedule change, manual run, or Blueprint
 application is part of this release or its rollback. Rollback advances a
 prepared feature-only revert through ordinary auto-deploy and natural cron,
 then closes the same ledger through the first rollback-SHA natural cycle.
+For every production release, preserve the live-operation continuity rule in
+`AGENTS.md`. Never hold the scheduled harvester or another live collector to
+stabilize a migration or historical copy. If an exceptional owner-ordered stop
+or outage occurs, use the [harvest coverage rule](../operations/pause-and-resume-harvest-cron.md)
+to record and reconcile skipped search windows; a successful next cycle proves
+future operation, not recovery of the past.
 Read-only feed page-fill/performance preflight, immutable exact-cohort quality,
 and the supplemental detailed latest-50 report are defined in the acceptance
 runbook rather than duplicated here.

@@ -48,6 +48,18 @@ repository, including Claude Code and Codex.
 
 ## Harvester changes
 
+**Live-operation continuity is a release invariant.** Do not pause, suspend,
+reschedule away, or otherwise intentionally interrupt production harvesting or
+other live collection/worker operations to obtain a stable schema-copy cohort,
+run a parity check, or simplify deployment. Design online copies and final
+delta checks around active writers. If the work cannot be completed while
+those operations run, stop that work and redesign its release path; a planned
+gap is not an acceptable routine tradeoff. Only a current explicit owner order
+for an exceptional stop can override this rule. Any such stop or actual outage
+must have its skipped time windows recorded and reconciled under
+`docs/operations/pause-and-resume-harvest-cron.md`. Restoring a schedule and
+seeing one healthy run does not recover missed data.
+
 Before changing harvest/cycle behavior (CycleRunner, `run_cycle`, backfill,
 harvest policy, A/B/C TwitterAPI calls, cursors, metrics refresh, translator
 or classifier post-fetch, Render harvest cron, credit burn, or

@@ -41,6 +41,15 @@ Users need not name files or root cause. The agent owns reproduction, tracing,
 regression pins, and post-deploy evidence. The owner controls every production
 pause or resume decision.
 
+`AGENTS.md` now requires live-operation continuity through routine refactors
+and releases. Do not hold the production cron to stabilize a data copy; use
+online copying and a bounded final delta. For an exceptional owner-ordered
+stop or an outage, follow the coverage rule in
+`docs/operations/pause-and-resume-harvest-cron.md`: account for skipped search
+windows separately from schedule restoration and next-cycle health. The RG6
+failure is documented in
+`docs/analysis/2026-10-28-070730-rg6-harvest-gap-incident-review.md`.
+
 ## Scope before editing
 
 State exact **TOUCH**, **PRESERVE**, and **ASK FIRST** boundaries.
