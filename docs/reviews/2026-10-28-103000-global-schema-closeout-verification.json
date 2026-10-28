@@ -1,0 +1,23 @@
+{
+  "table_inventory_and_detail_set": 221,
+  "physical_columns": 2516,
+  "column_types_nullability_defaults": "exact",
+  "catalog_constraints_indexes_triggers": "all represented",
+  "internal_anchor_failures": 0,
+  "ordinary_orm_matches_migrations": true,
+  "application_tests": "not run; documentation-only change",
+  "live_mutations": 0,
+  "schema_reference_sha256": "e276bf76d55c3062631c8f7c40fdb1f35a14a1eb374102a00e719e92e0abc159",
+  "production_staging_constraint_names_equal": true,
+  "constraint_rendering_differences_verified_equivalent": 49,
+  "owner_scope_decision": "Close delivered RG1\u2013RG7; transfer unresolved field proposals to a separate plan",
+  "continuity_and_recovery_branch": "fix/live-operation-continuity-20261028",
+  "ledger_reconciliation_branch": "docs/schema-ledger-reconciliation-20261028",
+  "learning": "docs/solutions/workflow-issues/2026-10-28-100000-release-batches-need-field-disposition-reconciliation.md",
+  "compound_claims_check": "passed",
+  "compound_frontmatter_check": "passed",
+  "vocabulary_capture": "scanned; no qualifying new domain terms",
+  "independent_review": false,
+  "worktree_cleanup": "retain: unrelated modified plan sections and untracked artifacts; no forced cleanup",
+  "scope_qualification": "No unresolved field conversion is labeled implemented. Historical group data/page proof is reused within its recorded scope."
+}

@@ -1,6 +1,6 @@
 # Collection jobs, evidence and recovery
 
-Shared-reference schema through `0168_rg5_remove_superseded_storage` is live in staging and production on `3d4d341daa52ed3d184184d5b35f27717813d381`. The permanent local PostgreSQL test database matches that physical schema. Runtime and retained-history verification is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
+The collection and product-release schema is deployed through `0205_rg7_retire_model_release_storage` in staging and production. The read-only October28 catalog check confirms that boundary and matching public column inventories. RG7 also recorded the permanent local test database at0205; this documentation refresh did not reconnect or modify it. Runtime and retained-history evidence is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
 
 A collection job stores what to collect, from which source, for which frozen
 selection and within which limits. An execution run records what happened when
@@ -65,11 +65,21 @@ flowchart TD
     D[metrics: source definitions] --> V
 ```
 
-The arrows show references/ownership, not another set of tables. Scopes are flat
-records under a run; an observation can omit a scope. A metric value references
+The arrows show references/ownership, not another set of tables. Scopes belong to a run and can reference a parent scope; an observation can omit a scope. A metric value references
 an observation, which supplies the source identifier, mapping, dates and run.
 Catalog mappings have no numeric contract; metric mappings require one. The
 complete physical columns and constraints are in [Database schema](db-schema.md#measurements).
+
+
+## Typed execution state and immutable evidence
+
+`collection_runs`, `collection_scope_runs` and `collection_observations` use typed current fields and explicit relations. Their former13 operational JSON columns are physically absent. A run can link to sealed source metadata and payload captures; legacy evidence is reached through `legacy_archive_id`. An archive preserves original evidence for parity, inspection or correction; it is not the normal reader's current business state. The narrowly validated, immutable `collection_jobs.definition` remains the job-instruction packet.
+
+`source_datasets` identifies a feed/archive within a measurement source. Jobs, scopes and observations can reference that identity separately from publisher accounts and hosting URLs. `collection_scope_cursor_receipts` keeps ordered checkpoints without inventing HTTP requests. `collection_scope_request_uses` records scope reuse of an actual captured request; observations and immutable request-input links preserve exact source ownership. `collection_observation_metric_selections` pins the exact metric definition selected before projection. Full columns and database guards appear in the [schema reference](db-schema.md#table-collection_runs).
+
+Product-release intake and review use EventDossiers, claims, reviews and `product_release_details`; the prototype `model_releases` and `model_release_evidence` tables and proposal `source_release_id` are absent. A proposal's `source_dossier_id` supplies the current link. Historical intake packets remain evidence and must not be mistaken for a completed review or a confirmed announcement/access date.
+
+A successful collector run proves only its recorded search window. The current 15-minute lookback does not automatically recover hours missed during an interruption. Existing pending/quarantined backlog records are recovery debt, and one healthy subsequent run does not establish historical completeness. The [pause/resume coverage rule](../operations/pause-and-resume-harvest-cron.md) governs incident accounting; future continuity/recovery changes have their own plan.
 
 ## Registration, claims and cancellation
 

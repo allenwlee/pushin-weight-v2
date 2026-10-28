@@ -18,5 +18,8 @@
   },
   "historical_fk_proposals_source_still_scalar": 176,
   "source_ledger_sha256": "bf59e051420880ee9f07996e83d8179b1d24d783b3186854939232f298f3a88b",
-  "qualification": "Catalog presence reconciles inventory, not approval status or row/caller correctness. Historical proposals are not assumed all active. Whole-plan closure needs explicit scope dispositions for remaining proposals."
+  "qualification": "Catalog presence reconciles inventory, not approval status or row/caller correctness. Historical proposals are not assumed all active. Whole-plan closure needs explicit scope dispositions for remaining proposals.",
+  "owner_scope_decision": "Close delivered RG1\u2013RG7; transfer unresolved historical proposals to a separate reconciliation plan.",
+  "reconciliation_branch": "docs/schema-ledger-reconciliation-20261028",
+  "closure_boundary": "Delivered schema-release scope only; unimplemented historical proposals remain follow-up work."
 }

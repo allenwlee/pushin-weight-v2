@@ -371,6 +371,7 @@ Graphviz schema and legacy SQLite file are read-only historical artifacts.
 - [TwitterAPI call inventory](docs/reference/twitterapi-io-calls.md)
 - [Live query composition](docs/reference/twitterapi-live-queries-by-model.md)
 - [Database schema](docs/reference/db-schema.md), including shared catalogues, source tables, restricted chart views and derived homepage counts
+  - [Global schema reconciliation](docs/analysis/2026-10-28-093000-global-schema-closure-reconciliation.md) records the delivered RG1–RG7 scope and separately owned historical proposals.
 - [HF catalog collection, shared storage and recovery](docs/reference/hf-model-catalog.md)
 - [Collection jobs, reviewed provider identities and history](docs/reference/collection-jobs.md)
 - [Staff intake, evidence and reviewed corrections](docs/operations/staff-collection.md)
