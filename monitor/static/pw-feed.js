@@ -252,6 +252,53 @@
     });
   }
 
+  function generalStylePage() {
+    return Boolean(typeof document !== 'undefined' && document.body && document.body.classList &&
+      document.body.classList.contains('pw-general'));
+  }
+
+  function brandLogoUrls() {
+    var body = typeof document !== 'undefined' ? document.body : null;
+    var raw = body && body.getAttribute ? body.getAttribute('data-pw-brand-logos') : null;
+    try {
+      var parsed = JSON.parse(raw || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch (_error) {
+      return {};
+    }
+  }
+
+  // Logos of every brand a post is about, above its sentiment signals; the
+  // inspection popup shows each brand's name.
+  function postBrandsHtml(row) {
+    if (!generalStylePage()) return '';
+    var brands = Array.isArray(row.brands) ? row.brands : [];
+    var locale = currentLocale();
+    var zh = locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans';
+    var logos = brandLogoUrls();
+    var seen = Object.create(null);
+    var items = brands.filter(function (brand) {
+      if (!brand || typeof brand.nickname !== 'string' || seen[brand.nickname]) return false;
+      seen[brand.nickname] = true;
+      return true;
+    }).map(function (brand) {
+      var name = zh
+        ? (brand.display_name_zh_cn || brand.display_name || brand.nickname)
+        : (brand.display_name_en || brand.display_name || brand.nickname);
+      var logo = typeof logos[brand.nickname] === 'string' ? logos[brand.nickname] : '';
+      return '<button type="button" class="pw-inspection-trigger pw-post-brand"' +
+        ' data-pw-inspection="' + escapeHtml(name) + '" aria-label="' + escapeHtml(name) + '"' +
+        ' aria-expanded="false">' +
+        (logo
+          ? '<img src="' + escapeHtml(logo) + '" alt="" width="14" height="14">'
+          : '<span>' + escapeHtml(name) + '</span>') +
+        '</button>';
+    });
+    return items.length
+      ? '<div class="sig-row pw-post-brands" data-sig-brands>' + items.join('') + '</div>'
+      : '';
+  }
+
   // U2: absolute timestamp in the user's local timezone, for the
   // hover tooltip. Falls back to the raw ISO string if Intl is missing.
   function formatLocalTooltip(isoOrDate, locale) {
@@ -262,6 +309,10 @@
       var dateLocale = locale === 'ja' || locale === 'ja-JP' ? 'ja-JP' :
         locale === 'zh_cn' || locale === 'zh-CN' || locale === 'zh_hans' ? 'zh-CN' :
         locale === 'en' ? 'en' : undefined;
+      if (generalStylePage() && typeof window !== 'undefined' && window.pwTime) {
+        return d.toLocaleDateString(dateLocale, { dateStyle: 'medium' }) + ' ' +
+          window.pwTime.clockText(d, locale);
+      }
       return d.toLocaleString(dateLocale, {
         dateStyle: 'medium',
         timeStyle: 'short',
@@ -439,10 +490,13 @@
     return { code: code, symbolId: symbolId, label: label };
   }
 
+  // Production serves the collectstatic-hashed name (country-flags.<hash>.svg).
+  var COUNTRY_FLAG_SPRITE = /(?:^|\/)country-flags(?:\.[0-9a-f]+)?\.svg(?:[?#]|$)/;
+
   function countryFlagSpriteUrl() {
     var body = typeof document !== 'undefined' ? document.body : null;
     var spriteUrl = body && body.getAttribute('data-pw-country-flag-sprite-url');
-    return spriteUrl && spriteUrl.indexOf('country-flags.svg') !== -1 ? spriteUrl : '';
+    return spriteUrl && COUNTRY_FLAG_SPRITE.test(spriteUrl) ? spriteUrl : '';
   }
 
   function countryFlagHref(symbolId) {
@@ -546,6 +600,7 @@
             escapeHtml(actionLabel) + '</a></div>' +
         '</div></div>' +
         '<div class="feed-signals">' +
+          postBrandsHtml(row) +
           '<div class="sig-row sig-sentiment" data-sig-sentiment></div>' +
           '<div class="sig-row sig-post-type" data-sig-post-type></div>' +
           '<div class="sig-row sig-product" data-sig-product></div>' +
@@ -646,6 +701,7 @@
           '</div>' +
         '</div>' +
         '<div class="feed-signals">' +
+          postBrandsHtml(row) +
           '<div class="sig-row sig-sentiment" data-sig-sentiment></div>' +
           '<div class="sig-row sig-post-type" data-sig-post-type></div>' +
           '<div class="sig-row sig-product" data-sig-product></div>' +
@@ -1683,6 +1739,8 @@
       createRequestGate: createRequestGate,
       formatRelative: formatRelative,
       formatLocalTooltip: formatLocalTooltip,
+      countryFlagSpriteUrl: countryFlagSpriteUrl,
+      postBrandsHtml: postBrandsHtml,
       enrichmentStatusHtml: enrichmentStatusHtml,
       synthesisStatusHtml: synthesisStatusHtml,
       textLayers: textLayers,

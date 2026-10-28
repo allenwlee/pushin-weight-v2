@@ -140,6 +140,7 @@
         {% endif %}
       </div>
       <div class="feed-signals">
+        {% if row.brands %}<div class="sig-row pw-post-brands" data-sig-brands>{% for brand in row.brands %}{% if is_zh_chrome %}{% firstof brand.display_name_zh_cn brand.display_name brand.nickname as brand_name %}{% else %}{% firstof brand.display_name_en brand.display_name brand.nickname as brand_name %}{% endif %}{% with logo=brand_logo_urls|get_item:brand.nickname %}<button type="button" class="pw-inspection-trigger pw-post-brand" data-pw-inspection="{{ brand_name }}" aria-label="{{ brand_name }}" aria-expanded="false">{% if logo %}<img src="{{ logo }}" alt="" width="14" height="14">{% else %}<span>{{ brand_name }}</span>{% endif %}</button>{% endwith %}{% endfor %}</div>{% endif %}
         <div class="sig-row sig-sentiment" data-sig-sentiment></div>
         <div class="sig-row sig-post-type" data-sig-post-type></div>
         <div class="sig-row sig-product" data-sig-product></div>
