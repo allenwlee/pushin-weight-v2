@@ -59,11 +59,49 @@
     });
   }
 
-  function chartLabel(value, granularity) {
+  function chartLabel(value, granularity, yearly) {
+    var time = window.pwTime;
     if (granularity === 'minute') {
-      return new Date(value).toLocaleTimeString(locale.replace('_', '-'), { hour: 'numeric', minute: '2-digit' });
+      return time
+        ? time.clockText(new Date(value), locale)
+        : new Date(value).toLocaleTimeString(locale.replace('_', '-'), { hour: 'numeric', minute: '2-digit' });
     }
-    return value.slice(5);
+    return time ? time.dateLabel(value, locale, yearly) : value.slice(5);
+  }
+
+  // Time axis built from the payload's dates: one-day ticks end at the last
+  // harvested bucket and step back whole hours; date ticks end on the latest day.
+  function timeAxis(days, granularity) {
+    var time = window.pwTime;
+    var built = [];
+    var yearly = days.length > 90;
+    return {
+      stacked: true,
+      afterBuildTicks: function (axis) {
+        if (!time) return;
+        if (granularity === 'minute') {
+          built = time.oneDayTicks(days, axis.width, 8);
+          axis.ticks = built.map(function (tick) { return { value: tick.value }; });
+        } else {
+          axis.ticks = time.dateTickIndices(days).map(function (value) { return { value: value }; });
+        }
+      },
+      ticks: {
+        color: '#687589',
+        autoSkip: !time,
+        maxTicksLimit: time ? undefined : 8,
+        maxRotation: 0,
+        callback: function (value, index) {
+          if (!time) return this.getLabelForValue(value);
+          if (granularity === 'minute') {
+            return built[index] ? time.clockText(new Date(built[index].instant), locale) : '';
+          }
+          return days[value] ? time.dateLabel(days[value], locale, yearly) : '';
+        }
+      },
+      grid: { color: '#eef1f7' },
+      border: { color: '#e6eaf1' }
+    };
   }
 
   function render(next) {
@@ -75,7 +113,9 @@
       (/^zh/.test(locale) ? '帖子' : locale === 'ja' ? '投稿' : 'posts') :
       (/^zh/.test(locale) ? '标签分配' : locale === 'ja' ? 'ラベル割当' : 'label assignments');
     canvas.setAttribute('aria-label', next.brand + ': ' + unitText + (mode === 'percent' ? ', % of total' : ', by volume'));
-    var localeLabels = next.days.map(function (day) { return chartLabel(day, next.granularity); });
+    var localeLabels = next.days.map(function (day) {
+      return chartLabel(day, next.granularity, next.days.length > 90);
+    });
     var stackTotals = next.days.map(function (_, index) {
       return next.entries.reduce(function (sum, entry) {
         return sum + Number((next.series[entry.key] || [])[index] || 0);
@@ -89,11 +129,12 @@
         }),
         borderColor: entry.color,
         backgroundColor: entry.color + 'a8',
-        borderWidth: 1.4,
+        borderWidth: 1,
         fill: 'stack',
         pointRadius: 0,
+        pointHoverRadius: 0,
         pointHitRadius: 8,
-        tension: 0.22,
+        cubicInterpolationMode: 'monotone',
         stack: 'classification'
       };
     });
@@ -139,20 +180,18 @@
           }
         },
         scales: {
-          x: {
-            stacked: true,
-            ticks: { color: '#8f9bb2', maxTicksLimit: 8, maxRotation: 0 },
-            grid: { color: 'rgba(141,156,181,.08)' }
-          },
+          x: timeAxis(next.days, next.granularity),
           y: {
             stacked: true,
+            position: 'right',
             beginAtZero: true,
             max: mode === 'percent' ? 100 : undefined,
             ticks: {
-              color: '#8f9bb2', precision: 0,
+              color: '#687589', precision: 0,
               callback: mode === 'percent' ? function (value) { return value + '%'; } : undefined
             },
-            grid: { color: 'rgba(141,156,181,.14)' }
+            grid: { color: '#dfe4ec' },
+            border: { display: false, dash: [1, 3] }
           }
         }
       }

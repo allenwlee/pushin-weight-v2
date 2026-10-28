@@ -45,12 +45,116 @@
     };
   }
 
+
+  // General-style pages show English times on the 12-hour clock ("8:17pm") and
+  // Chinese and Japanese on the 24-hour clock ("20:17"). Other pages keep the
+  // 24-hour clock everywhere.
+  function generalStylePage() {
+    return Boolean(typeof document !== 'undefined' && document.body &&
+      document.body.classList && document.body.classList.contains('pw-general'));
+  }
+
+  function usesTwelveHourClock(locale) {
+    var key = String(locale || '').toLowerCase();
+    return key === 'en' || key.indexOf('en-') === 0 || key.indexOf('en_') === 0;
+  }
+
+  var clockFormatters = Object.create(null);
+
+  function clockText(date, locale, timeZone, twelveHour) {
+    var instant = date instanceof Date ? date : new Date(date);
+    if (!Number.isFinite(instant.getTime())) return '';
+    var twelve = twelveHour === undefined ? usesTwelveHourClock(locale) : twelveHour;
+    var cacheKey = (twelve ? '12|' : '24|') + (timeZone || '');
+    if (!clockFormatters[cacheKey]) {
+      var options = twelve
+        ? { hour: 'numeric', minute: '2-digit', hour12: true }
+        : { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
+      if (timeZone) options.timeZone = timeZone;
+      clockFormatters[cacheKey] = new Intl.DateTimeFormat(twelve ? 'en-US' : 'en-GB', options);
+    }
+    var text = clockFormatters[cacheKey].format(instant);
+    return twelve
+      ? text.replace(/[\s\u202f\u00a0]?([AP])M$/i, function (_match, letter) {
+          return letter.toLowerCase() + 'm';
+        })
+      : text;
+  }
+
+  // One-day axis ticks: the last tick is the end of the last bucket and the
+  // others step back whole hours (1, 2, 3, 4 or 6) so each step gets at least
+  // 42px. Buckets are drawn at their end, so a tick's value is the index of
+  // the bucket that ends at that instant.
+  function oneDayTicks(labels, width, maxTicks) {
+    if (!Array.isArray(labels) || labels.length < 2) return [];
+    var first = Date.parse(labels[0]);
+    var step = Date.parse(labels[1]) - first;
+    if (!Number.isFinite(first) || !(step > 0)) return [];
+    var end = Date.parse(labels[labels.length - 1]) + step;
+    if (!Number.isFinite(end)) return [];
+    var spanHours = (end - first) / 3600000;
+    var limit = maxTicks || Infinity;
+    var hours = [1, 2, 3, 4, 6].filter(function (candidate) {
+      return (Number(width) || 0) * candidate / spanHours >= 42 &&
+        spanHours / candidate <= limit;
+    })[0] || 6;
+    var ticks = [];
+    for (var instant = end; instant >= first + step; instant -= hours * 3600000) {
+      ticks.unshift({ value: Math.round((instant - first) / step) - 1, instant: instant });
+    }
+    return ticks;
+  }
+
+  function dateLocale(locale) {
+    var key = String(locale || '').toLowerCase();
+    if (key.indexOf('zh') === 0) return 'zh-CN';
+    if (key.indexOf('ja') === 0) return 'ja-JP';
+    return null;
+  }
+
+  // 7/30/365-day axis dates: "Oct 18" / "10月18日"; 365 days "Dec 2025" / "2025年12月".
+  function dateLabel(isoDay, locale, yearly) {
+    var instant = Date.parse(String(isoDay) + 'T00:00:00Z');
+    if (!Number.isFinite(instant)) return '';
+    var cjk = dateLocale(locale);
+    var options = yearly
+      ? { year: 'numeric', month: cjk ? 'long' : 'short', timeZone: 'UTC' }
+      : { month: cjk ? 'long' : 'short', day: 'numeric', timeZone: 'UTC' };
+    return new Intl.DateTimeFormat(cjk || 'en-US', options).format(instant);
+  }
+
+  // Tick indices for date axes: the latest day plus every day (7 days), every
+  // fifth day (30 days), or every other month start (365 days), counted back.
+  function dateTickIndices(labels) {
+    if (!Array.isArray(labels) || !labels.length) return [];
+    var last = labels.length - 1;
+    var picks = [];
+    if (labels.length > 90) {
+      var starts = [];
+      labels.forEach(function (label, index) { if (/-01$/.test(String(label))) starts.push(index); });
+      for (var i = starts.length - 1; i >= 0; i -= 2) picks.unshift(starts[i]);
+      return picks;
+    }
+    var every = Math.ceil(labels.length / 7);
+    for (var j = last; j >= 0; j -= every) picks.unshift(j);
+    return picks;
+  }
+
+  var axisHelpers = {
+    clockText: clockText,
+    usesTwelveHourClock: usesTwelveHourClock,
+    oneDayTicks: oneDayTicks,
+    dateLabel: dateLabel,
+    dateTickIndices: dateTickIndices,
+  };
+
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
+    module.exports = Object.assign({
       comparisonForLocalTimezone: comparisonForLocalTimezone,
       timezoneCopy: timezoneCopy,
-    };
+    }, axisHelpers);
   }
+  if (typeof window !== 'undefined') window.pwTime = axisHelpers;
 
   var root = document.querySelector('[data-tz-widget]');
   if (!root || !window.Intl || !Intl.DateTimeFormat) return;
@@ -100,6 +204,7 @@
   }
 
   function zoneTime(date, timezone) {
+    if (generalStylePage()) return clockText(date, currentLocale(), timezone);
     return formattersFor(timezone).time.format(date);
   }
 

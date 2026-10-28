@@ -1,5 +1,7 @@
 {% load i18n %}
-<canvas class="home-chart"
-        aria-label="{% trans "Daily total posts per brand" %}"
-        data-home='{{ payload }}'></canvas>
+<div class="pw-canvas-box">
+  <canvas class="home-chart"
+          aria-label="{% trans "Daily total posts per brand" %}"
+          data-home='{{ payload }}'></canvas>
+</div>
 <p class="chart-state muted" data-pw-chart-status hidden></p>
