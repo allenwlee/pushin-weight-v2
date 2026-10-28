@@ -142,6 +142,25 @@ def _is_direct_chart_runtime_projection(node: dict[str, Any]) -> bool:
     )
 
 
+def _unwrap_feed_heading(children: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """See through the General-style feed heading row to its authored title.
+
+    docs/iterations/2026-10-28-183433-general-style-bridgewright-target.md adds
+    an icon row around the feed title. The row and its icon are chrome; the
+    authored ``h3`` inside it stays strictly compared.
+    """
+    unwrapped = []
+    for child in children:
+        if child.get("tag") == "div" and _has_class(child, "pw-panel-head"):
+            unwrapped.extend(
+                grandchild for grandchild in _children(child)
+                if grandchild.get("tag") == "h3"
+            )
+        else:
+            unwrapped.append(child)
+    return unwrapped
+
+
 def _compare_nodes(expected: dict[str, Any], actual: dict[str, Any], *, region: str, selector: str, path: str) -> Difference | None:
     if expected["tag"] != actual["tag"]:
         return Difference(region, selector, "tag", path, expected["tag"], actual["tag"])
@@ -172,6 +191,8 @@ def _compare_nodes(expected: dict[str, Any], actual: dict[str, Any], *, region: 
             child for child in actual_children
             if not _is_direct_chart_runtime_projection(child)
         ]
+    if region == "feed" and path == "section.feed-strip":
+        actual_children = _unwrap_feed_heading(actual_children)
     if len(expected_children) != len(actual_children):
         return Difference(region, selector, "ordered-children", path, len(expected_children), len(actual_children))
     for index, (expected_child, actual_child) in enumerate(zip(expected_children, actual_children)):

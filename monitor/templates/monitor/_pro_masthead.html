@@ -1,0 +1,53 @@
+<header class="topbar tz-hitch">
+  <div class="topbar-title-row">
+    <button type="button" class="pw-mobile-toggle" aria-controls="pw-rail" aria-expanded="false" aria-label="{% if is_zh_chrome %}切换导航{% elif is_ja_chrome %}ナビゲーション切替{% else %}Toggle navigation{% endif %}" data-pw-rail-open>☰</button>
+    <h1 class="app-name" aria-label="PUSHINWEIGHT">
+      <svg class="pw-icon app-mark" aria-hidden="true" focusable="false"><use href="#mark-quiet"></use></svg>
+      <span class="pw-wordmark" aria-hidden="true"><span class="pw-wm-pushin">Pushin</span><span class="pw-wm-weight">Weight</span></span>
+    </h1>
+    <span class="pw-setting-label pw-setting-language" aria-hidden="true">{% if is_zh_chrome %}语言{% elif is_ja_chrome %}言語{% else %}Language{% endif %}</span>
+    <nav class="window-toggle locale-toggle" aria-label="{% if is_zh_chrome %}显示语言{% elif is_ja_chrome %}表示言語{% else %}Display language{% endif %}" data-i18n-aria="locale">
+      <button type="button"{% if active_locale == 'en' %} class="is-active"{% endif %}
+              data-pw-locale-btn="en">en</button>
+      <button type="button"{% if is_zh_chrome %} class="is-active"{% endif %}
+              data-pw-locale-btn="zh_cn">中文</button>
+      <button type="button"{% if active_locale == 'ja' %} class="is-active"{% endif %}
+              data-pw-locale-btn="ja">日本語</button>
+    </nav>
+  </div>
+  <div class="topbar-controls">
+    <span class="pw-setting-label pw-setting-window" aria-hidden="true">{% if is_zh_chrome %}时间窗口{% elif is_ja_chrome %}期間{% else %}Window{% endif %}</span>
+    <nav class="window-toggle" aria-label="{% if is_zh_chrome %}时间窗口{% elif is_ja_chrome %}期間{% else %}Time-period selector{% endif %}" data-i18n-aria="window">
+      {% for n in allowed_home_windows %}
+        <button type="button"
+                {% if home_window_days == n %}class="is-active"{% endif %}
+                data-pw-window-btn="{{ n }}" data-window="{{ n }}"
+                {% if n == 1 %}data-label-en="1d" data-label-zh="1天" data-label-ja="1日"{% elif n == 7 %}data-label-en="7d" data-label-zh="7天" data-label-ja="7日"{% elif n == 30 %}data-label-en="30d" data-label-zh="30天" data-label-ja="30日"{% elif n == 365 %}data-label-en="365d" data-label-zh="365天" data-label-ja="365日"{% else %}data-label-en="{{ n }}d" data-label-zh="{{ n }}d" data-label-ja="{{ n }}日"{% endif %}>
+          {% if active_locale == 'en' %}
+            {% if n == 1 %}1d{% elif n == 7 %}7d{% elif n == 30 %}30d{% elif n == 365 %}365d{% else %}{{ n }}d{% endif %}
+          {% elif active_locale == 'ja' %}
+            {% if n == 1 %}1日{% elif n == 7 %}7日{% elif n == 30 %}30日{% elif n == 365 %}365日{% else %}{{ n }}日{% endif %}
+          {% else %}
+            {% if n == 1 %}1天{% elif n == 7 %}7天{% elif n == 30 %}30天{% elif n == 365 %}365天{% else %}{{ n }}d{% endif %}
+          {% endif %}
+        </button>
+      {% endfor %}
+    </nav>
+    <span class="pw-setting-label pw-setting-clock" aria-hidden="true">{% if is_zh_chrome %}时钟{% elif is_ja_chrome %}時計{% else %}Clock{% endif %}</span>
+    <button type="button" class="tz-pill" data-tz-widget data-tz-idea="c" data-tz-active="local"
+            title="{% if is_zh_chrome %}切换 本地 ⇄ 加州时间{% elif is_ja_chrome %}現地時間 ⇄ カリフォルニア時間{% else %}Toggle local ⇄ California time{% endif %}"
+            aria-label="{% if is_zh_chrome %}切换 本地 ⇄ 加州时间{% elif is_ja_chrome %}現地時間 ⇄ カリフォルニア時間{% else %}Toggle local ⇄ California time{% endif %}">
+      <span class="tz-choice is-selected" data-tz-choice="local">
+        <span class="tz-emoji" data-tz-local-emoji><svg class="pw-icon tz-daypart-icon" aria-hidden="true" focusable="false"><use href="#icon-day"></use></svg></span>
+        <span class="tz-time" data-tz-local-time data-tz-time>00:00</span>
+        <span class="tz-label tz-zone" data-tz-local-label data-tz-zone data-i18n-tz-local="1">{% if is_zh_chrome %}本地{% elif is_ja_chrome %}現地{% else %}local{% endif %}</span>
+      </span>
+      <span class="tz-divider" aria-hidden="true"></span>
+      <span class="tz-choice" data-tz-choice="ca">
+        <span class="tz-emoji" data-tz-comparison-emoji data-tz-ca-emoji><svg class="pw-icon tz-daypart-icon" aria-hidden="true" focusable="false"><use href="#icon-night"></use></svg></span>
+        <span class="tz-time" data-tz-comparison-time data-tz-ca-time>00:00</span>
+        <span class="tz-ca-icon" data-tz-comparison-icon title="California" aria-label="California"><svg class="pw-icon tz-place-icon" aria-hidden="true" focusable="false"><use href="#icon-california"></use></svg></span>
+      </span>
+    </button>
+  </div>
+</header>

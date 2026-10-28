@@ -101,10 +101,17 @@ class HomeV22TopbarLayoutTests(PostgreSQLV22TestCase):
             re.search(r'<div class="topbar-title-row">.*?<h1 class="app-name".*?</h1>.*?</div>', body, re.DOTALL),
             "app-name must live inside .topbar-title-row per mockup L847",
         )
+        # Owner items 39-40 (2026-10-27): the locked PUSHINWEIGHT wordmark replaces
+        # the 走个量 / Pushin' Weight lettering.
         self.assertRegex(
             body,
-            r'<span class="en">\s*<span class="en-line">Pushin\'</span>\s*<span class="en-line">Weight</span>\s*</span>',
+            r'<span class="pw-wordmark" aria-hidden="true"><span class="pw-wm-pushin">Pushin</span>'
+            r'<span class="pw-wm-weight">Weight</span></span>',
         )
+        masthead = re.search(r'<header class="topbar.*?</header>', body, re.DOTALL).group(0)
+        self.assertNotIn('class="zh"', masthead)
+        self.assertNotIn("走个量", masthead)
+        self.assertIn('<h1 class="app-name" aria-label="PUSHINWEIGHT">', masthead)
 
     def test_redundant_pulse_heading_is_absent(self):
         body = self._get_home().content.decode("utf-8")
@@ -162,3 +169,18 @@ class HomeV22TopbarLayoutTests(PostgreSQLV22TestCase):
         m = re.search(r'<div class="topbar-controls">.*?<nav[^>]*class="[^"]*locale-toggle[^"]*".*?</div>',
                       body, re.DOTALL)
         self.assertIsNone(m, "locale-toggle nav leaked back into .topbar-controls")
+
+    def test_settings_carry_labels_before_their_controls(self):
+        """Owner item 1: labelled Window, Clock and Language controls."""
+        import re
+
+        body = self._get_home().content.decode("utf-8")
+        title_row = re.search(r'<div class="topbar-title-row">.*?</nav>', body, re.DOTALL).group(0)
+        self.assertRegex(
+            title_row,
+            r'pw-setting-language" aria-hidden="true">Language</span>\s*<nav class="window-toggle locale-toggle"',
+        )
+        controls = re.search(r'<div class="topbar-controls">.*?</header>', body, re.DOTALL).group(0)
+        self.assertRegex(controls, r'pw-setting-window" aria-hidden="true">Window</span>\s*<nav class="window-toggle"')
+        self.assertRegex(controls, r'pw-setting-clock" aria-hidden="true">Clock</span>\s*<button type="button" class="tz-pill"')
+        self.assertIn('<title>PUSHINWEIGHT</title>', body)

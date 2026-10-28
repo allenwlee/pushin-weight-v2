@@ -111,6 +111,28 @@ class HomeV22MockupDiffTests(PostgreSQLV22TestCase):
         self.assertEqual(difference.region, "chart")
         self.assertEqual(difference.category, "ordered-children")
 
+    def test_feed_heading_row_still_requires_the_authored_title(self):
+        """The General-style icon row cannot hide a missing or changed feed title."""
+        spec = load_spec()
+        rendered = self._render("en")
+        allowlist = validate_allowlist(json.loads(ALLOWLIST.read_text(encoding="utf-8")))
+        marker = 'data-i18n="feed_title">'
+        self.assertIn(marker, rendered)
+        mutated = rendered.replace(
+            '<h3 data-pw-feed-title data-i18n="feed_title">',
+            '<h4 data-pw-feed-title data-i18n="feed_title">',
+            1,
+        ).replace("</h3>", "</h4>", 1)
+        difference = first_authored_difference(
+            spec,
+            mutated,
+            locale="en",
+            viewport=VIEWPORT,
+            allowlist=allowlist,
+        )
+        self.assertIsNotNone(difference)
+        self.assertEqual(difference.region, "feed")
+
     def test_locale_and_window_setters_require_post_and_safe_redirects(self):
         self.assertEqual(self.client.get("/locale/en/").status_code, 405)
         locale = self.client.post("/locale/en/", HTTP_REFERER="https://example.invalid/")
