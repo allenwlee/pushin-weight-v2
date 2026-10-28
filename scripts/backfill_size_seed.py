@@ -13,11 +13,14 @@ Subcommands
 ``build``
     Write the keyword and roster CSVs from the frozen query file, the lab-list
     roster JSON and the recorded evidence spellings. No database access.
-``seed --keywords CSV --roster CSV --undo-receipt PATH``
+``seed --keywords CSV --roster CSV --main-list JSON --undo-receipt PATH``
     Create the literal BrandKeyword, Account and BrandAccount rows through
     ``onboard_brand --csv``, then the TwitterListMembership rows for the two
-    lab lists, and write an undo receipt naming every catalog-relevant row the
-    seed created or changed. Context gating is not a database property: it
+    lab lists. Copy production's current Call A main-list members and the
+    seeded authors' account roles from the saved read-only export
+    (``scripts/backfill_size_main_list_production.sql``), because xbackfiller
+    holds no list memberships and an older copy of the roles. Write an undo
+    receipt naming every catalog-relevant row the seed created or changed. Context gating is not a database property: it
     lives in ``config/harvest_policy.yaml`` ``alias_context`` and is checked
     against the keyword CSV before any write. A second seed is refused while
     the brands still carry keywords.
@@ -75,6 +78,14 @@ EXPECTED_ROLE_COUNTS = {
 # Handle strings that are also ordinary words get their brand's context words.
 COMMON_WORD_HANDLES = frozenset({"sama"})
 MEMBERSHIP_SOURCE = "size-test-roster"
+# Production's Call A main list. xbackfiller holds no list memberships and an
+# older, partial copy of account-brand roles, so a manifest built there would
+# freeze no main-list author roles. The seed copies production's current
+# members and roles (read-only export) and the undo receipt removes them.
+MAIN_LIST = 2067062923525275922
+MAIN_LIST_FORMAT = "oai-anthropic-main-list/v1"
+MAIN_LIST_SOURCE = "size-test-main-list"
+SEEDED_LISTS = (*LAB_LISTS.values(), MAIN_LIST)
 SEED_NOTES = (
     "OpenAI/Anthropic size test (branch ops/oai-anthropic-size-20261027); "
     "dedicated xbackfiller database only"
@@ -623,8 +634,34 @@ def _delete_rows(model, keys: list[list[Any]], **scope) -> int:
     return model.objects.filter(match, **scope).delete()[0]
 
 
-def seed_state() -> dict[str, Any]:
-    """Catalog-relevant rows for the two brands and the two lab lists, as primary keys and values."""
+def read_main_list_export(path: Path) -> dict[str, Any]:
+    """Production's main-list members and account roles, saved from the read-only export SQL."""
+    from scripts.backfill_size_report import load_document
+
+    try:
+        export = load_document(Path(path).read_text(encoding="utf-8"), MAIN_LIST_FORMAT)
+    except (OSError, ValueError) as exc:
+        raise SeedRefused(f"main-list export unreadable: {exc}") from exc
+    _require(export.get("database") == "pushinweight_shadow", "main-list export is not from production")
+    _require(export.get("list_id") == MAIN_LIST, "main-list export is for another list")
+    members, roles = export.get("members"), export.get("roles")
+    _require(isinstance(members, list) and members, "main-list export has no members")
+    _require(isinstance(roles, list), "main-list export has no roles")
+    _require(all(str(m.get("author_id") or "").isdecimal() for m in members), "main-list member without author_id")
+    _require(all({"author_id", "brand_id", "role_id"} <= set(r) for r in roles), "malformed main-list role")
+    return export
+
+
+def scope_author_ids(roster: list[RosterRow], export: dict[str, Any]) -> list[str]:
+    return sorted({row.author_id for row in roster} | {str(m["author_id"]) for m in export["members"]})
+
+
+def seed_state(author_ids: list[str] = ()) -> dict[str, Any]:
+    """Catalog-relevant rows the seed may touch, as primary keys and values.
+
+    Brand-scoped rows for the two brands, every account-brand role of the
+    seeded authors (any brand), and the memberships of the lab and main lists.
+    """
     brands = {
         row["nickname"]: {field: row[field] for field in BRAND_FIELDS}
         for row in _model("Brand").objects.filter(nickname__in=BRANDS).values("nickname", *BRAND_FIELDS)
@@ -632,11 +669,16 @@ def seed_state() -> dict[str, Any]:
     rows = {name: _row_keys(_model(name), _model(name).objects.filter(brand_id__in=BRANDS)) for name in BRAND_SCOPED}
     memberships = {
         str(row["pk"]): {field: _jsonable(row[field]) for field in MEMBERSHIP_FIELDS}
-        for row in _model("TwitterListMembership").objects.filter(list_id__in=LAB_LISTS.values()).values(
+        for row in _model("TwitterListMembership").objects.filter(list_id__in=SEEDED_LISTS).values(
             "pk", *MEMBERSHIP_FIELDS)
     }
+    roles = {
+        f"{brand}|{account}": role
+        for brand, account, role in _model("BrandAccount").objects.filter(
+            account__author_id__in=list(author_ids)).values_list("brand_id", "account_id", "role_id")
+    }
     companies = sorted(str(pk) for pk in _model("Company").objects.values_list("pk", flat=True))
-    return {"brands": brands, "rows": rows, "memberships": memberships, "companies": companies}
+    return {"brands": brands, "rows": rows, "memberships": memberships, "roles": roles, "companies": companies}
 
 
 def undo_plan(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
@@ -656,6 +698,11 @@ def undo_plan(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
             pk: values for pk, values in before["memberships"].items() if after["memberships"].get(pk) != values
         },
         "created_companies": sorted(set(after["companies"]) - set(before["companies"])),
+        "created_roles": sorted(set(after.get("roles", {})) - set(before.get("roles", {}))),
+        "changed_roles": {
+            key: role for key, role in before.get("roles", {}).items()
+            if key in after.get("roles", {}) and after["roles"][key] != role
+        },
     }
 
 
@@ -667,7 +714,7 @@ def _restore_undo(plan: dict[str, Any]) -> dict[str, int]:
         deleted[name] = _delete_rows(_model(name), plan["created_rows"].get(name, []), brand_id__in=BRANDS)
     membership = _model("TwitterListMembership")
     deleted["TwitterListMembership"] = (
-        membership.objects.filter(pk__in=plan["created_memberships"], list_id__in=LAB_LISTS.values()).delete()[0]
+        membership.objects.filter(pk__in=plan["created_memberships"], list_id__in=SEEDED_LISTS).delete()[0]
         if plan["created_memberships"] else 0
     )
     for pk, values in plan["changed_memberships"].items():
@@ -675,7 +722,13 @@ def _restore_undo(plan: dict[str, Any]) -> dict[str, int]:
             field: parse_datetime(value) if field.endswith("_at") and isinstance(value, str) else value
             for field, value in values.items()
         }
-        membership.objects.filter(pk=pk, list_id__in=LAB_LISTS.values()).update(**restored)
+        membership.objects.filter(pk=pk, list_id__in=SEEDED_LISTS).update(**restored)
+    brand_account = _model("BrandAccount")
+    deleted["BrandAccount_roles"] = _delete_rows(
+        brand_account, [key.split("|", 1) for key in plan.get("created_roles", [])])
+    for key, role in plan.get("changed_roles", {}).items():
+        brand, account = key.split("|", 1)
+        brand_account.objects.filter(brand_id=brand, account_id=account).update(role_id=role)
     for brand, values in plan["brand_fields"].items():
         _model("Brand").objects.filter(nickname=brand).update(**values)
     company = _model("Company")
@@ -683,6 +736,59 @@ def _restore_undo(plan: dict[str, Any]) -> dict[str, int]:
                     if not _model("BrandCompany").objects.filter(company_id=pk).exists()]
     deleted["Company"] = company.objects.filter(pk__in=unreferenced).delete()[0] if unreferenced else 0
     return deleted
+
+
+def _write_main_list(export: dict[str, Any], roster: list[RosterRow], *, export_sha256: str) -> dict[str, Any]:
+    """Copy production's main-list members and the seeded authors' roles; never edit an existing account."""
+    from django.utils import timezone
+
+    from core.models import Account, Brand, BrandAccount, Role, TwitterListMembership
+    from monitor.list_membership import _upsert_account, _upsert_membership
+
+    now = timezone.now()
+    counts = {"main_list_accounts_created": 0, "main_list_memberships_created": 0,
+              "main_list_memberships_reactivated": 0, "main_list_memberships_unchanged": 0,
+              "roles_created": 0, "roles_changed": 0, "roles_unchanged": 0}
+    skipped: list[str] = []
+    accounts = {}
+    for member in export["members"]:
+        author_id = str(member["author_id"])
+        account = Account.x.filter(author_id=author_id).first()
+        if account is None:
+            account, _created = _upsert_account({"author_id": author_id, "handle": member.get("handle")},
+                                                degraded=[], observed_at=now)
+            counts["main_list_accounts_created"] += 1
+        accounts[author_id] = account
+        existing = TwitterListMembership.objects.filter(list_id=MAIN_LIST, account=account).first()
+        if existing is not None and existing.active:
+            counts["main_list_memberships_unchanged"] += 1
+            continue
+        _membership, created, _was_active = _upsert_membership(
+            list_id=MAIN_LIST, account=account, observed_at=now, source=MAIN_LIST_SOURCE,
+            source_run_id=f"production-export-sha256:{export_sha256}", complete=False,
+        )
+        counts["main_list_memberships_created" if created else "main_list_memberships_reactivated"] += 1
+    scope = set(scope_author_ids(roster, export))
+    brands = set(Brand.objects.values_list("nickname", flat=True))
+    role_keys = set(Role.objects.values_list("key", flat=True))
+    for role in export["roles"]:
+        author_id = str(role["author_id"])
+        if author_id not in scope:
+            continue
+        account = accounts.get(author_id) or Account.x.filter(author_id=author_id).first()
+        if account is None or role["brand_id"] not in brands or role["role_id"] not in role_keys:
+            skipped.append(f"{role['brand_id']}:{role['role_id']}:{author_id}")
+            continue
+        current = BrandAccount.objects.filter(brand_id=role["brand_id"], account=account).first()
+        if current is None:
+            BrandAccount.objects.create(brand_id=role["brand_id"], account=account, role_id=role["role_id"])
+            counts["roles_created"] += 1
+        elif current.role_id != role["role_id"]:
+            BrandAccount.objects.filter(brand_id=role["brand_id"], account=account).update(role_id=role["role_id"])
+            counts["roles_changed"] += 1
+        else:
+            counts["roles_unchanged"] += 1
+    return {**counts, "roles_skipped": sorted(skipped)}
 
 
 def _write_seed(keywords, roster, *, roster_sha256, config_path, policy_path) -> dict[str, Any]:
@@ -733,13 +839,15 @@ def _write_seed(keywords, roster, *, roster_sha256, config_path, policy_path) ->
 
 
 def seed(keywords_path: Path, roster_path: Path, *, config_path: Path, policy_path: Path,
-         undo_receipt: Path) -> dict[str, Any]:
+         undo_receipt: Path, main_list_path: Path) -> dict[str, Any]:
     from django.db import transaction
 
     from x_monitor.harvest_policy import load_policy
 
     keywords = read_keyword_csv(keywords_path)
     roster = read_roster_csv(roster_path)
+    export = read_main_list_export(main_list_path)
+    authors = scope_author_ids(roster, export)
     check_policy_alignment(keywords, load_policy(policy_path))
     _require(not Path(undo_receipt).exists(), f"undo receipt already exists: {undo_receipt}")
     database = require_dedicated_backfill()
@@ -747,12 +855,14 @@ def seed(keywords_path: Path, roster_path: Path, *, config_path: Path, policy_pa
     _require(not _model("BrandKeyword").objects.filter(brand_id__in=BRANDS).exists(),
              "size-test brands already carry keywords; switch off with the existing undo receipt first")
     with transaction.atomic():
-        state_before, before = seed_state(), catalog_report()
+        state_before, before = seed_state(authors), catalog_report()
         written = _write_seed(keywords, roster, roster_sha256=_sha256(roster_path),
                               config_path=config_path, policy_path=policy_path)
-        plan = undo_plan(state_before, seed_state())
+        written["main_list"] = _write_main_list(export, roster, export_sha256=_sha256(main_list_path))
+        plan = undo_plan(state_before, seed_state(authors))
         receipt = {"format": UNDO_FORMAT, "database": database["name"], "catalog_before": before, "undo": plan,
-                   "keywords_sha256": _sha256(keywords_path), "roster_sha256": _sha256(roster_path)}
+                   "keywords_sha256": _sha256(keywords_path), "roster_sha256": _sha256(roster_path),
+                   "main_list_sha256": _sha256(main_list_path)}
         Path(undo_receipt).parent.mkdir(parents=True, exist_ok=True)
         with Path(undo_receipt).open("x", encoding="utf-8") as stream:
             json.dump(receipt, stream, ensure_ascii=False, sort_keys=True, indent=2)
@@ -829,6 +939,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--roster", type=Path, required=True)
     s.add_argument("--config", type=Path, default=Path("config.yaml"))
     s.add_argument("--policy", type=Path, default=Path("config/harvest_policy.yaml"))
+    s.add_argument("--main-list", type=Path, required=True,
+                   help="saved output of scripts/backfill_size_main_list_production.sql (read-only production export)")
     s.add_argument("--undo-receipt", type=Path, required=True,
                    help="new file recording the rows switch-off must undo (machine-local receipt)")
     o = sub.add_parser("switch-off")
@@ -841,7 +953,7 @@ def main(argv: list[str] | None = None) -> int:
             _setup_django()
             if args.command == "seed":
                 result = seed(args.keywords, args.roster, config_path=args.config, policy_path=args.policy,
-                              undo_receipt=args.undo_receipt)
+                              undo_receipt=args.undo_receipt, main_list_path=args.main_list)
             else:
                 result = switch_off(undo_receipt=args.undo_receipt)
     except SeedRefused as exc:

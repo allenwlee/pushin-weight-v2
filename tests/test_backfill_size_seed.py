@@ -228,8 +228,9 @@ def _identity(monkeypatch, name, user):
 
 
 UNDO = "/nonexistent/size-test-undo-receipt.json"
-SEED_ARGS = ["seed", "--keywords", str(KEYWORDS), "--roster", str(ROSTER),
-             "--config", str(CONFIG), "--policy", str(POLICY), "--undo-receipt", UNDO]
+MAIN_LIST = REPO / "tests/fixtures/size_test_main_list_export.json"
+SEED_ARGS = ["seed", "--keywords", str(KEYWORDS), "--roster", str(ROSTER), "--config", str(CONFIG),
+             "--policy", str(POLICY), "--main-list", str(MAIN_LIST), "--undo-receipt", UNDO]
 SWITCH_OFF_ARGS = ["switch-off", "--undo-receipt", UNDO]
 
 
@@ -298,6 +299,32 @@ def test_undo_plan_requires_the_brands_to_exist_before_the_seed():
         seed_module.undo_plan(before, _state())
 
 
+def test_undo_plan_reverses_copied_main_list_roles():
+    before = _state()
+    before["roles"] = {"deepseek|acc-1": "staff"}
+    after = _state()
+    after["roles"] = {"deepseek|acc-1": "official", "qwen|acc-2": "staff"}
+    plan = seed_module.undo_plan(before, after)
+    assert plan["created_roles"] == ["qwen|acc-2"]
+    assert plan["changed_roles"] == {"deepseek|acc-1": "staff"}
+
+
+def test_main_list_export_is_read_from_render_output_and_validated(tmp_path):
+    export = seed_module.read_main_list_export(MAIN_LIST)
+    assert [m["author_id"] for m in export["members"]] == ["900000000000000001", "900000000000000002"]
+    roster = read_roster_csv(ROSTER)
+    authors = seed_module.scope_author_ids(roster, export)
+    assert "900000000000000001" in authors and len(authors) == 48 + 2
+    staging = tmp_path / "staging.json"
+    staging.write_text(MAIN_LIST.read_text().replace("pushinweight_shadow", "pushinweight_staging"))
+    with pytest.raises(SeedRefused, match="not from production"):
+        seed_module.read_main_list_export(staging)
+    other = tmp_path / "other.json"
+    other.write_text(MAIN_LIST.read_text().replace("2067062923525275922", "2067500935769895374"))
+    with pytest.raises(SeedRefused, match="another list"):
+        seed_module.read_main_list_export(other)
+
+
 def test_switch_off_refuses_an_unreadable_or_foreign_receipt(tmp_path):
     with pytest.raises(SeedRefused, match="unreadable"):
         seed_module.read_undo_receipt(tmp_path / "missing.json")
@@ -342,7 +369,8 @@ def xbackfiller(monkeypatch, seeded_policy_keywords, tmp_path):
 
 
 def _seed(receipt):
-    return seed_module.seed(KEYWORDS, ROSTER, config_path=CONFIG, policy_path=POLICY, undo_receipt=receipt)
+    return seed_module.seed(KEYWORDS, ROSTER, config_path=CONFIG, policy_path=POLICY, undo_receipt=receipt,
+                            main_list_path=MAIN_LIST)
 
 
 @pytest.mark.requires_postgres
@@ -357,6 +385,9 @@ def test_second_seed_is_refused_and_creates_no_duplicates(xbackfiller):
     assert _row_counts() == counts
     keyword_rows = len(read_keyword_csv(KEYWORDS))
     assert counts == {"brands": 2, "keywords": keyword_rows, "accounts": 48, "brand_accounts": 48, "memberships": 48}
+    from core.models import TwitterListMembership
+
+    assert TwitterListMembership.objects.filter(list_id=seed_module.MAIN_LIST, active=True).count() == 2
     roles = {(e.brand_id, e.account.handle): e.role_id for e in BrandAccount.objects.filter(brand_id__in=BRANDS)}
     assert roles[("anthropic", "karpathy")] == "staff" and roles[("openai", "OpenAINewsroom")] == "official"
 
@@ -395,5 +426,9 @@ def test_switch_off_restores_the_pre_seed_catalog_and_keeps_post_brands(xbackfil
     assert not BrandAccount.objects.filter(brand_id__in=BRANDS).exists()
     assert set(Brand.objects.filter(nickname__in=BRANDS).values_list("is_sentinel", flat=True)) == {False}
     assert set(Brand.objects.filter(nickname__in=BRANDS).values_list("accent_color", flat=True)) == {None}
+    from core.models import TwitterListMembership
+
+    assert not TwitterListMembership.objects.filter(list_id=seed_module.MAIN_LIST).exists()
+    assert not BrandAccount.objects.filter(account__author_id__startswith="9000000000000000").exists()
     # A repeated switch-off finds nothing left to undo and still matches.
     assert seed_module.switch_off(undo_receipt=receipt)["catalog_after"]["revision"] == pre_seed["revision"]
