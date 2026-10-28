@@ -1429,6 +1429,9 @@ def main(argv: list[str] | None = None) -> int:
             doc = load_document(Path(args.watch).read_text(), XBACKFILLER_FORMAT)
             if doc.get("database") != XBACKFILLER_DATABASE:
                 raise ValueError(f"watch output came from database {doc.get('database')!r}, not xbackfiller")
+            if doc.get("job") is None:
+                # A well-formed but wrong --job-id returns no calls; never report that as zero spend.
+                raise ValueError("the watched --job-id matched no CollectionJob in xbackfiller")
             watch = watch_summary(doc.get("calls") or [])
             print(watch_text(watch))
             return WATCH_TRIGGER_EXIT if watch["trigger"] else 0

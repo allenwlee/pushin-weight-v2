@@ -414,6 +414,15 @@ def test_watch_mode_exit_code_signals_trigger(tmp_path, capsys):
     assert "R24 trigger: HOLDS" in capsys.readouterr().out
 
 
+def test_watch_refuses_a_job_id_that_matches_no_job(tmp_path, capsys):
+    doc = {**_xbackfiller_doc(), "job": None, "calls": []}
+    path = tmp_path / "watch.json"
+    path.write_text(json.dumps(doc))
+
+    assert report.main(["--watch", str(path)]) == 1
+    assert "matched no CollectionJob" in capsys.readouterr().err
+
+
 def test_load_document_reads_render_psql_json_wrapper():
     """`render psql -o json` wraps psql's aligned text in {"output": "..."} (observed 2026-10-28)."""
     import json as _json
