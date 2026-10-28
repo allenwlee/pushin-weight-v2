@@ -601,3 +601,41 @@ Report executed, skipped and errored counts for every run; a skip or error is ne
 - No migration, production data write, provider call, harvester change or prototype-file edit exists in the diff.
 - No dead-end or experimental code from abandoned approaches remains in the diff; the prototype's monkeypatches are absent.
 - The General Launch Index has an OFF line for `g5-homepage-general-production-20261028` with the PR URL.
+
+---
+
+## Execution Record (2026-10-28)
+
+Decisions and deviations made while implementing, for the reviewer and the owner.
+
+**Owner attention**
+
+- The rail's General link (R2, owner record item 1) puts a link to `/general/` back on the public homepage. It supersedes the 2026-10-14 owner-requested removal of the masthead `data-general-link` anchor (`30ebc2ae`); that anchor stays removed and the rail is the only link. `tests/test_general_views.py::test_home_links_general_only_from_the_rail` replaces the removal test. Confirm before merge.
+- At phone width the language buttons sit on the first masthead row. In the prototype the "Prototype" badge (intentionally not shipped) pushed them to the second row.
+- The 1px masthead rule on General moved from `.masthead` to the full-width header in both Human and Agent views (the prototype applied it to Human only, which moved Human panels 1px against Agent and broke the existing equal-geometry invariant).
+
+**Deliberate test changes**
+
+- `tests/test_home_v22_browser.py`: tooltip-display assertions replaced by tooltip-disabled plus frozen feed-title slot text (KTD5); 12-hour English clock regexes; content-sized segmented buttons (heights and positions still pinned); clock pill on its own row at phone widths; feed below the chart at every width; the 1-day and Beijing axes now check the hour-stepped ticks ending at harvest coverage; muted pending language tag; short zh/ja pending copy; footer `v1.0.0b1 (0.2.0b1)`; signal selectors skip the new logo buttons; the empty Geopolitical help trigger has no popover visual. The 0.45 changed-pixel ceiling against the dark v22 mockup is retired (the approved target replaces that oracle); paired captures and structure/geometry checks remain.
+- Six tests that already failed at `e5edf737` because their fixtures recorded no harvest (the 1-day chart ends at scheduled coverage since `8b146658`) now call `_record_current_harvest()`; StepFun's evidence post moved before the latest closed five-minute boundary. The Japanese processing test's place name is aligned with the shared places fixture (`米国`).
+- Still failing at both `e5edf737` and this branch, untouched here: `test_activated_geopolitical_and_promotion_controls_round_trip_in_browser` (its untracked-brand post never reaches the feed) and seven `tests/test_dashboard_i18n.py` v1 dashboard tests. Neither is in the gate's test lists.
+- `tests/test_cyber_quan_visual_regression.py`: goldens recaptured for the new design; the prechange-to-candidate icon comparison and its capture mode are retired (the old PNGs stay as the evidence the 2026-08-28 target records).
+- Regression-net baseline recaptured from an untouched `e5edf737` copy. The feed's per-brand post-type, product-label, audience-topic and geopolitical-mode lists come from queries without ORDER BY at `e5edf737`, so their order follows test-database state (it flipped between runs); the net compares those lists, and the inspection JSON built from them, order-independently. Production ordering is unchanged and listed as a follow-up. Row-relative wall-clock text (`meta_text`, `ts_abs_text`) is excluded. The fixture exercises none of the R16/R17 strings, so `INTENDED_CHANGES` stays empty; `tests/test_views.py` and `tests/test_general_style_copy.py` cover them.
+
+**Defects found and fixed by the new tests**
+
+- Client-rendered feed rows had no brand-logo row (only official-job rows did).
+- The phone drawer could not receive focus on open (visibility transition); a drawer link click returned focus to the toggle and scrolled back to the top.
+- A frozen Chinese feed title overflowed at 320px (`flex: 0 0 auto`).
+- Flags on scroll-loaded rows under hashed static names (AE4) — fixed and fault-injected.
+- A selected trending chip's "NEW" and flat deltas rendered white on the light tint (the prototype styled only up/down) — now green and muted.
+
+**Verification so far (this worktree, before review)**
+
+- Affected gate: 422 focused tests passed (0 skipped, 0 errors); 5,191 Pro and 71 General obligations clean; performance declarations clean.
+- Prototype parity: 27 candidate/prototype pairs (3 pages × en, zh_cn, ja × 1440, 1100, 390px) for owner review; no page errors or third-party requests on any candidate page.
+
+**Structure**
+
+- `monitor/static/home-v20.css` and `pw-each-chart.css` are unchanged; `pro-general.css` overrides the forced canvas height and flag filter under `body.pw-general`, so `/brands/` and `/internal/` keep their rules.
+- UI assurance: controls `chart_focus`, `focus_brand` and `rail`, two coverage groups, four ordered groups, two invariants and two seeds (5,191 obligations); the new browser tests join the gate's focused list and the touched home browser tests its candidate list.
