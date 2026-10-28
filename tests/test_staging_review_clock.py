@@ -67,12 +67,66 @@ def test_staging_one_day_feed_and_chart_follow_latest_post_across_locales():
     assert [row["tweet_id"] for row in japanese["rows"]] == expected
     assert english["rows"][0]["meta_text"] == "just now"
     assert chart["computed_at"] == (latest + timedelta(microseconds=1)).isoformat()
-    assert chart["totals"]["minimax"] == 2
+    # The copied snapshot ends at the review clock. Like production's searched
+    # coverage, the chart keeps only finished five-minute buckets, so the post
+    # in the unfinished 14:45 bucket waits.
+    assert chart["harvest_coverage"] is None
+    assert len(chart["days"]) == 288
+    assert chart["days"][-1] == "2026-09-18T14:40:00+00:00"
+    assert chart["totals"]["minimax"] == 1
     assert homepage.status_code == 200
     assert (
         f'data-pw-feed-now="{(latest + timedelta(microseconds=1)).isoformat()}"'
         in homepage.content.decode()
     )
+
+
+@override_settings(
+    OLLIJA_STAGING_MODE=True,
+    OLLIJA_STAGING_ALLOWED_EMAILS=frozenset({"owner@example.com"}),
+)
+@pytest.mark.parametrize("locale", ["en", "zh_hans", "ja"])
+def test_staging_copied_snapshot_without_harvest_records_fills_daily_charts(
+    monkeypatch, locale
+):
+    copied_latest = datetime(2026, 10, 4, 0, 44, 56, tzinfo=UTC)
+    review_now = copied_latest + timedelta(microseconds=1)
+    brand = Brand.objects.create(nickname="deepseek", display_name="DeepSeek")
+    for tweet_id, created_at in (
+        ("copied-hour-ago", copied_latest - timedelta(hours=1)),
+        ("copied-unfinished-bucket", copied_latest),
+        ("later-sparse-probe", copied_latest + timedelta(days=10)),
+    ):
+        post = Post.objects.create(
+            tweet_id=tweet_id,
+            text="staging review fixture",
+            lang_detected="en",
+            created_at=created_at,
+        )
+        PostBrand.objects.create(post=post, brand=brand)
+    monkeypatch.setattr(views, "_staging_refresh_review_horizon", lambda: review_now)
+
+    client = Client(HTTP_HOST="localhost")
+    client.force_login(
+        get_user_model().objects.create_user(
+            username="staging-snapshot-owner",
+            email="owner@example.com",
+            password="unused",
+        )
+    )
+    for route in ("/chart/", "/dashboard/each/chart/"):
+        response = client.get(
+            route, {"brand": "deepseek", "window": 1, "locale": locale}, secure=True
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["computed_at"] == review_now.isoformat()
+        assert data["harvest_coverage"] is None
+        assert len(data["days"]) == 288
+        assert data["days"][0] == "2026-10-03T00:40:00+00:00"
+        assert data["days"][-1] == "2026-10-04T00:35:00+00:00"
+        totals = data["totals"]
+        assert sum(totals.values() if isinstance(totals, dict) else totals) == 1
 
 
 @override_settings(

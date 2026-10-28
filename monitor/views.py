@@ -484,6 +484,20 @@ def _dashboard_now() -> datetime:
     return review_now
 
 
+def _one_day_chart_end(at: datetime, coverage: dict[str, str] | None) -> datetime:
+    """End the 1-day series at searched coverage, or at staging's review clock."""
+    from monitor.harvest_coverage import closed_five_minute_boundary
+
+    start = closed_five_minute_boundary(at) - timedelta(days=1)
+    if coverage:
+        return max(start, datetime.fromisoformat(coverage["chart_end_at"]))
+    if settings.OLLIJA_STAGING_MODE:
+        # Copied snapshots carry no scheduled-harvest records; the review
+        # clock already marks where the copied posts end.
+        return closed_five_minute_boundary(at)
+    return start
+
+
 # ============================================================================
 # Locale helpers
 # ============================================================================
@@ -3461,9 +3475,9 @@ def _build_home_chart_payload(
     coverage = latest_scheduled_coverage(requested_at) if window_days == 1 else None
     chart_start = closed_five_minute_boundary(requested_at) - timedelta(days=1)
     chart_end = (
-        max(chart_start, datetime.fromisoformat(coverage["chart_end_at"]))
-        if coverage else chart_start
-    ) if window_days == 1 else requested_at
+        _one_day_chart_end(requested_at, coverage)
+        if window_days == 1 else requested_at
+    )
     normalized_filters = _normalize_home_filters(filters)
     tracked_brands = _tracked_home_brand_nicknames() if tracked_only else None
     from monitor.home_count_summary import home_count_cache_token, read_home_counts
@@ -4174,7 +4188,7 @@ def _each_chart_payload(
     local_today = at.astimezone(tzinfo).date()
     if window_days == 1:
         start = closed_five_minute_boundary(at) - timedelta(days=1)
-        at = max(start, datetime.fromisoformat(coverage["chart_end_at"])) if coverage else start
+        at = _one_day_chart_end(at, coverage)
         buckets = max(0, int((at - start).total_seconds() // 300))
         labels = [(start + timedelta(minutes=5 * i)).isoformat() for i in range(buckets)]
     else:
