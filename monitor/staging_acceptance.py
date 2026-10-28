@@ -48,6 +48,8 @@ MAX_CURRENT_CYCLE_ENRICHMENT_CLAIMS = 5
 MAX_CARRYOVER_ENRICHMENT_CLAIMS = 0
 MAX_RARE_TYPE_JEV_DECISIONS = 5
 MAX_RARE_TYPE_HF_REQUESTS = 1
+MAX_RARE_TYPE_RAW_RESULTS = 20
+MAX_RARE_TYPE_SEARCH_CREDITS = 300
 
 _SAFE_POST_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _FACT_KEYS = {
@@ -92,6 +94,8 @@ class StagingAcceptanceProfile:
             caps.update(
                 jev_decisions=MAX_RARE_TYPE_JEV_DECISIONS,
                 hf_requests=MAX_RARE_TYPE_HF_REQUESTS,
+                raw_results=MAX_RARE_TYPE_RAW_RESULTS,
+                search_credits=MAX_RARE_TYPE_SEARCH_CREDITS,
             )
         return {
             "service": self.service,
@@ -403,6 +407,7 @@ def evaluate_staging_acceptance(
         selected_call["n_results"] = n_results
         selected_call["n_inserted"] = n_inserted
         selected_call["n_updated"] = n_updated
+        selected_call["coverage_complete"] = call_status in {"stored", "no_results"}
     else:
         n_results = selected_call.get("n_results")
         n_inserted = selected_call.get("n_inserted")
@@ -416,9 +421,35 @@ def evaluate_staging_acceptance(
         and not isinstance(selected_call.get("backlog_window_id"), bool)
         and selected_call["backlog_window_id"] > 0
     )
+    # Discovery deliberately samples one page; acceptance proves processing of
+    # that bounded sample, never complete search-window coverage or replay.
+    discovery_bounds_valid = not is_rare_extra or (
+        call_status in {"stored", "no_results", "truncated"}
+        and selected_call.get("provider_called") is True
+        and selected_call.get("cursor_advanced") is False
+        and type(selected_call.get("run_id")) is int
+        and selected_call["run_id"] > 0
+        and type(selected_call.get("raw_count")) is int
+        and 0 <= selected_call["raw_count"] <= MAX_RARE_TYPE_RAW_RESULTS
+        and type(n_results) is int
+        and 0 <= n_results <= selected_call["raw_count"]
+        and type(selected_call.get("request_count")) is int
+        and selected_call["request_count"] == 1
+        and type(selected_call.get("reserved_credits")) is int
+        and 0 < selected_call["reserved_credits"] <= MAX_RARE_TYPE_SEARCH_CREDITS
+        and type(selected_call.get("estimated_credits")) is int
+        and 0 < selected_call["estimated_credits"] <= selected_call["reserved_credits"]
+        and selected_call.get("normalization_errors") == 0
+        and totals.get("n_calls_run") == 1
+        and len(stats.get("calls", [])) == 1
+        and type(n_inserted) is int
+        and type(n_updated) is int
+        and n_inserted + n_updated <= n_results
+    )
     if (
         stats.get("status") not in {"completed", "degraded"}
         or bool(stats.get("errors"))
+        or not discovery_bounds_valid
         or (
             call_status
             not in (
@@ -427,6 +458,9 @@ def evaluate_staging_acceptance(
                 else {"completed", "no_results"}
             )
             and not safe_truncated_transfer
+            and not (
+                is_rare_extra and call_status == "truncated" and discovery_bounds_valid
+            )
         )
         or not isinstance(n_results, int)
         or isinstance(n_results, bool)

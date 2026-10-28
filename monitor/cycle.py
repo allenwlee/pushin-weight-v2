@@ -2304,6 +2304,7 @@ class CycleRunner:
         self._posts_attributed: int = 0
         self._api_calls: int = 0
         self._latency_observations: list[dict[str, Any]] = []
+        self._discovery_kept_posts: list[dict[str, Any]] = []
         self._errors: list[str] = []
         # Plan 2026-08-01-002 U4: typed counters surfaced via --json
         # n_errors_by_type. Each key represents a class of tolerated error
@@ -2922,6 +2923,7 @@ class CycleRunner:
                         "reserved_credits",
                         "estimated_credits",
                         "confirmed_credits",
+                        "request_count",
                     ]
                 )
             except DatabaseError:
@@ -2930,6 +2932,7 @@ class CycleRunner:
                 "reserved_credits": run.reserved_credits,
                 "estimated_credits": run.estimated_credits,
                 "confirmed_credits": run.confirmed_credits,
+                "request_count": run.request_count,
             }
         effective_query = XClient._effective_search_query(
             call.query_string,
@@ -3048,12 +3051,16 @@ class CycleRunner:
                 item["brand_id"] = UNATTRIBUTED_BRAND_ID
                 item["brand_ids"] = [UNATTRIBUTED_BRAND_ID]
             _inserted, _updated, _attributed, failed = self._persist_items([item])
+            self._posts_inserted += _inserted
+            self._posts_updated += _updated
+            self._posts_persist_failed += failed
             if failed or not item.get("_persisted_post_id"):
                 mark_hit_ingestion_failed(
                     hit_id=hit.pk, error_code="post_persistence_failed"
                 )
                 result["failed"] += 1
                 continue
+            self._discovery_kept_posts.append(item)
             post = Post.objects.get(pk=item["_persisted_post_id"])
             if link_kept_hit_to_post(hit_id=hit.pk, post=post, now=self._wall_now()):
                 result["persisted"] += 1
@@ -5196,6 +5203,7 @@ class CycleRunner:
                     rare_result.get("provider_called", False)
                 )
                 summary["totals"]["n_results"] += rare_result.get("raw_count", 0)
+                self._posts_seen += rare_result.get("raw_count", 0)
                 if call.call_id != last_paid_discovery_call_id:
                     continue
                 summary["rare_type_ingestion"] = self._drain_rare_type_hits(
@@ -5628,6 +5636,18 @@ class CycleRunner:
                     deadline=deadline,
                 )
             post_fetch_started = self._monotonic()
+            # Include discovery's persisted identities in post-fetch reporting.
+            # Preserve the independently configured synthesis-prewarm cohort.
+            post_fetch_posts = list(kept_all)
+            seen_post_ids = {
+                str(item.get("_persisted_post_id")) for item in kept_all
+                if item.get("_persisted_post_id")
+            }
+            for item in self._discovery_kept_posts:
+                post_id = str(item["_persisted_post_id"])
+                if post_id not in seen_post_ids:
+                    post_fetch_posts.append(item)
+                    seen_post_ids.add(post_id)
             recovery_ids = None
             enrichment_ids = None
             if self._backfill_context is not None:
@@ -5644,7 +5664,7 @@ class CycleRunner:
                 ][:context.enrichment_limit]
                 summary["enrichment_cohort_post_ids"] = enrichment_ids
             pf_counters = self._run_post_fetch(
-                kept_all,
+                post_fetch_posts,
                 run_id=run_id,
                 deadline=deadline,
                 prefer_created_before=(

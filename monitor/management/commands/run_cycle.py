@@ -478,6 +478,11 @@ class Command(BaseCommand):
             "cursor_advanced",
             "coverage_transfer",
             "backlog_window_id",
+            "coverage_complete",
+            "raw_count",
+            "normalized_count",
+            "estimated_credits",
+            "reserved_credits",
         )
         totals = stats.get("totals", {})
         post_fetch = stats.get("post_fetch", {})

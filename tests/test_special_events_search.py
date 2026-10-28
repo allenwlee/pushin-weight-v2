@@ -234,7 +234,9 @@ def test_staging_acceptance_selects_one_new_query_with_existing_bounds(
     assert prepared.profile.as_dict()["caps"]["hf_requests"] == 1
     stats = _accepted_stats()
     stats["calls"][0].update(
-        call_id=call_id, status="stored", normalized_count=2, provider_called=True
+        call_id=call_id, status="stored", normalized_count=2, provider_called=True,
+        raw_count=2, cursor_advanced=False, run_id=1, request_count=1,
+        normalization_errors=0, reserved_credits=300, estimated_credits=30,
     )
     assert evaluate_staging_acceptance(prepared, stats).status == "accepted"
 
@@ -344,3 +346,110 @@ def test_concurrent_queries_share_one_last_reservation_including_legacy_spend():
     budget.refresh_from_db()
     assert budget.search_credits_reserved + budget.search_credits_accounted == 28800
     assert RareTypeSearchDailyBudget.objects.count() == 1
+
+
+@pytest.mark.parametrize("call_id", CALL_IDS)
+@pytest.mark.parametrize("truncated", [False, True])
+def test_discovery_cycle_preserves_inserted_cohort_for_bounded_acceptance(
+    tmp_path, monkeypatch, call_id, truncated
+):
+    """A paid discovery page must reach the same persisted-ID acceptance path."""
+    from types import SimpleNamespace
+
+    from monitor.post_enrichment import ENRICHMENT_COUNT_KEYS
+    from monitor.staging_acceptance import (
+        BoundedXClient,
+        evaluate_staging_acceptance,
+        prepare_staging_acceptance,
+    )
+    from scripts.staging_refresh.policy import load_policy
+    from tests.test_staging_harvest_acceptance import (
+        POLICY_PATH,
+        _Connection,
+        _environment,
+        _options,
+    )
+
+    prepared = prepare_staging_acceptance(
+        call_id, options=_options(), cfg=enabled_config(tmp_path),
+        environ=_environment(TYPESAFE_API_KEY="fixture"), database=_Connection(),
+        policy=load_policy(POLICY_PATH),
+    )
+    Brand.objects.create(nickname="_unattributed", display_name="Unattributed", is_sentinel=True)
+    items = [{"id": f"discovery-{i}", "text": "An AI model arrived", "author_id": f"researcher-{i}",
+                  "author_handle": f"researcher{i}", "created_at": NOW.isoformat()} for i in range(2)]
+    api = FakeApi([{"tweets": items, "has_next_page": truncated}])
+    monkeypatch.setenv("RENDER_SERVICE_NAME", "pushinweight-staging-harvest")
+    monkeypatch.setattr("monitor.cycle._build_brand_index", lambda _models: (None, {}))
+    monkeypatch.setattr("monitor.cycle._load_brand_search_terms", dict)
+    monkeypatch.setattr("monitor.cycle.XClient.from_env", lambda purpose: BoundedXClient(api))
+    monkeypatch.setattr("scripts.harvest_cost.emit.finalize_and_persist", lambda summary, _api: summary)
+
+    class Gate:
+        def process_hit(self, hit_id, **kwargs):
+            RareTypeSearchHit.objects.filter(pk=hit_id).update(gate_state="kept", gate_completed_at=NOW)
+            return SimpleNamespace(outcome="kept")
+
+    monkeypatch.setattr("monitor.cycle.build_jev_decision_gate", lambda *a, **kw: Gate())
+    seen = []
+
+    def completed_post_fetch(self, kept_posts, **kwargs):
+        # Model transports are outside this regression: inspect the actual persisted cohort.
+        ids = self._unclaimed_post_fetch_cohort(kept_posts)["inserted_post_ids"]
+        seen.extend(ids)
+        assert set(ids) <= set(Post.objects.values_list("pk", flat=True))
+        counts = dict.fromkeys(ENRICHMENT_COUNT_KEYS, 0)
+        for key in ("n_enrichment_claimed", "n_enrichment_claimed_current_cycle",
+                    "n_enrichment_succeeded", "n_enrichment_succeeded_current_cycle"):
+            counts[key] = len(ids)
+        return {**counts, "inserted_post_ids": ids,
+                "enrichment_current_cycle_post_ids": ids, "enrichment_carryover_post_ids": [],
+                "enrichment_state_facts": [{"post_id": pk, "lane": "current_cycle",
+                    "translation_status": "succeeded", "classification_status": "succeeded",
+                    "output_complete": True} for pk in ids]}
+
+    monkeypatch.setattr(CycleRunner, "_run_post_fetch", completed_post_fetch)
+    monkeypatch.setattr(CycleRunner, "_request_synthesis_prewarm", lambda *a, **kw: {})
+    monkeypatch.setattr("monitor.cycle.drain_pending_verifications",
+                        lambda **kw: SimpleNamespace(attempted=0, resolved=0, deferred=0))
+    runner = CycleRunner(cfg=prepared.config, _backfill_call_ids=[call_id], _clock=lambda: NOW)
+    stats = runner.run()
+    assert len(api.calls) == 1
+    assert stats["totals"]["n_results"] == 2
+    assert stats["totals"]["n_inserted"] == 2
+    assert seen == ["discovery-0", "discovery-1"]
+    evaluation = evaluate_staging_acceptance(prepared, stats)
+    assert evaluation.status == "accepted", (evaluation, stats["errors"])
+    assert evaluation.selected_call["coverage_complete"] is (not truncated)
+
+
+@pytest.mark.parametrize("status", ["stored", "truncated"])
+@pytest.mark.parametrize("invalid", [
+    {"raw_count": 21}, {"normalized_count": 6}, {"estimated_credits": 301},
+    {"reserved_credits": 301}, {"run_id": None}, {"cursor_advanced": True},
+    {"normalization_errors": 1}, {"raw_count": 1}, {"request_count": 2},
+])
+def test_discovery_acceptance_rejects_invalid_page_evidence(tmp_path, status, invalid):
+    from monitor.staging_acceptance import (
+        evaluate_staging_acceptance,
+        prepare_staging_acceptance,
+    )
+    from scripts.staging_refresh.policy import load_policy
+    from tests.test_staging_harvest_acceptance import (
+        POLICY_PATH,
+        _accepted_stats,
+        _Connection,
+        _environment,
+        _options,
+    )
+    prepared = prepare_staging_acceptance(
+        "SPECIALEVENTS2", options=_options(), cfg=enabled_config(tmp_path),
+        environ=_environment(TYPESAFE_API_KEY="fixture"), database=_Connection(),
+        policy=load_policy(POLICY_PATH),
+    )
+    stats = _accepted_stats()
+    stats["calls"][0].update(call_id="SPECIALEVENTS2", status=status, normalized_count=2,
+        raw_count=2, provider_called=True, cursor_advanced=False, run_id=1,
+        normalization_errors=0, request_count=1, reserved_credits=300, estimated_credits=30)
+    stats["calls"][0].update(invalid)
+    assert evaluate_staging_acceptance(prepared, stats).status == "failed"

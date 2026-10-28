@@ -149,6 +149,27 @@ hidden before terminal success and is visible after terminal success. The
 existing 60-second feed refresh may be driven once without waiting a wall-clock
 minute. A pending, failed, or incomplete row appearing in the feed fails.
 
+For `RARE_EXTRA`, `SPECIALEVENTS1`, and `SPECIALEVENTS2`, bounded discovery
+acceptance proves processing of the selected sample. The provider may return
+its fixed page of up to 20 raw results; at most five normalized results enter
+staging processing. The shared search reservation remains at most 300 credits,
+one physical request and zero retries. The evaluator requires the persisted
+search-run identity, request count, raw/normalized counts, zero normalization
+errors, reserved/accounted credit bounds and no cursor advance. These checks
+apply to complete and truncated pages. A `truncated` sample may pass only with
+these facts and the same exact inserted/claimed/output checks; its output
+explicitly says `coverage_complete: false`. This establishes neither exhaustive
+search coverage nor ordinary-search backlog transfer.
+
+When only checker/reporting code changes, a separate read-only evaluation may
+reuse the original paid search and its exact persisted cohort. Verify original
+request/credit evidence, Post creation and hit-link timestamps, literal
+artifacts, classification and feed visibility on the candidate image; pair this
+with a real CycleRunner-to-evaluator regression using fake transports. Preserve
+the original failed receipt and identify the new result as saved-evidence
+verification, not another live search or historical success. This reuse
+procedure authorizes no new paid attempt.
+
 ## Staging acceptance evidence
 
 Fill every field; use `unknown` rather than inference.

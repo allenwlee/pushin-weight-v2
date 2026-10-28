@@ -335,6 +335,8 @@ def test_acceptance_understands_rare_extra_stored_result(tmp_path):
         status="stored",
         normalized_count=2,
         provider_called=True,
+        raw_count=2, cursor_advanced=False, run_id=1, request_count=1,
+        normalization_errors=0, reserved_credits=300, estimated_credits=30,
     )
 
     evaluation = evaluate_staging_acceptance(prepared, stats)
