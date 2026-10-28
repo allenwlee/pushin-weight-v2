@@ -16,7 +16,9 @@
     function isMobile() { return window.matchMedia(MOBILE).matches; }
     function state() { return body.getAttribute('data-pw-nav') || ''; }
 
-    function setNav(next) {
+    // Closing the drawer returns focus to its toggle, except after a link
+    // click, where focus would scroll the page back from the chosen section.
+    function setNav(next, returnFocus) {
       var wasDrawer = state() === 'mobile-open';
       if (next) body.setAttribute('data-pw-nav', next);
       else body.removeAttribute('data-pw-nav');
@@ -27,7 +29,7 @@
       if (next === 'mobile-open') {
         var first = rail.querySelector('nav a');
         if (first) first.focus();
-      } else if (wasDrawer && mobileToggle) {
+      } else if (wasDrawer && mobileToggle && returnFocus !== false) {
         mobileToggle.focus();
       }
     }
@@ -41,7 +43,7 @@
     if (mobileToggle) mobileToggle.addEventListener('click', function () { setNav('mobile-open'); });
     if (backdrop) backdrop.addEventListener('click', function () { setNav(''); });
     rail.addEventListener('click', function (event) {
-      if (event.target.closest('nav a') && state() === 'mobile-open') setNav('');
+      if (event.target.closest('nav a') && state() === 'mobile-open') setNav('', false);
     });
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape' && state()) setNav('');

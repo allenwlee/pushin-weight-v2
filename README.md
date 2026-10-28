@@ -1,7 +1,7 @@
 # Pushin Weight
 
-Version: v0.2.0-beta.1 (package `0.2.0b1`)
-Last updated: 2026-09-21 12:39:30 JST
+Version: v1.0.0-beta.1 (public `1.0.0b1`; package `0.2.0b1`)
+Last updated: 2026-10-28 19:23:18 JST
 
 > Pushin Weight watches public X posts about the AI models, labs, and tools
 > tracked by the product. It collects source posts, preserves context,

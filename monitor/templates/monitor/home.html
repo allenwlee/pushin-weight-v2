@@ -9,6 +9,8 @@
   <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}">
   <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=feed-inspection1">
   <link rel="stylesheet" href="{% static 'site-footer.css' %}">
+  <link rel="stylesheet" href="{% static 'fonts/pw-fonts.css' %}">
+  <link rel="stylesheet" href="{% static 'pro-general.css' %}">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
   <script src="{% static 'pw-filter-store.js' %}?v=preferences1" defer></script>
@@ -30,6 +32,7 @@
       data-pw-feed-now="{{ feed_now_iso }}"
       data-pw-preferences-namespace="{{ home_preferences_namespace }}"
       data-pw-country-flag-sprite-url="{% static 'country-flags.svg' %}"
+      data-pw-brand-logos='{{ brand_logo_urls_json }}'
       data-pw-processing-glyph-sprite-url="{% static 'pw-processing-glyphs.svg' %}"
       data-pw-country-flag-codes='{{ country_flag_codes_json }}'
       data-pw-window="{{ home_window_days }}"
@@ -78,8 +81,8 @@
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}品牌{% elif is_ja_chrome %}ブランド{% else %}Brands{% endif %}" data-idea="b" data-lens-pair="open,closed">
           <div class="dd-segment" role="tablist" aria-label="{% if is_zh_chrome %}品牌类型{% elif is_ja_chrome %}ブランド区分{% else %}Brand tier{% endif %}">
-            <button type="button" role="tab" data-lens="open" class="is-active" aria-selected="true"><span data-i18n="lens_open">{% if is_zh_chrome %}开源{% elif is_ja_chrome %}オープン{% else %}Open{% endif %}</span> <span class="n" data-lens-count="open">· {{ open_brands|length }}</span></button>
-            <button type="button" role="tab" data-lens="closed" aria-selected="false"><span data-i18n="lens_closed">{% if is_zh_chrome %}闭源{% elif is_ja_chrome %}クローズド{% else %}Closed{% endif %}</span> <span class="n" data-lens-count="closed">· {{ closed_brands|length }}</span></button>
+            <button type="button" role="tab" data-lens="open" class="is-active" aria-selected="true"><span data-i18n="lens_open">{% if is_zh_chrome %}其他{% elif is_ja_chrome %}その他{% else %}Others{% endif %}</span> <span class="n" data-lens-count="open">· {{ open_brands|length }}</span></button>
+            <button type="button" role="tab" data-lens="closed" aria-selected="false"><span data-i18n="lens_closed">{% if is_zh_chrome %}巨头{% elif is_ja_chrome %}大手{% else %}Giant{% endif %}</span> <span class="n" data-lens-count="closed">· {{ closed_brands|length }}</span></button>
           </div>
           <div class="dd-toolbar">
             <button type="button" data-dd-action="all" data-dd-scope="visible" data-i18n="btn_all">{% if is_zh_chrome %}全选{% elif is_ja_chrome %}すべて{% else %}all{% endif %}</button>
@@ -134,9 +137,9 @@
 
       <div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="lang">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title" data-i18n="pill_lang">{% if is_zh_chrome %}语言{% elif is_ja_chrome %}言語{% else %}Lang{% endif %}</span>
+        <span class="title" data-i18n="pill_lang">{% if is_zh_chrome %}语言{% elif is_ja_chrome %}言語{% else %}Language{% endif %}</span>
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
-        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}语言{% elif is_ja_chrome %}言語{% else %}Lang{% endif %}">
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}语言{% elif is_ja_chrome %}言語{% else %}Language{% endif %}">
           <div class="dd-toolbar">
             <button type="button" data-dd-action="all" data-i18n="btn_all">{% if is_zh_chrome %}全选{% elif is_ja_chrome %}すべて{% else %}all{% endif %}</button>
             <button type="button" data-dd-action="clear" data-i18n="btn_clear">{% if is_zh_chrome %}清空{% elif is_ja_chrome %}クリア{% else %}clear{% endif %}</button>
@@ -180,21 +183,22 @@
       {% if geopolitical_mode_entries %}<div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="geopolitical_modes">
         <span class="status-dot is-default" aria-hidden="true"></span>
         <span class="title" data-i18n="pill_geopolitical">{% if is_zh_chrome %}地缘政治{% elif is_ja_chrome %}地政学{% else %}Geopolitical{% endif %}</span>
-        <span class="filter-help-trigger pw-inspection-trigger" role="button" tabindex="0" aria-expanded="false" aria-label="{% if is_zh_chrome %}查看地缘政治模式及中美立场说明{% elif is_ja_chrome %}地政学的な論調と中国・米国への立場を説明{% else %}Explain geopolitical modes and China/U.S. stances{% endif %}" data-pw-inspection="{% if is_zh_chrome %}地缘政治模式描述帖文如何呈现议题；中国和美国国家立场分别记录帖文对各国的态度。{% elif is_ja_chrome %}地政学的な論調は投稿の枠組みを示し、中国と米国への国家的立場はそれぞれ別に記録します。{% else %}Geopolitical mode describes how the post frames an issue. China and U.S. national stances record separate attitudes toward each country.{% endif %}"><svg class="pw-icon" aria-hidden="true" focusable="false"><use href="{% static 'pw-processing-glyphs.svg' %}#icon-language-globe"></use></svg></span>
+        <span class="filter-help-trigger pw-inspection-trigger" role="button" tabindex="0" aria-expanded="false" aria-label="{% if is_zh_chrome %}查看地缘政治模式及中美立场说明{% elif is_ja_chrome %}地政学的な論調と中国・米国への立場を説明{% else %}Explain geopolitical modes and China/U.S. stances{% endif %}" data-pw-inspection="{% if is_zh_chrome %}地缘政治模式描述帖文如何呈现议题；中国和美国国家立场分别记录帖文对各国的态度。{% elif is_ja_chrome %}地政学的な論調は投稿の枠組みを示し、中国と米国への国家的立場はそれぞれ別に記録します。{% else %}Geopolitical mode describes how the post frames an issue. China and U.S. national stances record separate attitudes toward each country.{% endif %}"></span>
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
         <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}地缘政治{% elif is_ja_chrome %}地政学{% else %}Geopolitical{% endif %}">
+          <div class="dd-subtitle pw-dd-header">{% if is_zh_chrome %}地缘政治框架{% elif is_ja_chrome %}地政学的フレーミング{% else %}Geopolitical Framing{% endif %}</div>
           <div class="dd-grid cols-3">
             {% for entry in geopolitical_mode_entries %}
               <label><input type="checkbox" data-pw-filter-group="geopolitical_modes" value="{{ entry.key }}" checked><span class="filter-option-text">{{ entry.label }}</span></label>
             {% endfor %}
           </div>
-          <div class="dd-subtitle"><svg class="country-flag" viewBox="0 0 16 9" role="img" aria-label="{% if is_zh_chrome or is_ja_chrome %}中国{% else %}China{% endif %}"><use href="{% static 'country-flags.svg' %}#flag-cn"></use></svg>{% if is_zh_chrome %}国家立场{% elif is_ja_chrome %}国家的立場{% else %}national stance{% endif %}</div>
+          <div class="dd-subtitle"><svg class="country-flag" viewBox="0 0 16 9" role="img" aria-label="{% if is_zh_chrome or is_ja_chrome %}中国{% else %}China{% endif %}"><use href="{% static 'country-flags.svg' %}#flag-cn"></use></svg>{% if is_zh_chrome %}国家立场{% elif is_ja_chrome %}国家的立場{% else %}National Stance{% endif %}</div>
           <div class="dd-grid cols-3">
             {% for entry in national_stance_entries %}
               <label><input type="checkbox" data-pw-filter-group="china_national_stance" value="{{ entry.key }}" checked><span class="filter-option-text">{{ entry.label }}</span></label>
             {% endfor %}
           </div>
-          <div class="dd-subtitle"><svg class="country-flag" viewBox="0 0 16 9" role="img" aria-label="{% if is_zh_chrome %}美国{% elif is_ja_chrome %}米国{% else %}U.S.{% endif %}"><use href="{% static 'country-flags.svg' %}#flag-us"></use></svg>{% if is_zh_chrome %}国家立场{% elif is_ja_chrome %}国家的立場{% else %}national stance{% endif %}</div>
+          <div class="dd-subtitle"><svg class="country-flag" viewBox="0 0 16 9" role="img" aria-label="{% if is_zh_chrome %}美国{% elif is_ja_chrome %}米国{% else %}U.S.{% endif %}"><use href="{% static 'country-flags.svg' %}#flag-us"></use></svg>{% if is_zh_chrome %}国家立场{% elif is_ja_chrome %}国家的立場{% else %}National Stance{% endif %}</div>
           <div class="dd-grid cols-3">
             {% for entry in national_stance_entries %}
               <label><input type="checkbox" data-pw-filter-group="us_national_stance" value="{{ entry.key }}" checked><span class="filter-option-text">{{ entry.label }}</span></label>
@@ -219,9 +223,9 @@
 
       {% if untracked_brand_promotion_entries %}<div class="filter-pill" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" data-group="untracked_brand_promotions">
         <span class="status-dot is-default" aria-hidden="true"></span>
-        <span class="title" data-i18n="pill_untracked_brand_promotions">{% if is_zh_chrome %}未跟踪品牌推广{% elif is_ja_chrome %}未追跡ブランドのプロモーション{% else %}Untracked Brand Promotions{% endif %}</span>
+        <span class="title" data-i18n="pill_untracked_brand_promotions">{% if is_zh_chrome %}第三方品牌推广{% elif is_ja_chrome %}サードパーティのブランドプロモーション{% else %}3rd Party Brand Promotions{% endif %}</span>
         <span class="carat" aria-hidden="true"><svg class="pw-icon"><use href="#icon-caret"></use></svg></span>
-        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}未跟踪品牌推广{% elif is_ja_chrome %}未追跡ブランドのプロモーション{% else %}Untracked Brand Promotions{% endif %}">
+        <div class="filter-dropdown" role="group" aria-label="{% if is_zh_chrome %}第三方品牌推广{% elif is_ja_chrome %}サードパーティのブランドプロモーション{% else %}3rd Party Brand Promotions{% endif %}">
           <div class="dd-grid cols-2">
             {% for entry in untracked_brand_promotion_entries %}
               <label><input type="checkbox" data-pw-filter-group="untracked_brand_promotions" value="{{ entry.key }}"><span data-pw-semantic-icon data-pw-semantic-family="untracked_brand_promotions" data-pw-semantic-key="{{ entry.key }}"></span><span class="filter-option-text">{{ entry.label }}</span></label>

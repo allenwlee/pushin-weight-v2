@@ -10,6 +10,8 @@
   <link rel="stylesheet" href="{% static 'home-v20.css' %}?v=feed-inspection1">
   <link rel="stylesheet" href="{% static 'site-footer.css' %}">
   <link rel="stylesheet" href="{% static 'pw-each-chart.css' %}">
+  <link rel="stylesheet" href="{% static 'fonts/pw-fonts.css' %}">
+  <link rel="stylesheet" href="{% static 'pro-general.css' %}">
   <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
   <script src="https://unpkg.com/chart.js@4.4.0" defer></script>
   <script src="{% static 'pw-icons.js' %}?v=usability1" defer></script>
@@ -29,6 +31,7 @@
       data-pw-feed-now="{{ feed_now_iso }}"
       data-pw-preferences-namespace="{{ home_preferences_namespace }}"
       data-pw-country-flag-sprite-url="{% static 'country-flags.svg' %}"
+      data-pw-brand-logos='{{ brand_logo_urls_json }}'
       data-pw-processing-glyph-sprite-url="{% static 'pw-processing-glyphs.svg' %}"
       data-pw-country-flag-codes='{{ country_flag_codes_json }}'
       data-pw-window="{{ home_window_days }}"
@@ -82,12 +85,12 @@
                     aria-selected="{% if tab == selected_tab %}true{% else %}false{% endif %}" tabindex="{% if tab == selected_tab %}0{% else %}-1{% endif %}">
               {% if tab == 'sentiment' %}{% if is_zh_chrome %}情绪{% elif is_ja_chrome %}感情{% else %}Sentiment{% endif %}
               {% elif tab == 'post_types' %}{% if is_zh_chrome %}帖子类型{% elif is_ja_chrome %}投稿タイプ{% else %}Post Type{% endif %}
-              {% elif tab == 'lang' %}{% if is_zh_chrome %}语言{% elif is_ja_chrome %}言語{% else %}Lang{% endif %}
+              {% elif tab == 'lang' %}{% if is_zh_chrome %}语言{% elif is_ja_chrome %}言語{% else %}Language{% endif %}
               {% elif tab == 'role' %}{% if is_zh_chrome %}角色{% elif is_ja_chrome %}役割{% else %}Role{% endif %}
               {% elif tab == 'audience_topics' %}{% if is_zh_chrome %}受众主题{% elif is_ja_chrome %}オーディエンストピック{% else %}Audience Topics{% endif %}
               {% elif tab == 'geopolitical_modes' %}{% if is_zh_chrome %}地缘政治{% elif is_ja_chrome %}地政学{% else %}Geopolitical{% endif %}
               {% elif tab == 'product_labels' %}{% if is_zh_chrome %}产品{% elif is_ja_chrome %}製品{% else %}Product{% endif %}
-              {% elif tab == 'untracked_brand_promotions' %}{% if is_zh_chrome %}未跟踪品牌推广{% elif is_ja_chrome %}未追跡ブランドのプロモーション{% else %}Untracked Brand Promotions{% endif %}{% endif %}
+              {% elif tab == 'untracked_brand_promotions' %}{% if is_zh_chrome %}第三方品牌推广{% elif is_ja_chrome %}サードパーティのブランドプロモーション{% else %}3rd Party Brand Promotions{% endif %}{% endif %}
             </button>
           {% endfor %}
         </div>
@@ -97,7 +100,7 @@
             <label><input type="radio" name="each-chart-mode" value="volume" data-each-mode="volume"> {% if is_zh_chrome %}按帖子数量{% elif is_ja_chrome %}投稿数{% else %}By volume of posts{% endif %}</label>
           </fieldset>
           <div class="each-chart-face">
-            <canvas class="home-chart" data-each-canvas aria-label="{% if is_zh_chrome %}按分类堆叠的帖子数{% elif is_ja_chrome %}分類別の積み上げ投稿数{% else %}Stacked posts by classification{% endif %}"></canvas>
+            <div class="pw-canvas-box"><canvas class="home-chart" data-each-canvas aria-label="{% if is_zh_chrome %}按分类堆叠的帖子数{% elif is_ja_chrome %}分類別の積み上げ投稿数{% else %}Stacked posts by classification{% endif %}"></canvas></div>
             <div class="legend" data-each-legend></div>
           </div>
           <p class="chart-state muted" data-each-status role="status" aria-live="polite" hidden></p>

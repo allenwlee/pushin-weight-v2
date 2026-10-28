@@ -1267,15 +1267,6 @@ def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]
         "ja": {"translation": "翻訳", "classification": "分析", "analysis": "解説"},
     }
 
-    def average_note(process: str) -> str:
-        minutes = _FIRST_ATTEMPT_PROCESSING_MINUTES[process]
-        name = pending_names[language][process]
-        if language == "zh":
-            return f"{name}首次成功处理的历史平均时间：约{minutes}分钟。"
-        if language == "ja":
-            return f"{name}の初回成功処理の過去平均：約{minutes}分。"
-        raise ValueError("English uses a combined estimate")
-
     badges: list[dict[str, str]] = []
     pending: set[str] = set()
     retry_notes: dict[str, str] = {}
@@ -1308,23 +1299,23 @@ def _processing_badges(post: dict[str, Any], locale: str) -> list[dict[str, str]
         language_marker = language_pending and "translation" in pending
         ordered = [pending_names[language][key] for key in ("translation", "classification", "analysis") if key in pending]
         if language_marker:
-            ordered.insert(0, {"en": "language", "zh": "语言检测", "ja": "言語判定"}[language])
+            ordered.insert(0, {"en": "language", "zh": "语言", "ja": "言語"}[language])
+        estimates = [_FIRST_ATTEMPT_PROCESSING_MINUTES[key] for key in pending]
+        low, high = min(estimates), max(estimates)
         if language == "en":
             joined = ordered[0] if len(ordered) == 1 else " and ".join([", ".join(ordered[:-1]), ordered[-1]])
-            estimates = [_FIRST_ATTEMPT_PROCESSING_MINUTES[key] for key in pending]
-            low, high = min(estimates), max(estimates)
             minutes = str(low) if low == high else f"{low}-{high}"
             message = joined.capitalize() + f" pending ({minutes} min. est.)"
+        elif language == "zh":
+            joined = ordered[0] if len(ordered) == 1 else "、".join(ordered[:-1]) + "和" + ordered[-1]
+            minutes = str(low) if low == high else f"{low}-{high}"
+            message = joined + f"待处理（预计{minutes}分钟）"
         else:
-            joined = "、".join(ordered)
-            if language == "ja" and len(ordered) > 1:
-                joined = "、".join(ordered[:-1]) + "と" + ordered[-1]
-            message = joined + ("を待っています。" if language == "ja" else "待处理。")
+            minutes = str(low) if low == high else f"{low}〜{high}"
+            message = "・".join(ordered) + f"待ち（目安{minutes}分）"
         notes = [retry_notes[key] for key in ("translation", "classification", "analysis") if key in retry_notes]
-        if language != "en":
-            notes.extend(average_note(key) for key in ("translation", "classification", "analysis") if key in pending)
         if notes:
-            message += (". " if language == "en" else " ") + " ".join(notes)
+            message += (". " + " ".join(notes)) if language == "en" else ("。" + "".join(notes))
         badges.insert(0,
                       {"process": "pending", "state": "pending", "message": message,
                        "position": "language" if language_marker else "meta"})
@@ -1518,7 +1509,7 @@ def _feed_signal_inspections(
         "nat_us": ("U.S. national stance", "美国国家立场", "米国に対する立場"),
         "legacy_nat_cn": ("Legacy China nationalism", "旧版中国民族主义", "旧分類の中国ナショナリズム"),
         "legacy_nat_us": ("Legacy U.S. nationalism", "旧版美国民族主义", "旧分類の米国ナショナリズム"),
-        "audience_topic": ("Audience topic", "受众主题", "読者の関心分野"),
+        "audience_topic": ("Audience Topic", "受众主题", "読者の関心分野"),
         "geopolitical_mode": ("Geopolitical mode", "地缘政治模式", "地政学的な論調"),
         "classification_status": ("Classification status", "分类状态", "分類状態"),
     }
@@ -1649,7 +1640,7 @@ def _feed_signal_inspections(
             )
 
     if unsanctioned:
-        text = "未追跡ブランドのプロモーション" if use_ja else "未跟踪品牌推广" if use_zh else "Untracked Brand Promotion"
+        text = "サードパーティのブランドプロモーション" if use_ja else "第三方品牌推广" if use_zh else "3rd Party Brand Promotion"
         entry = [
             {"brand": "", "value": text, "text": text}
         ]
