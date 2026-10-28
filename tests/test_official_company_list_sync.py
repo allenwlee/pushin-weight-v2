@@ -457,3 +457,39 @@ def test_write_refusal_reason_is_structured_bounded_and_does_not_copy_tokens(mon
     intent.refresh_from_db()
     assert intent.last_error == expected and len(intent.last_error) <= 128
     assert "private-access-token" not in str(result)
+
+
+@pytest.mark.parametrize("refusal_at, status", [("POST", "deferred_write_refused"), ("/users/me", "blocked_auth")])
+def test_cycle_logs_list_refusal_and_keeps_block_visible_without_provider_retry(monkeypatch, caplog, refusal_at, status):
+    import json
+    import logging
+
+    from monitor.cycle import CycleRunner
+    from x_monitor.config import Config
+
+    _, list_cfg = setup_intent()
+    client, _, calls = stored_client(
+        monkeypatch, list_cfg, refusal_at=refusal_at, payload={"reason": "spend-cap-reached"}
+    )
+    cfg = Config(enabled_models=["deepseek"], daily_ceiling=100, official_company=list_cfg)
+    runner = CycleRunner(
+        cfg=cfg, cycle_kind="scheduled", _official_list_client=client,
+        _official_company_call=Mock(side_effect=AssertionError("unexpected model call")),
+    )
+    with caplog.at_level(logging.INFO, logger="monitor.cycle"):
+        for index in range(2):
+            result = runner._run_official_company_discovery(
+                run_id=f"list-refusal-{index}", deadline=cfg.harvest.start_deadline()
+            )
+            assert result["list_sync"]["status"] == status
+            assert result["list_sync"]["error"] == "http_403:spend-cap-reached"
+            if index:
+                assert not calls  # cooldown or a blocked credential never calls X
+            calls.clear()
+    records = [
+        json.loads(record.message.removeprefix("OFFICIAL_COMPANY_LIST_SYNC "))
+        for record in caplog.records if record.message.startswith("OFFICIAL_COMPANY_LIST_SYNC ")
+    ]
+    assert len(records) == 2
+    assert all(row["status"] == status and row["error"] == "http_403:spend-cap-reached" for row in records)
+    assert "private-access-token" not in caplog.text

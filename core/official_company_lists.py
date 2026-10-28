@@ -323,7 +323,18 @@ def sync_intents(*, cfg, client, deadline=None):
     )
     claims = [claim for pk in ids if (claim := _claim(pk)) is not None]
     if not claims:
-        result["status"] = "idle"
+        blocked = (
+            OfficialCompanyListIntent.objects.filter(
+                list_id=int(cfg.list_id), status="blocked_auth"
+            )
+            .order_by("updated_at", "pk")
+            .values("last_error")
+            .first()
+        )
+        if blocked:
+            result.update(status="blocked_auth", error=blocked["last_error"])
+        else:
+            result["status"] = "idle"
         return result
     result["claimed"] = len(claims)
     try:
