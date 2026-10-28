@@ -76,6 +76,18 @@ or release asset. It can be stored before a reviewed canonical model link exists
 Such values remain **native-only** until qualified for canonical attribution;
 one shared repository's counter is not copied onto each model it supports.
 
+### Harvest coverage
+
+The latest moment through which a settled scheduled X harvest has finished
+every ordinary tracked-brand search, rounded down to a closed five-minute slot.
+Recent-activity charts end there rather than at the current time, because
+slots after it have not been searched yet and would look like a collapse.
+
+Coverage comes only from recurring scheduled runs, never from the newest post's
+timestamp or from optional discovery searches; a search that completed with no
+results still counts. With no settled scheduled run in range there is no
+coverage, so a 1-day chart has nothing to draw, however many posts exist.
+
 ## Ollija plan guidance
 
 ### Standalone Ollija
