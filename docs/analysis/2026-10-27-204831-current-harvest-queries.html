@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Current Harvest Queries</title>
+<style>
+:root { --bg:#fbfbf9; --fg:#1d1d1b; --muted:#66655f; --card:#ffffff; --line:#e3e1da; --code:#f4f3ee; }
+@media (prefers-color-scheme: dark) { :root { --bg:#161614; --fg:#ecebe6; --muted:#a3a29b; --card:#1f1f1c; --line:#33322e; --code:#262622; } }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { max-width:960px; margin:0 auto; padding:24px 16px 64px; }
+h1 { font-size:22px; margin:0 0 8px; }
+h2 { font-size:17px; margin:0 0 4px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
+p { margin:4px 0; }
+.intro { color:var(--muted); }
+.role { font-weight:600; }
+.meta { color:var(--muted); font-size:13px; }
+section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin:16px 0; }
+pre { background:var(--code); border-radius:6px; padding:12px; margin:10px 0 6px; font:13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre.fmt { overflow-x:auto; }
+pre.raw { white-space:pre-wrap; word-break:break-all; }
+summary { cursor:pointer; color:var(--muted); font-size:13px; }
+nav a { margin-right:10px; font-family:ui-monospace, monospace; color:inherit; }
+</style>
+</head>
+<body>
+<main>
+<h1>Current harvest queries, verbatim</h1>
+<p class="intro">These are the exact search texts read on 2026-10-27 from production's current cycle job (<code>fb9114b7-e9f0-483f-bd2b-e8ecaeba7a0a</code>, last run 20:45 JST) and from the backfiller's July job (<code>d4440f2e-0366-44ec-9bfe-fe12ac3df79c</code>). The 8 routes production runs are identical, character for character, in both. The layout adds only line breaks and indentation: each <code>OR</code> alternative starts a new line, each parenthesis level indents four spaces, and short groups without nested parentheses stay on one line. Unquoted multi-word alternatives such as <code>dots studio</code> stay on one line exactly as written; the layout does not claim how X groups them.</p>
+<p class="intro">Every request appends <code>since_time:&lt;start&gt; until_time:&lt;end&gt;</code> (44 characters with 10-digit Unix times) to the text below, and that suffix counts toward X's 512-character limit. OpenAI and Anthropic queries are not on this page yet because they have not been drafted.</p>
+<nav><a href="#A">A</a> <a href="#B1">B1</a> <a href="#B2">B2</a> <a href="#B3">B3</a> <a href="#C1">C1</a> <a href="#C2">C2</a> <a href="#C3">C3</a> <a href="#C4">C4</a> <a href="#RARE_EXTRA">RARE_EXTRA</a></nav>
+
+<section id="A">
+  <h2>A</h2>
+  <p class="role">Posts by members of the private X list 2067062923525275922 (officials and staff).</p>
+  <p class="meta">Production 15-minute cycle and backfiller · 52 characters · 96 with time bounds · 416 left under the 512 cap</p>
+  <pre class="fmt">(list:2067062923525275922) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(list:2067062923525275922) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="B1">
+  <h2>B1</h2>
+  <p class="role">Wide net: brand and product names searched on their own.</p>
+  <p class="meta">Production 15-minute cycle and backfiller · 446 characters · 490 with time bounds · 22 left under the 512 cap</p>
+  <pre class="fmt">(
+    (DeepSeek OR 深度求索)
+    OR (
+        dots3-note
+        OR dots studio
+        OR &quot;dots 3 note&quot;
+        OR &quot;dots-3-note&quot;
+        OR &quot;dots.3-note&quot;
+        OR &quot;dots3 note&quot;
+        OR &quot;dots-studio&quot;
+        OR dots.ocr
+        OR dots.tts
+        OR dots.llm1
+        OR dots.vlm
+        OR dots.mocr
+        OR dots3
+        OR dots4
+    )
+    OR (
+        Hunyuan
+        OR (
+            混元 (AI OR 模型 OR 3D OR 腾讯)
+        )
+        OR 腾讯混元
+        OR Hy3
+        OR Hy4
+        OR Hy5
+        OR Hy4-preview
+        OR Hy5-preview
+    )
+    OR (
+        Hailuo
+        OR MiniMax
+        OR (
+            海螺 (AI OR 模型 OR H3 OR 歌曲)
+        )
+    )
+    OR (Qwen OR Qwen3 OR 通义千问)
+    OR (StepFun OR 阶跃星辰)
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">((DeepSeek OR 深度求索) OR (dots3-note OR dots studio OR &quot;dots 3 note&quot; OR &quot;dots-3-note&quot; OR &quot;dots.3-note&quot; OR &quot;dots3 note&quot; OR &quot;dots-studio&quot; OR dots.ocr OR dots.tts OR dots.llm1 OR dots.vlm OR dots.mocr OR dots3 OR dots4) OR (Hunyuan OR (混元 (AI OR 模型 OR 3D OR 腾讯)) OR 腾讯混元 OR Hy3 OR Hy4 OR Hy5 OR Hy4-preview OR Hy5-preview) OR (Hailuo OR MiniMax OR (海螺 (AI OR 模型 OR H3 OR 歌曲))) OR (Qwen OR Qwen3 OR 通义千问) OR (StepFun OR 阶跃星辰)) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="B2">
+  <h2>B2</h2>
+  <p class="role">Wide net: mentions of official accounts (first group).</p>
+  <p class="meta">Production 15-minute cycle and backfiller · 319 characters · 363 with time bounds · 149 left under the 512 cap</p>
+  <pre class="fmt">(
+    @MiniMaxAgent
+    OR @MiniMax_AI
+    OR @hailuo_ai
+    OR @Ali_TongyiLab
+    OR @Alibaba_Qwen
+    OR @deepseek_ai
+    OR @AntLingAGI
+    OR @TheInclusionAI
+    OR @ZhihuFrontier
+    OR @robbyant_brain
+    OR @MistralAI
+    OR @StepFun_ai
+    OR @stepfunai
+    OR @TencentHunyuan
+    OR @NVIDIAAI
+    OR @NVIDIAAIDev
+    OR @LG_AI_Research
+    OR @SakanaAILabs
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(@MiniMaxAgent OR @MiniMax_AI OR @hailuo_ai OR @Ali_TongyiLab OR @Alibaba_Qwen OR @deepseek_ai OR @AntLingAGI OR @TheInclusionAI OR @ZhihuFrontier OR @robbyant_brain OR @MistralAI OR @StepFun_ai OR @stepfunai OR @TencentHunyuan OR @NVIDIAAI OR @NVIDIAAIDev OR @LG_AI_Research OR @SakanaAILabs) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="B3">
+  <h2>B3</h2>
+  <p class="role">Wide net: mentions of official accounts (second group).</p>
+  <p class="meta">Production 15-minute cycle and backfiller · 228 characters · 272 with time bounds · 240 left under the 512 cap</p>
+  <pre class="fmt">(
+    @XiaomiMiMo
+    OR @XiaomiMiMoDevs
+    OR @Kimi_Moonshot
+    OR @ErnieforDevs
+    OR @PaddlePaddle
+    OR @AIatMeta
+    OR @BytePlusGlobal
+    OR @bytedanceoss
+    OR @doubaoai
+    OR @01AI_Yi
+    OR @Kling_ai
+    OR @SenseTime_AI
+    OR @upstageai
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(@XiaomiMiMo OR @XiaomiMiMoDevs OR @Kimi_Moonshot OR @ErnieforDevs OR @PaddlePaddle OR @AIatMeta OR @BytePlusGlobal OR @bytedanceoss OR @doubaoai OR @01AI_Yi OR @Kling_ai OR @SenseTime_AI OR @upstageai) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="C1">
+  <h2>C1</h2>
+  <p class="role">Co-occurrence: brand names that only count next to an AI word.</p>
+  <p class="meta">Production 15-minute cycle and backfiller · 241 characters · 285 with time bounds · 227 left under the 512 cap</p>
+  <pre class="fmt">(
+    (MiMo OR Xiaomi MiMo OR 小米 MiMo)
+    OR (Mistral OR Mixtral)
+    OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI)
+    OR (Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder)
+) (llm OR model OR api OR agentic OR huggingface) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Mistral OR Mixtral) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder)) (llm OR model OR api OR agentic OR huggingface) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="C2">
+  <h2>C2</h2>
+  <p class="role">Co-occurrence: brand names that only count next to an AI word.</p>
+  <p class="meta">Production 15-minute cycle and backfiller · 154 characters · 198 with time bounds · 314 left under the 512 cap</p>
+  <pre class="fmt">(
+    (ERNIE OR 文心一言)
+    OR (Upstage OR Solar Pro OR Solar LLM OR 업스테이지)
+) (
+    llm
+    OR model
+    OR api
+    OR agentic
+    OR huggingface
+    OR baidu
+    OR 文心
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">((ERNIE OR 文心一言) OR (Upstage OR Solar Pro OR Solar LLM OR 업스테이지)) (llm OR model OR api OR agentic OR huggingface OR baidu OR 文心) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="C3">
+  <h2>C3</h2>
+  <p class="role">Co-occurrence: brand names that only count next to an AI word, plus quoted product names.</p>
+  <p class="meta">Production 15-minute cycle and backfiller · 261 characters · 305 with time bounds · 207 left under the 512 cap</p>
+  <pre class="fmt">(
+    (
+        (Doubao OR ByteDance)
+        OR (Kuaishou OR KwaiYii)
+        OR (SenseChat OR SenseTime)
+        OR (
+            glm
+            OR ChatGLM
+            OR Zhipu
+            OR 智谱
+            OR Z.ai
+            OR GLM-4
+            OR GLM-5
+            OR GLM-6
+        )
+    ) (llm OR model OR api OR agentic OR huggingface)
+    OR (&quot;Ox Alpha&quot; OR OxAlpha OR ox-alpha)
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(((Doubao OR ByteDance) OR (Kuaishou OR KwaiYii) OR (SenseChat OR SenseTime) OR (glm OR ChatGLM OR Zhipu OR 智谱 OR Z.ai OR GLM-4 OR GLM-5 OR GLM-6)) (llm OR model OR api OR agentic OR huggingface) OR (&quot;Ox Alpha&quot; OR OxAlpha OR ox-alpha)) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="C4">
+  <h2>C4</h2>
+  <p class="role">Co-occurrence: Meta Llama and Muse names next to AI words, plus quoted product names.</p>
+  <p class="meta">Production 15-minute cycle and backfiller · 394 characters · 438 with time bounds · 74 left under the 512 cap</p>
+  <pre class="fmt">(
+    (
+        (
+            Llama
+            OR Llama 3
+            OR Llama 4
+            OR Meta Llama
+            OR Code Llama
+        ) (llm OR model OR api OR agentic OR huggingface)
+        OR (Meta OR Muse) (
+            AI
+            OR model
+            OR models
+            OR agent
+            OR agents
+            OR code
+            OR Wonder
+            OR Spark
+            OR Glimmer
+            OR research
+            OR release
+            OR 模型
+            OR 智能体
+            OR トークン
+        )
+    )
+    OR (
+        &quot;Muse Wonder&quot;
+        OR &quot;Muse Code&quot;
+        OR &quot;Muse Spark&quot;
+        OR &quot;Muse Glimmer&quot;
+        OR &quot;Muse Image&quot;
+        OR &quot;Muse Video&quot;
+        OR &quot;Muse Voice&quot;
+    )
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(((Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama) (llm OR model OR api OR agentic OR huggingface) OR (Meta OR Muse) (AI OR model OR models OR agent OR agents OR code OR Wonder OR Spark OR Glimmer OR research OR release OR 模型 OR 智能体 OR トークン)) OR (&quot;Muse Wonder&quot; OR &quot;Muse Code&quot; OR &quot;Muse Spark&quot; OR &quot;Muse Glimmer&quot; OR &quot;Muse Image&quot; OR &quot;Muse Video&quot; OR &quot;Muse Voice&quot;)) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="RARE_EXTRA">
+  <h2>RARE_EXTRA</h2>
+  <p class="role">Rare post types: job moves, hiring, events, programs and releases.</p>
+  <p class="meta">Backfiller only (not in production's cycle job) · 463 characters · 507 with time bounds · 5 left under the 512 cap</p>
+  <pre class="fmt">(
+    (
+        &quot;I&#x27;ve joined&quot;
+        OR &quot;I joined&quot;
+        OR &quot;I left&quot;
+        OR &quot;我加入&quot;
+        OR &quot;我离开&quot;
+        OR 出任
+        OR 换帅
+        OR に入社
+        OR を退職
+    ) (AI OR LLM OR OpenAI OR Anthropic)
+    OR (&quot;I&#x27;ve joined @deepseek_ai&quot;)
+    OR (&quot;we&#x27;re hiring&quot; OR &quot;currently hiring&quot; OR 招聘 OR 募集中) (engineer OR researcher)
+    OR (&quot;we&#x27;ll be at&quot; OR 登壇) (&quot;AI conference&quot; OR summit)
+    OR (&quot;applications open&quot; OR &quot;apply by&quot; OR 申请) (hackathon OR fellowship) (AI OR LLM)
+    OR (introducing OR 开源 OR 发布) (model OR weights OR Preview)
+    OR (&quot;step 5 preview&quot;)
+) min_faves:0</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">((&quot;I&#x27;ve joined&quot; OR &quot;I joined&quot; OR &quot;I left&quot; OR &quot;我加入&quot; OR &quot;我离开&quot; OR 出任 OR 换帅 OR に入社 OR を退職) (AI OR LLM OR OpenAI OR Anthropic) OR (&quot;I&#x27;ve joined @deepseek_ai&quot;) OR (&quot;we&#x27;re hiring&quot; OR &quot;currently hiring&quot; OR 招聘 OR 募集中) (engineer OR researcher) OR (&quot;we&#x27;ll be at&quot; OR 登壇) (&quot;AI conference&quot; OR summit) OR (&quot;applications open&quot; OR &quot;apply by&quot; OR 申请) (hackathon OR fellowship) (AI OR LLM) OR (introducing OR 开源 OR 发布) (model OR weights OR Preview) OR (&quot;step 5 preview&quot;)) min_faves:0</pre></details>
+</section>
+</main>
+</body>
+</html>

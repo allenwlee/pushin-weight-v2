@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenAI Anthropic Drafts</title>
+<style>
+:root { --bg:#fbfbf9; --fg:#1d1d1b; --muted:#66655f; --card:#ffffff; --line:#e3e1da; --code:#f4f3ee; }
+@media (prefers-color-scheme: dark) { :root { --bg:#161614; --fg:#ecebe6; --muted:#a3a29b; --card:#1f1f1c; --line:#33322e; --code:#262622; } }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { max-width:960px; margin:0 auto; padding:24px 16px 64px; }
+h1 { font-size:22px; margin:0 0 8px; }
+h2 { font-size:17px; margin:0 0 4px; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; }
+p { margin:4px 0; }
+.intro { color:var(--muted); }
+.role { font-weight:600; }
+.meta { color:var(--muted); font-size:13px; }
+section { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin:16px 0; }
+pre { background:var(--code); border-radius:6px; padding:12px; margin:10px 0 6px; font:13px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+pre.fmt { overflow-x:auto; }
+pre.raw { white-space:pre-wrap; word-break:break-all; }
+summary { cursor:pointer; color:var(--muted); font-size:13px; }
+nav a { margin-right:10px; font-family:ui-monospace, monospace; color:inherit; }
+</style>
+</head>
+<body>
+<main>
+<h1>OpenAI and Anthropic draft queries</h1>
+<p class="intro">Draft search texts for adding OpenAI and Anthropic as tracked brands, built from the keyword list mined from 116,378 of our posts. Nothing here is in any config yet. Each lab gets its own list search (combining lists in one search returned HTTP 400 today), its own @-mention search, and two or three keyword searches. The 9 existing searches stay unchanged.</p>
+<p class="intro">Rules used: names with clear meaning are searched on their own; ambiguous words only count next to an AI word (<code>AI model models llm api agent coding 模型 モデル</code>); multi-word names are quoted so the search and the brand matcher agree. Claude and Codex are searched on their own, as agreed, with exclusion words applied after fetch. Every request also appends the 44-character time window, counted in the headroom below.</p>
+<p class="intro">Checked on X on 2026-10-27 with direct searches: <code>GPT</code> matches hyphenated forms (GPT-5.6, GPT-6.1, so GPT-5.6 Sol is covered) but not joined ones (gpt6.1, GPT6.1Terra), so joined spellings are listed separately. <code>Anthropic</code> does not match <code>AnthropicAI</code> or <code>@AnthropicAI</code>. <code>OpenAI</code> matches OpenAIの next to Japanese, but our brand matcher does not yet. Bare Sol, Luna, Terra and Astra mostly mean OpenAI models in our posts and need an AI word nearby; Cyber was dropped because it almost always means cybersecurity. Still open: the volume that <code>GPT</code>, <code>ChatGPT</code>, <code>Claude</code> and <code>Codex</code> bring in with <code>min_faves:0</code>.</p>
+<nav><a href="#A_OAI">A_OAI</a> <a href="#OAI_1">OAI_1</a> <a href="#OAI_2">OAI_2</a> <a href="#OAI_3">OAI_3</a> <a href="#B_OAI">B_OAI</a> <a href="#A_ANT">A_ANT</a> <a href="#ANT_1">ANT_1</a> <a href="#ANT_2">ANT_2</a> <a href="#ANT_3">ANT_3</a> <a href="#B_ANT">B_ANT</a></nav>
+
+<section id="A_OAI">
+  <h2>A_OAI</h2>
+  <p class="role">OpenAI list: posts by accounts on the private OpenAI list (officials and staff).</p>
+  <p class="meta">Draft, not in any config · 52 characters · 96 with time window · 416 left under the 512 cap</p>
+  <pre class="fmt">(list:2067500935769895374) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(list:2067500935769895374) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="OAI_1">
+  <h2>OAI_1</h2>
+  <p class="role">OpenAI company and ChatGPT names, searched on their own.</p>
+  <p class="meta">Draft, not in any config · 345 characters · 389 with time window · 123 left under the 512 cap</p>
+  <pre class="fmt">(
+    (
+        OpenAI
+        OR &quot;Open AI&quot;
+        OR OpenAl
+        OR OpenIA
+        OR ClosedAI
+        OR &quot;Closed AI&quot;
+        OR CloseAI
+        OR OpenAIDevs
+        OR オープンAI
+        OR 오픈AI
+        OR &quot;أوبن إيه آي&quot;
+    )
+    OR (
+        ChatGPT
+        OR &quot;Chat GPT&quot;
+        OR ChatGTP
+        OR chagpt
+        OR chapgpt
+        OR chaptgpt
+        OR chtgpt
+        OR ChatGPTapp
+        OR チャットGPT
+        OR チャッピー
+        OR 챗GPT
+        OR 챗지피티
+        OR &quot;شات جي بي تي&quot;
+        OR &quot;چت جی پی تی&quot;
+        OR चैटजीपीटी
+        OR чатгпт
+    )
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">((OpenAI OR &quot;Open AI&quot; OR OpenAl OR OpenIA OR ClosedAI OR &quot;Closed AI&quot; OR CloseAI OR OpenAIDevs OR オープンAI OR 오픈AI OR &quot;أوبن إيه آي&quot;) OR (ChatGPT OR &quot;Chat GPT&quot; OR ChatGTP OR chagpt OR chapgpt OR chaptgpt OR chtgpt OR ChatGPTapp OR チャットGPT OR チャッピー OR 챗GPT OR 챗지피티 OR &quot;شات جي بي تي&quot; OR &quot;چت جی پی تی&quot; OR चैटजीपीटी OR чатгпт)) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="OAI_2">
+  <h2>OAI_2</h2>
+  <p class="role">OpenAI models, products and people, searched on their own (Codex included, with exclusion words after fetch). Exclusion words applied after fetch: Warhammer, 40k, Space Marines, Tyranids, Necrons.</p>
+  <p class="meta">Draft, not in any config · 400 characters · 444 with time window · 68 left under the 512 cap</p>
+  <pre class="fmt">(
+    (
+        GPT
+        OR GPTs
+        OR GPT5.5
+        OR GPT5.6
+        OR GPT6
+        OR GPT6.1
+        OR GPT7
+        OR GPT55
+        OR GPT56
+        OR GPT61
+        OR GPT6Astra
+        OR GPT6.1Sol
+        OR GPT61Terra
+        OR GPT4o
+        OR gptoss
+        OR gptimage
+    )
+    OR (
+        Codex
+        OR 코덱스
+        OR コーデックス
+        OR &quot;Sora 2&quot;
+        OR Sora2
+        OR SearchGPT
+        OR DALLE
+        OR DALL-E
+        OR DALL·E
+    )
+    OR (
+        &quot;Sam Altman&quot;
+        OR Altman
+        OR &quot;Greg Brockman&quot;
+        OR &quot;Jakub Pachocki&quot;
+        OR &quot;Fidji Simo&quot;
+        OR &quot;Kevin Weil&quot;
+        OR &quot;Nick Turley&quot;
+        OR 阿尔特曼
+    )
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">((GPT OR GPTs OR GPT5.5 OR GPT5.6 OR GPT6 OR GPT6.1 OR GPT7 OR GPT55 OR GPT56 OR GPT61 OR GPT6Astra OR GPT6.1Sol OR GPT61Terra OR GPT4o OR gptoss OR gptimage) OR (Codex OR 코덱스 OR コーデックス OR &quot;Sora 2&quot; OR Sora2 OR SearchGPT OR DALLE OR DALL-E OR DALL·E) OR (&quot;Sam Altman&quot; OR Altman OR &quot;Greg Brockman&quot; OR &quot;Jakub Pachocki&quot; OR &quot;Fidji Simo&quot; OR &quot;Kevin Weil&quot; OR &quot;Nick Turley&quot; OR 阿尔特曼)) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="OAI_3">
+  <h2>OAI_3</h2>
+  <p class="role">OpenAI words that only count next to an AI word. Exclusion words applied after fetch: Solana, $SOL.</p>
+  <p class="meta">Draft, not in any config · 292 characters · 336 with time window · 176 left under the 512 cap</p>
+  <pre class="fmt">(
+    (
+        Sora
+        OR Sol
+        OR Luna
+        OR Terra
+        OR Astra
+        OR o1
+        OR o3
+        OR o3-pro
+        OR o4-mini
+        OR OAI
+        OR sama
+        OR 奥特曼
+        OR Whisper
+        OR &quot;Deep Research&quot;
+        OR Stargate
+        OR Atlas
+        OR Operator
+        OR Jalapeño
+        OR DevDay
+        OR &quot;Mark Chen&quot;
+    ) (
+        AI
+        OR model
+        OR models
+        OR llm
+        OR api
+        OR agent
+        OR coding
+        OR 模型
+        OR モデル
+    )
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">((Sora OR Sol OR Luna OR Terra OR Astra OR o1 OR o3 OR o3-pro OR o4-mini OR OAI OR sama OR 奥特曼 OR Whisper OR &quot;Deep Research&quot; OR Stargate OR Atlas OR Operator OR Jalapeño OR DevDay OR &quot;Mark Chen&quot;) (AI OR model OR models OR llm OR api OR agent OR coding OR 模型 OR モデル)) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="B_OAI">
+  <h2>B_OAI</h2>
+  <p class="role">Mentions of OpenAI&#x27;s official accounts.</p>
+  <p class="meta">Draft, not in any config · 89 characters · 133 with time window · 379 left under the 512 cap</p>
+  <pre class="fmt">(
+    @OpenAI
+    OR @OpenAIDevs
+    OR @ChatGPTapp
+    OR @sama
+    OR @thsottiaux
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(@OpenAI OR @OpenAIDevs OR @ChatGPTapp OR @sama OR @thsottiaux) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="A_ANT">
+  <h2>A_ANT</h2>
+  <p class="role">Anthropic list: posts by accounts on the private Anthropic list (officials and staff).</p>
+  <p class="meta">Draft, not in any config · 52 characters · 96 with time window · 416 left under the 512 cap</p>
+  <pre class="fmt">(list:2067501173402460553) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(list:2067501173402460553) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="ANT_1">
+  <h2>ANT_1</h2>
+  <p class="role">Anthropic company, Claude and people, searched on their own (Claude included, with exclusion words after fetch). Exclusion words applied after fetch: Monet, Debussy, Van Damme, Makélélé, Lelouch.</p>
+  <p class="meta">Draft, not in any config · 430 characters · 474 with time window · 38 left under the 512 cap</p>
+  <pre class="fmt">(
+    (
+        Anthropic
+        OR AnthropicAI
+        OR Anthropics
+        OR 앤트로픽
+        OR アンソロピック
+        OR アンスロピック
+        OR أنثروبيك
+        OR антропик
+        OR 人择
+    )
+    OR (
+        Antropic
+        OR AntropicAI
+        OR Antrophic
+        OR Antrhopic
+        OR Anthrophic
+        OR Anthorpic
+        OR Anthopic
+        OR Authropic
+        OR Anthoropic
+        OR Athropic
+    )
+    OR (
+        Claude
+        OR ClaudeCode
+        OR ClaudeAI
+        OR ClaudeDevs
+        OR ClaudeOpus
+        OR CLAUDE.md
+    )
+    OR (
+        &quot;Dario Amodei&quot;
+        OR Amodei
+        OR &quot;Jared Kaplan&quot;
+        OR &quot;Boris Cherny&quot;
+        OR &quot;Mike Krieger&quot;
+        OR 阿莫代
+    )
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">((Anthropic OR AnthropicAI OR Anthropics OR 앤트로픽 OR アンソロピック OR アンスロピック OR أنثروبيك OR антропик OR 人择) OR (Antropic OR AntropicAI OR Antrophic OR Antrhopic OR Anthrophic OR Anthorpic OR Anthopic OR Authropic OR Anthoropic OR Athropic) OR (Claude OR ClaudeCode OR ClaudeAI OR ClaudeDevs OR ClaudeOpus OR CLAUDE.md) OR (&quot;Dario Amodei&quot; OR Amodei OR &quot;Jared Kaplan&quot; OR &quot;Boris Cherny&quot; OR &quot;Mike Krieger&quot; OR 阿莫代)) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="ANT_2">
+  <h2>ANT_2</h2>
+  <p class="role">Claude model names with a version number, searched on their own.</p>
+  <p class="meta">Draft, not in any config · 208 characters · 252 with time window · 260 left under the 512 cap</p>
+  <pre class="fmt">(
+    (
+        &quot;Opus 5.5&quot;
+        OR &quot;Opus 5&quot;
+        OR &quot;Opus 4.8&quot;
+        OR Opus5
+        OR Opus55
+    )
+    OR (&quot;Fable 5&quot; OR &quot;Fable 5.1&quot; OR Fable5 OR Fable51)
+    OR (
+        &quot;Sonnet 5&quot;
+        OR &quot;Sonnet 5.5&quot;
+        OR &quot;Haiku 5.5&quot;
+        OR &quot;Mythos 5&quot;
+        OR Mythos5
+    )
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">((&quot;Opus 5.5&quot; OR &quot;Opus 5&quot; OR &quot;Opus 4.8&quot; OR Opus5 OR Opus55) OR (&quot;Fable 5&quot; OR &quot;Fable 5.1&quot; OR Fable5 OR Fable51) OR (&quot;Sonnet 5&quot; OR &quot;Sonnet 5.5&quot; OR &quot;Haiku 5.5&quot; OR &quot;Mythos 5&quot; OR Mythos5)) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="ANT_3">
+  <h2>ANT_3</h2>
+  <p class="role">Anthropic words that only count next to an AI word.</p>
+  <p class="meta">Draft, not in any config · 230 characters · 274 with time window · 238 left under the 512 cap</p>
+  <pre class="fmt">(
+    (
+        Opus
+        OR Sonnet
+        OR Haiku
+        OR Fable
+        OR Mythos
+        OR Cowork
+        OR Duet
+        OR Dario
+        OR &quot;Jack Clark&quot;
+        OR &quot;Alex Albert&quot;
+        OR クロード
+        OR 클로드
+        OR 克劳德
+        OR A社
+    ) (
+        AI
+        OR model
+        OR models
+        OR llm
+        OR api
+        OR agent
+        OR coding
+        OR 模型
+        OR モデル
+    )
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">((Opus OR Sonnet OR Haiku OR Fable OR Mythos OR Cowork OR Duet OR Dario OR &quot;Jack Clark&quot; OR &quot;Alex Albert&quot; OR クロード OR 클로드 OR 克劳德 OR A社) (AI OR model OR models OR llm OR api OR agent OR coding OR 模型 OR モデル)) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+<section id="B_ANT">
+  <h2>B_ANT</h2>
+  <p class="role">Mentions of Anthropic&#x27;s official accounts.</p>
+  <p class="meta">Draft, not in any config · 84 characters · 128 with time window · 384 left under the 512 cap</p>
+  <pre class="fmt">(
+    @AnthropicAI
+    OR @claudeai
+    OR @DarioAmodei
+    OR @ClaudeDevs
+) min_faves:0 -from:xxyweb3</pre>
+  <details><summary>Exact one-line text</summary><pre class="raw">(@AnthropicAI OR @claudeai OR @DarioAmodei OR @ClaudeDevs) min_faves:0 -from:xxyweb3</pre></details>
+</section>
+</main>
+</body>
+</html>
