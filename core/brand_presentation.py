@@ -30,3 +30,40 @@ BRAND_ACCENT_COLORS = {
     "sakana_ai": "#e00000",
     "dots": "#ff2442",
 }
+
+
+# Brand marks shown in the chart legend, post rows and General brand pills,
+# under monitor/static/brand-logos/. Brands without an entry show text only.
+BRAND_LOGO_FILES = {
+    "deepseek": "deepseek.svg",
+    "qwen": "qwen.svg",
+    "minimax": "minimax.svg",
+    "glm": "glm.svg",
+    "mimo": "mimo.svg",
+    "moonshot_kimi": "moonshot_kimi.jpg",
+    "inclusionai": "inclusionai.jpg",
+    "mistral": "mistral.svg",
+    "stepfun": "stepfun.svg",
+    "ernie": "ernie.svg",
+    "hunyuan": "hunyuan.svg",
+    "llama": "llama.svg",
+    "nemo_megatron": "nemo_megatron.svg",
+    "doubao": "doubao.svg",
+    "exaone": "exaone.png",
+    "kuaishou": "kuaishou.svg",
+    "upstage": "upstage.svg",
+    "yi": "yi.jpg",
+    "sensechat": "sensechat.png",
+    "sakana_ai": "sakana_ai.png",
+    "dots": "dots.png",
+}
+
+
+def brand_logo_urls() -> dict[str, str]:
+    """Return each logo's served static URL (hashed in production)."""
+    from django.templatetags.static import static
+
+    return {
+        nickname: static(f"brand-logos/{filename}")
+        for nickname, filename in BRAND_LOGO_FILES.items()
+    }

@@ -11,13 +11,16 @@ from django.test import SimpleTestCase, override_settings
 
 from monitor import views
 
-LOGO_PATH = (
-    "M11.82 2.35c-3.03.04-4.78 2.08-4.95 5.71L5.6 8.9 4.24 21.17"
-    "c2.42.32 5.02.47 7.72.45 2.69-.01 5.34-.19 7.83-.54L18.2 8.82l-1.16-.76"
-    "c-.28-3.63-2.2-5.75-5.22-5.71Zm.02 2.26c1.7-.02 2.59 1.13 2.82 3.78"
-    "l-5.47.06c.13-2.6.98-3.82 2.65-3.84ZM7.66 10.54l8.59-.09 1.06 8.63"
-    "c-1.68.18-3.47.27-5.35.28-1.84.02-3.59-.06-5.24-.22l.94-8.6Z"
+LOCKED_LOGO_SOURCE = (
+    Path(__file__).resolve().parents[1]
+    / "docs/ideation/assets/2026-10-28-183433-locked-line-logo.svg"
 )
+LOCKED_VIEW_BOX = "90.5 97.0 697.6 930.9"
+
+
+def _locked_logo_path() -> str:
+    root = ElementTree.parse(LOCKED_LOGO_SOURCE).getroot()
+    return root.find("{http://www.w3.org/2000/svg}path").attrib["d"]
 
 
 @override_settings(SESSION_ENGINE="django.contrib.sessions.backends.signed_cookies")
@@ -27,6 +30,7 @@ class FaviconTests(SimpleTestCase):
             "top_voices": {"entries": []},
             "trend_narrative": {},
             "pulse": {"entries": [], "window_days": 1, "computed_at": ""},
+            "computed_at": "",
         }
         query = SimpleNamespace(values_list=lambda *args, **kwargs: [])
         with ExitStack() as patches:
@@ -67,7 +71,7 @@ class FaviconTests(SimpleTestCase):
                 )
             return self.client.get("/", secure=True)
 
-    def test_public_home_serves_transparent_existing_logo_as_favicon(self) -> None:
+    def test_public_home_serves_the_locked_line_logo_as_favicon(self) -> None:
         response = self._get_public_home()
 
         self.assertEqual(response.status_code, 200)
@@ -79,13 +83,18 @@ class FaviconTests(SimpleTestCase):
 
         favicon_path = finders.find("favicon.svg")
         self.assertIsNotNone(favicon_path)
-        root = ElementTree.parse(Path(favicon_path)).getroot()
-        self.assertEqual(root.attrib["viewBox"], "4.24 2.3494 15.55 19.2724")
+        source = Path(favicon_path).read_text(encoding="utf-8")
+        root = ElementTree.fromstring(source)
+        self.assertEqual(root.attrib["viewBox"], LOCKED_VIEW_BOX)
 
         namespace = {"svg": "http://www.w3.org/2000/svg"}
         mark = root.find("svg:path", namespace)
         self.assertIsNone(root.find("svg:rect", namespace))
         self.assertIsNotNone(mark)
-        self.assertEqual(mark.attrib["fill"], "#0b1220")
+        self.assertEqual(mark.attrib["fill"], "none")
         self.assertNotIn("transform", mark.attrib)
-        self.assertEqual(mark.attrib["d"], LOGO_PATH)
+        self.assertEqual(mark.attrib["d"], _locked_logo_path())
+        # Line weight stays one pixel at the 16px tab-icon size.
+        self.assertAlmostEqual(float(mark.attrib["stroke-width"]) / 930.9 * 16, 1.0, places=2)
+        self.assertIn("path{stroke:#18212d}", source)
+        self.assertIn("@media (prefers-color-scheme:dark){path{stroke:#e8eaed}}", source)

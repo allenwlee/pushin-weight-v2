@@ -183,7 +183,7 @@ def test_runtime_sprite_is_the_exact_approved_subset() -> None:
 
     assert tuple(symbol_id for symbol_id, _, _ in symbols) == RUNTIME_SYMBOLS
     assert len(set(RUNTIME_SYMBOLS)) == 51
-    assert view_boxes["mark-quiet"] == "4.24 2.3494 15.55 19.2724"
+    assert view_boxes["mark-quiet"] == "90.5 97.0 697.6 930.9"
     assert all(
         view_box == "0 0 24 24"
         for symbol_id, view_box, _ in symbols
@@ -206,7 +206,7 @@ def test_runtime_sprite_is_the_exact_approved_subset() -> None:
     dossier_runtime_symbols = tuple(
         symbol_id
         for symbol_id in RUNTIME_SYMBOLS
-        if symbol_id != "icon-role-badge"
+        if symbol_id not in {"icon-role-badge", "mark-quiet"}
         and symbol_id not in LOCKED_COLUMN_A_SYMBOLS
         and symbol_id not in SELECTED_SYMBOLS
     )
@@ -223,7 +223,7 @@ def test_runtime_sprite_is_the_exact_approved_subset() -> None:
     assert {
         symbol_id: re.sub(r"\s+", "", body)
         for symbol_id, _, body in symbols
-        if symbol_id != "icon-role-badge"
+        if symbol_id not in {"icon-role-badge", "mark-quiet"}
         and symbol_id not in LOCKED_COLUMN_A_SYMBOLS
         and symbol_id not in SELECTED_SYMBOLS
     } == expected_runtime_symbols
@@ -285,3 +285,18 @@ def test_follower_magnitude_and_sentiment_keep_the_approved_semantic_colors() ->
     assert ".feed-signals .tone-neutral { color: var(--muted); }" in source
     assert ".feed-signals .tone-negative { color: var(--down); }" in source
     assert ".feed-signals .tone-mixed { color: #fbbf24; }" in source
+
+
+def test_mark_quiet_is_the_owner_locked_line_logo() -> None:
+    """Owner items 39-40 (2026-10-27) replace the Cyber-Quan mark with the line logo."""
+    locked = (REPO_ROOT / "docs/ideation/assets/2026-10-28-183433-locked-line-logo.svg").read_text(
+        encoding="utf-8"
+    )
+    locked_d = re.search(r' d="([^"]+)"', locked).group(1)
+    symbols = {symbol_id: body for symbol_id, _, body in _symbols(SPRITE.read_text(encoding="utf-8"))}
+    body = symbols["mark-quiet"]
+    assert f'd="{locked_d}"' in body
+    assert 'fill="none"' in body
+    assert 'stroke="currentColor"' in body
+    assert 'stroke-width="1"' in body
+    assert 'vector-effect="non-scaling-stroke"' in body

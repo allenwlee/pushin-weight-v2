@@ -7,6 +7,7 @@ Adds:
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from django.conf import settings
@@ -35,6 +36,11 @@ def i18n_context(request: Any) -> dict[str, Any]:
         "current_lang_name": current_lang_name,
         "brands": _get_brands(current_lang_code),
     }
+    from core.brand_presentation import brand_logo_urls
+
+    logo_urls = brand_logo_urls()
+    ctx["brand_logo_urls"] = logo_urls
+    ctx["brand_logo_urls_json"] = json.dumps(logo_urls, separators=(",", ":"))
     return ctx
 
 
