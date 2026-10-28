@@ -44,6 +44,28 @@ with recovery progress tracked separately from recurring harvesting.
 Finishing the selected searches and enriching their saved posts are separate
 outcomes; neither alone proves that every eligible historical post was found.
 
+### Call A
+
+The X search over PushinWeight's private list of tracked companies' official
+accounts and staff, as distinct from the keyword and handle searches.
+
+A post found this way is credited by its author's role: an official account's
+post counts for its brand without a keyword match, while a staff member's post
+counts only after a relevance check. A historical X post backfill freezes those
+author roles when it is planned, so the roles it applies are the ones its
+database held at planning time.
+
+### Dedicated backfill database
+
+The separate database in which X post backfills collect and enrich history, so
+historical work never writes to production.
+
+Its reference data (list memberships, account-brand roles and brand records) is
+not kept current by recurring harvesting, because backfills do not record list
+membership; it holds only what was copied or seeded there. A backfill planned there
+inherits whatever that copy holds, so it must be brought in line with
+production first, and anything seeded for a test must be undone exactly.
+
 ### Backfiller data source
 
 The repeatable process for ingesting available historical and current provider
