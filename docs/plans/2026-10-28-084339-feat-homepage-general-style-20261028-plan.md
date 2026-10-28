@@ -639,3 +639,7 @@ Decisions and deviations made while implementing, for the reviewer and the owner
 
 - `monitor/static/home-v20.css` and `pw-each-chart.css` are unchanged; `pro-general.css` overrides the forced canvas height and flag filter under `body.pw-general`, so `/brands/` and `/internal/` keep their rules.
 - UI assurance: controls `chart_focus`, `focus_brand` and `rail`, two coverage groups, four ordered groups, two invariants and two seeds (5,191 obligations); the new browser tests join the gate's focused list and the touched home browser tests its candidate list.
+
+**Not done before the pull request**
+
+- Candidate performance measurement (Verification table, "before PR"; Exit criteria) did not run. A fixture-backed local preview server is needed. The shared-test-database rule forbids initializing the separate disposable database that earlier runs used, and a long-running preview on the shared database would leave seeded rows behind. The candidate gate on product revision `2b164f6d` therefore ran with `--performance-mode not-required` and recorded `performance_status: not-run`. This is outstanding, not waived and not passed. The PR opens under the owner's LFG grant with this listed first under the items that need owner attention before merge. An owner-approved measurement environment and a candidate run on the final product SHA are still required before release handoff (`.claude/skills/fix-ui/SKILL.md`, step 4).

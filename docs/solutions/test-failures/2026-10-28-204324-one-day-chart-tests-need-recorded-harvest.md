@@ -67,7 +67,7 @@ How the cutoff works (current tree):
 - `monitor/harvest_coverage.py:22` `latest_scheduled_coverage(at)` finds the latest settled scheduled run (`job__source_id="x"`, `purpose="content"`, `operation="x_cycle"`, `mode="recurring"`, with `scheduled_slot_at` set, not `running`, finished within the last day) whose ordinary frozen targets all completed, and returns a dict including `run_id` and `chart_end_at`. It returns `None` when there is no such run.
 - `monitor/views.py:3461-3465` applies it only for `window_days == 1`: `chart_start` is the closed boundary minus one day, and `chart_end` is the coverage `chart_end_at` (never earlier than `chart_start`); with no coverage, `chart_end = chart_start`, an empty range. The payload carries it as `harvest_coverage` (`monitor/views.py:3723`). The dashboard-each path does the same at `monitor/views.py:4169-4177`.
 
-Fix on this branch (pending on `feat/homepage-general-style-20261028`; no PR yet): make every such test record a harvest.
+Fix on branch `feat/homepage-general-style-20261028`: make every such test record a harvest.
 
 1. A module helper in `tests/test_home_v22_browser.py:211`:
 
