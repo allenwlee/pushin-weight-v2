@@ -137,8 +137,10 @@ body.pw-v20.pw-general .pulse-chip .delta { font-size: 11px; font-weight: 650; }
 body.pw-v20.pw-general .pulse-chip .delta.flat { color: var(--muted); }
 body.pw-v20.pw-general .pulse-chip[aria-pressed="true"] { background: var(--tint); border-color: var(--blue); color: var(--blue); }
 body.pw-v20.pw-general .pulse-chip[aria-pressed="true"] .pulse-chip-name { color: var(--blue); }
-body.pw-v20.pw-general .pulse-chip[aria-pressed="true"] .delta.up { color: var(--up); }
+body.pw-v20.pw-general .pulse-chip[aria-pressed="true"] .delta.up,
+body.pw-v20.pw-general .pulse-chip[aria-pressed="true"] .delta.new { color: var(--up); }
 body.pw-v20.pw-general .pulse-chip[aria-pressed="true"] .delta.down { color: var(--down); }
+body.pw-v20.pw-general .pulse-chip[aria-pressed="true"] .delta.flat { color: var(--muted); }
 
 /* filters */
 body.pw-v20.pw-general .filter-bar { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 0 2px; background: transparent; border: 0; border-radius: 0; }

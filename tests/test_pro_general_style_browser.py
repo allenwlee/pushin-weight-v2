@@ -205,6 +205,16 @@ class ProGeneralStyleBrowserTests(StaticLiveServerTestCase):
                     self.assertIn("drop-shadow", flag["filter"])
                     self.assertTrue(flag["transform"].startswith("matrix(0.844"), flag)
 
+                # A selected trending chip keeps every delta readable on its tint.
+                for kind, color in (("new", "rgb(10, 138, 92)"), ("flat", "rgb(104, 117, 137)")):
+                    chip = page.locator(f'[data-pw-pulse-entry]:has(.delta.{kind})').first
+                    with page.expect_response(lambda response: "/chart.html?" in response.url):
+                        chip.click()
+                    self.assertEqual(chip.get_attribute("aria-pressed"), "true")
+                    self.assertEqual(chip.locator(".delta").evaluate("node => getComputedStyle(node).color"), color)
+                    with page.expect_response(lambda response: "/chart.html?" in response.url):
+                        chip.click()
+
                 # Sentiment: an option without a glyph keeps the 16px glyph space.
                 sentiment = page.locator('.filter-pill[data-group="sentiment"]')
                 sentiment.locator(".title").click()
