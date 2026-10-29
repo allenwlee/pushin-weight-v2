@@ -10170,6 +10170,213 @@ MetricObservation = CollectionObservation
 
 
 # Event Dossier research foundation. Collection and measurement storage stay shared.
+class EventDossierIntakeDecision(models.Model):
+    """An evidenced disposition, including when a candidate has no product name."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_dossier = models.ForeignKey(
+        "EventDossier", on_delete=models.PROTECT, related_name="intake_decisions"
+    )
+    supporting_claim = models.ForeignKey(
+        "EventDossierClaim", on_delete=models.PROTECT, related_name="intake_decisions"
+    )
+    recorded_at = models.DateTimeField(default=timezone.now)
+    outcome = models.CharField(max_length=16)
+    actor = models.TextField()
+    method_version = models.TextField()
+    reason = models.TextField()
+    input_hash = models.CharField(max_length=64)
+
+    class Meta:
+        db_table = "event_dossier_intake_decisions"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["event_dossier", "input_hash"], name="uq_ed_intake_input"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    outcome__in=["pending", "non_release", "scam", "superseded"]
+                ),
+                name="ck_ed_intake_outcome",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(input_hash__regex=r"^[0-9a-f]{64}$"),
+                name="ck_ed_intake_hash",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(actor="")
+                & ~models.Q(method_version="")
+                & ~models.Q(reason=""),
+                name="ck_ed_intake_text",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["event_dossier", "-recorded_at"], name="idx_ed_intake_latest"
+            )
+        ]
+
+
+class DiscussionWindowSnapshot(models.Model):
+    """A reusable calculation over stored discussion; not a provider observation."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    subject = models.ForeignKey(
+        MeasurementSubject, on_delete=models.PROTECT, related_name="discussion_windows"
+    )
+    window_start = models.DateTimeField()
+    window_end = models.DateTimeField()
+    observed_at = models.DateTimeField(default=timezone.now)
+    knowledge_cutoff_at = models.DateTimeField()
+    method_version = models.CharField(max_length=64)
+    history_policy = models.CharField(max_length=24)
+    input_hash = models.CharField(max_length=64)
+    post_count = models.PositiveIntegerField()
+    account_count = models.PositiveIntegerField()
+    count_rows = models.PositiveIntegerField()
+    coverage = models.CharField(max_length=24, default="stored_only")
+    coverage_note = models.TextField()
+
+    class Meta:
+        db_table = "discussion_window_snapshots"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "subject",
+                    "window_start",
+                    "window_end",
+                    "method_version",
+                    "history_policy",
+                    "input_hash",
+                ],
+                name="uq_discussion_window_input",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(window_end__gt=models.F("window_start")),
+                name="ck_discussion_window_order",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(account_count__lte=models.F("post_count")),
+                name="ck_discussion_accounts",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(knowledge_cutoff_at__lte=models.F("observed_at")),
+                name="ck_discussion_cutoff",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(input_hash__regex=r"^[0-9a-f]{64}$"),
+                name="ck_discussion_hash",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    history_policy__in=["current_definition", "historical_inclusive"]
+                ),
+                name="ck_discussion_policy",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(coverage__in=["stored_only", "no_stored_posts"])
+                & ~models.Q(coverage_note="")
+                & ~models.Q(method_version=""),
+                name="ck_discussion_coverage",
+            ),
+        ]
+
+
+class DiscussionWindowCount(models.Model):
+    """One historical category count with its own population and denominator."""
+
+    id = models.BigAutoField(primary_key=True)
+    snapshot = models.ForeignKey(
+        DiscussionWindowSnapshot, on_delete=models.PROTECT, related_name="counts"
+    )
+    population = models.CharField(max_length=16)
+    dimension = models.CharField(max_length=24)
+    definition = models.CharField(max_length=128)
+    category = models.CharField(max_length=160)
+    count = models.PositiveIntegerField()
+    denominator = models.PositiveIntegerField()
+
+    class Meta:
+        db_table = "discussion_window_counts"
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "snapshot",
+                    "population",
+                    "dimension",
+                    "definition",
+                    "category",
+                ],
+                name="uq_discussion_category",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(count__lte=models.F("denominator")),
+                name="ck_discussion_denominator",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    population__in=["all", "exact", "legacy", "excluded"]
+                ),
+                name="ck_discussion_population",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    dimension__in=[
+                        "volume",
+                        "language",
+                        "sentiment",
+                        "post_type",
+                        "audience",
+                        "geopolitics",
+                        "classification",
+                    ]
+                ),
+                name="ck_discussion_dimension",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(definition="") & ~models.Q(category=""),
+                name="ck_discussion_category_text",
+            ),
+        ]
+
+
+class EventDossierDiscussionWindow(models.Model):
+    """A dossier's use of a shared calculation, pinned to a dated source claim."""
+
+    id = models.BigAutoField(primary_key=True)
+    event_dossier = models.ForeignKey(
+        "EventDossier", on_delete=models.PROTECT, related_name="discussion_windows"
+    )
+    anchor_claim = models.ForeignKey(
+        "EventDossierClaim", on_delete=models.PROTECT, related_name="discussion_windows"
+    )
+    review = models.ForeignKey(
+        "EventDossierReview",
+        null=True,
+        on_delete=models.PROTECT,
+        related_name="discussion_windows",
+    )
+    snapshot = models.ForeignKey(
+        DiscussionWindowSnapshot, on_delete=models.PROTECT, related_name="dossier_uses"
+    )
+    role = models.CharField(max_length=16)
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "event_dossier_discussion_windows"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["event_dossier", "anchor_claim", "snapshot", "role", "review"],
+                nulls_distinct=False,
+                name="uq_ed_discussion_use",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(role__in=["before", "after", "context"]),
+                name="ck_ed_discussion_role",
+            ),
+        ]
+
+
 class EventDossier(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event_kind_reference = models.ForeignKey(

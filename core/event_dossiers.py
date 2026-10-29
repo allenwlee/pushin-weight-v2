@@ -123,8 +123,10 @@ def _insert(row):
 
 
 @transaction.atomic
-def create_dossier(*, event_kind: str, identity_key: str) -> EventDossier:
+def create_dossier(*, event_kind: str, identity_key: str, first_seen_at=None) -> EventDossier:
     now = timezone.now()
+    first_seen_at = first_seen_at or now
+    _aware(first_seen_at)
     try:
         kind = EventKind.objects.get(code=event_kind)
     except EventKind.DoesNotExist as error:
@@ -133,8 +135,8 @@ def create_dossier(*, event_kind: str, identity_key: str) -> EventDossier:
         identity_key=identity_key,
         defaults={
             "event_kind_reference": kind,
-            "first_seen_at": now,
-            "last_seen_at": now,
+            "first_seen_at": first_seen_at,
+            "last_seen_at": first_seen_at,
         },
     )
     if row.event_kind_reference_id != kind.pk:
@@ -159,12 +161,13 @@ def attach_source(
             post_id, observation_id = observation.post_id, None
     if post_id is not None:
         Post.objects.get(pk=post_id)
-    row, _ = EventDossierSource.objects.get_or_create(
+    row, created = EventDossierSource.objects.get_or_create(
         event_dossier=event,
         post_id=post_id,
         collection_observation_id=observation_id,
     )
-    EventDossier.objects.filter(pk=event.pk).update(last_seen_at=timezone.now())
+    if created:
+        EventDossier.objects.filter(pk=event.pk).update(last_seen_at=timezone.now())
     return row
 
 
@@ -187,6 +190,10 @@ def add_claim(
     effective_month: int | None = None,
     not_before: datetime | None = None,
     not_after: datetime | None = None,
+    reported_brand_id: str | None = None,
+    reported_candidate_id: int | None = None,
+    source_archive_id=None,
+    release_maturity_id=None,
 ) -> EventDossierClaim:
     source = EventDossierSource.objects.get(pk=source_id)
     try:
@@ -234,6 +241,17 @@ def add_claim(
     }
     if access_channel is not None:
         values["access_channel"] = access_channel
+    if reported_brand_id is not None and reported_candidate_id is not None:
+        raise ValueError("A claim cannot report two owners")
+    # Omit absent optional references to preserve established claim hashes.
+    if reported_brand_id is not None:
+        values["reported_brand_id"] = reported_brand_id
+    if reported_candidate_id is not None:
+        values["reported_brand_discovery_candidate_id"] = reported_candidate_id
+    if source_archive_id is not None:
+        values["source_archive_id"] = source_archive_id
+    if release_maturity_id is not None:
+        values["release_maturity_reference_id"] = release_maturity_id
     claim_hash = _digest(["event-dossier-claim-v1", values])
     # Serialize claims for this dossier as well as its source attachments/reviews.
     event = EventDossier.objects.select_for_update().get(pk=source.event_dossier_id)

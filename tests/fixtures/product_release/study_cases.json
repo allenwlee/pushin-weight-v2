@@ -1,0 +1,711 @@
+{
+  "schema": "product-release-study/v1",
+  "selection_frozen_at": "2026-10-29",
+  "source_inventory_sha256": "1393a1dd33bd93c563a5950a21d5fc88e622d1ff826cda238884f6204aca3758",
+  "method": "Session analysis; nominations are not verified ground truth. Keep held-aside identities out of rule tuning; assess against retained sources before scoring.",
+  "cases": [
+    {
+      "name": "DeepSeek V4 Pro / 0813",
+      "brand_id": "deepseek",
+      "aliases": [
+        "DeepSeek-V4-Pro-0813"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-fd0fbf76fb0e05a984",
+          "event_date": "2026-08-13",
+          "milestone_kind": "general_availability",
+          "source_url": "https://api-docs.deepseek.com/news/news260813",
+          "evidence_status": "confirmed_primary"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "general",
+      "assessment": "needs_source_review",
+      "case_id": "PR01",
+      "split": "development",
+      "source_post_ids": [
+        "2087561979586089415",
+        "2087562384596725774",
+        "2087562906930126933",
+        "2087563032444776703",
+        "2087563310300545054",
+        "2087563377367474674",
+        "2087563763230867916",
+        "2087564065522794791"
+      ]
+    },
+    {
+      "name": "GLM / 5.3",
+      "brand_id": "glm",
+      "aliases": [
+        "GLM-5.3"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-d9e1b7b50d4f27214d",
+          "event_date": "2026-08-14",
+          "milestone_kind": "api_launch",
+          "source_url": "https://z.ai/blog/glm-5.3",
+          "evidence_status": "confirmed_primary"
+        },
+        {
+          "event_id": "e-837d349f602da9be5f",
+          "event_date": "2026-08-27T17:16:19Z",
+          "milestone_kind": "weight_revision",
+          "source_url": "https://huggingface.co/zai-org/GLM-5.3/commit/7cda81930d6e4cef42f48555de830aa32ecdde28",
+          "evidence_status": "artifact_dated"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "general",
+      "assessment": "needs_source_review",
+      "case_id": "PR02",
+      "split": "development",
+      "source_post_ids": [
+        "2084007906182148531",
+        "2084193951595266255",
+        "2084203418638221476",
+        "2084203811527336330",
+        "2084210420894613756",
+        "2084214879284535522",
+        "2084217162252620099",
+        "2084218834278600891"
+      ]
+    },
+    {
+      "name": "Qwen3.8 27B / 3.8",
+      "brand_id": "qwen",
+      "aliases": [
+        "Qwen3.8-27B"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-9993a182abef8d77ec",
+          "event_date": "2026-08-14",
+          "milestone_kind": "weights_launch",
+          "source_url": "https://github.com/QwenLM/Qwen3.8#news",
+          "evidence_status": "confirmed_primary"
+        },
+        {
+          "event_id": "e-8a89799683a7c51d8f",
+          "event_date": "2026-08-17",
+          "milestone_kind": "api_listing",
+          "source_url": "https://www.alibabacloud.com/help/en/model-studio/newly-released-models",
+          "evidence_status": "confirmed_primary_platform"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "general",
+      "assessment": "needs_source_review",
+      "case_id": "PR03",
+      "split": "held_aside",
+      "source_post_ids": [
+        "2083418023764148650",
+        "2084100707423289643",
+        "2084103942141780361",
+        "2084104846337339837",
+        "2084105121248809053",
+        "2084105594622112053",
+        "2084105619192381904",
+        "2084105866878550095"
+      ]
+    },
+    {
+      "name": "GLM Flash / 5.3",
+      "brand_id": "glm",
+      "aliases": [
+        "GLM-5.3-Flash"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-1b33f0c037d52b2124",
+          "event_date": "2026-08-20",
+          "milestone_kind": "anonymous_public_test",
+          "source_url": "https://openrouter.ai/stealth/ox-alpha",
+          "evidence_status": "confirmed_primary"
+        },
+        {
+          "event_id": "e-327a4ef585fd34378e",
+          "event_date": "2026-08-26",
+          "milestone_kind": "named_launch_identity_reveal",
+          "source_url": "https://z.ai/blog/glm-5.3-flash",
+          "evidence_status": "confirmed_primary"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "general",
+      "assessment": "needs_source_review",
+      "case_id": "PR04",
+      "split": "development",
+      "source_post_ids": [
+        "2090807234351550937",
+        "2090814096182591662",
+        "2090814710396387700",
+        "2090821143972164061",
+        "2090821483664691309",
+        "2090822529807970486",
+        "2090826960767484181",
+        "2090829113682731035"
+      ]
+    },
+    {
+      "name": "Tencent Hy4 Preview / 4",
+      "brand_id": "hunyuan",
+      "aliases": [
+        "Hy4-Preview",
+        "Tencent-Hy4-Preview"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-12aead62393d75cf61",
+          "event_date": "2026-08-28",
+          "milestone_kind": "weights_and_api_preview",
+          "source_url": "https://www.tencent.com/tencent-releases-and-open-sources-tencent-hy4-preview/",
+          "evidence_status": "confirmed_primary"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "general",
+      "assessment": "needs_source_review",
+      "case_id": "PR05",
+      "split": "development",
+      "source_post_ids": [
+        "2089741824932127046",
+        "2093221051862061290",
+        "2093222928720761009",
+        "2093223506435780994",
+        "2093224066110931262",
+        "2093224419607150983",
+        "2093224605238342028",
+        "2093224873934139421"
+      ]
+    },
+    {
+      "name": "Muse Spark / 1.3",
+      "brand_id": "llama",
+      "aliases": [
+        "Muse-Spark-1.3"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-ddd836cc6161dc3d80",
+          "event_date": "2026-09-02",
+          "milestone_kind": "api_product_launch",
+          "source_url": "https://research.meta.ai/blog/introducing-muse-spark-1-3",
+          "evidence_status": "confirmed_primary"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "general",
+      "assessment": "needs_source_review",
+      "case_id": "PR06",
+      "split": "held_aside",
+      "source_post_ids": []
+    },
+    {
+      "name": "DeepSeek V4.1 Flash / 4.1",
+      "brand_id": "deepseek",
+      "aliases": [
+        "DeepSeek-V4.1-Flash"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-f50a14a6b2dd768703",
+          "event_date": "2026-09-10",
+          "milestone_kind": "api_launch",
+          "source_url": "https://api-docs.deepseek.com/news/news260910",
+          "evidence_status": "confirmed_primary"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "general",
+      "assessment": "needs_source_review",
+      "case_id": "PR07",
+      "split": "development",
+      "source_post_ids": [
+        "2097224301611299011",
+        "2097225298400235528",
+        "2097225590281834927",
+        "2097228716183372164",
+        "2097229032819691627",
+        "2097229145067659646",
+        "2097229610224365806",
+        "2097229728398619037"
+      ]
+    },
+    {
+      "name": "Step 5 Preview / 5",
+      "brand_id": "stepfun",
+      "aliases": [
+        "Step-5-Preview"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-16ca7a83dcc1c2e3d7",
+          "event_date": "2026-09-20T03:15:13Z",
+          "milestone_kind": "api_product_preview",
+          "source_url": "https://x.com/StepFun_ai/status/2101510462685003786",
+          "evidence_status": "confirmed_stored_primary"
+        },
+        {
+          "event_id": "e-57fc0e29a279bc21e7",
+          "event_date": "2026-10-08T13:08:33Z",
+          "milestone_kind": "community_platform_rollout",
+          "source_url": "https://x.com/StepFun_ai/status/2108182763002278158",
+          "evidence_status": "confirmed_stored_primary"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "general",
+      "assessment": "needs_source_review",
+      "case_id": "PR08",
+      "split": "development",
+      "source_post_ids": [
+        "2101184381457179105",
+        "2101219311440572873",
+        "2101233859400536462",
+        "2101345310035390466",
+        "2101463954740719636",
+        "2101494634094403655",
+        "2101495293493841992",
+        "2101508416409899015"
+      ]
+    },
+    {
+      "name": "MiMo V2.6 / 2.6",
+      "brand_id": "mimo",
+      "aliases": [
+        "MiMo-V2.6",
+        "MiMo-V2.6-Pro",
+        "MiMo-V2.6-Flash"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-9b0871753b8d7f99fe",
+          "event_date": "2026-09-22",
+          "milestone_kind": "weights_and_api_launch",
+          "source_url": "https://mimo.xiaomi.com/mimo-v2-6",
+          "evidence_status": "confirmed_primary"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "general",
+      "assessment": "needs_source_review",
+      "case_id": "PR09",
+      "split": "held_aside",
+      "source_post_ids": [
+        "2108567482755952822"
+      ]
+    },
+    {
+      "name": "Mistral Large / 4",
+      "brand_id": "mistral",
+      "aliases": [
+        "Mistral-Large-4"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-31a89ec69e91f6f932",
+          "event_date": "2026-10-06",
+          "milestone_kind": "api_public_preview",
+          "source_url": "https://mistral.ai/news/mistral-large-4/",
+          "evidence_status": "confirmed_primary"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "general",
+      "assessment": "needs_source_review",
+      "case_id": "PR10",
+      "split": "development",
+      "source_post_ids": [
+        "2107576765682217204",
+        "2107617243307893065",
+        "2107788198734602670",
+        "2107841842947719351",
+        "2108029142117798318",
+        "2108553314598375930",
+        "2112805051546714588"
+      ]
+    },
+    {
+      "name": "DeepSeek-V4.1-Flash-1017",
+      "brand_id": "deepseek",
+      "aliases": [
+        "DeepSeek-V4.1-Flash-1017"
+      ],
+      "origin": "October26 primary-source audit",
+      "milestones": [
+        {
+          "event_date": "2026-10-17",
+          "milestone_kind": "identifiable_revision",
+          "source_url": "https://api-docs.deepseek.com/updates/",
+          "evidence_status": "primary_source_checked"
+        }
+      ],
+      "bucket": "general",
+      "assessment": "needs_source_review",
+      "case_id": "PR11",
+      "split": "development",
+      "source_post_ids": [
+        "2111295736411300047",
+        "2111305523983487363",
+        "2111306103984398731",
+        "2111308890524794987",
+        "2111309023177850911",
+        "2111312088593486277",
+        "2111313823219290374",
+        "2111315904298709322"
+      ]
+    },
+    {
+      "name": "Kimi-K3.1-Pro",
+      "brand_id": "moonshot_kimi",
+      "aliases": [
+        "Kimi-K3.1-Pro",
+        "K3.1-Pro"
+      ],
+      "origin": "October26 primary-source audit",
+      "milestones": [
+        {
+          "event_date": "2026-10-23",
+          "milestone_kind": "named_release",
+          "source_url": "https://www.kimi.com/code/docs/en/kimi-code/whats-new.html",
+          "evidence_status": "primary_source_checked"
+        }
+      ],
+      "bucket": "general",
+      "assessment": "needs_source_review",
+      "case_id": "PR12",
+      "split": "held_aside",
+      "source_post_ids": [
+        "2113702469763309839",
+        "2113766416528867620",
+        "2113865756337156329",
+        "2113901264375521444",
+        "2113949893996019919",
+        "2114129210008813955",
+        "2114189072184840200",
+        "2114217873753387069"
+      ]
+    },
+    {
+      "name": "MiniMax Music / 3.0",
+      "brand_id": "minimax",
+      "aliases": [
+        "MiniMax-Music-3.0",
+        "Music-3.0"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-c163e7fca4de535da5",
+          "event_date": "2026-08-13",
+          "milestone_kind": "weights_launch",
+          "source_url": "https://www.minimax.io/blog/minimax-music-3-0-next-generation-open-weights-production-ready-versatile-music-model",
+          "evidence_status": "confirmed_primary"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "specialist",
+      "assessment": "needs_source_review",
+      "case_id": "PR13",
+      "split": "development",
+      "source_post_ids": []
+    },
+    {
+      "name": "StepAudio / 3",
+      "brand_id": "stepfun",
+      "aliases": [
+        "StepAudio-3",
+        "Step-Audio-3"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-c55e2c1a54970ced0c",
+          "event_date": "2026-09-15",
+          "milestone_kind": "named_launch",
+          "source_url": "https://www.stepfun.com/news",
+          "evidence_status": "confirmed_primary_indexed"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "specialist",
+      "assessment": "needs_source_review",
+      "case_id": "PR14",
+      "split": "development",
+      "source_post_ids": []
+    },
+    {
+      "name": "Qwen3.8 Omni Flash / 3.8",
+      "brand_id": "qwen",
+      "aliases": [
+        "Qwen3.8-Omni-Flash"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-ac763c486a7492a9db",
+          "event_date": "2026-09-17",
+          "milestone_kind": "api_listing",
+          "source_url": "https://www.alibabacloud.com/help/en/model-studio/newly-released-models",
+          "evidence_status": "confirmed_primary_platform"
+        },
+        {
+          "event_id": "e-8371fa8ca5ab57e174",
+          "event_date": "2026-09-18",
+          "milestone_kind": "named_launch",
+          "source_url": "https://qwen.ai/blog?id=qwen3.8-omni-flash",
+          "evidence_status": "confirmed_primary"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "specialist",
+      "assessment": "needs_source_review",
+      "case_id": "PR15",
+      "split": "development",
+      "source_post_ids": []
+    },
+    {
+      "name": "Qwen Image / 2.1",
+      "brand_id": "qwen",
+      "aliases": [
+        "Qwen-Image-2.1"
+      ],
+      "milestones": [
+        {
+          "event_id": "e-53a5616f66d95fd680",
+          "event_date": "2026-09-20",
+          "milestone_kind": "weights_launch",
+          "source_url": "https://github.com/QwenLM/Qwen-Image-2.1#news",
+          "evidence_status": "confirmed_primary"
+        }
+      ],
+      "origin": "October12 research inventory",
+      "bucket": "specialist",
+      "assessment": "needs_source_review",
+      "case_id": "PR16",
+      "split": "held_aside",
+      "source_post_ids": [
+        "2100592805043425704",
+        "2100596581795844413",
+        "2100603161580831012",
+        "2100614692192350716",
+        "2100623393234059311",
+        "2100646573986418885",
+        "2100649780468981887",
+        "2100657352068243792"
+      ]
+    },
+    {
+      "name": "Voxtral TTS 3",
+      "brand_id": "mistral",
+      "aliases": [
+        "Voxtral TTS 3",
+        "voxtral-mini-tts-3-0"
+      ],
+      "origin": "October26 primary-source audit",
+      "milestones": [
+        {
+          "event_date": "2026-10-20",
+          "milestone_kind": "api_public_preview",
+          "source_url": "https://docs.mistral.ai/resources/changelogs",
+          "evidence_status": "primary_source_checked"
+        }
+      ],
+      "bucket": "specialist",
+      "assessment": "needs_source_review",
+      "case_id": "PR17",
+      "split": "development",
+      "source_post_ids": []
+    },
+    {
+      "name": "Mistral OCR 4.1",
+      "brand_id": "mistral",
+      "aliases": [
+        "Mistral-OCR-4.1",
+        "OCR-4.1"
+      ],
+      "origin": "October26 primary-source audit",
+      "milestones": [
+        {
+          "event_date": "2026-08-31",
+          "milestone_kind": "general_availability",
+          "source_url": "https://docs.mistral.ai/resources/changelogs",
+          "evidence_status": "primary_source_checked"
+        }
+      ],
+      "bucket": "specialist",
+      "assessment": "needs_source_review",
+      "case_id": "PR18",
+      "split": "held_aside",
+      "source_post_ids": []
+    },
+    {
+      "name": "Hermes Agent",
+      "bucket": "agent",
+      "source_post_ids": [
+        "2108875810547360003"
+      ],
+      "source_urls": [],
+      "assessment": "needs_source_review",
+      "case_id": "PR19",
+      "split": "development"
+    },
+    {
+      "name": "DeepSeek Harness Desktop",
+      "bucket": "agent",
+      "source_post_ids": [
+        "2107331767057424567"
+      ],
+      "source_urls": [],
+      "assessment": "needs_source_review",
+      "case_id": "PR20",
+      "split": "development"
+    },
+    {
+      "name": "Agents API",
+      "bucket": "agent",
+      "source_post_ids": [
+        "2104998997660475405"
+      ],
+      "source_urls": [],
+      "assessment": "needs_source_review",
+      "case_id": "PR21",
+      "split": "held_aside"
+    },
+    {
+      "name": "Copilot Studio Agent",
+      "bucket": "agent",
+      "source_post_ids": [
+        "2112164426053017749"
+      ],
+      "source_urls": [],
+      "assessment": "needs_source_review",
+      "case_id": "PR22",
+      "split": "development"
+    },
+    {
+      "name": "OpenZero Fusion Qwen3-4B Agentic",
+      "bucket": "derivative",
+      "source_post_ids": [
+        "2086799733142462634"
+      ],
+      "source_urls": [
+        "https://huggingface.co/shafire/OpenZero-Fusion-Qwen3-4B-Agentic-GGUF"
+      ],
+      "assessment": "needs_source_review",
+      "case_id": "PR23",
+      "split": "development"
+    },
+    {
+      "name": "DeepSeek V4 Flash MXFP4 GGUF by antirez",
+      "bucket": "derivative",
+      "source_post_ids": [
+        "2083465907943186847"
+      ],
+      "source_urls": [],
+      "assessment": "needs_source_review",
+      "case_id": "PR24",
+      "split": "development"
+    },
+    {
+      "name": "GLM-5.3-Flash-DFlash2 by incoai",
+      "bucket": "derivative",
+      "source_post_ids": [],
+      "source_urls": [
+        "https://huggingface.co/incoai/GLM-5.3-Flash-DFlash2"
+      ],
+      "assessment": "needs_source_review",
+      "case_id": "PR25",
+      "split": "held_aside"
+    },
+    {
+      "name": "NeuralDaredevil-8B-abliterated",
+      "bucket": "derivative",
+      "source_post_ids": [],
+      "source_urls": [
+        "https://huggingface.co/mlabonne/NeuralDaredevil-8B-abliterated"
+      ],
+      "assessment": "needs_source_review",
+      "case_id": "PR26",
+      "split": "development"
+    },
+    {
+      "name": "Nanbeige4.3-33B",
+      "bucket": "undercovered",
+      "source_post_ids": [
+        "2114357063535259719"
+      ],
+      "source_urls": [
+        "https://huggingface.co/Nanbeige/Nanbeige4.3-33B"
+      ],
+      "assessment": "needs_source_review",
+      "case_id": "PR27",
+      "split": "development"
+    },
+    {
+      "name": "Giotto Alto",
+      "bucket": "undercovered",
+      "source_post_ids": [],
+      "source_urls": [
+        "https://cloud.giotto.ai"
+      ],
+      "assessment": "needs_source_review",
+      "case_id": "PR28",
+      "split": "held_aside"
+    },
+    {
+      "name": "Giotto Solo",
+      "bucket": "undercovered",
+      "source_post_ids": [],
+      "source_urls": [
+        "https://cloud.giotto.ai"
+      ],
+      "assessment": "needs_source_review",
+      "case_id": "PR29",
+      "split": "development"
+    },
+    {
+      "name": "Altar-1",
+      "bucket": "undercovered",
+      "source_post_ids": [],
+      "source_urls": [
+        "https://huggingface.co/AikidoSec/altar-1"
+      ],
+      "assessment": "needs_source_review",
+      "case_id": "PR30",
+      "split": "held_aside"
+    }
+  ],
+  "synthetic_controls": [
+    {
+      "id": "NC1",
+      "text": "When will DeepSeek announce the next model?",
+      "expect": "pending_not_confirmed"
+    },
+    {
+      "id": "NC2",
+      "text": "The new release has not happened. This screenshot is a rumor.",
+      "expect": "pending_not_confirmed"
+    },
+    {
+      "id": "NC3",
+      "text": "Announcing a meetup about model evaluation next week.",
+      "expect": "non_release_after_assessment"
+    },
+    {
+      "id": "NC4",
+      "text": "Today we release Qwen-compatible quantized weights from our independent lab.",
+      "expect": "pending_not_qwen_publisher"
+    },
+    {
+      "id": "NC5",
+      "text": "Benchmark score rose 5% this week.",
+      "expect": "no_release_signal"
+    },
+    {
+      "id": "NC6",
+      "text": "We are launching a new model. Download from this unverified mirror.",
+      "expect": "pending_not_confirmed"
+    }
+  ]
+}
