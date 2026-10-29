@@ -110,6 +110,12 @@ def release_rows(dossier_ids):
             {
                 "id": str(link.snapshot_id),
                 "role": link.role,
+                "anchor_claim_id": str(link.anchor_claim_id),
+                "anchor_kind": link.anchor_claim.claim_kind_reference.code,
+                "anchor_value": str(
+                    link.anchor_claim.effective_at or link.anchor_claim.effective_date
+                ),
+                "anchor_precision": link.anchor_claim.effective_precision,
                 "start": link.snapshot.window_start.isoformat(),
                 "end": link.snapshot.window_end.isoformat(),
                 "posts": link.snapshot.post_count,
@@ -120,7 +126,7 @@ def release_rows(dossier_ids):
                 "subject_id": str(link.snapshot.subject_id),
             }
             for link in event.discussion_windows.filter(review=review)
-            .select_related("snapshot")
+            .select_related("snapshot", "anchor_claim__claim_kind_reference")
             .order_by("snapshot__window_start", "pk")
         ]
         result.append(
@@ -206,7 +212,7 @@ def render_report(rows, *, title="Product releases — staging study", notes="")
             for c in row["claims"]
         )
         windows = "".join(
-            f"<li>{escape(w['role'])}: {w['posts']} posts / {w['accounts']} accounts<br><small>{escape(w['start'])} → {escape(w['end'])}; {escape(w['coverage'])}; snapshot {escape(w['id'])}</small></li>"
+            f"<li>{escape(w['role'])} {escape(w.get('anchor_kind', 'unspecified milestone'))}: {w['posts']} posts / {w['accounts']} accounts<br><small>Anchor: {escape(w.get('anchor_value', 'unknown'))} ({escape(w.get('anchor_precision', 'unknown'))}); claim {escape(w.get('anchor_claim_id', 'unknown'))}<br>{escape(w['start'])} → {escape(w['end'])}; {escape(w['coverage'])}; snapshot {escape(w['id'])}</small></li>"
             for w in row["discussion"]
         )
         score = row["score"] if row["score"] is not None else "—"
@@ -220,7 +226,7 @@ def render_report(rows, *, title="Product releases — staging study", notes="")
         ]
         total_text = (
             "<br>".join(
-                f"7d {escape(w['role'])}: {w['posts']:,} posts / {w['accounts']:,} accounts"
+                f"7d {escape(w['role'])} {escape(w.get('anchor_kind', 'unspecified milestone'))}: {w['posts']:,} posts / {w['accounts']:,} accounts"
                 + (
                     " (partial follow-up)"
                     if not w.get("window_elapsed_at_capture", True)

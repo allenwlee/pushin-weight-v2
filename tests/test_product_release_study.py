@@ -151,6 +151,41 @@ def test_study_retains_day_precision_without_inventing_an_hour():
     assert result["cases"][0]["dated_claims"]
 
 
+def test_report_distinguishes_announcement_and_availability_comparisons():
+    from core.discussion_windows import capture_window
+    from core.product_release_report import release_rows, render_report
+
+    value = packet()
+    case = value["cases"][0]
+    case["evidence"].append(dict(case["evidence"][0], kind="availability"))
+    saved = apply_study(value)["cases"][0]
+    post = models.Post.objects.get(pk="study-source")
+    brand = models.Brand.objects.create(nickname="anchor-report")
+    models.PostBrand.objects.create(post=post, brand=brand)
+    snapshot, _ = capture_window(
+        brand.pk, post.created_at, post.created_at + timedelta(days=7)
+    )
+    for claim_id in saved["dated_claims"]:
+        models.EventDossierDiscussionWindow.objects.create(
+            event_dossier_id=saved["dossier_id"],
+            review_id=saved["review_id"],
+            anchor_claim_id=claim_id,
+            snapshot=snapshot,
+            role="after",
+        )
+    rows = release_rows([saved["dossier_id"]])
+    assert {w["anchor_kind"] for w in rows[0]["discussion"]} == {
+        "announcement",
+        "availability",
+    }
+    assert {w["anchor_claim_id"] for w in rows[0]["discussion"]} == set(
+        saved["dated_claims"]
+    )
+    html = render_report(rows)
+    assert "7d after announcement: 1 posts" in html
+    assert "7d after availability: 1 posts" in html
+
+
 def test_future_days_and_research_are_not_presented_as_observed():
     value = packet()
     evidence = value["cases"][0]["evidence"][0]
