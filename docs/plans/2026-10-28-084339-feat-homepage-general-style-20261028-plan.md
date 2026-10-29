@@ -10,7 +10,7 @@ ollija:
   change_id: feat-homepage-general-style-20261028-2026-10-28-084339
   branch: feat/homepage-general-style-20261028
   workflow: plan
-  delivery_target: staging
+  delivery_target: production
   delivery_selected_by_user: true
   delivery_route: staged
   delivery_route_selected_by_user: false
@@ -42,7 +42,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `plan`
-- Delivery target: `staging`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 
 1. Complete implementation and the plan's verification contract.
@@ -53,6 +53,13 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
 6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
 7. Run staging checks. Stop here if they fail.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/homepage-general-style-20261028` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/homepage-general-style-20261028` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -72,6 +79,7 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 - 2026-10-28 owner, during the PR #73 CI watch: "will u push to https://pushinweight-staging-web.onrender.com/?", then "dploy to staging". This adds staging delivery: after PR CI is decided, fast-forward the exact candidate SHA of this branch to `staging` (default staged route, branch transport; `staging` was at base `e5edf737`) and verify that `pushinweight-staging-web` serves that SHA. `delivery_target` is now `staging`, superseding the note above. Merge, production deployment and production data writes (including `apply_homepage_brand_updates --commit`) remain unauthorized. The outstanding candidate performance measurement is not waived.
 
 # Homepage, General and Dashboard in General Style - Plan
+- 2026-10-29 owner, after staging was verified at `1d37cadf`: "deploy". Asked to confirm, the owner chose "Run it first (Recommended)" for the outstanding candidate performance measurement and "Run after deploy (Recommended)" for `apply_homepage_brand_updates --commit`. This adds production delivery on the default staged route: run the candidate performance measurement on the staged product SHA and continue only if it is clean, then fast-forward `main` to that exact SHA (non-forced; `main` was still at base `e5edf737`) and verify that the production services serve it. After production serves it, run `python manage.py apply_homepage_brand_updates` as a dry run, then with `--commit` if the preview changes only Meta's identity and the curated brand colors, and verify the homepage. `delivery_target` is now `production`. Other production data writes and harvester changes remain unauthorized. CI's failures already present at `e5edf737` are not waived; they predate this change and stay red on `main`.
 
 ## Plain-English Summary
 
@@ -661,3 +669,16 @@ Decisions and deviations made while implementing, for the reviewer and the owner
 - Fix: `_one_day_chart_end` in `monitor/views.py` ends both 1-day routes at the last finished five-minute bucket before the staging review clock when `OLLIJA_STAGING_MODE` is on and no scheduled coverage exists. Production, where staging mode is off, still ends at searched coverage, and an unknown coverage still renders no 1-day series (`test_empty_search_is_coverage_and_unknown_is_not_a_zero_count_chart`). The staging test now asserts finished buckets only (the post in the unfinished bucket waits, as production's unsearched tail does). A new test covers `/chart/` and `/dashboard/each/chart/` in en, zh_hans and ja under a receipt clock with later sparse posts.
 - Evidence reuse: the UI assurance candidate gate evidence stays on product revision `2b164f6d`; this change touches only the staging-mode branch, which the gate (staging mode off) does not exercise. Focused tests: 158 passed, 0 skipped, 0 errors.
 - Delivery: the existing staging grant covers the redeploy (fast-forward `staging` to the new branch head after CI is decided, then verify). There are no data writes; the staging login is unchanged.
+
+**Candidate performance measurement (2026-10-29, owner: "Run it first")**
+
+- Product revision measured: `1d37cadf160bd6104ed26f680cb19be3d0247a7d`. The commits after it change only this plan, so the evidence carries over.
+- Environment: the shared local test database, used through `~/.local/bin/pushinweight-test-db pytest`, holding its exclusive lock. No new database was created. An untracked one-off transactional test seeded `tests.v22_support.seed_v22_metadata_regression_orm`, `tests.geolocation_factory.feed_places` (account `000` set to US) and the General feed contract posts. It served them with gunicorn on `127.0.0.1:8763` behind `tests.ui_assurance.local_preview.LocalPreviewServer`, and called Bridgewright's public `performance-run` and `performance-result`. The homepage declaration ran against a development-mode server (unhashed static names, as its cache rule expects), with the preview on 8764. The General declaration ran against production storage behind WhiteNoise (hashed sprite `max-age=315360000, public, immutable`), with the preview on 8792. Teardown flushed the seeded rows; a post-run census found 0 posts, 0 brands and 0 accounts. The harness file was deleted.
+- Data source: `environment`, identity `environment:local-orm-seed:tests.v22_support.seed_v22_metadata_regression_orm+account-geography:v22-metadata-account-000=US+general:tests.general_helpers.general_feed_contract`. Bridgewright installed commit `d0a5279f`, package source `0390f3c4`, runtime `950e4178…`, state home `~/.local/share/bridgewright/homepage-general-style-20261029`.
+- `declaration.local-candidate.json`: **clean** (attempt `2516dfb04db0eb5fc2c6218b`). Desktop Lighthouse LCP 1,760 ms, CLS 0.013, INP 20 ms. Mobile Lighthouse LCP 9,623 ms (web-vitals LCP 1,416 ms), CLS 0.033, INP 36 ms. DOM 2,902 of 6,000. All blocking network, cache and budget assertions passed. Only the non-blocking `lcp-advisory-mobile` (5,000 ms) failed. Stage 1 recorded the same advisory failure at 7,662 ms, on a different revision and environment.
+- `declaration.general-candidate.json`: **clean** (attempt `876e962df3a3324ae2052cd5`). The homepage scenarios match the run above (mobile LCP advisory failed, non-blocking). General desktop: LCP 646 ms, CLS 0, INP 16 ms. General mobile: LCP 1,356 ms, CLS 0.109, INP 12 ms. DOM 427. The immutable sprite cache assertion passed.
+- This closes the outstanding candidate performance measurement: it was run, not waived.
+
+**Production brand data (2026-10-29)**
+
+- A read-only preview of `python manage.py apply_homepage_brand_updates` on production (`pushinweight-web`, at `e5edf737`) reported `brand_changes: []`, `aliases_added: []` and `absent_brands: []`. A read-only shell check found brand `llama` already displayed as `Meta` with `#0089f4`, and HF publisher `meta-models` already linked to company `meta`. The update had already been applied, so `--commit` was not run: there was nothing to change.
