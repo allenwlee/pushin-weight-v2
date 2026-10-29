@@ -87,7 +87,7 @@ def _observed_publisher(source, linked):
         return
     post = models.Post.objects.get(pk=source.post_id)
     if not post.author_handle or not re.search(
-        r"\b(?:we|I)\s+(?:(?:are|am|have|today)\s+)?(?:releas|launch|announc|introduc)|我们.*(?:发布|推出)",
+        r"\b(?:we|I)(?:['’](?:ve|re|m))?\s+(?:(?:are|am|have|today|now)\s+)?(?:releas|launch|announc|introduc|publish)|我们.*(?:发布|推出)",
         post.text or "",
         re.IGNORECASE,
     ):
@@ -200,18 +200,27 @@ def persist_source(source: StoredSource):
             if source.record.fraud
             else "Release signal retained; product identity and publisher require reconciliation"
         )
-        record_intake_decision(
-            dossier_id,
-            claim_id=first_claim.pk,
-            outcome="scam" if source.record.fraud else "pending",
-            actor=METHOD,
-            reason=reason
-            + (
-                "; cautions=" + ",".join(candidate.cautions)
-                if candidate.cautions
-                else ""
-            ),
+        latest = (
+            models.EventDossierIntakeDecision.objects.filter(
+                event_dossier_id=dossier_id
+            )
+            .order_by("-recorded_at", "-pk")
+            .first()
         )
+        # New observations do not silently undo a reviewed exclusion.
+        if not latest or latest.outcome not in {"non_release", "scam"}:
+            record_intake_decision(
+                dossier_id,
+                claim_id=first_claim.pk,
+                outcome="scam" if source.record.fraud else "pending",
+                actor=METHOD,
+                reason=reason
+                + (
+                    "; cautions=" + ",".join(candidate.cautions)
+                    if candidate.cautions
+                    else ""
+                ),
+            )
     return {
         "source": source.record.identity,
         "disposition": candidate.disposition,

@@ -191,7 +191,7 @@ def _calculate(posts, states, projections, history_policy):
     ]
 
 
-def capture_windows(brand_id, windows, *, history_policy="historical_inclusive"):
+def _capture_windows(brand_id, windows, *, history_policy="historical_inclusive"):
     """Read one consistent population and save/reuse several exact windows."""
     if history_policy not in {"current_definition", "historical_inclusive"}:
         raise ValueError(
@@ -269,6 +269,22 @@ def capture_windows(brand_id, windows, *, history_policy="historical_inclusive")
                 )
             result.append((snapshot, created))
         return result
+
+
+def capture_windows(brand_id, windows, *, history_policy="historical_inclusive"):
+    """Serialize same-brand calculations before taking a repeatable snapshot."""
+    if connection.in_atomic_block:
+        raise ValueError("Discussion capture requires its own consistent transaction")
+    key = int(_digest(["discussion-capture", brand_id])[:15], 16)
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_try_advisory_lock(%s)", [key])
+        if not cursor.fetchone()[0]:
+            raise ValueError("Discussion capture for this brand is busy; retry later")
+    try:
+        return _capture_windows(brand_id, windows, history_policy=history_policy)
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_unlock(%s)", [key])
 
 
 def capture_window(brand_id, start, end, *, history_policy="historical_inclusive"):

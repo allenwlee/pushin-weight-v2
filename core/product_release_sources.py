@@ -11,7 +11,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef, Prefetch, Q
 
 from core import models
 from core.collection_capture import observation_object_documents
@@ -225,7 +225,15 @@ def observation_page(window: ReplayWindow, *, clock="publication", after=0, limi
             "resource_snapshot",
             "run__job__source",
         )
-        .prefetch_related("inputs__input_request__archive")
+        .defer("request__archive__body", "legacy_archive__body")
+        .prefetch_related(
+            Prefetch(
+                "inputs",
+                queryset=models.CollectionObservationInput.objects.select_related(
+                    "input_request__archive"
+                ).defer("input_request__archive__body"),
+            )
+        )
         .order_by("pk")[:limit]
     )
     result = []
@@ -289,6 +297,17 @@ def observation_page(window: ReplayWindow, *, clock="publication", after=0, limi
                             raw["tag_name"],
                         )
                     )
+        if isinstance(raw, dict):
+            for field in ("html_url", "web_url"):
+                if isinstance(raw.get(field), str) and raw[field].startswith(
+                    ("https://", "http://")
+                ):
+                    urls.append(
+                        URLReference(
+                            raw[field],
+                            f"collection_observations:{obs.pk}.listing.{field}",
+                        )
+                    )
         if request and request.endpoint_url:
             urls.append(
                 URLReference(
@@ -318,7 +337,7 @@ def observation_page(window: ReplayWindow, *, clock="publication", after=0, limi
                 obs.pk,
                 obs.published_at,
                 obs.observed_at,
-                request.endpoint_url if request else None,
+                urls[0].url if urls else None,
                 basis,
                 tuple(sorted(set(limitations + ["stored_population_only"]))),
             )
