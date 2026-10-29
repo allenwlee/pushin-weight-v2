@@ -718,7 +718,28 @@ flowchart TB
   - Step 7, launch: Render one-off `job-dbh78kd9el5s73cvjm7g` on `crn-d9gv94o4n6ts739tqaug` at 2026-10-28T22:16:49Z.
     - Arguments: `--phase all --execute --evaluate-at-end --collection-concurrency 20 --collection-starts-per-second 20 --enrichment-concurrency 32`.
     - Test CollectionJob `dd6a88f2-c98f-4efa-b33b-22af3a5208f2` (`oai-anthropic-size-20261027/1`).
-  - Step 10, production continuity: at 22:19:57Z production's newest saved post was 4 minutes old, with 239 saved in the past 30 minutes (`production-continuity-1.txt`).
+  - Step 8, collection (`collection-phase-summary.txt`, `run-20261027.events.json`, `monitor.log`):
+    - `verify_collection_window` returned verified at 2026-10-29T01:06:43Z, 2 h 49 m after start: 1,296 of 1,296 units, 24,044 posts, no failures, 38 runs.
+    - 4,614 TwitterAPI requests (limit 7,000), every one HTTP 200; no scope errors, transient failures or retries by the retry policy.
+    - 691 of the 4,614 were paid re-fetches: the response arrived as a run ended, so its page did not commit and the next run fetched it again (`lost_responses` in `monitor/backfill_staging.py`). Production's cycle has no such boundary, so the 3,923 committed pages are the production-shaped count.
+    - TwitterAPI on-demand balance 16,531,104 → 15,778,599 at 01:15:36Z: 752,505 credits ($7.53), inside the report's 629,940–837,240 receipt range (`balance-after-collection.json`).
+    - Collection-time staff relevance checks: 28 model requests, $0.00056.
+  - Step 8, enrichment: started 01:07Z. The R24 watch runs every 15 minutes (`watch/`). At 01:27Z: 404 posts classified, $0.000323 provider-reported per classified post, trigger not met. Throughput is about 1,400 posts per hour.
+  - Step 10, production continuity: at 22:19:57Z production's newest saved post was 4 minutes old, with 239 saved in the past 30 minutes (`production-continuity-1.txt`). At 01:16:30Z it was 22 seconds old, with 237 in 30 minutes (`production-continuity-2.txt`).
+  - U8 inputs read so far:
+    - production window and Pacific day (`production.json`): 3,223 window posts from the 8 searches, 15,207 for the day, RARE_EXTRA 9 and 47;
+    - R22 production daily figures, read-only for UTC day 2026-10-28 (96 of 96 scheduled runs; `production-daily-*.txt`):
+      - saved posts: 15,499 (15,395 from the 8 searches);
+      - search credits for the 8 searches: 321,585–356,175, from 21,422 results over 768 units and 2,323 page requests (zero-result pages are not stored per page);
+      - RARE_EXTRA and special-events searches: 27,330 estimated credits, on their own budget;
+      - engagement refresh: 15,596 posts refreshed, 233,940 credits;
+      - quote tweets: 0 credits, because no cycle code calls `monitor/quote_tweets.py`;
+      - classification: production's scheduled classifier records no per-call cost, and `original_content_calls` on 10-28 holds only editorial calls. The report uses the owner's $4 a day reference. The DeepInfra account's month-to-date bill rose $14.19 between 2026-10-28T07:04Z and 2026-10-29T01:26Z (`deepinfra-usage-20261029.txt`), but that covers every workload on the account;
+      - production's classifier and the backfill share `classify_batch_pragmatics_full` with 20-post batches (`x_monitor/attribution.py:1198`, `monitor/cycle.py:4528`), so the test's per-post rate applies to production's added posts;
+      - database growth: first reading 17,191,130,815 bytes at 01:27:55Z (`production-size-1.txt`); the second is read when the report is written.
+  - U8 report fixes found while preparing the inputs (both with regression tests):
+    - `3eab0f2f`: production's 8 searches leave `posts.source_query_id` empty, and only discovery lanes set it (`monitor/cycle.py:3705`). The report summed named routes, so the production share was 0 of 0 and the report could not run against production.
+    - `5c8cd3ee`: `load_document` rescanned the raw one-line `render psql -o json` output, which is quadratic. The 36 MB input took more than 5 minutes; it now takes 0.3 seconds.
   - One-off environment: production's rare-types variables (`e5edf737`) name a special-events assessment that source `47f8b721` lacks. The one-offs replace them with this revision's own `render.yaml` harvest values: the 2026-09-24 assessment, with targeted extraction on.
     - RARE_EXTRA still does not run, because the window's `call_ids` exclude it.
     - The run job also drops the scheduled and legacy TwitterAPI keys and the TypeSafe key.
