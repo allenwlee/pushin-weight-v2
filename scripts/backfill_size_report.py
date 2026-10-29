@@ -244,7 +244,6 @@ def _find_document(value: Any, expected_format: str, depth: int = 0) -> dict | N
 
 def load_document(text: str, expected_format: str) -> dict:
     """Find the report document in Render CLI output (JSON, CSV or plain text)."""
-    texts = [text]
     try:
         parsed = json.loads(text)
     except ValueError:
@@ -253,8 +252,16 @@ def load_document(text: str, expected_format: str) -> dict:
     if found is not None:
         return found
     # `render psql -o json` wraps psql's aligned table text in {"output": "..."}.
-    if isinstance(parsed, dict):
-        texts.extend(value for value in parsed.values() if isinstance(value, str))
+    # Scan only the strings inside parsed JSON. The raw JSON text is one long line
+    # that names the format too, and retrying every "{" in it is quadratic.
+    if parsed is None:
+        texts = [text]
+    elif isinstance(parsed, dict):
+        texts = [value for value in parsed.values() if isinstance(value, str)]
+    elif isinstance(parsed, list):
+        texts = [value for value in parsed if isinstance(value, str)]
+    else:
+        texts = [parsed] if isinstance(parsed, str) else []
     decoder = json.JSONDecoder()
     for line in (line for candidate in texts for line in candidate.splitlines()):
         if expected_format not in line:

@@ -472,3 +472,23 @@ def test_load_document_reads_render_psql_json_wrapper():
     aligned = f"BEGIN\n    doc    \n-----------\n {body}\n(1 row)\n\nROLLBACK\n"
     wrapped = _json.dumps({"output": aligned}, indent=2)
     assert load_document(wrapped, "probe-format/v1") == doc
+
+
+def test_load_document_scans_render_output_once_not_its_raw_json_line(monkeypatch):
+    """The real `render psql -o json` file is one line (2026-10-29: 36 MB for the size test).
+
+    Rescanning that raw line retried every "{" and took minutes; the document must
+    come from the psql text inside it, in a handful of decode attempts.
+    """
+    rows = [{"id": str(n), "empty": "", "nested": {"k": [{}]}} for n in range(2_000)]
+    doc = {"format": "probe-format/v1", "rows": rows}
+    aligned = f"BEGIN\n    doc    \n-----------\n {json.dumps(doc)}\n(1 row)\n\nROLLBACK\n"
+    wrapped = json.dumps({"output": aligned})
+    assert "\n" not in wrapped
+    calls = []
+    real = json.JSONDecoder.raw_decode
+    monkeypatch.setattr(json.JSONDecoder, "raw_decode",
+                        lambda self, s, idx=0: (calls.append(idx), real(self, s, idx))[1])
+
+    assert report.load_document(wrapped, "probe-format/v1") == doc
+    assert len(calls) <= 3
