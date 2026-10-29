@@ -6,6 +6,8 @@
 --   day_start_epoch, day_end_epoch        the US Pacific calendar day holding the window
 -- Posts are counted by the search that first saved them (posts.source_query_id),
 -- so the report can leave out RARE_EXTRA and the special-events searches.
+-- Production's ordinary searches leave source_query_id empty; only discovery
+-- lanes set it, so the empty group is the production searches.
 -- Output: one row with one text column, size_report_production, holding a JSON document.
 BEGIN TRANSACTION READ ONLY;
 WITH bounds AS (

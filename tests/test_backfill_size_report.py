@@ -404,6 +404,44 @@ def test_end_to_end_report_writes_markdown_and_json(tmp_path):
     assert "not measured" in markdown
 
 
+def test_production_posts_without_a_source_count_as_the_production_searches(tmp_path):
+    # Production's ordinary searches leave posts.source_query_id empty; only the
+    # discovery lanes set it (observed in production for 2026-09-19 to 2026-10-29).
+    production = {**_production_doc(),
+                  "window_posts": [{"source_query_id": None, "posts": 3},
+                                   {"source_query_id": "RARE_EXTRA", "posts": 1},
+                                   {"source_query_id": "SPECIALEVENTS2", "posts": 4}],
+                  "day_posts": [{"source_query_id": None, "posts": 12},
+                                {"source_query_id": "RARE_EXTRA", "posts": 6},
+                                {"source_query_id": "SPECIALEVENTS2", "posts": 9}]}
+    files = {
+        "xb.json": json.dumps(_xbackfiller_doc()),
+        "prod.json": json.dumps(production),
+        "share.json": json.dumps({"format": report.PILOT_SHARE_FORMAT, "source": "pilot slices 2-4",
+                                  "new_routes_share": 0.5}),
+        "config.yaml": "search:\n  max_results: 2000\nharvest:\n  run_deadline_seconds: 780\n"
+                       "  enrichment:\n    claim_per_cycle: 100\nmetrics_refresh:\n  per_cycle_cap: 200\n",
+    }
+    for name, text in files.items():
+        (tmp_path / name).write_text(text)
+
+    code = report.main([
+        "--xbackfiller", str(tmp_path / "xb.json"), "--production", str(tmp_path / "prod.json"),
+        "--frozen-queries", str(FROZEN), "--limits-config", str(tmp_path / "config.yaml"),
+        "--pilot-share", str(tmp_path / "share.json"),
+        "--output-dir", str(tmp_path / "out"), "--timestamp", "2026-10-30-120000",
+    ])
+
+    assert code == 0
+    data = json.loads((tmp_path / "out" / "2026-10-30-120000-oai-anthropic-size-report.json").read_text())
+    window = data["comparison"]["production_window"]
+    assert data["shares"]["production_routes"]["share"] == pytest.approx(0.25)  # 3 of 12
+    assert window["saved_posts_production_routes"] == 3
+    assert window["saved_posts_excluded_searches"]["RARE_EXTRA"] == 1
+    assert window["saved_posts_excluded_searches"]["SPECIALEVENTS2"] == 4
+    assert window["saved_posts_other_sources"] == {}
+
+
 def test_watch_mode_exit_code_signals_trigger(tmp_path, capsys):
     members = [[f"p{n}" for n in range(start, start + 20)] for start in range(0, 2000, 20)]
     doc = {**_xbackfiller_doc(), "calls": [call(group, actual="0.024000") for group in members]}

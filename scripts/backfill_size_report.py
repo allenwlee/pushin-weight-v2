@@ -108,6 +108,10 @@ BOOKKEEPING_TABLES = frozenset({"provider_batches", "original_content_calls"})
 
 # R19.
 EXCLUDED_PRODUCTION_SOURCES = ("RARE_EXTRA", "SPECIALEVENTS1", "SPECIALEVENTS2")
+# Production's ordinary searches leave posts.source_query_id empty; only the
+# discovery lanes above set it (monitor/cycle.py _mark_discovery_items). Posts
+# with no source therefore count together as the production searches.
+ORDINARY_SEARCH_SOURCE = ""
 BASELINE_LABEL = (
     "The baseline excludes RARE_EXTRA and the two special-events searches "
     "(SPECIALEVENTS1, SPECIALEVENTS2, live from deployed revision e5edf737)."
@@ -923,12 +927,14 @@ def build_report(xb: Mapping[str, Any], production: Mapping[str, Any], frozen: M
     # R21 shares.
     window_counts = _source_counts(production.get("window_posts"))
     day_counts = _source_counts(production.get("day_posts"))
-    prod_window = sum(window_counts.get(name, 0) for name in production_routes)
-    prod_day = sum(day_counts.get(name, 0) for name in production_routes)
+    production_sources = (ORDINARY_SEARCH_SOURCE, *production_routes)
+    prod_window = sum(window_counts.get(name, 0) for name in production_sources)
+    prod_day = sum(day_counts.get(name, 0) for name in production_sources)
     prod_share = window_share(prod_window, prod_day)
     new_share = _check_share(pilot_share.get("new_routes_share"))
     window_date = datetime.fromtimestamp(start, PACIFIC).date().isoformat()
-    prod_source = f"production saved posts on the 8 production searches, {window_date} Pacific"
+    prod_source = (f"production saved posts on the 8 production searches (posts with no discovery-lane "
+                   f"source), {window_date} Pacific")
     new_source = f"pilot slices: {pilot_share.get('source', 'pilot share file')}"
     route_shares = {}
     for name in production_routes:
@@ -1052,7 +1058,7 @@ def build_report(xb: Mapping[str, Any], production: Mapping[str, Any], frozen: M
     # R19 comparison.
     excluded = {name: window_counts.get(name, 0) for name in EXCLUDED_PRODUCTION_SOURCES}
     other_sources = {k: v for k, v in window_counts.items()
-                     if k not in production_routes and k not in EXCLUDED_PRODUCTION_SOURCES}
+                     if k not in production_sources and k not in EXCLUDED_PRODUCTION_SOURCES}
     comparison = {
         "label": BASELINE_LABEL, "note": SPECIAL_EVENTS_NOTE,
         "production_window": {
