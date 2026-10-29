@@ -1,0 +1,1378 @@
+{
+  "schema": "release-study-results-v1",
+  "code_revision": "5e3c475e4d42c776b9d8d33aecd2d56dc5dfb26d",
+  "data_verification_revision": "f85f67f73566da93c6cef288dfcd10b97535d7ea",
+  "nominations": 30,
+  "product_entries": 35,
+  "review_states": {
+    "confirmed": 2,
+    "provisional": 33
+  },
+  "source_scan": {
+    "counts": {
+      "candidates": 69550,
+      "post_read": 265340,
+      "sources_persisted": 0
+    },
+    "complete": true,
+    "clock": "publication",
+    "start": "2026-07-31T15:00:00Z",
+    "end": "2026-10-29T10:00:00Z",
+    "seconds": 2023.476,
+    "persist": false
+  },
+  "controls": [
+    {
+      "candidate_dossiers": 1,
+      "disposition": "pending",
+      "expect": "pending_not_confirmed",
+      "falsely_confirmed": false,
+      "id": "NC1"
+    },
+    {
+      "candidate_dossiers": 1,
+      "disposition": "pending",
+      "expect": "pending_not_confirmed",
+      "falsely_confirmed": false,
+      "id": "NC2"
+    },
+    {
+      "candidate_dossiers": 1,
+      "disposition": "pending",
+      "expect": "non_release_after_assessment",
+      "falsely_confirmed": false,
+      "id": "NC3"
+    },
+    {
+      "candidate_dossiers": 1,
+      "disposition": "pending",
+      "expect": "pending_not_qwen_publisher",
+      "falsely_confirmed": false,
+      "id": "NC4"
+    },
+    {
+      "candidate_dossiers": 0,
+      "disposition": "no_signal",
+      "expect": "no_release_signal",
+      "falsely_confirmed": false,
+      "id": "NC5"
+    },
+    {
+      "candidate_dossiers": 1,
+      "disposition": "pending",
+      "expect": "pending_not_confirmed",
+      "falsely_confirmed": false,
+      "id": "NC6"
+    }
+  ],
+  "row_counts": {
+    "brand_discovery_candidates": 3550,
+    "discussion_window_counts": 43491,
+    "discussion_window_snapshots": 3539,
+    "event_dossier_claims": 8202,
+    "event_dossier_discussion_windows": 4650,
+    "event_dossier_intake_decisions": 4332,
+    "event_dossier_reviews": 45,
+    "event_dossier_sources": 4437,
+    "event_dossiers": 4429,
+    "product_release_details": 45
+  },
+  "table_bytes": {
+    "discussion_window_counts": 11608064,
+    "discussion_window_snapshots": 2605056,
+    "event_dossier_discussion_windows": 1654784,
+    "event_dossier_intake_decisions": 2916352
+  },
+  "window_checks": [
+    {
+      "account_count": 173,
+      "end": "2026-10-17 09:15:00+00:00",
+      "post_count": 191,
+      "snapshot_id": "80cc0957-a7b0-4246-bf37-8ae0c1d0f6a6",
+      "start": "2026-10-17 09:00:00+00:00"
+    },
+    {
+      "account_count": 118,
+      "end": "2026-10-17 09:20:00+00:00",
+      "post_count": 127,
+      "snapshot_id": "706b28ba-408c-46db-86f9-367640c4237b",
+      "start": "2026-10-17 09:05:00+00:00"
+    },
+    {
+      "account_count": 490,
+      "end": "2026-10-17 11:00:00+00:00",
+      "post_count": 578,
+      "snapshot_id": "84cfe35c-5db4-4312-aa83-af7aaaff4f23",
+      "start": "2026-10-17 09:00:00+00:00"
+    },
+    {
+      "account_count": 933,
+      "end": "2026-10-18 09:00:00+00:00",
+      "post_count": 1166,
+      "snapshot_id": "e8b8cf9a-7293-43f0-8c8a-30f74e7a6648",
+      "start": "2026-10-17 09:00:00+00:00"
+    },
+    {
+      "account_count": 963,
+      "end": "2026-10-24 09:00:00+00:00",
+      "post_count": 1200,
+      "snapshot_id": "b9d43d44-c9c0-40cf-8bc2-b5a417cb4112",
+      "start": "2026-10-17 09:00:00+00:00"
+    }
+  ],
+  "window_first_seconds": 3.291711911559105,
+  "window_repeat_seconds": 1.3965529166162014,
+  "whole_side_reconciliations": 38,
+  "case_rows": [
+    {
+      "case_id": "PR01",
+      "name": "DeepSeek V4 Pro / 0813",
+      "dossier_id": "a9f622e6-0501-4973-ba01-13eccc42bf08",
+      "review_id": "3098177b-f1c4-45b1-b477-d235a6c58e87",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": "20d66250-db05-40bf-8fda-94b610bed0c7",
+      "publisher": "deepseek",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "34.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": "4b726407-a0d9-4bd5-8943-c1d28483763a",
+      "anchor_kind": "announcement",
+      "before_posts": 12801,
+      "after_posts": 24676,
+      "before_accounts": 7813,
+      "after_accounts": 12796,
+      "change_percent": 92.766,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "1794a3fd-7576-4ca9-8ae8-8075d9a0ab95",
+        "59e58590-f0cb-4c00-98d1-1c9b2b48b1ac"
+      ],
+      "reason": "Third-party release report; exact announcement day must be reconciled against the August13 primary changelog. The post time is the reporting time, not proof of first release. primary; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/AiBattle_/status/2087561979586089415"
+      ]
+    },
+    {
+      "case_id": "PR02",
+      "name": "GLM / 5.3",
+      "dossier_id": "abb3585f-b710-412a-9f50-afe0af8399f6",
+      "review_id": "514cbe31-f426-4256-adda-b8999cb08d88",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": "6504e32e-fa9f-4d48-a193-e41d238568fb",
+      "publisher": "zhipu",
+      "routine_detected_sources": 2,
+      "selected_sources": 2,
+      "significance": "34.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": "d806e832-0cd3-4af7-af52-3af0c9d35025",
+      "anchor_kind": "announcement",
+      "before_posts": 1401,
+      "after_posts": 3364,
+      "before_accounts": 1059,
+      "after_accounts": 2185,
+      "change_percent": 140.114,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "c6792fce-1450-4639-9810-09dccd6673b9",
+        "ae3667ba-cb85-4795-8318-6cd39d1ce13a"
+      ],
+      "reason": "Publisher-labelled announcement on August14; Coding Plan access is separately asserted. API and weight rollout were staged, so announcement does not prove weight availability. primary; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/Zai_org/status/2088132965922476159",
+        "https://x.com/Zai_org/status/2088132969630212372"
+      ]
+    },
+    {
+      "case_id": "PR03",
+      "name": "Qwen3.8 27B / 3.8",
+      "dossier_id": "2b37bb6e-b9db-499a-b189-d9abe549478e",
+      "review_id": "f5beab0e-aa43-4d9c-b41c-cff440b019ff",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": "86e71f83-03e7-4b42-9318-f3cf1c1a0af5",
+      "publisher": "alibaba",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "34.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": null,
+      "anchor_kind": null,
+      "before_posts": null,
+      "after_posts": null,
+      "before_accounts": null,
+      "after_accounts": null,
+      "change_percent": null,
+      "elapsed_followup": false,
+      "snapshot_pair": null,
+      "reason": "The nominated stored post is anticipation of Qwen3.8-27B, not its weight release. Keep the release identity provisional and the date unresolved; do not reuse the Qwen3.8-Max date. primary; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/TechieUltimatum/status/2084105619192381904"
+      ]
+    },
+    {
+      "case_id": "PR04",
+      "name": "GLM Flash / 5.3",
+      "dossier_id": "de51baf9-f503-4266-b177-f4e87fa4fe5e",
+      "review_id": "da803656-699f-4ae8-b6a6-50ded2d325f5",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": "cceb45fc-f883-4b25-8c9d-aeba27ca82d6",
+      "publisher": "zhipu",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "34.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": "02295524-c848-4f8b-b76a-26a9d4eba397",
+      "anchor_kind": "announcement",
+      "before_posts": 2794,
+      "after_posts": 5569,
+      "before_accounts": 1815,
+      "after_accounts": 3258,
+      "change_percent": 99.32,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "f5629245-1408-41f9-9827-2391b6f0d666",
+        "2c2d60c7-fc6c-4916-8072-36ea8e24f2e8"
+      ],
+      "reason": "Named launch and multiple access channels are asserted together; prior ox-alpha testing is a different milestone. primary; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/Zai_org/status/2092616204787626030"
+      ]
+    },
+    {
+      "case_id": "PR05",
+      "name": "Tencent Hy4 Preview / 4",
+      "dossier_id": "d83244aa-6f62-48cf-a74c-4e2d703b44e3",
+      "review_id": "d94a7c39-bb0f-4e27-ad82-3528375264f1",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": "6842efad-4d6b-48c8-90c1-559dfaf97d4c",
+      "publisher": "tencent",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "35.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": "2d2b8519-da70-4fa5-8507-1f87b1254664",
+      "anchor_kind": "announcement",
+      "before_posts": 176,
+      "after_posts": 556,
+      "before_accounts": 94,
+      "after_accounts": 335,
+      "change_percent": 215.909,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "f0b90651-b630-46d3-9c1a-dc1f5dbd47ae",
+        "2dc8a6b8-7cd8-4308-b6aa-ed789c0475aa"
+      ],
+      "reason": "Publisher-labelled Hy4 preview announcement. FP8 and BF16 repositories are packaging variants of the named release. primary; general_model; major change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/TencentHunyuan/status/2093222928720761009"
+      ]
+    },
+    {
+      "case_id": "PR06",
+      "name": "Muse Spark / 1.3",
+      "dossier_id": "b18cbacc-1454-42fd-904e-114a75bdbbeb",
+      "review_id": "e022cfb8-b551-4aa2-bba5-ea69c672f59b",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "meta",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "34.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": "3e69e584-f45e-49c8-b753-7402fdfd1c01",
+      "anchor_kind": "announcement",
+      "before_posts": 1038,
+      "after_posts": 1640,
+      "before_accounts": 729,
+      "after_accounts": 1063,
+      "change_percent": 57.996,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "d6088e93-be63-4852-81d4-38d5cab8b667",
+        "bf00b4b3-3a6a-42ce-a68a-805f8a45e4e8"
+      ],
+      "reason": "Muse Spark1.3 access in Code/API is asserted. Future open weights are a separate promise. primary; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/finkd/status/2095232032896946311"
+      ]
+    },
+    {
+      "case_id": "PR07",
+      "name": "DeepSeek V4.1 Flash / 4.1",
+      "dossier_id": "e9bfec81-4466-4583-976b-37a43f115002",
+      "review_id": "2f51cf15-42be-4612-a095-a325fd4554ec",
+      "state": "confirmed",
+      "availability": "available",
+      "product_key": "d8a9dbb6-49df-4d40-b6cd-dcbeb3bd15ff",
+      "publisher": "deepseek",
+      "routine_detected_sources": 2,
+      "selected_sources": 2,
+      "significance": "34.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": "6ec77b10-d9d8-4377-8159-e42e66be040b",
+      "anchor_kind": "announcement",
+      "before_posts": 7988,
+      "after_posts": 15467,
+      "before_accounts": 5180,
+      "after_accounts": 9498,
+      "change_percent": 93.628,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "d3913387-1159-4310-8fd4-58c7cdf559ff",
+        "b92a227c-6e04-464c-9937-f6ebe745b439"
+      ],
+      "reason": "Official DeepSeek site identifies the publisher and links @deepseek_ai. Source posts separately announce the model and API access. primary; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/deepseek_ai/status/2097930608790167907",
+        "https://x.com/deepseek_ai/status/2097930620680941732"
+      ]
+    },
+    {
+      "case_id": "PR08",
+      "name": "Step 5 Preview / 5",
+      "dossier_id": "a14c1478-ae6d-4860-aac4-fd20e9079dcd",
+      "review_id": "0a8255e6-f23a-41a8-af7e-0c63bbdc0bfb",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": "c44294eb-0329-44af-9747-fafe1c382dca",
+      "publisher": "stepfun_inc",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "35.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": "895430b9-da93-42ba-899a-a59246bcbd40",
+      "anchor_kind": "announcement",
+      "before_posts": 101,
+      "after_posts": 378,
+      "before_accounts": 67,
+      "after_accounts": 240,
+      "change_percent": 274.257,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "430df6a3-53e7-4af0-990c-c5c59b372895",
+        "695e9f0b-af90-4a2c-afb9-af3c80d5b241"
+      ],
+      "reason": "Step5 preview announcement; promised October15 weights must not be substituted for announcement or current availability. primary; general_model; major change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/StepFun_ai/status/2101510462685003786"
+      ]
+    },
+    {
+      "case_id": "PR09-Pro",
+      "name": "MiMo V2.6 Pro",
+      "dossier_id": "a8ab680e-2480-42a0-85fe-1db337766add",
+      "review_id": "b194c253-18e8-46b3-b3fd-e7ee81fbfbd0",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "xiaomi",
+      "routine_detected_sources": 2,
+      "selected_sources": 2,
+      "significance": "34.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": "d8ee090a-410c-4be0-8068-c0595bbab363",
+      "anchor_kind": "announcement",
+      "before_posts": 985,
+      "after_posts": 3028,
+      "before_accounts": 423,
+      "after_accounts": 1546,
+      "change_percent": 207.411,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "adfefc79-c55c-4a13-a466-3983b9453f9a",
+        "a078ef45-07d1-4819-afb9-c1e5aaf6d555"
+      ],
+      "reason": "One source announces two distinct models. Pro and Flash receive separate dossiers; shared discussion is brand-level and must not be added twice. primary; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/XiaomiMiMo/status/2102138559952290106",
+        "https://x.com/XiaomiMiMo/status/2102138582324625780"
+      ]
+    },
+    {
+      "case_id": "PR09-Flash",
+      "name": "MiMo V2.6 Flash",
+      "dossier_id": "d298874e-1b6f-4220-9b5e-24a8bd75aca8",
+      "review_id": "c9cfa07c-21e8-4b61-8316-eb82a3d01aa5",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "xiaomi",
+      "routine_detected_sources": 2,
+      "selected_sources": 2,
+      "significance": "34.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": "74be0dda-292f-47b1-8ea5-d7cbf4954683",
+      "anchor_kind": "announcement",
+      "before_posts": 985,
+      "after_posts": 3028,
+      "before_accounts": 423,
+      "after_accounts": 1546,
+      "change_percent": 207.411,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "adfefc79-c55c-4a13-a466-3983b9453f9a",
+        "a078ef45-07d1-4819-afb9-c1e5aaf6d555"
+      ],
+      "reason": "One source announces two distinct models. Pro and Flash receive separate dossiers; shared discussion is brand-level and must not be added twice. primary; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/XiaomiMiMo/status/2102138559952290106",
+        "https://x.com/XiaomiMiMo/status/2102138582324625780"
+      ]
+    },
+    {
+      "case_id": "PR10",
+      "name": "Mistral Large / 4",
+      "dossier_id": "d3a861e1-b9cf-4a4c-81c7-d9ec851892ea",
+      "review_id": "5507f2b4-e314-44f6-9332-7cd68f8f09d0",
+      "state": "confirmed",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "mistral_ai",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "35.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": "bf68d797-317a-4ab7-8136-b93ca8ade7fe",
+      "anchor_kind": "announcement",
+      "before_posts": 292,
+      "after_posts": 1,
+      "before_accounts": 250,
+      "after_accounts": 1,
+      "change_percent": -99.658,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "24b7ae78-536c-4f44-9e4b-8d49554df87f",
+        "b3a7ba99-7381-4ca2-ab5d-505ce253a35d"
+      ],
+      "reason": "API preview is available in the announcement; open weights are promised for the end of October. Preserve the difference. primary; general_model; major change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/MistralAI/status/2107457414387622310"
+      ]
+    },
+    {
+      "case_id": "PR11",
+      "name": "DeepSeek-V4.1-Flash-1017",
+      "dossier_id": "50ba71e2-db6f-474a-b8de-9db99d398bd1",
+      "review_id": "b7103dd4-4eec-4026-9493-71603a1dfcba",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": "d8a9dbb6-49df-4d40-b6cd-dcbeb3bd15ff",
+      "publisher": "deepseek",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "34.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": "8899517c-b7d2-4cb4-8fb7-89377a145a71",
+      "anchor_kind": "announcement",
+      "before_posts": 2645,
+      "after_posts": 1236,
+      "before_accounts": 1919,
+      "after_accounts": 987,
+      "change_percent": -53.27,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "79bade2b-d498-402d-b318-924c6d9b2a5f",
+        "0e8bfe31-5891-4e8a-9da8-9be62d12a71f"
+      ],
+      "reason": "Identifiable October17 revision verified in the primary changelog. Selected DB evidence is third-party reporting; retain provisional storage while publisher/source binding is completed. primary; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/darekgusto/status/2111380993902801197"
+      ]
+    },
+    {
+      "case_id": "PR12",
+      "name": "Kimi-K3.1-Pro",
+      "dossier_id": "2e78c6bb-27a2-4cf1-94c8-58f92c903938",
+      "review_id": "99a85ebf-d69b-4a86-9687-6804a3fe19d1",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "moonshot",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "34.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": "3e10763b-e63d-4370-ac93-d26306a10579",
+      "anchor_kind": "announcement",
+      "before_posts": 5,
+      "after_posts": 21,
+      "before_accounts": 5,
+      "after_accounts": 21,
+      "change_percent": 320.0,
+      "elapsed_followup": false,
+      "snapshot_pair": [
+        "4e46cd3b-a4d9-4d95-b616-fd781dffdb78",
+        "e750a83e-7f3a-4b6b-80d2-79314237be94"
+      ],
+      "reason": "K3.1 Pro launch and live API/app access are asserted; open weights promised for November4. Highspeed is not assumed to be a different set of weights. primary; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/Kimi_Moonshot/status/2113680701770068067"
+      ]
+    },
+    {
+      "case_id": "PR13",
+      "name": "MiniMax Music / 3.0",
+      "dossier_id": "81a4ddbd-5268-4c1e-b5e1-863d027c3a68",
+      "review_id": "1f7565bf-e283-49da-8854-7b7cc0977634",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": "b3240199-cf5b-4831-b045-3759b51efb1e",
+      "publisher": "minimax",
+      "routine_detected_sources": 1,
+      "selected_sources": 2,
+      "significance": "33.0000",
+      "product_kind": "specialist_model",
+      "lineage": "primary",
+      "anchor_claim_id": "903f1812-bc55-4f78-af14-6b9b8bb084f0",
+      "anchor_kind": "announcement",
+      "before_posts": 6941,
+      "after_posts": 6354,
+      "before_accounts": 3645,
+      "after_accounts": 3289,
+      "change_percent": -8.457,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "e5a1aaf3-7fe5-46c2-8166-a465f2e90f14",
+        "911073a9-8f14-4f22-9849-aa11e31b3727"
+      ],
+      "reason": "MiniMax-Music3 is the stored spelling of Music3.0. Existing Product is MiniMaxAI/MiniMax-Music3. Local access and later cloud availability are different milestones. primary; specialist_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/MiniMax_AI/status/2087934657354678421",
+        "https://x.com/MiniMax_AI/status/2088003990516912176"
+      ]
+    },
+    {
+      "case_id": "PR14-Realtime",
+      "name": "StepAudio 3 Realtime",
+      "dossier_id": "7661000f-9662-4ab5-abd9-13a028a39b2f",
+      "review_id": "c3f4129e-4400-482e-9cba-ca21da8ff9d3",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "stepfun_inc",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "33.0000",
+      "product_kind": "specialist_model",
+      "lineage": "primary",
+      "anchor_claim_id": "d352d6e9-292d-4ba9-85b4-d19d14e39cd2",
+      "anchor_kind": "announcement",
+      "before_posts": 171,
+      "after_posts": 369,
+      "before_accounts": 148,
+      "after_accounts": 234,
+      "change_percent": 115.789,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "0cee0882-d49c-4fd8-b264-609121d4ebfa",
+        "ef7d39e1-b005-4785-9b0a-11149db43536"
+      ],
+      "reason": "Five distinct StepAudio3 products share an announcement. The study creates a separate dossier for each, with shared brand-level discussion. primary; specialist_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/StepFun_ai/status/2099906151643250808"
+      ]
+    },
+    {
+      "case_id": "PR14-ASR",
+      "name": "StepAudio 3 ASR",
+      "dossier_id": "f38a50f3-7173-4516-b6fb-0f278de3a1d9",
+      "review_id": "109fb27e-96e5-4300-a668-178526d60c50",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "stepfun_inc",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "33.0000",
+      "product_kind": "specialist_model",
+      "lineage": "primary",
+      "anchor_claim_id": "709b2a06-bc0e-4da2-8918-2e85691e413f",
+      "anchor_kind": "announcement",
+      "before_posts": 171,
+      "after_posts": 369,
+      "before_accounts": 148,
+      "after_accounts": 234,
+      "change_percent": 115.789,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "0cee0882-d49c-4fd8-b264-609121d4ebfa",
+        "ef7d39e1-b005-4785-9b0a-11149db43536"
+      ],
+      "reason": "Five distinct StepAudio3 products share an announcement. The study creates a separate dossier for each, with shared brand-level discussion. primary; specialist_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/StepFun_ai/status/2099906151643250808"
+      ]
+    },
+    {
+      "case_id": "PR14-TTS",
+      "name": "StepAudio 3 TTS",
+      "dossier_id": "56009086-916f-4925-aedd-29e08a19b284",
+      "review_id": "b75119da-3687-4deb-862a-9d5f44d439b0",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "stepfun_inc",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "33.0000",
+      "product_kind": "specialist_model",
+      "lineage": "primary",
+      "anchor_claim_id": "87c833f0-fa76-45bd-9362-1df1c48ee7f1",
+      "anchor_kind": "announcement",
+      "before_posts": 171,
+      "after_posts": 369,
+      "before_accounts": 148,
+      "after_accounts": 234,
+      "change_percent": 115.789,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "0cee0882-d49c-4fd8-b264-609121d4ebfa",
+        "ef7d39e1-b005-4785-9b0a-11149db43536"
+      ],
+      "reason": "Five distinct StepAudio3 products share an announcement. The study creates a separate dossier for each, with shared brand-level discussion. primary; specialist_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/StepFun_ai/status/2099906151643250808"
+      ]
+    },
+    {
+      "case_id": "PR14-Gen",
+      "name": "StepAudio 3 Gen",
+      "dossier_id": "213bf7d2-09e2-42ed-86a6-26dc81bf768d",
+      "review_id": "63d8ca93-51d1-42b4-a0a3-057ac9959a54",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "stepfun_inc",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "33.0000",
+      "product_kind": "specialist_model",
+      "lineage": "primary",
+      "anchor_claim_id": "f0316745-78a0-4769-93e1-0613ba7286a6",
+      "anchor_kind": "announcement",
+      "before_posts": 171,
+      "after_posts": 369,
+      "before_accounts": 148,
+      "after_accounts": 234,
+      "change_percent": 115.789,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "0cee0882-d49c-4fd8-b264-609121d4ebfa",
+        "ef7d39e1-b005-4785-9b0a-11149db43536"
+      ],
+      "reason": "Five distinct StepAudio3 products share an announcement. The study creates a separate dossier for each, with shared brand-level discussion. primary; specialist_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/StepFun_ai/status/2099906151643250808"
+      ]
+    },
+    {
+      "case_id": "PR14-Music",
+      "name": "StepAudio 3 Music",
+      "dossier_id": "61f9b2f6-65d4-4a13-8f33-48763a744bf0",
+      "review_id": "a94d50f3-9576-46f6-a6ce-842fffc5338e",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "stepfun_inc",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "33.0000",
+      "product_kind": "specialist_model",
+      "lineage": "primary",
+      "anchor_claim_id": "db1b4a3d-53dc-4442-8189-8ee87486d8db",
+      "anchor_kind": "announcement",
+      "before_posts": 171,
+      "after_posts": 369,
+      "before_accounts": 148,
+      "after_accounts": 234,
+      "change_percent": 115.789,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "0cee0882-d49c-4fd8-b264-609121d4ebfa",
+        "ef7d39e1-b005-4785-9b0a-11149db43536"
+      ],
+      "reason": "Five distinct StepAudio3 products share an announcement. The study creates a separate dossier for each, with shared brand-level discussion. primary; specialist_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/StepFun_ai/status/2099906151643250808"
+      ]
+    },
+    {
+      "case_id": "PR15",
+      "name": "Qwen3.8 Omni Flash / 3.8",
+      "dossier_id": "a53432af-d980-4ea8-8368-4f839f911b24",
+      "review_id": "4afee6f0-e5b0-459c-a491-2957021d5695",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "alibaba",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "33.0000",
+      "product_kind": "specialist_model",
+      "lineage": "primary",
+      "anchor_claim_id": "35224192-694d-420c-8e39-56c3c52400b7",
+      "anchor_kind": "announcement",
+      "before_posts": 5502,
+      "after_posts": 8230,
+      "before_accounts": 3426,
+      "after_accounts": 5024,
+      "change_percent": 49.582,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "330b1507-6169-4a30-bbe3-e346a5aaaf35",
+        "77744fc3-6b9e-40eb-b456-514a682169d7"
+      ],
+      "reason": "Named multimodal model with separate harness/plugin announcements in the same post. This dossier covers Omni Flash only. primary; specialist_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/karminski3/status/2100751056104026497"
+      ]
+    },
+    {
+      "case_id": "PR16",
+      "name": "Qwen Image / 2.1",
+      "dossier_id": "7dd4339f-1d45-42e1-8496-4edf6a99a45b",
+      "review_id": "5b05dc56-a87a-460a-9347-192dd6c0c339",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": "97b183e1-d883-45ab-bf99-be03d788281e",
+      "publisher": "alibaba",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "33.0000",
+      "product_kind": "specialist_model",
+      "lineage": "primary",
+      "anchor_claim_id": "76bcb624-593c-4a0b-8893-65c4cd26ab29",
+      "anchor_kind": "announcement",
+      "before_posts": 5988,
+      "after_posts": 8190,
+      "before_accounts": 3737,
+      "after_accounts": 4982,
+      "change_percent": 36.774,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "bc5a3012-9e1c-4da4-a4ac-53bfc0241761",
+        "f9df23c7-6fa9-49aa-b88c-92445b1b5d24"
+      ],
+      "reason": "Third-party launch report conflicts with nearby preview/no-weights reports. Availability remains unknown until source-backed access reconciliation. primary; specialist_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/MrSkyAI/status/2101608077027868883"
+      ]
+    },
+    {
+      "case_id": "PR17",
+      "name": "Voxtral TTS 3",
+      "dossier_id": "972b0c92-a5d3-47fa-a0b7-7687185d4f27",
+      "review_id": "098c02ca-bf22-409a-b7aa-0901f858bc79",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "mistral_ai",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "33.0000",
+      "product_kind": "specialist_model",
+      "lineage": "primary",
+      "anchor_claim_id": "65a7a864-12c0-4c3f-a2ba-c216f696f885",
+      "anchor_kind": "announcement",
+      "before_posts": 0,
+      "after_posts": 3,
+      "before_accounts": 0,
+      "after_accounts": 3,
+      "change_percent": null,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "33bac3a8-e826-42fc-8a86-5e86d73f8b05",
+        "594152df-a0a7-4325-b47e-0ca246266cd2"
+      ],
+      "reason": "Third-party platform announcement of Voxtral TTS3. Do not attribute all Voxtral3 family attention to this one product. primary; specialist_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/DesignArena/status/2112589847638786161"
+      ]
+    },
+    {
+      "case_id": "PR18",
+      "name": "Mistral OCR 4.1",
+      "dossier_id": "ce3483e0-7574-4538-b051-a7b7a2884c3d",
+      "review_id": "7ea2557c-f222-4120-8349-a835e476c95c",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "mistral_ai",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "33.0000",
+      "product_kind": "specialist_model",
+      "lineage": "primary",
+      "anchor_claim_id": "c2242c91-e264-421b-a349-9786edf773cf",
+      "anchor_kind": "source_stated_release",
+      "before_posts": 626,
+      "after_posts": 535,
+      "before_accounts": 425,
+      "after_accounts": 436,
+      "change_percent": -14.537,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "d6388a25-2117-4445-a016-34286c726876",
+        "d7161285-6f6a-467b-a5ca-83ab6513eaed"
+      ],
+      "reason": "Third-party report explicitly states August31 general availability; retain source-stated day, pending publisher verification. primary; specialist_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/WaitSpin/status/2094485457136488852"
+      ]
+    },
+    {
+      "case_id": "PR19",
+      "name": "Hermes Agent v0.21.6",
+      "dossier_id": "56e24298-879c-4e1b-8d3a-1f19fa3f3bfc",
+      "review_id": "29c3080c-a721-4712-b7a3-9122ace5b83e",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "Unverified / unresolved",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "33.0000",
+      "product_kind": "agent",
+      "lineage": "primary",
+      "anchor_claim_id": null,
+      "anchor_kind": null,
+      "before_posts": null,
+      "after_posts": null,
+      "before_accounts": null,
+      "after_accounts": null,
+      "change_percent": null,
+      "elapsed_followup": false,
+      "snapshot_pair": null,
+      "reason": "Hermes Agent v0.21.6 is the concrete software release named in the October10 retrospective; source states October8. Step5 hosting is a separate event. primary; agent; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/Ar_Stanton/status/2108875810547360003"
+      ]
+    },
+    {
+      "case_id": "PR20",
+      "name": "DeepSeek Harness Desktop",
+      "dossier_id": "f097a105-a201-4d3f-9e2f-6e4021b9614b",
+      "review_id": "8e3c7cb6-ec55-4265-b946-59d35b1c5265",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "deepseek",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "33.0000",
+      "product_kind": "agent",
+      "lineage": "primary",
+      "anchor_claim_id": "0785dcec-42a4-4ed3-a624-cbf122261cd5",
+      "anchor_kind": "first_observed_usage",
+      "before_posts": 9738,
+      "after_posts": 8476,
+      "before_accounts": 6292,
+      "after_accounts": 5500,
+      "change_percent": -12.96,
+      "elapsed_followup": true,
+      "snapshot_pair": [
+        "8a4b0684-3e40-47f4-af66-5ba85d6dadda",
+        "e83034f9-00df-4816-a327-b1e7f1b0c11f"
+      ],
+      "reason": "Third-party discovery of desktop rc.2 binaries before an official announcement; distinguish observed access from publisher announcement. primary; agent; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/jauneclaude/status/2103185517429101055"
+      ]
+    },
+    {
+      "case_id": "PR21",
+      "name": "Agents API",
+      "dossier_id": "6b124d47-f03f-4606-8f45-bd29ad4a527e",
+      "review_id": "d64fcf4c-b79d-462e-8718-31643726c476",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "Unverified / unresolved",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "33.0000",
+      "product_kind": "agent",
+      "lineage": "primary",
+      "anchor_claim_id": null,
+      "anchor_kind": null,
+      "before_posts": null,
+      "after_posts": null,
+      "before_accounts": null,
+      "after_accounts": null,
+      "change_percent": null,
+      "elapsed_followup": false,
+      "snapshot_pair": null,
+      "reason": "Stored Thai report describes OpenAI Agents API public beta at DevDay. This is an agent infrastructure release, not a model. primary; agent; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/peesamac/status/2104998997660475405"
+      ]
+    },
+    {
+      "case_id": "PR22",
+      "name": "Copilot Studio: agent accounts and process memory",
+      "dossier_id": "b0abfaa4-2d39-4e28-87a1-bddf050fe74d",
+      "review_id": "af5ec8b6-a844-4717-85a8-abfe710d1aaa",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "Unverified / unresolved",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "32.0000",
+      "product_kind": "agent",
+      "lineage": "primary",
+      "anchor_claim_id": null,
+      "anchor_kind": null,
+      "before_posts": null,
+      "after_posts": null,
+      "before_accounts": null,
+      "after_accounts": null,
+      "change_percent": null,
+      "elapsed_followup": false,
+      "snapshot_pair": null,
+      "reason": "The source describes Copilot Studio agent accounts and business-process memory, not a new standalone model. Preserve this product update separately from the other roundup entries. primary; agent; minor change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/KiteAIChinese/status/2112164426053017749"
+      ]
+    },
+    {
+      "case_id": "PR23",
+      "name": "OpenZero Fusion Qwen3-4B Agentic",
+      "dossier_id": "1db85276-81e3-4aaa-b70b-21077debc0ef",
+      "review_id": "3255bac8-5c69-49ff-a754-438e722b9d38",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "Unverified / unresolved",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "24.0000",
+      "product_kind": "general_model",
+      "lineage": "derivative",
+      "anchor_claim_id": null,
+      "anchor_kind": null,
+      "before_posts": null,
+      "after_posts": null,
+      "before_accounts": null,
+      "after_accounts": null,
+      "change_percent": null,
+      "elapsed_followup": false,
+      "snapshot_pair": null,
+      "reason": "Actual creator is shafire/OpenZero, not Qwen or Google. Qwen3-1.7B and Gemma4 E2B supply teacher outputs; the student is a distinct Qwen3-4B derivative. Model card corroborates distillation. derivative; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/zerotalktoai/status/2086801877862109437"
+      ]
+    },
+    {
+      "case_id": "PR24",
+      "name": "DeepSeek V4 Flash MXFP4 GGUF by antirez",
+      "dossier_id": "af4923a7-76c9-4486-9d1b-d0f8839533f6",
+      "review_id": "e0bc9c32-add9-4ea7-9fd6-76902261bccb",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "Unverified / unresolved",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "13.0000",
+      "product_kind": "general_model",
+      "lineage": "limited_variant",
+      "anchor_claim_id": null,
+      "anchor_kind": null,
+      "before_posts": null,
+      "after_posts": null,
+      "before_accounts": null,
+      "after_accounts": null,
+      "change_percent": null,
+      "elapsed_followup": false,
+      "snapshot_pair": null,
+      "reason": "Antirez publishes a GGUF conversion of existing DeepSeek weights. The source calls it lossless MXFP4; do not invent additional quantization or attribute publication to DeepSeek. limited_variant; general_model; minor change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/antirez/status/2083465907943186847"
+      ]
+    },
+    {
+      "case_id": "PR25",
+      "name": "GLM-5.3-Flash-DFlash2 by incoai",
+      "dossier_id": "26dbb81c-9901-494f-9803-d154c93a2fe3",
+      "review_id": "1eb52846-521f-472d-a12c-988fa1b6ec45",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "Unverified / unresolved",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "13.0000",
+      "product_kind": "general_model",
+      "lineage": "limited_variant",
+      "anchor_claim_id": null,
+      "anchor_kind": null,
+      "before_posts": null,
+      "after_posts": null,
+      "before_accounts": null,
+      "after_accounts": null,
+      "change_percent": null,
+      "elapsed_followup": false,
+      "snapshot_pair": null,
+      "reason": "Inco AI DFlash2 is a draft model serving GLM5.3Flash. The stored source demonstrates use in a recipe, not its first announcement. Exact release day remains unknown. limited_variant; general_model; minor change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/JASONMCNAB/status/2096801151098229121"
+      ]
+    },
+    {
+      "case_id": "PR26",
+      "name": "NeuralDaredevil-8B-abliterated",
+      "dossier_id": "54bd9a00-ab4b-4ee6-85ff-e6bcefa075a6",
+      "review_id": "ede37507-f821-4c02-bfb3-4cbf4cbc0bc0",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "Unverified / unresolved",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "14.0000",
+      "product_kind": "general_model",
+      "lineage": "ablation",
+      "anchor_claim_id": null,
+      "anchor_kind": null,
+      "before_posts": null,
+      "after_posts": null,
+      "before_accounts": null,
+      "after_accounts": null,
+      "change_percent": null,
+      "elapsed_followup": false,
+      "snapshot_pair": null,
+      "reason": "The October25 post is an overview of an existing abliterated/DPO checkpoint. It does not establish a new October release. Preserve the product evidence but leave date unresolved. ablation; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/RizeOnline/status/2114429676143653153"
+      ]
+    },
+    {
+      "case_id": "PR27",
+      "name": "Nanbeige4.3-33B",
+      "dossier_id": "929a159e-7b18-429d-b4e1-28c2a4520df7",
+      "review_id": "0d273cdf-1150-4a48-a13e-5d3e4ed9db51",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "Unverified / unresolved",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": "35.0000",
+      "product_kind": "general_model",
+      "lineage": "primary",
+      "anchor_claim_id": null,
+      "anchor_kind": null,
+      "before_posts": null,
+      "after_posts": null,
+      "before_accounts": null,
+      "after_accounts": null,
+      "change_percent": null,
+      "elapsed_followup": false,
+      "snapshot_pair": null,
+      "reason": "Third-party reporting of Nanbeige4.3-33B; the announced smaller 3B student is future work, not the released product. Publisher verification remains open. primary; general_model; major change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/MartinSzerment/status/2114390684849352817"
+      ]
+    },
+    {
+      "case_id": "PR28",
+      "name": "Giotto Alto",
+      "dossier_id": "3ff7de21-5797-438f-9d77-c8a0badc7902",
+      "review_id": "97dfbccc-74f6-4df5-a576-5456a4731bf1",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "Unverified / unresolved",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": null,
+      "product_kind": "general_model",
+      "lineage": "unknown",
+      "anchor_claim_id": null,
+      "anchor_kind": null,
+      "before_posts": null,
+      "after_posts": null,
+      "before_accounts": null,
+      "after_accounts": null,
+      "change_percent": null,
+      "elapsed_followup": false,
+      "snapshot_pair": null,
+      "reason": "Giotto Alto has its own identity. Source reports inherited Kimi weights; lineage and publisher control are not resolved, so do not automatically rank it as a primary model. Unranked: lineage requires evidence",
+      "source_urls": [
+        "https://x.com/AGTPinsights/status/2115151576637817009"
+      ]
+    },
+    {
+      "case_id": "PR29",
+      "name": "Giotto Solo",
+      "dossier_id": "0e0d29f2-877a-468d-9124-61b0b314229b",
+      "review_id": "ef85a404-d732-49d8-be52-c99e57cc12e4",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "Unverified / unresolved",
+      "routine_detected_sources": 1,
+      "selected_sources": 1,
+      "significance": null,
+      "product_kind": "general_model",
+      "lineage": "unknown",
+      "anchor_claim_id": null,
+      "anchor_kind": null,
+      "before_posts": null,
+      "after_posts": null,
+      "before_accounts": null,
+      "after_accounts": null,
+      "change_percent": null,
+      "elapsed_followup": false,
+      "snapshot_pair": null,
+      "reason": "Giotto Solo has its own identity. Single-GPU positioning is evidenced; architecture/lineage and publisher control still need proof. Unranked: lineage requires evidence",
+      "source_urls": [
+        "https://x.com/AGTPinsights/status/2115151576637817009"
+      ]
+    },
+    {
+      "case_id": "PR30",
+      "name": "Altar-1",
+      "dossier_id": "02934700-c8d4-42a8-a425-75e72a605d89",
+      "review_id": "c8b16c11-7426-4b07-8e48-7dc5e9d46c86",
+      "state": "provisional",
+      "availability": "unknown",
+      "product_key": null,
+      "publisher": "Unverified / unresolved",
+      "routine_detected_sources": 2,
+      "selected_sources": 2,
+      "significance": "14.0000",
+      "product_kind": "general_model",
+      "lineage": "ablation",
+      "anchor_claim_id": null,
+      "anchor_kind": null,
+      "before_posts": null,
+      "after_posts": null,
+      "before_accounts": null,
+      "after_accounts": null,
+      "change_percent": null,
+      "elapsed_followup": false,
+      "snapshot_pair": null,
+      "reason": "Aikido Altar1 uses GLM5.3 with expert pruning and quantization, so publisher is Aikido rather than Zhipu. Treat as a specialized derivative, not a primary frontier model. ablation; general_model; substantial change. Attention is displayed separately.",
+      "source_urls": [
+        "https://x.com/AgentGrid_sh/status/2102056887810404801",
+        "https://x.com/alfredversa/status/2102221435322143126"
+      ]
+    }
+  ],
+  "descriptive_statistics": {
+    "method": "stored-population-descriptive-v1",
+    "unit": "one distinct brand/dated-anchor snapshot pair; family duplicates removed",
+    "weight": "equal per retained pair",
+    "baseline": "seven days immediately before the selected dated source assertion",
+    "comparison": "seven days after; alternative availability anchor kept separately",
+    "missingness": "exclude absent anchors and not-yet-elapsed seven-day follow-up; exclude zero baseline from percent ratios, retain absolute counts",
+    "coverage": "staging stored population only; elapsed time does not establish collection completeness; not an estimate of actual release response",
+    "members": [
+      "PR01",
+      "PR02",
+      "PR04",
+      "PR05",
+      "PR06",
+      "PR07",
+      "PR08",
+      "PR09-Pro",
+      "PR10",
+      "PR11",
+      "PR13",
+      "PR14-Realtime",
+      "PR15",
+      "PR16",
+      "PR17",
+      "PR18",
+      "PR20"
+    ],
+    "exclusions": [
+      {
+        "case_id": "PR03",
+        "reason": "no aligned dated brand population"
+      },
+      {
+        "case_id": "PR09-Flash",
+        "reason": "shared family population already counted"
+      },
+      {
+        "case_id": "PR12",
+        "reason": "seven-day follow-up has not elapsed"
+      },
+      {
+        "case_id": "PR14-ASR",
+        "reason": "shared family population already counted"
+      },
+      {
+        "case_id": "PR14-TTS",
+        "reason": "shared family population already counted"
+      },
+      {
+        "case_id": "PR14-Gen",
+        "reason": "shared family population already counted"
+      },
+      {
+        "case_id": "PR14-Music",
+        "reason": "shared family population already counted"
+      },
+      {
+        "case_id": "PR19",
+        "reason": "no aligned dated brand population"
+      },
+      {
+        "case_id": "PR21",
+        "reason": "no aligned dated brand population"
+      },
+      {
+        "case_id": "PR22",
+        "reason": "no aligned dated brand population"
+      },
+      {
+        "case_id": "PR23",
+        "reason": "no aligned dated brand population"
+      },
+      {
+        "case_id": "PR24",
+        "reason": "no aligned dated brand population"
+      },
+      {
+        "case_id": "PR25",
+        "reason": "no aligned dated brand population"
+      },
+      {
+        "case_id": "PR26",
+        "reason": "no aligned dated brand population"
+      },
+      {
+        "case_id": "PR27",
+        "reason": "no aligned dated brand population"
+      },
+      {
+        "case_id": "PR28",
+        "reason": "no aligned dated brand population"
+      },
+      {
+        "case_id": "PR29",
+        "reason": "no aligned dated brand population"
+      },
+      {
+        "case_id": "PR30",
+        "reason": "no aligned dated brand population"
+      }
+    ],
+    "groups": [
+      {
+        "kind": "general_model",
+        "lineage": "primary",
+        "n": 10,
+        "members": [
+          "PR01",
+          "PR02",
+          "PR04",
+          "PR05",
+          "PR06",
+          "PR07",
+          "PR08",
+          "PR09-Pro",
+          "PR10",
+          "PR11"
+        ],
+        "mean_before_posts": 3022.1,
+        "mean_after_posts": 5591.5,
+        "median_change_percent": 96.47399999999999,
+        "mean_change_percent": 102.847,
+        "min_change_percent": -99.658,
+        "max_change_percent": 274.257,
+        "ratio_n": 10
+      },
+      {
+        "kind": "specialist_model",
+        "lineage": "primary",
+        "n": 6,
+        "members": [
+          "PR13",
+          "PR14-Realtime",
+          "PR15",
+          "PR16",
+          "PR17",
+          "PR18"
+        ],
+        "mean_before_posts": 3204.667,
+        "mean_after_posts": 3946.833,
+        "median_change_percent": 36.774,
+        "mean_change_percent": 35.83,
+        "min_change_percent": -14.537,
+        "max_change_percent": 115.789,
+        "ratio_n": 5
+      },
+      {
+        "kind": "agent",
+        "lineage": "primary",
+        "n": 1,
+        "members": [
+          "PR20"
+        ],
+        "mean_before_posts": 9738,
+        "mean_after_posts": 8476,
+        "median_change_percent": -12.96,
+        "mean_change_percent": -12.96,
+        "min_change_percent": -12.96,
+        "max_change_percent": -12.96,
+        "ratio_n": 1
+      }
+    ]
+  },
+  "private_receipts": {
+    "assessed-study-final.json": "51f1e0477d2a59749cd9e7e7b686c9fc55dcbe0448e8c9fe581af63ffb75aa72",
+    "publisher-supplement.json": "24c649cedf296b76378537a0e57ee2e94cee2432c70973be724218a235dbd8ce",
+    "study-final.json": "efa75d482f192e7d76c89fe93c41832a67973590ba9d4bc7bce8576341205b5e",
+    "study-rows-final.json": "70f958f6e2042c40518de1a3a23a67650da0d066b8f88dbe415d955066528d8d",
+    "staging-final-stats.json": "03549ac426ac0d9f5c82f404793217717d4c8ee4817a2b431a3581b57ee87ee1",
+    "census-post.json": "61edc2ec89d637f1d8380356ffda28768b6886b6e87c3c30133c8ca0f717e417",
+    "census-observation.json": "61881ee44b28fc19c47bf10a33abe2ee8630bcdbd6db7843bad96c81869f046b"
+  },
+  "non_x_scan": {
+    "runtime": "f85f67f73566da93c6cef288dfcd10b97535d7ea",
+    "counts": {
+      "observation_read": 562000
+    },
+    "limitations": {
+      "no_supported_release_text": 562000,
+      "stored_population_only": 562000
+    },
+    "complete": false,
+    "cursor": {
+      "complete": [],
+      "observation": 562000,
+      "post": "",
+      "selection": "b5e4f3860c9bfff2ca14faeafd73968e76417a226da0d1ae98da93780bd72e5f"
+    },
+    "pages": 281,
+    "seconds": 3599.179,
+    "selection_clock": "first_storage",
+    "available_observations": 1371466,
+    "persist": false,
+    "stop_reason": "one-hour bounded run; more observations remain"
+  }
+}
