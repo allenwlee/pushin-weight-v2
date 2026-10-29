@@ -31,6 +31,10 @@ The four new tables have distinct record meanings: an intake disposition, an imm
 - Five requested windows, including shifted overlapping boundaries, matched direct Post/account queries. Repeat created no snapshots. All 38 distinct seven-day side totals matched direct source queries.
 - Browser: the normal staging reader/renderer exported a real 35-row report. At 1280px, filtering Giotto shows Alto and Solo separately; significance sorting orders numeric values; evidence expands; announcement/availability totals stay distinct. At 390px, the page stays within the viewport and the wide table scrolls. HTTP(S)-only links and zero browser errors observed. Screenshots are retained in the private run receipts.
 
+## CI integration follow-up
+
+The full CI workflows exposed an omission in this change: four new tables and two bigint sequences lacked explicit staging-refresh classification. They now have copy/optional-source/count policy entries and corresponding grant-runbook/schema documentation. Existing exhaustive policy tests reproduce the omission and verify the repair. This policy change does not execute a full refresh or grant source permissions. Three preceding lint fixes remove an unused test import, use TypeError for malformed historical metadata, and separate import groups. Broader collector/account-fixture and older schema-reference failures remain separate from the release feature; final CI outcomes are recorded on the PR.
+
 ## Limits and follow-up
 
 - Two announcements are confirmed; 33 provisional entries retain unknown publisher/date/identity facts. A company's name or matching classifier tag is insufficient proof.

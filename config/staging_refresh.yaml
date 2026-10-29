@@ -84,6 +84,11 @@ relations:
     - event_dossier_claims
     - event_dossier_reviews
     - event_dossier_review_claims
+    # Immutable release assessments and reusable discussion calculations.
+    - event_dossier_intake_decisions
+    - discussion_window_snapshots
+    - discussion_window_counts
+    - event_dossier_discussion_windows
     - product_release_details
     - personnel_change_details
     # Benchmark taxonomy and measurement evidence; never collection credentials.
@@ -333,6 +338,11 @@ relations:
     - event_dossier_claims
     - event_dossier_reviews
     - event_dossier_review_claims
+    # Immutable release assessments and reusable discussion calculations.
+    - event_dossier_intake_decisions
+    - discussion_window_snapshots
+    - discussion_window_counts
+    - event_dossier_discussion_windows
     - product_release_details
     - personnel_change_details
     - materialization_state
@@ -513,6 +523,8 @@ relations:
     - source_identifier_namespaces_id_seq
     - event_dossier_sources_id_seq
     - event_dossier_review_claims_id_seq
+    - discussion_window_counts_id_seq
+    - event_dossier_discussion_windows_id_seq
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - source_metrics_id_seq
     - metric_observations_id_seq
@@ -647,6 +659,8 @@ relations:
     - source_identifier_namespaces_id_seq
     - event_dossier_sources_id_seq
     - event_dossier_review_claims_id_seq
+    - discussion_window_counts_id_seq
+    - event_dossier_discussion_windows_id_seq
     - original_content_sources_id_seq
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - source_metrics_id_seq
@@ -797,6 +811,10 @@ scrub:
 
 validation:
   exact_count_tables:
+    - event_dossier_intake_decisions
+    - discussion_window_snapshots
+    - discussion_window_counts
+    - event_dossier_discussion_windows
     - geolocations
     - geolocation_alternate_names
     - geolocation_policies
