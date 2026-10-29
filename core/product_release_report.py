@@ -1,5 +1,6 @@
 """Compact review report from persisted dossiers, evidence and shared counts."""
 
+from datetime import datetime
 from decimal import Decimal
 from html import escape
 from urllib.parse import urlsplit
@@ -18,10 +19,14 @@ def significance(*, product_kind, lineage, change):
     }
     ancestry = {"primary": 30, "derivative": 20, "ablation": 10, "limited_variant": 10}
     changes = {"major": 3, "substantial": 2, "minor": 1, "unknown": 0}
+    if (
+        product_kind not in kinds
+        or lineage not in {*ancestry, "unknown"}
+        or change not in changes
+    ):
+        raise ValueError("Unknown release significance category")
     if lineage == "unknown":
         return None, "Unranked: lineage requires evidence"
-    if product_kind not in kinds or lineage not in ancestry or change not in changes:
-        raise ValueError("Unknown release significance category")
     return Decimal(
         ancestry[lineage] + kinds[product_kind] + changes[change]
     ), f"{lineage}; {product_kind}; {change} change. Attention is displayed separately."
@@ -38,11 +43,15 @@ def release_rows(dossier_ids):
         review = event.current_review
         detail = getattr(review, "product_release", None) if review else None
         latest = event.intake_decisions.order_by("-recorded_at", "-pk").first()
-        claims = list(
-            models.EventDossierClaim.objects.filter(
-                event_dossier_source__event_dossier=event
-            ).select_related("claim_kind_reference")
+        claim_query = models.EventDossierClaim.objects.filter(
+            event_dossier_source__event_dossier=event
         )
+        if review:
+            claim_query = claim_query.filter(
+                review_decisions__review=review,
+                review_decisions__disposition__in=["accepted", "uncertain"],
+            )
+        claims = list(claim_query.select_related("claim_kind_reference"))
         reports = [
             c.assertion_text
             for c in claims
@@ -55,7 +64,12 @@ def release_rows(dossier_ids):
             if len(set(reports)) == 1
             else "Unresolved source candidate"
         )
-        sources = list(event.sources.select_related("post", "collection_observation"))
+        source_query = event.sources.all()
+        if review:
+            source_query = source_query.filter(
+                pk__in={c.event_dossier_source_id for c in claims}
+            )
+        sources = list(source_query.select_related("post", "collection_observation"))
         accounts = {s.post.author_id for s in sources if s.post_id and s.post.author_id}
         milestones = []
         for claim in sorted(claims, key=lambda c: (c.recorded_at, str(c.pk))):
@@ -101,11 +115,13 @@ def release_rows(dossier_ids):
                 "posts": link.snapshot.post_count,
                 "accounts": link.snapshot.account_count,
                 "coverage": link.snapshot.coverage,
+                "window_elapsed_at_capture": link.snapshot.window_end
+                <= link.snapshot.knowledge_cutoff_at,
                 "subject_id": str(link.snapshot.subject_id),
             }
-            for link in event.discussion_windows.select_related("snapshot").order_by(
-                "snapshot__window_start", "pk"
-            )
+            for link in event.discussion_windows.filter(review=review)
+            .select_related("snapshot")
+            .order_by("snapshot__window_start", "pk")
         ]
         result.append(
             {
@@ -117,6 +133,14 @@ def release_rows(dossier_ids):
                 if latest
                 else "pending",
                 "review_id": str(review.pk) if review else None,
+                "review_cutoff_at": review.evidence_cutoff_at.isoformat()
+                if review
+                else None,
+                "review_method": review.method_version if review else None,
+                "availability": detail.release_availability_reference.code
+                if detail
+                else "unknown",
+                "intake_outcome": latest.outcome if latest else None,
                 "publisher": detail.release_issuer_company_id
                 if detail and detail.release_issuer_company_id
                 else "Unverified / unresolved",
@@ -134,6 +158,19 @@ def release_rows(dossier_ids):
                 "claims": milestones,
                 "sources": len(sources),
                 "accounts": len(accounts),
+                "source_accounts": [
+                    {
+                        "post_id": source.post_id,
+                        "name": source.post.author_name
+                        or source.post.author_handle
+                        or "Unknown account",
+                        "handle": source.post.author_handle,
+                        "url": source.post.tweet_url
+                        or f"https://x.com/i/status/{source.post_id}",
+                    }
+                    for source in sources
+                    if source.post_id
+                ],
                 "discussion": discussion,
             }
         )
@@ -173,9 +210,33 @@ def render_report(rows, *, title="Product releases — staging study", notes="")
             for w in row["discussion"]
         )
         score = row["score"] if row["score"] is not None else "—"
+        totals = [
+            w
+            for w in row["discussion"]
+            if (
+                datetime.fromisoformat(w["end"]) - datetime.fromisoformat(w["start"])
+            ).days
+            == 7
+        ]
+        total_text = (
+            "<br>".join(
+                f"7d {escape(w['role'])}: {w['posts']:,} posts / {w['accounts']:,} accounts"
+                + (
+                    " (partial follow-up)"
+                    if not w.get("window_elapsed_at_capture", True)
+                    else ""
+                )
+                for w in totals
+            )
+            or "No aligned brand measurement"
+        )
+        source_names = "<br>".join(
+            _link(source.get("url"), source["name"])
+            for source in row.get("source_accounts", [])
+        )
         body.append(f'''<tr><td>{index}</td><td>{escape(row["name"])}<small>{escape(row["id"])}</small></td>
-<td>{escape(row["state"])}</td><td>{escape(row["publisher"])}</td><td data-value="{escape(str(row["score"] or -1))}">{escape(str(score))}<details><summary>Reason</summary>{escape(row["reason"])}</details></td>
-<td>{row["sources"]} records<br>{row["accounts"]} X accounts</td><td><ul>{milestones}</ul></td><td><ul>{windows}</ul></td></tr>''')
+<td>{escape(row["state"])}<small>Access: {escape(row.get("availability", "unknown"))}</small></td><td>{escape(row["publisher"])}</td><td data-value="{escape(str(row["score"] or -1))}">{escape(str(score))}<details><summary>Reason</summary>{escape(row["reason"])}</details></td>
+<td>{row["sources"]} records / {row["accounts"]} X accounts<details><summary>Source names</summary>{source_names}</details></td><td><details><summary>{len(row["claims"])} dated or verification claims</summary><ul>{milestones}</ul><small>Review {escape(row.get("review_id") or "pending")}<br>Cutoff {escape(row.get("review_cutoff_at") or "unknown")}</small></details></td><td>{total_text}<details><summary>{len(row["discussion"])} saved windows</summary><ul>{windows}</ul></details></td></tr>''')
     return (
         """<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>"""

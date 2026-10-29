@@ -11,6 +11,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 
+from django.db import connection
 from django.db.models import Exists, OuterRef, Prefetch, Q
 
 from core import models
@@ -86,7 +87,23 @@ def post_page(window: ReplayWindow, *, clock="publication", after="", limit=500)
             Q(physical_in_window=True)
             | Q(fetched_at__gte=window.start, fetched_at__lt=window.end)
         )
-    posts = list(qs.order_by("pk")[:limit])
+    # Select narrow identities through the time index before loading wide Posts.
+    # PostgreSQL otherwise favors a PK scan for LIMIT and can read months of
+    # unrelated heap rows before reaching a late historical window. The CTE is
+    # statement-local; it does not persist a population or change cursor order.
+    sql, params = qs.order_by().values_list("pk", flat=True).query.sql_with_params()
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "WITH eligible(source_id) AS MATERIALIZED ("
+            + sql
+            + ") SELECT source_id FROM eligible ORDER BY source_id LIMIT %s",
+            (*params, limit),
+        )
+        ids = [row[0] for row in cursor.fetchall()]
+    selected = models.Post.objects.filter(pk__in=ids)
+    if clock == "collection":
+        selected = selected.annotate(physical_in_window=Exists(physical))
+    posts = list(selected.order_by("pk"))
     return _post_sources(posts, clock=clock)
 
 

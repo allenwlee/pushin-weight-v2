@@ -1,3 +1,5 @@
+import pytest
+
 from core.product_release_report import render_report, significance
 
 
@@ -48,3 +50,8 @@ def test_report_escapes_sources_and_never_makes_javascript_links():
     assert 'href="javascript:' not in html
     assert "&lt;script&gt;" in html
     assert "addEventListener" in html
+
+
+def test_unknown_lineage_does_not_bypass_validation_of_other_rank_metadata():
+    with pytest.raises(ValueError, match="category"):
+        significance(product_kind="invented", lineage="unknown", change="major")

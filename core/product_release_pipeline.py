@@ -332,11 +332,13 @@ def review_release(
     )
     if len(claims) != len(set(map(str, claim_ids))):
         raise ValueError("Review claims must exist in this dossier")
+    by_kind = {}
+    for claim in claims:
+        by_kind.setdefault(claim.claim_kind_reference.code, []).append(claim)
+    if release.availability_state == "available" and not by_kind.get("availability"):
+        raise ValueError("Availability requires its own evidence")
     if state == "confirmed":
         issuer = release.release_issuer_company_id
-        by_kind = {}
-        for claim in claims:
-            by_kind.setdefault(claim.claim_kind_reference.code, []).append(claim)
         entity_proof = any(
             c.scope_key == f"company:{issuer}" and c.source_locator
             for c in by_kind.get("publisher_verification", [])
@@ -372,10 +374,6 @@ def review_release(
             raise ValueError(
                 "Confirmation requires verified publisher identity and source ownership evidence"
             )
-        if release.availability_state == "available" and not by_kind.get(
-            "availability"
-        ):
-            raise ValueError("Availability requires its own evidence")
     # Complete_review hashes cutoff and inputs; pass a stable reviewed_at so an
     # unchanged assessed packet is a no-op, including after the current pointer moves.
     return complete_review(

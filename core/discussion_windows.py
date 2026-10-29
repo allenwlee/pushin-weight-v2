@@ -8,7 +8,7 @@ This is a current-projection historical analysis, never an as-known-then replay.
 from __future__ import annotations
 
 from bisect import bisect_left
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import UTC
 
 from django.db import connection, transaction
@@ -299,6 +299,8 @@ def read_window(snapshot_id):
         "window_start": snapshot.window_start.astimezone(UTC).isoformat(),
         "window_end": snapshot.window_end.astimezone(UTC).isoformat(),
         "observed_at": snapshot.observed_at.isoformat(),
+        "window_elapsed_at_capture": snapshot.window_end
+        <= snapshot.knowledge_cutoff_at,
         "post_count": snapshot.post_count,
         "account_count": snapshot.account_count,
         "coverage": snapshot.coverage,
@@ -370,25 +372,36 @@ def discussion_packet(snapshot_id, *, source_limit=16):
             strata[
                 (quartile, language, state.get("sentiment_id") or "unavailable")
             ].append(post)
+        # Balance time first. A multilingual first quartile must not consume the
+        # entire quota before a middle-window surge gets a representative source.
+        queues = {}
+        for quartile in range(4):
+            groups = [
+                deque(strata[key]) for key in sorted(strata) if key[0] == quartile
+            ]
+            queue = deque()
+            while any(groups):
+                for group in groups:
+                    if group:
+                        queue.append(group.popleft())
+            queues[quartile] = queue
         selected, accounts = [], defaultdict(int)
-        # One round per stratum before any repeats, ordered across the window.
-        for depth in range(source_limit):
-            for key in sorted(strata):
-                group = strata[key]
-                if depth >= len(group):
-                    continue
-                post = group[depth]
-                account = str(
-                    post["author_id"] or post["native_author_id"] or post["tweet_id"]
-                )
-                if accounts[account] >= 2:
-                    continue
-                selected.append(post["tweet_id"])
-                accounts[account] += 1
+        while any(queues.values()) and len(selected) < source_limit:
+            for queue in queues.values():
+                while queue:
+                    post = queue.popleft()
+                    account = str(
+                        post["author_id"]
+                        or post["native_author_id"]
+                        or post["tweet_id"]
+                    )
+                    if accounts[account] >= 2:
+                        continue
+                    selected.append(post["tweet_id"])
+                    accounts[account] += 1
+                    break
                 if len(selected) == source_limit:
                     break
-            if len(selected) == source_limit:
-                break
         sources = {p.pk: p for p in models.Post.objects.filter(pk__in=selected)}
         examples = [
             {
@@ -396,6 +409,7 @@ def discussion_packet(snapshot_id, *, source_limit=16):
                 "account_id": str(sources[key].author_id)
                 if sources[key].author_id
                 else None,
+                "native_author_id": sources[key].native_author_id,
                 "name": sources[key].author_name
                 or sources[key].author_handle
                 or "Unknown account",
@@ -411,9 +425,13 @@ def discussion_packet(snapshot_id, *, source_limit=16):
             sources=examples,
             supplied_post_count=len(examples),
             supplied_account_count=len(
-                {s["account_id"] for s in examples if s["account_id"]}
+                {
+                    s["account_id"] or s["native_author_id"]
+                    for s in examples
+                    if s["account_id"] or s["native_author_id"]
+                }
             ),
-            source_selection="quartile-language-sentiment-examples-v1",
+            source_selection="quartile-language-sentiment-examples-v2",
             source_limit=source_limit,
             attribution="brand discussion; examples are not automatically attributable to one release",
         )

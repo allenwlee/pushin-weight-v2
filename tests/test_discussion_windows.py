@@ -88,3 +88,27 @@ def test_published_snapshot_rejects_late_count_insertions():
             count=0,
             denominator=0,
         )
+
+
+def test_many_early_languages_do_not_hide_the_middle_of_the_window():
+    from core.discussion_windows import capture_window, discussion_packet
+
+    brand = models.Brand.objects.create(nickname="quartile-brand")
+    now = timezone.now()
+    for n in range(15):
+        minute = 1 if n < 12 else (n - 11) * 15 + 1
+        post = models.Post.objects.create(
+            tweet_id=f"quartile-{n}",
+            created_at=now + timedelta(minutes=minute),
+            lang=f"lang-{n}" if n < 12 else "en",
+            text=f"Observation {n}",
+        )
+        models.PostBrand.objects.create(post=post, brand=brand)
+    snapshot, _ = capture_window(brand.pk, now, now + timedelta(hours=1))
+    result = discussion_packet(snapshot.pk, source_limit=4)
+    assert {p["post_id"] for p in result["sources"]} == {
+        "quartile-0",
+        "quartile-12",
+        "quartile-13",
+        "quartile-14",
+    }

@@ -97,6 +97,7 @@ def validate_assessment(packet):
                 "availability",
                 "verification",
                 "research",
+                "observed_publisher",
             ),
         )
         for field in ("case_id", "identity", "name", "reason"):
@@ -140,10 +141,27 @@ def validate_assessment(packet):
                 raise ValueError("exclusive_source must be boolean")
             if item.get("effective_at") and _instant(item["effective_at"]) > cutoff:
                 raise ValueError("A study milestone cannot postdate its cutoff")
-            if item.get("effective_date"):
-                date.fromisoformat(item["effective_date"])
-        for doc in case.get("research", []):
+            if (
+                item.get("effective_date")
+                and date.fromisoformat(item["effective_date"]) > cutoff.date()
+            ):
+                raise ValueError("A study milestone cannot postdate its cutoff")
+        research = case.get("research", [])
+        if not isinstance(research, list) or len(research) > 40:
+            raise ValueError("Research evidence must be a bounded list")
+        for doc in research:
             _document(doc)
+            if _instant(doc["observed_at"]) > cutoff:
+                raise ValueError("Research evidence exceeds the review cutoff")
+        if case.get("observed_publisher"):
+            publisher = case["observed_publisher"]
+            _object(publisher, ("post_id", "name"), ("handle",))
+            _text(publisher["post_id"])
+            _text(publisher["name"])
+            if publisher.get("handle"):
+                _text(publisher["handle"])
+            if publisher["post_id"] not in {item["post_id"] for item in evidence}:
+                raise ValueError("Observed publisher must reference selected evidence")
         if case.get("verification"):
             _object(case["verification"], ("post_id", "entity", "ownership"))
             for name in ("entity", "ownership"):
@@ -202,10 +220,7 @@ def apply_case(case, *, actor, assessed_at):
                 ):
                     continue
                 if old.sources.filter(
-                    claims__claim_kind_reference__code__in=[
-                        "release_report",
-                        "release_context",
-                    ]
+                    claims__claim_kind_reference__code="release_report"
                 ).exists():
                     continue
                 merge_dossiers(
@@ -257,6 +272,40 @@ def apply_case(case, *, actor, assessed_at):
         extraction_version=METHOD,
     )
     claims.append(context)
+    publisher = case.get("observed_publisher")
+    if publisher:
+        from core.targeted_extraction import _organization_candidate
+
+        post = models.Post.objects.get(pk=publisher["post_id"])
+        observed = " ".join(
+            (post.text or "", post.author_name or "", post.author_handle or "")
+        ).casefold()
+        if not any(
+            value.casefold().removeprefix("@") in observed
+            for value in (publisher["name"], publisher.get("handle"))
+            if value
+        ):
+            raise ValueError("Publisher identity is absent from the selected source")
+        candidate, _ = _organization_candidate(
+            post=post,
+            name=publisher["name"],
+            handle=publisher.get("handle"),
+            confidence=None,
+        )
+        publisher_source = attach_source(event.pk, post_id=post.pk)
+        claims.append(
+            add_claim(
+                publisher_source.pk,
+                claim_kind="release_context",
+                scope_key="observed_publisher",
+                assertion_text=f"Reported release publisher: {publisher['name']}; ownership requires verification",
+                source_excerpt=post.text,
+                source_locator=sources[post.pk].source_url,
+                source_archive_id=archive.pk,
+                reported_candidate_id=candidate.pk,
+                extraction_version=METHOD,
+            )
+        )
     verification = case.get("verification")
     if verification:
         if verification["post_id"] not in sources or not case.get("issuer_company_id"):

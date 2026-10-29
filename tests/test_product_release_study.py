@@ -149,3 +149,86 @@ def test_study_retains_day_precision_without_inventing_an_hour():
     claims = result["releases"][0]["claims"]
     assert any(c["precision"] == "day" for c in claims)
     assert result["cases"][0]["dated_claims"]
+
+
+def test_future_days_and_research_are_not_presented_as_observed():
+    value = packet()
+    evidence = value["cases"][0]["evidence"][0]
+    evidence.pop("effective_at")
+    evidence["effective_date"] = (timezone.now() + timedelta(days=1)).date().isoformat()
+    with pytest.raises(ValueError, match="postdate"):
+        validate_assessment(value)
+    evidence.pop("effective_date")
+    value["cases"][0]["research"] = [
+        {
+            "url": "https://publisher.example/release",
+            "text": "Tomorrow's evidence is not known yet",
+            "observed_at": (timezone.now() + timedelta(days=1)).isoformat(),
+        }
+    ]
+    with pytest.raises(ValueError, match="cutoff"):
+        validate_assessment(value)
+
+
+def test_provisional_release_cannot_claim_availability_without_access_evidence():
+    value = packet()
+    value["cases"][0]["availability"] = "available"
+    with pytest.raises(ValueError, match="Availability requires"):
+        apply_study(value)
+
+
+def test_report_does_not_attach_later_unreviewed_claims_to_saved_review():
+    from core.event_dossiers import add_claim
+    from core.product_release_report import release_rows
+
+    result = apply_study(packet())
+    event_id = result["cases"][0]["dossier_id"]
+    source = models.EventDossierSource.objects.get(event_dossier_id=event_id)
+    claim = add_claim(
+        source.pk,
+        claim_kind="availability",
+        scope_key="later-api",
+        assertion_text="A later access report",
+        source_excerpt="A later access report",
+        extraction_version="later-test",
+    )
+    row = release_rows([event_id])[0]
+    assert str(claim.pk) not in {c["id"] for c in row["claims"]}
+    assert row["availability"] == "unknown"
+    assert row["review_id"] == result["cases"][0]["review_id"]
+
+
+def test_untracked_publisher_is_retained_from_third_party_release_evidence():
+    value = packet()
+    models.Post.objects.filter(pk="study-source").update(
+        text="Giotto announces Alto today."
+    )
+    case = value["cases"][0]
+    case["evidence"][0]["excerpt"] = "Giotto announces Alto today."
+    case["observed_publisher"] = {"post_id": "study-source", "name": "Giotto"}
+    result = apply_study(value)
+    claim = models.EventDossierClaim.objects.get(
+        event_dossier_source__event_dossier_id=result["cases"][0]["dossier_id"],
+        scope_key="observed_publisher",
+    )
+    candidate = claim.reported_brand_discovery_candidate
+    assert candidate.observed_name == "Giotto"
+    assert candidate.verification_status == "pending"
+    assert candidate.source_identities == ["post:study-source"]
+    apply_study(value)
+    assert models.BrandDiscoveryCandidate.objects.filter(pk=candidate.pk).count() == 1
+
+
+def test_exclusive_source_can_merge_pending_container_with_publisher_context():
+    value = packet()
+    models.Post.objects.filter(pk="study-source").update(
+        author_handle="new_lab", author_name="New Lab"
+    )
+    value["cases"][0]["evidence"][0]["exclusive_source"] = True
+    result = apply_study(value)
+    assert models.EventDossier.objects.filter(merged_into__isnull=True).count() == 1
+    assert models.EventDossier.objects.filter(
+        merged_into_id=result["cases"][0]["dossier_id"]
+    ).exists()
+    repeated = apply_study(value)
+    assert repeated["cases"] == result["cases"]
