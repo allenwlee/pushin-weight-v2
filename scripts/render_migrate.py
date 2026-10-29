@@ -19,6 +19,7 @@ _MIGRATION_LOCK_ID = 8_675_309
 def verify_serving_schema(connection, *, wait_seconds=900, sleep=time.sleep, clock=time.monotonic):
     """Web builds wait for the owner build's migration without receiving its key."""
     from django.db.migrations.executor import MigrationExecutor
+
     from core.geolocation_access import serving_grants_ready, verify_serving_access
 
     verify_serving_access(connection)
@@ -110,6 +111,7 @@ def main(
         serving_role = values.get("PW_SERVING_DATABASE_ROLE")
         if serving_role:
             from django.db import transaction
+
             from core.geolocation_access import apply_serving_grants
             with transaction.atomic(using=migration_connection.alias):
                 apply_serving_grants(migration_connection, serving_role)
