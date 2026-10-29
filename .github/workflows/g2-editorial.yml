@@ -69,3 +69,5 @@ jobs:
           tests/test_trend_narrative_lifecycle.py tests/test_trend_narrative_tasks.py
           tests/test_post_synthesis_lifecycle.py tests/test_post_synthesis_api.py
           tests/test_staff_library.py
+          tests/test_product_release*.py tests/test_discussion_windows.py
+          tests/test_event_dossiers.py
