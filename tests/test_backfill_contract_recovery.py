@@ -696,7 +696,12 @@ def test_translation_grant_needs_feedback_unless_the_provider_failed(native, var
         result = _advance_grant(native, grant, provider)
         if result["pending_posts"] == 0:
             break
-    assert result["pending_posts"] == 0 and provider.sent == 1
+    granted = list(OriginalContentCall.objects.filter(
+        provenance__context__recovery__grant_sha256=result["grant_sha256"],
+    ).values("stage", "state", "import_state", "error_code", "import_evidence"))
+    assert result["pending_posts"] == 0 and provider.sent == 1, {
+        "sent": provider.sent, "granted_calls": granted, **result,
+    }
     assert _paid_history()[:len(before)] == before
     granted = OriginalContentCall.objects.get(provenance__context__recovery__grant_sha256=digest(grant))
     assert granted.stage == "translation" and granted.import_state == "applied"

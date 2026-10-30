@@ -38,11 +38,21 @@ def staged_job(monkeypatch, count, **kwargs):
     return set_job_state(job.pk, "ready")
 
 
+@pytest.fixture
+def seeded_archives():
+    """Archives present before staging runs, which staging must not add to.
+
+    Migration 0150 seeds legacy-snapshot archives. Transactional tests flush
+    them afterwards, so only a session's first transactional test sees them.
+    """
+    return set(CollectionEvidenceArchive.objects.values_list("pk", flat=True))
+
+
 def result_for(params):
     return page(re.search(r"marker(\d+)", params["query"]).group(1))
 
 
-def test_twenty_simultaneous_requests_without_body_archives(http_pages, monkeypatch):  # noqa: F811
+def test_twenty_simultaneous_requests_without_body_archives(http_pages, monkeypatch, seeded_archives):  # noqa: F811
     barrier = threading.Barrier(20)
     job = staged_job(monkeypatch, 20)
     def response(params):
@@ -54,7 +64,7 @@ def test_twenty_simultaneous_requests_without_body_archives(http_pages, monkeypa
     assert report["collection_drained"]
     assert report["prefetch"]["max_buffered"] == 20
     assert Post.objects.count() == CollectionObservation.objects.filter(run_id=report["run_id"]).count() == 20
-    assert not CollectionEvidenceArchive.objects.exists()
+    assert not CollectionEvidenceArchive.objects.exclude(pk__in=seeded_archives).exists()
     assert CollectionRequest.objects.filter(request_category="x_backfill_staging", archive__isnull=True,
         transport_outcome="received", accounting_complete=True).count() == 20
     from core.models import CollectionScopeRequestUse
@@ -93,7 +103,7 @@ def test_fast_page_commits_and_refills_before_slow_request_finishes(http_pages, 
 
 
 @pytest.mark.parametrize("after_commit", [False, True])
-def test_interrupted_page_retries_only_when_uncommitted(http_pages, monkeypatch, after_commit):  # noqa: F811
+def test_interrupted_page_retries_only_when_uncommitted(http_pages, monkeypatch, after_commit, seeded_archives):  # noqa: F811
     job = staged_job(monkeypatch, 1)
     original = PageCheckpoint.persist
     def crash(self, *args, **kwargs):
@@ -113,10 +123,10 @@ def test_interrupted_page_retries_only_when_uncommitted(http_pages, monkeypatch,
     assert len(state["requests"]) == (1 if after_commit else 2)
     assert report["prefetch"]["lost_responses"] == int(not after_commit)
     assert Post.objects.count() == 1
-    assert not CollectionEvidenceArchive.objects.exists()
+    assert not CollectionEvidenceArchive.objects.exclude(pk__in=seeded_archives).exists()
 
 
-def test_pages_buffered_when_the_deadline_crosses_the_request_envelope_commit(http_pages, monkeypatch):  # noqa: F811
+def test_pages_buffered_when_the_deadline_crosses_the_request_envelope_commit(http_pages, monkeypatch, seeded_archives):  # noqa: F811
     # The size test paid twice for pages buffered as a run's deadline crossed
     # the 38 s request envelope. Each received page now commits in its run.
     job = staged_job(monkeypatch, 3)
@@ -154,10 +164,10 @@ def test_pages_buffered_when_the_deadline_crosses_the_request_envelope_commit(ht
     assert second["prefetch"]["lost_responses"] == 0
     assert len(state["requests"]) == Post.objects.count() == 6
     assert CollectionRequest.objects.filter(transport_outcome="received", accounting_complete=True).count() == 6
-    assert not CollectionEvidenceArchive.objects.exists()
+    assert not CollectionEvidenceArchive.objects.exclude(pk__in=seeded_archives).exists()
 
 
-def test_too_little_lease_keeps_receipts_and_refetches_only_those_pages(http_pages, monkeypatch):  # noqa: F811
+def test_too_little_lease_keeps_receipts_and_refetches_only_those_pages(http_pages, monkeypatch, seeded_archives):  # noqa: F811
     from datetime import UTC, datetime, timedelta
 
     from monitor import backfill_staging
@@ -211,10 +221,10 @@ def test_too_little_lease_keeps_receipts_and_refetches_only_those_pages(http_pag
     assert sorted(receipt["body_lost"] for receipt in receipts.values()) == [False, True, True]
     assert not CollectionRequest.objects.filter(transport_outcome="pending").exists()
     assert CollectionRequest.objects.filter(transport_outcome="received", accounting_complete=True).count() == 5
-    assert not CollectionEvidenceArchive.objects.exists()
+    assert not CollectionEvidenceArchive.objects.exclude(pk__in=seeded_archives).exists()
 
 
-def test_staff_relevance_reserve_keeps_late_pages_for_a_gated_refetch(http_pages, monkeypatch):  # noqa: F811
+def test_staff_relevance_reserve_keeps_late_pages_for_a_gated_refetch(http_pages, monkeypatch, seeded_archives):  # noqa: F811
     from monitor import backfill_collection
 
     # A Call A staff check needs its 30 s. A page drained with less left would
@@ -250,7 +260,7 @@ def test_staff_relevance_reserve_keeps_late_pages_for_a_gated_refetch(http_pages
     assert second["collection_drained"]
     assert second["prefetch"]["lost_responses"] == 2
     assert len(state["requests"]) == 5 and Post.objects.count() == 3
-    assert not CollectionEvidenceArchive.objects.exists()
+    assert not CollectionEvidenceArchive.objects.exclude(pk__in=seeded_archives).exists()
 
 
 def test_slow_consumer_tapers_admission_to_pages_it_can_commit(http_pages, monkeypatch):  # noqa: F811
@@ -382,7 +392,7 @@ def test_wrong_target_refused_before_paid_request(http_pages, monkeypatch, fault
     assert not CollectionRequest.objects.exists()
 
 
-def test_error_drains_every_started_request_and_keeps_cursors(http_pages, monkeypatch):  # noqa: F811
+def test_error_drains_every_started_request_and_keeps_cursors(http_pages, monkeypatch, seeded_archives):  # noqa: F811
     job = staged_job(monkeypatch, 3)
     barrier = threading.Barrier(3)
     def response(params):
@@ -395,7 +405,7 @@ def test_error_drains_every_started_request_and_keeps_cursors(http_pages, monkey
         execute_job(job.pk, collection_options={"concurrency": 3})
     assert len(state["requests"]) == 3
     assert CollectionRequest.objects.filter(transport_outcome="received").count() == 3
-    assert not CollectionEvidenceArchive.objects.exists()
+    assert not CollectionEvidenceArchive.objects.exclude(pk__in=seeded_archives).exists()
     assert not CollectionScopeRun.objects.filter(run__job=job, enumeration_complete=True).exists()
 
 
@@ -410,7 +420,7 @@ def test_underfilled_pages_follow_cursor_and_deduplicate(http_pages, monkeypatch
 
 
 @pytest.mark.parametrize("kept", [False, True])
-def test_staging_rare_gate_still_controls_admission(http_pages, monkeypatch, tmp_path, kept):  # noqa: F811
+def test_staging_rare_gate_still_controls_admission(http_pages, monkeypatch, tmp_path, kept, seeded_archives):  # noqa: F811
     from decimal import Decimal
 
     from core.models import RareTypeSearchHit
@@ -441,7 +451,7 @@ def test_staging_rare_gate_still_controls_admission(http_pages, monkeypatch, tmp
     assert Post.objects.filter(pk="rare-staging").exists() == kept
     assert CollectionObservation.objects.filter(run__job=job, post_id="rare-staging").exists() == kept
     assert RareTypeSearchHit.objects.get(provider_post_id="rare-staging").gate_state == ("kept" if kept else "junk")
-    assert not CollectionEvidenceArchive.objects.exists()
+    assert not CollectionEvidenceArchive.objects.exclude(pk__in=seeded_archives).exists()
 
 
 def test_staging_request_ceiling_survives_resume(http_pages, monkeypatch):  # noqa: F811
