@@ -110,6 +110,7 @@ def test_single_named_announcement_reuses_source_dossier_without_merging_ambigui
     source = stored_posts([post.pk])[0]
     if mode == "fraud":
         from dataclasses import replace
+
         from core.product_release_intake import FraudDecision
 
         source = replace(source, record=replace(source.record, fraud=FraudDecision(
@@ -134,6 +135,7 @@ def test_single_named_announcement_reuses_source_dossier_without_merging_ambigui
     review = None
     if mode in {"generic_first", "reviewed_product_generic"}:
         from django.utils import timezone
+
         from core.event_dossiers import ProductReleaseInput
         from core.product_release_pipeline import review_release
 
@@ -145,7 +147,12 @@ def test_single_named_announcement_reuses_source_dossier_without_merging_ambigui
                                 evidence_cutoff_at=timezone.now())
     if mode in {"rejected_anchor", "reviewed_product_rejected"}:
         from django.utils import timezone
-        from core.event_dossiers import ClaimDecision, ProductReleaseInput, complete_review
+
+        from core.event_dossiers import (
+            ClaimDecision,
+            ProductReleaseInput,
+            complete_review,
+        )
 
         rejected_product = models.Product.objects.create(repo_id="lab/GLM-5.3") if mode == "reviewed_product_rejected" else None
         complete_review(target.pk, expected_current_review_id=None, display_title="Other release",
@@ -219,9 +226,12 @@ def test_saved_release_report_provides_search_lead_without_repository_link():
     assert persist_source(source) == result
 
 
-@pytest.mark.parametrize("status,outcome", [(200, "found"), (404, "missing_or_private"),
-                                           (429, "throttled_or_forbidden")])
-def test_github_repository_reference_is_retained_as_unresolved_and_reused(status, outcome):
+@pytest.mark.parametrize("status,outcome,private", [
+    (200, "found", False), (200, "private", True), (200, "private_or_unverified", None),
+    (401, "unauthorized", False), (403, "forbidden_or_throttled", False),
+    (404, "missing_or_private", False), (429, "throttled", False),
+])
+def test_github_repository_reference_is_retained_as_unresolved_and_reused(status, outcome, private):
     import httpx
 
     from core.measurement_taxonomy import digest
@@ -261,14 +271,15 @@ def test_github_repository_reference_is_retained_as_unresolved_and_reused(status
         queue_github_repository(fabricated.pk)
     assert models.CollectionJob.objects.count() == 1
     client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(
-        status, json={"id": 42, "full_name": "Example/Agent", "private": False,
+        status, json={"id": 42, "full_name": "Example/Agent", "private": private,
                    "stargazers_count": 7, "owner": {"login": "Example"}}
     )))
     batch = drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(job.pk)])
     assert batch["provider_calls"] == 1
     result = batch["jobs"][0]
     assert result["outcome"] == outcome and result["physical_requests"] == 1
-    if status == 200:
+    assert models.CollectionRequest.objects.get(attempt__run__job=job).http_status == status
+    if outcome == "found":
         from core.collection_capture import observation_object_documents
 
         assert models.EventDossierClaim.objects.filter(scope_key__startswith="github_capture:").count() == 1

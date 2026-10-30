@@ -1237,8 +1237,14 @@ def execute_github_repository(job_id, *, client):
                        and type(row.get("id")) is int and row["id"] > 0 else "identity_mismatch")
         elif response.status == 404:
             outcome = "missing_or_private"
-        elif response.status in {403, 429}:
-            outcome = "throttled_or_forbidden"
+        elif response.status == 401:
+            outcome = "unauthorized"
+        elif response.status == 403:
+            outcome = "forbidden_or_throttled"
+        elif response.status == 429:
+            outcome = "throttled"
+        elif response.status == 200 and isinstance(row, dict) and row.get("private") is True:
+            outcome = "private"
         elif response.status == 200:
             outcome = "private_or_unverified"
         else:
