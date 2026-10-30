@@ -10,9 +10,8 @@ ollija:
   workflow: plan
   delivery_target: production
   delivery_selected_by_user: true
-  delivery_route: staged
-  delivery_route_selected_by_user: false
-  staging_transport: branch
+  delivery_route: direct
+  delivery_route_selected_by_user: true
 ---
 # Homepage range refresh repair
 
@@ -20,7 +19,7 @@ ollija:
 
 A single click from 365 days to 30 days or from 30 days to 7 days should update the chart and Pulse together. A failed request must visibly explain that the previous result remains displayed. Reuse existing saved counts for the seven-day comparison without changing its exact rolling boundaries or any collection/worker behavior.
 
-Verify the real homepage in Playwright, including descending ranges, a controlled timeout and recovery, exact PostgreSQL count parity at partial bucket boundaries, historical corrections, and existing state/race regressions. The owner selected production deployment on October30. Complete review, exact-candidate UI/performance verification, the selected staging route and production readback. The unaccepted product-release work remains excluded.
+Verify the real homepage in Playwright, including descending ranges, a controlled timeout and recovery, exact PostgreSQL count parity at partial bucket boundaries, historical corrections, and existing state/race regressions. The owner selected production deployment on October30 and explicitly approved direct production delivery after release preparation. Complete review, candidate UI/performance verification and exact deployed-revision readback. The unaccepted product-release work remains excluded.
 
 ## Scope and observed cause
 
@@ -81,14 +80,10 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
-8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
-9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
-10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
-11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+4. On the owner-selected direct route, fetch the remote production lane: `git fetch origin refs/heads/main`.
+5. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+6. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+7. After step 6 succeeds, perform worktree cleanup as the final filesystem action:
     - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/home-range-refresh-20261030` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
     - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/fix/home-range-refresh-20261030` without `--force`.
     - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
@@ -107,7 +102,9 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 
 ## Delivery Exceptions
 
-Owner requests “deploy” twice on October30, authorizing production delivery of this homepage fix. Preserve the default staged route unless the owner selects exact-commit staging or direct production in the pending route question. The shared staging branch/image is0a974d77 and contains unaccepted PR74 work; it must not be promoted into this candidate or overwritten without coordination. Exclude its migration/models/four tables from Git and production.
+Owner requests “deploy” twice on October30, then answers “approve” to the explicit direct-production question after the tested candidate is pushed. Direct production delivery is selected; staging is omitted, not reported as passed. The shared staging branch/image is0a974d77 and contains unaccepted PR74 work; preserve it and exclude its migration/models/four tables from Git and production.
+
+The deployment commit adds only this plan's approval and verification record to tested product-source revision `d9f66ff02ffe422ff66e15ae11a9e253854e4e52`. Reuse its 495 tests, 5191-obligation assessment, focused checks and sealed performance result: application code, assets, dependencies, tests, fixtures and runtime assumptions are unchanged. Verify the documentation-only diff before promotion, and observe the actual deployment commit in Render and the production browser. This is a real authorization record, not an empty source commit or a substitute for a missing runtime prerequisite.
 
 ## Regression acceptance
 
@@ -141,3 +138,13 @@ The first affected assurance invocation used the wrapper's maintenance `run` rou
 - Review found that unconditional partial-bucket OR predicates could widen existing aligned source scans. Preserve the original concrete boundary predicate whenever both boundaries align. Two new caller-level scan-bound tests red before correction, green afterward. Final focused suite123tests/16subtests,0requiredskips/errors; helper/new tests lint clean.
 - Internal GPT correctness, SQL/performance and request-race review in the primary session per AGENTS's sequential tool mapping. External Claude route remains excluded; no independent cross-model claim. Partial-boundary exactness, historical correction race guards and latest-request-wins preserved; no unresolved introduced finding after the aligned-scan correction.
 - Candidate assurance/performance and deployment observations remain pending. No schema/runtime mutations or production pauses are authorized or needed.
+
+## Exact-candidate release preparation — October30 17:30 JST
+
+- Committed and remote-verified candidate: `d9f66ff02ffe422ff66e15ae11a9e253854e4e52`, branch `fix/home-range-refresh-20261030`. Production main remains `c445ec24`; staging remains `0a974d77`. No PR or deployment performed.
+- Candidate test phase:495passed/198subtests,251required PostgreSQL tests executed,0requiredskips/errors. Node122chart/125feedassertions and timezone checks pass. Structural assessment:5191/5191required obligations passed,0failed/skipped/errored/missing/unknown. Configured Ollija checks36passed.
+- Candidate gate command initially exited1during private performance-fixture setup: incorrect Account.geolocation field. Corrected fixture to existing based_in_location with an exact row-count assertion. First actual performance attempt0368fcdb19a4b010348a4c5c invalidated by test-server static handler omitting WhiteNoise cache headers; evidence retained. Route fixture static requests through the project's actual WhiteNoise middleware; assert real200andCache-Control before measuring. No product code or acceptance requirement changed. Reuse completed candidate test/assessment evidence because only private fixture setup changed; do not claim the initial command exited0.
+- Repaired public performance-run and performance-result exit0, clean sealed attempt `2ce2f5432a63febe1aed3d44`, target exact candidateSHA, evidence digest `5fb29b0bc2a6bc2057fda942993a7861866618f75a0991dd420c542738ad9d9e`; fixture cleanly tears down and releases shared DB lock. Desktop/mobile2samples each; required budgets/network/cache checks clean. Lighthouse medianLCP desktop1.72s/mobile9.41s (mobile remains above advisory6s, not a blocking target); synthetic local measurement is not production timing proof. Functional range probe passed with one click per transition,179ms/149ms in the initial repaired fixture; final probe receipt retained separately. No production performance claim.
+- Removed temporary0206loader only after exactSHA256verification. No migration/schema/product-release integration. Private test scripts/receipts remain outside Git.
+- All remaining independent release preparation is complete, including a bounded production browser smoke script for exact revision,3cache-disabled loads and365→30→7chart/Pulse agreement. Pending required route choice remains unanswered. AGENTS.md explicitly requires owner selection for direct production or exact-commit staging; shared staging contains unaccepted work and an active peer pilot. No production/staging Git ref or service changed.
+- This final execution record is a local plan-only change after the tested/pushed candidate; product source/tests/dependencies are unchanged. Preserve worktree and branch pending the route answer; do not remove a dirty or undeployed worktree.
