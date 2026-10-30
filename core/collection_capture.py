@@ -105,7 +105,7 @@ def observation_object_documents(observation):
         from core.product_release_github_owner import owner_documents
 
         return owner_documents(observation)
-    if observation.projection_kind in {"hf-release-exact-v1", "hf-release-expanded-v1"}:
+    if observation.projection_kind in {"hf-release-exact-v1", "hf-release-expanded-v1", "hf-release-parent-v1"}:
         from core.product_release_acquisition import hf_exact_observation_documents
 
         return hf_exact_observation_documents(observation)
