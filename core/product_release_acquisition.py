@@ -1185,6 +1185,25 @@ def integrate_github_capture(observation):
                       source_archive_id=request.archive_id, extraction_version="github-release-exact-v1")
 
 
+def github_repository_outcome(status, row, target_identifier):
+    """Describe only what the response establishes about repository access."""
+    if status == 200 and isinstance(row, dict) and row.get("private") is False:
+        return ("found" if isinstance(row.get("full_name"), str)
+                and row["full_name"].casefold() == target_identifier.casefold()
+                and type(row.get("id")) is int and row["id"] > 0 else "identity_mismatch")
+    if status == 404:
+        return "missing_or_private"
+    if status == 401:
+        return "unauthorized"
+    if status == 403:
+        return "forbidden_or_throttled"
+    if status == 429:
+        return "throttled"
+    if status == 200 and isinstance(row, dict) and row.get("private") is True:
+        return "private"
+    return "private_or_unverified" if status == 200 else "http_error"
+
+
 def execute_github_repository(job_id, *, client):
     """Fetch one public GitHub repository, retaining evidence without confirming ownership."""
     from datetime import timedelta
@@ -1231,24 +1250,7 @@ def execute_github_repository(job_id, *, client):
     try:
         response = github.repository(target.native_identifier)
         row = response.payload
-        if response.status == 200 and isinstance(row, dict) and row.get("private") is False:
-            outcome = ("found" if isinstance(row.get("full_name"), str)
-                       and row["full_name"].casefold() == target.native_identifier.casefold()
-                       and type(row.get("id")) is int and row["id"] > 0 else "identity_mismatch")
-        elif response.status == 404:
-            outcome = "missing_or_private"
-        elif response.status == 401:
-            outcome = "unauthorized"
-        elif response.status == 403:
-            outcome = "forbidden_or_throttled"
-        elif response.status == 429:
-            outcome = "throttled"
-        elif response.status == 200 and isinstance(row, dict) and row.get("private") is True:
-            outcome = "private"
-        elif response.status == 200:
-            outcome = "private_or_unverified"
-        else:
-            outcome = "http_error"
+        outcome = github_repository_outcome(response.status, row, target.native_identifier)
     except SourceError:
         response, row, outcome = None, None, "request_error"
     with fenced_run(lease):
