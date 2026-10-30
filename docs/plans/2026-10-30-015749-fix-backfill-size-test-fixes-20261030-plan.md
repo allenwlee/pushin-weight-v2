@@ -114,6 +114,7 @@ Completion is checked by the existing and new tests passing on the pull request'
 - `scripts/backfill_campaign.py`
 - `monitor/management/commands/run_backfill.py`
 - the tests named in each unit
+- `.github/workflows/backfill.yml` (a fast step for the retry and spend-basis tests; trigger paths for `monitor/backfill_retry.py` and `monitor/backfill_staging.py`)
 
 **PRESERVE**
 - July's saved manifests and their frozen policies. A window without `spend_basis` gives a byte-identical manifest and a `policy_snapshot` without the key.
@@ -140,7 +141,12 @@ Completion is checked by the existing and new tests passing on the pull request'
 - **KTD3. The regression net pins the July-shaped manifest.**
   - The manifest test from `f01d0f03` is ported to pin that a plain window keeps today's exact manifest and policy.
   - Its companion frozen-query test is omitted: it depends on the size-test frozen query file, which is not on this branch and would only skip.
-- **KTD4. The local PostgreSQL gap is recorded, not worked around.** The shared test database (`~/.local/bin/pushinweight-test-db`) refuses because this branch's migration `0183` is pending there. Pure-Python tests run locally with `scripts/pytest-local`. PostgreSQL-marked tests run in the PR's CI on a fresh database, as they did for PR #72.
+- **KTD4. PostgreSQL evidence comes from CI, in a step that always finishes.**
+  - The shared test database (`~/.local/bin/pushinweight-test-db`) refuses this branch: it holds migrations `0184`–`0186`, which this branch lacks (checked 2026-10-30). Pure-Python tests run locally with `scripts/pytest-local`.
+  - `tests/test_backfill_retry_statuses.py`, `tests/test_backfill_spend_basis.py` and `tests/test_backfill_staging_retry.py` were in no workflow.
+  - The backfill job's long suite reaches its 15-minute limit at about 43%, so its later tests never run.
+  - A new step before the long suite runs those three files plus the named spend-basis and July-manifest cases (80 tests).
+  - `monitor/backfill_retry.py` and `monitor/backfill_staging.py` join the workflow's trigger paths.
 
 ## Implementation Units
 
