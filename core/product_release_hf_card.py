@@ -19,6 +19,33 @@ from scripts.benchmark_download_collector.sources import Budget, SourceError
 
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 PROJECTION = "hf-release-card-v1"
+_OUTPUT_TEACHERS = re.compile(
+    r"\b(?:outputs|responses)\s+from\s+(?P<names>[^\n]{1,200}?)\s+(?:teachers|specialists)\b",
+    re.IGNORECASE,
+)
+_VERSIONED_TEACHER = re.compile(r"(?<![\w/])[A-Za-z][A-Za-z0-9_-]*\d[A-Za-z0-9_.-]*(?![\w.-])")
+
+
+def teacher_mentions(text):
+    """Extract narrowly worded publisher claims, not canonical identities."""
+    if not isinstance(text, str):
+        raise TypeError("model-card text required")
+    found = {}
+    for line in text.splitlines():
+        if len(line) > 2000:
+            continue
+        for match in _OUTPUT_TEACHERS.finditer(line):
+            before = re.split(r"(?<=[.!?])\s+", line[:match.start()])[-1]
+            if (not re.search(r"\b(?:trained|training|distilled|distillation)\b", before, re.IGNORECASE)
+                    or re.search(r"\b(?:not|never|without|may|might|could|would|alleged)\b",
+                                 before + match.group("names"), re.IGNORECASE)):
+                continue
+            for name in _VERSIONED_TEACHER.finditer(match.group("names")):
+                term = name.group().rstrip("-_.")
+                found.setdefault(term.casefold(), {"name": term, "excerpt": line})
+                if len(found) >= 20:
+                    return tuple(found.values())
+    return tuple(found.values())
 
 
 def _target(job):
@@ -72,6 +99,14 @@ def integrate_card(observation):
                       source_excerpt=document["text"][:500],
                       source_locator=f"https://huggingface.co/{repo}/blob/{revision}/README.md",
                       source_archive_id=request.archive_id, extraction_version=PROJECTION)
+            for teacher in teacher_mentions(document["text"]):
+                add_claim(source.pk, claim_kind="release_context",
+                          scope_key="hf_card_teacher:" + digest([observation.pk, teacher["name"].casefold()]),
+                          assertion_text=(f"Model card reports {teacher['name']} as a specialist supplying training outputs; "
+                                          "the exact Product identity is unresolved"),
+                          source_excerpt=teacher["excerpt"],
+                          source_locator=f"https://huggingface.co/{repo}/blob/{revision}/README.md",
+                          source_archive_id=request.archive_id, extraction_version="hf-card-teacher-v1")
 
 
 def queue_card(claim_id, exact_observation_id):

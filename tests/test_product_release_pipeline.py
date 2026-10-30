@@ -566,7 +566,7 @@ def test_queue_saved_name_shares_one_bounded_job_without_provider_requests():
 
 
 @pytest.mark.parametrize("card_status,expected,card_body", [
-    (200, "found", b"# Student4\nTeacher: Qwen and Gemma\n"),
+    (200, "found", b"# Student4\nStudent trained from filtered outputs from Qwen3-1.7B and Gemma4-E2B specialists.\n"),
     (404, "missing_or_private", b""), (302, "http_error", b""),
     (429, "throttled", b""), (200, "malformed_text", b"\xff"),
     (200, "response_size_cap", b"x" * 1048577),
@@ -623,9 +623,21 @@ def test_exact_model_queues_pinned_card_and_preserves_text(card_status, expected
     if expected == "found":
         card = models.CollectionObservation.objects.get(projection_kind="hf-release-card-v1")
         document, dimensions, _ = observation_object_documents(card)
-        assert document["text"] == "# Student4\nTeacher: Qwen and Gemma\n"
+        assert document["text"] == card_body.decode()
         assert document["revision"] == revision and dimensions["kind"] == "model_card"
         assert dossier.sources.filter(collection_observation=card).exists()
+        teachers = dossier.sources.get(collection_observation=card).claims.filter(
+            scope_key__startswith="hf_card_teacher:"
+        )
+        assert teachers.count() == 2
+        assert {c.assertion_text.split(" reports ")[1].split(" as ")[0] for c in teachers} == {
+            "Qwen3-1.7B", "Gemma4-E2B"
+        }
+        assert all(c.source_archive_id == card.inputs.get().input_request.archive_id for c in teachers)
+        assert not models.ProductRelationship.objects.exists()
+        from core.product_release_hf_card import integrate_card
+        integrate_card(card)
+        assert teachers.count() == 2
         assert card.run.physical_bytes_received == len(document["text"].encode())
         card.payload_sha256 = "0" * 64
         with pytest.raises(ValueError, match="content changed"):
@@ -639,6 +651,16 @@ def test_exact_model_queues_pinned_card_and_preserves_text(card_status, expected
             card_job.refresh_from_db()
             assert not card_job.last_attempt.attempts.get().accounting_complete
     assert len(calls) == 2
+
+
+def test_teacher_mentions_require_a_specific_unnegated_training_statement():
+    from core.product_release_hf_card import teacher_mentions
+
+    assert not teacher_mentions("Not trained with outputs from Qwen3-1.7B specialists.")
+    assert not teacher_mentions("May be trained with outputs from Qwen3-1.7B specialists.")
+    assert not teacher_mentions("Trained with outputs from Qwen3-1.7B but not Gemma4-E2B specialists.")
+    assert not teacher_mentions("The model was trained. We discuss outputs from Qwen3-1.7B specialists.")
+    assert not teacher_mentions("The model uses Qwen3-1.7B as a base.")
 
 
 def test_pinned_card_recovers_after_checkpoint_without_refetch(monkeypatch):
