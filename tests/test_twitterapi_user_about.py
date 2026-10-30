@@ -161,6 +161,33 @@ def test_post_label_rejects_conflicts_and_unknown_shapes(label):
         flatten_label({"label": label}, prefix="affiliate_label", path="post", post_shape=True)
 
 
+def test_partial_post_label_preserves_absent_fields_in_snapshot_observation():
+    from core.profile_snapshots import profile_observation_from_payload
+
+    observation = profile_observation_from_payload({
+        "author_affiliates_highlighted_label": {
+            "label": {"description": "New", "user_label_type": "BusinessLabel"}
+        },
+        "_author_present_fields": ["author_affiliates_highlighted_label"],
+    })
+    assert observation.profile_data["affiliate_label_description"] == "New"
+    assert observation.profile_data["affiliate_label_type"] == "BusinessLabel"
+    assert "affiliate_target_url" not in observation.present_fields
+    assert "affiliate_target_url" not in observation.profile_data
+
+
+def test_post_label_explicit_null_and_empty_label_remain_clears():
+    from core.profile_snapshots import profile_observation_from_payload
+
+    for label in ({"label": {"description": None}}, {}):
+        observation = profile_observation_from_payload({
+            "author_affiliates_highlighted_label": label,
+            "_author_present_fields": ["author_affiliates_highlighted_label"],
+        })
+        assert "affiliate_label_description" in observation.present_fields
+        assert observation.profile_data["affiliate_label_description"] is None
+
+
 def test_live_probe_shape_parses_with_empty_optional_labels():
     payload = _complete_payload()
     payload["data"]["affiliates_highlighted_label"] = {}
