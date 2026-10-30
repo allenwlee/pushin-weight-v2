@@ -732,7 +732,10 @@ flowchart TB
     - At 01:27Z: 404 posts classified, $0.000323 provider-reported per classified post. Throughput then held at about 1,550 posts per hour.
     - The Render job finished `succeeded` at 2026-10-29T21:04:45Z.
     - Final enrichment receipt (`final-phase-receipt.json`, read-only): 59,857 model requests, $7.912137 provider-reported, $84.863666 reserved, settled $7.96 against `max_usd` 30. The settled basis kept admission open after reservations passed $30.
-    - Classification retries: 1,636 of 2,651 classification requests had a member fail canonical validation, so 24,044 posts filled 52,870 classification slots (`final-failures.json`).
+    - Classification passes and retries (`final-failures.json`, `cls-roles.json`, `cls-failures.json`):
+      - classification runs a `content` pass and a `brand_interpretation` pass per post, about 1,326 requests and 26,435 member slots each;
+      - 1,641 requests (about 62%) had a member fail canonical validation, but each kept its valid members (17.0 of 19.9 applied on average) and retried about 2.9;
+      - retries add about 10% to classification cost. An earlier note in this session said retries roughly doubled it; that was wrong.
   - Step 9, deferred posts: the receipt's status is `failed`, with 123 deferred posts (122 `model_attempt_allowance_exhausted`, 1 `provider_outcome_unknown`).
     - 23,980 of 24,044 posts are fully classified and translated.
     - 64 were never classified, because their replies failed canonical validation `max_attempts` (3) times; 7 of them also lack a translation.

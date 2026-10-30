@@ -267,10 +267,11 @@ These notes were added by hand after `scripts/backfill_size_report.py` generated
   - The final enrichment receipt deferred 123 posts (122 `model_attempt_allowance_exhausted`, 1 `provider_outcome_unknown`). Its status is `failed`, so `verify_window` did not return verified.
   - A re-run could not retry them, because `deferred_enrichment_work` keeps each post's attempt count across regrouped packets.
   - The spend check's "Classified posts: 24,042" counts posts with a completed classification request, including replies that later failed validation.
-- **Classification retries are part of the cost.**
-  - 1,636 of 2,651 classification requests had at least one member fail canonical validation, and those members were retried in new packets.
-  - The 24,044 posts filled 52,870 classification slots, about 2.2 per post.
-  - The provider-reported cost above includes those retries. Production's scheduled classifier keeps no per-call rows, so its failure rate cannot be compared here.
+- **Classification retries add about 10% to classification cost.**
+  - Classification makes two passes per post, `content` and `brand_interpretation`. That is why 2,651 requests filled 52,870 member slots for 24,044 posts.
+  - Each pass sent about 1,326 requests for about 26,435 slots, so about 2,400 slots per pass (10%) were retries.
+  - 1,641 requests (about 62%) had at least one member fail canonical validation. Such a request kept its valid members: on average 17.0 of 19.9 members applied and 2.9 were retried.
+  - The provider-reported cost above includes the retries. Production's scheduled classifier keeps no per-call rows, so its failure rate cannot be compared here.
   - Both use the same 20-post packet (`_CLASSIFY_BASE_BATCH_SIZE`), so per-post cost carries over otherwise.
   - Translation is $3.61 of the window's $7.91.
 - **The low end of the search-credit range is the production-shaped figure.**
