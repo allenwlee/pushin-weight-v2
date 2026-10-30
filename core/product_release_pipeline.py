@@ -385,10 +385,10 @@ def persist_source(source: StoredSource):
 
 
 def persist_collected_posts(post_ids):
-    """Detect saved posts in bounded batches without provider or model calls.
+    """Explicitly detect saved posts in bounded batches without model calls.
 
-    Each source commits independently. Failed sources remain in the Post table
-    for the existing explicit historical replay to recover.
+    This synchronous helper is for explicit replay, not the harvest path.
+    Each source commits independently; failures remain eligible for replay.
     """
     import logging
 

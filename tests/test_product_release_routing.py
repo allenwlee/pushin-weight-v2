@@ -14,6 +14,7 @@ from core.models import (
     SentimentKey,
     TargetedExtractionState,
 )
+from core.product_release_detection_queue import drain_posts
 from monitor.cycle import CycleRunner
 from scripts.backfill_targeted import requirements
 from tests.test_post_enrichment_queue import _cfg, _classification_results, _state
@@ -23,6 +24,15 @@ from x_monitor import attribution, reattribute, translator
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=True)]
 
 QUOTE = "Nanbeige released Nanbeige4.3-33B. Qwen is a comparator; the 33B model teaches an upcoming 3B model."
+
+
+@pytest.fixture
+def enabled_release_background(settings, monkeypatch):
+    from monitor.tasks import acquire_product_release, recover_due_product_releases
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    monkeypatch.setattr(acquire_product_release, "apply_async", lambda **_kwargs: None)
+    monkeypatch.setattr(recover_due_product_releases, "apply_async", lambda **_kwargs: None)
 
 
 @pytest.mark.parametrize("origin", ["ordinary", "special-events"])
@@ -126,7 +136,7 @@ def test_real_enrichment_and_replay_accept_the_same_release(monkeypatch, origin,
     assert CollectionJob.objects.filter(operation="release_acquisition").count() == 1
 
 
-def test_collected_unclassified_announcement_gets_pending_dossier_without_model_calls():
+def test_collected_unclassified_announcement_gets_pending_dossier_without_model_calls(enabled_release_background):
     state = _state("release-raw-worker")
     state.post.text = "Today we announce a new model from an unfamiliar lab"
     state.post.save(update_fields=["text"])
@@ -136,7 +146,9 @@ def test_collected_unclassified_announcement_gets_pending_dossier_without_model_
     kept = [{"_persisted_post_id": state.pk, "_db_inserted": True}]
     first = runner._run_post_fetch(kept, run_id="raw-release")
     assert first["enrichment_processed_externally"] is True
-    assert first["product_release_intake"]["candidates"] == 1
+    assert first["product_release_intake"]["queued"] == 1
+    assert not EventDossier.objects.exists()
+    assert drain_posts()["candidates"] == 1
     dossier = EventDossier.objects.get(event_kind_reference__code="product_release")
     assert dossier.current_review_id is None
     assert EventDossierClaim.objects.filter(
@@ -144,13 +156,14 @@ def test_collected_unclassified_announcement_gets_pending_dossier_without_model_
     ).exists()
     before = EventDossierClaim.objects.count()
     second = runner._run_post_fetch(kept, run_id="raw-release-again")
-    assert second["product_release_intake"]["candidates"] == 1
+    assert second["product_release_intake"]["queued"] == 1
+    assert drain_posts()["candidates"] == 1
     assert EventDossier.objects.count() == 1 and EventDossierClaim.objects.count() == before
     assert not CollectionRequest.objects.exists()
 
 
-def test_intake_failure_does_not_interrupt_collection_and_saved_post_can_be_replayed(monkeypatch):
-    from core import product_release_pipeline
+def test_intake_failure_does_not_interrupt_collection_and_saved_post_can_be_replayed(monkeypatch, enabled_release_background):
+    from core import product_release_detection_queue
 
     state = _state("release-intake-failure")
     state.post.text = "Announcing a new model"
@@ -159,21 +172,22 @@ def test_intake_failure_does_not_interrupt_collection_and_saved_post_can_be_repl
     cfg.harvest.enrichment.mode = "worker"
     runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
     kept = [{"_persisted_post_id": state.pk, "_db_inserted": True}]
-    actual = product_release_pipeline.persist_collected_posts
+    actual = product_release_detection_queue.enqueue_posts
     def fail(_ids):
         raise RuntimeError("simulated intake failure")
-    monkeypatch.setattr(product_release_pipeline, "persist_collected_posts", fail)
+    monkeypatch.setattr(product_release_detection_queue, "enqueue_posts", fail)
     result = runner._run_post_fetch(kept, run_id="failed-release-intake")
     assert result["enrichment_processed_externally"] is True
     assert result["product_release_intake"]["failed"] == 1
     assert not EventDossier.objects.filter(event_kind_reference__code="product_release").exists()
-    monkeypatch.setattr(product_release_pipeline, "persist_collected_posts", actual)
+    monkeypatch.setattr(product_release_detection_queue, "enqueue_posts", actual)
     result = runner._run_post_fetch(kept, run_id="replayed-release-intake")
-    assert result["product_release_intake"]["candidates"] == 1
+    assert result["product_release_intake"]["queued"] == 1
+    assert drain_posts()["candidates"] == 1
     assert EventDossier.objects.filter(event_kind_reference__code="product_release").count() == 1
 
 
-def test_raw_release_queues_linked_repositories_as_unresolved_leads():
+def test_raw_release_queues_linked_repositories_as_unresolved_leads(enabled_release_background):
     import httpx
 
     from core.collection_capture import observation_object_documents
@@ -193,7 +207,8 @@ def test_raw_release_queues_linked_repositories_as_unresolved_leads():
     runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
     kept = [{"_persisted_post_id": state.pk, "_db_inserted": True}]
     result = runner._run_post_fetch(kept, run_id="raw-linked")
-    assert result["product_release_intake"]["candidates"] == 1
+    assert result["product_release_intake"]["queued"] == 1
+    assert drain_posts()["candidates"] == 1
     jobs = CollectionJob.objects.filter(operation="release_acquisition", targets__target_role="exact_model")
     assert jobs.count() == 2 and not CollectionRequest.objects.exists()
     assert set(jobs.values_list("targets__native_identifier", flat=True)) == {"lab/student", "teacher/base"}
@@ -210,14 +225,15 @@ def test_raw_release_queues_linked_repositories_as_unresolved_leads():
         assert observation.processing_outcome == "unresolved"
         assert observation_object_documents(observation)[0]["id"] in calls
     runner._run_post_fetch(kept, run_id="raw-linked-again")
+    drain_posts()
     assert CollectionJob.objects.filter(operation="release_acquisition", targets__target_role="exact_model").count() == 2
     assert drain_due_hf_acquisitions(client=client, execute=True,
                                     job_ids=[str(job.pk) for job in jobs])["provider_calls"] == 0
     from core.models import Product, ProductReleaseDetail
-    assert not Product.objects.exists() and not ProductReleaseDetail.objects.exists()
+    assert Product.objects.count() == 2 and not ProductReleaseDetail.objects.exists()
 
 
-def test_raw_versioned_announcement_queues_name_search_without_extraction():
+def test_raw_versioned_announcement_queues_name_search_without_extraction(enabled_release_background):
     import httpx
 
     from core.collection_capture import observation_object_documents
@@ -234,7 +250,8 @@ def test_raw_versioned_announcement_queues_name_search_without_extraction():
     cfg.harvest.enrichment.mode = "worker"
     runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
     kept = [{"_persisted_post_id": state.pk, "_db_inserted": True}]
-    assert runner._run_post_fetch(kept)["product_release_intake"]["candidates"] == 1
+    assert runner._run_post_fetch(kept)["product_release_intake"]["queued"] == 1
+    assert drain_posts()["candidates"] == 1
     job = CollectionJob.objects.get(operation="release_acquisition")
     target = job.targets.get()
     assert target.target_role == "name_search" and target.native_identifier == "Nanbeige4.3-33B"
@@ -255,6 +272,7 @@ def test_raw_versioned_announcement_queues_name_search_without_extraction():
     assert followup.targets.get().native_identifier == "nanbeige/Nanbeige4.3-33B"
     assert followup.dossier_claim_links.get().claim.event_dossier_source.collection_observation_id == observation.pk
     runner._run_post_fetch(kept)
+    drain_posts()
     assert CollectionJob.objects.filter(operation="release_acquisition").count() == 2
 
 
@@ -278,6 +296,7 @@ def test_opt_in_dispatch_runs_one_committed_job_without_duplicate_fetch(settings
     runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
     kept = [{"_persisted_post_id": state.pk, "_db_inserted": True}]
     runner._run_post_fetch(kept)
+    drain_posts()
     job = CollectionJob.objects.get(operation="release_acquisition")
     assert messages == [{"kwargs": {"job_id": str(job.pk)}, "queue": "trend-narratives", "retry": False}]
     assert not CollectionRequest.objects.exists()
@@ -316,6 +335,7 @@ def test_background_dispatch_failure_keeps_the_saved_job(settings, monkeypatch):
     runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
     result = runner._run_post_fetch([{"_persisted_post_id": state.pk, "_db_inserted": True}])
     assert result["product_release_intake"]["failed"] == 0
+    assert drain_posts()["candidates"] == 1
     assert CollectionJob.objects.filter(operation="release_acquisition", state="ready").count() == 1
     assert not CollectionRequest.objects.exists()
 
@@ -345,7 +365,6 @@ def test_existing_harvest_wakeup_recovers_broker_failure_and_delayed_release(set
     runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
     first = runner._run_post_fetch([{"_persisted_post_id": state.pk, "_db_inserted": True}])
     assert first["product_release_recovery"]["status"] == "scheduled" and len(sweeps) == 1
-    job = CollectionJob.objects.get(operation="release_acquisition")
     responses = iter([httpx.Response(200, json=[]), httpx.Response(
         200, json=[{"id": "nanbeige/Nanbeige4.3-33B"}]
     )])
@@ -358,6 +377,7 @@ def test_existing_harvest_wakeup_recovers_broker_failure_and_delayed_release(set
         return original_client(transport=httpx.MockTransport(respond))
     monkeypatch.setattr(httpx, "Client", client_factory)
     initial = recover_due_product_releases.run()
+    job = CollectionJob.objects.get(operation="release_acquisition", targets__target_role="name_search")
     assert initial["provider_calls"] == 1 and initial["jobs"][0]["outcome"] == "empty"
     # Even when all provider jobs are cooling down, wake the saved-claim sweep.
     assert runner._run_post_fetch([])["product_release_recovery"]["status"] == "scheduled"

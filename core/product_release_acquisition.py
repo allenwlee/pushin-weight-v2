@@ -641,6 +641,10 @@ def _integrate_acquisition_run(run_id):
                     totals["products_resolved"] += int(_finalize_known_publisher(
                         proposal.pk, token, HFMetadataResult("matched", payload)
                     ))
+        if exact and eligible_dossiers:
+            from core.source_metric_projection import retain_release_projection_followup
+
+            retain_release_projection_followup(observation)
         if (prior_x_only and eligible_dossiers
                 and models.ProductVerificationProposal.objects.filter(
                     source_dossier_id__in=eligible_dossiers, review_status="approved",
@@ -826,9 +830,11 @@ def execute_hf_name_search(job_id, *, client):
                 if exact:
                     from core.source_metric_projection import (
                         enqueue_authorized_release_projection,
+                        retain_release_projection_followup,
                     )
 
                     enqueue_authorized_release_projection(claim, observation)
+                    retain_release_projection_followup(observation)
                 count += 1
             if not cursor_cycle:
                 scope.cursor = response.next_cursor

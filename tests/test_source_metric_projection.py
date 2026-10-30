@@ -359,6 +359,181 @@ def test_exact_release_capture_queues_active_reviewed_publisher_for_projection(
 
 
 @pytest.mark.django_db(transaction=True)
+def test_saved_release_capture_waits_for_later_reviewed_authority_without_refetch():
+    from datetime import timedelta
+
+    import httpx
+    from django.utils import timezone
+    from core.collection_scheduling import take_metric_authority
+    from core.models import DataSource, EventDossierClaim, Post
+    from core.product_release_acquisition import (
+        drain_due_hf_acquisitions, execute_hf_name_search, queue_hf_name_search,
+    )
+    from core.product_release_dossiers import record_release_report
+    from core.source_metric_projection import recover_release_projection_followups
+
+    contract, _, product, _ = configured("hf", product_type="llm-model", mapped=True)
+    url = "https://huggingface.co/lab/Model"
+    post = Post.objects.create(tweet_id="release-later-contract", text=f"Announcing Model {url}")
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": "Model", "source_url": url},
+        release_identity="release-later-contract", observed_name="Model", source_url=url,
+        brand=product.brand, maturity_code="unknown", release_value=None,
+        release_precision="unknown", extraction_version="test",
+    )
+    claim = EventDossierClaim.objects.get(event_dossier_source__event_dossier=dossier,
+                                           claim_kind_reference__code="release_report")
+    job = queue_hf_name_search(claim.pk)
+    calls = []
+    def respond(request):
+        calls.append(request)
+        return httpx.Response(200, json={"id": "lab/Model", "author": "lab", "downloads": 17, "likes": 4})
+    client = httpx.Client(transport=httpx.MockTransport(respond))
+    capture = execute_hf_name_search(job.pk, client=client)
+    observation = CollectionObservation.objects.get(run_id=capture["run_id"])
+    marker = observation.run.scopes.get(scope_kind="release_metric_followup")
+    assert marker.outcome == "pending" and not MetricValue.objects.exists()
+    assert recover_release_projection_followups(observation_ids=[observation.pk])["waiting"] == 1
+    assert recover_release_projection_followups(observation_ids=[observation.pk + 1])["selected"] == 0
+    with pytest.raises(ValueError, match="observation IDs"):
+        recover_release_projection_followups(observation_ids=[])
+    marker.refresh_from_db()
+    assert marker.retry_at > timezone.now()
+    authority = register_job(
+        job_key="reviewed-later-hf-authority", source=DataSource.objects.get(pk="hf"),
+        purpose="metric", operation="collect_metrics", mode="recurring", contract=contract,
+        definition={"version": 1, "scope": {},
+                    "schedule": {"kind": "interval", "driver": "shared", "seconds": 86400},
+                    "budgets": {"requests": 1, "seconds": 60, "bytes": 100000, "items": 100}},
+    )
+    set_job_state(authority.pk, "ready")
+    take_metric_authority(authority.pk)
+    marker.retry_at = timezone.now() - timedelta(seconds=1)
+    marker.save(update_fields=["retry_at"])
+    assert recover_release_projection_followups()["queued"] == 1
+    marker.refresh_from_db()
+    assert marker.outcome == "complete"
+    recovered = drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(job.pk)])
+    assert recovered["provider_calls"] == 0 and len(calls) == 1
+    values = MetricValue.objects.select_related("observation")
+    assert {int(value.integer_value) for value in values} == {17, 4}
+    assert all(value.observation.observed_at == observation.observed_at for value in values)
+    assert all(value.observation.mapping.subject.product_id == product.product_key for value in values)
+    assert recover_release_projection_followups()["queued"] == 0
+    assert drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(job.pk)])["provider_calls"] == 0
+    assert MetricValue.objects.count() == 2
+
+
+@pytest.mark.django_db(transaction=True)
+def test_waiting_release_followup_respects_exclusion_and_later_correction():
+    import httpx
+    from core.models import EventDossierClaim, Post
+    from core.product_release_acquisition import execute_hf_name_search, integrate_acquisition_run, queue_hf_name_search
+    from core.product_release_dossiers import record_release_report
+    from core.product_release_pipeline import record_intake_decision
+    from core.source_metric_projection import recover_release_projection_followups, retain_release_projection_followup
+
+    _, _, product, _ = configured("hf", product_type="llm-model", mapped=True)
+    url = "https://huggingface.co/lab/Model"
+    post = Post.objects.create(tweet_id="release-reconsider", text=f"Announcing Model {url}")
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": "Model", "source_url": url},
+        release_identity="release-reconsider", observed_name="Model", source_url=url,
+        brand=product.brand, maturity_code="unknown", release_value=None,
+        release_precision="unknown", extraction_version="test",
+    )
+    claim = EventDossierClaim.objects.get(event_dossier_source__event_dossier=dossier,
+                                           claim_kind_reference__code="release_report")
+    job = queue_hf_name_search(claim.pk)
+    client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(
+        200, json={"id": "lab/Model", "author": "lab", "downloads": 17}
+    )))
+    capture = execute_hf_name_search(job.pk, client=client)
+    marker = CollectionRun.objects.get(pk=capture["run_id"]).scopes.get(scope_kind="release_metric_followup")
+    marker.scope_key = "incorrect"
+    marker.save(update_fields=["scope_key"])
+    assert recover_release_projection_followups()["failed"] == 1
+    marker.refresh_from_db()
+    assert marker.outcome == "failed" and marker.error_code == "invalid_release_followup"
+    marker.scope_key = str(marker.resource_observation_id)
+    marker.save(update_fields=["scope_key"])
+    with transaction.atomic():
+        retain_release_projection_followup(marker.resource_observation)
+    marker.refresh_from_db()
+    assert marker.outcome == "pending"
+    record_intake_decision(dossier.pk, claim_id=claim.pk, outcome="scam", actor="test", reason="evidence")
+    assert recover_release_projection_followups()["excluded"] == 1
+    marker.refresh_from_db()
+    assert marker.outcome == "excluded" and not MetricValue.objects.exists()
+    record_intake_decision(dossier.pk, claim_id=claim.pk, outcome="pending", actor="test", reason="correction")
+    assert integrate_acquisition_run(capture["run_id"])["status"] == "complete"
+    marker.refresh_from_db()
+    assert marker.outcome == "pending" and marker.retry_at is None
+
+
+@pytest.mark.django_db(transaction=True)
+def test_native_release_measurement_waits_for_later_dedicated_product_mapping():
+    import httpx
+    from core.collection_scheduling import take_metric_authority
+    from core.models import DataSource, EventDossierClaim, Post
+    from core.product_release_acquisition import drain_due_hf_acquisitions, execute_hf_name_search, queue_hf_name_search
+    from core.product_release_dossiers import record_release_report
+    from core.source_metric_projection import configure_source_statistics, recover_release_projection_followups
+
+    dedicated, _, product, spec = configured("hf", product_type="llm-model", mapped=True)
+    native_spec = copy.deepcopy(spec)
+    native_spec["mappings"] = [m for m in native_spec["mappings"] if m["source_subject_kind"] == "account"]
+    native = configure_source_statistics(native_spec)
+
+    def authorize(contract, suffix):
+        job = register_job(
+            job_key=f"reviewed-release-authority-{suffix}", source=DataSource.objects.get(pk="hf"),
+            purpose="metric", operation="collect_metrics", mode="recurring", contract=contract,
+            definition={"version": 1, "scope": {},
+                        "schedule": {"kind": "interval", "driver": "shared", "seconds": 86400},
+                        "budgets": {"requests": 1, "seconds": 60, "bytes": 100000, "items": 100}},
+        )
+        set_job_state(job.pk, "ready")
+        take_metric_authority(job.pk)
+
+    authorize(native, "native")
+    url = "https://huggingface.co/lab/Model"
+    post = Post.objects.create(tweet_id="release-later-mapping", text=f"Announcing Model {url}")
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": "Model", "source_url": url},
+        release_identity="release-later-mapping", observed_name="Model", source_url=url,
+        brand=product.brand, maturity_code="unknown", release_value=None,
+        release_precision="unknown", extraction_version="test",
+    )
+    claim = EventDossierClaim.objects.get(event_dossier_source__event_dossier=dossier,
+                                           claim_kind_reference__code="release_report")
+    job = queue_hf_name_search(claim.pk)
+    calls = []
+    def respond(request):
+        calls.append(request)
+        return httpx.Response(200, json={"id": "lab/Model", "author": "lab", "downloads": 17, "likes": 4})
+    client = httpx.Client(transport=httpx.MockTransport(respond))
+    capture = execute_hf_name_search(job.pk, client=client)
+    observation = CollectionObservation.objects.get(run_id=capture["run_id"])
+    marker = observation.run.scopes.get(scope_kind="release_metric_followup")
+    assert drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(job.pk)])["provider_calls"] == 0
+    assert MetricValue.objects.filter(observation__mapping__isnull=True).count() == 2
+    assert recover_release_projection_followups()["waiting"] == 1
+    marker.refresh_from_db()
+    assert marker.outcome == "pending" and marker.error_code == "awaiting_product_mapping"
+    authorize(dedicated, "dedicated")
+    marker.retry_at = timezone.now() - timedelta(seconds=1)
+    marker.save(update_fields=["retry_at"])
+    assert recover_release_projection_followups()["queued"] == 1
+    marker.refresh_from_db()
+    assert marker.outcome == "complete"
+    assert drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(job.pk)])["provider_calls"] == 0
+    mapped = MetricValue.objects.filter(observation__mapping__subject__product=product)
+    assert mapped.count() == 2 and all(row.observation.observed_at == observation.observed_at for row in mapped)
+    assert len(calls) == 1 and MetricValue.objects.count() == 4
+
+
+@pytest.mark.django_db(transaction=True)
 def test_github_replay_selects_archived_capture_after_old_columns_clear():
     from core.collection_resources import project_observation_facts
     from core.models import DataSource

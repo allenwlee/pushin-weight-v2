@@ -62,6 +62,26 @@ def _environment(policy) -> dict[str, str]:
     }
 
 
+def test_release_detection_queue_is_environment_local() -> None:
+    policy = load_policy(POLICY_PATH)
+    table = "product_release_detection_states"
+    assert table in policy.relations.excluded_tables
+    assert table in policy.relations.optional_source_tables
+    assert table in policy.scrub.truncate_tables
+    assert table not in policy.relations.copied_tables
+
+
+def test_release_claim_job_links_are_preserved_when_available() -> None:
+    policy = load_policy(POLICY_PATH)
+    table = "event_dossier_claim_collection_jobs"
+    sequence = "event_dossier_claim_collection_jobs_id_seq"
+    assert table in policy.relations.copied_tables
+    assert table in policy.relations.optional_source_tables
+    assert table in policy.validation.exact_count_tables
+    assert sequence in policy.relations.sequences
+    assert sequence in policy.relations.optional_source_sequences
+
+
 def test_loads_the_tracked_exhaustive_policy() -> None:
     policy = load_policy(POLICY_PATH)
 
