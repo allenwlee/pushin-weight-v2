@@ -956,7 +956,7 @@ def drain_due_hf_acquisitions(*, client, limit=10, execute=False, job_ids=None):
                         result = execute_hf_name_search(job.pk, client=client)
             except BusyJob:
                 result = {"outcome": "busy", "physical_requests": 0}
-            if job.source_id == "hf" and result["outcome"] in {"found", "projection_only"}:
+            if result["outcome"] in {"found", "projection_only"}:
                 try:
                     result["projection"] = drain_pending_projections(job.pk)
                 except (BusyJob, StaleClaim):
@@ -1213,6 +1213,10 @@ def integrate_github_capture(observation):
                       assertion_text=f"Captured GitHub repository {row['full_name']}; its release role and ownership are unresolved",
                       source_excerpt=row["full_name"], source_locator=f"https://github.com/{row['full_name']}",
                       source_archive_id=request.archive_id, extraction_version="github-release-exact-v1")
+        if _has_eligible_claim(observation.run.job):
+            from core.source_metric_projection import retain_release_projection_followup
+
+            retain_release_projection_followup(observation)
 
 
 def github_repository_outcome(status, row, target_identifier):
@@ -1298,6 +1302,11 @@ def execute_github_repository(job_id, *, client):
             )
             if created:
                 link_request(observation, request, role="github_exact")
+            from core.source_metric_projection import (
+                enqueue_authorized_release_projection,
+            )
+
+            enqueue_authorized_release_projection(lease, observation)
             integrate_github_capture(observation)
         scope.outcome = outcome
         scope.error_code = None if outcome == "found" else outcome

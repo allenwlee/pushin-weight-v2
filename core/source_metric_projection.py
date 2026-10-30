@@ -69,15 +69,15 @@ def _eligible_evidence_owner(evidence, source):
     job = evidence.run.job
     return job.source_id == source and (
         job.purpose == "catalog"
-        or source == "hf" and job.purpose == "content"
+        or source in {"hf", "github"} and job.purpose == "content"
         and job.operation == "release_acquisition"
-        and evidence.projection_kind == "hf-release-exact-v1"
+        and evidence.projection_kind == f"{source}-release-exact-v1"
     )
 
 
 def _eligible_projection_origin(job):
     return job.purpose == "catalog" or (
-        job.purpose == "content" and job.source_id == "hf"
+        job.purpose == "content" and job.source_id in {"hf", "github"}
         and job.operation == "release_acquisition"
     )
 
@@ -796,9 +796,9 @@ def _adopt_projection_queue(scope):
     if scope.run.job.purpose == "content":
         require(
             not _projection_items(scope).exclude(
-                resource_observation__projection_kind="hf-release-exact-v1"
+                resource_observation__projection_kind=f"{scope.run.job.source_id}-release-exact-v1"
             ).exists(),
-            "release projection needs exact HF captures",
+            "release projection needs exact source captures",
         )
     for item in _projection_items(scope).only(
         "scope_key", "resource_observation_id", "outcome", "enumeration_complete",
@@ -843,9 +843,9 @@ def enqueue_projection(claim, *, contract, evidence_ids):
         if run.job.purpose == "content":
             require(
                 CollectionObservation.objects.filter(
-                    run=run, pk__in=ids, projection_kind="hf-release-exact-v1"
+                    run=run, pk__in=ids, projection_kind=f"{run.job.source_id}-release-exact-v1"
                 ).count() == len(ids),
-                "release projection needs exact HF captures",
+                "release projection needs exact source captures",
             )
         key = str(contract.pk)
         existing = run.scopes.filter(
@@ -880,47 +880,60 @@ def _authorized_release_contracts(evidence):
     from core.benchmark_attribution import enforce_source_collection
     from core.models import MetricCollectionContract
 
-    require(_eligible_evidence_owner(evidence, "hf")
-            and evidence.run.job.operation == "release_acquisition"
-            and evidence.projection_kind == "hf-release-exact-v1", "exact release capture required")
-    namespace = evidence.source_identifier.split("/", 1)[0]
+    source = evidence.run.job.source_id
+    require(source in {"hf", "github"} and _eligible_evidence_owner(evidence, source)
+            and evidence.run.job.operation == "release_acquisition", "exact release capture required")
+    if source == "github":
+        from core.product_release_acquisition import github_exact_observation_documents
+
+        row, _, _ = github_exact_observation_documents(evidence)
+        owner_id = row.get("owner", {}).get("id") if isinstance(row.get("owner"), dict) else None
+        if type(owner_id) is not int or owner_id <= 0:
+            return []
+        namespace = str(owner_id)
+        resource_id = evidence.source_identifier
+        identifier_scope = "repository_id"
+    else:
+        namespace = evidence.source_identifier.split("/", 1)[0]
+        resource_id = evidence.source_identifier.casefold()
+        identifier_scope = "model"
     contracts = MetricCollectionContract.objects.filter(
-        collectionjob__source_id="hf", collectionjob__purpose="metric",
+        collectionjob__source_id=source, collectionjob__purpose="metric",
         collectionjob__authority_enabled=True, collectionjob__state="ready",
-        mappings__purpose="metric", mappings__source_id="hf",
+        mappings__purpose="metric", mappings__source_id=source,
         mappings__source_subject_kind="account", mappings__normalized_identifier=namespace.casefold(),
     ).distinct()
     accepted = []
     for contract in contracts:
-        settings = contract.source_configuration.get("hf", {})
+        settings = contract.source_configuration.get(source, {})
         if settings.get("eligibility_policy") != SOURCE_STATISTICS_POLICY:
             continue
         try:
-            enforce_source_collection(contract, "hf")
-            _publisher(contract, "hf", namespace)
+            enforce_source_collection(contract, source)
+            publisher = _publisher(contract, source, namespace)
             mappings = list(contract.mappings.filter(
-                purpose="metric", source_id="hf", source_subject_kind="repository",
-                identifier_scope__code="model",
-                normalized_identifier=evidence.source_identifier.casefold(),
+                purpose="metric", source_id=source, source_subject_kind="repository",
+                identifier_scope__code=identifier_scope, normalized_identifier=resource_id,
             ).select_related("subject__product", "publisher_account", "identifier_scope"))
             if mappings:
                 require(len(mappings) == 1, "ambiguous repository mapping")
                 mapping = mappings[0]
                 require(mapping.subject.subject_kind == "product"
                         and mapping.identifier_metadata.get("role") == "dedicated_model"
-                        and (mapping.subject.product.repo_id or "").casefold()
-                        == evidence.source_identifier.casefold(), "dedicated product mapping required")
+                        and mapping.publisher_account_id == publisher.subject.account_id
+                        and (source != "hf" or (mapping.subject.product.repo_id or "").casefold()
+                             == evidence.source_identifier.casefold()), "dedicated product mapping required")
                 validate_statistics_mapping(
                     mapping.subject,
                     {"external_identifier": mapping.external_identifier,
                      "source_subject_kind": mapping.source_subject_kind,
                      "publisher_account_key": str(mapping.publisher_account_id),
                      "identifier_metadata": mapping.identifier_metadata},
-                    "hf", contract.taxonomy_version,
+                    source, contract.taxonomy_version,
                 )
             else:
                 require(settings.get("native_resources", True)
-                        and evidence.source_identifier.casefold() not in settings.get("native_exclusions", []),
+                        and resource_id not in settings.get("native_exclusions", []),
                         "repository outside native partition")
         except (ValueError, KeyError, TypeError):
             continue
@@ -945,9 +958,9 @@ def enqueue_authorized_release_projection(claim, evidence):
 def retain_release_projection_followup(evidence):
     """Remember a saved capture until a reviewed measurement contract admits it."""
     require(transaction.get_connection().in_atomic_block, "retain follow-up inside transaction")
-    require(_eligible_evidence_owner(evidence, "hf")
-            and evidence.run.job.operation == "release_acquisition"
-            and evidence.projection_kind == "hf-release-exact-v1", "exact release capture required")
+    source = evidence.run.job.source_id
+    require(source in {"hf", "github"} and _eligible_evidence_owner(evidence, source)
+            and evidence.run.job.operation == "release_acquisition", "exact release capture required")
     # A product-mapped projection is already a durable request, even if complete.
     # A native-only partition does not replace a later reviewed Product mapping.
     if any(
@@ -975,13 +988,17 @@ def retain_release_projection_followup(evidence):
 
 
 def _release_contract_is_dedicated(contract, evidence):
-    return contract.mappings.filter(
-        purpose="metric", source_id="hf", source_subject_kind="repository",
-        identifier_scope__code="model",
-        normalized_identifier=evidence.source_identifier.casefold(),
-        identifier_metadata__role="dedicated_model",
-        subject__subject_kind="product", subject__product__repo_id__iexact=evidence.source_identifier,
-    ).exists()
+    source = evidence.run.job.source_id
+    filters = {
+        "purpose": "metric", "source_id": source, "source_subject_kind": "repository",
+        "identifier_scope__code": "model" if source == "hf" else "repository_id",
+        "normalized_identifier": evidence.source_identifier.casefold() if source == "hf" else evidence.source_identifier,
+        "identifier_metadata__role": "dedicated_model",
+        "subject__subject_kind": "product",
+    }
+    if source == "hf":
+        filters["subject__product__repo_id__iexact"] = evidence.source_identifier
+    return contract.mappings.filter(**filters).exists()
 
 
 def recover_release_projection_followups(*, limit=25, observation_ids=None):
@@ -1304,10 +1321,10 @@ def replay_saved_evidence(job_id):
         ).first()
         cursor = int(previous.cursor) if previous and previous.cursor else 0
     allowed_origin = Q(run__job__purpose="catalog")
-    if job.source_id == "hf":
+    if job.source_id in {"hf", "github"}:
         allowed_origin |= Q(
             run__job__purpose="content", run__job__operation="release_acquisition",
-            projection_kind="hf-release-exact-v1",
+            projection_kind=f"{job.source_id}-release-exact-v1",
         )
     selected = CollectionObservation.objects.filter(
         Q(run_id__in=runs) | Q(run__job_id__in=jobs),
@@ -1320,7 +1337,7 @@ def replay_saved_evidence(job_id):
     if job.source_id == "github":
         selected = selected.filter(
             Q(source_subject_kind="account")
-            | Q(observation_kind__in=["repository", "repository_access", "release_asset"])
+            | Q(observation_kind__in=["repository", "repository_access", "release_asset", "github_release_exact"])
         )
     if job.source_id in {"openrouter", "arena"}:
         selected = selected.filter(observation_kind="publication_row")
