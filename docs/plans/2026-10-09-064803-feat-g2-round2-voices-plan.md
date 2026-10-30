@@ -217,6 +217,7 @@ by this planning amendment.
   - **Limits:** $5 of model spend, 60 SerpApi searches, $1 of Apify, and 15 rounds or 8 h.
   - **Never:** deploy, production writes, push or merge, a model change, or people beyond the six.
   - **Where the rules live:** the approved [stop-rules table](../analysis/2026-10-26-165941-g2-cast-loop-stoppers.html) as amended in the [speed-loop subplan](#cast-collector-speed-loop--separate-execution-subplan-october26), which owns the details.
+- D56. **Fix the still supply, then run the 48 pending cast people through D54, October30.** The agent uses its own judgement on the fixes. Every pending person gets at most three passes; a 100% success rate is not required. One ceiling covers the 12-pack check and the batch: $8 model, 320 SerpApi searches, $8 Apify and 12 hours. Cast code and documents are committed and pushed as each unit lands, with media kept out of git. There is no merge, deploy, database or R2 write, model change, or speed-loop restart. Details are in the [still-supply subplan](#cast-still-supply-fix-and-48-person-batch--subplan-october30).
 
 ## Cast of Characters Subplan — Next Interactive Workstream
 
@@ -224,7 +225,9 @@ by this planning amendment.
 
 **CJK implementation checkpoint:** standalone checkout `/Users/fuchitalee/development/collect-chinese-workers`, branch `feat/g2-cast-collector-api`, baseline `b7b9f86c450c5824ed21e55f03e409adff2444b2`, with earlier company/filing/person work preserved. Added direct page reader/policy, extended existing filing/command/provider paths and the person requirements; canonical `SKILL.md` plus the company/person workflow references describe the same behavior. Live company mode uses explicit `--reading-model`, `--reading-provider`, `--reading-key-env`, `--reading-budget-usd` and optional physical `--filing-pages`. Named-person mode reuses its selected vision model. Verification: `uv run --no-project --with pytest --with-requirements requirements-person.txt python -m pytest -q tests/test_visual_documents.py tests/test_filings.py tests/test_command.py tests/test_person_provider.py` →58passed; canonical skill validator passes. Tests use real PDF/rendered image/wire construction and mocked provider responses; they do not establish paid-provider transcription quality. Native assistant vision separately read the saved Zhipu pages. No commit, push, new acquisition, provider inference or production write was performed by this checkpoint. Automatic Graphics Editor orchestration and DB registration still follow D51's later integration.
 
-**Speed loop — October26:** D55 and the [Cast Collector Speed Loop subplan](#cast-collector-speed-loop--separate-execution-subplan-october26) cover cutting cold pack time to five minutes or less. That work is planned, not started.
+**Speed loop — October26:** D55 and the [Cast Collector Speed Loop subplan](#cast-collector-speed-loop--separate-execution-subplan-october26) cover cutting cold pack time to five minutes or less. It is paused before CS-U9 (2026-10-28).
+
+**Still supply and batch — October30:** D56 and the [still-supply subplan](#cast-still-supply-fix-and-48-person-batch--subplan-october30) fix the still supply and then run the 48 pending people. The batch starts only after a 12-pack check reaches 11 of 12 at B−.
 
 **Status:** original eight first-pass cases remain accepted. Owner says acquiring assets is sufficient and selects batches of three, easiest first; per-person generated likeness tests are now optional. LUO Fuli’s real pack and the next three YAN Junjie, YANG Zhilin and TANG Jie have been saved in shared private R2 storage and read back. Production database registration of new references/video ingestion remains pending; do not confuse archived files with database-attributed media. **Parent unit:** U14a. **Owner decision:** D50 and October22 continuations. **Authority:** this section of the existing G2 plan; HTML review extracts are for reading only. Updating this subplan performs no new collection, generation, database import or application change.
 
@@ -1332,6 +1335,257 @@ Waived or unrun checks are reported as "not run", never as passed.
 - **Cleanup:** the loop branch holds only the snapshot, the harness and kept changes. Rejected candidates survive only as `H-NNN-<sha7>` tags. No abandoned experimental code remains on the branch.
 - tmux sessions and `caffeinate` have ended. The worktree and `LOOP` remain for the owner.
 - This subplan records the outcome, and the general launch index has its OFF entry.
+
+### Cast Still Supply Fix and 48-Person Batch — subplan, October30
+
+#### Plain-English Summary
+
+**End state.** Every one of the 48 pending people in the [living cast audit](../analysis/2026-10-23-180418-g2-cast-living-cost-audit.html) has been tried up to three times. Each one ends either complete or incomplete:
+- **Complete** means two attributed real stills and one real clip, with every file graded B− or better.
+- **Incomplete** comes with the reason.
+
+The audit is regenerated after each person.
+
+**Why.** The speed loop showed that quality, not speed, is the blocker. The collector almost always used a video frame for the second still. Its web-photo check runs only when video frames can't fill both still slots, so it never ran in any of the last 8 packs. Those frames were the weak ones: soft, mouth open mid-word, or caption text near the face.
+
+**What changes.** All the changes are in the collector, on a new branch of the separate clone:
+- the web-photo check always runs on a few photos;
+- the photo picker prefers clear photos and sees how sharp each face is;
+- when a frame grades weak, the repair also offers frames from just before and after it in the same shot;
+- Chinese characters in links no longer crash the downloader.
+
+A new batch runner applies the D54 retry rules for each person.
+
+**What doesn't change:**
+- the model, provider and reasoning setting;
+- Face Matcher;
+- the shared collector checkout;
+- the database and R2, and nothing is deployed;
+- the paused speed loop.
+
+**How it's checked.**
+1. Offline tests.
+2. A 12-pack check: the four test people, three fresh runs each, graded by the speed loop's calibrated grader. At least 11 of 12 must reach B−.
+3. Code review.
+4. The batch report.
+
+If the check misses, the batch doesn't start.
+
+**What to know.**
+- **Handle-only people:** six people are known only by an X handle (no real name). They're recorded as incomplete without a search, because a name-based search would risk the wrong person.
+- **Baidu Baike:** it still refuses the collector (HTTP 403), and the collector won't pretend to be a browser.
+- **Ceiling:** one shared limit covers the check and the batch: $8 model, 320 SerpApi searches, $8 Apify and 12 hours.
+
+#### Owner decisions and authority — 2026-10-30
+
+- **D56. Fix the still supply, then run the 48 pending people through D54.**
+  - **Judgement:** delegated to the agent: "make those fixes, use your judgement".
+  - **Batch scope:** the 48 people still pending in the living audit. Each gets the D54 passes (at most three). A 100% success rate isn't required, but every person is attempted until the queue is done.
+  - **Ceiling:** one limit for the 12-pack check and the batch together: $8 model, 320 SerpApi searches, $8 Apify and 12 hours.
+  - **Saving work:** commit and push cast code and documents as each unit lands.
+    - Collector branches go to `allenwlee/collect-chinese-workers`.
+    - G2 cast files go to `feat/g2-round2-voices`.
+    - No merge or deploy.
+    - Raw media stays in `.local/`, out of git. Each file is committed only as a record of its hash, source and credit.
+  - **Never:**
+    - other sessions' uncommitted G2 files;
+    - the database, R2 or a deploy;
+    - a model, provider or reasoning change;
+    - edits to the shared collector checkout or Face Matcher;
+    - restarting the speed loop (CS-U9 stays paused).
+- **Delivery for this subplan:** commit and push to the two feature branches, verified on the remote. The plan frontmatter's `delivery_target: production` does not apply here.
+
+#### Findings that set the design
+
+1. **The web-photo check never ran.** In `reference_first.qualify_candidates`, the `matched-still-source` check runs only when frame-eligible stills number fewer than `photo_count`. Named-video frames almost always fill both slots. In all 8 CS-U8 packs it never ran, while LI Kai-Fu, LI Yanhong and CHENG Yixiao each had 4–7 web photos that matched locally. The only web stills chosen were the trusted reference itself.
+2. **Why the weak stills were weak.** Every C-range still was a video frame. The collector's own review gave three reasons: soft or compressed detail, the mouth open mid-word, and caption text close to the chin.
+3. **Chinese URLs.** A raw-Chinese URL fails inside `urlopen` with `'ascii' codec can't encode`, which surfaces as a `RuntimeError`. The URL check is not the cause; this corrects the 2026-10-28 closeout. Once encoded, `baike.baidu.com` still answers HTTP 403 to the collector's honest User-Agent, which is kept.
+4. **Handle-only people.** Six of the 48 have neither a native name nor a `SURNAME Given` name: `zR`, `Cara`, `Lou`, `RyanLee`, `@carolglms` and `@liulicheng10`. D52 says never invent a native name. The collector searches by name and keeps only pages that carry that name, so these six would match unrelated people.
+
+#### Implementation units
+
+All collector work is in `/Users/fuchitalee/development/collect-chinese-workers-worktrees/cast-speed-20261026`, on branch `feat/cast-still-supply-batch` from `8fe84d1`. Tests use the CS-U8 runner, with `--basetemp` under `/Users/fuchitalee/loops/g2-cast-batch-20261030/pytest/`.
+
+##### SB-U1. Save and branch
+
+Done 2026-10-30:
+- `loop/cast-speed-20261026` pushed (remote `8fe84d1`);
+- G2 cast plan, reports and ledger script committed and pushed (`dba8fee1`);
+- 8 media-embedding report pages (about 110 MB) kept out of git.
+
+Create the new branch from `8fe84d1`.
+
+##### SB-U2. Always check a few web photos
+
+**Files:** `person_collect/reference_first.py`, `tests/test_person_reference_first.py`.
+
+**Change:** always assess up to `WEB_PHOTO_CHECK_CAP = 6` locally matching web photos, not only when frames fall short:
+- these are the pending, non-video, non-Xiaohongshu-unlabelled stills;
+- rank them by match score, then face area;
+- use one batched `matched-still-source` call;
+- attributed photos join `eligible_stills`;
+- the rest of the logic is unchanged.
+
+**Tests:**
+- with 3 eligible frames and 3 matching web photos, the check runs on all 3 and attributed photos become eligible;
+- the cap of 6 holds;
+- with no pending photos, no call is made.
+
+##### SB-U3. Prefer clear photos, and show face measurements
+
+**Files:**
+- `person_collect/local_faces.py`: add a `sharpness` value to each face, the variance of the Laplacian on a 128 px-tall grey face crop;
+- `person_collect/reference_first.py`: attach `face_height_pixels` and `face_sharpness` to eligible stills;
+- `person_collect/reference_selection.py`: add a prompt paragraph;
+- tests.
+
+**Prompt rule:** prefer a clear attributed photograph over a video frame. Among frames, prefer higher `face_sharpness`, eyes open, mouth closed or relaxed, and no caption near the face. Use a frame when no photo is clear. These measurements guide the choice; they never establish identity.
+
+**Tests:**
+- the fields reach the selection packet;
+- the prompt carries the rule;
+- the measurement code runs on the fixture images.
+
+##### SB-U4. Offer neighbour frames during repair
+
+**Files:**
+- new `person_collect/neighbor_frames.py`;
+- `person_collect/pipeline.py` (repair loop, reference mode);
+- `tests/test_person_neighbor_frames.py`.
+
+**Change:** for each weak or framing-failed still whose source is a video:
+1. Extract frames at ±0.33, ±0.67, ±1.0 and ±1.5 s, kept inside that frame's shot interval (0.1 s margin).
+2. Measure them against the trusted reference.
+3. Keep frames with one matching face, a head that fits and a valid conservative crop.
+4. Add the top 3 by sharpness as new eligible candidates, with ids `<video>-f-<t>`. They inherit the parent video's attribution.
+
+The weak frame stays blocked. There are still at most two repairs.
+
+**Tests (fake measure):**
+- the neighbour frames stay inside the shot;
+- they carry the parent's source and attribution;
+- at most 3 are added;
+- no neighbour is added when the shot is too short;
+- photo stills get none.
+
+##### SB-U5. Encode non-ASCII URLs
+
+**Files:** `person_collect/sources.py` and tests.
+
+**Change:** `live_download` converts an IRI to a URI before `urlopen` and before the final-URL check:
+- percent-encode the path, query and fragment as UTF-8, keeping existing escapes and reserved characters;
+- convert the host with IDNA.
+
+**Tests:**
+- `https://baike.baidu.com/item/李彦宏/125160` becomes the expected encoding;
+- an already-encoded URL is unchanged;
+- localhost is still refused.
+
+##### SB-U6. Batch runner
+
+**Files:**
+- new `person_collect/batch.py`;
+- new `scripts/cast_batch.py`;
+- `person_collect/fresh_collection.py` and `person_collect/command.py` (`--search-strategy {standard,supplemental,alternate}`; `--supplemental-search` stays as the alias for `supplemental`);
+- `tests/test_cast_batch.py`.
+
+**Inputs:**
+- the PushinWeight roster `.local/g2-cast-roster-21brands-20261023/roster.json`;
+- the pending keys, worked out the same way `scripts/g2_cast_cost_ledger.py` does;
+- `--root`, the limits, `--workers 3`, the collector settings, the review kit and the audit hook.
+
+**Person case:**
+- the id is a slug of the key;
+- `name`, `name_zh` from `name_original`, and `search_name` (native name, else name);
+- `company` from the brand, as Chinese plus English tokens;
+- `roster_key`, `person_id` and `role_context`.
+- A handle-only person gets an `incomplete` record with `early_stop_reason`, and no paid call.
+
+**Passes (D54):**
+
+| Pass | Search strategy | Recovery brief | Reuses |
+|---|---|---|---|
+| 1 | `standard` (2 searches) | none | — |
+| 2 | `supplemental` (+2 targeted searches) | names the failed slots and the grader's reasons | pass 1 raw sources (`--source-cache-root`); trusted reference |
+| 3 | `alternate` (+2 different searches: speech/keynote) | a second, different brief that pushes photographs and different shots | same as pass 2 |
+
+- Each pass is one `person_collect.command --mode fresh` process with its own run root. They share the person's search ledger (`--max-baidu-queries 6`), the batch model ledger (`--budget-usd` = what remains of $8), the batch reference root and the XHS risk sentinel.
+
+**Judging each pass:**
+- **Gate:** the calibrated reviewer (CS-U5 kit, with one calibration for the whole batch) grades the pack's two stills and the clip.
+- **Success:** the pack is `completed_within_scope`, has no framing failure, and every grade is B− or better. Success ends the person.
+- **After three passes:** keep the best pack. Rank by met slots, then by the lowest grade. The person is incomplete.
+
+**Records and stops:**
+- **After every person:** write the audit record in the `validate_record` shape (each pass has a prompt hash and change reason) and run the hook `python scripts/g2_cast_cost_ledger.py --record-file <record>` from the G2 worktree.
+- **Stops for the whole batch:**
+  - model, search, Apify or time ceiling, checked before starting a person, with the worst-case per-person reserve: $0.15 model, 6 searches, $0.10 Apify;
+  - a missing credential;
+  - an HTTP 402 owner wait;
+  - three people in a row failing with the same non-asset error type;
+  - less than 5 GB free disk;
+  - a changed review kit.
+- **Stops for one person:** asset gaps, and a pass over its 40-minute timeout.
+
+**Tests (fake collector and reviewer):**
+- stop on success at pass 1;
+- three passes with distinct prompt hashes;
+- the best-pack choice;
+- the handle-only skip;
+- ceiling stops;
+- three-in-a-row stops;
+- resume skips finished people;
+- record validation.
+
+##### SB-U7. 12-pack quality check
+
+**Setup:**
+- four test people (LEI Jun, LI Kai-Fu, LI Yanhong, CHENG Yixiao);
+- three runs each, pass 1 only;
+- cold: fresh reference roots, no source cache, the audit hook off;
+- no code change between runs.
+
+**Bar:** at least 11 of 12 packs meet the success rule.
+
+- **Miss:** stop, report, and don't run SB-U9.
+- **Pass:** continue.
+
+Spend counts toward the shared ceiling.
+
+##### SB-U8. Code review
+
+- Run `ce-code-review` on `8fe84d1..feat/cast-still-supply-batch`.
+- Apply fixes and rerun the tests.
+- Commit and push.
+
+##### SB-U9. The 48-person batch
+
+- Run in the background with `caffeinate`.
+- The audit is regenerated after each person.
+- **Afterwards:**
+  - write a batch report;
+  - commit the records and the report to G2, then push;
+  - add an outcome note here and an OFF entry in the general launch index;
+  - deliver the report through show-locally.
+
+#### Verification Contract
+
+| Gate | Check | When |
+|---|---|---|
+| Collector tests | `uv run --offline --no-project --with pytest --with-requirements requirements-person.txt python -m pytest -q -p no:cacheprovider --basetemp=/Users/fuchitalee/loops/g2-cast-batch-20261030/pytest/<unit>` in the clone | SB-U2–SB-U6, SB-U8 |
+| No paid call in tests | Fakes only; there is no network in the test run | SB-U2–SB-U6 |
+| 12-pack bar | At least 11/12 by the calibrated reviewer | SB-U7 |
+| Shared checkout untouched | `git status` and HEAD of `/Users/fuchitalee/development/collect-chinese-workers` unchanged | Before and after SB-U7 and SB-U9 |
+| Spend | Model ledger, SerpApi receipts and the Apify meter within $8 / 320 / $8 | Before each person |
+| Remote | `git ls-remote` equals the local HEAD for both branches | After every push |
+
+#### Definition of Done
+
+- All 48 people have a record of `complete` or `incomplete` with a reason, or the batch stopped on a named run-wide stop with the remaining people listed.
+- The audit HTML is regenerated, and the batch report has been delivered.
+- Code and documents are committed and pushed, with media out of git.
+- The shared collector checkout and Face Matcher are unchanged. Nothing touched the database, R2 or a deploy.
+- This subplan has its outcome note, and the launch index has its OFF entry.
 
 ### Initial roster and order
 
