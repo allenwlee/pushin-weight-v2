@@ -1,0 +1,1658 @@
+{
+  "classification_per_day": {
+    "reported_usd": {
+      "baseline": 7.081366145482444,
+      "incremental": 37.150136658892265,
+      "not_kept": 0.0
+    },
+    "settled_usd": {
+      "baseline": 7.117083486469102,
+      "incremental": 37.35800198477681,
+      "not_kept": 0.0
+    }
+  },
+  "collection": {
+    "groups": {
+      "new": {
+        "fetched": 28717,
+        "kept": 21654,
+        "pages": 2819,
+        "routes": [
+          "ANT_1",
+          "ANT_2",
+          "ANT_3",
+          "A_ANT",
+          "A_OAI",
+          "B_ANT",
+          "B_OAI",
+          "OAI_1",
+          "OAI_2",
+          "OAI_3"
+        ]
+      },
+      "production": {
+        "fetched": 3900,
+        "kept": 3116,
+        "pages": 1104,
+        "routes": [
+          "A",
+          "B1",
+          "B2",
+          "B3",
+          "C1",
+          "C2",
+          "C3",
+          "C4"
+        ]
+      }
+    },
+    "routes": {
+      "A": {
+        "dropped": {
+          "relevance_drop": 10,
+          "unmatched_attribution": 5
+        },
+        "dropped_total": 15,
+        "envelopes": 116,
+        "fetched": 93,
+        "kept": 78,
+        "pages": 116,
+        "raw_count": 93,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "ANT_1": {
+        "dropped": {
+          "not_include": 42,
+          "unmatched_attribution": 3295
+        },
+        "dropped_total": 3337,
+        "envelopes": 833,
+        "fetched": 14597,
+        "kept": 11260,
+        "pages": 833,
+        "raw_count": 14597,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "ANT_2": {
+        "dropped": {
+          "unmatched_attribution": 32
+        },
+        "dropped_total": 32,
+        "envelopes": 159,
+        "fetched": 1204,
+        "kept": 1172,
+        "pages": 159,
+        "raw_count": 1204,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "ANT_3": {
+        "dropped": {
+          "unmatched_attribution": 114
+        },
+        "dropped_total": 114,
+        "envelopes": 152,
+        "fetched": 1020,
+        "kept": 906,
+        "pages": 152,
+        "raw_count": 1020,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "A_ANT": {
+        "dropped": {
+          "relevance_drop": 3
+        },
+        "dropped_total": 3,
+        "envelopes": 82,
+        "fetched": 11,
+        "kept": 8,
+        "pages": 82,
+        "raw_count": 11,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "A_OAI": {
+        "dropped": {
+          "relevance_drop": 5
+        },
+        "dropped_total": 5,
+        "envelopes": 76,
+        "fetched": 5,
+        "kept": 0,
+        "pages": 76,
+        "raw_count": 5,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "B1": {
+        "dropped": {
+          "unmatched_attribution": 261
+        },
+        "dropped_total": 261,
+        "envelopes": 179,
+        "fetched": 1544,
+        "kept": 1283,
+        "pages": 179,
+        "raw_count": 1544,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "B2": {
+        "dropped": {
+          "unmatched_attribution": 131
+        },
+        "dropped_total": 131,
+        "envelopes": 135,
+        "fetched": 167,
+        "kept": 36,
+        "pages": 135,
+        "raw_count": 167,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "B3": {
+        "dropped": {
+          "unmatched_attribution": 64
+        },
+        "dropped_total": 64,
+        "envelopes": 113,
+        "fetched": 86,
+        "kept": 22,
+        "pages": 113,
+        "raw_count": 86,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "B_ANT": {
+        "dropped": {},
+        "dropped_total": 0,
+        "envelopes": 169,
+        "fetched": 1322,
+        "kept": 1322,
+        "pages": 169,
+        "raw_count": 1322,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "B_OAI": {
+        "dropped": {
+          "unmatched_attribution": 69
+        },
+        "dropped_total": 69,
+        "envelopes": 168,
+        "fetched": 1285,
+        "kept": 1216,
+        "pages": 168,
+        "raw_count": 1285,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "C1": {
+        "dropped": {
+          "not_include": 5,
+          "unmatched_attribution": 36
+        },
+        "dropped_total": 41,
+        "envelopes": 136,
+        "fetched": 169,
+        "kept": 128,
+        "pages": 136,
+        "raw_count": 169,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "C2": {
+        "dropped": {
+          "unmatched_attribution": 27
+        },
+        "dropped_total": 27,
+        "envelopes": 102,
+        "fetched": 36,
+        "kept": 9,
+        "pages": 102,
+        "raw_count": 36,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "C3": {
+        "dropped": {
+          "unmatched_attribution": 13
+        },
+        "dropped_total": 13,
+        "envelopes": 120,
+        "fetched": 85,
+        "kept": 72,
+        "pages": 120,
+        "raw_count": 85,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "C4": {
+        "dropped": {
+          "not_include": 13,
+          "unmatched_attribution": 244
+        },
+        "dropped_total": 257,
+        "envelopes": 203,
+        "fetched": 1874,
+        "kept": 1617,
+        "pages": 203,
+        "raw_count": 1874,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "OAI_1": {
+        "dropped": {
+          "unmatched_attribution": 1956
+        },
+        "dropped_total": 1956,
+        "envelopes": 576,
+        "fetched": 9416,
+        "kept": 7460,
+        "pages": 576,
+        "raw_count": 9416,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "OAI_2": {
+        "dropped": {
+          "not_include": 4,
+          "unmatched_attribution": 1463
+        },
+        "dropped_total": 1467,
+        "envelopes": 407,
+        "fetched": 5960,
+        "kept": 4493,
+        "pages": 407,
+        "raw_count": 5960,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      },
+      "OAI_3": {
+        "dropped": {
+          "not_include": 103,
+          "unmatched_attribution": 524
+        },
+        "dropped_total": 627,
+        "envelopes": 197,
+        "fetched": 1826,
+        "kept": 1199,
+        "pages": 197,
+        "raw_count": 1826,
+        "slices": 72,
+        "terminal_state": {
+          "complete": 72
+        }
+      }
+    },
+    "totals": {
+      "fetched": 31801,
+      "kept": 24044,
+      "pages": 3923,
+      "routes": 18
+    },
+    "unclassified_routes": []
+  },
+  "comparison": {
+    "label": "The baseline excludes RARE_EXTRA and the two special-events searches (SPECIALEVENTS1, SPECIALEVENTS2, live from deployed revision e5edf737).",
+    "note": "Those searches have their own shared budget, so their search volume does not change with the new brands. Their posts that mention OpenAI or Anthropic would gain tracked tags; that added classification is not measured here.",
+    "pilot_day": {
+      "estimates": {
+        "baseline_fetched": 23300,
+        "baseline_search_usd": 4.02,
+        "net_new_fetched": 114500,
+        "net_new_kept": 73000,
+        "new_fetched": 118500,
+        "new_search_usd": 22.86,
+        "production_saved_posts": 15988,
+        "source": "docs/analysis/2026-10-27-221500-oai-anthropic-volume-pilot.md (2026-10-26 JST)"
+      },
+      "measured": {
+        "baseline_fetched": 18401.272106732857,
+        "baseline_search_usd": [
+          3.2768419174681975,
+          5.980413434688179
+        ],
+        "incremental_kept": 121642.72618764918,
+        "net_new_fetched": 161820.604283054,
+        "new_search_usd": [
+          32.50737625698324,
+          41.2070969273743
+        ]
+      }
+    },
+    "pilot_window": {
+      "estimates": {
+        "fetched": {
+          "net_new": 20200,
+          "new": 21000,
+          "production": 4100,
+          "total": 24000
+        },
+        "kept": {
+          "new": 13000,
+          "production": 2800,
+          "total": 16000
+        },
+        "requests": {
+          "new": 2300,
+          "production": 1100,
+          "total": 3400
+        },
+        "search_usd": {
+          "new": 3.97,
+          "production": 0.73,
+          "total": 4.7
+        },
+        "source": "plan Sizing Assumptions (pilot's three in-window slices, 2026-10-25 Pacific)"
+      },
+      "measured": {
+        "fetched": {
+          "net_new": 27901,
+          "new": 28717,
+          "production": 3900,
+          "total": 31801
+        },
+        "kept": {
+          "new": 21654,
+          "production": 3116,
+          "total": 24044
+        },
+        "requests": {
+          "new": 3319,
+          "production": 1295,
+          "total": 4614
+        },
+        "search_usd": {
+          "new": [
+            5.6049,
+            7.1049
+          ],
+          "production": [
+            0.6945,
+            1.2675
+          ],
+          "total": [
+            6.2994,
+            8.3724
+          ]
+        }
+      }
+    },
+    "production_window": {
+      "saved_posts_excluded_searches": {
+        "RARE_EXTRA": 9,
+        "SPECIALEVENTS1": 0,
+        "SPECIALEVENTS2": 0
+      },
+      "saved_posts_other_sources": {},
+      "saved_posts_production_routes": 3223,
+      "test_baseline_equivalent_kept": 3060,
+      "test_kept_on_production_routes": 3116,
+      "test_to_production_ratio": 0.9668011169717654
+    }
+  },
+  "credits": {
+    "groups": {
+      "new": {
+        "billed": 2819,
+        "credits_max": 710490,
+        "credits_min": 560490,
+        "error_with_body": 0,
+        "no_body": 500,
+        "requests": 3319,
+        "retries": 500,
+        "usd_max": 7.1049,
+        "usd_min": 5.6049
+      },
+      "production": {
+        "billed": 1104,
+        "credits_max": 126750,
+        "credits_min": 69450,
+        "error_with_body": 0,
+        "no_body": 191,
+        "requests": 1295,
+        "retries": 191,
+        "usd_max": 1.2675,
+        "usd_min": 0.6945
+      }
+    },
+    "request_limit": 7000,
+    "routes": {
+      "A": {
+        "billed": 116,
+        "credits_max": 6975,
+        "credits_min": 2475,
+        "error_with_body": 0,
+        "no_body": 15,
+        "requests": 131,
+        "retries": 15,
+        "usd_max": 0.06975,
+        "usd_min": 0.02475
+      },
+      "ANT_1": {
+        "billed": 833,
+        "credits_max": 266535,
+        "credits_min": 220035,
+        "error_with_body": 0,
+        "no_body": 155,
+        "requests": 988,
+        "retries": 155,
+        "usd_max": 2.66535,
+        "usd_min": 2.20035
+      },
+      "ANT_2": {
+        "billed": 159,
+        "credits_max": 25440,
+        "credits_min": 19140,
+        "error_with_body": 0,
+        "no_body": 21,
+        "requests": 180,
+        "retries": 21,
+        "usd_max": 0.2544,
+        "usd_min": 0.1914
+      },
+      "ANT_3": {
+        "billed": 152,
+        "credits_max": 24180,
+        "credits_min": 16380,
+        "error_with_body": 0,
+        "no_body": 26,
+        "requests": 178,
+        "retries": 26,
+        "usd_max": 0.2418,
+        "usd_min": 0.1638
+      },
+      "A_ANT": {
+        "billed": 82,
+        "credits_max": 3945,
+        "credits_min": 1245,
+        "error_with_body": 0,
+        "no_body": 9,
+        "requests": 91,
+        "retries": 9,
+        "usd_max": 0.03945,
+        "usd_min": 0.01245
+      },
+      "A_OAI": {
+        "billed": 76,
+        "credits_max": 4455,
+        "credits_min": 1155,
+        "error_with_body": 0,
+        "no_body": 11,
+        "requests": 87,
+        "retries": 11,
+        "usd_max": 0.04455,
+        "usd_min": 0.01155
+      },
+      "B1": {
+        "billed": 179,
+        "credits_max": 34440,
+        "credits_min": 24240,
+        "error_with_body": 0,
+        "no_body": 34,
+        "requests": 213,
+        "retries": 34,
+        "usd_max": 0.3444,
+        "usd_min": 0.2424
+      },
+      "B2": {
+        "billed": 135,
+        "credits_max": 10785,
+        "credits_min": 3585,
+        "error_with_body": 0,
+        "no_body": 24,
+        "requests": 159,
+        "retries": 24,
+        "usd_max": 0.10785,
+        "usd_min": 0.03585
+      },
+      "B3": {
+        "billed": 113,
+        "credits_max": 10170,
+        "credits_min": 2370,
+        "error_with_body": 0,
+        "no_body": 26,
+        "requests": 139,
+        "retries": 26,
+        "usd_max": 0.1017,
+        "usd_min": 0.0237
+      },
+      "B_ANT": {
+        "billed": 169,
+        "credits_max": 26310,
+        "credits_min": 20910,
+        "error_with_body": 0,
+        "no_body": 18,
+        "requests": 187,
+        "retries": 18,
+        "usd_max": 0.2631,
+        "usd_min": 0.2091
+      },
+      "B_OAI": {
+        "billed": 168,
+        "credits_max": 26355,
+        "credits_min": 20355,
+        "error_with_body": 0,
+        "no_body": 20,
+        "requests": 188,
+        "retries": 20,
+        "usd_max": 0.26355,
+        "usd_min": 0.20355
+      },
+      "C1": {
+        "billed": 136,
+        "credits_max": 7215,
+        "credits_min": 3615,
+        "error_with_body": 0,
+        "no_body": 12,
+        "requests": 148,
+        "retries": 12,
+        "usd_max": 0.07215,
+        "usd_min": 0.03615
+      },
+      "C2": {
+        "billed": 102,
+        "credits_max": 5220,
+        "credits_min": 1620,
+        "error_with_body": 0,
+        "no_body": 12,
+        "requests": 114,
+        "retries": 12,
+        "usd_max": 0.0522,
+        "usd_min": 0.0162
+      },
+      "C3": {
+        "billed": 120,
+        "credits_max": 7155,
+        "credits_min": 2355,
+        "error_with_body": 0,
+        "no_body": 16,
+        "requests": 136,
+        "retries": 16,
+        "usd_max": 0.07155,
+        "usd_min": 0.02355
+      },
+      "C4": {
+        "billed": 203,
+        "credits_max": 44790,
+        "credits_min": 29190,
+        "error_with_body": 0,
+        "no_body": 52,
+        "requests": 255,
+        "retries": 52,
+        "usd_max": 0.4479,
+        "usd_min": 0.2919
+      },
+      "OAI_1": {
+        "billed": 576,
+        "credits_max": 179220,
+        "credits_min": 142320,
+        "error_with_body": 0,
+        "no_body": 123,
+        "requests": 699,
+        "retries": 123,
+        "usd_max": 1.7922,
+        "usd_min": 1.4232
+      },
+      "OAI_2": {
+        "billed": 407,
+        "credits_max": 112080,
+        "credits_min": 90480,
+        "error_with_body": 0,
+        "no_body": 72,
+        "requests": 479,
+        "retries": 72,
+        "usd_max": 1.1208,
+        "usd_min": 0.9048
+      },
+      "OAI_3": {
+        "billed": 197,
+        "credits_max": 41970,
+        "credits_min": 28470,
+        "error_with_body": 0,
+        "no_body": 45,
+        "requests": 242,
+        "retries": 45,
+        "usd_max": 0.4197,
+        "usd_min": 0.2847
+      }
+    },
+    "totals": {
+      "billed": 3923,
+      "credits_max": 837240,
+      "credits_min": 629940,
+      "error_with_body": 0,
+      "no_body": 691,
+      "requests": 4614,
+      "retries": 691,
+      "usd_max": 8.3724,
+      "usd_min": 6.2994
+    }
+  },
+  "db_growth": {
+    "bookkeeping_bytes": 575774720,
+    "production_equivalent_bytes": 497188864,
+    "tables": {
+      "account_profile_snapshots": {
+        "after": 92495872,
+        "before": 40386560,
+        "delta": 52109312,
+        "kind": "production_equivalent"
+      },
+      "accounts": {
+        "after": 24641536,
+        "before": 10272768,
+        "delta": 14368768,
+        "kind": "production_equivalent"
+      },
+      "brand_discovery_candidates": {
+        "after": 1105920,
+        "before": 131072,
+        "delta": 974848,
+        "kind": "production_equivalent"
+      },
+      "collection_attempts": {
+        "after": 352256,
+        "before": 311296,
+        "delta": 40960,
+        "kind": "bookkeeping"
+      },
+      "collection_job_targets": {
+        "after": 3031040,
+        "before": 2465792,
+        "delta": 565248,
+        "kind": "bookkeeping"
+      },
+      "collection_jobs": {
+        "after": 2121728,
+        "before": 2056192,
+        "delta": 65536,
+        "kind": "bookkeeping"
+      },
+      "collection_observations": {
+        "after": 54616064,
+        "before": 23273472,
+        "delta": 31342592,
+        "kind": "bookkeeping"
+      },
+      "collection_requests": {
+        "after": 62029824,
+        "before": 46751744,
+        "delta": 15278080,
+        "kind": "bookkeeping"
+      },
+      "collection_runs": {
+        "after": 26796032,
+        "before": 16154624,
+        "delta": 10641408,
+        "kind": "bookkeeping"
+      },
+      "collection_scope_request_uses": {
+        "after": 3047424,
+        "before": 1933312,
+        "delta": 1114112,
+        "kind": "bookkeeping"
+      },
+      "collection_scope_runs": {
+        "after": 311033856,
+        "before": 203481088,
+        "delta": 107552768,
+        "kind": "bookkeeping"
+      },
+      "event_evidence": {
+        "after": 131072,
+        "before": 49152,
+        "delta": 81920,
+        "kind": "production_equivalent"
+      },
+      "events": {
+        "after": 204800,
+        "before": 81920,
+        "delta": 122880,
+        "kind": "production_equivalent"
+      },
+      "job_employment_type_assignments": {
+        "after": 114688,
+        "before": 57344,
+        "delta": 57344,
+        "kind": "production_equivalent"
+      },
+      "job_function_assignments": {
+        "after": 114688,
+        "before": 57344,
+        "delta": 57344,
+        "kind": "production_equivalent"
+      },
+      "job_listing_evidence": {
+        "after": 204800,
+        "before": 57344,
+        "delta": 147456,
+        "kind": "production_equivalent"
+      },
+      "job_listing_locations": {
+        "after": 139264,
+        "before": 73728,
+        "delta": 65536,
+        "kind": "production_equivalent"
+      },
+      "job_listings": {
+        "after": 311296,
+        "before": 122880,
+        "delta": 188416,
+        "kind": "production_equivalent"
+      },
+      "job_seniority_assignments": {
+        "after": 114688,
+        "before": 57344,
+        "delta": 57344,
+        "kind": "production_equivalent"
+      },
+      "job_workplace_type_assignments": {
+        "after": 114688,
+        "before": 57344,
+        "delta": 57344,
+        "kind": "production_equivalent"
+      },
+      "opportunities": {
+        "after": 229376,
+        "before": 98304,
+        "delta": 131072,
+        "kind": "production_equivalent"
+      },
+      "original_content_calls": {
+        "after": 408354816,
+        "before": 811008,
+        "delta": 407543808,
+        "kind": "bookkeeping"
+      },
+      "people": {
+        "after": 204800,
+        "before": 122880,
+        "delta": 81920,
+        "kind": "production_equivalent"
+      },
+      "people_accounts": {
+        "after": 557056,
+        "before": 237568,
+        "delta": 319488,
+        "kind": "production_equivalent"
+      },
+      "people_brand_affiliation_evidence": {
+        "after": 1458176,
+        "before": 385024,
+        "delta": 1073152,
+        "kind": "production_equivalent"
+      },
+      "people_brand_affiliations": {
+        "after": 1056768,
+        "before": 393216,
+        "delta": 663552,
+        "kind": "production_equivalent"
+      },
+      "people_media": {
+        "after": 163840,
+        "before": 98304,
+        "delta": 65536,
+        "kind": "production_equivalent"
+      },
+      "people_name_evidence": {
+        "after": 491520,
+        "before": 204800,
+        "delta": 286720,
+        "kind": "production_equivalent"
+      },
+      "people_names": {
+        "after": 532480,
+        "before": 237568,
+        "delta": 294912,
+        "kind": "production_equivalent"
+      },
+      "person_name_selections": {
+        "after": 311296,
+        "before": 155648,
+        "delta": 155648,
+        "kind": "production_equivalent"
+      },
+      "post_enrichment_states": {
+        "after": 20283392,
+        "before": 6758400,
+        "delta": 13524992,
+        "kind": "production_equivalent"
+      },
+      "post_translation_artifacts": {
+        "after": 36634624,
+        "before": 212992,
+        "delta": 36421632,
+        "kind": "production_equivalent"
+      },
+      "post_translation_chunks": {
+        "after": 7593984,
+        "before": 40960,
+        "delta": 7553024,
+        "kind": "production_equivalent"
+      },
+      "post_translation_texts": {
+        "after": 48955392,
+        "before": 245760,
+        "delta": 48709632,
+        "kind": "production_equivalent"
+      },
+      "posts": {
+        "after": 310779904,
+        "before": 163692544,
+        "delta": 147087360,
+        "kind": "production_equivalent"
+      },
+      "posts_brands": {
+        "after": 17088512,
+        "before": 9109504,
+        "delta": 7979008,
+        "kind": "production_equivalent"
+      },
+      "posts_brands_audience_topics": {
+        "after": 5709824,
+        "before": 163840,
+        "delta": 5545984,
+        "kind": "production_equivalent"
+      },
+      "posts_brands_classification_judgments": {
+        "after": 107905024,
+        "before": 319488,
+        "delta": 107585536,
+        "kind": "production_equivalent"
+      },
+      "posts_brands_classification_states": {
+        "after": 18857984,
+        "before": 245760,
+        "delta": 18612224,
+        "kind": "production_equivalent"
+      },
+      "posts_brands_geopolitical_modes": {
+        "after": 663552,
+        "before": 147456,
+        "delta": 516096,
+        "kind": "production_equivalent"
+      },
+      "posts_brands_mentions": {
+        "after": 19709952,
+        "before": 10526720,
+        "delta": 9183232,
+        "kind": "production_equivalent"
+      },
+      "posts_brands_product_labels": {
+        "after": 2383872,
+        "before": 114688,
+        "delta": 2269184,
+        "kind": "production_equivalent"
+      },
+      "posts_brands_signals": {
+        "after": 15450112,
+        "before": 1556480,
+        "delta": 13893632,
+        "kind": "production_equivalent"
+      },
+      "posts_untracked_brand_promotions": {
+        "after": 868352,
+        "before": 81920,
+        "delta": 786432,
+        "kind": "production_equivalent"
+      },
+      "provider_batches": {
+        "after": 1818624,
+        "before": 188416,
+        "delta": 1630208,
+        "kind": "bookkeeping"
+      },
+      "search_queries": {
+        "after": 139264,
+        "before": 131072,
+        "delta": 8192,
+        "kind": "production_equivalent"
+      },
+      "staff_collection_work": {
+        "after": 253952,
+        "before": 131072,
+        "delta": 122880,
+        "kind": "production_equivalent"
+      },
+      "targeted_extraction_attempts": {
+        "after": 647168,
+        "before": 40960,
+        "delta": 606208,
+        "kind": "production_equivalent"
+      },
+      "targeted_extraction_states": {
+        "after": 598016,
+        "before": 49152,
+        "delta": 548864,
+        "kind": "production_equivalent"
+      },
+      "untracked_brand_promotion_evidence": {
+        "after": 1843200,
+        "before": 212992,
+        "delta": 1630208,
+        "kind": "production_equivalent"
+      },
+      "x_account_details": {
+        "after": 6750208,
+        "before": 3506176,
+        "delta": 3244032,
+        "kind": "production_equivalent"
+      }
+    },
+    "total_bytes": 1072963584
+  },
+  "format": "oai-anthropic-size-report/v1",
+  "generated_at_jst": "2026-10-30-095822",
+  "growth": {
+    "baseline_equivalent_kept": 3060,
+    "baseline_fetched": 3900,
+    "incremental_kept": {
+      "by_brand_set": {
+        "anthropic": 9514,
+        "anthropic+existing brand": 157,
+        "anthropic+openai": 2173,
+        "anthropic+openai+existing brand": 97,
+        "existing brand": 45,
+        "openai": 8918,
+        "openai+existing brand": 80
+      },
+      "by_discovery": {
+        "new_routes_only": 20922,
+        "production_fetched_new_route_kept": 6,
+        "production_route_new_keyword": 56
+      },
+      "total": 20984
+    },
+    "kept_with_new_brands": 24044,
+    "net_new_fetched": 27901,
+    "new_routes_fetched": 28717,
+    "production_route_untagged_kept": 0,
+    "ratios": {
+      "by_brand_set_to_baseline_kept": {
+        "anthropic": 3.1091503267973857,
+        "anthropic+existing brand": 0.05130718954248366,
+        "anthropic+openai": 0.7101307189542484,
+        "anthropic+openai+existing brand": 0.03169934640522876,
+        "existing brand": 0.014705882352941176,
+        "openai": 2.91437908496732,
+        "openai+existing brand": 0.026143790849673203
+      },
+      "by_discovery_to_baseline_kept": {
+        "new_routes_only": 6.837254901960784,
+        "production_fetched_new_route_kept": 0.00196078431372549,
+        "production_route_new_keyword": 0.018300653594771243
+      },
+      "incremental_kept_to_baseline_kept": 6.857516339869281,
+      "kept_with_new_brands_to_baseline_kept": 7.857516339869281,
+      "net_new_fetched_to_baseline_fetched": 7.154102564102564
+    }
+  },
+  "headline": {
+    "classification_reported_usd": {
+      "label": "estimate: each post's allocated cost \u00f7 the share of the search group that kept it",
+      "per_day": 44.231502804374706,
+      "share": 0.1766893416741294,
+      "window": 7.912137
+    },
+    "db_growth_bookkeeping_bytes": {
+      "label": "estimate: window figure \u00f7 window share 0.1767 (kept-post-weighted mix of the production and pilot shares)",
+      "per_day": 3258683939.5321836,
+      "share": 0.1766893416741294,
+      "window": 575774720
+    },
+    "db_growth_production_equivalent_bytes": {
+      "label": "estimate: window figure \u00f7 window share 0.1767 (kept-post-weighted mix of the production and pilot shares)",
+      "per_day": 2813915425.170197,
+      "share": 0.1766893416741294,
+      "window": 497188864
+    },
+    "fetched_baseline": {
+      "label": "estimate: window figure \u00f7 window share 0.2119 (production saved posts on the 8 production searches (posts with no discovery-lane source), 2026-10-27 Pacific)",
+      "per_day": 18401.272106732857,
+      "share": 0.21194186887617544,
+      "window": 3900
+    },
+    "fetched_net_new": {
+      "label": "estimate: window figure \u00f7 window share 0.1724 (pilot slices: summaries.json sha256 7567078461d3, in-window slices [2, 3, 4] of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])",
+      "per_day": 161820.604283054,
+      "share": 0.17241932894525605,
+      "window": 27901
+    },
+    "posts_kept_baseline": {
+      "label": "estimate: window figure \u00f7 window share 0.2119 (production saved posts on the 8 production searches (posts with no discovery-lane source), 2026-10-27 Pacific)",
+      "per_day": 14437.92119143655,
+      "share": 0.21194186887617544,
+      "window": 3060
+    },
+    "posts_kept_incremental": {
+      "label": "estimate: production-search part \u00f7 production share 0.2119, new-search part \u00f7 pilot share 0.1724",
+      "per_day": 121642.72618764918,
+      "share": 0.17241932894525605,
+      "window": 20984
+    },
+    "posts_kept_with_new_brands": {
+      "label": "estimate: sum of the parts (kept-post-weighted mix of the production and pilot shares)",
+      "per_day": 136080.64737908574,
+      "share": 0.1766893416741294,
+      "window": 24044
+    },
+    "search_usd_new_routes": {
+      "label": "estimate: window \u00f7 pilot share 0.1724",
+      "per_day": [
+        32.50737625698324,
+        41.2070969273743
+      ],
+      "share": 0.17241932894525605,
+      "window": [
+        5.6049,
+        7.1049
+      ]
+    },
+    "search_usd_production_routes": {
+      "label": "estimate: window \u00f7 production share 0.2119",
+      "per_day": [
+        3.2768419174681975,
+        5.980413434688179
+      ],
+      "share": 0.21194186887617544,
+      "window": [
+        0.6945,
+        1.2675
+      ]
+    },
+    "staff_relevance_reported_usd": {
+      "label": "estimate: window figure \u00f7 window share 0.1767 (kept-post-weighted mix of the production and pilot shares)",
+      "per_day": 0.0031438229082571345,
+      "share": 0.1766893416741294,
+      "window": 0.00055548
+    }
+  },
+  "inputs": {
+    "frozen_queries": "3d2c9c17114bd3de7a7070c60e35ad14eb54236fbf2efd048f657e804c994dec",
+    "limits_config": "ff02748de8e55f513a738b79288bd1a2c782a2b1c49eca70cb98d431ce49880c",
+    "pilot_share": "a1bff893257bd60056e33c11c7393ee8d908d4b0c6bac680e8e36ad9135e2b00",
+    "production": "8e3ce38f4c918665b5a8262c4bd3341cfe9aedd240aaa102e87ed48a02b7685b",
+    "production_daily": "8dd7103ee70bddee7cfdcef1a3459969309c122939f1acd21f074abc817155f3",
+    "production_sql": "704fe17dfb895f3b7e01643dcffe75da2dbc086699d2819110074d1c6466ff50",
+    "size_before": "9904b213bd6a77bf4e39f8e4be7d900e7928af6d2a55aba4d32aef41568764eb",
+    "xbackfiller": "5bb600a74f2ac2c0182ff4d568d7d84889b06fa90e509fbbc7dc62d0f9b3c0aa",
+    "xbackfiller_sql": "27068cc3a73fcca1378fc36f5cc742fbc94a3e8cca69865be1ba3a1cbb56ab6e"
+  },
+  "job": {
+    "id": "dd6a88f2-c98f-4efa-b33b-22af3a5208f2",
+    "job_key": "oai-anthropic-size-20261027/1",
+    "state": "completed"
+  },
+  "kept_per_day_by_bucket": {
+    "baseline_equivalent": 14437.92119143655,
+    "new_routes_only": 121343.70391061454,
+    "production_fetched_new_route_kept": 34.79888268156425,
+    "production_route_new_keyword": 264.2233943530872,
+    "production_route_untagged": 0.0
+  },
+  "limits": {
+    "comparison": [
+      {
+        "exceeded": false,
+        "factor": 0.44662964527027027,
+        "limit": "search.max_results",
+        "note": "Average 15-minute run; busy runs fetch more than the average.",
+        "per_day_capacity": null,
+        "per_route_per_run": {
+          "A": 4.5708288085634505,
+          "ANT_1": 893.2592905405405,
+          "ANT_2": 61.03611111111112,
+          "ANT_3": 64.08203125,
+          "A_ANT": 0.6645619956548728,
+          "A_OAI": 0.30207363438857854,
+          "B1": 75.88558796152653,
+          "B2": 8.207832376667701,
+          "B3": 4.226787930499534,
+          "B_ANT": 150.4198717948718,
+          "B_OAI": 107.50162760416669,
+          "C1": 8.306129770400249,
+          "C2": 1.7693530871858518,
+          "C3": 4.17763923363326,
+          "C4": 92.10465792739683,
+          "OAI_1": 506.86356707317077,
+          "OAI_2": 353.8082437275985,
+          "OAI_3": 166.89247311827958
+        },
+        "projected": 893.2592905405405,
+        "route": "ANT_1",
+        "unit": "posts per search per run",
+        "value": 2000
+      },
+      {
+        "exceeded": true,
+        "factor": 14.285596477880123,
+        "limit": "harvest.enrichment.claim_per_cycle",
+        "note": "100 per run \u00d7 96 runs per day.",
+        "per_day_capacity": 9600,
+        "projected": 137141.72618764918,
+        "route": null,
+        "unit": "posts enriched per run",
+        "value": 100
+      },
+      {
+        "exceeded": true,
+        "factor": 7.1427982389400615,
+        "limit": "metrics_refresh.per_cycle_cap",
+        "note": "200 per run \u00d7 96 runs per day.",
+        "per_day_capacity": 19200,
+        "projected": 137141.72618764918,
+        "route": null,
+        "unit": "posts refreshed per run",
+        "value": 200
+      },
+      {
+        "exceeded": null,
+        "factor": null,
+        "limit": "harvest.run_deadline_seconds",
+        "note": "Run time per 15-minute run is not measured by this test: the backfiller runs a different execution shape. A staging trial of run_cycle is needed to measure it.",
+        "per_day_capacity": null,
+        "projected": null,
+        "route": null,
+        "unit": "seconds per run",
+        "value": 780
+      }
+    ],
+    "values": {
+      "enrichment_claim_per_cycle": 100,
+      "metrics_refresh_per_cycle_cap": 200,
+      "run_deadline_seconds": 780,
+      "search_max_results": 2000
+    }
+  },
+  "model_cost": {
+    "by_bucket": {
+      "baseline_equivalent": {
+        "posts": 3060,
+        "reported_usd": 1.500837975070028,
+        "settled_usd": 1.508407975070028
+      },
+      "new_routes_only": {
+        "posts": 20922,
+        "reported_usd": 6.359939374929972,
+        "settled_usd": 6.393585374929972
+      },
+      "production_fetched_new_route_kept": {
+        "posts": 6,
+        "reported_usd": 0.01973455,
+        "settled_usd": 0.02192855
+      },
+      "production_route_new_keyword": {
+        "posts": 56,
+        "reported_usd": 0.0316251,
+        "settled_usd": 0.0316251
+      }
+    },
+    "by_stage": {
+      "classification": {
+        "cost_unknown_requests": 0,
+        "member_posts": 52870,
+        "reported_usd": 4.242922,
+        "requests": 2651,
+        "reserved_usd": 46.375254,
+        "settled_usd": 4.242922,
+        "states": {
+          "completed": 2651
+        }
+      },
+      "classification (post_targeted_extraction)": {
+        "cost_unknown_requests": 1,
+        "member_posts": 933,
+        "reported_usd": 0.058036,
+        "requests": 933,
+        "reserved_usd": 0.57822,
+        "settled_usd": 0.058625,
+        "states": {
+          "ambiguous": 1,
+          "completed": 932
+        }
+      },
+      "translation (post_literal_language_detection)": {
+        "cost_unknown_requests": 0,
+        "member_posts": 433,
+        "reported_usd": 0.005607,
+        "requests": 433,
+        "reserved_usd": 0.066363,
+        "settled_usd": 0.005607,
+        "states": {
+          "completed": 433
+        }
+      },
+      "translation (post_literal_translation)": {
+        "cost_unknown_requests": 53,
+        "member_posts": 55840,
+        "reported_usd": 3.605572,
+        "requests": 55840,
+        "reserved_usd": 37.843829,
+        "settled_usd": 3.648393,
+        "states": {
+          "completed": 55787,
+          "failed": 53
+        }
+      }
+    },
+    "totals": {
+      "classified_posts": 24042,
+      "classified_posts_not_kept": 0,
+      "posts_with_cost": 24044,
+      "reported_usd": 7.912137,
+      "reported_usd_per_classified_post": 0.0003290964562016471,
+      "requests": 59857,
+      "reserved_usd": 84.863666,
+      "settled_usd": 7.955547
+    }
+  },
+  "projection": [
+    {
+      "added": 121642.72618764918,
+      "current": 15499,
+      "need": "Saved posts per day",
+      "note": "current from production UTC day 2026-10-28 (96 of 96 runs): saved posts, the 8 searches' credits (low end), one 15-credit refresh per refreshed post, no quote calls; classification is the owner's $4/day reference; database growth from pg_database_size 2026-10-29 01:27:55Z (17,191,130,815) to 21:09:29Z (17,602,459,327), read-only",
+      "projected": 137141.72618764918
+    },
+    {
+      "added": [
+        3250737.6256983243,
+        4120709.6927374303
+      ],
+      "current": 321585,
+      "need": "Search credits per day",
+      "note": "added = new searches' window credits \u00f7 pilot share; production's 15-minute windows pay fewer per-request minimums than 5-minute slices",
+      "projected": [
+        3572322.6256983243,
+        4442294.69273743
+      ]
+    },
+    {
+      "added": 1824641,
+      "current": 233940,
+      "need": "Engagement-refresh credits per day",
+      "note": "projected = projected saved posts per day \u00d7 15 credits (one refresh per saved post)",
+      "projected": 2057126
+    },
+    {
+      "added": 0.0,
+      "current": 0,
+      "need": "Quote-tweet credits per day",
+      "note": "scaled from production's current quote-tweet credits per saved post",
+      "projected": 0.0
+    },
+    {
+      "added": 37.150136658892265,
+      "current": 4.0,
+      "need": "Classification cost per day (USD)",
+      "note": "added = provider-reported cost allocated to the added posts \u00f7 their search group's share",
+      "projected": 41.150136658892265
+    },
+    {
+      "added": 2515363868.20414,
+      "current": 501297782,
+      "need": "Database growth per day (bytes)",
+      "note": "production-equivalent tables only, at the test's bytes per kept post",
+      "projected": 3016661650.20414
+    }
+  ],
+  "reconciliation": {
+    "classified_posts_not_kept": 0,
+    "kept_not_observed": 0,
+    "kept_posts": 24044,
+    "observed_not_kept": 0,
+    "observed_posts": 24044
+  },
+  "report_run": {
+    "completed_at": "2026-10-29T01:06:19.571548+00:00",
+    "id": "8bcc64e9-d291-44f3-9426-09e879c5fe85",
+    "runs_in_job": 38,
+    "status": "success"
+  },
+  "shares": {
+    "effective": {
+      "share": 0.1766893416741294,
+      "source": "kept-post-weighted mix of the production and pilot shares"
+    },
+    "new_routes": {
+      "share": 0.17241932894525605,
+      "source": "pilot slices: summaries.json sha256 7567078461d3, in-window slices [2, 3, 4] of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]"
+    },
+    "per_route": {
+      "A": 0.21194186887617544,
+      "ANT_1": 0.17022166457549143,
+      "ANT_2": 0.2054794520547945,
+      "ANT_3": 0.16580310880829016,
+      "A_ANT": 0.17241932894525605,
+      "A_OAI": 0.17241932894525605,
+      "B1": 0.21194186887617544,
+      "B2": 0.21194186887617544,
+      "B3": 0.21194186887617544,
+      "B_ANT": 0.09154929577464788,
+      "B_OAI": 0.12451361867704279,
+      "C1": 0.21194186887617544,
+      "C2": 0.21194186887617544,
+      "C3": 0.21194186887617544,
+      "C4": 0.21194186887617544,
+      "OAI_1": 0.1935103244837758,
+      "OAI_2": 0.17547169811320756,
+      "OAI_3": 0.11397058823529412
+    },
+    "production_routes": {
+      "day_posts": 15207,
+      "share": 0.21194186887617544,
+      "source": "production saved posts on the 8 production searches (posts with no discovery-lane source), 2026-10-27 Pacific",
+      "window_posts": 3223
+    }
+  },
+  "staff_relevance": {
+    "checks": 28,
+    "checks_by_status": {
+      "returned": 28
+    },
+    "reported_usd": 0.00055548,
+    "responses": {
+      "returned": 28
+    }
+  },
+  "table_sizes_after": {
+    "_applied_config_snapshot": 24576,
+    "account_based_in_mappings": 147456,
+    "account_emailaddress": 57344,
+    "account_emailconfirmation": 32768,
+    "account_post_appearances": 491520,
+    "account_profile_snapshots": 92495872,
+    "account_profile_text_translations": 65536,
+    "account_query_memberships": 65536,
+    "account_verification_types": 73728,
+    "accounts": 24641536,
+    "actors": 40960,
+    "affiliation_types": 57344,
+    "audience_topic_concepts": 57344,
+    "audience_topic_labels": 49152,
+    "audience_topic_schemes": 24576,
+    "auth_group": 24576,
+    "auth_group_permissions": 32768,
+    "auth_permission": 262144,
+    "auth_user": 32768,
+    "auth_user_groups": 32768,
+    "auth_user_user_permissions": 32768,
+    "brand_discovery_candidate_token_evidence": 73728,
+    "brand_discovery_candidate_tokens": 32768,
+    "brand_discovery_candidates": 1105920,
+    "brand_hashtags": 32768,
+    "brand_keywords": 196608,
+    "brand_search_terms": 49152,
+    "brands": 65536,
+    "brands_accounts": 262144,
+    "brands_companies": 57344,
+    "call_state": 24576,
+    "collection_attempts": 352256,
+    "collection_campaigns": 24576,
+    "collection_corrections": 114688,
+    "collection_evidence_archives": 52568064,
+    "collection_job_targets": 3031040,
+    "collection_jobs": 2121728,
+    "collection_metric_gaps": 40960,
+    "collection_observation_inputs": 57344,
+    "collection_observations": 54616064,
+    "collection_requests": 62029824,
+    "collection_resource_snapshots": 57344,
+    "collection_runs": 26796032,
+    "collection_scope_rare_hits": 147456,
+    "collection_scope_request_uses": 3047424,
+    "collection_scope_runs": 311033856,
+    "companies": 49152,
+    "companies_accounts": 73728,
+    "company_labels": 98304,
+    "content_pictures": 81920,
+    "currencies": 73728,
+    "data_sources": 65536,
+    "definition_versions": 81920,
+    "discourse_keys": 24576,
+    "discourse_labels": 65536,
+    "django_content_type": 98304,
+    "django_migrations": 73728,
+    "django_session": 32768,
+    "django_site": 57344,
+    "editorial_assessments": 32768,
+    "editorial_budgets": 8192,
+    "editorial_calls": 49152,
+    "editorial_editions": 65536,
+    "editorial_heroes": 24576,
+    "editorial_stories": 49152,
+    "employment_types": 57344,
+    "event_claim_kinds": 57344,
+    "event_dossier_claims": 73728,
+    "event_dossier_review_claims": 40960,
+    "event_dossier_reviews": 57344,
+    "event_dossier_sources": 65536,
+    "event_dossiers": 57344,
+    "event_evidence": 131072,
+    "event_kinds": 57344,
+    "events": 204800,
+    "geolocation_alternate_names": 950272,
+    "geolocation_policies": 139264,
+    "geolocations": 221184,
+    "geopolitical_mode_keys": 24576,
+    "geopolitical_mode_labels": 49152,
+    "harvest_backlog_windows": 49152,
+    "home_brand_time_counts": 8192,
+    "inference_models": 40960,
+    "job_discovery_runs": 40960,
+    "job_employment_type_assignments": 114688,
+    "job_function_assignments": 114688,
+    "job_functions": 57344,
+    "job_listing_evidence": 204800,
+    "job_listing_locations": 139264,
+    "job_listings": 311296,
+    "job_organization_ai_relationship_assignments": 57344,
+    "job_role_ai_relationship_assignments": 57344,
+    "job_seniority_assignments": 114688,
+    "job_source_states": 32768,
+    "job_source_sync_runs": 24576,
+    "job_workplace_type_assignments": 114688,
+    "languages": 745472,
+    "locales": 1359872,
+    "materialization_state": 57344,
+    "measurement_subjects": 49152,
+    "measurement_units": 40960,
+    "metric_collection_contracts": 40960,
+    "metric_types": 24576,
+    "metric_values": 73728,
+    "metrics": 114688,
+    "model_gating_states": 57344,
+    "model_release_details": 49152,
+    "model_release_evidence": 49152,
+    "model_releases": 57344,
+    "model_tasks": 32768,
+    "national_stance_keys": 24576,
+    "national_stance_labels": 49152,
+    "nationalism_keys": 24576,
+    "nationalism_labels": 49152,
+    "official_company_account_states": 90112,
+    "official_company_attempts": 40960,
+    "official_company_budgets": 16384,
+    "official_company_list_intents": 73728,
+    "official_company_owner_credentials": 24576,
+    "official_company_provider_states": 16384,
+    "official_company_scans": 24576,
+    "opportunities": 229376,
+    "opportunity_types": 57344,
+    "organization_ai_relationship_types": 57344,
+    "original_content": 98304,
+    "original_content_calls": 408354816,
+    "original_content_runs": 65536,
+    "original_content_selections": 49152,
+    "original_content_sources": 57344,
+    "original_content_subject_labels": 49152,
+    "original_content_texts": 49152,
+    "people": 204800,
+    "people_accounts": 557056,
+    "people_brand_affiliation_evidence": 1458176,
+    "people_brand_affiliations": 1056768,
+    "people_identity_corrections": 49152,
+    "people_media": 163840,
+    "people_name_evidence": 491520,
+    "people_names": 532480,
+    "people_text_translations": 32768,
+    "people_texts": 49152,
+    "person_citizenship_evidence": 32768,
+    "person_citizenships": 40960,
+    "person_name_selections": 311296,
+    "personnel_change_details": 49152,
+    "personnel_change_types": 57344,
+    "personnel_discovery_runs": 40960,
+    "post_enrichment_states": 20283392,
+    "post_subject_attributions": 65536,
+    "post_synthesis_artifacts": 131072,
+    "post_synthesis_daily_budgets": 40960,
+    "post_synthesis_demands": 147456,
+    "post_synthesis_rate_limit_buckets": 24576,
+    "post_synthesis_texts": 65536,
+    "post_translation_artifacts": 36634624,
+    "post_translation_chunks": 7593984,
+    "post_translation_texts": 48955392,
+    "post_type_keys": 24576,
+    "post_type_labels": 49152,
+    "post_unsanctioned_flag_assignments": 49152,
+    "posts": 310779904,
+    "posts_brands": 17088512,
+    "posts_brands_audience_topics": 5709824,
+    "posts_brands_classification_judgments": 107905024,
+    "posts_brands_classification_states": 18857984,
+    "posts_brands_discourse": 1130496,
+    "posts_brands_geopolitical_modes": 663552,
+    "posts_brands_mentions": 19709952,
+    "posts_brands_product_labels": 2383872,
+    "posts_brands_products": 57344,
+    "posts_brands_signals": 15450112,
+    "posts_unsanctioned_flags": 163840,
+    "posts_untracked_brand_promotions": 868352,
+    "product_group_memberships": 57344,
+    "product_groups": 49152,
+    "product_label_keys": 24576,
+    "product_label_labels": 49152,
+    "product_relationship_types": 57344,
+    "product_relationships": 90112,
+    "product_types": 73728,
+    "product_verification_proposals": 114688,
+    "products": 106496,
+    "profile_movement_candidates": 106496,
+    "provider_batches": 1818624,
+    "provider_label_display_types": 73728,
+    "provider_label_types": 73728,
+    "provider_link_types": 73728,
+    "rare_type_category_assignments": 65536,
+    "rare_type_decision_attempts": 212992,
+    "rare_type_decision_processing_cycles": 98304,
+    "rare_type_decisions": 3497984,
+    "rare_type_search_daily_budgets": 507904,
+    "rare_type_search_hits": 10600448,
+    "rare_type_search_runs": 2285568,
+    "release_access_channels": 57344,
+    "release_availability_states": 57344,
+    "release_maturities": 57344,
+    "role_ai_relationship_types": 24576,
+    "role_labels": 49152,
+    "roles": 24576,
+    "salary_periods": 57344,
+    "search_queries": 139264,
+    "seniority_levels": 57344,
+    "sentiment_keys": 24576,
+    "sentiment_labels": 49152,
+    "service_providers": 16384,
+    "socialaccount_socialaccount": 32768,
+    "socialaccount_socialapp": 16384,
+    "socialaccount_socialapp_sites": 32768,
+    "socialaccount_socialtoken": 40960,
+    "software_libraries": 32768,
+    "source_identifier_namespaces": 32768,
+    "source_subject_mappings": 98304,
+    "staff_collection_work": 253952,
+    "staff_intakes": 114688,
+    "staff_media_objects": 24576,
+    "staff_provider_requests": 40960,
+    "subject_relationships": 49152,
+    "targeted_extraction_attempts": 647168,
+    "targeted_extraction_states": 598016,
+    "taxonomy_versions": 32768,
+    "time_zones": 16384,
+    "trend_narrative_demands": 49152,
+    "trend_narrative_subject_labels": 49152,
+    "trend_narrative_subjects": 49152,
+    "trend_narrative_work_slots": 16384,
+    "trend_narratives": 81920,
+    "twitter_list_memberships": 278528,
+    "twitter_list_sync_state": 8192,
+    "unsanctioned_flag_keys": 24576,
+    "untracked_brand_promotion_evidence": 1843200,
+    "untracked_brand_promotion_keys": 24576,
+    "untracked_brand_promotion_labels": 49152,
+    "workflow_stages": 24576,
+    "workplace_types": 57344,
+    "x_account_details": 6750208
+  },
+  "watch": {
+    "classified_posts": 24042,
+    "reported_usd": 7.912137,
+    "reported_usd_per_classified_post": 0.0003290964562016471,
+    "requests": 59857,
+    "reserved_usd": 84.863666,
+    "settled_usd": 7.955547,
+    "settled_usd_per_classified_post": 0.00033090204641876716,
+    "thresholds": {
+      "reported_usd_per_classified_post": 0.0008,
+      "settled_usd": 2.0
+    },
+    "trigger": false,
+    "volume_above_doubling": true
+  },
+  "window": {
+    "end_epoch": 1793149200,
+    "end_utc": "2026-10-28T01:00:00+00:00",
+    "pacific_clock": "12:00\u201318:00",
+    "pacific_date": "2026-10-27",
+    "start_epoch": 1793127600,
+    "start_utc": "2026-10-27T19:00:00+00:00"
+  }
+}

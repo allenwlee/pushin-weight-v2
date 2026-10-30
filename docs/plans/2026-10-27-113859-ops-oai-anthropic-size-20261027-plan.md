@@ -65,6 +65,10 @@ Target is not authorized until the owner selects it. Wait for a later explicit r
   - The owner's go also confirms the exact undo for KTD10/R9/U10 (recommended in the close-out); KTD10, R9, U10 and the flowchart below now say so.
   - Database-backed proof method changed from a rollback run on xbackfiller to CI on a fresh PostgreSQL at schema 0183 (KTD12 records why).
   - Window date: first set to 2026-10-28 Pacific, because production's 2026-10-27 day is missing about 1,180 saved posts from a schedule hold. At 15:14 PDT on 2026-10-28, with that window still open, the owner said "run it now", so the run uses 2026-10-27, the most recent complete weekday window (U9 step 3).
+- 2026-10-29: the owner rejected a reply filter (`-filter:replies`) as a volume cut: "a reply about a brand is definitely signal we want to keep".
+- 2026-10-30 (JST): enrichment ended with 64 posts unclassified and 60 missing targeted extraction (U9 step 9), and a re-run cannot retry them.
+  - The owner chose "Accept and finish": record them as a residual, make the report final and run U10.
+  - This waives the zero-deferred condition for U9's verification and U10's dependency.
 
 # OpenAI and Anthropic Collection Size Test - Plan
 
@@ -724,7 +728,17 @@ flowchart TB
     - 691 of the 4,614 were paid re-fetches: the response arrived as a run ended, so its page did not commit and the next run fetched it again (`lost_responses` in `monitor/backfill_staging.py`). Production's cycle has no such boundary, so the 3,923 committed pages are the production-shaped count.
     - TwitterAPI on-demand balance 16,531,104 → 15,778,599 at 01:15:36Z: 752,505 credits ($7.53), inside the report's 629,940–837,240 receipt range (`balance-after-collection.json`).
     - Collection-time staff relevance checks: 28 model requests, $0.00056.
-  - Step 8, enrichment: started 01:07Z. The R24 watch runs every 15 minutes (`watch/`). At 01:27Z: 404 posts classified, $0.000323 provider-reported per classified post, trigger not met. Throughput is about 1,400 posts per hour.
+  - Step 8, enrichment: started 01:07Z. The R24 watch ran every 15 minutes (`watch/`) and its trigger never held.
+    - At 01:27Z: 404 posts classified, $0.000323 provider-reported per classified post. Throughput then held at about 1,550 posts per hour.
+    - The Render job finished `succeeded` at 2026-10-29T21:04:45Z.
+    - Final enrichment receipt (`final-phase-receipt.json`, read-only): 59,857 model requests, $7.912137 provider-reported, $84.863666 reserved, settled $7.96 against `max_usd` 30. The settled basis kept admission open after reservations passed $30.
+    - Classification retries: 1,636 of 2,651 classification requests had a member fail canonical validation, so 24,044 posts filled 52,870 classification slots (`final-failures.json`).
+  - Step 9, deferred posts: the receipt's status is `failed`, with 123 deferred posts (122 `model_attempt_allowance_exhausted`, 1 `provider_outcome_unknown`).
+    - 23,980 of 24,044 posts are fully classified and translated.
+    - 64 were never classified, because their replies failed canonical validation `max_attempts` (3) times; 7 of them also lack a translation.
+    - 60 did not finish targeted extraction, and one targeted request has an unknown outcome.
+    - A re-run of the enrich phase cannot retry them, because `deferred_enrichment_work` (`monitor/backfill_enrichment.py:777`) keeps each post's attempt count across regrouped packets. So `verify_window` did not return verified.
+    - Reported to the owner on 2026-10-30. **Owner decision: accept these posts as a recorded residual, make the report final and run U10** ("Accept and finish"). This is an owner exception to the zero-deferred condition in U9's verification and U10's dependency.
   - Step 10, production continuity: at 22:19:57Z production's newest saved post was 4 minutes old, with 239 saved in the past 30 minutes (`production-continuity-1.txt`). At 01:16:30Z it was 22 seconds old, with 237 in 30 minutes (`production-continuity-2.txt`).
   - U8 inputs read so far:
     - production window and Pacific day (`production.json`): 3,223 window posts from the 8 searches, 15,207 for the day, RARE_EXTRA 9 and 47;
@@ -736,7 +750,10 @@ flowchart TB
       - quote tweets: 0 credits, because no cycle code calls `monitor/quote_tweets.py`;
       - classification: production's scheduled classifier records no per-call cost, and `original_content_calls` on 10-28 holds only editorial calls. The report uses the owner's $4 a day reference. The DeepInfra account's month-to-date bill rose $14.19 between 2026-10-28T07:04Z and 2026-10-29T01:26Z (`deepinfra-usage-20261029.txt`), but that covers every workload on the account;
       - production's classifier and the backfill share `classify_batch_pragmatics_full` with 20-post batches (`x_monitor/attribution.py:1198`, `monitor/cycle.py:4528`), so the test's per-post rate applies to production's added posts;
-      - database growth: first reading 17,191,130,815 bytes at 01:27:55Z (`production-size-1.txt`); the second is read when the report is written.
+      - database growth: 17,191,130,815 bytes at 2026-10-29 01:27:55Z (`production-size-1.txt`) and 17,602,459,327 at 21:09:29Z (`production-size-4.json`), so 501,297,782 bytes per day. The figures are recorded in `production-daily.json`.
+  - U8 report: `docs/analysis/2026-10-30-095822-oai-anthropic-size-report.md` and `.json`, generated from the final xbackfiller input (`xbackfiller-final.json`, sha256 `5bb600a7…`), with hand-written run notes appended to the Markdown.
+    - Headline per day: 121,643 added kept posts; 3,250,738–4,120,710 added search credits; $37.15 added model cost (classification plus translation); 2,515,363,868 added bytes in production-equivalent tables.
+    - At the projected 3.0 GB per day, production's 30 GB disk (storage autoscaling off on 2026-10-29) has about four days of free space.
   - U8 report fixes found while preparing the inputs (both with regression tests):
     - `3eab0f2f`: production's 8 searches leave `posts.source_query_id` empty, and only discovery lanes set it (`monitor/cycle.py:3705`). The report summed named routes, so the production share was 0 of 0 and the report could not run against production.
     - `5c8cd3ee`: `load_document` rescanned the raw one-line `render psql -o json` output, which is quadratic. The 36 MB input took more than 5 minutes; it now takes 0.3 seconds.
@@ -765,6 +782,17 @@ flowchart TB
   - Their PostBrand rows remain.
   - Switch-off refuses to run while a historical lease is live.
 - **Verification:** the digests are equal, July's snapshot is unchanged, and the receipt exists.
+- **Execution record** (same receipts folder; run on 2026-10-30 after the owner accepted the U9 residual):
+  - Switch-off, run locally through `run_local_xbackfiller.py` against xbackfiller (`switch-off-result.json`):
+    - catalog revision `874988d1…` became `44ab32ab…`, equal to the pre-seed revision;
+    - 177 brands, with openai and anthropic still present as alias-only rows;
+    - deleted 178 BrandKeyword rows, 48 BrandAccount rows, 130 seeded roles and 256 list memberships (208 main-list plus 48 lab-list);
+    - PostBrand rows unchanged: anthropic 12,396, openai 11,649.
+  - July re-snapshot (`july-compare.json`): identical to the U7 snapshot.
+    - Job `d4440f2e-0366-44ec-9bfe-fe12ac3df79c` is paused, definition sha256 `5255ecfa…`, 5 runs (1 failed, 4 partial), 3,240 scope rows, 207 frozen author contexts.
+    - No live historical lease.
+  - Handback receipt for the July session: `handback-receipt.json`. This task does not resume July.
+  - After switch-off, xbackfiller again holds no Call A list memberships, so a window planned there freezes no Call A author roles. July's frozen manifest carries its own 207 contexts. The HTTP 520 retry (`6df3bb4a`) exists only on this branch, and the deployed image `e5edf737` lacks it.
 
 ---
 
