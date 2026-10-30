@@ -1459,7 +1459,7 @@ Create the new branch from `8fe84d1`.
 3. Keep frames with one matching face, a head that fits and a valid conservative crop.
 4. Add the top 3 by sharpness as new eligible candidates, with ids `<video>-f-<t>`. They inherit the parent video's attribution.
 
-The weak frame stays blocked. There are still at most two repairs.
+The weak frame is blocked only while at least two other stills remain eligible, so a repair never empties a slot. There are still at most two repairs.
 
 **Tests (fake measure):**
 - the neighbour frames stay inside the shot;
@@ -1499,7 +1499,7 @@ The weak frame stays blocked. There are still at most two repairs.
 - `name`, `name_zh` from `name_original`, and `search_name` (native name, else name);
 - `company` from the brand, as Chinese plus English tokens;
 - `roster_key`, `person_id` and `role_context`.
-- A handle-only person gets an `incomplete` record with `early_stop_reason`, and no paid call.
+- A handle-only person (D52) gets an `incomplete` record with one `skipped_handle_only` pass, `early_stop_reason` and zero spend, and no paid call. These records are written first.
 
 **Passes (D54):**
 
@@ -1519,13 +1519,18 @@ The weak frame stays blocked. There are still at most two repairs.
 **Records and stops:**
 - **After every person:** write the audit record in the `validate_record` shape (each pass has a prompt hash and change reason) and run the hook `python scripts/g2_cast_cost_ledger.py --record-file <record>` from the G2 worktree.
 - **Stops for the whole batch:**
-  - model, search, Apify or time ceiling, checked before starting a person, with the worst-case per-person reserve: $0.15 model, 6 searches, $0.10 Apify;
+  - model, search, Apify or time ceiling, checked before starting each pass, with a worst-case reserve per pass ($0.15 model, 2 searches, $0.10 Apify) multiplied by the passes already running plus this one, and a full 40-minute pass held against the hour ceiling;
   - a missing credential;
-  - an HTTP 402 owner wait;
-  - three people in a row failing with the same non-asset error type;
+  - an HTTP 402 owner wait from the collector or the reviewer (the pass is not spent: an uncollected pass runs again, a collected one is judged again);
+  - an operator SIGINT/SIGTERM (running collectors get SIGTERM, SIGKILL on a second signal; a restart stops any collector a killed batch left behind);
+  - the calibrated reviewer refusing on the model ceiling;
+  - three people in a row failing with the same non-asset error type, runner faults included (any runner fault also makes the exit code non-zero);
   - less than 5 GB free disk;
   - a changed review kit.
 - **Stops for one person:** asset gaps, and a pass over its 40-minute timeout.
+- **Reviewer unavailable:** the calibrated reviewer is retried once; if it still fails, the collector's own grades name the gaps but the pass is `below_bar` (gap `calibrated review unavailable`), and each audited pass records `judged_by`.
+- **Resume:** the source cache is the newest earlier pass that left a collection; a failed or timed-out audit hook is recorded in `result.json` and replayed on restart, and `report.json` lists hook failures.
+- **Batch root:** `/Users/fuchitalee/loops/g2-cast-batch-20261030/` holds both the SB-U7 check and the batch, so they share one set of ceilings.
 
 **Tests (fake collector and reviewer):**
 - stop on success at pass 1;
@@ -1535,7 +1540,13 @@ The weak frame stays blocked. There are still at most two repairs.
 - ceiling stops;
 - three-in-a-row stops;
 - resume skips finished people;
-- record validation.
+- each ceiling (model, search, Apify, time, unreadable meter, disk), running passes counted, and a three-worker run;
+- owner waits (collector and reviewer) are not spent passes;
+- reviewer retry and no `met_bar` without it;
+- runner-fault streak, hook replay and timeout, signal stop and orphan stop;
+- record validation against `validate_record` (`G2_CAST_LEDGER=<G2>/scripts/g2_cast_cost_ledger.py`).
+
+> **Outcome — 2026-10-31 (SB-U6 review):** ce-code-review on `8fe84d1..51a8313` returned 9 P2 findings, all in `batch.py`, plus a pre-existing URL-guard gap (a fullwidth host IDNA-encodes to loopback). All were fixed in collector commit `738ba41` on `feat/cast-still-supply-batch` (pushed). The full collector suite passed: 490 tests, offline. Design calls taken under the owner's delegated judgement: the reserve is per pass with running passes counted; the first signal kills running collectors; a collector-only grade never makes a person complete. The cross-model review pass was not run because the permission system blocked sending the diff to an external provider.
 
 ##### SB-U7. 12-pack quality check
 
