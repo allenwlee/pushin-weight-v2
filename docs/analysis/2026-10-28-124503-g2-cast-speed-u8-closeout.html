@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cast Speed Loop Paused</title>
+<style>
+:root { --bg:#fff; --fg:#1b1f24; --muted:#5d6670; --line:#d9dee3; --accent:#2457c5; --bad:#b3261e; --good:#1e7b34; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#16181b; --fg:#e7eaee; --muted:#9aa3ad; --line:#30353b; --accent:#7ea6ff; --bad:#ff8a80; --good:#7bd88f; } }
+:root[data-theme="dark"] { --bg:#16181b; --fg:#e7eaee; --muted:#9aa3ad; --line:#30353b; --accent:#7ea6ff; --bad:#ff8a80; --good:#7bd88f; }
+body { background:var(--bg); color:var(--fg); font:14px/1.45 -apple-system, system-ui, sans-serif; margin:0; padding:16px; max-width:960px; }
+h1 { font-size:19px; margin:0 0 6px; } h2 { font-size:15px; margin:22px 0 6px; }
+p, li { max-width:780px; } p.lead { font-size:15px; } .muted { color:var(--muted); }
+table { border-collapse:collapse; width:100%; margin:6px 0 4px; } .wrap { overflow-x:auto; }
+th, td { border-bottom:1px solid var(--line); padding:5px 8px; text-align:left; vertical-align:top; }
+th { color:var(--muted); font-weight:600; white-space:nowrap; }
+.bad { color:var(--bad); font-weight:600; } .good { color:var(--good); font-weight:600; }
+code { font:12px ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap:anywhere; }
+ul { padding-left:20px; margin:4px 0; }
+</style></head><body>
+<h1>Cast speed loop: paused before the unattended run</h1>
+<p class="muted">CS-U8 closeout · 2026-10-28 JST · loop branch <code>loop/cast-speed-20261026</code> at <code>8fe84d1</code> (local only, no remote)</p>
+
+<p class="lead"><b>Bottom line.</b> The loop never started its unattended run (CS-U9), as you chose. The baseline collector can't meet your B− bar for all four test people often enough. Two stalls are fixed, but a test round now passes about one time in five. Nearly every miss is a still taken from a video frame caught mid-word or soft. The next step is a focused fix to the still supply. After that we measure the pass rate and come back to the speed loop.</p>
+
+<h2>What happened in the four attempts</h2>
+<div class="wrap"><table>
+<tr><th>#</th><th>When (JST)</th><th>What stopped it</th><th>What changed after</th></tr>
+<tr><td>1</td><td>Oct 27 morning</td><td>The spend check flagged tiny unexplained Apify charges (about $0.00001 per person). These come from account storage, not from the loop.</td><td>Apify tolerance set to $0.005. Spend from aborted attempts is now carried into the limits.</td></tr>
+<tr><td>2</td><td>Oct 27 08:00</td><td>The grader failed calibration: it graded your C+ still B+ twice.</td><td>Your written rubric was added to the grader, and calibration now uses all four of your graded stills (12-call check, $0.0015).</td></tr>
+<tr><td>3</td><td>Oct 27 09:35</td><td>Three photo-check calls each hung for the full 10-minute timeout. LI Kai-Fu's timing was unusable even after his single rerun. One of LI Yanhong's stills got C+ (mouth open mid-word).</td><td>A 10-call streaming test ($0.013) found the cause: the model leaves its JSON answer one key short, then writes blank space. The stream guard is now on, and every model step gets one compact retry. The collector's photo check now uses your rubric.</td></tr>
+<tr><td>4</td><td>Oct 27 14:40</td><td>Round 0 <span class="good">passed for all four</span>. Round 0b, the repeat that measures noise, <span class="bad">failed for three of four</span>, each on one C+ still.</td><td>Paused here at your direction.</td></tr>
+</table></div>
+
+<h2>Attempt 4 in detail</h2>
+<div class="wrap"><table>
+<tr><th>Person</th><th>Round 0 time</th><th>Round 0 grades</th><th>Round 0b time</th><th>Round 0b grades</th></tr>
+<tr><td>LEI Jun</td><td>319 s</td><td>A−, B+, B+</td><td>398 s</td><td>A−, B+, B−</td></tr>
+<tr><td>LI Kai-Fu</td><td>526 s</td><td>A−, A−, A−</td><td>606 s</td><td>A−, A−, <span class="bad">C+</span></td></tr>
+<tr><td>LI Yanhong</td><td>431 s</td><td>A, B, B−</td><td>638 s</td><td>A, B, <span class="bad">C+</span></td></tr>
+<tr><td>CHENG Yixiao</td><td>557 s</td><td>B, B, B−</td><td>591 s</td><td>B, B, <span class="bad">C+</span></td></tr>
+<tr><td><b>Median</b></td><td><b>478 s</b></td><td></td><td><b>598 s</b></td><td></td></tr>
+</table></div>
+<p>Everything else held in both rounds:
+<ul>
+<li>Every pack started from scratch, the file checks passed, and no wrong person appeared.</li>
+<li>Round 0's timing accounted for 97% of the measured time.</li>
+<li>No call stalled. In round 0b the guard cut off 4 padded answers, and each recovered in 4–42 s with no cooldown wait.</li>
+</ul>
+<p>The target is 300 s. Re-picking photos to meet your rubric now costs 1–4 minutes per person. Before the rubric, the median was 430 s.</p>
+
+<h2>Why good stills are scarce</h2>
+<ul>
+<li><b>All 5 weak stills in attempt 4 were video frames,</b> going by the collector's own grades. Every photo from a web page graded B− or better.</li>
+<li><b>In round 0b the collector agreed with the grader.</b> It flagged its own weak still after using both re-picks, so the grading wasn't the problem. It had no better candidate.</li>
+<li><b>Grades near the C+/B− line flip between runs.</b> The same LI Yanhong still was graded C+ once and B once. A borderline frame can pass one round and fail the next.</li>
+<li><b>The candidate pool is thin.</b> CHENG Yixiao had only 2 usable source items, so one still had to be a video frame. Each person lost 2–7 pages:
+<ul>
+<li>Zhihu, Tieba and some company sites answer with an HTTP error;</li>
+<li>Baidu Baike links that contain raw Chinese characters are refused by the collector's own URL check before any download. This looks like a missing URL-encoding step. It's worth checking, but Baike also returned an HTTP error for an encoded link.</li>
+</ul></li>
+</ul>
+
+<h2>Possible directions for the fix (to plan, not yet decided)</h2>
+<ul>
+<li>When a video frame is caught mid-word, soft or with text near the face, try nearby frames from the same shot. The same face a second later is usually usable.</li>
+<li>Prefer photos from web pages over video frames when both are available.</li>
+<li>Percent-encode Chinese URLs before the URL check, and look for photo sources that don't block the collector.</li>
+<li>Success measure: rerun the four test people a few times with no paid change between runs, and aim for nearly every pack to pass the bar (for example 11 of 12) before going back to the speed loop.</li>
+</ul>
+
+<h2>What is kept on the loop branch</h2>
+<ul>
+<li><code>8fe84d1</code> adds:
+<ul>
+<li>the DeepInfra stream guard, turned on;</li>
+<li>one compact retry for a cut-off photo-check or credit answer;</li>
+<li>your rubric in the collector's photo check.</li>
+</ul>
+408 tests pass.</li>
+<li>Earlier CS-U8 commits: <code>65b3ecb</code> (deadlines, round-0 attribution gate, assembly), <code>e6e986a</code> (narrower write audit), <code>4f23861</code> (owner hold), <code>5a83be2</code> (Apify tolerance, carried-over spend).</li>
+<li>Nothing was pushed, merged or deployed. The shared collector checkout is byte-identical to its starting record (HEAD, index, config, refs and all 45 dirty files). A code review of the loop branch hasn't run yet. It's still required before any of this moves toward production.</li>
+</ul>
+
+<h2>Spend across all attempts and checks</h2>
+<div class="wrap"><table>
+<tr><th>Limit</th><th>Used</th><th>Ceiling</th></tr>
+<tr><td>Model (DeepInfra)</td><td>about $0.42</td><td>$5</td></tr>
+<tr><td>SerpApi searches</td><td>28</td><td>60</td></tr>
+<tr><td>Apify</td><td>about $0.0004 (storage drift only)</td><td>$1</td></tr>
+<tr><td>Rounds</td><td>5</td><td>15</td></tr>
+<tr><td>Hours</td><td>about 3.3 of loop running time</td><td>8</td></tr>
+</table></div>
+<p class="muted">Model spend books each guard-ended answer at its maximum possible cost ($0.0255), so the true spend is lower.</p>
+
+<h2>Still open for you</h2>
+<ul>
+<li>Whether "done" also requires each test person to finish in 900 s or less.</li>
+<li>The Goal Capsule wording fix from the doc review.</li>
+<li>A face match against the anchors for every still (<code>score.still_face_match</code> is still off).</li>
+<li>Rotating <code>RENDER_PASSWORD</code>.</li>
+<li>The U5 face-match "hit below 20" threshold.</li>
+<li>Whether the speed loop's hours should restart from 8 when it resumes. They now carry over.</li>
+</ul>
+
+<h2>Where things are</h2>
+<ul>
+<li>Loop folder (final stopped state, kept as is): <code>/Users/fuchitalee/loops/g2-cast-speed-20261026/</code>. Its <code>report.html</code> shows the stop. Earlier attempts are under <code>setup/aborted-run-*</code>. Before a new assembly, move the current state into <code>setup/</code>, because the assembly refuses to run over an existing <code>run-start.json</code>.</li>
+<li>Streaming test: <code>setup/stream-check-20261027/</code>. Rubric check: <code>setup/collector-rubric-check-20261027/</code>.</li>
+<li>Plan: the "Cast Collector Speed Loop — separate execution subplan, October26" section of <code>docs/plans/2026-10-09-064803-feat-g2-round2-voices-plan.md</code> (outcome note added).</li>
+</ul>
+</body></html>

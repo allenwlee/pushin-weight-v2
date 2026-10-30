@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cast Loop Stoppers</title>
+<style>
+:root{--bg:#fff;--ink:#1d1d1b;--muted:#6b6b66;--line:#ddd;--head:#f2f1ed;--tag:#9a3412}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1a1a18;--ink:#ecebe6;--muted:#9c9b94;--line:#3a3a36;--head:#262623;--tag:#ffb27a}}
+:root[data-theme="dark"]{--bg:#1a1a18;--ink:#ecebe6;--muted:#9c9b94;--line:#3a3a36;--head:#262623;--tag:#ffb27a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.wrap{max-width:1150px;margin:0 auto;padding:14px 16px 40px}
+h1{font-size:17px;margin:0 0 4px}
+p{margin:0 0 10px;color:var(--muted)}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
+th{background:var(--head);position:sticky;top:0}
+td:first-child{width:34px;color:var(--muted);text-align:right}
+td:nth-child(2){width:25%}
+td:nth-child(4){width:20%}
+td:last-child{width:22%;padding:2px}
+.tag{color:var(--tag);font-weight:700;font-size:11px;margin-right:4px}
+input{width:100%;font:13px inherit;font-family:inherit;padding:3px 5px;border:1px solid transparent;background:transparent;color:var(--ink)}
+input:focus{outline:none;border-color:var(--muted);background:var(--head)}
+input:not(:placeholder-shown){background:var(--head)}
+button{margin-top:10px;padding:5px 12px;font:13px inherit;font-family:inherit;border:1px solid var(--ink);background:var(--ink);color:var(--bg);border-radius:4px;cursor:pointer}
+#msg{margin-left:8px;color:var(--muted)}
+@media (max-width:700px){td:nth-child(2),td:nth-child(4),td:last-child{width:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Cast loop stoppers</h1>
+<p>Things that could stop the loop that speeds up the cast-reference run (~15 min → 3–5 min), each with a proposed handling. Rows marked UPDATED or NEW come from the backfiller's history (handoff 2026-10-26-172510). Type in the last column for any row you want changed, then click Copy and paste it into the session.</p>
+<table>
+<thead><tr><th>#</th><th>What could stop the loop</th><th>Proposed handling</th><th>My recommendation</th><th>Your note</th></tr></thead>
+<tbody id="rows"></tbody>
+</table>
+<button id="copy">Copy my notes</button><span id="msg"></span>
+</div>
+<script>
+// [item, proposed handling, recommendation, tag]
+const R=[
+['Model key rejected (401). The backfiller hit a real one on Oct 26.','Same as the backfiller: retry with the same key only, never another key or provider. Wait 1 min, then 5, then 15, then every 15 min. After each wait, restart slowly: 1 call, then 4, then normal. Tell you on the first one. Check the key once before starting.','Updated per your note. This is the backfiller rule you chose on Oct 26.','UPDATED'],
+['Model account out of credit (402)','Same waits as #1, and tell you the top-up needed. Once you top up, the next try succeeds and the loop continues without restarting.','Updated per your note. One difference: the backfiller still stops on 402. Waiting here lets a top-up resume the loop. DeepInfra suspended this account once in October for low funds.','UPDATED'],
+['Model access refused (403)','Same as #1.','Updated per your note. Same as the backfiller.','UPDATED'],
+['Too many requests (429). Today this stops the whole batch.','Wait as long as the provider says, otherwise 15 s, 30 s, 60 s, up to 5 min. Then skip that person this round.','Change suggested: use the same rule as #1. The backfiller retries 429 the same way and it is tested. One rule for every retryable error is simpler.',''],
+['Model server error or overloaded (500, 502, 503, 529)','Same as #4.','Change suggested: same rule as #1.',''],
+['Model doesn\'t answer in time. The limit is 600 s today.','Lower the limit to 120 s. Count the maximum possible cost as spent. Retry once, then skip.','Change suggested: same rule as #1, and only after #7. LI Kai-Fu\'s call took 248 s, so 120 s works only once answers are shorter. Counting the maximum cost matches the backfiller.',''],
+['Model answer cut off at the length limit (happened with LI Kai-Fu)','Retry once and ask for a shorter answer. Then skip the person.','Approve, high priority. This is the LI Kai-Fu failure.',''],
+['Model answer breaks a rule, e.g. an empty clip ID (happened with LI Yanhong and CHENG)','Treat an empty clip ID as "no clip". Keep the good stills as a partial result. Retry once for the rest.','Approve, high priority. This caused 2 of the 3 failed tests.',''],
+['Bug: once a request fails, the same request can never be sent again','Allow resending after failures the provider rejected without charging. Keep the failed record untouched and save each retry as its own record. That is how the backfiller fixed this on Oct 24.','Approve. Fix before starting.','UPDATED'],
+['Provider served a different model than requested','Stop that round, because the timing comparison would be meaningless.','Approve. Keep as a hard stop.',''],
+['Model refuses to answer','Skip that slot and log it. Don\'t switch to a stronger model automatically.','Approve.',''],
+['Loop budget used up','Warn at 80%, stop at 100% and write a report.','Approve. A round costs about $0.03, so $5 is plenty.',''],
+['Bug: budget looks used up when it isn\'t, because failed calls never release the money set aside for them','Release the set-aside when a call fails without a charge, and clear leftovers from crashed runs before starting.','Approve. Fix first. The backfiller hit the same thing ($3.95 set aside vs $0.51 actually used, Oct 21), and that fix never shipped.','UPDATED'],
+['SerpApi search quota reaches its floor (stops at 50 left)','Show searches left before starting. At the floor, use saved search results instead of new searches.','Approve. Check searches left before setting the limit.',''],
+['Shared Baidu search allowance (80) used up','Same as #14.','Approve.',''],
+['Apify / Xiaohongshu spend reaches its cap','Stop Xiaohongshu at the cap; the rest of the run continues.','Approve.',''],
+['Model answer length capped at 8,192 tokens, hard-coded','Raise it to 65,536, as the backfiller did for DeepSeek when answers were being cut off. Do this after #13 is fixed, because a bigger cap sets aside more money. Keep the short-answer rule from #7.','Change suggested, based on the backfiller. A bigger cap alone did not fix LI Kai-Fu\'s padding, so #7 is still needed.','UPDATED'],
+['Built-in limit of one retry per slot','Keep it as a limit, not something to use up.','Approve.',''],
+['YouTube blocks the download (bot check, 403, 429)','Skip that video and note the gap. Before starting, test one video lookup.','Approve.',''],
+['The YouTube download tool updates itself mid-loop','Fix one version for the whole loop so timings stay comparable.','Approve.',''],
+['Downloads slow or hang. Each has its own 60–150 s limit and they run one after another.','Run downloads at the same time with one shared deadline (~90 s), and use whatever has arrived.','Approve. Likely the biggest speed gain: downloading alone takes 4–6 min today, more than the whole target.',''],
+['A Chinese site blocks or is slow (403, Cloudflare, image hotlink protection)','Skip that page.','Approve.',''],
+['Xiaohongshu account risk warning','Stop Xiaohongshu only, until you clear it. The rest continues. Warn you before starting if an old warning is still blocking it.','Approve. Keep as a hard stop; it protects your account.',''],
+['Xiaohongshu browser logged out','Tell you; continue without Xiaohongshu meanwhile.','Approve.',''],
+['Bug: a crash leaves a "started" record that blocks that request forever','At loop start, redo free requests that never finished. Count paid ones as spent, then redo them if the budget allows.','Approve. Fix before starting.',''],
+['Saved files changed, or a saved file belongs to another person','Skip that person and flag it. Never delete anything automatically.','Approve. Keep as a hard stop.',''],
+['Network or DNS down','Retry every 30 s for up to 10 min, then stop.','Approve.',''],
+['Bug: the budget file\'s lock waits forever if another session holds it','Give the loop its own budget file. If still blocked, wait up to 2 min, then stop and name who holds it.','Approve. Fix before starting.',''],
+['Reusing a saved reference photo makes cold runs look faster than they are','Time each round twice and record both: from scratch, and with saved photos.','Approve. Needed for honest numbers.',''],
+['Shared test database busy (only if database tests run)','Check every 30 s for up to 10 min. Then skip those tests and mark them "not run", never "passed".','Approve. Probably unused, since the collector\'s tests don\'t need the database.',''],
+['Other jobs slowing the machine','Record machine load with each timing. If load is high, measure again instead of calling it slower.','Approve.',''],
+['Other sessions editing the same files (collector code isn\'t in Git yet)','Save the starting version on its own branch before starting (needs your OK). The loop works only there. If the code changes underneath anyway, stop and re-baseline; don\'t retry.','Your call. I\'d say yes. The backfiller died when another session changed the database mid-run, and a retry can\'t fix that.','UPDATED'],
+['Disk full (videos up to 80 MB each)','Need 20 GB free to start; stop below 5 GB.','Approve.',''],
+['macOS empties the temp folder mid-run','Keep working files under the home folder.','Approve.',''],
+['A video can\'t be decoded. Today this fails the whole person.','Skip just that video.','Approve.',''],
+['Mac sleeps, SSH drops, or tmux dies, and the run dies unnoticed','Keep the Mac awake, write a heartbeat file each step, and check it every 10 min. Restart from the last finished round.','Approve.',''],
+['Claude session hits an API error (overloaded, 401, capacity)','A script runs the loop, not the chat. Restart automatically after errors.','Approve.',''],
+['Conversation fills up and loses track','Keep all loop state in a log file that each round reads first.','Approve.',''],
+['Permission prompts stall an unattended run','List the exact commands before starting so you can approve them once.','Approve. You see the command list once.',''],
+['Codex asks before every action because of a wrong setting name in ~/.codex/config.toml (only if run with Codex)','Fix the setting name. It\'s your config, so it\'s your call.','Your call. Only matters if Codex runs the loop; I\'d run it in Claude Code.',''],
+['Agent stops to ask a question that already has a default','Use the default from this table and log it.','Approve.',''],
+['The "done" check fires too early, or never','"Done" is a script checking the numbers, not an opinion.','Approve.',''],
+['Target reached','Typical run from scratch ≤5 min (stretch goal 3), two rounds in a row, quality no worse than today: stop as a success.','Your call on the numbers. I\'d make 5 min the pass line and 3 min the stretch goal.',''],
+['A speed change makes results worse','Undo that change and continue.','Approve.',''],
+['Wrong person in a result','Undo that change and flag it. Stop if it happens twice.','Stricter: stop on the first wrong person, not the second.',''],
+['No improvement for 3 rounds','Stop and report the slowest remaining step.','Approve.',''],
+['Timings too uneven to compare (more than 20% spread)','Measure again, up to 2 more times.','Approve.',''],
+['Test people\'s saved files missing or changed','Stop.','Approve.',''],
+['Anything beyond the loop: deploying, production database, pushing shared branches, more people, a new model, spending over limits','The loop never does these.','Approve.',''],
+['A run looks faster because it quietly skipped work','Count a round only if its results are as complete as the baseline\'s. A round that skipped a step isn\'t comparable.','Add. The biggest false-win risk in a speed loop. The backfiller once reported success while silently dropping 18 posts.','NEW'],
+['Waiting gets mistaken for being stuck, or stuck for waiting','Log planned waits (retry waits, lock waits) as waiting. Stop only after 15 min with no progress and no logged reason.','Add. This is the backfiller\'s no-progress rule. One of its runs looked failed when it was only waiting.','NEW'],
+['A run folder name is reused with different code or settings','Give every round its own fixed name (round-01, round-02, …). Never reuse a folder for different settings.','Add. The backfiller stopped on Oct 26 for this reason.','NEW'],
+['The pre-start check passes even though the inputs are empty','Before any paid call, confirm the test people and their saved files are really there, not just that the check finished.','Add. A backfiller pre-start check once passed with zero authors.','NEW'],
+['The loop competes with live work for shared accounts (DeepInfra, SerpApi, Xiaohongshu)','Live work goes first; the loop waits.','Add. The backfiller crowded out live harvesting, and 29 scheduled runs were skipped.','NEW'],
+['Checking the work fails (test time cap hit, or a review call runs out of credit)','Mark it "not run" and run it again. Never count it as passed.','Add. This happened during the backfiller work.','NEW'],
+['You stop the loop on purpose','Stop at the next safe point, keep everything, resume from the last finished round.','Add.','NEW'],
+['Limit: total spend','$5','Approve. Plenty of headroom.',''],
+['Limit: SerpApi searches','60','Check the remaining balance first. Each round uses about 2–4 searches per person.',''],
+['Limit: Apify spend','$1','Approve.',''],
+['Limit: model call time','120 s','See #6.',''],
+['Limit: 401 / 402 / 403 waits','1, 5, 15 min, then every 15 min until the 8-hour limit','Updated per your note (backfiller rule).','UPDATED'],
+['Limit: wait on 429 or server errors, per call','5 min','If you accept the change on #4, this becomes the same waits as #1.',''],
+['Limit: lock wait','2 min (budget file), 10 min (test database)','Approve.',''],
+['Limit: rounds','15, or 8 hours, whichever comes first','Approve.',''],
+];
+const KEY='g2-cast-loop-stoppers-notes-v3';let notes={};
+try{notes=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){}
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+document.getElementById('rows').innerHTML=R.map((r,i)=>`<tr><td>${i+1}</td><td>${r[3]?`<span class="tag">${r[3]}</span>`:''}${esc(r[0])}</td><td>${esc(r[1])}</td><td>${esc(r[2])}</td><td><input data-i="${i}" placeholder=" " value="${esc(notes[i]||'')}"></td></tr>`).join('');
+document.getElementById('rows').addEventListener('input',e=>{notes[e.target.dataset.i]=e.target.value;try{localStorage.setItem(KEY,JSON.stringify(notes))}catch(x){}});
+document.getElementById('copy').addEventListener('click',async()=>{
+  const lines=R.map((r,i)=>[i,(notes[i]||'').trim()]).filter(([,n])=>n).map(([i,n])=>`#${i+1} ${R[i][0]}: ${n}`);
+  const text=lines.length?'Loop stoppers, notes (all other rows approved):\n'+lines.join('\n'):'Loop stoppers: all rows approved as written.';
+  const m=document.getElementById('msg');
+  try{await navigator.clipboard.writeText(text);m.textContent='Copied.'}
+  catch(e){const t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();try{document.execCommand('copy');m.textContent='Copied.'}catch(x){m.textContent='Copy failed.'}t.remove();}
+});
+</script>
+</body>
+</html>
