@@ -272,6 +272,7 @@ def test_github_repository_reference_is_retained_as_unresolved_and_reused(status
     assert models.CollectionJob.objects.count() == 1
     client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(
         status, json={"id": 42, "full_name": "Example/Agent", "private": private,
+                   "created_at": "2026-10-01T10:00:00Z",
                    "stargazers_count": 7, "owner": {"login": "Example"}}
     )))
     batch = drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(job.pk)])
@@ -286,7 +287,12 @@ def test_github_repository_reference_is_retained_as_unresolved_and_reused(status
         observation = models.CollectionObservation.objects.get(projection_kind="github-release-exact-v1")
         payload, dimensions, _ = observation_object_documents(observation)
         assert payload["stargazers_count"] == 7 and dimensions["kind"] == "repository"
+        snapshot = observation.resource_snapshot
+        assert snapshot.native_stable_id == "42"
+        assert snapshot.provider_created_at.isoformat() == "2026-10-01T10:00:00+00:00"
+        assert snapshot.provider_created_precision == "instant"
         assert execute_github_repository(job.pk, client=client)["physical_requests"] == 0
+        assert models.CollectionResourceSnapshot.objects.filter(observation=observation).count() == 1
         models.Post.objects.create(tweet_id="github-second-release", text=(
             "We launch another product at https://github.com/Example/Agent"
         ))
@@ -358,6 +364,73 @@ def test_github_release_reuses_only_a_matching_reviewed_dedicated_product(observ
             execute_github_repository(job.pk, client=client)
         observation.refresh_from_db()
         assert observation.product_id == other.pk and observation.mapping_id == mapping.pk
+
+
+@pytest.mark.parametrize("status,owner_id,expected", [
+    (200, 12, "found"), (200, 99, "identity_mismatch"),
+    (404, 12, "missing_or_inaccessible"), (403, 12, "forbidden_or_throttled"), (429, 12, "throttled"),
+])
+def test_github_owner_profile_is_captured_without_confirming_publisher(status, owner_id, expected):
+    import httpx
+
+    from core.collection_capture import observation_object_documents
+    from core.product_release_acquisition import (
+        drain_due_hf_acquisitions,
+        execute_github_repository,
+        queue_github_repository,
+    )
+    from core.product_release_pipeline import persist_source
+    from core.product_release_sources import stored_posts
+
+    post = models.Post.objects.create(tweet_id="github-owner-source", text=(
+        "We release our agent at https://github.com/Example/Agent"
+    ))
+    persist_source(stored_posts([post.pk])[0])
+    lead = models.EventDossierClaim.objects.get(scope_key__startswith="github_repo_lead:")
+    repo_job = queue_github_repository(lead.pk)
+    calls = []
+
+    def respond(request):
+        calls.append(str(request.url))
+        if request.url.path.startswith("/repos/"):
+            return httpx.Response(200, json={"id": 42, "full_name": "Example/Agent", "private": False,
+                                            "owner": {"login": "Example", "id": 12}})
+        return httpx.Response(status, json={"id": owner_id, "login": "Example",
+                                            "twitter_username": "example_ai", "blog": "https://example.com"})
+
+    client = httpx.Client(transport=httpx.MockTransport(respond))
+    assert execute_github_repository(repo_job.pk, client=client)["outcome"] == "found"
+    owner_job = models.CollectionJob.objects.get(targets__target_role="publisher_profile")
+    repo_observation = models.CollectionObservation.objects.get(projection_kind="github-release-exact-v1")
+    assert owner_job.targets.get().evidence_observation_id == repo_observation.pk
+    result = drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(owner_job.pk)])
+    assert result["provider_calls"] == 1 and result["jobs"][0]["outcome"] == expected
+    assert calls == ["https://api.github.com/repos/Example/Agent", "https://api.github.com/users/Example"]
+    if expected == "found":
+        from core.product_release_github_owner import execute_owner
+
+        observation = models.CollectionObservation.objects.get(projection_kind="github-release-owner-v1")
+        row, _, _ = observation_object_documents(observation)
+        assert row["twitter_username"] == "example_ai" and row["blog"] == "https://example.com"
+        assert models.EventDossierClaim.objects.filter(scope_key=f"github_owner:{observation.pk}").exists()
+        assert models.EventDossierClaim.objects.get(scope_key=f"github_owner_x:{observation.pk}").source_excerpt == "@example_ai"
+        assert execute_owner(owner_job.pk, client=client)["physical_requests"] == 0
+        second_post = models.Post.objects.create(tweet_id="github-owner-source-two", text=(
+            "We launch another product at https://github.com/Example/Agent"
+        ))
+        persist_source(stored_posts([second_post.pk])[0])
+        second_lead = models.EventDossierClaim.objects.get(
+            scope_key__startswith="github_repo_lead:", event_dossier_source__post=second_post,
+        )
+        assert queue_github_repository(second_lead.pk).pk == repo_job.pk
+        assert models.EventDossierClaim.objects.filter(scope_key=f"github_owner:{observation.pk}").count() == 2
+        assert drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(owner_job.pk)])["provider_calls"] == 0
+    else:
+        owner_job.refresh_from_db()
+        assert owner_job.last_attempt.error_code == expected and owner_job.next_retry_at is not None
+        assert not models.CollectionObservation.objects.filter(projection_kind="github-release-owner-v1").exists()
+    assert not models.Product.objects.exists()
+    assert not models.ProductReleaseDetail.objects.exists()
 
 
 def test_github_checkpoint_recovers_without_refetch(monkeypatch):

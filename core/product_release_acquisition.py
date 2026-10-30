@@ -947,7 +947,12 @@ def drain_due_hf_acquisitions(*, client, limit=10, execute=False, job_ids=None):
                     result = {"outcome": "projection_only", "physical_requests": 0}
                 else:
                     if job.source_id == "github":
-                        result = execute_github_repository(job.pk, client=client)
+                        if job.targets.filter(target_role="publisher_profile").exists():
+                            from core.product_release_github_owner import execute_owner
+
+                            result = execute_owner(job.pk, client=client)
+                        else:
+                            result = execute_github_repository(job.pk, client=client)
                     elif job.targets.filter(target_role="model_card").exists():
                         from core.product_release_hf_card import execute_card
 
@@ -1171,12 +1176,14 @@ def integrate_github_capture(observation):
 
     from core import models
     from core.collection_identity import qualified_catalog_ownership
+    from core.collection_resources import snapshot_resource
     from core.event_dossiers import add_claim, attach_source
     from core.product_release_pipeline import canonical_dossier
 
     with transaction.atomic():
         row, _, _ = github_exact_observation_documents(observation)
         observation = models.CollectionObservation.objects.select_for_update().get(pk=observation.pk)
+        snapshot_resource(observation)
         owner_id = row.get("owner", {}).get("id") if isinstance(row.get("owner"), dict) else None
         if type(owner_id) is int and owner_id > 0:
             mappings = list(models.SourceSubjectMapping.objects.filter(
@@ -1208,11 +1215,18 @@ def integrate_github_capture(observation):
         for link in observation.run.job.dossier_claim_links.select_related("claim__event_dossier_source"):
             dossier = canonical_dossier(link.claim.event_dossier_source.event_dossier_id)
             event_source = attach_source(dossier.pk, observation_id=observation.pk)
-            add_claim(event_source.pk, claim_kind="release_context",
+            capture_claim = add_claim(event_source.pk, claim_kind="release_context",
                       scope_key=f"github_capture:{observation.pk}",
                       assertion_text=f"Captured GitHub repository {row['full_name']}; its release role and ownership are unresolved",
                       source_excerpt=row["full_name"], source_locator=f"https://github.com/{row['full_name']}",
                       source_archive_id=request.archive_id, extraction_version="github-release-exact-v1")
+            latest = dossier.intake_decisions.order_by("-recorded_at", "-pk").first()
+            if not latest or latest.outcome not in {"non_release", "scam"}:
+                from core.product_release_github_owner import queue_owner
+
+                owner_job = queue_owner(capture_claim.pk, observation.pk)
+                if owner_job is not None:
+                    _dispatch_if_enabled(owner_job)
         if _has_eligible_claim(observation.run.job):
             from core.source_metric_projection import retain_release_projection_followup
 
