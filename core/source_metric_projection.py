@@ -63,6 +63,23 @@ def _result_parent(claim, run, contract):
     return scope
 
 
+def _eligible_evidence_owner(evidence, source):
+    job = evidence.run.job
+    return job.source_id == source and (
+        job.purpose == "catalog"
+        or source == "hf" and job.purpose == "content"
+        and job.operation == "release_acquisition"
+        and evidence.projection_kind == "hf-release-exact-v1"
+    )
+
+
+def _eligible_projection_origin(job):
+    return job.purpose == "catalog" or (
+        job.purpose == "content" and job.source_id == "hf"
+        and job.operation == "release_acquisition"
+    )
+
+
 def _retain_results(scope, selected, prepared, observations, accounting, before_values, rejections, terminal_ids):
     """One source evaluation and its actual outputs; reused rows keep their run."""
     from core.collection_capture import archive_document
@@ -74,8 +91,8 @@ def _retain_results(scope, selected, prepared, observations, accounting, before_
     terminal_ids = set(terminal_ids)
     written = created = 0
     for evidence in selected:
-        require(evidence.run.job.source_id == scope.run.job.source_id
-                and evidence.run.job.purpose == "catalog", "projection source owner changed")
+        require(_eligible_evidence_owner(evidence, scope.run.job.source_id),
+                "projection source owner changed")
         rows = outputs.get(evidence.pk, [])
         require(len(rows) <= 1, "one projection output per source capture required")
         diagnostics = [row for row in rejections if row["observation_id"] == evidence.pk]
@@ -137,6 +154,7 @@ def projection_report(run):
     items = list(scope.child_scopes.filter(scope_kind=PROJECTION_RESULT_KIND).select_related("resource_observation__run__job").only(
         "pk", "run_id", "scope_key", "phase", "outcome", "enumeration_complete", "raw_count",
         "projection_contract_id", "resource_observation_id", "resource_observation__run_id",
+        "resource_observation__projection_kind", "resource_observation__run__job__operation",
         "resource_observation__run__job_id", "resource_observation__run__job__purpose",
         "resource_observation__run__job__source_id",
     ))
@@ -170,8 +188,7 @@ def projection_report(run):
     for item in items:
         evidence = item.resource_observation
         require(item.run_id == run.pk and item.projection_contract_id == run.job.contract_id
-                and evidence is not None and evidence.run.job.purpose == "catalog"
-                and evidence.run.job.source_id == run.job.source_id
+                and evidence is not None and _eligible_evidence_owner(evidence, run.job.source_id)
                 and item.scope_key == str(evidence.pk) and item.phase == PROJECTION_RESULT_PHASE
                 and item.raw_count == 1
                 and item.outcome in {"admitted", "admitted_with_gaps", "terminal_invalid", "terminal_missing", "rejected"}
@@ -493,8 +510,8 @@ def _evidence_documents(evidence):
 def evidence_rows(contract, source, evidence):
     """Yield supported native rows; preserve snapshot and effective clocks separately."""
     require(
-        evidence.run.job.purpose == "catalog" and evidence.run.job.source_id == source,
-        "catalog evidence source mismatch",
+        _eligible_evidence_owner(evidence, source),
+        "catalog or exact release evidence source mismatch",
     )
     require(evidence.status == "ok", "source evidence is an error")
     raw, captured_dimensions, captured_metadata = _evidence_documents(evidence)
@@ -758,7 +775,7 @@ def _adopt_projection_queue(scope):
     """Adopt old pending references once, under the origin and queue locks."""
     require(
         scope.scope_kind == "numeric_projection"
-        and scope.run.job.purpose == "catalog"
+        and _eligible_projection_origin(scope.run.job)
         and scope.projection_contract_id is not None
         and scope.scope_key == str(scope.projection_contract_id),
         "numeric projection queue identity changed",
@@ -774,6 +791,13 @@ def _adopt_projection_queue(scope):
         ).exists(),
         "numeric projection item ownership mismatch",
     )
+    if scope.run.job.purpose == "content":
+        require(
+            not _projection_items(scope).exclude(
+                resource_observation__projection_kind="hf-release-exact-v1"
+            ).exists(),
+            "release projection needs exact HF captures",
+        )
     for item in _projection_items(scope).only(
         "scope_key", "resource_observation_id", "outcome", "enumeration_complete",
     ):
@@ -803,7 +827,7 @@ def enqueue_projection(claim, *, contract, evidence_ids):
     )
     with fenced_run(claim) as (_, run):
         require(
-            run.job.purpose == "catalog"
+            _eligible_projection_origin(run.job)
             and run.job.source_id in contract.source_configuration,
             "projection queue requires catalog source evidence",
         )
@@ -814,6 +838,13 @@ def enqueue_projection(claim, *, contract, evidence_ids):
             == len(ids),
             "queue evidence outside capture run",
         )
+        if run.job.purpose == "content":
+            require(
+                CollectionObservation.objects.filter(
+                    run=run, pk__in=ids, projection_kind="hf-release-exact-v1"
+                ).count() == len(ids),
+                "release projection needs exact HF captures",
+            )
         key = str(contract.pk)
         existing = run.scopes.filter(
             scope_kind="numeric_projection", scope_key=key
@@ -840,6 +871,66 @@ def enqueue_projection(claim, *, contract, evidence_ids):
             "outcome", "enumeration_complete", "execution_state", "coverage_state", "raw_count",
         ])
         return scope
+
+
+def enqueue_authorized_release_projection(claim, evidence):
+    """Queue exact capture under an active, reviewed publisher contract.
+
+    A dedicated reviewed mapping admits product attribution. Without one, an
+    eligible native partition retains measurements on the repository alone.
+    No contract or product mapping is guessed or created.
+    """
+    from core.benchmark_attribution import enforce_source_collection
+    from core.models import MetricCollectionContract
+
+    require(transaction.get_connection().in_atomic_block, "enqueue inside capture transaction")
+    require(_eligible_evidence_owner(evidence, "hf")
+            and evidence.run.job.operation == "release_acquisition"
+            and evidence.projection_kind == "hf-release-exact-v1", "exact release capture required")
+    namespace = evidence.source_identifier.split("/", 1)[0]
+    contracts = MetricCollectionContract.objects.filter(
+        collectionjob__source_id="hf", collectionjob__purpose="metric",
+        collectionjob__authority_enabled=True, collectionjob__state="ready",
+        mappings__purpose="metric", mappings__source_id="hf",
+        mappings__source_subject_kind="account", mappings__normalized_identifier=namespace.casefold(),
+    ).distinct()
+    queued = []
+    for contract in contracts:
+        settings = contract.source_configuration.get("hf", {})
+        if settings.get("eligibility_policy") != SOURCE_STATISTICS_POLICY:
+            continue
+        try:
+            enforce_source_collection(contract, "hf")
+            _publisher(contract, "hf", namespace)
+            mappings = list(contract.mappings.filter(
+                purpose="metric", source_id="hf", source_subject_kind="repository",
+                identifier_scope__code="model",
+                normalized_identifier=evidence.source_identifier.casefold(),
+            ).select_related("subject__product", "publisher_account", "identifier_scope"))
+            if mappings:
+                require(len(mappings) == 1, "ambiguous repository mapping")
+                mapping = mappings[0]
+                require(mapping.subject.subject_kind == "product"
+                        and mapping.identifier_metadata.get("role") == "dedicated_model"
+                        and (mapping.subject.product.repo_id or "").casefold()
+                        == evidence.source_identifier.casefold(), "dedicated product mapping required")
+                validate_statistics_mapping(
+                    mapping.subject,
+                    {"external_identifier": mapping.external_identifier,
+                     "source_subject_kind": mapping.source_subject_kind,
+                     "publisher_account_key": str(mapping.publisher_account_id),
+                     "identifier_metadata": mapping.identifier_metadata},
+                    "hf", contract.taxonomy_version,
+                )
+            else:
+                require(settings.get("native_resources", True)
+                        and evidence.source_identifier.casefold() not in settings.get("native_exclusions", []),
+                        "repository outside native partition")
+        except (ValueError, KeyError, TypeError):
+            continue
+        enqueue_projection(claim, contract=contract, evidence_ids=[evidence.pk])
+        queued.append(str(contract.pk))
+    return queued
 
 
 def _project_evidence(
@@ -1048,10 +1139,16 @@ def replay_saved_evidence(job_id):
             scope_kind="numeric_projection", scope_key="saved-evidence"
         ).first()
         cursor = int(previous.cursor) if previous and previous.cursor else 0
+    allowed_origin = Q(run__job__purpose="catalog")
+    if job.source_id == "hf":
+        allowed_origin |= Q(
+            run__job__purpose="content", run__job__operation="release_acquisition",
+            projection_kind="hf-release-exact-v1",
+        )
     selected = CollectionObservation.objects.filter(
         Q(run_id__in=runs) | Q(run__job_id__in=jobs),
+        allowed_origin,
         run__job__source_id=job.source_id,
-        run__job__purpose="catalog",
         pk__gt=cursor,
         source_subject_kind__in=["repository", "account", "model", "aggregate"],
         status="ok",
@@ -1141,7 +1238,7 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
 
     with _projection_origin(catalog_job_id, origin_claim) as origin:
         validate_job(origin)
-        require(origin.purpose == "catalog", "catalog projection origin required")
+        require(_eligible_projection_origin(origin), "supported projection origin required")
     limits = origin.budgets
     started = monotonic()
     usage = {"items": 0, "bytes": 0}

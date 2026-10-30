@@ -100,6 +100,116 @@ def test_negative_post_makes_zero_targeted_calls():
     assert TargetedExtractionState.objects.count() == 0
 
 
+def test_named_release_without_url_or_version_keeps_source_specific_pending_dossiers():
+    from core import models
+    from core.product_release_acquisition import queue_saved_release_claims
+    from core.targeted_extraction import _persist_product_release_reports
+
+    models.DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    first = _post("no-link-first", text="Nanbeige announces Nanbeige Agent", brand_ids=("nanbeige",), author_handle="release_one")
+    second = _post("no-link-second", text="Nanbeige announces Nanbeige Agent", brand_ids=("nanbeige",), author_handle="release_two")
+    record = {"brand_id": "nanbeige", "model_name": "Nanbeige Agent"}
+    assert _persist_product_release_reports(first, [record], "test-v1")[:2] == (1, 1)
+    assert _persist_product_release_reports(first, [record], "test-v1")[:2] == (0, 0)
+    assert _persist_product_release_reports(second, [record], "test-v1")[:2] == (1, 1)
+    claims = models.EventDossierClaim.objects.filter(claim_kind_reference__code="release_report")
+    assert claims.count() == 2
+    assert claims.values("event_dossier_source__event_dossier_id").distinct().count() == 2
+    assert all(claim.effective_precision == "unknown" for claim in claims)
+    queued = queue_saved_release_claims(limit=10, persist=True)
+    assert queued["queued"] == 0 and models.CollectionJob.objects.count() == 1
+    assert models.EventDossierClaimCollectionJob.objects.count() == 2
+    assert not models.CollectionRequest.objects.exists()
+    assert not models.Product.objects.exists()
+
+
+def test_named_release_with_unidentified_publisher_is_saved_and_searchable():
+    from core import models
+    from core.collection_capture import read_document
+    from core.product_release_acquisition import queue_saved_release_claims
+    from core.targeted_extraction import _persist_product_release_reports
+
+    models.DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    first = _post("unknown-owner-1", text="Introducing Model Z", brand_ids=(), author_handle="witness_one")
+    second = _post("unknown-owner-2", text="Introducing Model Z", brand_ids=(), author_handle="witness_two")
+    record = {"model_name": "Model Z", "version": "1.0", "categories": ["llm-model"]}
+    assert _persist_product_release_reports(first, [record], "test-v1")[:2] == (1, 1)
+    assert _persist_product_release_reports(first, [record], "test-v1")[:2] == (0, 0)
+    assert _persist_product_release_reports(second, [record], "test-v1")[:2] == (1, 1)
+    claims = models.EventDossierClaim.objects.filter(claim_kind_reference__code="release_report")
+    assert claims.count() == 2
+    assert claims.values("event_dossier_source__event_dossier_id").distinct().count() == 2
+    for claim in claims:
+        assert claim.reported_brand_id is None
+        assert claim.reported_brand_discovery_candidate_id is None
+        assert read_document(claim.source_archive)["record"]["categories"] == ["llm-model"]
+    assert not models.BrandDiscoveryCandidate.objects.exists()
+    assert not models.ProductVerificationProposal.objects.exists()
+    assert not models.RareTypeCategoryAssignment.objects.exists()
+    result = queue_saved_release_claims(limit=10, persist=True)
+    assert result["queued"] == 0 and models.CollectionJob.objects.count() == 1
+    assert models.EventDossierClaimCollectionJob.objects.count() == 2
+    assert not models.Product.objects.exists()
+    assert not models.CollectionRequest.objects.exists()
+
+
+def test_postfetch_dispatch_saves_and_queues_named_release_without_link():
+    from core import models
+    from core.product_release_acquisition import queue_saved_release_claims
+
+    models.DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    post = _post("dispatch-no-link", text="Nanbeige announces Nanbeige Agent", brand_ids=("nanbeige",))
+    calls = []
+
+    def saved_response(*args):
+        calls.append(args)
+        return {"records": [{"brand_id": "nanbeige", "model_name": "Nanbeige Agent"}]}
+
+    arguments = {
+        "post": post, "post_types": {"releases_updates"}, "config": _config(),
+        "calls": {"model_release_extraction": saved_response}, "max_calls": 1,
+    }
+    result = run_targeted_extractions(**arguments)
+    assert result.calls_made == 1 and not result.failed_roles
+    assert models.EventDossierClaim.objects.filter(claim_kind_reference__code="release_report").count() == 1
+    assert models.EventDossierClaimCollectionJob.objects.count() == 1
+    assert queue_saved_release_claims(persist=True)["queued"] == 0
+    assert run_targeted_extractions(**arguments).calls_made == 0
+    assert len(calls) == 1 and models.CollectionJob.objects.count() == 1
+    assert not models.CollectionRequest.objects.exists()
+
+
+def test_failed_acquisition_registration_keeps_report_for_recovery(monkeypatch):
+    from core import models, product_release_acquisition
+
+    models.DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    post = _post("queue-failure", text="Nanbeige announces Agent", brand_ids=("nanbeige",))
+    real_queue = product_release_acquisition.queue_hf_name_search
+    def fail_queue(_claim_id):
+        raise RuntimeError("temporary registration failure")
+    monkeypatch.setattr(product_release_acquisition, "queue_hf_name_search", fail_queue)
+    result = run_targeted_extractions(
+        post=post, post_types={"releases_updates"}, config=_config(),
+        calls={"model_release_extraction": lambda *_: {
+            "records": [{"brand_id": "nanbeige", "model_name": "Agent"}]
+        }}, max_calls=1,
+    )
+    assert not result.failed_roles
+    assert models.EventDossierClaim.objects.filter(claim_kind_reference__code="release_report").count() == 1
+    assert not models.CollectionJob.objects.exists()
+    monkeypatch.setattr(product_release_acquisition, "queue_hf_name_search", real_queue)
+    assert product_release_acquisition.queue_saved_release_claims(persist=True)["queued"] == 1
+    assert not models.CollectionRequest.objects.exists()
+
+
 def test_ambiguous_profile_candidate_routes_to_profile_extractor_without_images():
     post = _post("profile-candidate", text="A normal unrelated post")
     from django.db import transaction

@@ -3635,16 +3635,43 @@ class CycleRunner:
     ) -> dict[str, Any]:
         """Shared boundary for collection, explicit batches and the worker."""
         if self.cycle_kind == "backfill" or kwargs.get("source_collection_job_id") is not None:
-            return self._process_enrichment_claim_batch(kept_posts, **kwargs)
-        if self.cycle_kind == "scheduled" and self.cfg.harvest.enrichment.mode == "worker":
-            return {
+            result = self._process_enrichment_claim_batch(kept_posts, **kwargs)
+        elif self.cycle_kind == "scheduled" and self.cfg.harvest.enrichment.mode == "worker":
+            result = {
                 **{key: 0 for key in ENRICHMENT_COUNT_KEYS},
                 **self._unclaimed_post_fetch_cohort(kept_posts),
                 "enrichment_mode": "worker", "enrichment_processed_externally": True,
             }
-        from monitor.enrichment_worker import process_enrichment_batch
+        else:
+            from monitor.enrichment_worker import process_enrichment_batch
 
-        return process_enrichment_batch(self, kept_posts, **kwargs)
+            result = process_enrichment_batch(self, kept_posts, **kwargs)
+        if kwargs.get("repair_manifest") is None:
+            from core.product_release_pipeline import persist_collected_posts
+
+            source_ids = {
+                str(item["_persisted_post_id"]) for item in kept_posts
+                if item.get("_persisted_post_id")
+            }
+            source_ids.update(str(value) for value in (kwargs.get("post_ids") or ()))
+            if source_ids:
+                try:
+                    result["product_release_intake"] = persist_collected_posts(source_ids)
+                except Exception:  # Keep collection healthy; replay can recover saved posts.
+                    logger.exception("Post-collection release intake failed")
+                    result["product_release_intake"] = {
+                        "selected": len(source_ids), "read": 0, "candidates": 0,
+                        "failed": len(source_ids),
+                    }
+            if self.cycle_kind == "scheduled":
+                try:
+                    from core.product_release_acquisition import dispatch_due_recovery
+
+                    result["product_release_recovery"] = dispatch_due_recovery()
+                except Exception:  # Recovery is optional and never interrupts harvesting.
+                    logger.exception("Post-collection release recovery dispatch failed")
+                    result["product_release_recovery"] = {"status": "error"}
+        return result
 
     def _process_enrichment_claim_batch(
         self,

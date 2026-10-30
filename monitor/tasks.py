@@ -21,6 +21,67 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task(
+    name="monitor.tasks.acquire_product_release",
+    bind=False,
+    autoretry_for=(),
+    max_retries=0,
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=90,
+    time_limit=120,
+)
+def acquire_product_release(*, job_id: str) -> dict[str, object]:
+    """Run one bounded, durable acquisition job on the existing worker."""
+    import httpx
+    from django.conf import settings
+
+    if not settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
+        return {"status": "disabled", "provider_calls": 0}
+    from core.product_release_acquisition import drain_due_hf_acquisitions
+
+    with httpx.Client(follow_redirects=False, trust_env=False) as client:
+        result = drain_due_hf_acquisitions(
+            client=client, limit=1, execute=True, job_ids=[job_id]
+        )
+    return {"status": "processed", **result}
+
+
+@shared_task(
+    name="monitor.tasks.recover_due_product_releases",
+    bind=False,
+    autoretry_for=(),
+    max_retries=0,
+    ignore_result=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
+    soft_time_limit=110,
+    time_limit=120,
+)
+def recover_due_product_releases() -> dict[str, object]:
+    """Process up to three due saved jobs; each owns its request budget."""
+    import httpx
+    from django.conf import settings
+
+    if not settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
+        return {"status": "disabled", "provider_calls": 0}
+    from core.product_release_acquisition import (
+        drain_due_hf_acquisitions,
+        recover_release_registrations,
+    )
+
+    try:
+        registrations = recover_release_registrations(limit=25)
+    except Exception:
+        logger.exception("Release registration recovery failed; later wake-up can retry")
+        registrations = {"status": "error"}
+
+    with httpx.Client(follow_redirects=False, trust_env=False) as client:
+        result = drain_due_hf_acquisitions(client=client, limit=3, execute=True)
+    return {"status": "processed", "registration_recovery": registrations, **result}
+
+
+@shared_task(
     name="monitor.tasks.refresh_trend_narratives",
     bind=False,
     autoretry_for=(),

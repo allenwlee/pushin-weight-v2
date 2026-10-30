@@ -1575,22 +1575,31 @@ def _persist_product_release_reports(
     for record in records:
         brand = _known_brand(brand_context, record.get("brand_id"))
         candidate = None
-        if brand is None:
+        organization_name = _text(record.get("organization_name"))
+        if brand is None and organization_name:
             candidate, created = _organization_candidate(
                 post=post,
-                name=_text(record.get("organization_name"), required=True) or "",
+                name=organization_name,
                 handle=_text(record.get("organization_handle"), maximum=64),
                 confidence=_confidence(record.get("confidence")),
             )
             candidates += int(created)
         model_name = _text(record.get("model_name")) or ""
-        _persist_categories(
-            post=post,
-            record=record,
-            version=version,
-            brand=brand,
-            candidate=candidate,
-        )
+        categories = record.get("categories") or []
+        if not isinstance(categories, list) or any(
+            category not in ALLOWED_RARE_CATEGORIES for category in categories
+        ):
+            raise ValueError("invalid rare-type categories")
+        # Owner-bound category rows cannot represent an unidentified publisher.
+        # The immutable source packet still retains the extracted categories.
+        if brand is not None or candidate is not None:
+            _persist_categories(
+                post=post,
+                record=record,
+                version=version,
+                brand=brand,
+                candidate=candidate,
+            )
         if not model_name:
             continue
         version_value = _text(record.get("version")) or ""
@@ -1609,10 +1618,9 @@ def _persist_product_release_reports(
         source_url = _source_bound_url(
             record.get("source_url"), source_urls=source_urls, field="source"
         )
-        if source_url is None and not version_value:
-            raise ValueError("model release needs a source URL or exact version")
         owner_identity = (
-            f"brand:{brand.pk}" if brand is not None else f"candidate:{candidate.pk}"
+            f"brand:{brand.pk}" if brand is not None else
+            f"candidate:{candidate.pk}" if candidate is not None else "owner:unknown"
         )
         identity = _hash(
             {
@@ -1621,6 +1629,11 @@ def _persist_product_release_reports(
                 "version": version_value,
                 "channel": channel,
                 **({"source_url": source_url} if not version_value else {}),
+                # A bare name is a source-level candidate, not a cross-post
+                # release identity. Later evidence may reconcile these dossiers.
+                **({"unresolved_source_post": str(post.pk)}
+                   if (brand is None and candidate is None)
+                   or (source_url is None and not version_value) else {}),
             }
         )
         dossier, created, evidence_created = record_release_report(
@@ -1635,9 +1648,10 @@ def _persist_product_release_reports(
             release_value=release_value,
             release_precision=release_precision,
             extraction_version=version,
+            queue_acquisition=True,
         )
         candidate_repo_id = _text(record.get("candidate_repo_id"), maximum=256) or ""
-        if post.author_id:
+        if post.author_id and (brand is not None or candidate is not None):
             source_identity_evidence = source_repo_evidence(post, candidate_repo_id)
             proposal, _ = ProductVerificationProposal.objects.get_or_create(
                 proposal_key=_hash(

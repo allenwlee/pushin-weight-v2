@@ -43,6 +43,10 @@ _NEGATED = re.compile(
 )
 _URL = re.compile(r"https?://[^\s<>\"\[\]]+", re.IGNORECASE)
 _SEGMENT = re.compile(r"[a-zA-Z0-9_][a-zA-Z0-9_.-]*\Z")
+_VERSIONED_NAME = re.compile(
+    r"(?<![\w@/])(?=[A-Za-z][A-Za-z0-9_.-]{2,79}(?![\w.-]))"
+    r"(?=[A-Za-z0-9_.-]*[0-9])[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*"
+)
 
 
 def _required(value: str, field: str) -> None:
@@ -293,3 +297,54 @@ def detect(source: SourceRecord) -> ReleaseCandidate | None:
         tuple(sorted(cautions)),
         "excluded" if source.fraud else "pending",
     )
+
+
+def search_leads(candidate: ReleaseCandidate) -> tuple[dict, ...]:
+    """Expose saved release names as attributable search leads, not identities.
+
+    Keep ineligible names visible for later resolution. Repository references are
+    deliberately excluded: they can name teachers or comparison models.
+    """
+    leads = []
+    for evidence in candidate.source.texts:
+        if evidence.kind != "release_extraction" or not evidence.text.strip():
+            continue
+        term = " ".join(evidence.text.split())
+        leads.append(
+            {
+                "term": term,
+                "locator": evidence.locator,
+                "eligible": len(term) <= 256
+                and any(char.isalnum() for char in term)
+                and not _URL.search(term),
+            }
+        )
+    return tuple(leads)
+
+
+def raw_versioned_name_leads(text: str, *, limit: int = 3) -> tuple[dict, ...]:
+    """Find bounded, source-verbatim search terms; never assert product identity.
+
+    This deliberately misses unversioned names. All hits, including teacher
+    names and unrelated version strings, remain provisional search leads.
+    """
+    if not isinstance(text, str) or type(limit) is not int or not 1 <= limit <= 10:
+        raise ValueError("Text and a name lead limit between 1 and 10 are required")
+    anchors = list(_RELEASE.finditer(text))
+    if not anchors:
+        return ()
+    urls = [match.span() for match in _URL.finditer(text)]
+    found = {}
+    for match in _VERSIONED_NAME.finditer(text):
+        if any(start <= match.start() < end for start, end in urls):
+            continue
+        term = match.group().rstrip("-_.")
+        if len(term) < 3:
+            continue
+        distance = min(abs(match.start() - anchor.end()) for anchor in anchors)
+        found.setdefault(term.casefold(), {
+            "term": term, "start": match.start(), "end": match.start() + len(term),
+            "distance": distance,
+        })
+    ranked = sorted(found.values(), key=lambda row: (row["distance"], row["start"]))[:limit]
+    return tuple({key: row[key] for key in ("term", "start", "end")} for row in ranked)

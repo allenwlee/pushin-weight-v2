@@ -120,10 +120,11 @@ def record_release_report(
     release_value,
     release_precision,
     extraction_version,
+    queue_acquisition=False,
 ):
     """Save one fresh source claim without writing the retired prototype tables."""
-    if (brand is None) == (candidate is None):
-        raise ValueError("Release report needs exactly one original owner")
+    if brand is not None and candidate is not None:
+        raise ValueError("Release report cannot name two original owners")
     _validate_record(record)
     packet = {
         "schema": "product-release-intake-v1",
@@ -194,4 +195,8 @@ def record_release_report(
         raise ValueError("Release report claim identity collision")
     if dossier.last_seen_at < post.fetched_at:
         EventDossier.objects.filter(pk=dossier.pk).update(last_seen_at=post.fetched_at)
+    if queue_acquisition:
+        from core.product_release_acquisition import queue_after_commit
+
+        queue_after_commit(claim.pk)
     return dossier, created, claim_created

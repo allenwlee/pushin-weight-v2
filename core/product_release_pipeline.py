@@ -22,7 +22,7 @@ from core.event_dossiers import (
     create_dossier,
     identity_key,
 )
-from core.product_release_intake import detect
+from core.product_release_intake import detect, search_leads
 from core.product_release_milestones import METHOD as MILESTONE_METHOD
 from core.product_release_milestones import extract_milestones
 from core.product_release_sources import StoredSource
@@ -221,6 +221,71 @@ def persist_source(source: StoredSource):
                     else ""
                 ),
             )
+        # A linked repository is a lead, not proof that this is the announced
+        # product: it may be a teacher, comparison or third-party upload.
+        if source.post_id and not source.record.fraud:
+            from core.hf_metadata_client import REPO_ID
+            from core.product_release_acquisition import queue_after_commit
+            from core.product_verification import (
+                _repo_from_hf_url,
+                source_repo_evidence,
+            )
+
+            post = models.Post.objects.get(pk=source.post_id)
+            # Keep GitHub references as explicit leads even before a publisher is
+            # known. A link may point to a dependency or quoted project, so it
+            # does not establish that the repository is the released product.
+            github_repos = {}
+            for reference in candidate.references:
+                if reference.provider == "github" and reference.repository_type == "repository":
+                    github_repos.setdefault(reference.native_identifier.casefold(), reference)
+            for reference in sorted(github_repos.values(), key=lambda item: item.native_identifier.casefold())[:3]:
+                lead = add_claim(
+                    linked.pk,
+                    claim_kind="release_context",
+                    scope_key="github_repo_lead:" + _digest(reference.native_identifier.casefold()),
+                    assertion_text=f"Source references GitHub repository {reference.native_identifier}; its role is unresolved",
+                    source_excerpt=reference.url,
+                    source_locator=reference.url,
+                    extraction_version=METHOD,
+                )
+                if not latest or latest.outcome not in {"non_release", "scam"}:
+                    queue_after_commit(lead.pk, provider="github")
+            repos = {}
+            for reference in candidate.references:
+                if reference.provider != "huggingface" or reference.repository_type != "model":
+                    continue
+                repo = _repo_from_hf_url(reference.url)
+                if (repo and REPO_ID.fullmatch(repo)
+                        and source_repo_evidence(post, repo)["exact_hf_repo_link"]):
+                    repos.setdefault(repo.casefold(), (repo, reference.url))
+            for repo, url in sorted(repos.values(), key=lambda item: item[0].casefold())[:3]:
+                lead = add_claim(
+                    linked.pk,
+                    claim_kind="release_context",
+                    scope_key="hf_repo_lead:" + _digest(repo.casefold()),
+                    assertion_text=f"Post references HF repository {repo}; its role is unresolved",
+                    source_excerpt=post.text or url,
+                    source_locator=url,
+                    extraction_version=METHOD,
+                )
+                if not latest or latest.outcome not in {"non_release", "scam"}:
+                    queue_after_commit(lead.pk)
+            if not repos:
+                from core.product_release_intake import raw_versioned_name_leads
+
+                for name in raw_versioned_name_leads(post.text or ""):
+                    lead = add_claim(
+                        linked.pk,
+                        claim_kind="release_context",
+                        scope_key="hf_name_lead:" + _digest(name["term"].casefold()),
+                        assertion_text=name["term"],
+                        source_excerpt=post.text,
+                        source_locator=source.source_url,
+                        extraction_version=METHOD,
+                    )
+                    if not latest or latest.outcome not in {"non_release", "scam"}:
+                        queue_after_commit(lead.pk)
     return {
         "source": source.record.identity,
         "disposition": candidate.disposition,
@@ -228,7 +293,46 @@ def persist_source(source: StoredSource):
         "input_hash": _digest(asdict(source.record)),
         "cautions": candidate.cautions,
         "references": [asdict(ref) for ref in candidate.references],
+        "search_leads": list(search_leads(candidate)),
     }
+
+
+def persist_collected_posts(post_ids):
+    """Detect saved posts in bounded batches without provider or model calls.
+
+    Each source commits independently. Failed sources remain in the Post table
+    for the existing explicit historical replay to recover.
+    """
+    import logging
+
+    from core.product_release_sources import stored_posts
+
+    ids = sorted({str(value) for value in post_ids if value})
+    totals = {"selected": len(ids), "read": 0, "candidates": 0, "failed": 0}
+    for start in range(0, len(ids), 2000):
+        batch = ids[start:start + 2000]
+        existing = set(models.Post.objects.filter(pk__in=batch).values_list("pk", flat=True))
+        totals["failed"] += len(batch) - len(existing)
+        if not existing:
+            continue
+        try:
+            rows = stored_posts(sorted(existing))
+        except Exception:  # Preserve the harvest; explicit replay can recover the batch.
+            logging.getLogger(__name__).exception("Release intake failed to load saved post batch")
+            totals["failed"] += len(existing)
+            continue
+        for source in rows:
+            totals["read"] += 1
+            if detect(source.record) is None:
+                continue
+            try:
+                result = persist_source(source)
+            except Exception:  # Preserve the harvest; explicit replay can recover this source.
+                logging.getLogger(__name__).exception("Release intake failed for post %s", source.post_id)
+                totals["failed"] += 1
+                continue
+            totals["candidates"] += int(result["disposition"] != "no_signal")
+    return totals
 
 
 def _copy_claim(claim, source_id):

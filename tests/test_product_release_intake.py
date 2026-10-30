@@ -11,6 +11,7 @@ from core.product_release_intake import (
     TextEvidence,
     URLReference,
     detect,
+    search_leads,
 )
 
 
@@ -79,6 +80,24 @@ class ProductReleaseIntakeTests(unittest.TestCase):
             ),
         )
         self.assertEqual(detect(row).signals[0].kind, "saved_extraction")
+        self.assertEqual(
+            search_leads(detect(row)),
+            ({"term": "Aster v2", "locator": "release-evidence/9", "eligible": True},),
+        )
+
+    def test_search_leads_keep_each_saved_name_and_do_not_promote_teacher_links(self):
+        row = replace(
+            source("Released Fusion; trained from https://huggingface.co/Qwen/Qwen3-4B"),
+            texts=(
+                TextEvidence("post/text", "raw", "Released Fusion; trained from https://huggingface.co/Qwen/Qwen3-4B"),
+                TextEvidence("claim/1", "release_extraction", "Fusion Model"),
+                TextEvidence("claim/2", "release_extraction", "x" * 257),
+            ),
+        )
+        leads = search_leads(detect(row))
+        self.assertEqual([lead["locator"] for lead in leads], ["claim/1", "claim/2"])
+        self.assertEqual([lead["eligible"] for lead in leads], [True, False])
+        self.assertNotIn("Qwen3-4B", [lead["term"] for lead in leads])
 
     def test_teacher_links_do_not_become_released_products_or_publishers(self):
         row = source(
@@ -210,6 +229,18 @@ class ProductReleaseIntakeTests(unittest.TestCase):
                     TextEvidence("x", "raw", "two"),
                 ),
             )
+
+
+def test_raw_versioned_name_leads_are_bounded_source_spans_and_not_urls():
+    from core.product_release_intake import raw_versioned_name_leads
+
+    text = "Announcing Nanbeige4.3-33B, trained with Qwen3-4B and Gemma4."
+    leads = raw_versioned_name_leads(text, limit=2)
+    assert [lead["term"] for lead in leads] == ["Nanbeige4.3-33B", "Qwen3-4B"]
+    assert all(text[lead["start"]:lead["end"]] == lead["term"] for lead in leads)
+    assert not raw_versioned_name_leads("Discussion about Nanbeige4.3-33B")
+    assert not raw_versioned_name_leads("Announcing https://huggingface.co/lab/Model4")
+    assert not raw_versioned_name_leads("We announce 2606 rows in 2026.")
 
 
 if __name__ == "__main__":

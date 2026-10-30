@@ -10596,6 +10596,24 @@ class EventDossierClaim(models.Model):
         ]
 
 
+class EventDossierClaimCollectionJob(models.Model):
+    """An evidence claim that caused or shares a collection job."""
+
+    claim = models.ForeignKey(
+        EventDossierClaim, on_delete=models.PROTECT, related_name="collection_job_links"
+    )
+    job = models.ForeignKey(
+        CollectionJob, on_delete=models.PROTECT, related_name="dossier_claim_links"
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = "event_dossier_claim_collection_jobs"
+        constraints = [
+            models.UniqueConstraint(fields=["claim", "job"], name="uq_ed_claim_collection_job")
+        ]
+
+
 class EventDossierReview(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     event_dossier = models.ForeignKey(

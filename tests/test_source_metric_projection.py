@@ -199,6 +199,166 @@ def project(contract, source, snapshots, *, key="projection"):
 
 
 @pytest.mark.django_db(transaction=True)
+def test_exact_release_capture_projects_into_reviewed_product_statistics():
+    import httpx
+
+    from core.models import DataSource, EventDossierClaim, Post
+    from core.product_release_acquisition import (
+        execute_hf_name_search,
+        queue_hf_name_search,
+    )
+    from core.product_release_dossiers import record_release_report
+    from core.source_metric_projection import (
+        configure_source_statistics,
+        evidence_rows,
+        replay_saved_evidence,
+    )
+
+    contract, _, product, spec = configured("hf", product_type="llm-model", mapped=True)
+    url = "https://huggingface.co/lab/Model"
+    post = Post.objects.create(tweet_id="metric-release", text=f"Announcing Model {url}")
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": "Model", "source_url": url},
+        release_identity="metric-release", observed_name="Model", source_url=url,
+        brand=product.brand, maturity_code="unknown", release_value=None,
+        release_precision="unknown", extraction_version="test",
+    )
+    claim = EventDossierClaim.objects.get(
+        event_dossier_source__event_dossier=dossier, claim_kind_reference__code="release_report"
+    )
+    job = queue_hf_name_search(claim.pk)
+    client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(
+        200, json={"id": "lab/Model", "author": "lab", "downloads": 17, "likes": 4}
+    )))
+    result = execute_hf_name_search(job.pk, client=client)
+    captured = CollectionObservation.objects.get(run_id=result["run_id"])
+    assert not captured.run.scopes.filter(scope_kind="numeric_projection").exists()
+    first = project(contract, "hf", [captured], key="release-projection-one")
+    assert first.status == "success"
+    values = MetricValue.objects.filter(observation__run=first).select_related("source_metric", "observation")
+    assert {v.source_metric.metric_key: int(v.integer_value) for v in values} == {"downloads": 17, "likes": 4}
+    assert all(v.observation.observed_at == captured.observed_at for v in values)
+    assert all(v.observation.mapping.subject.product_id == product.product_key for v in values)
+    assert all(v.observation.inputs.filter(input_observation=captured).exists() for v in values)
+    count = MetricValue.objects.count()
+    replay = register_job(
+        job_key="release-projection-replay", source=DataSource.objects.get(pk="hf"),
+        purpose="metric", operation="collect_metrics", mode="historical", contract=contract,
+        definition={
+            "version": 1, "scope": {"origin_run_ids": [str(captured.run_id)]},
+            "schedule": {"kind": "manual", "driver": "manual"},
+            "budgets": {"requests": 1, "seconds": 60, "bytes": 100000, "items": 100},
+        },
+    )
+    set_job_state(replay.pk, "ready")
+    second = replay_saved_evidence(replay.pk)
+    assert second.status == "success" and second.selected_count == 1
+    assert MetricValue.objects.count() == count
+    # Without the reviewed repository mapping, the same counters stay at
+    # native-resource level and cannot be attributed to the Product.
+    native_spec = copy.deepcopy(spec)
+    native_spec["mappings"] = [row for row in native_spec["mappings"]
+                               if row["source_subject_kind"] == "account"]
+    native = configure_source_statistics(native_spec)
+    native_run = project(native, "hf", [captured], key="release-projection-native")
+    native_values = MetricValue.objects.filter(observation__run=native_run)
+    assert native_values.count() == 2
+    assert all(v.observation.mapping_id is None for v in native_values)
+    captured.projection_kind = "hf-release-search-v1"
+    with pytest.raises(ValueError, match="evidence source mismatch"):
+        list(evidence_rows(contract, "hf", captured))
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    "mapped,paused,native_allowed,known_publisher",
+    [(True, False, True, True), (False, False, True, True),
+     (True, True, True, True), (False, False, False, True),
+     (False, False, True, False)],
+)
+def test_exact_release_capture_queues_active_reviewed_publisher_for_projection(
+    mapped, paused, native_allowed, known_publisher, monkeypatch
+):
+    import httpx
+
+    from core import source_metric_projection
+    from core.collection_scheduling import take_metric_authority
+    from core.collection_state import BusyJob
+    from core.models import DataSource, EventDossierClaim, Post
+    from core.product_release_acquisition import (
+        drain_due_hf_acquisitions,
+        execute_hf_name_search,
+        queue_hf_name_search,
+    )
+    from core.product_release_dossiers import record_release_report
+
+    contract, _, product, spec = configured("hf", product_type="llm-model", mapped=mapped)
+    if not native_allowed:
+        spec["source_configuration"]["hf"]["native_resources"] = False
+        contract = source_metric_projection.configure_source_statistics(spec)
+    authority = register_job(
+        job_key="reviewed-hf-metric-authority", source=DataSource.objects.get(pk="hf"),
+        purpose="metric", operation="collect_metrics", mode="recurring", contract=contract,
+        definition={
+            "version": 1, "scope": {},
+            "schedule": {"kind": "interval", "driver": "shared", "seconds": 86400},
+            "budgets": {"requests": 1, "seconds": 60, "bytes": 100000, "items": 100},
+        },
+    )
+    set_job_state(authority.pk, "ready")
+    take_metric_authority(authority.pk)
+    if paused:
+        set_job_state(authority.pk, "paused")
+    repo = "lab/Model" if known_publisher else "unreviewed/Model"
+    url = f"https://huggingface.co/{repo}"
+    post = Post.objects.create(tweet_id="queued-metric-release", text=f"Announcing Model {url}")
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": "Model", "source_url": url},
+        release_identity="queued-metric-release", observed_name="Model", source_url=url,
+        brand=product.brand, maturity_code="unknown", release_value=None,
+        release_precision="unknown", extraction_version="test",
+    )
+    claim = EventDossierClaim.objects.get(
+        event_dossier_source__event_dossier=dossier, claim_kind_reference__code="release_report"
+    )
+    job = queue_hf_name_search(claim.pk)
+    client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(
+        200, json={"id": repo, "author": repo.split("/")[0], "downloads": 17, "likes": 4}
+    )))
+    actual_drain = source_metric_projection.drain_pending_projections
+    admitted = not paused and known_publisher and (mapped or native_allowed)
+    if admitted:
+        monkeypatch.setattr(source_metric_projection, "drain_pending_projections",
+                            lambda *_args, **_kwargs: (_ for _ in ()).throw(BusyJob("busy")))
+    result = drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(job.pk)])
+    assert result["provider_calls"] == 1
+    run = CollectionRun.objects.get(pk=result["jobs"][0]["run_id"])
+    if not admitted:
+        assert not run.scopes.filter(scope_kind="numeric_projection").exists()
+        assert actual_drain(job.pk)["written_values"] == 0
+        assert not MetricValue.objects.exists()
+        return
+    pending = run.scopes.get(scope_kind="numeric_projection", projection_contract=contract)
+    assert pending.outcome == "pending" and pending.child_scopes.count() == 1
+    assert result["jobs"][0]["projection"]["outcome"] == "busy"
+    assert not MetricValue.objects.exists()
+    monkeypatch.setattr(source_metric_projection, "drain_pending_projections", actual_drain)
+    recovered = drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(job.pk)])
+    assert recovered["provider_calls"] == 0
+    drained = recovered["jobs"][0]["projection"]
+    assert drained["written_values"] == 2 and drained["acknowledged"] == 1
+    assert MetricValue.objects.count() == 2
+    values = MetricValue.objects.select_related("observation")
+    assert all(value.observation.observed_at == run.observations.get(
+        projection_kind="hf-release-exact-v1").observed_at for value in values)
+    assert all((value.observation.mapping_id is not None) == mapped for value in values)
+    pending.refresh_from_db()
+    assert pending.outcome == "complete"
+    assert actual_drain(job.pk)["written_values"] == 0
+    assert execute_hf_name_search(job.pk, client=client)["physical_requests"] == 0
+
+
+@pytest.mark.django_db(transaction=True)
 def test_github_replay_selects_archived_capture_after_old_columns_clear():
     from core.collection_resources import project_observation_facts
     from core.models import DataSource

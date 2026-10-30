@@ -3,6 +3,9 @@
 import pytest
 
 from core.models import (
+    CollectionJob,
+    CollectionRequest,
+    DataSource,
     EventDossier,
     EventDossierClaim,
     PostBrandSignal,
@@ -25,6 +28,9 @@ QUOTE = "Nanbeige released Nanbeige4.3-33B. Qwen is a comparator; the 33B model 
 @pytest.mark.parametrize("origin", ["ordinary", "special-events"])
 @pytest.mark.parametrize("path", ["new-classification", "saved-replay"])
 def test_real_enrichment_and_replay_accept_the_same_release(monkeypatch, origin, path):
+    DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
     state = _state("release-routing")
     state.post.text = "DeepSeek comparison and a quoted release announcement"
     state.post.quoted_text = QUOTE
@@ -102,16 +108,269 @@ def test_real_enrichment_and_replay_accept_the_same_release(monkeypatch, origin,
         state.refresh_from_db()
         assert state.classification_status == "succeeded"
     dossier = EventDossier.objects.get(event_kind_reference__code="product_release")
-    claim = EventDossierClaim.objects.get(event_dossier_source__event_dossier=dossier)
+    claim = EventDossierClaim.objects.get(
+        event_dossier_source__event_dossier=dossier, claim_kind_reference__code="release_report"
+    )
     assert claim.reported_brand_id is None
     assert claim.reported_brand_discovery_candidate.observed_name == "Nanbeige"
     assert dossier.current_review_id is None
+    assert claim.collection_job_links.count() == 1
+    assert CollectionJob.objects.filter(operation="release_acquisition").count() == 1
+    assert not CollectionRequest.objects.exists()
     assert len(seen) == 1
     assert TargetedExtractionState.objects.get(post=state.post).status == "succeeded"
     replay = runner._replay_targeted_extractions(post_ids={state.pk})
     assert replay["calls"] == 0
     assert len(seen) == 1
-    assert EventDossierClaim.objects.count() == 1
+    assert EventDossierClaim.objects.filter(claim_kind_reference__code="release_report").count() == 1
+    assert CollectionJob.objects.filter(operation="release_acquisition").count() == 1
+
+
+def test_collected_unclassified_announcement_gets_pending_dossier_without_model_calls():
+    state = _state("release-raw-worker")
+    state.post.text = "Today we announce a new model from an unfamiliar lab"
+    state.post.save(update_fields=["text"])
+    cfg = _cfg()
+    cfg.harvest.enrichment.mode = "worker"
+    runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
+    kept = [{"_persisted_post_id": state.pk, "_db_inserted": True}]
+    first = runner._run_post_fetch(kept, run_id="raw-release")
+    assert first["enrichment_processed_externally"] is True
+    assert first["product_release_intake"]["candidates"] == 1
+    dossier = EventDossier.objects.get(event_kind_reference__code="product_release")
+    assert dossier.current_review_id is None
+    assert EventDossierClaim.objects.filter(
+        event_dossier_source__event_dossier=dossier, claim_kind_reference__code="release_signal"
+    ).exists()
+    before = EventDossierClaim.objects.count()
+    second = runner._run_post_fetch(kept, run_id="raw-release-again")
+    assert second["product_release_intake"]["candidates"] == 1
+    assert EventDossier.objects.count() == 1 and EventDossierClaim.objects.count() == before
+    assert not CollectionRequest.objects.exists()
+
+
+def test_intake_failure_does_not_interrupt_collection_and_saved_post_can_be_replayed(monkeypatch):
+    from core import product_release_pipeline
+
+    state = _state("release-intake-failure")
+    state.post.text = "Announcing a new model"
+    state.post.save(update_fields=["text"])
+    cfg = _cfg()
+    cfg.harvest.enrichment.mode = "worker"
+    runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
+    kept = [{"_persisted_post_id": state.pk, "_db_inserted": True}]
+    actual = product_release_pipeline.persist_collected_posts
+    def fail(_ids):
+        raise RuntimeError("simulated intake failure")
+    monkeypatch.setattr(product_release_pipeline, "persist_collected_posts", fail)
+    result = runner._run_post_fetch(kept, run_id="failed-release-intake")
+    assert result["enrichment_processed_externally"] is True
+    assert result["product_release_intake"]["failed"] == 1
+    assert not EventDossier.objects.filter(event_kind_reference__code="product_release").exists()
+    monkeypatch.setattr(product_release_pipeline, "persist_collected_posts", actual)
+    result = runner._run_post_fetch(kept, run_id="replayed-release-intake")
+    assert result["product_release_intake"]["candidates"] == 1
+    assert EventDossier.objects.filter(event_kind_reference__code="product_release").count() == 1
+
+
+def test_raw_release_queues_linked_repositories_as_unresolved_leads():
+    import httpx
+
+    from core.collection_capture import observation_object_documents
+    from core.product_release_acquisition import drain_due_hf_acquisitions
+
+    DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    state = _state("raw-linked-release")
+    state.post.text = (
+        "We released a student trained on a teacher. "
+        "https://huggingface.co/lab/student https://huggingface.co/teacher/base"
+    )
+    state.post.save(update_fields=["text"])
+    cfg = _cfg()
+    cfg.harvest.enrichment.mode = "worker"
+    runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
+    kept = [{"_persisted_post_id": state.pk, "_db_inserted": True}]
+    result = runner._run_post_fetch(kept, run_id="raw-linked")
+    assert result["product_release_intake"]["candidates"] == 1
+    jobs = CollectionJob.objects.filter(operation="release_acquisition", targets__target_role="exact_model")
+    assert jobs.count() == 2 and not CollectionRequest.objects.exists()
+    assert set(jobs.values_list("targets__native_identifier", flat=True)) == {"lab/student", "teacher/base"}
+    calls = []
+    def respond(request):
+        repo = request.url.path.removeprefix("/api/models/")
+        calls.append(repo)
+        return httpx.Response(200, json={"id": repo, "likes": 2})
+    client = httpx.Client(transport=httpx.MockTransport(respond))
+    drained = drain_due_hf_acquisitions(client=client, execute=True, limit=2)
+    assert drained["provider_calls"] == 2 and set(calls) == {"lab/student", "teacher/base"}
+    for job in jobs:
+        observation = job.last_success.observations.get()
+        assert observation.processing_outcome == "unresolved"
+        assert observation_object_documents(observation)[0]["id"] in calls
+    runner._run_post_fetch(kept, run_id="raw-linked-again")
+    assert CollectionJob.objects.filter(operation="release_acquisition", targets__target_role="exact_model").count() == 2
+    assert drain_due_hf_acquisitions(client=client, execute=True,
+                                    job_ids=[str(job.pk) for job in jobs])["provider_calls"] == 0
+    from core.models import Product, ProductReleaseDetail
+    assert not Product.objects.exists() and not ProductReleaseDetail.objects.exists()
+
+
+def test_raw_versioned_announcement_queues_name_search_without_extraction():
+    import httpx
+
+    from core.collection_capture import observation_object_documents
+    from core.models import Product
+    from core.product_release_acquisition import drain_due_hf_acquisitions
+
+    DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    state = _state("raw-versioned-release")
+    state.post.text = "Excited to announce Nanbeige4.3-33B!"
+    state.post.save(update_fields=["text"])
+    cfg = _cfg()
+    cfg.harvest.enrichment.mode = "worker"
+    runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
+    kept = [{"_persisted_post_id": state.pk, "_db_inserted": True}]
+    assert runner._run_post_fetch(kept)["product_release_intake"]["candidates"] == 1
+    job = CollectionJob.objects.get(operation="release_acquisition")
+    target = job.targets.get()
+    assert target.target_role == "name_search" and target.native_identifier == "Nanbeige4.3-33B"
+    lead = EventDossierClaim.objects.get(scope_key__startswith="hf_name_lead:")
+    assert lead.assertion_text == "Nanbeige4.3-33B" and lead.source_excerpt == state.post.text
+    assert not CollectionRequest.objects.exists()
+    def respond(request):
+        assert request.url.params["search"] == "Nanbeige4.3-33B"
+        return httpx.Response(200, json=[{"id": "nanbeige/Nanbeige4.3-33B"}])
+    client = httpx.Client(transport=httpx.MockTransport(respond))
+    assert drain_due_hf_acquisitions(client=client, execute=True)["provider_calls"] == 1
+    job.refresh_from_db()
+    observation = job.last_success.observations.get()
+    assert observation.processing_outcome == "unresolved"
+    assert observation_object_documents(observation)[0]["id"] == "nanbeige/Nanbeige4.3-33B"
+    assert not Product.objects.exists()
+    followup = CollectionJob.objects.get(targets__target_role="exact_model")
+    assert followup.targets.get().native_identifier == "nanbeige/Nanbeige4.3-33B"
+    assert followup.dossier_claim_links.get().claim.event_dossier_source.collection_observation_id == observation.pk
+    runner._run_post_fetch(kept)
+    assert CollectionJob.objects.filter(operation="release_acquisition").count() == 2
+
+
+def test_opt_in_dispatch_runs_one_committed_job_without_duplicate_fetch(settings, monkeypatch):
+    import httpx
+
+    from monitor.tasks import acquire_product_release, recover_due_product_releases
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    state = _state("background-release")
+    state.post.text = "We announce Nanbeige4.3-33B today"
+    state.post.save(update_fields=["text"])
+    messages = []
+    monkeypatch.setattr(acquire_product_release, "apply_async", lambda **kwargs: messages.append(kwargs))
+    monkeypatch.setattr(recover_due_product_releases, "apply_async", lambda **kwargs: None)
+    cfg = _cfg()
+    cfg.harvest.enrichment.mode = "worker"
+    runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
+    kept = [{"_persisted_post_id": state.pk, "_db_inserted": True}]
+    runner._run_post_fetch(kept)
+    job = CollectionJob.objects.get(operation="release_acquisition")
+    assert messages == [{"kwargs": {"job_id": str(job.pk)}, "queue": "trend-narratives", "retry": False}]
+    assert not CollectionRequest.objects.exists()
+    calls = []
+    original_client = httpx.Client
+    def client_factory(**_kwargs):
+        def respond(request):
+            calls.append(request)
+            return httpx.Response(200, json=[{"id": "nanbeige/Nanbeige4.3-33B"}])
+        return original_client(transport=httpx.MockTransport(respond))
+    monkeypatch.setattr(httpx, "Client", client_factory)
+    result = acquire_product_release.run(job_id=str(job.pk))
+    assert result["provider_calls"] == 1 and len(calls) == 1
+    assert acquire_product_release.run(job_id=str(job.pk))["provider_calls"] == 0
+    assert len(calls) == 1
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    assert acquire_product_release.run(job_id=str(job.pk))["status"] == "disabled"
+
+
+def test_background_dispatch_failure_keeps_the_saved_job(settings, monkeypatch):
+    from monitor.tasks import acquire_product_release, recover_due_product_releases
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    state = _state("background-broker-failure")
+    state.post.text = "We announce Nanbeige4.3-33B today"
+    state.post.save(update_fields=["text"])
+    def unavailable(**_kwargs):
+        raise RuntimeError("broker unavailable")
+    monkeypatch.setattr(acquire_product_release, "apply_async", unavailable)
+    monkeypatch.setattr(recover_due_product_releases, "apply_async", unavailable)
+    cfg = _cfg()
+    cfg.harvest.enrichment.mode = "worker"
+    runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
+    result = runner._run_post_fetch([{"_persisted_post_id": state.pk, "_db_inserted": True}])
+    assert result["product_release_intake"]["failed"] == 0
+    assert CollectionJob.objects.filter(operation="release_acquisition", state="ready").count() == 1
+    assert not CollectionRequest.objects.exists()
+
+
+def test_existing_harvest_wakeup_recovers_broker_failure_and_delayed_release(settings, monkeypatch):
+    from datetime import timedelta
+
+    import httpx
+    from django.utils import timezone
+
+    from monitor.tasks import acquire_product_release, recover_due_product_releases
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    state = _state("retry-harvest-wakeup")
+    state.post.text = "We announce Nanbeige4.3-33B today"
+    state.post.save(update_fields=["text"])
+    def unavailable(**_kwargs):
+        raise RuntimeError("broker unavailable for initial dispatch")
+    monkeypatch.setattr(acquire_product_release, "apply_async", unavailable)
+    sweeps = []
+    monkeypatch.setattr(recover_due_product_releases, "apply_async", lambda **kwargs: sweeps.append(kwargs))
+    cfg = _cfg()
+    cfg.harvest.enrichment.mode = "worker"
+    runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
+    first = runner._run_post_fetch([{"_persisted_post_id": state.pk, "_db_inserted": True}])
+    assert first["product_release_recovery"]["status"] == "scheduled" and len(sweeps) == 1
+    job = CollectionJob.objects.get(operation="release_acquisition")
+    responses = iter([httpx.Response(200, json=[]), httpx.Response(
+        200, json=[{"id": "nanbeige/Nanbeige4.3-33B"}]
+    )])
+    calls = []
+    original_client = httpx.Client
+    def client_factory(**_kwargs):
+        def respond(request):
+            calls.append(request)
+            return next(responses)
+        return original_client(transport=httpx.MockTransport(respond))
+    monkeypatch.setattr(httpx, "Client", client_factory)
+    initial = recover_due_product_releases.run()
+    assert initial["provider_calls"] == 1 and initial["jobs"][0]["outcome"] == "empty"
+    # Even when all provider jobs are cooling down, wake the saved-claim sweep.
+    assert runner._run_post_fetch([])["product_release_recovery"]["status"] == "scheduled"
+    assert len(sweeps) == 2 and len(calls) == 1
+    CollectionJob.objects.filter(pk=job.pk).update(next_retry_at=timezone.now() - timedelta(seconds=1))
+    assert runner._run_post_fetch([])["product_release_recovery"]["status"] == "scheduled"
+    assert len(sweeps) == 3
+    retried = recover_due_product_releases.run()
+    assert retried["provider_calls"] == 1 and retried["jobs"][0]["outcome"] == "found"
+    assert len(calls) == 2
+    job.refresh_from_db()
+    assert job.last_success_id is not None
+    assert CollectionJob.objects.filter(targets__target_role="exact_model", state="ready").exists()
 
 
 @pytest.mark.parametrize("stop", ["disabled", "budget", "deadline", "unclassified"])
