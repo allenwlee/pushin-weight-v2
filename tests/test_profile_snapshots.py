@@ -422,3 +422,47 @@ def test_production_persist_call_chain_captures_profile_without_provider_call():
     assert snapshot.first_source_post_id == "live-profile"
     assert runner._errors == []
     assert PersonBrandAffiliationEvidence.objects.count() == 0
+
+
+@pytest.mark.parametrize("style", ["snake", "camel_with_long_description"])
+def test_production_persist_keeps_affiliate_fields_for_observed_label_shapes(style):
+    from core.geolocation_evidence import source_evidence
+
+    label = {
+        "description": "Example company",
+        "badge": {"url": "https://example.com/badge.png"},
+        "url": {"url": "https://x.com/example", "urlType": "DeepLink"},
+        "userLabelDisplayType": "Badge",
+        "userLabelType": "BusinessLabel",
+    }
+    if style == "snake":
+        label["url"]["url_type"] = label["url"].pop("urlType")
+        label["user_label_display_type"] = label.pop("userLabelDisplayType")
+        label["user_label_type"] = label.pop("userLabelType")
+    else:
+        label["longDescription"] = {"text": "Automated", "entities": []}
+
+    raw_label = {"label": label}
+    item = _normalize_tweet({
+        "id": f"label-post-{style}",
+        "text": "hello",
+        "author": {
+            "id": f"label-author-{style}",
+            "userName": "labeltest",
+            "affiliatesHighlightedLabel": raw_label,
+        },
+    })
+    item.update(brand_ids=[], mentions=[], classifications={})
+    runner = CycleRunner.__new__(CycleRunner)
+    runner._errors = []
+    runner._clock = timezone.now
+    assert runner._persist_items([item]) == (1, 0, 0, 0)
+    snapshot = AccountProfileSnapshot.objects.get(account__author_id=f"label-author-{style}")
+    assert snapshot.affiliate_label_description == "Example company"
+    assert snapshot.affiliate_target_url == "https://x.com/example"
+    assert snapshot.affiliate_target_username == "example"
+    assert snapshot.affiliate_label_type.code == "BusinessLabel"
+    assert snapshot.affiliate_display_type.code == "Badge"
+    assert snapshot.affiliate_badge_image_url == "https://example.com/badge.png"
+    assert source_evidence(snapshot).raw_profile_payload["author_affiliates_highlighted_label"] == raw_label
+    assert runner._errors == []

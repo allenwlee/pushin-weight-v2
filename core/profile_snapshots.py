@@ -286,25 +286,30 @@ def profile_observation_from_payload(raw: Mapping[str, Any]) -> ProfileObservati
         raw_label = _json_safe(raw.get(label_source))
         raw_profile[label_source] = raw_label
         try:
-            values, _fields = flatten_label(
+            values, fields = flatten_label(
                 raw_label,
                 prefix="affiliate_label",
                 path="post.author_affiliates_highlighted_label",
+                post_shape=True,
             )
         except SchemaDriftError:
             values = {}
+            fields = set()
         mapped = {
-            "affiliate_target_url": values.get("affiliate_label_url"),
-            "affiliate_label_description": values.get("affiliate_label_description"),
-            "affiliate_badge_image_url": values.get("affiliate_label_badge_url"),
-            "affiliate_label_type": values.get("affiliate_label_user_label_type"),
-            "affiliate_display_type": values.get(
-                "affiliate_label_user_label_display_type"
-            ),
+            target: values[source]
+            for target, source in (
+                ("affiliate_target_url", "affiliate_label_url"),
+                ("affiliate_label_description", "affiliate_label_description"),
+                ("affiliate_badge_image_url", "affiliate_label_badge_url"),
+                ("affiliate_label_type", "affiliate_label_user_label_type"),
+                ("affiliate_display_type", "affiliate_label_user_label_display_type"),
+            )
+            if source in fields
         }
-        mapped["affiliate_target_username"] = _username_from_url(
-            mapped["affiliate_target_url"]
-        )
+        if "affiliate_target_url" in mapped:
+            mapped["affiliate_target_username"] = _username_from_url(
+                mapped["affiliate_target_url"]
+            )
         profile_data.update(mapped)
         present.update(mapped)
 
