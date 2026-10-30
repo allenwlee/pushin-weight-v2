@@ -235,6 +235,23 @@ def test_post_affiliate_label_refresh_preserves_about_only_country(company_count
     assert source_evidence(account.x_details).reported_based_in == "United States"
 
 
+def test_partial_post_affiliate_label_does_not_clear_existing_group():
+    account = Account.objects.create(
+        author_id="partial-affiliate",
+        affiliate_label_description="Existing",
+        affiliate_label_url="https://x.com/existing",
+    )
+    _upsert_account({
+        "author_id": "partial-affiliate",
+        "author_affiliates_highlighted_label": {
+            "label": {"description": "New", "user_label_type": "BusinessLabel"}
+        },
+    })
+    account.refresh_from_db()
+    assert account.affiliate_label_description == "Existing"
+    assert account.affiliate_label_url == "https://x.com/existing"
+
+
 def test_post_refreshes_shared_live_about_fields_and_preserves_about_only_fields():
     account = Account.objects.create(
         author_id="42",
