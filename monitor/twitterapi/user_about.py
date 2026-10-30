@@ -401,6 +401,23 @@ def flatten_label(
         candidates[f"{prefix}_user_label_type"] = _strict_string(
             label["userLabelType"], f"{path}.label.userLabelType"
         )
+    if post_shape:
+        present = set()
+        for key, suffix in (
+            ("description", "description"),
+            ("userLabelDisplayType", "user_label_display_type"),
+            ("userLabelType", "user_label_type"),
+        ):
+            if key in label:
+                present.add(f"{prefix}_{suffix}")
+        if "badge" in label and (badge is None or "url" in badge):
+            present.add(f"{prefix}_badge_url")
+        if "url" in label:
+            if url is None or "url" in url:
+                present.add(f"{prefix}_url")
+            if url is None or "urlType" in url:
+                present.add(f"{prefix}_url_type")
+        return {field: candidates[field] for field in present}, present
     return candidates, field_names
 
 
