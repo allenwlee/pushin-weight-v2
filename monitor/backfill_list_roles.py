@@ -5,8 +5,7 @@ roles from the database it runs in. The dedicated backfill database
 (xbackfiller) learns neither by itself, so this module copies them from a saved,
 read-only production export (``scripts/backfill_list_roles_production.sql``).
 
-Operator flow (plan U7 in
-``docs/plans/2026-10-30-015749-fix-backfill-size-test-fixes-20261030-plan.md``):
+Operator flow:
 
 1. On fuchitalee, run the export SQL against production with
    ``render psql ... -o json`` and save the full output.
@@ -80,7 +79,7 @@ RUN_ID_PREFIX = "production-export-sha256:"
 BACKFILL_DATABASE = "xbackfiller"
 ENTRYPOINT = "management.sync_backfill_list_roles"
 CALL_A_ROLES = ("official", "staff")
-# Rows the sync must never create, edit or delete (R9).
+# Rows the sync must never create, edit or delete.
 PROTECTED_MODELS = (Brand, BrandKeyword, BrandSearchTerm, BrandHashtag, Product, Role)
 COUNT_KEYS = (
     "accounts_created",
@@ -105,8 +104,7 @@ def _require(condition: Any, message: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Reading the saved export (ported from scripts/backfill_size_report.py on
-# ops/oai-anthropic-size-20261027, including its quadratic-scan fix)
+# Reading the saved export (scans the render output once, never quadratically)
 # ---------------------------------------------------------------------------
 
 
@@ -208,7 +206,7 @@ def _decimal_id(value: Any) -> str | None:
     return text if text.isascii() and text.isdecimal() else None
 
 
-def _text_or_none(value: Any) -> bool:
+def _is_text_or_none(value: Any) -> bool:
     return value is None or isinstance(value, str)
 
 
@@ -248,7 +246,7 @@ def read_export(path: Path | str, *, list_id: int) -> ProductionExport:
     for member in raw_members:
         author_id = _decimal_id(member.get("author_id")) if isinstance(member, dict) else None
         _require(author_id is not None, "export member author_id must be decimal")
-        _require(_text_or_none(member.get("handle")), "export member handle must be text or null")
+        _require(_is_text_or_none(member.get("handle")), "export member handle must be text or null")
         _require(author_id not in seen, f"export has a duplicate member: {author_id}")
         seen.add(author_id)
         members.append({"author_id": author_id, "handle": _clean_handle(member.get("handle"))})
@@ -262,7 +260,7 @@ def read_export(path: Path | str, *, list_id: int) -> ProductionExport:
             isinstance(role, dict)
             and {"author_id", "handle", "brand_id", "role_id"} <= set(role)
             and _decimal_id(role["author_id"]) is not None
-            and _text_or_none(role["handle"])
+            and _is_text_or_none(role["handle"])
             and all(isinstance(role[key], str) and role[key] and role[key] == role[key].strip()
                     for key in ("brand_id", "role_id"))
         )

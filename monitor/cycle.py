@@ -2874,15 +2874,13 @@ class CycleRunner:
                 page_admission["can_start_page"] = (
                     lambda: deadline.remaining() >= request_envelope
                 )
-            elif (
+            # StagingPrefetcher pages are already received and paid for, with
+            # no body to replay, so they need no HTTP envelope.
+            elif not (
                 context is not None
                 and context.staging_capture
                 and context.captured_pages is not None
             ):
-                # StagingPrefetcher already received and paid for this page
-                # and keeps no body to replay; it needs no HTTP envelope.
-                pass
-            else:
                 page_budget = int(deadline.remaining() // request_envelope)
                 if page_budget < 1:
                     return [], "truncated"

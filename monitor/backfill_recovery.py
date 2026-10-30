@@ -334,7 +334,7 @@ def _advance_wave(
     pending = []
     for spec, post, previous in entries:
         identifier = str(post.pk)
-        spec_hash = digest(spec) if header is None else header["grant_sha256"]
+        recovery_hash = digest(spec) if header is None else header["grant_sha256"]
         complete = completion_facts([identifier])[identifier]
         if spec["phase"] == "base" and complete["translation"] and complete["classification"]:
             continue
@@ -343,8 +343,8 @@ def _advance_wave(
         pending.append(identifier)
         current = list(OriginalContentCall.objects.filter(
             provider_batch__source_collection_job=job,
-            **({"provenance__context__recovery__spec_sha256": spec_hash} if header is None else {
-                "provenance__context__recovery__grant_sha256": spec_hash,
+            **({"provenance__context__recovery__spec_sha256": recovery_hash} if header is None else {
+                "provenance__context__recovery__grant_sha256": recovery_hash,
                 "member_post_ids__contains": [identifier],
             }),
         ))
@@ -358,10 +358,10 @@ def _advance_wave(
             deferred[identifier] = spent
             continue
         context = {
-            "version": VERSION, "spec_sha256": spec_hash,
+            "version": VERSION, "spec_sha256": recovery_hash,
             "prior_call_ids": spec["prior_call_ids"],
         } if header is None else {
-            "version": GRANT_VERSION, "grant_sha256": spec_hash,
+            "version": GRANT_VERSION, "grant_sha256": recovery_hash,
             "actor": header["actor"], "reason": header["reason"],
             "prior_call_ids": spec["prior_call_ids"],
         }
