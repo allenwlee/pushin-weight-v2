@@ -1820,6 +1820,7 @@ def _upsert_account(raw: dict[str, Any]) -> Account | None:
                 raw["author_affiliates_highlighted_label"],
                 prefix="affiliate_label",
                 path="post.author_affiliates_highlighted_label",
+                post_shape=True,
             )
         except SchemaDriftError:
             label_fields = {

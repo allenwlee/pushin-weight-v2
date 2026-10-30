@@ -290,6 +290,7 @@ def profile_observation_from_payload(raw: Mapping[str, Any]) -> ProfileObservati
                 raw_label,
                 prefix="affiliate_label",
                 path="post.author_affiliates_highlighted_label",
+                post_shape=True,
             )
         except SchemaDriftError:
             values = {}
