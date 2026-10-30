@@ -333,7 +333,7 @@ def validate_statistics_mapping(subject, row, source, taxonomy):
     if subject.subject_kind == "product":
         require(
             row.get("identifier_metadata", {}).get("role")
-            in {"dedicated_model", "family_repository"},
+            in {"dedicated_model", "dedicated_product", "family_repository"},
             "reviewed repository relation required",
         )
         require(
@@ -447,7 +447,7 @@ def configure_statistics_partitions(spec):
                 if m["source"] == "hf"
                 else m["external_identifier"]
                 for m in models[start + size :]
-                if m.get("identifier_metadata", {}).get("role") == "dedicated_model"
+                if m.get("identifier_metadata", {}).get("role") in {"dedicated_model", "dedicated_product"}
             )
         result.append(configure_source_statistics(partition))
     return result
@@ -919,7 +919,7 @@ def _authorized_release_contracts(evidence):
                 require(len(mappings) == 1, "ambiguous repository mapping")
                 mapping = mappings[0]
                 require(mapping.subject.subject_kind == "product"
-                        and mapping.identifier_metadata.get("role") == "dedicated_model"
+                        and mapping.identifier_metadata.get("role") in {"dedicated_model", "dedicated_product"}
                         and mapping.publisher_account_id == publisher.subject.account_id
                         and (source != "hf" or (mapping.subject.product.repo_id or "").casefold()
                              == evidence.source_identifier.casefold()), "dedicated product mapping required")
@@ -993,7 +993,7 @@ def _release_contract_is_dedicated(contract, evidence):
         "purpose": "metric", "source_id": source, "source_subject_kind": "repository",
         "identifier_scope__code": "model" if source == "hf" else "repository_id",
         "normalized_identifier": evidence.source_identifier.casefold() if source == "hf" else evidence.source_identifier,
-        "identifier_metadata__role": "dedicated_model",
+        "identifier_metadata__role__in": ["dedicated_model", "dedicated_product"],
         "subject__subject_kind": "product",
     }
     if source == "hf":

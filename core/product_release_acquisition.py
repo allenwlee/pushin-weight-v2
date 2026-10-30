@@ -1175,7 +1175,7 @@ def integrate_github_capture(observation):
     from django.db import transaction
 
     from core import models
-    from core.collection_identity import qualified_catalog_ownership
+    from core.collection_identity import DEDICATED_ROLES, qualified_catalog_ownership
     from core.collection_resources import snapshot_resource
     from core.event_dossiers import add_claim, attach_source
     from core.product_release_pipeline import canonical_dossier
@@ -1191,7 +1191,7 @@ def integrate_github_capture(observation):
                 identifier_scope__code="repository_id", normalized_identifier=str(row["id"]),
                 subject__subject_kind="product", publisher_account__data_source_id="github",
                 publisher_account__normalized_identifier=str(owner_id),
-                identity_snapshot__role="dedicated_model",
+                identity_snapshot__role__in=DEDICATED_ROLES,
             ).select_related("subject__product", "publisher_account")[:2])
             if len(mappings) == 1:
                 mapping = mappings[0]

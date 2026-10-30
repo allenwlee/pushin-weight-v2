@@ -313,6 +313,7 @@ def test_github_repository_reference_is_retained_as_unresolved_and_reused(status
 
 @pytest.mark.parametrize("observed_owner,role,ownership,linked", [
     (42, "dedicated_model", True, True), (99, "dedicated_model", True, False),
+    (42, "dedicated_product", True, True), (99, "dedicated_product", True, False),
     (42, "family_repository", True, False), (42, "dedicated_model", False, False),
 ])
 def test_github_release_reuses_only_a_matching_reviewed_dedicated_product(observed_owner, role, ownership, linked):

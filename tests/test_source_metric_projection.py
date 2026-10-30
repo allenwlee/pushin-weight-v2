@@ -554,7 +554,10 @@ def test_native_release_measurement_waits_for_later_dedicated_product_mapping():
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("owner_matches", [True, False])
-def test_github_release_capture_projects_reviewed_product_metrics_without_refetch(owner_matches):
+@pytest.mark.parametrize("role,product_type", [
+    ("dedicated_model", "llm-model"), ("dedicated_product", "agent-harness"),
+])
+def test_github_release_capture_projects_reviewed_product_metrics_without_refetch(owner_matches, role, product_type):
     import httpx
 
     from core.collection_scheduling import take_metric_authority
@@ -565,9 +568,15 @@ def test_github_release_capture_projects_reviewed_product_metrics_without_refetc
     )
     from core.product_release_pipeline import persist_source
     from core.product_release_sources import stored_posts
-    from core.source_metric_projection import replay_saved_evidence
+    from core.source_metric_projection import (
+        configure_source_statistics,
+        replay_saved_evidence,
+    )
 
-    contract, raw, product, _ = configured("github", product_type="llm-model", mapped=True)
+    contract, raw, product, spec = configured("github", product_type=product_type, mapped=True)
+    if role != "dedicated_model":
+        spec["mappings"][1]["identifier_metadata"]["role"] = role
+        contract = configure_source_statistics(spec)
     if not owner_matches:
         raw = {**raw, "owner": {**raw["owner"], "id": 99}}
     authority = register_job(
@@ -930,6 +939,19 @@ def test_family_repo_stays_native_only_instead_of_copying_models():
     assert run.observations.get().mapping_id is None
     assert MetricValue.objects.count() == 3
     assert run_report_document(run)["projection"]["mapped_resources"] == 0
+
+
+def test_dedicated_agent_repository_projects_to_reviewed_product():
+    from core.source_metric_projection import configure_source_statistics
+
+    _, raw, product, spec = configured("github", product_type="agent-harness", mapped=True)
+    spec["mappings"][1]["identifier_metadata"]["role"] = "dedicated_product"
+    contract = configure_source_statistics(spec)
+    run = project(contract, "github", [evidence("github", raw)])
+    observation = run.observations.get()
+    assert observation.product_id == product.pk
+    assert observation.mapping.subject.product_id == product.product_key
+    assert MetricValue.objects.filter(observation=observation).count() == 3
 
 
 def test_unreviewed_owner_cannot_be_admitted():

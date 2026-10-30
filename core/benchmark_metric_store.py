@@ -502,7 +502,7 @@ def prepare_rows(contract, source, payload, *, adapter=None):
             statistics
             and mapping
             and mapping.subject.subject_kind == "product"
-            and mapping.identifier_metadata.get("role") != "dedicated_model"
+            and mapping.identifier_metadata.get("role") not in {"dedicated_model", "dedicated_product"}
         ):
             mapping = None
         metadata = dict(row.get("source_metadata", {}))
