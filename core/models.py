@@ -3696,6 +3696,12 @@ class CollectionScopeRun(models.Model):
 
     class Meta:
         db_table = "collection_scope_runs"
+        indexes = [
+            models.Index(
+                fields=["retry_at", "id"], name="idx_rel_metric_followup_due",
+                condition=models.Q(scope_kind="release_metric_followup", outcome="pending"),
+            ),
+        ]
         constraints = (
             models.UniqueConstraint(
                 fields=["run", "scope_kind", "scope_key"],

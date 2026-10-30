@@ -45,6 +45,18 @@ def test_new_observation_during_detection_remains_pending(monkeypatch):
     assert models.EventDossier.objects.count() == 1
 
 
+def test_explicit_replay_only_drains_selected_posts():
+    first = models.Post.objects.create(tweet_id="scan-selected", text="We announce a new model.")
+    other = models.Post.objects.create(tweet_id="scan-other", text="We announce another model.")
+    enqueue_posts([first.pk, other.pk])
+    result = drain_posts(post_ids=[first.pk])
+    assert result["processed"] == 1 and not result["due_remaining"]
+    assert models.ProductReleaseDetectionState.objects.get(post=first).completed_at is not None
+    assert models.ProductReleaseDetectionState.objects.get(post=other).completed_at is None
+    with pytest.raises(ValueError, match="Post IDs"):
+        drain_posts(post_ids=[])
+
+
 def test_enqueue_reports_committed_batches_when_a_later_batch_fails(monkeypatch):
     from core import product_release_detection_queue as queue
 
@@ -215,3 +227,17 @@ def test_lost_broker_wakeup_leaves_durable_post_for_later_recovery(settings, mon
     recovered = recover_due_product_releases.run()
     assert recovered["detection"]["candidates"] == 1 and recovered["provider_calls"] == 0
     assert models.ProductReleaseDetectionState.objects.get(post=state.post).completed_at is not None
+
+
+def test_disabled_background_does_not_enqueue_collected_posts(settings):
+    from monitor.cycle import CycleRunner
+    from tests.test_post_enrichment_queue import _cfg, _state
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    state = _state("scan-disabled")
+    cfg = _cfg()
+    cfg.harvest.enrichment.mode = "worker"
+    runner = CycleRunner(cfg=cfg, cycle_kind="scheduled")
+    result = runner._run_post_fetch([{"_persisted_post_id": state.pk, "_db_inserted": True}])
+    assert "product_release_intake" not in result
+    assert not models.ProductReleaseDetectionState.objects.exists()

@@ -3650,7 +3650,7 @@ class CycleRunner:
             from monitor.enrichment_worker import process_enrichment_batch
 
             result = process_enrichment_batch(self, kept_posts, **kwargs)
-        if kwargs.get("repair_manifest") is None:
+        if kwargs.get("repair_manifest") is None and settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
             from core.product_release_detection_queue import enqueue_posts
 
             source_ids = {

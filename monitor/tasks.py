@@ -71,6 +71,7 @@ def recover_due_product_releases() -> dict[str, object]:
         recover_release_registrations,
     )
     from core.product_release_detection_queue import drain_posts
+    from core.source_metric_projection import recover_release_projection_followups
 
     try:
         detection = drain_posts(limit=50, max_seconds=20)
@@ -84,11 +85,23 @@ def recover_due_product_releases() -> dict[str, object]:
         logger.exception("Release registration recovery failed; later wake-up can retry")
         registrations = {"status": "error"}
 
+    try:
+        projections = recover_release_projection_followups(limit=25)
+    except Exception:
+        logger.exception("Release measurement follow-up failed; later wake-up can retry")
+        projections = {"status": "error"}
+
     with httpx.Client(follow_redirects=False, trust_env=False) as client:
         result = drain_due_hf_acquisitions(client=client, limit=3, execute=True)
-    if detection.get("due_remaining") and (detection.get("processed") or detection.get("failed")):
+    detection_progress = detection.get("due_remaining") and (detection.get("processed") or detection.get("failed"))
+    projection_progress = projections.get("due_remaining") and (
+        projections.get("queued") or projections.get("waiting") or projections.get("excluded")
+        or projections.get("failed")
+    )
+    if detection_progress or projection_progress:
         dispatch_due_recovery()
-    return {"status": "processed", "detection": detection, "registration_recovery": registrations, **result}
+    return {"status": "processed", "detection": detection, "registration_recovery": registrations,
+            "measurement_followups": projections, **result}
 
 
 @shared_task(

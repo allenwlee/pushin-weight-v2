@@ -26,6 +26,15 @@ pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db(transaction=T
 QUOTE = "Nanbeige released Nanbeige4.3-33B. Qwen is a comparator; the 33B model teaches an upcoming 3B model."
 
 
+@pytest.fixture
+def enabled_release_background(settings, monkeypatch):
+    from monitor.tasks import acquire_product_release, recover_due_product_releases
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    monkeypatch.setattr(acquire_product_release, "apply_async", lambda **_kwargs: None)
+    monkeypatch.setattr(recover_due_product_releases, "apply_async", lambda **_kwargs: None)
+
+
 @pytest.mark.parametrize("origin", ["ordinary", "special-events"])
 @pytest.mark.parametrize("path", ["new-classification", "saved-replay"])
 def test_real_enrichment_and_replay_accept_the_same_release(monkeypatch, origin, path):
@@ -127,7 +136,7 @@ def test_real_enrichment_and_replay_accept_the_same_release(monkeypatch, origin,
     assert CollectionJob.objects.filter(operation="release_acquisition").count() == 1
 
 
-def test_collected_unclassified_announcement_gets_pending_dossier_without_model_calls():
+def test_collected_unclassified_announcement_gets_pending_dossier_without_model_calls(enabled_release_background):
     state = _state("release-raw-worker")
     state.post.text = "Today we announce a new model from an unfamiliar lab"
     state.post.save(update_fields=["text"])
@@ -153,7 +162,7 @@ def test_collected_unclassified_announcement_gets_pending_dossier_without_model_
     assert not CollectionRequest.objects.exists()
 
 
-def test_intake_failure_does_not_interrupt_collection_and_saved_post_can_be_replayed(monkeypatch):
+def test_intake_failure_does_not_interrupt_collection_and_saved_post_can_be_replayed(monkeypatch, enabled_release_background):
     from core import product_release_detection_queue
 
     state = _state("release-intake-failure")
@@ -178,7 +187,7 @@ def test_intake_failure_does_not_interrupt_collection_and_saved_post_can_be_repl
     assert EventDossier.objects.filter(event_kind_reference__code="product_release").count() == 1
 
 
-def test_raw_release_queues_linked_repositories_as_unresolved_leads():
+def test_raw_release_queues_linked_repositories_as_unresolved_leads(enabled_release_background):
     import httpx
 
     from core.collection_capture import observation_object_documents
@@ -224,7 +233,7 @@ def test_raw_release_queues_linked_repositories_as_unresolved_leads():
     assert Product.objects.count() == 2 and not ProductReleaseDetail.objects.exists()
 
 
-def test_raw_versioned_announcement_queues_name_search_without_extraction():
+def test_raw_versioned_announcement_queues_name_search_without_extraction(enabled_release_background):
     import httpx
 
     from core.collection_capture import observation_object_documents

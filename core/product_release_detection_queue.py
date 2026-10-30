@@ -93,20 +93,27 @@ def enqueue_posts(post_ids):
     return {"selected": len(ids), "queued": queued, "missing": missing, "failed": missing}
 
 
-def drain_posts(*, limit=50, max_seconds=30):
+def drain_posts(*, limit=50, max_seconds=30, post_ids=None):
     """Process a bounded page; locks fence duplicate workers, not harvest writes."""
     if type(limit) is not int or not 1 <= limit <= 500 or not 0 < max_seconds <= 120:
         raise ValueError("invalid release detection budget")
     if connection.vendor != "postgresql":
         raise ValueError("release detection queue requires PostgreSQL")
+    if post_ids is not None:
+        if (not isinstance(post_ids, (tuple, list)) or not 1 <= len(post_ids) <= 100
+                or any(not isinstance(value, str) or not value or len(value) > 64 for value in post_ids)):
+            raise ValueError("select 1..100 Post IDs")
     from core.product_release_pipeline import persist_source
     from core.product_release_sources import stored_posts
 
     deadline = monotonic() + max_seconds
     pending = Q(completed_at__isnull=True) | Q(completed_at__lt=F("requested_at"))
-    ids = list(models.ProductReleaseDetectionState.objects.filter(
+    due = models.ProductReleaseDetectionState.objects.filter(
         pending, Q(retry_at__isnull=True) | Q(retry_at__lte=timezone.now()), attempts__lt=MAX_ATTEMPTS,
-    ).order_by("requested_at", "post_id").values_list("post_id", flat=True)[:limit])
+    )
+    if post_ids is not None:
+        due = due.filter(post_id__in=post_ids)
+    ids = list(due.order_by("requested_at", "post_id").values_list("post_id", flat=True)[:limit])
     result = {"selected": len(ids), "processed": 0, "candidates": 0, "failed": 0, "busy": 0}
     for post_id in ids:
         if monotonic() >= deadline:
@@ -149,7 +156,10 @@ def drain_posts(*, limit=50, max_seconds=30):
                         attempts=attempts, retry_at=None if attempts == MAX_ATTEMPTS else timezone.now() + timedelta(hours=6),
                         error_code="processing_error",
                     )
-    result["due_remaining"] = models.ProductReleaseDetectionState.objects.filter(
+    remaining = models.ProductReleaseDetectionState.objects.filter(
         pending, Q(retry_at__isnull=True) | Q(retry_at__lte=timezone.now()), attempts__lt=MAX_ATTEMPTS,
-    ).exists()
+    )
+    if post_ids is not None:
+        remaining = remaining.filter(post_id__in=post_ids)
+    result["due_remaining"] = remaining.exists()
     return result

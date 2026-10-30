@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 from contextlib import contextmanager
 from time import monotonic
 
@@ -41,6 +42,7 @@ PROJECTION_QUEUE_PHASE = "projection_queue"
 PROJECTION_RESULT_KIND = "numeric_projection_result"
 PROJECTION_OUTPUT_KIND = "numeric_projection_output"
 PROJECTION_RESULT_PHASE = "projection_results_v1"
+logger = logging.getLogger(__name__)
 
 
 def _empty_scope_compatibility():
@@ -873,17 +875,11 @@ def enqueue_projection(claim, *, contract, evidence_ids):
         return scope
 
 
-def enqueue_authorized_release_projection(claim, evidence):
-    """Queue exact capture under an active, reviewed publisher contract.
-
-    A dedicated reviewed mapping admits product attribution. Without one, an
-    eligible native partition retains measurements on the repository alone.
-    No contract or product mapping is guessed or created.
-    """
+def _authorized_release_contracts(evidence):
+    """Find currently active reviewed contracts which admit an exact capture."""
     from core.benchmark_attribution import enforce_source_collection
     from core.models import MetricCollectionContract
 
-    require(transaction.get_connection().in_atomic_block, "enqueue inside capture transaction")
     require(_eligible_evidence_owner(evidence, "hf")
             and evidence.run.job.operation == "release_acquisition"
             and evidence.projection_kind == "hf-release-exact-v1", "exact release capture required")
@@ -894,7 +890,7 @@ def enqueue_authorized_release_projection(claim, evidence):
         mappings__purpose="metric", mappings__source_id="hf",
         mappings__source_subject_kind="account", mappings__normalized_identifier=namespace.casefold(),
     ).distinct()
-    queued = []
+    accepted = []
     for contract in contracts:
         settings = contract.source_configuration.get("hf", {})
         if settings.get("eligibility_policy") != SOURCE_STATISTICS_POLICY:
@@ -928,9 +924,177 @@ def enqueue_authorized_release_projection(claim, evidence):
                         "repository outside native partition")
         except (ValueError, KeyError, TypeError):
             continue
+        accepted.append(contract)
+    return accepted
+
+
+def enqueue_authorized_release_projection(claim, evidence):
+    """Queue exact capture under an active, reviewed publisher contract.
+
+    A dedicated reviewed mapping admits product attribution. Without one, an
+    eligible native partition retains measurements on the repository alone.
+    No contract or product mapping is guessed or created.
+    """
+    require(transaction.get_connection().in_atomic_block, "enqueue inside capture transaction")
+    contracts = _authorized_release_contracts(evidence)
+    for contract in contracts:
         enqueue_projection(claim, contract=contract, evidence_ids=[evidence.pk])
-        queued.append(str(contract.pk))
-    return queued
+    return [str(contract.pk) for contract in contracts]
+
+
+def retain_release_projection_followup(evidence):
+    """Remember a saved capture until a reviewed measurement contract admits it."""
+    require(transaction.get_connection().in_atomic_block, "retain follow-up inside transaction")
+    require(_eligible_evidence_owner(evidence, "hf")
+            and evidence.run.job.operation == "release_acquisition"
+            and evidence.projection_kind == "hf-release-exact-v1", "exact release capture required")
+    # A product-mapped projection is already a durable request, even if complete.
+    # A native-only partition does not replace a later reviewed Product mapping.
+    if any(
+        _release_contract_is_dedicated(contract, evidence)
+        and CollectionScopeRun.objects.filter(
+            run_id=evidence.run_id, scope_kind=PROJECTION_ITEM_KIND,
+            resource_observation=evidence, projection_contract=contract,
+        ).exists()
+        for contract in _authorized_release_contracts(evidence)
+    ):
+        return None
+    scope, _ = CollectionScopeRun.objects.get_or_create(
+        run_id=evidence.run_id, scope_kind="release_metric_followup", scope_key=str(evidence.pk),
+        defaults={"resource_observation": evidence, "phase": "awaiting_authority",
+                  "error_code": "awaiting_reviewed_contract", "raw_count": 1,
+                  **_empty_scope_compatibility()},
+    )
+    require(scope.resource_observation_id == evidence.pk, "release follow-up identity changed")
+    if scope.outcome in {"excluded", "failed"}:
+        scope.outcome, scope.execution_state, scope.coverage_state = "pending", "pending", "pending"
+        scope.error_code, scope.retry_at, scope.enumeration_complete = "awaiting_reviewed_contract", None, False
+        scope.save(update_fields=["outcome", "execution_state", "coverage_state", "error_code",
+                                  "retry_at", "enumeration_complete"])
+    return scope
+
+
+def _release_contract_is_dedicated(contract, evidence):
+    return contract.mappings.filter(
+        purpose="metric", source_id="hf", source_subject_kind="repository",
+        identifier_scope__code="model",
+        normalized_identifier=evidence.source_identifier.casefold(),
+        identifier_metadata__role="dedicated_model",
+        subject__subject_kind="product", subject__product__repo_id__iexact=evidence.source_identifier,
+    ).exists()
+
+
+def recover_release_projection_followups(*, limit=25, observation_ids=None):
+    """Recheck bounded saved captures after reviewed source authority changes.
+
+    Missing authority is a waiting state, never a zero-valued measurement. No
+    provider request, model call, new contract, or scheduler is created here.
+    """
+    from datetime import timedelta
+
+    from django.db import DatabaseError
+    from django.utils import timezone
+
+    from core.product_release_acquisition import _has_eligible_claim
+
+    require(type(limit) is int and 1 <= limit <= 100, "invalid follow-up budget")
+    if observation_ids is not None:
+        require(isinstance(observation_ids, (list, tuple)) and 1 <= len(observation_ids) <= 100
+                and all(type(value) is int and value > 0 for value in observation_ids),
+                "select 1..100 observation IDs")
+    now = timezone.now()
+    due = CollectionScopeRun.objects.filter(
+        Q(retry_at__isnull=True) | Q(retry_at__lte=now),
+        scope_kind="release_metric_followup", outcome="pending",
+    )
+    if observation_ids is not None:
+        due = due.filter(resource_observation_id__in=observation_ids)
+    ids = list(due.order_by("retry_at", "pk").values_list("pk", flat=True)[:limit])
+    result = {"selected": len(ids), "queued": 0, "waiting": 0, "busy": 0, "excluded": 0, "failed": 0}
+    for scope_id in ids:
+        try:
+            with transaction.atomic():
+                followup = CollectionScopeRun.objects.select_for_update(skip_locked=True, of=("self",)).filter(
+                    Q(retry_at__isnull=True) | Q(retry_at__lte=now),
+                    pk=scope_id, scope_kind="release_metric_followup", outcome="pending",
+                ).select_related("resource_observation__run__job").first()
+                if followup is None:
+                    result["busy"] += 1
+                    continue
+                evidence = followup.resource_observation
+                require(evidence is not None and evidence.run_id == followup.run_id
+                        and followup.scope_key == str(evidence.pk), "release follow-up ownership changed")
+                origin = CollectionJob.objects.select_for_update(nowait=True).get(pk=evidence.run.job_id)
+                if origin.active_run_id is not None:
+                    followup.retry_at = now + timedelta(minutes=5)
+                    followup.save(update_fields=["retry_at"])
+                    result["busy"] += 1
+                    continue
+                if not _has_eligible_claim(origin):
+                    followup.outcome, followup.execution_state = "excluded", "completed"
+                    followup.coverage_state, followup.error_code = "unavailable", "release_excluded"
+                    followup.enumeration_complete = True
+                    followup.save(update_fields=["outcome", "execution_state", "coverage_state",
+                                                "error_code", "enumeration_complete"])
+                    result["excluded"] += 1
+                    continue
+                contracts = _authorized_release_contracts(evidence)
+                if not contracts:
+                    followup.retry_at = now + timedelta(hours=6)
+                    followup.save(update_fields=["retry_at"])
+                    result["waiting"] += 1
+                    continue
+                for contract in contracts:
+                    key = str(contract.pk)
+                    queue, _ = CollectionScopeRun.objects.get_or_create(
+                        run_id=evidence.run_id, scope_kind="numeric_projection", scope_key=key,
+                        defaults={"projection_contract": contract, "phase": PROJECTION_QUEUE_PHASE,
+                                  **_empty_scope_compatibility()},
+                    )
+                    queue = CollectionScopeRun.objects.select_for_update().get(pk=queue.pk)
+                    require(queue.projection_contract_id == contract.pk, "projection contract pin changed")
+                    _adopt_projection_queue(queue)
+                    _retain_projection_items(queue, [evidence.pk])
+                    count = _projection_items(queue).filter(outcome="pending").count()
+                    queue.outcome = "pending" if count else "complete"
+                    queue.enumeration_complete = not count
+                    queue.execution_state = "pending" if count else "completed"
+                    queue.coverage_state = "pending" if count else "complete"
+                    queue.raw_count = count
+                    queue.save(update_fields=["outcome", "enumeration_complete", "execution_state",
+                                              "coverage_state", "raw_count"])
+                dedicated = any(_release_contract_is_dedicated(contract, evidence) for contract in contracts)
+                followup.outcome = "complete" if dedicated else "pending"
+                followup.execution_state = "completed" if dedicated else "pending"
+                followup.coverage_state = "complete" if dedicated else "pending"
+                followup.error_code = None if dedicated else "awaiting_product_mapping"
+                followup.retry_at = None if dedicated else now + timedelta(hours=6)
+                followup.enumeration_complete = dedicated
+                followup.save(update_fields=["outcome", "execution_state", "coverage_state", "error_code",
+                                            "retry_at", "enumeration_complete"])
+                result["queued"] += 1
+                result["waiting"] += int(not dedicated)
+        except DatabaseError as error:
+            cause = error.__cause__
+            if getattr(cause, "sqlstate", None) != "55P03" and getattr(cause, "pgcode", None) != "55P03":
+                raise
+            # A concurrent acquisition owns this source; leave the marker intact.
+            result["busy"] += 1
+        except (ValueError, KeyError, TypeError):
+            logger.exception("Invalid release measurement follow-up %s", scope_id)
+            CollectionScopeRun.objects.filter(pk=scope_id, outcome="pending").update(
+                outcome="failed", execution_state="failed", coverage_state="unavailable",
+                error_code="invalid_release_followup", retry_at=None,
+            )
+            result["failed"] += 1
+    remaining = CollectionScopeRun.objects.filter(
+        Q(retry_at__isnull=True) | Q(retry_at__lte=timezone.now()),
+        scope_kind="release_metric_followup", outcome="pending",
+    )
+    if observation_ids is not None:
+        remaining = remaining.filter(resource_observation_id__in=observation_ids)
+    result["due_remaining"] = remaining.exists()
+    return result
 
 
 def _project_evidence(
