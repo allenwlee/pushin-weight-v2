@@ -18,6 +18,41 @@ def planned(settings):
     settings.X_MONITOR_LIST_ID = 123
 
 
+# Final assessments in the two shapes the runners return: run's campaign report
+# and run_phases' compact per-window rows.
+VERIFIED_WINDOW = {
+    "status": "verified", "source_collection_job": "job-1",
+    "window": {"index": 1, "since": "2026-07-01", "until": "2026-07-02"},
+}
+FAILED_WINDOW = {
+    "status": "failed", "error_code": "classification_incomplete", "source_collection_job": "job-2",
+    "window": {"index": 2, "since": "2026-07-02", "until": "2026-07-03"},
+}
+VERIFIED_REPORT = {"status": "verified", "windows_attempted": 1, "windows_verified": 1,
+                   "windows": [VERIFIED_WINDOW]}
+UNVERIFIED_REPORT = {"status": "incomplete", "windows_attempted": 2, "windows_verified": 1,
+                     "windows": [VERIFIED_WINDOW, FAILED_WINDOW]}
+PHASE_ROWS = [
+    {"phase": "collection", "status": "verified", "source_collection_job": "job-1"},
+    {"phase": "collection", "status": "verified", "source_collection_job": "job-2"},
+    {"phase": "enrichment", "status": "verified", "source_collection_job": "job-1"},
+    {"phase": "enrichment", "status": "failed", "error_code": "classification_incomplete",
+     "source_collection_job": "job-2"},
+]
+
+
+def saved_campaign(tmp_path):
+    """Saved instructions any phase accepts; the tests replace the runners."""
+    from datetime import UTC, datetime, timedelta
+
+    path = tmp_path / "saved.json"
+    path.write_text(json.dumps({
+        "campaign": "final-assessment", "direct_concurrency": 32, "windows": [],
+        "deadline": (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+    }))
+    return path
+
+
 @pytest.mark.parametrize(
     "since,until",
     [("2026-07-01", "2026-08-01"), ("2026-09-17T03:00:00Z", "2026-09-17T05:00:00Z")],
@@ -97,7 +132,10 @@ def test_saved_campaign_can_select_a_new_exact_runtime_without_rewriting_instruc
     saved.write_text(json.dumps(frozen))
     original_bytes = saved.read_bytes()
     observed = []
-    monkeypatch.setattr(command, "run", lambda manifest, cfg, **kw: observed.append((manifest, kw)))
+    monkeypatch.setattr(
+        command, "run",
+        lambda manifest, cfg, **kw: observed.append((manifest, kw)) or VERIFIED_REPORT,
+    )
     call_command(
         "run_backfill", manifest=saved, execute=True,
         runtime_revision="b" * 40, evaluate_at_end=True,
@@ -139,7 +177,8 @@ def test_aggregate_execution_mode_does_not_change_saved_manifest(
     monkeypatch.setattr(
         command,
         "run",
-        lambda manifest, cfg, **kwargs: observed.append((manifest, kwargs)),
+        lambda manifest, cfg, **kwargs: observed.append((manifest, kwargs))
+        or VERIFIED_REPORT,
     )
     call_command("run_backfill", manifest=saved, execute=True, evaluate_at_end=True)
     assert observed == [(frozen, {"evaluate_at_end": True})]
@@ -260,3 +299,98 @@ def test_unknown_window_field_is_rejected_without_jobs(planned, tmp_path):
     with pytest.raises(CommandError, match="unknown_window_field"):
         call_command("run_backfill", windows=path, stdout=StringIO())
     assert not CollectionJob.objects.exists() and not OriginalContentCall.objects.exists()
+
+
+@pytest.mark.parametrize("result,unverified", [
+    (VERIFIED_REPORT, []),
+    (UNVERIFIED_REPORT, [{"window": 2, "since": "2026-07-02", "until": "2026-07-03", "status": "failed",
+                          "error_code": "classification_incomplete", "source_collection_job": "job-2"}]),
+    ({"status": "incomplete", "windows": [VERIFIED_WINDOW]}, [{"status": "incomplete"}]),
+    (PHASE_ROWS[:3], []),
+    (PHASE_ROWS, [{"phase": "enrichment", "status": "failed", "error_code": "classification_incomplete",
+                   "source_collection_job": "job-2"}]),
+    (None, [{"status": "final_assessment_missing"}]),
+])
+def test_final_assessment_names_only_its_unverified_windows(result, unverified):
+    from monitor.management.commands.run_backfill import unverified_windows
+
+    assert unverified_windows(result) == unverified
+
+
+def test_unverified_campaign_assessment_exits_3_after_its_receipts_are_saved(tmp_path, monkeypatch):
+    import monitor.management.commands.run_backfill as command
+
+    saved = []
+
+    def run(frozen, cfg, **kw):
+        # assess_campaign saves every window's receipt before returning its report.
+        saved.extend(row["source_collection_job"] for row in UNVERIFIED_REPORT["windows"])
+        return UNVERIFIED_REPORT
+
+    monkeypatch.setattr(command, "run", run)
+    with pytest.raises(CommandError, match="final assessment not verified") as failure:
+        call_command("run_backfill", manifest=saved_campaign(tmp_path), execute=True, evaluate_at_end=True)
+    assert failure.value.returncode == 3
+    assert saved == ["job-1", "job-2"]
+    message = str(failure.value)
+    assert '"window": 2' in message and '"source_collection_job": "job-2"' in message
+    assert "job-1" not in message and "CollectionRun.report['backfill_campaign']" in message
+
+
+def test_unverified_phase_assessment_exits_3_after_verified_collection(tmp_path, monkeypatch):
+    import monitor.management.commands.run_backfill as command
+
+    seen = []
+    monkeypatch.setattr(command, "run_phases", lambda frozen, cfg, **kw: seen.append(kw) or PHASE_ROWS)
+    monkeypatch.setattr(command, "run", lambda *a, **kw: pytest.fail("legacy runner selected"))
+    with pytest.raises(CommandError, match="final assessment not verified") as failure:
+        call_command("run_backfill", manifest=saved_campaign(tmp_path), phase="all",
+                     execute=True, evaluate_at_end=True)
+    assert failure.value.returncode == 3
+    assert len(seen) == 1 and seen[0]["phase"] == "all" and seen[0]["evaluate_at_end"] is True
+    message = str(failure.value)
+    assert '"phase": "enrichment"' in message and '"source_collection_job": "job-2"' in message
+    assert "job-1" not in message and '"phase": "collection"' not in message
+
+
+def test_unverified_final_assessment_is_a_failed_process_exit(tmp_path, monkeypatch):
+    import monitor.management.commands.run_backfill as command
+
+    monkeypatch.setattr(command, "run", lambda *a, **kw: UNVERIFIED_REPORT)
+    stderr = StringIO()
+    with pytest.raises(SystemExit) as exited:
+        command.Command(stderr=stderr).run_from_argv([
+            "manage.py", "run_backfill", "--manifest", str(saved_campaign(tmp_path)),
+            "--execute", "--evaluate-at-end",
+        ])
+    assert exited.value.code == 3
+    assert "final assessment not verified" in stderr.getvalue()
+
+
+@pytest.mark.parametrize("runner,phase,result", [
+    ("run", None, VERIFIED_REPORT),
+    ("run_phases", "all", PHASE_ROWS[:3]),
+])
+def test_verified_final_assessment_exits_normally(tmp_path, monkeypatch, runner, phase, result):
+    import monitor.management.commands.run_backfill as command
+
+    seen = []
+    monkeypatch.setattr(command, runner, lambda frozen, cfg, **kw: seen.append(kw) or result)
+    call_command("run_backfill", manifest=saved_campaign(tmp_path), phase=phase,
+                 execute=True, evaluate_at_end=True)
+    assert len(seen) == 1 and seen[0]["evaluate_at_end"] is True
+
+
+@pytest.mark.parametrize("runner,phase,result", [
+    ("run", None, None),
+    ("run", None, UNVERIFIED_REPORT),
+    ("run_phases", "all", PHASE_ROWS),
+    ("run_phases", "enrich", [{"phase": "enrichment", "status": "attempted"}]),
+])
+def test_without_evaluate_at_end_the_result_keeps_todays_exit(tmp_path, monkeypatch, runner, phase, result):
+    import monitor.management.commands.run_backfill as command
+
+    seen = []
+    monkeypatch.setattr(command, runner, lambda frozen, cfg, **kw: seen.append(kw) or result)
+    call_command("run_backfill", manifest=saved_campaign(tmp_path), phase=phase, execute=True)
+    assert len(seen) == 1 and seen[0]["evaluate_at_end"] is False
