@@ -35,6 +35,7 @@ from core.models import (
     PostEnrichmentState,
 )
 from core.provider_batches import (
+    SPEND_BASES,
     BatchAdmissionError,
     enrichment_control_status,
     own_historical_posts,
@@ -99,6 +100,25 @@ def _utc_epoch(value):
     return int(parsed.timestamp())
 
 
+# A window object may add only spend_basis to its bounds; plain pairs keep today's shape.
+WINDOW_FIELDS = frozenset({"since", "until", "spend_basis"})
+
+
+def _window_input(item):
+    """Return (since, until, spend_basis); spend_basis is None unless the window names one."""
+    if not isinstance(item, dict):
+        since, until = item
+        return since, until, None
+    if set(item) - WINDOW_FIELDS:
+        raise ValueError("unknown_window_field")
+    if not {"since", "until"} <= set(item):
+        raise ValueError("window_bounds_required")
+    basis = item.get("spend_basis")
+    if "spend_basis" in item and basis not in SPEND_BASES:
+        raise ValueError("invalid_spend_basis")
+    return item["since"], item["until"], basis
+
+
 def manifest(
     cfg,
     *,
@@ -137,7 +157,8 @@ def manifest(
         raise ValueError("campaign_windows_required")
     output_windows = []
     previous_upper = None
-    for index, (since, until) in enumerate(inputs, start=1):
+    for index, item in enumerate(inputs, start=1):
+        since, until, spend_basis = _window_input(item)
         lower, upper = (_utc_epoch(value) for value in (since, until))
         if lower >= upper or (previous_upper is not None and lower < previous_upper):
             raise ValueError("windows_must_be_ordered_and_nonoverlapping")
@@ -170,6 +191,8 @@ def manifest(
                     5000, math.ceil((upper - lower) / 86400 * 50000)
                 ),
             }
+        if spend_basis is not None:
+            window["spend_basis"] = spend_basis
         definition = plan_job_definition(
             cfg=cfg, since_epoch=lower, until_epoch=upper, brands=list(cfg.enabled_models),
             requests=200, model_requests=500, seconds=300,
@@ -590,6 +613,8 @@ def _enrich_window(job, window, *, frozen, cfg, evaluate_at_end, enrichment_conc
             deadline=deadline,
             max_model_requests=window["maximum_model_requests"],
             max_control_requests=5000,
+            # Saved July windows carry no basis and keep today's policy.
+            **({"spend_basis": window["spend_basis"]} if "spend_basis" in window else {}),
         )
     )
     progress, no_progress = None, 0

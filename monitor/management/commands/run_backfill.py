@@ -33,7 +33,10 @@ class Command(BaseCommand):
         parser.add_argument(
             "--windows",
             type=Path,
-            help="JSON campaign: windows with since/until, optional name and supplemental_queries.",
+            help=(
+                "JSON campaign: windows with since/until, optional name and supplemental_queries. "
+                "A window may add spend_basis (reservation or settled)."
+            ),
         )
         parser.add_argument(
             "--campaign-name", help="Stable name for the saved collection instructions."
@@ -201,8 +204,12 @@ class Command(BaseCommand):
                     if options["since"] or options["until"]:
                         raise CommandError("select --windows or --since/--until")
                     config = json.loads(options["windows"].read_text())
+                    # Plain bounds keep today's input; any other window field
+                    # goes to the manifest, which validates and rejects unknowns.
                     windows = [
-                        (row["since"], row["until"]) for row in config["windows"]
+                        (row["since"], row["until"])
+                        if set(row) <= {"since", "until"} else row
+                        for row in config["windows"]
                     ]
                 else:
                     if not options["since"] or not options["until"]:

@@ -236,3 +236,27 @@ def test_phase_preferences_do_not_rewrite_saved_campaign(planned, tmp_path, monk
     assert seen[0][1]["collection_concurrency"] == 4
     assert json.loads(saved.read_text()) == frozen
     assert not CollectionJob.objects.exists() and not OriginalContentCall.objects.exists()
+
+
+def test_window_spend_basis_is_planned_into_the_manifest_without_jobs(planned, tmp_path):
+    path = tmp_path / "settled.json"
+    path.write_text(json.dumps({"name": "settled-window", "windows": [
+        {"since": "2026-07-01T00:00:00+00:00", "until": "2026-07-01T06:00:00+00:00", "spend_basis": "settled"},
+        {"since": "2026-07-01T06:00:00+00:00", "until": "2026-07-01T12:00:00+00:00"},
+    ]}))
+    output = StringIO()
+    call_command("run_backfill", windows=path, stdout=output)
+    first, second = json.loads(output.getvalue())["windows"]
+    assert first["spend_basis"] == "settled"
+    assert "spend_basis" not in second
+    assert not CollectionJob.objects.exists() and not OriginalContentCall.objects.exists()
+
+
+def test_unknown_window_field_is_rejected_without_jobs(planned, tmp_path):
+    path = tmp_path / "unknown.json"
+    path.write_text(json.dumps({"windows": [
+        {"since": "2026-07-01T00:00:00+00:00", "until": "2026-07-01T06:00:00+00:00", "slice_seconds": 300},
+    ]}))
+    with pytest.raises(CommandError, match="unknown_window_field"):
+        call_command("run_backfill", windows=path, stdout=StringIO())
+    assert not CollectionJob.objects.exists() and not OriginalContentCall.objects.exists()
