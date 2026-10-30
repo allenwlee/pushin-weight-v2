@@ -328,8 +328,8 @@ def _observation_sources(qs, *, clock):
                 if (
                     snapshot
                     and snapshot.resource_kind == "releases"
-                    and raw.get("tag_name")
                     and raw.get("draft") is False
+                    and raw.get("published_at")
                 ):
                     labels.append(
                         SavedLabel(
@@ -337,13 +337,15 @@ def _observation_sources(qs, *, clock):
                             f"collection_resource_snapshots:{obs.pk}.resource_kind",
                         )
                     )
-                    texts.append(
-                        TextEvidence(
-                            f"collection_observations:{obs.pk}.listing.tag_name",
-                            "release_extraction",
-                            raw["tag_name"],
-                        )
-                    )
+                    for field, evidence_kind in (("tag_name", "release_extraction"), ("name", "raw")):
+                        if isinstance(raw.get(field), str) and raw[field].strip():
+                            texts.append(
+                                TextEvidence(
+                                    f"collection_observations:{obs.pk}.listing.{field}",
+                                    evidence_kind,
+                                    raw[field],
+                                )
+                            )
         if isinstance(raw, dict):
             for field in ("html_url", "web_url"):
                 if isinstance(raw.get(field), str) and raw[field].startswith(

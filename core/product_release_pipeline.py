@@ -30,6 +30,10 @@ from core.product_release_sources import StoredSource
 METHOD = "product-release-persistence-v1"
 
 
+class ReleaseIdentityBusy(ValueError):
+    """Another detector is reconciling the same native release."""
+
+
 def canonical_dossier(dossier_id):
     seen = set()
     while dossier_id not in seen:
@@ -79,6 +83,49 @@ def _known_dossiers(source):
         canonical_dossier(pk).pk
         for pk in sources.values_list("event_dossier_id", flat=True)
     }
+
+
+def _github_release_identity(source):
+    """Use the provider's repository and release IDs, not capture-row IDs."""
+    if source.observation_id is None:
+        return None
+    from core.collection_capture import observation_object_documents
+    from core.measurement_taxonomy import require
+
+    observation = models.CollectionObservation.objects.select_related(
+        "run__job", "resource_snapshot",
+    ).get(pk=source.observation_id)
+    if observation.run.job.source_id != "github" or observation.observation_kind != "releases":
+        return None
+    payload, _, _ = observation_object_documents(observation)
+    require(isinstance(payload, dict) and type(payload.get("id")) is int and payload["id"] > 0
+            and payload.get("draft") is False and payload.get("published_at")
+            and observation.resource_snapshot.resource_kind == "releases"
+            and observation.resource_snapshot.native_stable_id == str(payload["id"])
+            and observation.source_identifier.isascii() and observation.source_identifier.isdigit()
+            and int(observation.source_identifier) > 0, "GitHub native release identity mismatch")
+    return observation.source_identifier, str(payload["id"])
+
+
+def _github_release_dossiers(native):
+    """Reuse source-backed prior dossiers, including reviewed ones, without merging them."""
+    from core.collection_capture import observation_object_documents
+    from core.measurement_taxonomy import require
+
+    sources = list(models.EventDossierSource.objects.filter(
+        event_dossier__event_kind_reference__code="product_release",
+        collection_observation__run__job__source_id="github",
+        collection_observation__observation_kind="releases",
+        collection_observation__source_identifier=native[0],
+        collection_observation__resource_snapshot__resource_kind="releases",
+        collection_observation__resource_snapshot__native_stable_id=native[1],
+    ).select_related("collection_observation").order_by("event_dossier_id", "-pk").distinct("event_dossier_id")[:51])
+    require(len(sources) <= 50, "too many dossiers for one GitHub release")
+    for source in sources:
+        row, _, _ = observation_object_documents(source.collection_observation)
+        require(isinstance(row, dict) and type(row.get("id")) is int and str(row["id"]) == native[1]
+                and row.get("draft") is False, "prior GitHub release evidence conflicts")
+    return {canonical_dossier(source.event_dossier_id).pk for source in sources}
 
 
 def _named_announcement_dossier(source, candidate):
@@ -194,6 +241,46 @@ def _observed_publisher(source, linked):
     )
 
 
+def _attach_github_release_repository(source, dossier_id):
+    """Reuse the repository captured by the same GitHub release collection."""
+    from core.benchmark_metric_timing import aware_instant
+    from core.collection_capture import observation_object_documents
+    from core.github_metadata_client import GitHubMetadataClient
+    from core.measurement_taxonomy import require
+
+    observation = models.CollectionObservation.objects.select_related(
+        "run__job", "scope_run__resource_observation",
+    ).get(pk=source.observation_id)
+    if observation.run.job.source_id != "github" or observation.observation_kind != "releases":
+        return
+    scope = observation.scope_run
+    require(scope is not None and scope.run_id == observation.run_id
+            and scope.scope_kind == "repository_events" and scope.resource_observation_id is not None,
+            "GitHub release repository evidence missing")
+    repository = scope.resource_observation
+    release, _, _ = observation_object_documents(observation)
+    repo, _, _ = observation_object_documents(repository)
+    require(repository.run_id == observation.run_id and repository.observation_kind == "repository"
+            and isinstance(repo, dict) and type(repo.get("id")) is int
+            and str(repo["id"]) == observation.source_identifier == repository.source_identifier
+            and isinstance(release, dict) and release.get("draft") is False and release.get("published_at")
+            and isinstance(repo.get("full_name"), str), "GitHub release/repository identity mismatch")
+    published = aware_instant(release["published_at"])
+    require(observation.published_at == published, "GitHub release publication timestamp mismatch")
+    GitHubMetadataClient.repo_url(repo["full_name"])
+    release_source = attach_source(dossier_id, observation_id=observation.pk)
+    add_claim(release_source.pk, claim_kind="release_context", scope_key=f"github_published:{observation.pk}",
+              assertion_text="GitHub published this release record at the stated time",
+              source_excerpt=release["published_at"], source_locator=source.source_url,
+              extraction_version="github-release-publication-v1", effective_precision="datetime",
+              effective_at=published)
+    linked = attach_source(dossier_id, observation_id=repository.pk)
+    add_claim(linked.pk, claim_kind="release_context", scope_key=f"github_repository:{repository.pk}",
+              assertion_text=f"GitHub collection captured repository {repo['full_name']}; release role is unresolved",
+              source_excerpt=repo["full_name"], source_locator=f"https://github.com/{repo['full_name']}",
+              extraction_version="github-release-repository-v1")
+
+
 @transaction.atomic
 def persist_source(source: StoredSource):
     candidate = detect(source.record)
@@ -203,7 +290,16 @@ def persist_source(source: StoredSource):
             "disposition": "no_signal",
             "dossier_ids": [],
         }
+    native = _github_release_identity(source)
+    if native is not None:
+        lock_key = int(_digest(["github-release-detection-v1", *native])[:15], 16)
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_try_advisory_xact_lock(%s)", [lock_key])
+            if not cursor.fetchone()[0]:
+                raise ReleaseIdentityBusy("GitHub release identity is busy")
     dossier_ids = _known_dossiers(source)
+    if native is not None:
+        dossier_ids |= _github_release_dossiers(native)
     if not dossier_ids:
         match = _named_announcement_dossier(source, candidate)
         if match:
@@ -229,9 +325,8 @@ def persist_source(source: StoredSource):
     if not dossier_ids:
         event = create_dossier(
             event_kind="product_release",
-            identity_key=identity_key(
-                "product-release-source-v1", ":".join(source.record.identity)
-            ),
+            identity_key=(identity_key("github-release-v1", ":".join(native)) if native else
+                          identity_key("product-release-source-v1", ":".join(source.record.identity))),
             first_seen_at=source.stored_at,
         )
         dossier_ids = {canonical_dossier(event.pk).pk}
@@ -243,6 +338,8 @@ def persist_source(source: StoredSource):
         linked = attach_source(
             dossier_id, post_id=source.post_id, observation_id=source.observation_id
         )
+        if source.observation_id is not None:
+            _attach_github_release_repository(source, dossier_id)
         _observed_publisher(source, linked)
         first_claim = None
         for locator, signals in sorted(by_locator.items()):

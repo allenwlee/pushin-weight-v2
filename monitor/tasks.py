@@ -71,6 +71,7 @@ def recover_due_product_releases() -> dict[str, object]:
         recover_release_registrations,
     )
     from core.product_release_detection_queue import drain_posts
+    from core.product_release_source_queue import drain_observations
     from core.source_metric_projection import recover_release_projection_followups
 
     try:
@@ -78,6 +79,12 @@ def recover_due_product_releases() -> dict[str, object]:
     except Exception:
         logger.exception("Release detection recovery failed; later wake-up can retry")
         detection = {"status": "error"}
+
+    try:
+        source_detection = drain_observations(limit=25, max_seconds=15)
+    except Exception:
+        logger.exception("Source release detection recovery failed; later wake-up can retry")
+        source_detection = {"status": "error"}
 
     try:
         registrations = recover_release_registrations(limit=25)
@@ -98,9 +105,13 @@ def recover_due_product_releases() -> dict[str, object]:
         projections.get("queued") or projections.get("waiting") or projections.get("excluded")
         or projections.get("failed")
     )
-    if detection_progress or projection_progress:
+    source_progress = source_detection.get("due_remaining") and (
+        source_detection.get("processed") or source_detection.get("failed")
+    )
+    if detection_progress or source_progress or projection_progress:
         dispatch_due_recovery()
-    return {"status": "processed", "detection": detection, "registration_recovery": registrations,
+    return {"status": "processed", "detection": detection, "source_detection": source_detection,
+            "registration_recovery": registrations,
             "measurement_followups": projections, **result}
 
 
