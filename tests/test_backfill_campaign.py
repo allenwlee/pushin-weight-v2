@@ -1,5 +1,7 @@
 """Explicit aggregate evaluation defers failures without declaring success."""
 
+from datetime import UTC, datetime
+
 import pytest
 
 from scripts.backfill_campaign import block_live_cursor_writes, run_sequence
@@ -354,3 +356,143 @@ def test_phase_receipt_keeps_unknown_enrichment_cost_visible(monkeypatch):
     assert usage["reserved_usd"] == Decimal(".12")
     assert usage["input_tokens"] == 100 and usage["output_tokens"] == 20
     assert list(calls.values()) == before
+
+
+def _stub_manifest_inputs(monkeypatch):
+    from types import SimpleNamespace
+
+    from scripts import backfill_campaign as campaign
+
+    planned = [SimpleNamespace(call_id=call, query_string=f"{call} query min_faves:0")
+               for call in ("A", "B1", "C1")]
+    monkeypatch.setattr(campaign, "plan_calls_for_cycle", lambda cfg, **kw: planned)
+    monkeypatch.setattr(campaign, "database_identity", lambda: {"name": "xbackfiller", "user": "xbackfiller"})
+    monkeypatch.setattr(campaign, "configuration_pin", lambda cfg: "pin")
+    monkeypatch.setattr(campaign, "config_digest", lambda cfg, version: "digest")
+    seen = []
+
+    def definition(**kw):
+        seen.append(kw)
+        return {"scope": {"units": [
+            {"scope_key": call.call_id, "scope_kind": "x_query", "ownership": {
+                "call_id": call.call_id, "query": call.query_string,
+                "since_epoch": kw["since_epoch"], "until_epoch": kw["until_epoch"]}}
+            for call in planned]}}
+
+    monkeypatch.setattr(campaign, "plan_job_definition", definition)
+    return SimpleNamespace(enabled_models=["deepseek", "qwen"]), seen
+
+
+def test_manifest_without_new_window_fields_keeps_its_july_shape(monkeypatch):
+    """Regression net: today's campaign manifest stays byte-identical for July-style inputs."""
+    from scripts import backfill_campaign as campaign
+
+    cfg, seen = _stub_manifest_inputs(monkeypatch)
+    deadline = datetime(2026, 10, 30, tzinfo=UTC)
+    frozen = campaign.manifest(
+        cfg, windows=[("2026-07-01T00:00:00+00:00", "2026-07-01T06:00:00+00:00")],
+        campaign_name="july-regression", supplemental_queries=[("B1", "extra min_faves:0")],
+        deadline=deadline, expected_revision="r" * 40,
+    )
+    window = frozen["windows"][0]
+    assert {key: window[key] for key in window if key != "collection_definition"} == {
+        "index": 1, "since": "2026-07-01T00:00:00+00:00", "until": "2026-07-01T06:00:00+00:00",
+        "since_epoch": 1782864000, "until_epoch": 1782885600,
+        "max_usd": "6.25", "maximum_api_requests": 1250, "maximum_model_requests": 12500,
+    }
+    assert window["collection_definition"]["scope"]["units"] == [
+        {"scope_key": call, "scope_kind": "x_query", "ownership": {
+            "call_id": call, "query": f"{call} query min_faves:0",
+            "since_epoch": 1782864000, "until_epoch": 1782885600}}
+        for call in ("A", "B1", "C1")
+    ] + [{"scope_key": "B1:supplement:0", "scope_kind": "x_query", "ownership": {
+        "call_id": "B1", "query": "extra min_faves:0",
+        "since_epoch": 1782864000, "until_epoch": 1782885600}}]
+    assert window["collection_definition"]["scope"]["deadline"] == deadline.isoformat()
+    assert [{k: v for k, v in kw.items() if k != "cfg"} for kw in seen] == [{
+        "since_epoch": 1782864000, "until_epoch": 1782885600, "brands": ["deepseek", "qwen"],
+        "requests": 200, "model_requests": 500, "seconds": 300,
+        "maximum_requests": 1250, "maximum_models": 12500,
+    }]
+    assert {key: frozen[key] for key in frozen if key != "windows"} == {
+        "schema_version": 1, "instruction_format": "x-backfill-campaign/v2",
+        "campaign": "july-regression", "revision": "r" * 40,
+        "database": {"name": "xbackfiller", "user": "xbackfiller"},
+        "configuration_pin": "pin", "deadline": deadline.isoformat(),
+        "runtime_config_sha256": "digest", "brands": ["deepseek", "qwen"],
+        "queries": [("A", "A query min_faves:0"), ("B1", "B1 query min_faves:0"),
+                    ("C1", "C1 query min_faves:0"), ("B1", "extra min_faves:0")],
+        "model_reservation_ceiling_usd": "6.25", "direct_concurrency": 32,
+        "credential_purpose": "on-demand",
+    }
+
+
+@pytest.mark.parametrize("window_basis,expected", [(None, {}), ("settled", {"spend_basis": "settled"})])
+def test_saved_spend_basis_reaches_the_enrichment_policy_only_when_present(monkeypatch, window_basis, expected):
+    from types import SimpleNamespace
+
+    from scripts import backfill_campaign as campaign
+
+    job = SimpleNamespace(pk="existing", provider_batches=SimpleNamespace(order_by=lambda *a: SimpleNamespace(first=lambda: None)))
+    monkeypatch.setattr(campaign, "_window_job", lambda *a: job)
+    monkeypatch.setattr(campaign, "verify_collection_window", lambda *a, **kw: {"status": "verified"})
+    monkeypatch.setattr(campaign, "verify_window", lambda *a, **kw: {"status": "verified"})
+    monkeypatch.setattr(campaign, "prepare_current_contract", lambda *a: None)
+    policies = []
+    monkeypatch.setattr(campaign, "policy_snapshot", lambda **kw: policies.append(kw) or {})
+    monkeypatch.setattr(campaign, "resolve_api_key", lambda *a: "test")
+    monkeypatch.setattr(campaign, "assert_no_provider_failure", lambda *a: None)
+    monkeypatch.setattr(campaign, "_phase_receipt", lambda job, phase, result, **kw: result)
+    monkeypatch.setattr(campaign, "OriginalContentCall", SimpleNamespace(objects=SimpleNamespace(
+        filter=lambda **kw: SimpleNamespace(aggregate=lambda **kw: {}))))
+    monkeypatch.setattr(campaign, "execute_enrichment", lambda *a, **kw: {"status": "completed"})
+    monkeypatch.setattr(campaign, "advance_targeted", lambda *a, **kw: {"status": "completed"})
+    frozen = {"direct_concurrency": 32, "deadline": "2099-01-01T00:00:00+00:00"}
+    window = {"max_usd": "30", "maximum_model_requests": 100000}
+    if window_basis is not None:
+        window["spend_basis"] = window_basis
+    assert campaign.enrich_window(window, frozen=frozen, cfg=None)["status"] == "verified"
+    assert policies == [{
+        "max_usd": "30", "deadline": datetime(2099, 1, 1, tzinfo=UTC),
+        "max_model_requests": 100000, "max_control_requests": 5000, **expected,
+    }]
+
+
+def test_window_spend_basis_is_frozen_into_the_manifest(monkeypatch):
+    from scripts import backfill_campaign as campaign
+
+    cfg, _ = _stub_manifest_inputs(monkeypatch)
+    frozen = campaign.manifest(
+        cfg, windows=[{"since": "2026-07-01T00:00:00+00:00", "until": "2026-07-01T06:00:00+00:00",
+                       "spend_basis": "settled"}],
+        campaign_name="settled-window", deadline=datetime(2026, 10, 30, tzinfo=UTC), expected_revision="r" * 40,
+    )
+    window = frozen["windows"][0]
+    assert window["spend_basis"] == "settled"
+    assert (window["max_usd"], window["maximum_api_requests"], window["maximum_model_requests"]) == ("6.25", 1250, 12500)
+
+
+def test_bounds_only_window_object_matches_the_plain_pair(monkeypatch):
+    from scripts import backfill_campaign as campaign
+
+    cfg, _ = _stub_manifest_inputs(monkeypatch)
+    bounds = ("2026-07-01T00:00:00+00:00", "2026-07-01T06:00:00+00:00")
+    common = {"campaign_name": "bounds", "deadline": datetime(2026, 10, 30, tzinfo=UTC), "expected_revision": "r" * 40}
+    assert campaign.manifest(cfg, windows=[{"since": bounds[0], "until": bounds[1]}], **common) == campaign.manifest(
+        cfg, windows=[bounds], **common)
+
+
+@pytest.mark.parametrize("row,error", [
+    ({"since": "2026-07-01T00:00:00+00:00", "until": "2026-07-01T06:00:00+00:00", "spend_basis": "actual"},
+     "invalid_spend_basis"),
+    ({"since": "2026-07-01T00:00:00+00:00", "until": "2026-07-01T06:00:00+00:00", "slice_seconds": 300},
+     "unknown_window_field"),
+    ({"since": "2026-07-01T00:00:00+00:00", "spend_basis": "settled"}, "window_bounds_required"),
+])
+def test_invalid_window_object_is_rejected_before_planning(monkeypatch, row, error):
+    from scripts import backfill_campaign as campaign
+
+    cfg, seen = _stub_manifest_inputs(monkeypatch)
+    with pytest.raises(ValueError, match=error):
+        campaign.manifest(cfg, windows=[row], campaign_name="bad", deadline=datetime(2026, 10, 30, tzinfo=UTC))
+    assert seen == []

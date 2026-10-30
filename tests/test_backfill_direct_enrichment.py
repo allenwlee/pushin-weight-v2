@@ -423,6 +423,72 @@ def test_direct_spend_guard_stops_before_http(native):
     assert not OriginalContentCall.objects.exists()
 
 
+@pytest.mark.parametrize(
+    ("spend_basis", "actual_usd", "admitted"),
+    [
+        ("settled", "0.001", True),
+        # A finished request without a provider-reported cost counts its reservation.
+        ("settled", None, False),
+        # Policies frozen without the field (July's) keep reservation-only counting.
+        (None, "0.001", False),
+        ("reservation", "0.001", False),
+    ],
+)
+def test_spend_basis_decides_the_real_direct_admission(
+    native, spend_basis, actual_usd, admitted
+):
+    from decimal import Decimal
+
+    from django.db import transaction
+
+    from core.models import Post, PostBrand, PostEnrichmentState
+    from core.provider_batches import BatchAdmissionError, record_post_membership
+
+    job, policy = native[0], native[3]
+    if spend_basis is not None:
+        policy["spend_basis"] = spend_basis
+    provider = DirectProvider()
+    for turn in range(15):
+        result = run_direct(native, provider, initial=turn == 0)
+        if result["status"] == "completed":
+            break
+    assert result["status"] == "completed", json.dumps(result)
+    finished = OriginalContentCall.objects.filter(state="completed")
+    assert finished.count() == OriginalContentCall.objects.count() == 6
+    # Six $1 reservations exceed the frozen $5 limit; provider cost stays tiny.
+    finished.update(
+        reserved_usd=Decimal(1),
+        actual_usd=None if actual_usd is None else Decimal(actual_usd),
+    )
+    for group in ProviderBatch.objects.filter(source_collection_job=job):
+        assert group.policy.get("spend_basis") == spend_basis
+        assert group.policy["max_usd"] == "5"
+    # A newly collected member needs paid requests, so admission runs again.
+    post = Post.objects.create(tweet_id="native-3", text="I tried Qwen today.", lang="en")
+    PostBrand.objects.create(post=post, brand_id="qwen")
+    PostEnrichmentState.objects.create(post=post)
+    with transaction.atomic():
+        record_post_membership(job.runs.get(), None, [post.pk])
+    sent = provider.sent
+    if admitted:
+        for _ in range(15):
+            result = run_direct(native, provider)
+            if result["status"] == "completed":
+                break
+        assert result["status"] == "completed", json.dumps(result)
+        assert provider.sent > sent
+        assert OriginalContentCall.objects.filter(
+            member_post_ids__overlap=["native-3"]
+        ).exists()
+    else:
+        with pytest.raises(
+            BatchAdmissionError, match="model_campaign_allowance_exhausted"
+        ):
+            run_direct(native, provider)
+        assert provider.sent == sent
+        assert OriginalContentCall.objects.count() == 6
+
+
 def test_direct_32_requests_overlap_without_worker_database_connections(native):
     from core.models import Post, PostBrand, PostEnrichmentState
     from core.provider_batches import record_post_membership

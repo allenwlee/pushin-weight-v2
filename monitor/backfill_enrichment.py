@@ -26,6 +26,7 @@ from core.models import (
     ProviderBatch,
 )
 from core.provider_batches import (
+    SPEND_BASES,
     BatchAdmissionError,
     assert_enrichment_admission,
     claim_batch,
@@ -244,7 +245,18 @@ def policy_snapshot(
     selection=None,
     max_model_requests=20000,
     max_control_requests=5000,
+    spend_basis=None,
 ):
+    """Freeze a campaign's enrichment limits on its first ProviderBatch.
+
+    ``spend_basis`` decides what the ``max_usd`` limit counts: ``"reservation"``
+    (conservative reservations) or ``"settled"`` (provider-reported cost for
+    finished requests, reservations for the rest). ``None`` omits the key, so
+    the snapshot equals one frozen before the option existed and admission
+    counts reservations.
+    """
+    if spend_basis is not None and spend_basis not in SPEND_BASES:
+        raise BatchAdmissionError("enrichment_spend_basis_invalid")
     dollars = Decimal(str(max_usd))
     if not dollars.is_finite() or not Decimal(0) < dollars <= Decimal(10000):
         raise BatchAdmissionError("enrichment_spend_limit_invalid")
@@ -258,7 +270,7 @@ def policy_snapshot(
     selection = sorted({str(v) for v in (selection or [])})
     if len(selection) > 110:
         raise BatchAdmissionError("pilot_selection_limit")
-    return {
+    snapshot = {
         "version": 1,
         "max_usd": str(max_usd),
         "deadline": deadline.isoformat(),
@@ -270,6 +282,9 @@ def policy_snapshot(
         "max_file_requests": 2000,
         "max_file_bytes": 16 * 1024 * 1024,
     }
+    if spend_basis is not None:
+        snapshot["spend_basis"] = spend_basis
+    return snapshot
 
 
 def _classifier_ready(body):
