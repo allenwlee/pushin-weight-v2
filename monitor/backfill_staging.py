@@ -55,6 +55,14 @@ from x_monitor.twitterapi_credentials import (
 )
 
 CATEGORY = "x_backfill_staging"
+# Worst case for one physical request: the 30 s timeout plus 8 s, the shared
+# runner's request envelope.
+REQUEST_SECONDS = 38
+# The consumer's time per page until this run has measured one.
+DEFAULT_CONSUME_SECONDS = 2.0
+# Lease kept after the last yielded page to wait for in-flight requests, save
+# their receipts and finish the run. Claims never renew the lease.
+LEASE_RESERVE_SECONDS = REQUEST_SECONDS + 12
 
 
 @transaction.atomic
@@ -131,9 +139,19 @@ class StagingPrefetcher(Prefetcher):
         previous = job.last_attempt.report if job.last_attempt_id else {}
         self.retry = RetryControl.restore(previous.get("staging_retry"))
         self.retry_at = None
+        # Conservative running maximum of the consumer's time per yielded page.
+        self.consume_seconds = DEFAULT_CONSUME_SECONDS
+        with fenced_run(self.claim) as (_, run):
+            self.lease_expires_at = run.lease_expires_at
         self.metrics.update(mode="staging", lost_responses=0, max_buffered=0,
-                            retry_policy=POLICY, transient_failures=0, retry_requests=0)
+                            retry_policy=POLICY, transient_failures=0, retry_requests=0,
+                            uncommitted_captures=0, consume_seconds=self.consume_seconds)
         self._save_retry()
+
+    def _lease_allows_page(self):
+        """Commit a yielded page and still finish the run inside the lease."""
+        margin = (self.lease_expires_at - datetime.now(UTC)).total_seconds()
+        return margin >= 2 * self.consume_seconds + LEASE_RESERVE_SECONDS
 
     def _save_retry(self):
         with fenced_run(self.claim) as (_, run):
@@ -283,8 +301,15 @@ class StagingPrefetcher(Prefetcher):
                     while admission_open and len(futures) < limit:
                         if any(f.done() and f.result().error for f in futures):
                             break
-                        if not self.budget.can_start(38) or not self.budget.remaining_api_requests:
+                        if not self.budget.can_start(REQUEST_SECONDS) or not self.budget.remaining_api_requests:
                             admission_open = False
+                            break
+                        # Reserve time to commit every buffered page, and this
+                        # one, while the runner's normal budgets still apply.
+                        # Admission resumes as pages drain; with none buffered
+                        # it stops, as at the request envelope.
+                        if not self.budget.can_start(REQUEST_SECONDS + self.consume_seconds * (len(futures) + 1)):
+                            admission_open = bool(futures)
                             break
                         busy = [value[0].pk for value in futures.values()]
                         scope = CollectionScopeRun.objects.filter(run_id=self.claim.run_id,
@@ -346,7 +371,16 @@ class StagingPrefetcher(Prefetcher):
                         self._failed(request, result)
                         continue
                     capture = self._save(request, result)
+                    if not self._lease_allows_page():
+                        # Keep this receipt only, as before: the next run marks
+                        # it body_lost and re-fetches, rather than leaving
+                        # requests pending past the lease.
+                        self.metrics["uncommitted_captures"] += 1
+                        return
+                    started = time.monotonic()
                     yield scope, capture
+                    self.consume_seconds = max(self.consume_seconds, time.monotonic() - started)
+                    self.metrics["consume_seconds"] = round(self.consume_seconds, 3)
             finally:
                 # A consumer error, writer yield or provider failure must still
                 # account all physical requests already started. Lost bodies are
@@ -354,7 +388,9 @@ class StagingPrefetcher(Prefetcher):
                 first_error = None
                 for future, (_, request, _) in futures.items():
                     try:
-                        self._save(request, future.result())
+                        result = future.result()
+                        self._save(request, result)
+                        self.metrics["uncommitted_captures"] += int(result.body is not None and not result.error)
                     except Exception as exc:  # noqa: BLE001 - account other started requests before raising
                         first_error = first_error or exc
                 if first_error is not None:

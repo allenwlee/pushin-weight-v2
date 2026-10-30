@@ -110,3 +110,68 @@ def test_scheduled_search_checks_remaining_time_between_pages(call, monkeypatch)
     assert outcome == "ok"
     assert [item["id"] for item in items] == ["1", "2", "3", "4", "5"]
     assert len(requests) == 5
+
+
+class NoHttpApi:
+    """A captured page must be read from the capture, never re-requested."""
+
+    timeout_s = 30
+    max_retries = 0
+
+    def run_search_pages(self, *args, **kwargs):
+        pytest.fail("captured page triggered an HTTP request")
+
+
+class AlmostExpiredDeadline:
+    @staticmethod
+    def remaining():
+        # Below the 30s * 1 attempt + 8s = 38s request envelope.
+        return 10.0
+
+
+def _captured(*, staging_capture):
+    from monitor.backfill_resources import BackfillBudget, BackfillContext
+    from x_monitor.apify import search_page_from_response
+
+    received = search_page_from_response({
+        "tweets": [{"id": "7", "text": "DeepSeek release", "lang": "en",
+                    "createdAt": "Sun Aug 09 00:10:00 +0000 2026",
+                    "author": {"id": "author-7", "userName": "user7"}}],
+        "has_next_page": False, "next_cursor": "",
+    })
+    pages = iter([received])
+    runner = CycleRunner(
+        cfg=Config(enabled_models=["deepseek"], daily_ceiling=100),
+        cycle_kind="backfill",
+        _backfill_context=BackfillContext(
+            budget=BackfillBudget(max_api_requests=1, max_llm_calls=0, run_seconds=120),
+            captured_pages=pages, staging_capture=staging_capture,
+        ),
+    )
+    return runner, pages
+
+
+# 2026-08-09 00:00-00:15 UTC contains the captured post's createdAt.
+CAPTURED_WINDOW = (1786233600, 1786234500)
+
+
+def test_staging_capture_is_committed_with_less_than_one_request_envelope(call):
+    runner, pages = _captured(staging_capture=True)
+    items, outcome = runner._fetch_tweets(
+        call, NoHttpApi(), window=CAPTURED_WINDOW, deadline=AlmostExpiredDeadline(),
+    )
+    assert (outcome, [item["id"] for item in items]) == ("ok", ["7"])
+    receipt = runner._backfill_fetch_receipt
+    assert receipt["pages_received"] == 1 and receipt["drained"] is True
+    assert next(pages, None) is None
+
+
+def test_archive_capture_keeps_the_request_envelope_budget(call):
+    # Archive-mode Prefetcher captures replay a stored body on the next run,
+    # so they keep today's deadline check and the page stays unread.
+    runner, pages = _captured(staging_capture=False)
+    assert runner._fetch_tweets(
+        call, NoHttpApi(), window=CAPTURED_WINDOW, deadline=AlmostExpiredDeadline(),
+    ) == ([], "truncated")
+    assert runner._backfill_fetch_receipt == {}
+    assert next(pages, None) is not None

@@ -2869,10 +2869,19 @@ class CycleRunner:
                 * (int(getattr(api, "max_retries", 2)) + 1)
                 + 8.0
             )
+            context = self._backfill_context
             if self.cycle_kind == "scheduled":
                 page_admission["can_start_page"] = (
                     lambda: deadline.remaining() >= request_envelope
                 )
+            elif (
+                context is not None
+                and context.staging_capture
+                and context.captured_pages is not None
+            ):
+                # StagingPrefetcher already received and paid for this page
+                # and keeps no body to replay; it needs no HTTP envelope.
+                pass
             else:
                 page_budget = int(deadline.remaining() // request_envelope)
                 if page_budget < 1:

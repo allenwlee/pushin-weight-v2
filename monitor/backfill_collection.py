@@ -711,6 +711,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
     retry_at = None
     prefetch = None
     pages = None
+    handed = []  # checkpoints for staging pages given to the shared runner
     try:
         if not CollectionScopeRun.objects.filter(run_id=claim.run_id).exists():
             import_scope_checkpoints(
@@ -744,6 +745,10 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
         else:
             pages = serial_scopes()
         for scoped, capture in pages:
+            page = PageCheckpoint(claim, scoped, budget, capture=capture)
+            staging_capture = direct_staging and capture is not None
+            if staging_capture:
+                handed.append(page)
             with harvest_writer_lock(execution_mode="backfill", entrypoint="management.backfill.job") as lease:
                 if not lease.acquired:
                     break
@@ -753,7 +758,6 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
                 settings.X_MONITOR_CYCLE_LIMIT_PER_CALL = 20
                 settings.X_MONITOR_CYCLE_MAX_PAGES_PER_CALL = 1
                 settings.X_MONITOR_CYCLE_BRAND_FILTER = ",".join(scope["brands"]) or None
-                page = PageCheckpoint(claim, scoped, budget, capture=capture)
                 context = BackfillContext(
                     budget=budget, cursor=scoped.cursor, seen_cursors=scoped.cursor_history,
                     enrichment_limit=0, query_override=owner["query"], page_writer=page.persist,
@@ -761,6 +765,8 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
                     author_contexts=scope.get("author_scope", {}).get("contexts") if current_policy else None,
                     rare_page_writer=page.persist_rare if current_policy else None,
                     captured_pages=capture.pages() if capture is not None else None,
+                    # Archive-mode captures replay their stored body instead.
+                    staging_capture=staging_capture,
                 )
                 try:
                     stats = CycleRunner(cfg=cfg, cycle_kind="backfill", dry_run=False,
@@ -822,6 +828,10 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
     report.update({"usage": budget.snapshot(), "revision": os.environ.get("RENDER_GIT_COMMIT"),
                    "scope_errors": scope_errors})
     if prefetch is not None:
+        if direct_staging:
+            # Received pages handed over but not committed; the next run marks
+            # them body_lost. StagingPrefetcher counts pages it never yielded.
+            prefetch.metrics["uncommitted_captures"] += sum(not checkpoint.written for checkpoint in handed)
         report["prefetch"] = prefetch.metrics
         if error is None and getattr(prefetch, "retry_at", None):
             retry_at = prefetch.retry_at
