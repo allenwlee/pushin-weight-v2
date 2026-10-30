@@ -364,10 +364,13 @@ def test_saved_release_capture_waits_for_later_reviewed_authority_without_refetc
 
     import httpx
     from django.utils import timezone
+
     from core.collection_scheduling import take_metric_authority
     from core.models import DataSource, EventDossierClaim, Post
     from core.product_release_acquisition import (
-        drain_due_hf_acquisitions, execute_hf_name_search, queue_hf_name_search,
+        drain_due_hf_acquisitions,
+        execute_hf_name_search,
+        queue_hf_name_search,
     )
     from core.product_release_dossiers import record_release_report
     from core.source_metric_projection import recover_release_projection_followups
@@ -427,11 +430,19 @@ def test_saved_release_capture_waits_for_later_reviewed_authority_without_refetc
 @pytest.mark.django_db(transaction=True)
 def test_waiting_release_followup_respects_exclusion_and_later_correction():
     import httpx
+
     from core.models import EventDossierClaim, Post
-    from core.product_release_acquisition import execute_hf_name_search, integrate_acquisition_run, queue_hf_name_search
+    from core.product_release_acquisition import (
+        execute_hf_name_search,
+        integrate_acquisition_run,
+        queue_hf_name_search,
+    )
     from core.product_release_dossiers import record_release_report
     from core.product_release_pipeline import record_intake_decision
-    from core.source_metric_projection import recover_release_projection_followups, retain_release_projection_followup
+    from core.source_metric_projection import (
+        recover_release_projection_followups,
+        retain_release_projection_followup,
+    )
 
     _, _, product, _ = configured("hf", product_type="llm-model", mapped=True)
     url = "https://huggingface.co/lab/Model"
@@ -474,11 +485,19 @@ def test_waiting_release_followup_respects_exclusion_and_later_correction():
 @pytest.mark.django_db(transaction=True)
 def test_native_release_measurement_waits_for_later_dedicated_product_mapping():
     import httpx
+
     from core.collection_scheduling import take_metric_authority
     from core.models import DataSource, EventDossierClaim, Post
-    from core.product_release_acquisition import drain_due_hf_acquisitions, execute_hf_name_search, queue_hf_name_search
+    from core.product_release_acquisition import (
+        drain_due_hf_acquisitions,
+        execute_hf_name_search,
+        queue_hf_name_search,
+    )
     from core.product_release_dossiers import record_release_report
-    from core.source_metric_projection import configure_source_statistics, recover_release_projection_followups
+    from core.source_metric_projection import (
+        configure_source_statistics,
+        recover_release_projection_followups,
+    )
 
     dedicated, _, product, spec = configured("hf", product_type="llm-model", mapped=True)
     native_spec = copy.deepcopy(spec)

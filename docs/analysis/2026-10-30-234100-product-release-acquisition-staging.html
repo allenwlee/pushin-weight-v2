@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Product release acquisition — staging results</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 1150px; margin: 32px auto; padding: 0 20px; color: #1c2630; background: #fafafa; }
+  h1 { margin-bottom: 5px; } h2 { margin-top: 34px; } p { max-width: 90ch; }
+  .note { background: #fff8e7; border-left: 4px solid #bd8320; padding: 12px 16px; }
+  .wrap { overflow-x: auto; } table { border-collapse: collapse; width: 100%; background: white; }
+  th, td { text-align: left; vertical-align: top; padding: 10px; border-bottom: 1px solid #ddd; }
+  th button { background: none; border: 0; font: inherit; font-weight: bold; cursor: pointer; }
+  a { color: #075b9c; } small { color: #5f6d78; }
+</style>
+<h1>Product release acquisition</h1>
+<p>Staging evidence and test results · 30 October 2026 · times are UTC unless stated otherwise</p>
+<div class="note"><strong>Staging:</strong> the latest detector and waiting-measurement handoff were verified on the saved OpenZero evidence. A real late-contract projection and a captured historical 404-to-200 transition have not been demonstrated in staging. Production was not deployed, and its separate health check failed as described below.</div>
+<h2>What the system is intended to do</h2>
+<p>Start from a saved post or another saved source, retain a pending release dossier, and look for a small set of specific source records. A repository match can identify a Product, while confirmation of an announcement requires evidence that the publisher controls the announcing source. Captured source values retain their observation time. No new language-model call is used by routine detection.</p>
+<h2>Representative cases</h2>
+<p>Click a column heading to sort. Source counts are values in the captured provider response, not proof that the release was announced or publicly available at that time.</p>
+<div class="wrap"><table id="cases"><thead><tr>
+  <th><button data-col="0">Case ↕</button></th><th><button data-col="1">Result ↕</button></th>
+  <th><button data-col="2">Evidence and observed time ↕</button></th><th><button data-col="3">What remains unresolved ↕</button></th>
+</tr></thead><tbody>
+<tr><td>Nanbeige 4.3 33B</td><td>Repository Product retained; announcement provisional.</td><td><a href="https://huggingface.co/Nanbeige/Nanbeige4.3-33B">HF repository</a>; captured 12:02:27, with 12,178 downloads and 787 likes. One search and one exact-repository request were used in the staged pass.</td><td>The search had more pages; the original third-party post did not establish publisher control. Values are not yet approved Product measurements.</td></tr>
+<tr><td>OpenZero Fusion Qwen3-4B Agentic</td><td>Derivative repository Product retained; announcement provisional.</td><td><a href="https://huggingface.co/shafire/OpenZero-Fusion-Qwen3-4B-Agentic-GGUF">HF repository</a>; captured 12:11:46, with 142 downloads and one like. The staged discovery and metadata/profile pass used five requests; a separate card capture used one.</td><td>The HF profile did not link back to the announcing X account. Model-card teacher claims are evidence, not verified Product relationships.</td></tr>
+<tr><td>GLM-5.3</td><td>Previously confirmed dossier retained; the same-source duplicate was reconciled.</td><td><a href="https://x.com/Zai_org/status/2088132965922476159">Stored announcement</a>, 14 August 05:17:49; the stored <a href="https://huggingface.co/zai-org/GLM-5.3">HF Product</a> has provider creation time 25 August 06:42:50. The staged reconciliation made no provider request.</td><td>Repository creation time does not establish public availability. No historical 404-to-200 retry was captured; another source-specific candidate and general cross-post grouping remain open.</td></tr>
+<tr><td>Ambiguous and misleading examples</td><td>Anticipation, a usage recipe and an older checkpoint overview remain provisional.</td><td>Three saved X posts were inspected with the deterministic detector and no provider request.</td><td>The observations do not establish a database-wide false-positive rate, and the separate dossiers still need broader reconciliation.</td></tr>
+</tbody></table></div>
+<h2>Storage and safeguards</h2>
+<p>One reusable detector-state row per saved Post records progress and bounded retries. A saved HF observation with no reviewed Product mapping retains a waiting collection scope; a later eligible contract can reuse the observation without fetching it again. Native-only and Product-specific measurements remain separate. The background feature remains disabled in staging until explicitly activated.</p>
+<p>On the staging revision, a finite job processed the saved OpenZero post twice: each pass selected one candidate, its dossier stayed at 23 claims, both dossier reviews were preserved, and no new provider request was made. Its exact HF observation is waiting for a reviewed contract; an immediate second check selected nothing during the six-hour wait. A first attempt used the restricted web role and failed to read the evidence archives; the two resulting staging cooldowns were recovered using the job service. A separate access check confirmed that the staging headline worker can read those archives and insert detector-state rows, with the feature flag off. Staging has no active reviewed HF metric job, so this test does not claim a real late-contract projection has occurred there.</p>
+<p>Source records and claims are retained in existing collection and EventDossier storage. The branch adds six tables in total, including the detector state, and no new JSON column. The final index for due measurement work is created concurrently on the existing collection scope table.</p>
+<h2>Verification and limits</h2>
+<p>The local projection and release-pipeline suite passed 108 tests; focused queue and measurement tests passed after later changes. A separate existing harvest test fails because the unchanged configuration uses a 24-hour lookback while the test expects at most one hour. The shared local test database was restored to its previous migration level. Remote checks are still running; one test-import formatting failure was corrected locally and is being rechecked.</p>
+<p>The read-only production health check did not pass. At the first observation all 20 selected posts were freshly pending. Thirty minutes later, one was complete and 19 were unhealthy because both English and Chinese commentary were missing. Language detection was present for all 20 posts, and the required Chinese translation was present for all 18 applicable posts. The exact same IDs were checked both times. These release changes are not deployed to production; the check does not establish the cause of missing commentary. No production write, provider call or model call was made by the check.</p>
+<p>Confirmation, availability and first use remain separate. Missing repositories, unfamiliar publishers, low attention and missing Product mappings do not establish fraud. This report does not assert complete coverage of every release in the database or a measured miss rate.</p>
+<script>
+  document.querySelectorAll('th button').forEach(button => button.addEventListener('click', () => {
+    const table = document.getElementById('cases'); const body = table.tBodies[0];
+    const column = Number(button.dataset.col); const direction = button.dataset.direction === 'up' ? -1 : 1;
+    button.dataset.direction = direction === 1 ? 'up' : 'down';
+    [...body.rows].sort((a, b) => direction * a.cells[column].innerText.localeCompare(b.cells[column].innerText)).forEach(row => body.appendChild(row));
+  }));
+</script>
+</html>
