@@ -123,17 +123,22 @@ def _named_announcement_dossier(source, candidate):
     canonical = {pk: canonical_dossier(pk).pk for pk in {pk for pk, _, _ in claims}}
     if len(set(canonical.values())) != 1:
         return None
-    target_ids = {
-        canonical[pk] for pk, scope, _ in claims
-        if scope.rsplit("/", 1)[-1].casefold() == normalized
-    }
-    if len(target_ids) != 1:
-        return None
-    target_id = next(iter(target_ids))
+    target_id = next(iter(canonical.values()))
     target = models.EventDossier.objects.get(pk=target_id)
+    matching_claims = [claim_id for pk, scope, claim_id in claims
+                       if canonical[pk] == target_id and scope.rsplit("/", 1)[-1].casefold() == normalized]
+    if not matching_claims and target.current_review_id:
+        # A reviewed Product's exact repository name can retain punctuation
+        # lost by an older release-identity slug. It is still only an identity
+        # match; the review must have accepted this source's announcement.
+        repo = models.ProductReleaseDetail.objects.filter(
+            review_id=target.current_review_id
+        ).values_list("product__repo_id", flat=True).first()
+        if repo and repo.rsplit("/", 1)[-1].casefold() == normalized:
+            matching_claims = [claim_id for pk, _, claim_id in claims if canonical[pk] == target_id]
+    if not matching_claims:
+        return None
     if target.current_review_id:
-        matching_claims = [claim_id for pk, scope, claim_id in claims
-                           if canonical[pk] == target_id and scope.rsplit("/", 1)[-1].casefold() == normalized]
         if not models.EventDossierReviewClaim.objects.filter(
             review_id=target.current_review_id, claim_id__in=matching_claims, disposition="accepted"
         ).exists():
