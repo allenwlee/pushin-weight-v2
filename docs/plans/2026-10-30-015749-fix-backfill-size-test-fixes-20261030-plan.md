@@ -1,7 +1,8 @@
 ---
 title: Backfiller fixes from the OpenAI/Anthropic size test - Plan
 artifact_contract: ce-unified-plan/v1
-artifact_readiness: implementation-ready
+type: fix
+date: 2026-10-30
 product_contract_source: ollija-annotate-plan
 execution: code
 ollija:
@@ -57,167 +58,379 @@ Target is not authorized until the owner selects it. Wait for a later explicit r
 ## Delivery Exceptions
 
 - 2026-10-30 (JST): the owner asked to plan all seven backfiller fixes and build fixes 1–3 first ("Plan all 7, build 1–3 first").
-  - The endpoint is an open pull request with CI decided. No merge, staging or production delivery without the owner's go.
-- 2026-10-30 (JST): the pull request targets `ops/xbackfiller-db-20261026`, not `main` (owner choice "PR into the July branch").
-  - July runs from pinned source archives of that branch, at schema 0183. `main` is at schema 0205 and 220 commits ahead of their merge base.
-  - Bringing these fixes to `main` happens when that branch itself lands on `main`, which is follow-up U9.
+- 2026-10-30 (JST): fixes target `ops/xbackfiller-db-20261026`, not `main` ("PR into the July branch").
+- 2026-10-30 (JST): the owner said "merge pr 75". PR #75 (U1–U4) merged into `ops/xbackfiller-db-20261026` as `b4d5d8b7`.
+- 2026-10-30 (JST): the owner invoked `/lfg` on fixes 4–7 (U5–U8). The endpoint is an open pull request with CI decided. No further merge, staging or production delivery without the owner's go.
 
 # Backfiller fixes from the OpenAI/Anthropic size test - Plan
 
 ## Plain-English Summary
 
-The six-hour OpenAI/Anthropic size test (PR #72, which never merges to `main`) used the backfiller harder than July has, and exposed seven backfiller problems. This plan records all seven and fixes the first three now:
+The OpenAI/Anthropic size test (PR #72, which never merges) pushed the backfiller harder than July has and exposed seven problems. Fixes 1–3 are merged (PR #75):
+- an HTTP 520 now retries instead of stopping the run;
+- a window can cap spending on actual cost;
+- the backfill CI lint step passes.
 
-1. a provider HTTP 520 error stops a backfill run, which is how July stopped;
-2. the spending cap counts conservative reservations, which run 6–7 times the real bill, so a $30 cap stops at about $5 of real spend;
-3. an unused import fails the backfill CI lint step, so that job's database tests never run.
+This plan builds the other four:
+- **Fix 4 (U5):** stop paying twice for search pages that arrive as a run ends. That was 15% of requests in the size test.
+- **Fix 5 (U6):** give operators a recorded, one-request "final attempt" for posts that failed model validation three times. Today those posts can never finish.
+- **Fix 6 (U7):** add a guarded command that copies production's list members and brand-account roles into the backfill database from a read-only export. Without them, new windows planned there know nothing about who is on each list.
+- **Fix 7 (U8):** make a run whose final check fails exit with an error code instead of reporting success.
 
-The first three are already written and tested on PR #72. This change carries only those pieces onto the branch July actually runs from, `ops/xbackfiller-db-20261026`. It leaves behind the OpenAI/Anthropic brand config, the size-test routes and the size-test scripts. Nothing in production changes, and July's saved windows behave exactly as before: a window without the new `spend_basis` field produces the same manifest and the same spending policy.
+What stays the same:
+- production's 15-minute harvester;
+- July's saved windows and their frozen settings;
+- the backfill database, until an operator explicitly runs the new commands. Building U6 and U7 writes nothing.
 
-The other four problems are recorded with evidence, but they are not built in this change:
+One timing note for the final-attempt tool: it only works before a campaign's frozen deadline, which is 2026-11-04 20:59 UTC for July. Posts still exhausted after that cannot be finished this way.
 
-4. 15% of search requests were paid twice at run boundaries;
-5. posts that fail model validation three times stay unfinished forever;
-6. the backfill database lacks production's list memberships;
-7. a run whose final check fails still exits as success.
+Two operational notes for whoever launches July next. First, July pins checksums of the files it runs, so launching from a revision with changed files needs July's existing runtime override, which supplies the new revision and checksums. Second, when to run the membership sync is an owner decision, because new roles change how July's later posts are classified.
 
-Moving everything onto `main` is a separate, larger step (U9), because the July branch is 220 commits behind `main` at an older schema.
+Completion is shown by the new tests passing in the pull request's CI. The PostgreSQL tests can only run there, because the shared local test database is at a different schema.
 
-Completion is checked by the existing and new tests passing on the pull request's CI. The PostgreSQL tests can only run in CI, because the shared local test database is not at this branch's schema. A pull request is opened against the July branch; merging it is the owner's decision, and July's session then decides when to launch from the merged revision.
+---
 
-## Context and evidence
+## Goal Capsule
 
-- **Size-test plan:** `docs/plans/2026-10-27-113859-ops-oai-anthropic-size-20261027-plan.md` on branch `ops/oai-anthropic-size-20261027`, especially the U9 and U10 execution records.
-- **Size-test report:** `docs/analysis/2026-10-30-095822-oai-anthropic-size-report.md` (run notes at the end).
-- **Machine-local receipts** on fuchitalee: `~/.local/share/render-operations/2026-10-29-oai-anthropic-size-test/`.
-  - `final-phase-receipt.json`, `final-failures.json` and `cls-failures.json` (enrichment outcome);
-  - `collection-phase-summary.txt` (collection);
-  - `handback-receipt.json` (July handback).
-- **How July runs:** Render one-off jobs that download and verify a pinned source archive of this branch line, for example `ba3a2685` and `447e8286` (`~/.local/share/render-operations/2026-10-26-xbackfiller-db-move/collect-payload.json`, `entity-rollout.json`).
-  - The database is xbackfiller (`dpg-dbfemu2vcj2c73fsafe0-a`), at schema `0183_rg6_typed_statistics_identity`.
-- **Branch state on 2026-10-30:**
-  - `origin/ops/xbackfiller-db-20261026` is at `ccf10e1b`. It is checked out clean in worktree `.worktrees/ops/u10-staging-20261025` and has no open PR.
-  - `origin/main` is at `c445ec24`, migration `0205`.
-- **Source commits on PR #72's branch, and how each applies to `ccf10e1b`** (`git merge-tree`, files untouched):
-  - `47f8b721` applies cleanly;
-  - `6df3bb4a` applies cleanly;
-  - `cef1168e` applies cleanly;
-  - the `spend_basis` plumbing in `6a13d480` is entangled with the size-test routes, slices and lab lists, so it is re-written here as a minimal change.
+- **Objective:** historical X backfills can be run to completion without paying twice for the same search pages, without leaving posts permanently unclassifiable, with the same Call A list roles as production, and with a failed run visibly failing.
+- **Means:** small fixes on the July branch line, reusing the shared backfill core and existing recovery and list-membership helpers (KTD1, KTD5–KTD8).
+- **Authority:** owner decisions in Delivery Exceptions, then the Product Contract R-IDs, then KTDs, then units.
+- **Stop conditions:**
+  - stop if a change would alter production's scheduled harvester (R6), a July saved manifest or policy (R4), or Brand/BrandKeyword rows (R9);
+  - stop if a fix needs a migration.
+- **Execution profile:** code changes with unit and PostgreSQL tests. No provider calls, no database writes and no deploys while building.
+- **Who ships:** the implementing session opens a PR into `ops/xbackfiller-db-20261026` and decides CI. Merging, running U6/U7 against xbackfiller, and launching July are owner or July-session actions.
 
-## Scope
+---
 
-**TOUCH**
-- `tests/test_account_user_about_model.py` (lint)
-- `monitor/backfill_retry.py`
-- `core/provider_batches.py`
-- `monitor/backfill_enrichment.py`
-- `scripts/backfill_campaign.py`
-- `monitor/management/commands/run_backfill.py`
-- the tests named in each unit
-- `.github/workflows/backfill.yml` (a fast step for the retry and spend-basis tests; trigger paths for `monitor/backfill_retry.py` and `monitor/backfill_staging.py`)
+## Product Contract
 
-**PRESERVE**
-- July's saved manifests and their frozen policies. A window without `spend_basis` gives a byte-identical manifest and a `policy_snapshot` without the key.
-- The scheduled harvester path (`run_cycle`, `CycleRunner` collection, `config.yaml`, `config/harvest_policy.yaml`).
-- The 8-call production query shape, the brand set and all size-test-only code.
+### Summary
 
-**EXCLUDED**
-- OpenAI/Anthropic config (`fce17cfc`).
-- Named routes, slices, `author_list_ids` and ceilings (`6a13d480`, except `spend_basis`).
-- The `scripts/backfill_size_*` files and the size report.
-- Any merge, deploy, cron change or production write.
+Four backfiller fixes (U5–U8) join the three already merged (U1–U4) on the branch July runs from.
 
-## Key Technical Decisions
+### Problem Frame
 
-- **KTD1. Target the July branch.** July launches from pinned archives of `ops/xbackfiller-db-20261026` against a 0183 database, so a fix on `main` (0205) does not reach July.
-  - (session-settled: user-directed, 2026-10-30, chosen over a branch from `main` with the base folded in.)
-- **KTD2. Carry the proven commits, then add only the missing plumbing.**
-  - `47f8b721`, `6df3bb4a` and `cef1168e` are cherry-picked with their tests. They ran in PR #72's CI database proof, run 40769414567: 181 of 184 passed, and the 3 failures predate that plan.
-  - `cef1168e` alone is unreachable from `run_backfill`, because no window can set `spend_basis`. The plumbing is therefore re-written minimally:
-    - campaign windows accept one optional `spend_basis` field (`reservation` or `settled`);
-    - unknown window fields are rejected;
-    - `_enrich_window` passes the field to `policy_snapshot` only when present.
-  - Plain `since`/`until` rows keep today's tuple input, so campaign names and manifests are unchanged.
-- **KTD3. The regression net pins the July-shaped manifest.**
-  - The manifest test from `f01d0f03` is ported to pin that a plain window keeps today's exact manifest and policy.
-  - Its companion frozen-query test is omitted: it depends on the size-test frozen query file, which is not on this branch and would only skip.
-- **KTD4. PostgreSQL evidence comes from CI, in a step that always finishes.**
-  - The shared test database (`~/.local/bin/pushinweight-test-db`) refuses this branch: it holds migrations `0184`–`0186`, which this branch lacks (checked 2026-10-30). Pure-Python tests run locally with `scripts/pytest-local`.
-  - `tests/test_backfill_retry_statuses.py`, `tests/test_backfill_spend_basis.py` and `tests/test_backfill_staging_retry.py` were in no workflow.
-  - The backfill job's long suite reaches its 15-minute limit at about 43%, so its later tests never run.
-  - A new step before the long suite runs those three files plus the named spend-basis and July-manifest cases (80 tests).
-  - `monitor/backfill_retry.py` and `monitor/backfill_staging.py` join the workflow's trigger paths.
+The size test, a six-hour window with 24,044 kept posts, showed four costs the backfiller imposes on every large window.
+- **Paid twice:** 691 of 4,614 search requests were paid twice, because pages received in a run's last seconds were never committed.
+- **Unfinishable:** 64 posts could not be classified after three invalid model replies, and 60 never finished targeted extraction. No tool can finish them without silently resetting their retry limits.
+- **Missing roles:** the backfill database lacks production's list memberships and most of its roles, so a newly planned window freezes no Call A author roles.
+- **False success:** the run's final check said `failed`, yet the job exited as a success.
+
+### Requirements
+
+Collection
+- R1. A provider HTTP 520 retries at the same cursor (U2).
+- R2. The backfill CI lint step passes, and the retry and spend-basis tests run in CI (U1, U4).
+- R3. A campaign window can choose `spend_basis: "settled"` (U3).
+- R4. July's saved windows keep byte-identical manifests and spending policies.
+- R5. A search page the backfill already received is committed in the same run whenever the run's lease allows. When it cannot be committed safely, the outcome is no worse than today's paid re-fetch.
+- R6. Production's scheduled and manual `run_cycle` behave exactly as today.
+
+Enrichment
+- R7. An operator can give a listed set of exhausted, still-incomplete posts exactly one more physical request each. The grant is recorded with actor and reason, stays inside the campaign's existing spend, request and deadline limits, and never resets earlier attempts.
+- R8. A `run_backfill --execute --evaluate-at-end` run whose final assessment is not verified exits non-zero, after its receipts are saved.
+
+Backfill database
+- R9. An operator can sync production's main-list memberships and X brand-account roles into the dedicated backfill database from a saved read-only production export. The sync is idempotent, refuses any other database and any live historical lease, and never creates or edits Brand, BrandKeyword or Role rows or existing account handles.
+- R10. The sync and the final-attempt grant write nothing unless the operator passes `--execute`. Building them changes no backfill data.
+
+### Key Decisions
+
+- **Fixes target the July branch line.** Governs R1–R10. See KTD1.
+- **Exit code for "finished but not verified" is 3.** Governs R8. This is an assumption the owner can change; Render shows any non-zero code as a failed job.
+
+### Scope Boundaries
+
+- Not in scope:
+  - changes to production's harvester or its enrichment budget windows;
+  - archiving response bodies for replay;
+  - raising per-run limits in saved windows.
+- Running U6 or U7 against xbackfiller is an operator action, not part of this change.
+
+### Deferred to Follow-Up Work
+
+- **U9:** land the July branch, with these fixes, on `main`. It conflicts across 220 commits, and xbackfiller must move from schema 0183 to 0205.
+- **Retry gap outside defer mode:** `backfill --enrich-direct`, and `run_backfill` without `--evaluate-at-end`, regroup exhausted classification members into new packets and quietly retry them. The per-post limit applies only in defer mode (`monitor/backfill_enrichment.py` around 1345–1351 and 1420). No test pins this.
+- **Smaller packets for retried members during normal runs:** only if a ledger query shows failures depend on packet size.
+- **Why about 9% of classification member results fail canonical validation:** a model or prompt investigation.
+- **A guard in `manifest()`** that refuses a database-storage plan whose author scope is empty. It edits an attested runtime module, so it goes with U9.
+
+### Sources
+
+- Size-test plan `docs/plans/2026-10-27-113859-ops-oai-anthropic-size-20261027-plan.md` (U9 and U10 execution records) and report `docs/analysis/2026-10-30-095822-oai-anthropic-size-report.md`, both on branch `ops/oai-anthropic-size-20261027`.
+- Machine-local receipts on fuchitalee in `~/.local/share/render-operations/2026-10-29-oai-anthropic-size-test/`: `final-phase-receipt.json`, `final-failures.json`, `cls-failures.json`, `collection-phase-summary.txt`, `seed-result.json`, `switch-off-result.json`.
+
+---
+
+## Planning Contract
+
+### Key Technical Decisions
+
+- KTD1. **Target `ops/xbackfiller-db-20261026`.** July launches one-off jobs from pinned archives of this branch against xbackfiller at schema 0183, while `main` is at 0205 and 220 commits ahead. (session-settled: user-directed — chosen over a branch from main with the dedicated-database branch folded in: main-based code cannot run against July's 0183 database.)
+- KTD2. **U1–U3 carried proven commits** (`47f8b721`, `6df3bb4a`, `cef1168e`) and added the minimal `spend_basis` window plumbing.
+- KTD3. **The July-shaped manifest regression net** (`tests/test_backfill_campaign.py::test_manifest_without_new_window_fields_keeps_its_july_shape`) guards R4 for every unit.
+- KTD4. **PostgreSQL evidence comes from a fast CI step.**
+  - The shared local test database holds migrations 0184–0186, which this branch lacks.
+  - The backfill workflow's "Retry and spend-basis regressions" step runs before the long suite, which reaches the 15-minute limit at about 43%.
+  - New PostgreSQL tests join that step, together with the existing suites of the code each unit changes, because those suites run in no workflow today: `tests/test_backfill_staging.py` for U5, and `tests/test_backfill_contract_recovery.py` plus `tests/test_backfill_cached_replay.py` for U6.
+- KTD5. **Fix re-fetches by consuming captured pages, with tapering and a lease guard (U5).**
+  - **Cause:** `StagingPrefetcher.pages` stops admitting new requests below 38 s (`monitor/backfill_staging.py`, the `can_start(38)` check), then yields buffered pages. But `CycleRunner._fetch_tweets` budgets each yielded page as a new HTTP call and returns `[], "truncated"` when under one request envelope remains (`monitor/cycle.py`, the non-scheduled `page_budget < 1` branch). It returns before reading `captured_pages`, so the receipt commits without its page and the next run marks it `body_lost` and pays again.
+  - **Fix, three parts:**
+    1. `_fetch_tweets` skips the page-budget early return only for pages captured by `StagingPrefetcher`, which `execute_job` marks on the backfill context. Archive-mode `Prefetcher` captures (`monitor/backfill_prefetch.py`) also arrive as `captured_pages`, but archive runs replay stored bodies instead of paying twice, so they keep today's budget check. Production passes `_backfill_context=None`, so it is unaffected (R6).
+    2. The prefetcher reserves drain time at admission, using a measured per-page consume time times the buffered pages, so drains finish while normal budgets, including staff relevance checks, still apply.
+    3. Before each yield, the prefetcher checks the run's lease margin. If it is too small, it stops and keeps today's receipt-only behavior, so a drain can never outrun the lease (`core/collection_state.py` sets it once, at claim time plus seconds plus 60) and strand requests as `pending`.
+  - **Rejected:** archiving unconsumed bodies for replay, which breaks the pinned "no evidence archive in staging" invariant asserted by three staging tests; and raising per-run limits, which are frozen in saved windows (R4) and only reduce the frequency.
+- KTD6. **Finish exhausted posts with a "final attempt grant" spec on the existing recovery executor (U6).**
+  - `monitor/backfill_recovery.py::advance_contract_recovery` already builds single-member requests under the campaign's ceilings, preserves paid history, requires drained work, and is tested. It needs per-post correction feedback and allows 3 attempts per corrected request.
+  - A new spec version, `final-attempt-grant-v1`:
+    - requires actor and reason;
+    - admits only posts currently deferred as `model_attempt_allowance_exhausted` and canonically incomplete;
+    - rejects posts with an unknown provider outcome;
+    - allows exactly one physical request per grant per request hash;
+    - stores the grant in the new call's provenance and in a `save_campaign_report` receipt.
+  - **Rejected:** raising `max_attempts`, which is frozen in the policy (`enrichment_policy_changed`) and affects every post; and a fresh job or policy, which is a silent reset.
+  - An ambiguous call (`direct_outcome_unknown`) is closed first with the existing `close_unrecoverable_direct_imports`.
+- KTD7. **Return exit code 3 from `run_backfill` when an `--evaluate-at-end` run's final assessment is not verified (U8).**
+  - `_handle` currently drops the return of `run`/`run_phases`.
+  - The two paths return different shapes. `run` (`scripts/backfill_campaign.py`) returns `assess_campaign`'s report, a dict whose `status` is `verified` only when every window is verified. `run_phases` (`scripts/backfill_month.py`, used by `--phase` and month recipes, July included) returns `phase_sequence`'s list of compact per-window rows, and drops the report's overall status.
+  - Raise `CommandError(..., returncode=3)` after they return: for `run`, when the report's `status` is not `verified`; for `run_phases`, when any returned row's `status` is not `verified`.
+  - The receipts are already saved at that point. Raising inside `run_phases` would instead trigger its failure handler, which pauses every campaign job.
+- KTD8. **The membership sync is a new guarded command that reuses `monitor/list_membership.py` (U7).**
+  - `sync_backfill_list_roles` reads a saved read-only export.
+  - It reuses `_upsert_account`, `_upsert_membership`, `resolve_call_a_author_contexts`, `validate_staging` and `harvest_writer_lock`.
+  - It ports and generalizes the size-test seed's main-list import (`scripts/backfill_size_seed.py` on `ops/oai-anthropic-size-20261027`).
+  - Memberships alone leave the classifier catalog revision unchanged. Roles change it by design, since the catalog hashes each brand's account handles and roles. So the proof is: the catalog without handles is identical, and the handle/role delta equals the intended rows.
+  - Tables added: 0, retired: 0. It adds one value, `production_export`, to the existing `TwitterListMembership.source` vocabulary.
+- KTD9. **July runtime attestation.** U5 and U8 edit modules July attests (`scripts/backfill_month.py` `RUNTIME_MODULES`, plus `monitor/backfill_staging.py` for database storage). July adopts them through `selected_runtime`'s existing override (`runtime_revision` plus `source_sha256`). No recipe rewrite.
+
+### Assumptions
+
+- Exit code 3 for an unverified evaluate-at-end run (R8).
+- U7 syncs all X roles from production (232 at the last export), reports xbackfiller-only roles without deleting them, and leaves the timing relative to July to the owner.
+- A plain grant (no feedback) is allowed for classification, whose single-member request differs from earlier packets. Translation and targeted retries keep identical bodies, so they require feedback (corrected recovery), unless the post's failures include provider-side `failed` calls.
+
+### Risks
+
+- **A grant only works before its campaign's frozen deadline.** Each grant registers a provider batch under the campaign policy's `deadline`, and `fenced_batch` refuses new starts after it (`batch_deadline_exhausted`, `core/provider_batches.py`). July's recipes freeze `2026-11-04T20:59:34Z`, and the size test's manifest freezes `2026-10-31T22:15Z`. Exhausted posts left after those times stay unfinished.
+
+### High-Level Technical Design
+
+```mermaid
+sequenceDiagram
+    participant P as StagingPrefetcher.pages
+    participant C as CycleRunner._fetch_tweets
+    participant DB as Page checkpoint
+    Note over P: admit while can_start(38 + est_consume × (buffered+1))
+    P->>C: yield captured page
+    C->>DB: commit page (no HTTP budget check for captured pages)
+    Note over P: before each yield: lease margin ≥ 2 × est_consume + safety?
+    P-->>P: if not, stop yielding; finally saves receipts (today's body_lost path)
+```
+
+U7's sync refuses before any write, in this order:
+
+```mermaid
+flowchart TD
+    A[read export file] -->|invalid| X1[refuse: export]
+    A --> B{environment = backfill?}
+    B -->|no| X2[refuse before identity read]
+    B --> C{identity = xbackfiller?}
+    C -->|no| X3[refuse before lease check]
+    C --> D{live historical lease?}
+    D -->|yes| X4[refuse, no writes]
+    D --> E[harvest_writer_lock, re-check lease]
+    E --> F[one transaction: writes + proofs]
+    F -->|dry run or failed proof| R[roll back, report]
+    F -->|--execute and proofs pass| K[commit, report]
+```
+
+### Sequencing
+
+U8 first (smallest, independent), then U5, U7 and U6. Each is independent of the others and lands as its own commit set.
+
+---
 
 ## Implementation Units
 
 ### U1. CI lint fix
 
-- **Goal:** the backfill workflow's ruff step passes, so its PostgreSQL tests run.
-- **Change:** cherry-pick `47f8b721` (removes the unused `transaction` import at `tests/test_account_user_about_model.py:7`, which arrived in `e41c4ff1`).
-- **Verification:** `ruff check tests/test_account_user_about_model.py` is clean.
+- **Goal:** the backfill workflow's ruff step passes (R2).
+- **Files:** `tests/test_account_user_about_model.py`.
+- **Approach:** cherry-pick `47f8b721`.
+- **Verification:** the ruff step passes in CI.
 
 ### U2. HTTP 520 retries at the same cursor
 
-- **Goal:** a provider 520 is transient, as 500/502/503/504 already are. July stopped on one.
-- **Change:** cherry-pick `6df3bb4a`, which adds 520 to `transient()` in `monitor/backfill_retry.py`.
-- **Tests:**
-  - `tests/test_backfill_retry_statuses.py` (pure);
-  - the 520 recovery case in `tests/test_backfill_staging_retry.py` (PostgreSQL; it exercises the staging prefetcher's retry at the same cursor, the call-chain pin per M18).
-- **Verification:** the pure test fails before the change and passes after it; the CI PostgreSQL case passes.
+- **Goal:** R1.
+- **Files:** `monitor/backfill_retry.py`, `tests/test_backfill_retry_statuses.py`, `tests/test_backfill_staging_retry.py`.
+- **Approach:** cherry-pick `6df3bb4a`.
+- **Test scenarios:** 520 is transient; the staging prefetcher retries a 520 at the same cursor.
+- **Verification:** the fast CI step passes.
 
 ### U3. Settled spend basis, reachable from a campaign window
 
-- **Goal:** a campaign window can choose `spend_basis: "settled"`, so `max_usd` counts provider-reported cost for finished requests and reservations for the rest.
-- **Change:**
-  - cherry-pick `cef1168e` (`core/provider_batches.py`: `SPEND_BASES`, `counted_model_spend`, `campaign_model_totals`, `admit_model_request`; and `monitor/backfill_enrichment.py`: `policy_snapshot(spend_basis=...)`);
-  - in `scripts/backfill_campaign.py`, add `WINDOW_FIELDS = {"since", "until", "spend_basis"}` and `_window_input` (a dict row is validated, an unknown field gives `unknown_window_field`, an invalid basis gives `invalid_spend_basis`). `manifest()` copies a present basis into the window, and `_enrich_window` passes it to `policy_snapshot`;
-  - in `monitor/management/commands/run_backfill.py`, `--windows` rows with only `since`/`until` stay tuples, and any other row passes through as a dict for `manifest()` to validate.
-- **Tests:**
-  - `tests/test_backfill_spend_basis.py`, plus the cases in `tests/test_backfill_direct_enrichment.py` and `tests/test_backfill_native_enrichment.py` (from `cef1168e`);
-  - new `tests/test_backfill_campaign.py` cases: the basis reaches `policy_snapshot` only when present, and a window with `spend_basis` gets it in the manifest while an unknown field or an invalid basis is rejected;
-  - a new `tests/test_run_backfill_command.py` case (PostgreSQL): a `--windows` file with `spend_basis` plans a manifest carrying it, without creating jobs.
-- **Live evidence:** the size test (`6a13d480`'s version of this plumbing) held $84.86 in reservations against $7.96 settled, and kept classifying under a $30 cap.
+- **Goal:** R3, R4.
+- **Files:** `core/provider_batches.py`, `monitor/backfill_enrichment.py`, `scripts/backfill_campaign.py`, `monitor/management/commands/run_backfill.py`, `tests/test_backfill_spend_basis.py`, `tests/test_backfill_campaign.py`, `tests/test_run_backfill_command.py`, `tests/test_backfill_direct_enrichment.py`, `tests/test_backfill_native_enrichment.py`.
+- **Approach:** cherry-pick `cef1168e`, then add the optional window field `spend_basis`. A plain window keeps today's tuple input.
+- **Test scenarios:**
+  - the basis reaches `policy_snapshot` only when present;
+  - a window object's basis is frozen into the manifest;
+  - an unknown window field is rejected before planning.
+- **Verification:** the fast CI step passes.
 
-### U4. Regression net for July-shaped inputs
+### U4. Regression net and CI step
 
-- **Goal:** prove July's plain windows are unchanged.
-- **Change:** port `test_manifest_without_new_window_fields_keeps_its_july_shape` and `_stub_manifest_inputs` from `f01d0f03` into `tests/test_backfill_campaign.py`.
-- **Verification:** the test passes before and after U3. Pinning before the change shows today's shape; the same assertions pass after.
+- **Goal:** R2, R4.
+- **Files:** `tests/test_backfill_campaign.py`, `.github/workflows/backfill.yml`.
+- **Approach:** port the July-shaped manifest test (KTD3). Add the fast CI step and the trigger paths (KTD4).
+- **Verification:** the fast step ran 80 tests (36 PostgreSQL) with none skipped on PR #75.
 
-### Follow-up units (recorded, not built in this change)
+### U8. Unverified evaluate-at-end runs exit non-zero
 
-- **U5. Paid re-fetches at run boundaries.**
-  - 691 of 4,614 search requests (15%) were paid twice: a response arrived as a run ended, its page did not commit, and the next run re-fetched it (`lost_responses`, `monitor/backfill_staging.py` around line 200).
-  - One 6-hour window took 38 runs.
-  - First step: find why runs end so often, then commit in-flight pages or reuse the received body.
-- **U6. Unfinished posts after three validation failures.**
-  - 64 posts were never classified and 60 never finished targeted extraction.
-  - `deferred_enrichment_work` (`monitor/backfill_enrichment.py:777`) keeps each post's attempt count across regrouped packets, so no re-run retries them.
-  - About 9% of member results fail canonical validation per pass, which adds about 10% to classification cost.
-  - Needs a bounded way to finish them, and a look at the validation failures (model `deepseek-ai/DeepSeek-V4-Flash-0731`, `canonical_validation_failed`).
-- **U7. Backfill-database list memberships and roles.**
-  - xbackfiller holds no Call A list memberships, and only 98 of production's 232 roles at the last count, so a window planned there freezes no Call A author roles.
-  - July's saved windows carry their own frozen contexts (207 for job `d4440f2e…`).
-  - Needs a standing, read-only-sourced sync before planning a window. The size test's seed (`scripts/backfill_size_seed.py`) was deliberately undone.
-- **U8. Exit status after a failed final check.** The size test's final enrichment receipt said `failed`, with 123 posts deferred, but the Render job exited `succeeded`. Decide whether exit 0 is intended under `--evaluate-at-end`; if not, return non-zero.
-- **U9. Land the July branch, with these fixes, on `main`.**
-  - It conflicts across 220 commits, in `monitor/backfill_collection.py`, `backfill_promotion.py`, `backfill_staging.py`, `cycle.py` and `tests/test_backfill_staging_retry.py`.
-  - xbackfiller must move from schema 0183 to 0205 before July can run `main`-based code.
-  - It needs its own plan and coordination with the July session.
+- **Goal:** R8.
+- **Requirements:** R8, R4.
+- **Dependencies:** none.
+- **Files:** `monitor/management/commands/run_backfill.py`, `tests/test_run_backfill_command.py`, `.github/workflows/backfill.yml`.
+- **Approach:**
+  1. In `Command._handle`, keep the value returned by `run(...)` and `run_phases(...)`.
+  2. When `evaluate_at_end` is set and the result is not verified, raise `CommandError` with `returncode=3`, naming the unverified window and pointing to the saved campaign receipt. A `run` result is unverified when its report's `status` is not `verified`; a `run_phases` result is unverified when any row's `status` is not `verified` (KTD7).
+  3. Leave the non-evaluate path and dry-run planning output unchanged.
+- **Patterns to follow:** existing `CommandError` handling in `run_backfill.py`; October operator wrappers raised `october_recovery_assessment_incomplete` on the same condition.
+- **Test scenarios:**
+  - `run` under evaluate-at-end returning a report with `status: incomplete` raises `CommandError` with return code 3, and the mocked receipt save still ran;
+  - `run_phases` under `--phase all --evaluate-at-end` returning verified collection rows plus one `failed` assessment row raises `CommandError` with return code 3;
+  - `run_phases` returning only `verified` rows, and `run` returning `status: verified`, both exit normally;
+  - a run without `--evaluate-at-end` keeps today's behavior whatever its result;
+  - the two existing command tests whose mocks return `None` under evaluate-at-end (around lines 88–105 and 128–147) return a verified result instead. Their other assertions are unchanged.
+- **Verification:** the new and updated tests are added to the workflow's fast step and pass there.
+
+### U5. Commit captured pages before a run ends
+
+- **Goal:** R5, R6.
+- **Requirements:** R5, R6, R4.
+- **Dependencies:** none.
+- **Files:** `monitor/cycle.py`, `monitor/backfill_staging.py`, `monitor/backfill_collection.py`, `monitor/backfill_resources.py`, `tests/test_cycle_search_caps.py`, `tests/test_backfill_staging.py`, `.github/workflows/backfill.yml`.
+- **Approach:**
+  1. Add a flag on `BackfillContext` that `execute_job` sets only when the capture comes from `StagingPrefetcher`. In `CycleRunner._fetch_tweets`, skip the non-scheduled `page_budget < 1` early return and the page-cap clamp only when that flag is set (KTD5).
+  2. In `StagingPrefetcher.pages`, measure the consumer's time per yielded page (from yield to resume, a conservative running maximum with a small default). Admit new requests only while `can_start(38 + est × (buffered + 1))`.
+  3. Before each yield, compare the run's lease expiry, read once through the fenced run, with now. Stop yielding when the margin is below about twice the estimate plus a safety margin, so `finally` saves the remaining receipts as today.
+  4. Record `uncommitted_captures` in the prefetch metrics so a dropped page is visible in the same run.
+- **Execution note:** start with a failing PostgreSQL test that reproduces a deadline crossing with buffered pages.
+- **Patterns to follow:**
+  - `staging_retry` state restoration (`StagingPrefetcher.__init__`);
+  - the deadline tests in `tests/test_cycle_search_caps.py`;
+  - the fixtures in `tests/test_backfill_staging.py` (`job_for_scopes`, fake HTTP pages).
+- **Test scenarios:**
+  - Covers R5: a run whose deadline passes the 38 s mark with several pages buffered commits every received page in that run, and the next run reports `lost_responses == 0`, with total HTTP requests equal to total pages.
+  - Covers R5: with a lease margin too small for the next page, the prefetcher stops yielding and saves receipts; the next run re-fetches exactly those pages (today's behavior), and no request is left `pending`.
+  - Admission tapering: with a slow consumer, the prefetcher stops admitting earlier than 38 s, proportionally to the buffered pages.
+  - Covers R6: `_fetch_tweets` without a backfill context keeps the deadline page budget (`test_deadline_reduces_deep_page_budget_before_starting` unchanged), and the scheduled branch still checks time between pages.
+  - Pure unit: `_fetch_tweets` with a staging-captured page and under one envelope remaining processes the page instead of returning `truncated`.
+  - Pure unit: an archive-mode captured page (flag unset) with under one envelope remaining still returns `truncated`.
+  - Existing staging tests keep passing unchanged: no evidence archive, 20 concurrent requests, error drain keeps cursors.
+- **Verification:** `tests/test_cycle_search_caps.py` passes locally. The fast CI step runs the whole of `tests/test_backfill_staging.py`, new and existing tests, and it passes with none skipped.
+
+### U7. Guarded sync of production list memberships and roles
+
+- **Goal:** R9, R10.
+- **Requirements:** R9, R10, R6.
+- **Dependencies:** none.
+- **Files:**
+  - create `scripts/backfill_list_roles_production.sql`, `monitor/backfill_list_roles.py`, `monitor/management/commands/sync_backfill_list_roles.py`, `tests/test_backfill_list_roles.py` and `tests/fixtures/backfill_list_roles_export.json`;
+  - modify `.github/workflows/backfill.yml`.
+- **Approach:**
+  1. The SQL, wrapped in `BEGIN TRANSACTION READ ONLY; … ROLLBACK;`, outputs format `x-backfill-list-roles/v1`: the database name, `generated_at`, the main `list_id`, active `members` (author_id, handle), and every X `brands_accounts` role (author_id, handle, brand_id, role_id).
+  2. `monitor/backfill_list_roles.py` holds the logic.
+     - `read_export` validates the production database name, the list id against config (`monitor.cycle._resolve_x_monitor_list_id`), a non-empty member list and decimal author ids.
+     - Port `load_document` from the size branch's `scripts/backfill_size_report.py` and `_ensure_membership` from `scripts/backfill_size_seed.py`.
+     - `apply_export` upserts memberships with source `production_export` and run id `production-export-sha256:<sha256>`. It deactivates main-list members absent from the export, creates role-only accounts from export handles, and creates or corrects roles whose brand and role exist. It reports skipped roles, xbackfiller-only roles and differing handles, and never edits handles or creates Brand/Role rows.
+  3. Guard order, each before any write:
+     1. validate the export;
+     2. require `X_MONITOR_DEPLOYMENT_ENVIRONMENT == "backfill"`;
+     3. pass `validate_staging` identity for xbackfiller;
+     4. find no live historical lease;
+     5. acquire `harvest_writer_lock`, then re-check the lease.
+  4. One transaction: before-state, writes, then proofs.
+     - The catalog projection without handles is unchanged.
+     - The handle/role delta equals the written roles.
+     - `resolve_call_a_author_contexts` returns one context per exported member with matching roles.
+     - Historical `CollectionJob` definition checksums are unchanged.
+
+     The transaction rolls back on dry run (the default) or on any failed proof. It prints one JSON report.
+  5. The command: `--export PATH`, plus `--execute` to commit.
+  6. Add the new files to the workflow's paths, ruff list and fast step, together with `tests/test_list_membership_reconciliation.py` and `tests/test_call_a_role_routing.py` as the helpers' regression net.
+- **Patterns to follow:**
+  - `monitor/management/commands/sync_twitter_list_members.py` and `monitor/list_membership.py`;
+  - `transfer_backfill`'s read-only-unless-`--execute` convention;
+  - the size-test seed's guard tests on `ops/oai-anthropic-size-20261027`.
+- **Test scenarios:**
+  - Pure:
+    - export parsing from `render psql -o json` output;
+    - refusal of a non-production database, another list id, empty members, a malformed role or a non-decimal author id;
+    - guard order: a non-backfill environment is refused before identity is read, a wrong identity before the lease check, and a live lease before any write;
+    - the projection digest keeps steady for a handle/role change and changes for a keyword change;
+    - the SQL starts read-only, ends with `ROLLBACK;`, and contains no INSERT/UPDATE/DELETE/ALTER/CREATE/DROP.
+  - PostgreSQL:
+    - Covers R9: the first `--execute` creates memberships, missing accounts and roles, and a second run of the same export changes nothing;
+    - a role is corrected from staff to official; an unknown brand or role key is skipped and reported with no Brand/Role row created;
+    - Brand, BrandKeyword, BrandSearchTerm, BrandHashtag and Product rows are unchanged; a memberships-only export leaves the catalog revision byte-identical;
+    - dropping a member from the export deactivates only that row;
+    - an existing account handle is never edited and is reported as differing;
+    - after sync, planning freezes one Call A context per exported member, and an existing historical job's definition checksum is unchanged;
+    - Covers R10: a dry run leaves every row count unchanged and reports the would-be revision;
+    - a live historical lease refuses with no writes.
+- **Verification:** the pure tests pass locally; the PostgreSQL tests pass in the fast CI step.
+
+### U6. Final-attempt grant for exhausted posts
+
+- **Goal:** R7, R10.
+- **Requirements:** R7, R10.
+- **Dependencies:** none.
+- **Files:** `monitor/backfill_recovery.py`, `x_monitor/corrected_inference.py`, `monitor/management/commands/backfill.py`, `scripts/backfill_campaign.py` (receipt only, through `save_campaign_report`), `tests/test_backfill_contract_recovery.py`, `tests/test_backfill_cached_replay.py`, `tests/test_backfill_direct_enrichment.py`, `.github/workflows/backfill.yml`.
+- **Approach:**
+  1. `_validate_spec` accepts version `final-attempt-grant-v1`.
+     - Fields: `job_id`, `phase` (base or targeted; translation retries belong to base), up to 50 distinct posts with their `prior_call_ids` and `source_snapshot`, required `actor` and `reason`, and optional `feedback`.
+     - It admits only posts deferred as `model_attempt_allowance_exhausted` by `deferred_enrichment_work` and still incomplete (`completion_facts` for base, `incomplete_roles` for targeted).
+     - It rejects unknown-outcome posts, posts with an outstanding grant call, and chained recoveries (KTD6). Operators close an unknown-outcome call with `close_unrecoverable_direct_imports` as a separate earlier step; the grant never closes it.
+  2. `advance_contract_recovery` chooses the attempt cap by version: 1 for a grant, the policy's `max_attempts` for corrected recovery. The grant enforces its cap itself; the frozen policy's `max_attempts` stays 3. It records actor, reason, the grant checksum and the prior call ids in the request context and returns per-post outcomes and spend.
+  3. `x_monitor/corrected_inference.py` gains a tag-only mode. Without feedback, the request body is unchanged and the grant context is still attached.
+  4. `backfill` gains `--enrichment-attempt-grant SPEC.json` with `--collection-job`.
+     - Without `--execute`, it runs `prepare_only` and gives a zero-spend preview (R10). Only with `--execute` does it register and send requests.
+     - Execution holds the campaign advisory lock.
+     - The receipt goes through `save_campaign_report` under phase `attempt_grant:<sha12>`.
+  5. Translation and targeted grants without feedback are refused unless the post's failures include provider-side `failed` calls (Assumptions).
+- **Patterns to follow:** existing `canonical-contract-recovery-v1` specs and tests (`_rejected_packet`, `_paid_history` in `tests/test_backfill_contract_recovery.py`); `close_unrecoverable_direct_imports` audit fields.
+- **Test scenarios:**
+  - Covers R7: a grant on an exhausted base post sends exactly one single-member content and brand-interpretation pair and publishes it. Earlier paid calls are byte-for-byte unchanged.
+  - A failing grant sends exactly one pair; a second invocation sends nothing and reports `final_attempt_grant_exhausted`.
+  - Refusals: a complete post, a non-deferred post, a `provider_outcome_unknown` post, a changed source, missing actor or reason, more than 50 posts, or an outstanding grant call.
+  - Hitting the campaign USD or request ceiling refuses with `model_campaign_allowance_exhausted` and registers nothing.
+  - Every provider batch's frozen policy keeps `max_attempts == 3` and is otherwise unchanged; only the grant itself limits a granted request hash to one physical request.
+  - A grant attempted after the campaign policy's deadline refuses with `batch_deadline_exhausted` and registers nothing.
+  - A grant on one member leaves its siblings' allowance unchanged.
+  - After a grant, `execute_enrichment(defer_failures=True)` still defers the non-granted exhausted posts.
+  - Covers R10: the `backfill` flag without `--execute` reserves nothing; actor and reason are required.
+  - Targeted and translation variants follow the feedback rule.
+- **Verification:** the fast CI step runs the new tests and the whole of `tests/test_backfill_contract_recovery.py` and `tests/test_backfill_cached_replay.py`, and they pass with none skipped.
+
+---
 
 ## Verification Contract
 
 | Check | Command or source | Pass condition |
 |---|---|---|
 | Lint | `.venv/bin/ruff check` on changed files | clean |
-| Pure tests | `scripts/pytest-local tests/test_backfill_retry_statuses.py tests/test_backfill_campaign.py -q` | all pass; skips reported |
-| PostgreSQL tests | PR CI ("Historical X backfill" and the others), on a fresh database | the new and cherry-picked tests pass; other outcomes match the base branch's |
-| No behavior change for July | U4 test, plus manifest bytes for plain windows | identical |
-| Scope | `git diff origin/ops/xbackfiller-db-20261026 --stat` | only TOUCH files |
+| Pure tests | `scripts/pytest-local tests/test_cycle_search_caps.py tests/test_backfill_list_roles.py tests/test_backfill_campaign.py -q` | pass; skips reported |
+| PostgreSQL tests | PR CI, backfill workflow fast step | the new U5–U8 tests, `tests/test_backfill_staging.py`, `tests/test_backfill_contract_recovery.py` and `tests/test_backfill_cached_replay.py` pass with none skipped |
+| Other PR checks | Homepage counts, Official company discovery, Staff identity, Editorial | outcomes match the base branch (pre-existing failures unchanged) |
+| July untouched | U4 regression net; U7 job-checksum proof | identical |
+| Production untouched | `tests/test_cycle_search_caps.py` scheduled and manual branches | unchanged assertions pass |
 
 ## Definition of Done
 
-- U1–U4 are committed on `fix/backfill-size-test-fixes-20261030`, with named files only.
-- The branch is pushed and a PR is open against `ops/xbackfiller-db-20261026`.
-- Each CI check is decided; any failure is compared with the base branch's and reported.
-- U5–U9 stay recorded here as follow-ups. Merging, and launching July from the merged revision, are the owner's and July session's decisions.
+- U5–U8 are committed with named files on a branch for a PR into `ops/xbackfiller-db-20261026`.
+- The PR is open, and each CI check is decided and compared with the base branch.
+- No production write, provider call, xbackfiller write or deploy happened.
+- No abandoned-attempt code remains in the diff.
+- U9 and the other deferred items stay recorded in Deferred to Follow-Up Work.

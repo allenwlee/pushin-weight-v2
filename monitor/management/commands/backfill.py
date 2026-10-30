@@ -31,6 +31,11 @@ Usage:
     # Reset and start over
     python manage.py backfill --since 2026-07-22T05:00 --until 2026-07-23T21:00 --brands qwen --call-ids B1 --reset
 
+    # One more model request for listed exhausted Posts (final-attempt-grant-v1):
+    # preview with zero spend, then register and send under the campaign lock
+    python manage.py backfill --collection-job JOB --enrichment-attempt-grant grant.json
+    python manage.py backfill --collection-job JOB --enrichment-attempt-grant grant.json --execute
+
 State file: data/backfill/<since_epoch>-<until_epoch>[-<scope_hash>].json
 """
 
@@ -42,6 +47,7 @@ import math
 import os
 import tempfile
 import time as _time
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -150,6 +156,39 @@ def _seconds_to_next_slot() -> float:
     return 0 if elapsed < 120 else 900 - elapsed
 
 
+@contextmanager
+def _campaign_lock(job):
+    """Hold the controller lock that ``run()`` and ``run_phases()`` take.
+
+    Their key is sha256(campaign + str(database)) from the frozen manifest, and
+    a campaign job's key is ``<campaign>/<index>``. The session identity and
+    the job's frozen database identity are both locked when they differ.
+    """
+    import psycopg
+
+    from scripts.backfill_campaign import database_identity
+
+    campaign = job.job_key.rpartition("/")[0] or job.job_key
+    databases = [database_identity()]
+    frozen = job.scope.get("database")
+    if isinstance(frozen, dict):
+        databases.append({key: frozen.get(key) for key in ("name", "user")})
+    keys = sorted({
+        int(hashlib.sha256((campaign + str(database)).encode()).hexdigest()[:15], 16)
+        for database in databases
+    })
+    if not os.environ.get("DATABASE_URL"):
+        raise CommandError("the campaign lock requires DATABASE_URL")
+    guard = psycopg.connect(os.environ["DATABASE_URL"], autocommit=True)
+    try:
+        for key in keys:
+            if not guard.execute("SELECT pg_try_advisory_lock(%s)", [key]).fetchone()[0]:
+                raise CommandError("campaign_controller_already_running")
+        yield keys
+    finally:
+        guard.close()
+
+
 class Command(BaseCommand):
     help = "Run harvest cycles with date-bounded search window (batchable, resumable)."
 
@@ -188,6 +227,11 @@ class Command(BaseCommand):
                             help="Initial campaign upload/poll allowance, separate from model starts.")
         parser.add_argument("--enrichment-deadline", default=None,
                             help="Initial aware ISO deadline for the whole enrichment campaign.")
+        parser.add_argument("--enrichment-attempt-grant", default=None,
+                            help="final-attempt-grant-v1 JSON spec: one more model request per listed exhausted, "
+                                 "incomplete Post. Previews with zero spend unless --execute is given.")
+        parser.add_argument("--execute", action="store_true",
+                            help="With --enrichment-attempt-grant: reserve and send under the campaign lock.")
         parser.add_argument(
             "--batch", action="store_true",
             help="Collect whole historical windows with per-page checkpoints, no cron waits or inline enrichment.",
@@ -271,6 +315,10 @@ class Command(BaseCommand):
             for name in _RUNTIME_SETTING_NAMES
         }
         try:
+            if options.get("execute") and not options.get("enrichment_attempt_grant"):
+                raise CommandError("--execute applies only to --enrichment-attempt-grant")
+            if options.get("enrichment_attempt_grant") and not options.get("collection_job"):
+                raise CommandError("--enrichment-attempt-grant requires --collection-job")
             if options.get("plan_collection_job"):
                 if not options.get("since") or not options.get("until"):
                     raise CommandError("job planning requires --since and --until")
@@ -300,6 +348,17 @@ class Command(BaseCommand):
                     "since", "until", "brands", "call_ids", "query", "reset", "quarantined",
                 )):
                     raise CommandError("--collection-job owns its frozen scope; omit scope/reset options")
+                if options.get("enrichment_attempt_grant"):
+                    if any(options.get(key) for key in (
+                        "enrichment_control", "enrich_native", "enrich_direct",
+                        "enrichment_finish_pilot", "storage_probe",
+                    )):
+                        raise CommandError("the final-attempt grant runs alone; omit other enrichment options")
+                    if options["execute"] and (options["status"] or options["dry_run"]):
+                        raise CommandError("--execute conflicts with --status and --dry-run")
+                    self.result = self._attempt_grant(options)
+                    self.stdout.write(json.dumps(self.result, sort_keys=True, default=str))
+                    return
                 if options.get("enrichment_control"):
                     from core.provider_batches import (
                         BatchAdmissionError,
@@ -392,6 +451,74 @@ class Command(BaseCommand):
                         pass
                 else:
                     setattr(settings, name, value)
+
+    def _attempt_grant(self, options):
+        """Preview a final-attempt grant with zero spend, or execute it with --execute."""
+        from django.core.exceptions import ValidationError
+
+        from core.models import CollectionJob
+        from core.provider_batches import BatchAdmissionError
+        from monitor.backfill_recovery import advance_contract_recovery, grant_specs
+        from scripts.backfill_campaign import save_campaign_report
+
+        path = Path(options["enrichment_attempt_grant"])
+        try:
+            if path.stat().st_size > 1024 * 1024:
+                raise CommandError("final_attempt_grant_spec_too_large")
+            body = path.read_bytes()
+            grant = json.loads(body)
+        except (OSError, ValueError) as exc:
+            raise CommandError(f"final_attempt_grant_spec_unreadable: {type(exc).__name__}") from None
+
+        def refused(exc):
+            members = f" posts={','.join(exc.member_ids)}" if exc.member_ids else ""
+            return CommandError(f"{exc}{members}")
+
+        try:
+            _, header = grant_specs(grant)
+        except BatchAdmissionError as exc:
+            raise refused(exc) from None
+        try:
+            job = CollectionJob.objects.get(pk=options["collection_job"])
+        except (CollectionJob.DoesNotExist, ValidationError, ValueError):
+            raise CommandError("collection job not found") from None
+        if header["job_id"] != str(job.pk):
+            raise CommandError("final_attempt_grant_spec_invalid: job_id differs from --collection-job")
+        api_key = os.environ.get("DEEPINFRA_ON_DEMAND", "")
+        if options["execute"] and not api_key:
+            raise CommandError("historical enrichment requires DEEPINFRA_ON_DEMAND")
+        audit = {
+            "spec_file_sha256": hashlib.sha256(body).hexdigest(),
+            "posts_listed": [entry["post_id"] for entry in grant["posts"]],
+        }
+        arguments = {
+            "grant": grant, "cfg": load_config(Path("config.yaml")), "api_key": api_key,
+            "direct_concurrency": options["enrichment_concurrency"],
+        }
+        try:
+            if not options["execute"]:
+                # The preview rolls back every preparation write and reserves nothing.
+                result = advance_contract_recovery(job.pk, prepare_only=True, **arguments)
+                return result | audit | {
+                    "mode": "preview",
+                    "requests": [
+                        {
+                            "hash": r["hash"], "post_ids": r["context"]["post_ids"],
+                            "stage": r["context"]["stage"], "role": r["context"].get("role"),
+                            "operation": r["context"].get("operation"),
+                            "target_language": r["context"].get("target_language"),
+                            "model": r["body"]["model"],
+                        }
+                        for r in result["requests"]
+                    ],
+                }
+            with _campaign_lock(job):
+                result = advance_contract_recovery(job.pk, **arguments)
+                receipt = result | audit | {"phase": "attempt_grant", "mode": "execute"}
+                save_campaign_report(job, receipt, phase=f"attempt_grant:{header['grant_sha256'][:12]}")
+        except BatchAdmissionError as exc:
+            raise refused(exc) from None
+        return receipt | {"receipt_saved": bool(job.last_attempt_id)}
 
     def _handle_guarded(self, *args, **options) -> None:
         # Status and dry-run are read-only. Every explicit write-capable

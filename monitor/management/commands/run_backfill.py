@@ -18,6 +18,34 @@ from scripts.backfill_month import (
 from x_monitor.config import load_config
 
 
+def unverified_windows(result):
+    """Name each window a final assessment left unverified; empty when verified.
+
+    ``run`` returns assess_campaign's report, verified only when every window
+    is. ``run_phases`` returns compact per-window rows without that overall
+    status, so any unverified row decides. A missing assessment is unverified.
+    """
+    if isinstance(result, list):
+        rows = result
+    elif isinstance(result, dict):
+        if result.get("status") == "verified":
+            return []
+        # An unverified report names its failed windows, or else its own status.
+        rows = [row for row in result.get("windows") or [] if row.get("status") != "verified"]
+        rows = rows or [{"status": result.get("status")}]
+    else:
+        rows = [{"status": "final_assessment_missing"}]
+    named = []
+    for row in rows:
+        if row.get("status") == "verified":
+            continue
+        window = row.get("window") or {}
+        label = {"window": window.get("index"), "since": window.get("since"), "until": window.get("until")}
+        label |= {key: row.get(key) for key in ("phase", "status", "error_code", "source_collection_job")}
+        named.append({key: value for key, value in label.items() if value is not None})
+    return named
+
+
 class Command(BaseCommand):
     help = (
         "Collect and enrich historical X windows, with optional aggregate evaluation."
@@ -252,11 +280,21 @@ class Command(BaseCommand):
                 if revision is not None:
                     execution["runtime_revision"] = revision
                 if phase is None:
-                    run(frozen, cfg, **execution)
+                    result = run(frozen, cfg, **execution)
                 else:
                     if runtime is not None:
                         execution["runtime_attestation"] = runtime
-                    run_phases(frozen, cfg, phase=phase, **preferences, **execution)
+                    result = run_phases(frozen, cfg, phase=phase, **preferences, **execution)
+                # Raised only after the runner returns, so every receipt is saved
+                # and no campaign job is paused. Exit 3: finished, not verified.
+                unverified = unverified_windows(result) if options["evaluate_at_end"] else []
+                if unverified:
+                    raise CommandError(
+                        "final assessment not verified: "
+                        + json.dumps(unverified, sort_keys=True, default=str)
+                        + "; receipts are saved in each job's CollectionRun.report['backfill_campaign']",
+                        returncode=3,
+                    )
             else:
                 self.stdout.write(json.dumps(frozen, sort_keys=True))
         except (OSError, ValueError, KeyError, TypeError) as exc:

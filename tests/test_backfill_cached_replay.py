@@ -329,3 +329,45 @@ def test_unknown_import_closure_rejects_active_or_unverified_work(native, blocke
     with pytest.raises(BatchAdmissionError):
         _close_unknown(native, call, receipt)
     assert list(OriginalContentCall.objects.order_by("pk").values()) == before
+
+
+def _final_attempt_grant(native, post_id, ids):
+    from core.provider_batches import post_snapshot
+
+    return {
+        "version": "final-attempt-grant-v1", "job_id": str(native[0].pk), "phase": "base",
+        "actor": "test-operator", "reason": "Exhausted after three invalid classifier replies",
+        "posts": [{
+            "post_id": post_id, "prior_call_ids": ids,
+            "source_snapshot": post_snapshot(Post.objects.prefetch_related("brands").get(pk=post_id)),
+        }],
+    }
+
+
+def test_final_attempt_grant_does_not_reset_failed_siblings_allowance(native):
+    from monitor.backfill_recovery import advance_contract_recovery
+
+    _, ids = _rejected_packet(native)
+    PostEnrichmentState.objects.filter(pk="native-2").update(classification_status="pending")
+    PostBrandClassificationState.objects.filter(post_id="native-2").update(selected_final_judgment=None)
+    assert deferred_enrichment_work(native[0], max_attempts=3)["native-2"] == "model_attempt_allowance_exhausted"
+    evidence = dict(OriginalContentCall.objects.values_list("pk", "import_evidence"))
+    grant = _final_attempt_grant(native, "native-1", ids)
+    before = _paid_history()
+    provider = DirectProvider()
+    for _ in range(8):
+        result = advance_contract_recovery(
+            native[0].pk, grant=grant, cfg=native[1], api_key="test", delegates=native[2],
+            client_factory=provider.factory, direct_concurrency=2,
+        )
+        if result["pending_posts"] == 0:
+            break
+    assert result["pending_posts"] == 0 and provider.sent == 2
+    assert _paid_history()[:len(before)] == before
+    facts = completion_facts(["native-1", "native-2"])
+    assert facts["native-1"]["classification"] and not facts["native-2"]["classification"]
+    assert deferred_enrichment_work(native[0], max_attempts=3)["native-2"] == "model_attempt_allowance_exhausted"
+    assert dict(OriginalContentCall.objects.filter(pk__in=evidence).values_list("pk", "import_evidence")) == evidence
+    granted = OriginalContentCall.objects.filter(provenance__context__recovery__grant_sha256=digest(grant))
+    assert granted.count() == 2 and all(c.member_post_ids == ["native-1"] for c in granted)
+    assert all(b.policy["max_attempts"] == 3 for b in ProviderBatch.objects.all())
