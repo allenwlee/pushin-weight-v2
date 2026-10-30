@@ -186,12 +186,15 @@ def hf_socials_observation_documents(observation):
             "socials response ownership or checksum mismatch")
     target = run.job.targets.get(target_role="publisher_socials")
     endpoint = urlsplit(request.endpoint_url)
+    org_path = f"/api/organizations/{target.native_identifier}/socials"
+    user_path = f"/api/users/{target.native_identifier}/socials"
     require(endpoint.scheme == "https" and endpoint.netloc == "huggingface.co"
-            and endpoint.path == f"/api/organizations/{target.native_identifier}/socials"
+            and endpoint.path in {org_path, user_path}
             and not endpoint.query and not endpoint.fragment, "socials endpoint or target mismatch")
     row = read_document(request.archive)
-    require(isinstance(row, dict) and isinstance(row.get("org"), str)
-            and row["org"].casefold() == target.native_identifier.casefold()
+    identity_field = "org" if endpoint.path == org_path else "user"
+    require(isinstance(row, dict) and isinstance(row.get(identity_field), str)
+            and row[identity_field].casefold() == target.native_identifier.casefold()
             and observation.source_identifier.casefold() == target.native_identifier.casefold()
             and isinstance(row.get("socialHandles"), dict) and digest(row) == observation.payload_sha256,
             "socials identity or content changed")
@@ -315,6 +318,80 @@ def _resolve_official_search_result(dossier, search_observation, exact_observati
     return 0
 
 
+def _resolve_candidate_from_socials(dossier, claim, social_observation, socials):
+    """Apply the existing cross-platform publisher policy to two saved captures."""
+    import uuid
+    from datetime import timedelta
+
+    from django.db import IntegrityError, transaction
+    from django.utils import timezone
+
+    from core import models
+    from core.product_verification import (
+        POLICY_VERSION,
+        _evaluate_new_publisher_source,
+        _finalize_new_publisher,
+        _normalized_identity,
+        _proposal_categories,
+    )
+
+    source = claim.event_dossier_source
+    if not source.post_id:
+        return 0
+    namespace = social_observation.source_identifier
+    jobs = models.CollectionJob.objects.filter(
+        source_id="hf", operation="release_acquisition", last_success__isnull=False,
+        dossier_claim_links__claim=claim, targets__target_role="exact_model",
+    ).select_related("last_success").distinct()
+    resolved = 0
+    for job in jobs:
+        target = job.targets.get(target_role="exact_model")
+        if target.native_identifier.split("/", 1)[0].casefold() != namespace.casefold():
+            continue
+        exact = job.last_success.observations.get(projection_kind="hf-release-exact-v1")
+        payload, _, _ = hf_exact_observation_documents(exact)
+        proposal_ids = models.ProductVerificationProposal.objects.filter(
+            source_dossier_id=dossier.pk, source_post_id=source.post_id,
+            proposed_candidate__isnull=False, candidate_repo_id__iexact=target.native_identifier,
+            review_status="pending", policy_version=POLICY_VERSION,
+        ).values_list("pk", flat=True)
+        for proposal_id in proposal_ids:
+            with transaction.atomic():
+                models.EventDossier.objects.select_for_update().get(pk=dossier.pk)
+                proposal = models.ProductVerificationProposal.objects.select_for_update(of=("self",)).select_related(
+                    "account", "source_post", "proposed_candidate"
+                ).get(pk=proposal_id)
+                now = timezone.now()
+                if (proposal.review_status != "pending" or proposal.proposed_candidate_id is None
+                        or proposal.verification_claim_expires_at is not None
+                        and proposal.verification_claim_expires_at > now
+                        or not _normalized_identity(proposal.observed_name)
+                        or _normalized_identity(proposal.observed_name)
+                        != _normalized_identity(target.native_identifier.split("/", 1)[1])
+                        or len(_proposal_categories(proposal)) != 1
+                        or not _evaluate_new_publisher_source(
+                            proposal, namespace=namespace, allow_source_declaration=True
+                        ).qualifies):
+                    continue
+                token = uuid.uuid4()
+                proposal.verification_claim_token = token
+                proposal.verification_claim_expires_at = now + timedelta(minutes=2)
+                proposal.save(update_fields=["verification_claim_token", "verification_claim_expires_at", "updated_at"])
+                try:
+                    with transaction.atomic():
+                        resolved += int(_finalize_new_publisher(
+                            proposal.pk, token, model_payload=payload, socials_payload=socials,
+                            allow_source_declaration=True,
+                        ))
+                except (IntegrityError, ValueError):
+                    proposal.verification_claim_token = None
+                    proposal.verification_claim_expires_at = None
+                    proposal.rule_trace = [*proposal.rule_trace, "automatic_verification_stopped:identity_conflict"]
+                    proposal.save(update_fields=["verification_claim_token", "verification_claim_expires_at",
+                                                 "rule_trace", "updated_at"])
+    return resolved
+
+
 def _integrate_acquisition_run(run_id):
     """Attach captured leads and reuse exact evidence for known-publisher identity.
 
@@ -376,7 +453,7 @@ def _integrate_acquisition_run(run_id):
                 captured_claim = add_claim(
                     event_source.pk, claim_kind="release_context",
                     scope_key=f"hf_capture:{observation.pk}",
-                    assertion_text=(f"Captured HF organization {repo} social links; ownership is unresolved"
+                    assertion_text=(f"Captured HF publisher {repo} social links; ownership is unresolved"
                                     if socials else
                                     f"Captured HF repository {repo}; its release role is unresolved"),
                     source_excerpt=repo,
@@ -429,6 +506,10 @@ def _integrate_acquisition_run(run_id):
                         logging.getLogger(__name__).exception(
                             "Exact search-hit registration failed for capture %s", observation.pk,
                         )
+            if socials and eligible:
+                totals["products_resolved"] += _resolve_candidate_from_socials(
+                    dossier, link.claim, observation, payload
+                )
             if not exact:
                 continue
             if not eligible:
@@ -635,7 +716,7 @@ def execute_hf_name_search(job_id, *, client):
         if accepted:
             rows = [response.payload] if exact or expanded or socials else response.payload
             for position, row in enumerate(rows):
-                native_id = row["org"] if socials else row.get("id") or row["modelId"]
+                native_id = (row.get("org") or row["user"]) if socials else row.get("id") or row["modelId"]
                 projection = ("hf-release-socials-v1" if socials else "hf-release-expanded-v1" if expanded else
                               "hf-release-exact-v1" if exact else "hf-release-search-v1")
                 key = digest([projection, native_id.casefold(), digest(row)])

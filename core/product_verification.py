@@ -392,7 +392,7 @@ def _proposal_source_gate(
 
 
 def _evaluate_new_publisher_source(
-    proposal: ProductVerificationProposal, *, namespace: str
+    proposal: ProductVerificationProposal, *, namespace: str, allow_source_declaration: bool = False
 ) -> LegitimacyDecision:
     source = _proposal_source_gate(proposal, namespace=namespace)
     account_type = str(code_for(proposal.account, "verified_type") or "")
@@ -405,15 +405,31 @@ def _evaluate_new_publisher_source(
         _normalized_identity(namespace),
         _normalized_identity(proposal.account.handle),
     }
+    declared = False
+    if allow_source_declaration and proposal.observed_name and proposal.source_post.text:
+        from core.product_release_intake import SourceRecord, TextEvidence, detect
+
+        post = proposal.source_post
+        detected = detect(SourceRecord(
+            "post", str(post.pk), (TextEvidence("post-text", "raw", post.text),)
+        ))
+        name = re.escape(proposal.observed_name)
+        pattern = (r"^\s*(?:we|i)(?:['’]ve)?\s+(?:(?:are|have|today|now)\s+){0,2}"
+                   r"(?:announc(?:e|ed|ing)|releas(?:e|ed|ing)|launch(?:ed|ing)?)\s+"
+                   r"(?:(?:our|the|new)\s+){0,2}" + name + r"(?![\w.-])")
+        declared = bool(not post.is_retweet and detected
+                        and not set(detected.cautions) & {"future_or_uncertain", "negated", "question", "reshare"}
+                        and re.search(pattern, post.text, flags=re.IGNORECASE))
     trace = (
         *source.trace,
         f"x_business_gold:{str(is_business).lower()}",
         f"candidate_publisher_correlation:{str(correlated).lower()}",
+        f"source_first_person_declaration:{str(declared).lower()}",
         f"blue_subscription:{str(bool(proposal.account.is_blue_verified)).lower()}",
     )
     if not source.qualifies:
         return LegitimacyDecision(False, source.reason, trace)
-    if not is_business:
+    if not is_business and not declared:
         return LegitimacyDecision(False, "x_business_gold_missing", trace)
     if not correlated:
         return LegitimacyDecision(False, "candidate_publisher_not_correlated", trace)
@@ -785,6 +801,7 @@ def _finalize_new_publisher(
     *,
     model_payload: dict[str, Any],
     socials_payload: dict[str, Any],
+    allow_source_declaration: bool = False,
 ) -> bool:
     locked_source_id = _lock_proposal_dossier(proposal_id)
     proposal = (
@@ -805,8 +822,15 @@ def _finalize_new_publisher(
     candidate = BrandDiscoveryCandidate.objects.select_for_update().get(
         pk=proposal.proposed_candidate_id
     )
+    if candidate.verification_status in {"rejected", "needs_review"}:
+        proposal.rule_trace = [*proposal.rule_trace, "automatic_verification_stopped:candidate_review"]
+        _release_claim(proposal)
+        proposal.save()
+        return False
     namespace = proposal.candidate_repo_id.split("/", 1)[0]
-    decision = _evaluate_new_publisher_source(proposal, namespace=namespace)
+    decision = _evaluate_new_publisher_source(
+        proposal, namespace=namespace, allow_source_declaration=allow_source_declaration
+    )
     if not decision.qualifies:
         proposal.hf_outcome = ProductVerificationProposal.HFOutcome.DEFERRED
         proposal.rule_trace = [
@@ -821,7 +845,7 @@ def _finalize_new_publisher(
         (socials_payload.get("socialHandles") or {}).get("twitter") or ""
     ).removeprefix("@")
     if (
-        str(socials_payload.get("org") or "").casefold() != namespace.casefold()
+        str(socials_payload.get("org") or socials_payload.get("user") or "").casefold() != namespace.casefold()
         or not twitter_handle
         or twitter_handle.casefold()
         != str(proposal.account.handle or "").removeprefix("@").casefold()
@@ -861,7 +885,7 @@ def _finalize_new_publisher(
         candidate.reviewed_brand = brand
         candidate.verification_status = "confirmed"
         candidate.reviewer = f"automatic:{POLICY_VERSION}"
-        candidate.review_note = "Exact X Business/HF repository/social cross-links"
+        candidate.review_note = "Exact X/HF repository/social cross-links and source qualification"
         candidate.reviewed_at = timezone.now()
         candidate.save()
 

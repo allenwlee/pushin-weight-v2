@@ -498,6 +498,93 @@ def _new_publisher_proposal(*, verified_type: str = "Business"):
     return proposal
 
 
+@pytest.mark.parametrize("verified_type,handle,observed_name,category,candidate_status,approved", [
+    ("Business", "NewPublisher_AI", "Model One", True, "pending", True),
+    ("Blue", "NewPublisher_AI", "Model One", True, "pending", False),
+    ("Business", "SomeoneElse", "Model One", True, "pending", False),
+    ("Business", "NewPublisher_AI", "Different Product", True, "pending", False),
+    ("Business", "NewPublisher_AI", "Model One", False, "pending", False),
+    ("Business", "NewPublisher_AI", "Model One", True, "rejected", False),
+    ("Business", "NewPublisher_AI", "Model One", True, "needs_review", False),
+    ("Business", "NewPublisher_AI", "Model One", True, "collision", False),
+    ("Blue", "NewPublisher_AI", "Model One", True, "self_declared", True),
+    ("Blue", "NewPublisher_AI", "Model One", True, "third_party", False),
+    ("Blue", "NewPublisher_AI", "Model One", True, "quoted", False),
+    ("Blue", "NewPublisher_AI", "Model One", True, "future", False),
+    ("Blue", "SomeoneElse", "Model One", True, "self_declared", False),
+    ("Blue", "NewPublisher_AI", "Model One", True, "individual", True),
+    ("Blue", "SomeoneElse", "Model One", True, "individual", False),
+])
+def test_captured_sources_use_existing_new_publisher_policy(
+    verified_type, handle, observed_name, category, candidate_status, approved
+):
+    from core.event_dossiers import add_claim
+    from core.measurement_taxonomy import digest
+    from core.models import CollectionJob, DataSource
+    from core.product_release_acquisition import (
+        execute_hf_name_search,
+        queue_hf_name_search,
+    )
+
+    proposal = _new_publisher_proposal(verified_type=verified_type)
+    candidate = proposal.proposed_candidate
+    declared_text = {
+        "self_declared": "I released Model One at https://huggingface.co/NewPublisher-AI/Model-One",
+        "third_party": "They released Model One at https://huggingface.co/NewPublisher-AI/Model-One",
+        "quoted": 'They said "I released Model One" at https://huggingface.co/NewPublisher-AI/Model-One',
+        "future": "I will release Model One at https://huggingface.co/NewPublisher-AI/Model-One",
+        "individual": "I released Model One at https://huggingface.co/NewPublisher-AI/Model-One",
+    }
+    if candidate_status in declared_text:
+        proposal.source_post.text = declared_text[candidate_status]
+        proposal.source_post.save(update_fields=["text"])
+    if candidate_status == "collision":
+        Brand.objects.create(nickname="newpublisher_ai", display_name="Unrelated publisher")
+    candidate.verification_status = ("pending" if candidate_status in {"collision", *declared_text}
+                                     else candidate_status)
+    candidate.save(update_fields=["verification_status"])
+    if not category:
+        RareTypeCategoryAssignment.objects.filter(post=proposal.source_post).delete()
+    proposal.observed_name = observed_name
+    proposal.save(update_fields=["observed_name", "updated_at"])
+    DataSource.objects.get_or_create(pk="hf", defaults={"name": "HF", "source_type": "model_adoption"})
+    source = proposal.source_dossier.sources.get(post=proposal.source_post)
+    repo = proposal.candidate_repo_id
+    lead = add_claim(
+        source.pk, claim_kind="release_context", scope_key="hf_repo_lead:" + digest(repo.casefold()),
+        assertion_text=f"Source references {repo}", source_excerpt=proposal.source_post.text,
+        source_locator=f"https://huggingface.co/{repo}", extraction_version="test",
+    )
+    job = queue_hf_name_search(lead.pk)
+    def respond(request):
+        if request.url.path.startswith("/api/models/"):
+            return httpx.Response(200, json={"id": repo, "author": "NewPublisher-AI"})
+        if candidate_status == "individual":
+            if request.url.path.startswith("/api/organizations/"):
+                return httpx.Response(404)
+            assert request.url.path == "/api/users/NewPublisher-AI/socials"
+            return httpx.Response(200, json={"user": "NewPublisher-AI", "socialHandles": {"twitter": handle}})
+        return httpx.Response(200, json={"org": "NewPublisher-AI", "socialHandles": {"twitter": handle}})
+    client = _client(respond)
+    assert execute_hf_name_search(job.pk, client=client)["outcome"] == "found"
+    social_job = CollectionJob.objects.get(targets__target_role="publisher_socials")
+    result = execute_hf_name_search(social_job.pk, client=client)
+    assert result["physical_requests"] == (2 if candidate_status == "individual" else 1)
+    proposal.refresh_from_db()
+    assert result["integration"]["products_resolved"] == int(approved)
+    assert (proposal.review_status == "approved") == approved
+    assert Product.objects.count() == int(approved)
+    candidate.refresh_from_db()
+    assert candidate.verification_status == ("confirmed" if approved else
+                                             "pending" if candidate_status in {"collision", *declared_text}
+                                             else candidate_status)
+    assert proposal.source_dossier.sources.filter(
+        collection_observation__projection_kind="hf-release-socials-v1"
+    ).exists()
+    assert proposal.source_dossier.current_review_id is None
+    assert execute_hf_name_search(social_job.pk, client=client)["physical_requests"] == 0
+
+
 def test_new_publisher_exact_model_is_cached_then_socials_resume_without_refetch():
     proposal = _new_publisher_proposal()
     calls = []

@@ -449,6 +449,27 @@ def test_organization_socials_remains_source_claim_with_identity_validation():
     assert hf.requests == 1
 
 
+def test_socials_fall_back_to_user_only_after_organization_not_found():
+    calls = []
+    def respond(request):
+        calls.append(request.url.path)
+        if "/organizations/" in request.url.path:
+            return httpx.Response(404)
+        return httpx.Response(200, json={"user": "Lab", "socialHandles": {"twitter": "owner"}})
+    hf = client(respond)
+    result = hf.organization_socials("lab")
+    assert result.outcome == "ok" and result.payload["user"] == "Lab"
+    assert calls == ["/api/organizations/lab/socials", "/api/users/lab/socials"]
+    assert len(result.attempts) == hf.requests == 2
+    hf = client(lambda _request: httpx.Response(403))
+    assert hf.organization_socials("lab").outcome == "forbidden"
+    assert hf.requests == 1
+    hf = client(lambda request: httpx.Response(404) if "/organizations/" in request.url.path
+                else httpx.Response(200, json={"user": "other", "socialHandles": {}}))
+    assert hf.organization_socials("lab").outcome == "identity_mismatch"
+    assert hf.requests == 2
+
+
 def test_client_credentials_are_not_sent():
     seen = []
 

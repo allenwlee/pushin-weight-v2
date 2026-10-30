@@ -318,14 +318,21 @@ class HFMetadataClient:
         return result
 
     def organization_socials(self, namespace: str) -> MetadataResponse:
-        """Capture public organization self-reported links within this budget."""
+        """Capture organization or individual self-reported links within this budget."""
         if not NAMESPACE.fullmatch(namespace):
             return MetadataResponse("malformed")
         result = self._get(f"/organizations/{namespace}/socials")
+        identity_field = "org"
+        if result.outcome == "not_found":
+            user = self._get(f"/users/{namespace}/socials")
+            user.attempts = result.attempts + user.attempts
+            result = user
+            identity_field = "user"
         if result.outcome == "ok":
             payload = result.payload
             if (not isinstance(payload, dict)
-                    or str(payload.get("org") or "").casefold() != namespace.casefold()
+                    or str(payload.get(identity_field) or "").casefold() != namespace.casefold()
+                    or ("user" if identity_field == "org" else "org") in payload
                     or not isinstance(payload.get("socialHandles"), dict)):
                 result.outcome = "identity_mismatch"
         return result
