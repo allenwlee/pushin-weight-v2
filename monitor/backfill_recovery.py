@@ -380,6 +380,9 @@ def _advance_wave(
                     state="completed", import_state__in=["pending", "applied"],
                 )
                 if body_digest(c.request_packet) in failed_translation_bodies
+                # A tag-only grant resends the failed body unchanged; its own
+                # reply must stay tagged to be found under its own identity.
+                and c.provenance.get("context", {}).get("recovery") != context
                 and c.provenance.get("post_snapshots", {}).get(identifier) == spec["source_snapshot"]
                 and _cached_reply_valid(c, delegates["translation"], post.text)
             }
