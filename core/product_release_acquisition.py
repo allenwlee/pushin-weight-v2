@@ -610,6 +610,8 @@ def _integrate_acquisition_run(run_id):
                 )
             if parent and eligible:
                 _retain_exact_hf_product(observation, payload)
+                observation.refresh_from_db(fields=["product"])
+                link_source_reported_parent(link.claim, observation)
             if not exact:
                 continue
             if not eligible:
@@ -1030,6 +1032,89 @@ def _source_bound_hf_repo(claim):
     return None
 
 
+def link_source_reported_parent(claim, parent_observation):
+    """Append a source-attributed Product reference, without reviewing lineage."""
+    from django.db import transaction
+
+    from core import models
+    from core.event_dossiers import add_claim, attach_source
+    from core.hf_metadata_client import REPO_ID
+    from core.measurement_taxonomy import digest, require
+    from core.product_release_pipeline import canonical_dossier
+
+    source = claim.event_dossier_source
+    require(source.collection_observation_id is not None
+            and claim.extraction_version == "hf-card-base-model-v1",
+            "captured base-model claim required")
+    expanded = source.collection_observation
+    require(expanded.projection_kind == "hf-release-expanded-v1", "expanded model capture required")
+    row, _, _ = hf_exact_observation_documents(expanded)
+    parent_row, _, _ = hf_exact_observation_documents(parent_observation)
+    require(parent_observation.projection_kind in {"hf-release-exact-v1", "hf-release-parent-v1"}
+            and parent_observation.product_id is not None, "resolved exact parent capture required")
+    parent_product = parent_observation.product
+    repo = claim.source_excerpt
+    card = row.get("cardData") if isinstance(row.get("cardData"), dict) else {}
+    bases = card.get("base_model")
+    bases = [bases] if isinstance(bases, str) else bases if isinstance(bases, list) else []
+    relation = card.get("base_model_relation")
+    relation = relation if isinstance(relation, str) and len(relation) <= 64 else "unspecified"
+    require(isinstance(repo, str) and REPO_ID.fullmatch(repo) and repo in bases[:50]
+            and claim.scope_key == "hf_base_model:" + digest([repo, relation])
+            and (parent_product.repo_id or "").casefold() == repo.casefold()
+            and parent_observation.source_identifier.casefold() == repo.casefold()
+            and (parent_row.get("id") or parent_row.get("modelId", "")).casefold() == repo.casefold()
+            and expanded.source_identifier.casefold() != repo.casefold(),
+            "parent identity differs from captured source evidence")
+    dossier = canonical_dossier(source.event_dossier_id)
+    with transaction.atomic():
+        dossier = models.EventDossier.objects.select_for_update().get(pk=dossier.pk)
+        require(dossier.merged_into_id is None, "dossier changed during lineage resolution")
+        latest = dossier.intake_decisions.order_by("-recorded_at", "-pk").first()
+        require(not latest or latest.outcome not in {"non_release", "scam"}, "excluded release")
+        locked = {item.pk: item for item in models.CollectionObservation.objects.select_for_update().filter(
+            pk__in=[expanded.pk, parent_observation.pk],
+        ).order_by("pk")}
+        expanded = locked[expanded.pk]
+        locked_parent = locked[parent_observation.pk]
+        require(locked_parent.product_id == parent_product.pk
+                and locked_parent.source_identifier.casefold() == repo.casefold()
+                and locked_parent.projection_kind == parent_observation.projection_kind,
+                "parent observation changed during lineage resolution")
+        child_id = models.Product.objects.filter(repo_id__iexact=expanded.source_identifier).values_list("pk", flat=True).first()
+        product_ids = {parent_product.pk}
+        if child_id is not None:
+            product_ids.add(child_id)
+        if expanded.product_id is not None:
+            product_ids.add(expanded.product_id)
+        products = {item.pk: item for item in models.Product.objects.select_for_update().filter(
+            pk__in=product_ids,
+        ).order_by("pk")}
+        require(parent_product.pk in products and (products[parent_product.pk].repo_id or "").casefold() == repo.casefold(),
+                "parent Product identity changed during lineage resolution")
+        if expanded.product_id is not None:
+            require(expanded.product_id in products
+                    and (products[expanded.product_id].repo_id or "").casefold() == expanded.source_identifier.casefold(),
+                    "child observation has conflicting Product identity")
+        child = products.get(child_id)
+        if child is not None:
+            require((child.repo_id or "").casefold() == expanded.source_identifier.casefold()
+                    and child.pk != parent_product.pk and expanded.product_id in (None, child.pk),
+                    "child observation has conflicting Product identity")
+            if expanded.product_id is None:
+                expanded.product = child
+                expanded.save(update_fields=["product", "updated_at"])
+        canonical_source = attach_source(dossier.pk, observation_id=expanded.pk)
+        request = expanded.inputs.select_related("input_request").get().input_request
+        return add_claim(
+            canonical_source.pk, claim_kind="release_context",
+            scope_key="hf_base_product:" + digest([repo, relation, str(parent_product.product_key)]),
+            assertion_text=f"HF model card reports base model {repo}; relation {relation}", source_excerpt=repo,
+            source_locator=f"https://huggingface.co/{expanded.source_identifier}", source_archive_id=request.archive_id,
+            reported_product_id=parent_product.pk, extraction_version="hf-base-product-v1",
+        )
+
+
 def queue_hf_lineage_parent(claim_id, expanded_observation_id):
     """Reuse saved exact parent evidence or register one nonrecursive lookup."""
     from django.db import transaction
@@ -1070,6 +1155,7 @@ def queue_hf_lineage_parent(claim_id, expanded_observation_id):
         ).order_by("-observed_at", "-pk").first()
         if saved is not None:
             hf_exact_observation_documents(saved)
+            link_source_reported_parent(claim, saved)
             if models.EventDossierSource.objects.filter(
                 event_dossier=dossier, collection_observation=saved,
             ).exists():

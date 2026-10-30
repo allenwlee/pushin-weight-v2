@@ -192,6 +192,7 @@ def add_claim(
     not_after: datetime | None = None,
     reported_brand_id: str | None = None,
     reported_candidate_id: int | None = None,
+    reported_product_id: int | None = None,
     source_archive_id=None,
     release_maturity_id=None,
 ) -> EventDossierClaim:
@@ -248,6 +249,10 @@ def add_claim(
         values["reported_brand_id"] = reported_brand_id
     if reported_candidate_id is not None:
         values["reported_brand_discovery_candidate_id"] = reported_candidate_id
+    if reported_product_id is not None:
+        if type(reported_product_id) is not int or reported_product_id <= 0:
+            raise ValueError("Reported Product must use a positive Product ID")
+        values["reported_product_id"] = reported_product_id
     if source_archive_id is not None:
         values["source_archive_id"] = source_archive_id
     if release_maturity_id is not None:
