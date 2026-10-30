@@ -63,6 +63,44 @@ def test_intake_decision_requires_a_reason_and_a_known_outcome():
         models.EventDossierIntakeDecision.objects.create(**values)
 
 
+def test_source_claim_product_reference_is_immutable_and_foreign_key_checked():
+    import importlib
+    import uuid
+    from types import SimpleNamespace
+
+    from django.apps import apps
+    from django.db import connection
+    from django.db.models.deletion import ProtectedError
+
+    _, original = evidence("reported-parent-identity")
+    product = models.Product.objects.create(repo_id="test/parent", display_name="parent")
+    values = {
+        "claim_kind": "release_context", "scope_key": "reported-parent",
+        "assertion_text": "Source reports parent", "source_excerpt": "test/parent",
+        "extraction_version": "test-v1", "reported_product_id": product.pk,
+    }
+    resolved = add_claim(original.event_dossier_source_id, **values)
+    assert resolved.reported_product_id == product.pk
+    with pytest.raises(ProtectedError):
+        product.delete()
+    migration = importlib.import_module("core.migrations.0214_dossier_claim_reported_product")
+    with pytest.raises(RuntimeError, match="Preserve reported Product references"):
+        migration.refuse_loss(apps, SimpleNamespace(connection=connection))
+    assert add_claim(original.event_dossier_source_id, **values).pk == resolved.pk
+    original.refresh_from_db()
+    assert original.reported_product_id is None
+    with pytest.raises(ValueError, match="not a valid choice"):
+        add_claim(original.event_dossier_source_id, **{**values, "reported_product_id": 999999999})
+    raw = models.EventDossierClaim.objects.filter(pk=resolved.pk).values().get()
+    raw.update(id=uuid.uuid4(), claim_hash="b" * 64, reported_product_id=999999999)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        models.EventDossierClaim.objects.create(**raw)
+        with connection.cursor() as cursor:
+            cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        models.EventDossierClaim.objects.filter(pk=resolved.pk).update(reported_product=None)
+
+
 def test_stored_post_replay_keeps_unknown_release_and_is_idempotent():
     from datetime import timedelta
 
@@ -1396,6 +1434,7 @@ def test_exact_release_enqueues_expanded_metadata_and_retains_base_model_claims(
     from core.collection_capture import observation_object_documents
     from core.product_release_acquisition import (
         execute_hf_name_search,
+        link_source_reported_parent,
         queue_hf_lineage_parent,
         queue_hf_name_search,
     )
@@ -1484,6 +1523,16 @@ def test_exact_release_enqueues_expanded_metadata_and_retains_base_model_claims(
             event_dossier=dossier, collection_observation=parent_observation,
         ).exists()
         assert execute_hf_name_search(parent_job.pk, client=parent_client)["physical_requests"] == 0
+    observation.refresh_from_db()
+    assert observation.product_id == models.Product.objects.get(repo_id="author/derived").pk
+    resolved = models.EventDossierClaim.objects.filter(
+        event_dossier_source__collection_observation=observation,
+        scope_key__startswith="hf_base_product:",
+    )
+    assert set(resolved.values_list("reported_product__repo_id", flat=True)) == set(parent_names[:5])
+    assert all(row.reported_product_id is None for row in lineage)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        resolved.update(assertion_text="rewritten")
     assert models.CollectionJob.objects.filter(targets__target_role="expanded_model").count() == 1
     assert models.CollectionJob.objects.filter(targets__target_role="lineage_model").count() == min(5, len(parent_names))
     second_dossier = create_dossier(event_kind="product_release", identity_key=identity_key("reuse-parent", "second"))
@@ -1496,6 +1545,9 @@ def test_exact_release_enqueues_expanded_metadata_and_retains_base_model_claims(
         extraction_version="hf-card-base-model-v1",
     )
     assert queue_hf_lineage_parent(second_claim.pk, observation.pk) is None
+    assert second_source.claims.get(scope_key__startswith="hf_base_product:").reported_product_id == (
+        models.Product.objects.get(repo_id="Qwen/base").pk
+    )
     assert models.EventDossierSource.objects.filter(
         event_dossier=second_dossier, collection_observation__product__repo_id="Qwen/base",
     ).exists()
@@ -1503,6 +1555,13 @@ def test_exact_release_enqueues_expanded_metadata_and_retains_base_model_claims(
     before_replay = models.EventDossierClaim.objects.count()
     assert execute_hf_name_search(expanded_job.pk, client=client)["physical_requests"] == 0
     assert models.EventDossierClaim.objects.count() == before_replay
+    conflict = models.Product.objects.create(repo_id="wrong/child", display_name="Wrong child")
+    models.CollectionObservation.objects.filter(pk=observation.pk).update(product=conflict)
+    parent_claim = lineage.get(source_excerpt=parent_observation.source_identifier)
+    with pytest.raises(ValueError, match="child observation has conflicting Product identity"):
+        link_source_reported_parent(parent_claim, parent_observation)
+    observation.refresh_from_db()
+    assert observation.product_id == conflict.pk
     assert len(requests) == 3
 
 

@@ -10547,6 +10547,10 @@ class EventDossierClaim(models.Model):
         BrandDiscoveryCandidate, null=True, blank=True,
         on_delete=models.PROTECT, related_name="dossier_claims",
     )
+    reported_product = models.ForeignKey(
+        Product, null=True, blank=True, db_index=False,
+        on_delete=models.PROTECT, related_name="dossier_claims",
+    )
     release_maturity_reference = models.ForeignKey(
         ReleaseMaturity, db_column="release_maturity_id", null=True, blank=True,
         on_delete=models.PROTECT, related_name="dossier_claims",
@@ -10591,6 +10595,10 @@ class EventDossierClaim(models.Model):
 
     class Meta:
         db_table = "event_dossier_claims"
+        indexes: ClassVar[list] = [
+            models.Index(fields=["reported_product"], condition=models.Q(reported_product__isnull=False),
+                         name="idx_ed_claim_reported_product"),
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(reported_brand__isnull=True) | models.Q(reported_brand_discovery_candidate__isnull=True),
