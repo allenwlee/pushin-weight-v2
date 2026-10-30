@@ -40,10 +40,11 @@ def enqueue_github_release(observation, *, captured_row=None):
     return marker
 
 
-def enqueue_saved_observations(observation_ids):
-    """Explicitly select existing public release observations for replay."""
+def enqueue_saved_observations(observation_ids, *, reconcile=False):
+    """Select saved releases; optionally revisit completed ones after new evidence."""
     if (not isinstance(observation_ids, (tuple, list)) or not 1 <= len(observation_ids) <= 100
-            or any(type(value) is not int or value <= 0 for value in observation_ids)):
+            or any(type(value) is not int or value <= 0 for value in observation_ids)
+            or type(reconcile) is not bool):
         raise ValueError("select 1..100 source observation IDs")
     rows = []
     for observation_id in dict.fromkeys(observation_ids):
@@ -53,6 +54,16 @@ def enqueue_saved_observations(observation_ids):
                     pk=observation_id,
                 )
                 marker = enqueue_github_release(observation)
+                if reconcile:
+                    marker = models.CollectionScopeRun.objects.select_for_update().get(pk=marker.pk)
+                    if marker.outcome == "complete":
+                        marker.outcome = "pending"
+                        marker.execution_state = "pending"
+                        marker.coverage_state = "pending"
+                        marker.enumeration_complete = False
+                        marker.retry_at = None
+                        marker.save(update_fields=["outcome", "execution_state", "coverage_state",
+                                                   "enumeration_complete", "retry_at"])
                 rows.append({"observation_id": observation_id, "outcome": marker.outcome})
         except models.CollectionObservation.DoesNotExist:
             rows.append({"observation_id": observation_id, "outcome": "missing"})

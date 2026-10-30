@@ -278,6 +278,42 @@ def test_public_release_capture_hands_off_to_dossier_detection(settings, monkeyp
     assert marker.outcome == "complete" and marker.enumeration_complete
 
 
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("role,linked,late", [
+    ("dedicated_product", True, False), ("dedicated_product", True, True),
+    ("family_repository", False, False),
+])
+def test_catalog_release_reuses_only_reviewed_dedicated_product(settings, role, linked, late):
+    from core import models
+    from core.collection_identity import review_github_mapping
+    from core.product_release_source_queue import drain_observations, enqueue_saved_observations
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    job, repo = configured()
+    subject = models.MeasurementSubject.objects.get(subject_kind="product", product__repo_id="HFPublisher/Model")
+    run = execute_github_catalog(job.pk, client=reader(responses(repo, []), 30))
+    release = run.observations.filter(observation_kind="releases").first()
+    repository = release.scope_run.resource_observation
+    if late:
+        enqueue_saved_observations([release.pk])
+        assert drain_observations(observation_ids=[release.pk])["processed"] == 1
+        release.refresh_from_db()
+        assert release.product_id is None
+        assert enqueue_saved_observations([release.pk])["observations"][0]["outcome"] == "complete"
+    mapping = review_github_mapping(subject=subject, repo=repo, role=role,
+        version_selector="v2" if role == "family_repository" else None,
+        evidence_url="https://github.com/publisher/family", reviewed_by="reviewer")
+    enqueue_saved_observations([release.pk], reconcile=late)
+    assert drain_observations(observation_ids=[release.pk])["processed"] == 1
+    for observation in (repository, release):
+        observation.refresh_from_db()
+        assert observation.product_id == (subject.product.pk if linked else None)
+        assert observation.mapping_id == (mapping.pk if linked else None)
+    assert not models.ProductReleaseDetail.objects.exists()
+    assert models.Product.objects.count() == 1
+    assert models.EventDossier.objects.filter(event_kind_reference__code="product_release").count() == 1
+
+
 @pytest.fixture
 def captured_release_assets():
     from copy import deepcopy

@@ -268,6 +268,13 @@ def _attach_github_release_repository(source, dossier_id):
     published = aware_instant(release["published_at"])
     require(observation.published_at == published, "GitHub release publication timestamp mismatch")
     GitHubMetadataClient.repo_url(repo["full_name"])
+    from core.product_release_acquisition import link_reviewed_github_product
+
+    repository = models.CollectionObservation.objects.select_for_update().get(pk=repository.pk)
+    observation = models.CollectionObservation.objects.select_for_update().get(pk=observation.pk)
+    mapping = link_reviewed_github_product(repository, repo)
+    if mapping:
+        link_reviewed_github_product(observation, repo)
     release_source = attach_source(dossier_id, observation_id=observation.pk)
     add_claim(release_source.pk, claim_kind="release_context", scope_key=f"github_published:{observation.pk}",
               assertion_text="GitHub published this release record at the stated time",
