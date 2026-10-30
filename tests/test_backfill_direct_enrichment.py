@@ -1025,3 +1025,41 @@ def test_unknown_group_does_not_block_new_independent_members(native):
     assert OriginalContentCall.objects.filter(
         state="ambiguous", actual_usd=None
     ).count() == len(unknown)
+
+
+def test_defer_mode_still_defers_exhausted_posts_left_out_of_a_grant(native):
+    from core.models import Post, PostBrandClassificationState, PostEnrichmentState
+    from core.provider_batches import post_snapshot
+    from monitor.backfill_recovery import advance_contract_recovery
+    from tests.test_backfill_cached_replay import _paid_history, _rejected_packet
+
+    _, ids = _rejected_packet(native)
+    PostEnrichmentState.objects.filter(pk="native-2").update(classification_status="pending")
+    PostBrandClassificationState.objects.filter(post_id="native-2").update(selected_final_judgment=None)
+    grant = {
+        "version": "final-attempt-grant-v1", "job_id": str(native[0].pk), "phase": "base",
+        "actor": "test-operator", "reason": "Grant only native-1",
+        "posts": [{
+            "post_id": "native-1", "prior_call_ids": ids,
+            "source_snapshot": post_snapshot(Post.objects.prefetch_related("brands").get(pk="native-1")),
+        }],
+    }
+    provider = DirectProvider()
+    for _ in range(8):
+        granted = advance_contract_recovery(
+            native[0].pk, grant=grant, cfg=native[1], api_key="test", delegates=native[2],
+            client_factory=provider.factory, direct_concurrency=2,
+        )
+        if granted["pending_posts"] == 0:
+            break
+    assert granted["pending_posts"] == 0 and provider.sent == 2
+    before = _paid_history()
+    result = execute_enrichment(
+        native[0].pk, cfg=native[1], delegates=native[2], api_key="test",
+        transport="direct", direct_concurrency=2, direct_client_factory=provider.factory,
+        defer_failures=True,
+    )
+    assert result["deferred_reasons"] == {"model_attempt_allowance_exhausted": 1}
+    assert result["deferred_post_count"] == 1 and result["actionable_pending_count"] == 0
+    assert result["pending_count"] == 1 and result["status"] == "partial"
+    assert provider.sent == 2 and _paid_history() == before
