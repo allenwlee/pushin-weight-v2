@@ -3701,6 +3701,10 @@ class CollectionScopeRun(models.Model):
                 fields=["retry_at", "id"], name="idx_rel_metric_followup_due",
                 condition=models.Q(scope_kind="release_metric_followup", outcome="pending"),
             ),
+            models.Index(
+                fields=["retry_at", "id"], name="idx_rel_source_detect_due",
+                condition=models.Q(scope_kind="release_detection", outcome="pending"),
+            ),
         ]
         constraints = (
             models.UniqueConstraint(
@@ -9688,6 +9692,10 @@ class CollectionResourceSnapshot(models.Model):
 
     class Meta:
         db_table = "collection_resource_snapshots"
+        indexes: ClassVar[list] = [
+            models.Index(fields=["native_stable_id"], name="idx_release_native_id",
+                         condition=models.Q(resource_kind="releases")),
+        ]
         constraints: ClassVar[list] = [
             models.CheckConstraint(condition=models.Q(provider_created_precision="unknown", provider_created_at__isnull=True, provider_created_date__isnull=True) | models.Q(provider_created_precision="instant", provider_created_at__isnull=False, provider_created_date__isnull=True) | models.Q(provider_created_precision="date", provider_created_at__isnull=True, provider_created_date__isnull=False), name="ck_resource_created_precision"),
             models.CheckConstraint(condition=models.Q(provider_modified_precision="unknown", provider_modified_at__isnull=True, provider_modified_date__isnull=True) | models.Q(provider_modified_precision="instant", provider_modified_at__isnull=False, provider_modified_date__isnull=True) | models.Q(provider_modified_precision="date", provider_modified_at__isnull=True, provider_modified_date__isnull=False), name="ck_resource_modified_precision"),

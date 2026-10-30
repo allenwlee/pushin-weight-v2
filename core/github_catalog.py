@@ -365,7 +365,7 @@ def observation_documents(observation):
 def catalog_report(run):
     """Build the operator report from scope, attempt and projection results."""
     scopes = run.scopes.exclude(
-        scope_kind__in={"numeric_projection_item", "catalog_execution"}
+        scope_kind__in={"numeric_projection_item", "catalog_execution", "release_detection"}
     )
     attempt = run.attempts.order_by("-ordinal").first()
     projection = None
@@ -638,6 +638,13 @@ def _record(
             },
         )
     project_observation_facts(observation)
+    if kind == "releases" and payload.get("draft") is False and payload.get("published_at"):
+        from django.conf import settings
+
+        if settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
+            from core.product_release_source_queue import enqueue_github_release
+
+            enqueue_github_release(observation, captured_row=payload)
     return observation
 
 
@@ -1487,7 +1494,7 @@ def execute_github_catalog(job_id, *, client=None, key=None):
         except (ValueError, KeyError, TypeError):
             reason = reason or "numeric_projection_failed"
     scopes = run.scopes.exclude(
-        scope_kind__in={"numeric_projection_item", "catalog_execution"}
+        scope_kind__in={"numeric_projection_item", "catalog_execution", "release_detection"}
     )
     selected, successful = (
         scopes.count(),
@@ -1498,7 +1505,7 @@ def execute_github_catalog(job_id, *, client=None, key=None):
         attempt.actual_items = items[0]
         attempt.save(update_fields=["actual_items"])
     run.refresh_from_db()
-    return finish_run(
+    finished = finish_run(
         claim,
         status="partial" if reason else "success",
         typed=True,
@@ -1509,3 +1516,8 @@ def execute_github_catalog(job_id, *, client=None, key=None):
         retry_at=retry_at,
         error_code=reason,
     )
+    if run.scopes.filter(scope_kind="release_detection", outcome="pending").exists():
+        from core.product_release_acquisition import dispatch_due_recovery
+
+        dispatch_due_recovery()
+    return finished
