@@ -69,7 +69,11 @@ def release_rows(dossier_ids):
             source_query = source_query.filter(
                 pk__in={c.event_dossier_source_id for c in claims}
             )
-        sources = list(source_query.select_related("post", "collection_observation"))
+        sources = list(
+            source_query.select_related(
+                "post", "collection_observation__run__job__source"
+            )
+        )
         accounts = {s.post.author_id for s in sources if s.post_id and s.post.author_id}
         milestones = []
         for claim in sorted(claims, key=lambda c: (c.recorded_at, str(c.pk))):
@@ -164,6 +168,17 @@ def release_rows(dossier_ids):
                 "claims": milestones,
                 "sources": len(sources),
                 "accounts": len(accounts),
+                "source_documents": [
+                    {
+                        "observation_id": source.collection_observation_id,
+                        "name": source.collection_observation.source_identifier,
+                        "provider": source.collection_observation.run.job.source.name,
+                        "url": source.collection_observation.run.source_url,
+                        "observed_at": source.collection_observation.observed_at.isoformat(),
+                    }
+                    for source in sources
+                    if source.collection_observation_id
+                ],
                 "source_accounts": [
                     {
                         "post_id": source.post_id,
@@ -239,6 +254,7 @@ def render_report(rows, *, title="Product releases — staging study", notes="")
         source_names = "<br>".join(
             _link(source.get("url"), source["name"])
             for source in row.get("source_accounts", [])
+            + row.get("source_documents", [])
         )
         body.append(f'''<tr><td>{index}</td><td>{escape(row["name"])}<small>{escape(row["id"])}</small></td>
 <td>{escape(row["state"])}<small>Access: {escape(row.get("availability", "unknown"))}</small></td><td>{escape(row["publisher"])}</td><td data-value="{escape(str(row["score"] or -1))}">{escape(str(score))}<details><summary>Reason</summary>{escape(row["reason"])}</details></td>

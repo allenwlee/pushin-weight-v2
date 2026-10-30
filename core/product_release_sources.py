@@ -35,6 +35,7 @@ class StoredSource:
     source_url: str | None
     clock_basis: str
     limitations: tuple[str, ...] = ()
+    archive_id: str | None = None
 
 
 def _entities_urls(entities, prefix):
@@ -234,15 +235,43 @@ def observation_page(window: ReplayWindow, *, clock="publication", after=0, limi
             )
         )
     else:
-        qs = qs.filter(observed_at__gte=window.start, observed_at__lt=window.end)
+        qs = qs.filter(
+            Q(
+                projection_kind="release-document-v1",
+                run__started_at__gte=window.start,
+                run__started_at__lt=window.end,
+            )
+            | (
+                ~Q(projection_kind="release-document-v1")
+                & Q(observed_at__gte=window.start, observed_at__lt=window.end)
+            )
+        )
+    return _observation_sources(qs.order_by("pk")[:limit], clock=clock)
+
+
+def stored_observations(observation_ids):
+    if len(observation_ids) > 2000:
+        raise ValueError("Select at most 2000 stored observations")
+    qs = models.CollectionObservation.objects.filter(
+        pk__in=observation_ids, post__isnull=True
+    ).exclude(run__job__source_id="x")
+    return _observation_sources(qs.order_by("pk"), clock="first_storage")
+
+
+def _observation_sources(qs, *, clock):
     observations = list(
         qs.select_related(
             "request__archive",
             "legacy_archive",
             "resource_snapshot",
             "run__job__source",
+            "run__payload_archive",
         )
-        .defer("request__archive__body", "legacy_archive__body")
+        .defer(
+            "request__archive__body",
+            "legacy_archive__body",
+            "run__payload_archive__body",
+        )
         .prefetch_related(
             Prefetch(
                 "inputs",
@@ -251,7 +280,6 @@ def observation_page(window: ReplayWindow, *, clock="publication", after=0, limi
                 ).defer("input_request__archive__body"),
             )
         )
-        .order_by("pk")[:limit]
     )
     result = []
     for obs in observations:
@@ -265,6 +293,8 @@ def observation_page(window: ReplayWindow, *, clock="publication", after=0, limi
                 archives[item.input_request.archive_id] = item.input_request.archive
         if obs.legacy_archive_id:
             archives[obs.legacy_archive_id] = obs.legacy_archive
+        if obs.projection_kind == "release-document-v1" and obs.run.payload_archive_id:
+            archives[obs.run.payload_archive_id] = obs.run.payload_archive
         # Canonical projectors select the observation's actual object from a
         # retained page and check its identity/hash. Never attach a whole list's
         # release text to each repository on that page.
@@ -337,6 +367,10 @@ def observation_page(window: ReplayWindow, *, clock="publication", after=0, limi
         basis = (
             "physical_receipt"
             if clock == "collection" and request and request.receipt_kind == "physical"
+            else "imported_capture_time"
+            if clock == "collection" and obs.projection_kind == "release-document-v1"
+            else "import_time"
+            if clock == "first_storage" and obs.projection_kind == "release-document-v1"
             else "observation_time"
             if clock != "publication"
             else clock
@@ -353,10 +387,15 @@ def observation_page(window: ReplayWindow, *, clock="publication", after=0, limi
                 None,
                 obs.pk,
                 obs.published_at,
-                obs.observed_at,
+                obs.run.started_at
+                if obs.projection_kind == "release-document-v1"
+                else obs.observed_at,
                 urls[0].url if urls else None,
                 basis,
                 tuple(sorted(set(limitations + ["stored_population_only"]))),
+                str(obs.run.payload_archive_id)
+                if obs.projection_kind == "release-document-v1"
+                else None,
             )
         )
     return result

@@ -1,8 +1,8 @@
 """Apply explicit, source-checked study assessments through canonical writers.
 
-This is an offline review import, not an LLM or collection service. Research
-captures retain the reviewer's supplied material and URLs; they are never
-represented as physical HTTP receipts. Unverified cases stay provisional.
+This is an offline review import, not an LLM or collection service. Source
+assertions reference stored Posts or collected documents. Research notes retain
+the reviewer's material separately; they are not physical HTTP receipts.
 """
 
 from datetime import UTC, date, datetime, timedelta
@@ -24,7 +24,7 @@ from core.event_dossiers import (
 )
 from core.product_release_pipeline import merge_dossiers, persist_source, review_release
 from core.product_release_report import release_rows, significance
-from core.product_release_sources import stored_posts
+from core.product_release_sources import stored_observations, stored_posts
 
 METHOD = "product-release-study-v1"
 KINDS = {
@@ -71,6 +71,22 @@ def _document(doc):
         raise ValueError("Research evidence needs a public HTTP source URL")
     _text(doc["text"])
     _instant(doc["observed_at"])
+
+
+def _source_reference(item):
+    if ("post_id" in item) == ("observation_id" in item):
+        raise ValueError("Evidence must reference exactly one Post or observation")
+    if "post_id" in item:
+        return ("post", _text(item["post_id"]))
+    if type(item["observation_id"]) is not int or item["observation_id"] <= 0:
+        raise ValueError("Observation reference must be a positive integer")
+    return ("observation", item["observation_id"])
+
+
+def _attach(event, source):
+    return attach_source(
+        event.pk, post_id=source.post_id, observation_id=source.observation_id
+    )
 
 
 def validate_assessment(packet):
@@ -121,15 +137,17 @@ def validate_assessment(packet):
         for item in evidence:
             _object(
                 item,
-                ("post_id", "excerpt", "kind"),
+                ("excerpt", "kind"),
                 (
+                    "post_id",
+                    "observation_id",
                     "effective_at",
                     "effective_date",
                     "access_channel",
                     "exclusive_source",
                 ),
             )
-            _text(item["post_id"])
+            _source_reference(item)
             _text(item["excerpt"])
             if item["kind"] not in KINDS or (
                 item.get("effective_at") and item.get("effective_date")
@@ -160,10 +178,15 @@ def validate_assessment(packet):
             _text(publisher["name"])
             if publisher.get("handle"):
                 _text(publisher["handle"])
-            if publisher["post_id"] not in {item["post_id"] for item in evidence}:
+            if publisher["post_id"] not in {item.get("post_id") for item in evidence}:
                 raise ValueError("Observed publisher must reference selected evidence")
         if case.get("verification"):
-            _object(case["verification"], ("post_id", "entity", "ownership"))
+            _object(
+                case["verification"],
+                ("entity", "ownership"),
+                ("post_id", "observation_id"),
+            )
+            _source_reference(case["verification"])
             for name in ("entity", "ownership"):
                 _document(case["verification"][name])
                 if _instant(case["verification"][name]["observed_at"]) > cutoff:
@@ -187,14 +210,37 @@ def _archive(packet):
 
 @transaction.atomic
 def apply_case(case, *, actor, assessed_at):
-    ids = {item["post_id"] for item in case["evidence"]}
-    sources = {s.post_id: s for s in stored_posts(ids)}
-    # Validate source quotations before creating any record. External research is
-    # kept separately in the assessment archive and cannot masquerade as Post text.
+    references = {_source_reference(item) for item in case["evidence"]}
+    post_ids = [v for k, v in references if k == "post"]
+    sources = {
+        ("post", s.post_id): s for s in (stored_posts(post_ids) if post_ids else [])
+    }
+    sources.update(
+        {
+            ("observation", s.observation_id): s
+            for s in stored_observations(
+                [v for k, v in references if k == "observation"]
+            )
+        }
+    )
+    if set(sources) != references:
+        raise ValueError("Selected source evidence is unavailable")
+    post_texts = dict(
+        models.Post.objects.filter(pk__in=post_ids).values_list("pk", "text")
+    )
     for item in case["evidence"]:
-        raw = models.Post.objects.get(pk=item["post_id"]).text or ""
-        if item["excerpt"] not in raw:
-            raise ValueError("Study excerpt does not occur in its stored source Post")
+        source = sources[_source_reference(item)]
+        if source.observation_id and source.stored_at > _instant(assessed_at):
+            raise ValueError("Source capture exceeds assessment cutoff")
+        texts = (
+            [post_texts[source.post_id] or ""]
+            if source.post_id
+            else [t.text for t in source.record.texts]
+        )
+        if not any(item["excerpt"] in text for text in texts):
+            raise ValueError(
+                "Study excerpt does not occur in its stored source evidence"
+            )
     event = create_dossier(
         event_kind="product_release",
         identity_key=identity_key("product-release-identity-v1", case["identity"]),
@@ -207,7 +253,12 @@ def apply_case(case, *, actor, assessed_at):
     for source in sources.values():
         result = persist_source(source)
         detected.append(result)
-        source_items = [e for e in case["evidence"] if e["post_id"] == source.post_id]
+        source_items = [
+            e
+            for e in case["evidence"]
+            if _source_reference(e) == ("post", source.post_id)
+            or _source_reference(e) == ("observation", source.observation_id)
+        ]
         if all(e.get("exclusive_source", False) for e in source_items):
             # A family-wide announcement attaches to each product independently.
             # Merge only a still-provisional, single-source intake container.
@@ -229,7 +280,7 @@ def apply_case(case, *, actor, assessed_at):
                     actor=actor,
                     reason="Source-checked atomic release: " + case["identity"],
                 )
-        linked = attach_source(event.pk, post_id=source.post_id)
+        linked = _attach(event, source)
         for item in source_items:
             instant = (
                 _instant(item["effective_at"]) if item.get("effective_at") else None
@@ -246,6 +297,7 @@ def apply_case(case, *, actor, assessed_at):
                 assertion_text=item["excerpt"],
                 source_excerpt=item["excerpt"],
                 source_locator=source.source_url,
+                source_archive_id=source.archive_id,
                 extraction_version=METHOD,
                 effective_precision="datetime"
                 if instant
@@ -300,7 +352,7 @@ def apply_case(case, *, actor, assessed_at):
                 scope_key="observed_publisher",
                 assertion_text=f"Reported release publisher: {publisher['name']}; ownership requires verification",
                 source_excerpt=post.text,
-                source_locator=sources[post.pk].source_url,
+                source_locator=sources[("post", post.pk)].source_url,
                 source_archive_id=archive.pk,
                 reported_candidate_id=candidate.pk,
                 extraction_version=METHOD,
@@ -308,12 +360,40 @@ def apply_case(case, *, actor, assessed_at):
         )
     verification = case.get("verification")
     if verification:
-        if verification["post_id"] not in sources or not case.get("issuer_company_id"):
+        reference = _source_reference(verification)
+        if reference not in sources or not case.get("issuer_company_id"):
             raise ValueError(
                 "Verification must identify this release's announcing source and issuer"
             )
-        post = models.Post.objects.get(pk=verification["post_id"])
-        linked = attach_source(event.pk, post_id=post.pk)
+        source = sources[reference]
+        linked = _attach(event, source)
+        if source.post_id:
+            account_id = models.Post.objects.get(pk=source.post_id).author_id
+            control_scope = f"account:{account_id}:company:{case['issuer_company_id']}"
+        else:
+            observation = models.CollectionObservation.objects.select_related(
+                "resource_snapshot", "run__job"
+            ).get(pk=source.observation_id)
+            if (
+                observation.projection_kind == "release-document-v1"
+                and observation.run.job.source_id == "publisher_web"
+            ):
+                if verification["ownership"]["url"] != source.source_url:
+                    raise ValueError(
+                        "Website ownership proof must identify the exact captured document URL"
+                    )
+                control_scope = (
+                    f"observation:{observation.pk}:company:{case['issuer_company_id']}"
+                )
+            else:
+                account_id = getattr(
+                    getattr(observation, "resource_snapshot", None),
+                    "publisher_account_id",
+                    None,
+                )
+                control_scope = (
+                    f"account:{account_id}:company:{case['issuer_company_id']}"
+                )
         for kind, name, scope in (
             (
                 "publisher_verification",
@@ -323,7 +403,7 @@ def apply_case(case, *, actor, assessed_at):
             (
                 "source_ownership",
                 "ownership",
-                f"account:{post.author_id}:company:{case['issuer_company_id']}",
+                control_scope,
             ),
         ):
             doc = verification[name]

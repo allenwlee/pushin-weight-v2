@@ -89,6 +89,10 @@ def _has_legacy_fields(model, *names):
 
 def observation_object_documents(observation):
     """Return a catalog object's captured fields, preferring frozen legacy evidence."""
+    if observation.projection_kind == "release-document-v1":
+        from core.product_release_documents import observation_documents
+
+        return observation_documents(observation)
     if observation.projection_kind == "github-catalog-object-v1":
         from core.github_catalog import observation_documents
 

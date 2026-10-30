@@ -14,6 +14,7 @@ from core.measurement_taxonomy import digest, require
 from core.models import CollectionJob, CollectionJobTarget
 
 OPTION_TYPES = {
+    "release_document_import": {},
     "model_inventory": {
         "ingest_metadata": bool,
         "watch_inventory": bool,

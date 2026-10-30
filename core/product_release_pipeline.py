@@ -348,6 +348,34 @@ def review_release(
             "source_stated_release", []
         ):
             source = claim.event_dossier_source
+            observation = (
+                source.collection_observation
+                if source.collection_observation_id
+                else None
+            )
+            if (
+                observation
+                and observation.projection_kind == "release-document-v1"
+                and observation.run.job.source_id == "publisher_web"
+            ):
+                from core.product_release_documents import observation_documents
+
+                document, _, _ = observation_documents(observation)
+                if (
+                    claim.source_locator == document["web_url"]
+                    and claim.source_archive_id == observation.run.payload_archive_id
+                    and claim.source_excerpt in document["body"]
+                    and any(
+                        c.event_dossier_source_id == source.pk
+                        and c.scope_key
+                        == f"observation:{observation.pk}:company:{issuer}"
+                        and c.source_locator == document["web_url"]
+                        and c.source_archive_id is not None
+                        for c in by_kind.get("source_ownership", [])
+                    )
+                ):
+                    official_assertion = True
+                continue
             account_id = (
                 source.post.author_id
                 if source.post_id

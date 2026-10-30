@@ -1,6 +1,6 @@
 # Product-release detection and discussion windows
 
-Last checked: 2026-10-29 23:00 JST. Code: `5e3c475e`, schema migration `0206`.
+Last checked: 2026-10-30 JST. Feature-branch implementation through migration `0208`; deployment evidence is recorded in the linked study reports.
 This describes the staging command and study services. Scheduled harvesting does
 not invoke this detector, and the study does not generate TN or Pulse prose.
 
@@ -28,8 +28,11 @@ can be reused by another dossier or a later narrative request.
    The evidence claim preserves where that candidate came from.
 4. Apply a source-checked assessment to identify separate products and revisions.
    A family announcement may support several dossiers. Confirmation requires
-   publisher-identity evidence, account/repository-control evidence, an existing
-   confirmed `CompanyAccount` relationship, and that publisher's announcement.
+   publisher-identity evidence and that publisher's announcement. Post and native
+   repository sources require account-control evidence and a confirmed
+   `CompanyAccount` relationship. Imported publisher website documents require
+   explicit reviewed control proof scoped to that exact observation and URL.
+   A website research note alone cannot confirm the release.
    An `available` result also requires its own availability claim.
 5. Capture exact discussion windows for a dated brand anchor, then export a
    sortable report. Review evidence and discussion examples are different
@@ -42,7 +45,7 @@ identity resolver. No `SourceRecord` table or model-only release table exists.
 
 ## Commands and clocks
 
-Both commands default to read-only validation/detection. Select the intended
+All commands default to read-only validation/detection. Select the intended
 database through the existing environment before running them.
 
 ```bash
@@ -57,7 +60,7 @@ python manage.py study_product_releases /path/to/source-checked-study.json
 `--discussion`, `--output /path/result.json` and `--report /path/report.html`.
 Its packet uses the strict `product-release-study-v1` contract in
 [`validate_assessment`](../../core/product_release_study.py). It rejects unknown
-fields, invented stored-Post quotations, conflicting date precision and research
+fields, invented stored-source quotations, conflicting date precision and research
 that postdates the assessment. Packets are bounded to 4 MB, 60 cases and 40
 evidence assertions per case. Each case is atomic and repeatable by content.
 
@@ -70,8 +73,8 @@ limitations. A candidate count is a count of source records, not unique releases
 | Clock | Meaning |
 |---|---|
 | `publication` | `posts.created_at`, or a collection observation's exact `published_at`. A day-only observation cannot be assigned to an arbitrary sub-day interval. |
-| `first_storage` | `posts.fetched_at`, or `collection_observations.observed_at`. |
-| `collection` | A retained physical request receipt in the window; otherwise explicitly labelled first-storage fallback. Cached processing is not a new collection. |
+| `first_storage` | `posts.fetched_at`, or `collection_observations.observed_at`; retained document imports use `collection_runs.started_at`. |
+| `collection` | A retained physical request receipt in the window; otherwise explicitly labelled observation-time fallback. Imported captures are labelled `imported_capture_time`, with zero new transport requests. Cached processing is not a new collection. |
 
 All intervals are `[start, end)`: the start is included, the end excluded.
 Timezone-free input requires `--timezone`. Current saved enrichment is used;
@@ -85,6 +88,35 @@ is also a signal. A repository creation date, metrics or model name alone does
 not prove a release. Missing, unsupported or oversized captured documents are
 reported as coverage limitations. No archive body over 2 MB is interpreted.
 
+## Retained primary documents
+
+`import_release_document` accepts one existing UTF-8 HTML, plain-text or Markdown capture, at most 2 MB. It validates its SHA-256 checksum, HTTPS URL, capture time, source and unresolved model/repository identity. This command does not fetch a URL, execute scripts, resolve a publisher or create a Product. A future capture time is rejected. HTML script/style/template content is excluded from quotation matching; this parser does not render JavaScript.
+
+```bash
+python manage.py import_release_document /path/announcement.html \
+  --url https://publisher.example/news/model \
+  --observed-at 2026-10-30T08:13:53+00:00 \
+  --sha256 CAPTURE_SHA256 \
+  --media-type text/html \
+  --source publisher_web \
+  --subject-kind model
+```
+
+Use `--persist` to create the manual import job/run, immutable archive, observation and resource snapshot. The response supplies `observation_id`. `--source hf` or `github` additionally checks the URL's repository identity; supply `--native-identifier owner/repository` and optionally an existing `--publisher-account-id` whose native owner matches. Publisher websites do not invent Accounts. The `publisher_web` source is disabled for scheduling. These imports are manual operations with strict empty options; the maximum request setting is a reservation ceiling, while the run records zero actual requests and zero physical bytes received. No CollectionRequest is fabricated.
+
+The archive contains the original retained bytes with `decoded-body-v1` encoding. The run owns the URL and import clock, while the observation retains the original capture clock. A capture clock is not a release date. Study evidence references exactly one `post_id` or integer `observation_id`, for example:
+
+```json
+{
+  "observation_id": 123,
+  "excerpt": "Today we release Model Flash.",
+  "kind": "announcement",
+  "effective_date": "2026-10-17"
+}
+```
+
+The quote must occur in the selected source. Imported document claims reference the actual capture archive. General research notes remain in the separate assessment archive. Confirmation remains an explicit reviewed assessment, not an automatic inference from a URL, badge or name. Website verification uses the same observation as the announcement and requires its exact URL in the ownership proof; repository verification retains the existing verified-account requirement. Missing publisher identity stays provisional. Repeated capture imports and unchanged assessments reuse existing rows. Source reports name and link both X accounts and collected documents.
+
 ## Existing records reused
 
 | Record | Meaning in this workflow |
@@ -95,7 +127,7 @@ reported as coverage limitations. No archive body over 2 MB is interpreted.
 | `event_dossier_reviews`, `event_dossier_review_claims` | Completed interpretation and its exact accepted/uncertain/rejected evidence. |
 | `product_release_details` | Existing one-to-one release extension of a completed review; uses the existing Product foreign key when resolved. |
 | `brand_discovery_candidates` | Observed unresolved publisher, linked from a release-context claim. Observation does not establish ownership. |
-| `collection_evidence_archives` | Retained assessment/research document. An assessment archive is labelled as such, never a fabricated HTTP receipt. |
+| `collection_evidence_archives` | Exact retained source bytes or a separately labelled assessment/research document; neither is a fabricated HTTP receipt. |
 | `measurement_subjects` | Shared identity for the measured brand. Discussion attribution is not automatically product-specific. |
 
 The report reads claims and sources selected by the current review. Evidence
