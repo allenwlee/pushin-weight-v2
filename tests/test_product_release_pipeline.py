@@ -1486,6 +1486,20 @@ def test_exact_release_enqueues_expanded_metadata_and_retains_base_model_claims(
         assert execute_hf_name_search(parent_job.pk, client=parent_client)["physical_requests"] == 0
     assert models.CollectionJob.objects.filter(targets__target_role="expanded_model").count() == 1
     assert models.CollectionJob.objects.filter(targets__target_role="lineage_model").count() == min(5, len(parent_names))
+    second_dossier = create_dossier(event_kind="product_release", identity_key=identity_key("reuse-parent", "second"))
+    second_source = attach_source(second_dossier.pk, observation_id=observation.pk)
+    second_claim = add_claim(
+        second_source.pk, claim_kind="release_context", scope_key="hf_base_model:" + digest(["Qwen/base", "merge"]),
+        assertion_text="HF model card reports base model Qwen/base; relation merge",
+        source_excerpt="Qwen/base", source_locator=url,
+        source_archive_id=observation.inputs.get().input_request.archive_id,
+        extraction_version="hf-card-base-model-v1",
+    )
+    assert queue_hf_lineage_parent(second_claim.pk, observation.pk) is None
+    assert models.EventDossierSource.objects.filter(
+        event_dossier=second_dossier, collection_observation__product__repo_id="Qwen/base",
+    ).exists()
+    assert models.CollectionJob.objects.filter(targets__target_role="lineage_model").count() == min(5, len(parent_names))
     before_replay = models.EventDossierClaim.objects.count()
     assert execute_hf_name_search(expanded_job.pk, client=client)["physical_requests"] == 0
     assert models.EventDossierClaim.objects.count() == before_replay
