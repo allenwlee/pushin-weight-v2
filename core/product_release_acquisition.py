@@ -402,6 +402,7 @@ def _retain_exact_hf_product(observation, payload):
     from django.db import DataError, transaction
 
     from core import models
+    from core.measurement_taxonomy import resolve_subject_id
     from core.product_metadata import apply_metadata
 
     with transaction.atomic():
@@ -409,6 +410,11 @@ def _retain_exact_hf_product(observation, payload):
         repo = observed.source_identifier
         product, created = models.Product.objects.get_or_create(
             repo_id=repo, defaults={"display_name": repo.split("/", 1)[1], "hf_type": "model"}
+        )
+        product = models.Product.objects.select_for_update().get(pk=product.pk)
+        models.MeasurementSubject.objects.get_or_create(
+            pk=resolve_subject_id("product", str(product.product_key)),
+            defaults={"subject_kind": "product", "product": product},
         )
         if observed.product_id not in (None, product.pk):
             raise ValueError("exact repository observation has conflicting product")

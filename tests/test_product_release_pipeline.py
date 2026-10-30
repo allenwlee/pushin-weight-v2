@@ -1114,6 +1114,8 @@ def test_exact_source_repo_is_captured_after_delayed_availability_without_confir
     product = models.Product.objects.get(repo_id="unknown-lab/model-z")
     assert observation.product_id == product.pk and observation.created_product is not already_known
     assert product.brand_id is None and product.publisher_account_id is None
+    subject = models.MeasurementSubject.objects.get(product=product, subject_kind="product")
+    assert not models.SourceSubjectMapping.objects.filter(subject=subject).exists()
     if already_known:
         assert product.display_name == "Curated name" and product.likes == 99
     elif malformed:
@@ -1138,6 +1140,7 @@ def test_exact_source_repo_is_captured_after_delayed_availability_without_confir
     assert queue_hf_name_search(other_claim.pk).pk == job.pk
     assert other.sources.filter(collection_observation=observation).exists()
     assert models.Product.objects.filter(repo_id="unknown-lab/model-z").count() == 1
+    assert models.MeasurementSubject.objects.filter(product=product).count() == 1
     assert len(calls) == 2
 
 
