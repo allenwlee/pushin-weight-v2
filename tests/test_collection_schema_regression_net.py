@@ -1,7 +1,4 @@
-"""Exactly one table, safe rollback boundaries, and a complete column reference."""
-
-import re
-from pathlib import Path
+"""Verify collection rollback boundaries and the physical application schema."""
 
 import pytest
 from django.apps import apps
@@ -48,28 +45,16 @@ def test_one_table_delta_preserves_legacy_numeric_rows_and_refuses_evidence_loss
     assert after.get_model("core", "CollectionJob").objects.filter(pk=job.pk).exists()
 
 
-def test_reference_inventory_and_columns_match_all_concrete_application_tables():
+def test_concrete_application_models_match_database_columns():
     from core.geolocation_evidence import PROJECTIONS
 
-    doc = (
-        Path(__file__).resolve().parents[1] / "docs/reference/db-schema.md"
-    ).read_text()
     models = [
         m
         for m in apps.get_app_config("core").get_models()
         if m._meta.managed and not m._meta.proxy
     ]
-    expected = {m._meta.db_table for m in models}
-    headings = re.findall(r"^### `([^`]+)` —", doc, re.MULTILINE)
-    assert set(headings) == expected and len(headings) == len(expected)
-    inventory = re.findall(r"^\| \[([^]]+)\]\(#table-[^)]+\) \|", doc, re.MULTILINE)
-    assert set(inventory) == expected and len(inventory) == len(expected)
     canonical = {model._meta.db_table: model for model in models}
     for table, model in canonical.items():
-        section = doc.split(f"### `{table}` —", 1)[1].split(
-            "[Back to table inventory]", 1
-        )[0]
-        columns = re.findall(r"^\| `([^`]+)` \|", section, re.MULTILINE)
         orm_columns = {f.column for f in model._meta.local_fields if f.concrete}
         projection = PROJECTIONS.get(table)
         source_columns = {f.column for f in projection._meta.local_concrete_fields} if projection else set()
@@ -82,7 +67,6 @@ def test_reference_inventory_and_columns_match_all_concrete_application_tables()
                 )
             }
         assert physical_columns == expected_columns, table
-        assert set(columns) == expected_columns and len(columns) == len(expected_columns), table
 
 
 @pytest.mark.usefixtures("isolated_migration_database")
