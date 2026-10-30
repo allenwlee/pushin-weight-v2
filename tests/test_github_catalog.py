@@ -286,7 +286,10 @@ def test_public_release_capture_hands_off_to_dossier_detection(settings, monkeyp
 def test_catalog_release_reuses_only_reviewed_dedicated_product(settings, role, linked, late):
     from core import models
     from core.collection_identity import review_github_mapping
-    from core.product_release_source_queue import drain_observations, enqueue_saved_observations
+    from core.product_release_source_queue import (
+        drain_observations,
+        enqueue_saved_observations,
+    )
 
     settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
     job, repo = configured()
@@ -319,7 +322,9 @@ def test_new_dedicated_review_queues_bounded_reconciliation(settings):
     from core import models
     from core.collection_identity import review_github_mapping
     from core.product_release_source_queue import (
-        drain_mapping_reconciliations, drain_observations, enqueue_saved_observations,
+        drain_mapping_reconciliations,
+        drain_observations,
+        enqueue_saved_observations,
     )
 
     settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
@@ -359,7 +364,9 @@ def test_new_dedicated_review_queues_bounded_reconciliation(settings):
 @pytest.mark.django_db(transaction=True)
 def test_mapping_reconciliation_rollback_and_retry(settings, monkeypatch):
     from django.db import transaction
-    from core import models, product_release_source_queue as queue
+
+    from core import models
+    from core import product_release_source_queue as queue
     from core.collection_identity import review_github_mapping
 
     settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
@@ -369,8 +376,8 @@ def test_mapping_reconciliation_rollback_and_retry(settings, monkeypatch):
     release = run.observations.filter(observation_kind="releases").first()
     queue.enqueue_saved_observations([release.pk])
     assert queue.drain_observations(observation_ids=[release.pk])["processed"] == 1
-    args = dict(subject=subject, repo=repo, role="dedicated_product",
-                evidence_url="https://github.com/publisher/family", reviewed_by="reviewer")
+    args = {"subject": subject, "repo": repo, "role": "dedicated_product",
+            "evidence_url": "https://github.com/publisher/family", "reviewed_by": "reviewer"}
     with pytest.raises(RuntimeError), transaction.atomic():
         review_github_mapping(**args)
         assert models.CollectionScopeRun.objects.filter(scope_kind="release_mapping_reconcile").exists()
@@ -401,7 +408,10 @@ def test_mapping_reconciliation_rollback_and_retry(settings, monkeypatch):
 def test_mapping_reconciliation_runs_only_when_background_enabled(settings, monkeypatch):
     from core import models
     from core.collection_identity import review_github_mapping
-    from core.product_release_source_queue import drain_observations, enqueue_saved_observations
+    from core.product_release_source_queue import (
+        drain_observations,
+        enqueue_saved_observations,
+    )
     from monitor.tasks import recover_due_product_releases
 
     settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
@@ -429,10 +439,15 @@ def test_mapping_reconciliation_runs_only_when_background_enabled(settings, monk
 @pytest.mark.django_db(transaction=True)
 def test_release_detection_waits_for_repository_review_lock(settings):
     import threading
+
     from django.db import connection, transaction
+
     from core import models
     from core.measurement_taxonomy import digest
-    from core.product_release_source_queue import drain_observations, enqueue_saved_observations
+    from core.product_release_source_queue import (
+        drain_observations,
+        enqueue_saved_observations,
+    )
 
     settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
     job, repo = configured()
