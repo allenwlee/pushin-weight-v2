@@ -262,6 +262,7 @@ def apply_case(case, *, actor, assessed_at):
         if all(e.get("exclusive_source", False) for e in source_items):
             # A family-wide announcement attaches to each product independently.
             # Merge only a still-provisional, single-source intake container.
+            merged = False
             for previous in result["dossier_ids"]:
                 old = models.EventDossier.objects.get(pk=previous)
                 if (
@@ -280,6 +281,12 @@ def apply_case(case, *, actor, assessed_at):
                     actor=actor,
                     reason="Source-checked atomic release: " + case["identity"],
                 )
+                merged = True
+            if merged:
+                # The merge copies evidence, not intake decisions. Finish the
+                # canonical source intake now so a replay has nothing to add.
+                # Reuse the writer's existing protection for reviewed exclusions.
+                persist_source(source)
         linked = _attach(event, source)
         for item in source_items:
             instant = (

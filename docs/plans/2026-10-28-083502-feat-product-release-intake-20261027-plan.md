@@ -151,6 +151,8 @@ Verification: existing Post study stays unchanged; document-only and mixed-sourc
 
 Before deployment, reconcile the earlier local Company.url revert with staging's already-applied0207 migration. Retain historical migration identity and remove the unwanted field through a forward migration if required; never rewrite applied migration history or affect production. This continuation preserves the authorized staging endpoint.
 
+Staging checkpoint: `cbe8da4f` is live on both staging services with migration 0208 and no `companies.url` column. The two-document pilot passed its rollback preflight, then stopped and rolled back on an exact-repeat assertion. Diagnosis reproduced the defect locally: merging a temporary intake dossier copied evidence but left the canonical intake decision to the second invocation. The fix completes source intake immediately after the merge using the existing writer, including its exclusion protection. The strengthened existing regression checks an exclusive-source merge and includes intake-decision row counts. All 28 document/study/pipeline tests pass after the correction. The failed pilot is not a successful data import; the corrected revision requires a new bounded staging pilot before completion.
+
 ## Historical checkpoint — October28
 
 - Feature branch `feat/product-release-intake-20261027` remains at local commit `490a34c62be3efb76c47983699c137cce6eee1ce`. Four owned files: `core/product_release_intake.py`, `core/product_release_replay.py`, and their two tests. The previous receipt records29 passing pure tests; no new test run is claimed by this status audit. The commit is not on `origin/main` and the branch has no upstream publication in the observed branch inventory.

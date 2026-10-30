@@ -70,6 +70,7 @@ def assessment(observation_id):
 def test_document_command_study_and_repeat_preserve_real_sources(tmp_path):
     saved, path, options = captured_document(tmp_path)
     value = assessment(saved["observation_id"])
+    value["cases"][0]["evidence"][0]["exclusive_source"] = True
     result = apply_study(value)
     row = result["releases"][0]
     assert row["state"] == "provisional"
@@ -109,6 +110,7 @@ def test_document_command_study_and_repeat_preserve_real_sources(tmp_path):
             models.EventDossier,
             models.EventDossierClaim,
             models.EventDossierReview,
+            models.EventDossierIntakeDecision,
         )
     }
     out = StringIO()
