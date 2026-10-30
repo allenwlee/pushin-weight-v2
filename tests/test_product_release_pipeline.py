@@ -1386,12 +1386,17 @@ def test_unbound_hf_link_does_not_select_exact_lookup():
     assert queue_hf_name_search(claim.pk).targets.get().target_role == "name_search"
 
 
-def test_exact_release_enqueues_expanded_metadata_and_retains_base_model_claims():
+@pytest.mark.parametrize("additional_parents", [0, 5])
+def test_exact_release_enqueues_expanded_metadata_and_retains_base_model_claims(additional_parents):
+    from datetime import timedelta
+
     import httpx
+    from django.utils import timezone
 
     from core.collection_capture import observation_object_documents
     from core.product_release_acquisition import (
         execute_hf_name_search,
+        queue_hf_lineage_parent,
         queue_hf_name_search,
     )
     from core.product_release_dossiers import record_release_report
@@ -1411,6 +1416,7 @@ def test_exact_release_enqueues_expanded_metadata_and_retains_base_model_claims(
     )
     job = queue_hf_name_search(claim.pk)
     requests = []
+    parent_names = ["Qwen/base", "Gemma/base"] + [f"Other/base{index}" for index in range(additional_parents)]
     def respond(request):
         requests.append(request)
         if request.url.params.get("blobs"):
@@ -1419,7 +1425,7 @@ def test_exact_release_enqueues_expanded_metadata_and_retains_base_model_claims(
             return httpx.Response(400)
         return httpx.Response(200, json={
             "id": "author/derived", "cardData": {
-                "base_model": ["Qwen/base", "Gemma/base"], "base_model_relation": "merge"
+                "base_model": parent_names, "base_model_relation": "merge"
             },
         })
     client = httpx.Client(transport=httpx.MockTransport(respond))
@@ -1434,11 +1440,55 @@ def test_exact_release_enqueues_expanded_metadata_and_retains_base_model_claims(
     lineage = models.EventDossierClaim.objects.filter(
         event_dossier_source__event_dossier=dossier, scope_key__startswith="hf_base_model:"
     )
-    assert {row.source_excerpt for row in lineage} == {"Qwen/base", "Gemma/base"}
+    assert {row.source_excerpt for row in lineage} == set(parent_names)
+    assert models.EventDossierClaim.objects.filter(scope_key__startswith="hf_base_model_limit:").exists() == (additional_parents > 0)
     assert all(row.source_archive_id == observation.inputs.get().input_request.archive_id for row in lineage)
+    from core.measurement_taxonomy import digest
+
+    fabricated = add_claim(
+        lineage.first().event_dossier_source_id, claim_kind="release_context",
+        scope_key="hf_base_model:" + digest(["Other/model", "merge"]),
+        assertion_text="A fabricated parent", source_excerpt="Other/model",
+        source_locator=url, extraction_version="hf-card-base-model-v1",
+    )
+    with pytest.raises(ValueError, match="differs from captured"):
+        queue_hf_lineage_parent(fabricated.pk, observation.pk)
     assert not models.ProductRelationship.objects.exists()
     assert models.Product.objects.get(repo_id="author/derived").brand_id is None
+    parents = list(models.CollectionJob.objects.filter(targets__target_role="lineage_model"))
+    assert {job.targets.get().native_identifier for job in parents} == set(parent_names[:5])
+    attempts = {}
+    def parent_response(request):
+        name = request.url.path.removeprefix("/api/models/")
+        assert name in set(parent_names[:5])
+        attempts[name] = attempts.get(name, 0) + 1
+        if name == "Qwen/base" and attempts[name] == 1:
+            return httpx.Response(404)
+        return httpx.Response(200, json={"id": name})
+    parent_client = httpx.Client(transport=httpx.MockTransport(parent_response))
+    for parent_job in parents:
+        parent_result = execute_hf_name_search(parent_job.pk, client=parent_client)
+        if parent_job.targets.get().native_identifier == "Qwen/base":
+            assert parent_result["outcome"] == "not_found"
+            assert not models.Product.objects.filter(repo_id="Qwen/base").exists()
+            models.CollectionJob.objects.filter(pk=parent_job.pk).update(
+                next_retry_at=timezone.now() - timedelta(seconds=1),
+            )
+            parent_result = execute_hf_name_search(parent_job.pk, client=parent_client)
+        assert parent_result["outcome"] == "found" and parent_result["physical_requests"] == 1
+        parent_observation = models.CollectionObservation.objects.get(
+            run_id=parent_result["run_id"], projection_kind="hf-release-parent-v1",
+        )
+        assert parent_observation.product.repo_id == parent_job.targets.get().native_identifier
+        assert models.EventDossierSource.objects.filter(
+            event_dossier=dossier, collection_observation=parent_observation,
+        ).exists()
+        assert execute_hf_name_search(parent_job.pk, client=parent_client)["physical_requests"] == 0
+    assert models.CollectionJob.objects.filter(targets__target_role="expanded_model").count() == 1
+    assert models.CollectionJob.objects.filter(targets__target_role="lineage_model").count() == min(5, len(parent_names))
+    before_replay = models.EventDossierClaim.objects.count()
     assert execute_hf_name_search(expanded_job.pk, client=client)["physical_requests"] == 0
+    assert models.EventDossierClaim.objects.count() == before_replay
     assert len(requests) == 3
 
 

@@ -147,7 +147,9 @@ def hf_exact_observation_documents(observation):
             and request.archive_id is not None
             and link.input_sha256 == request.archive.content_sha256,
             "exact response ownership or checksum mismatch")
-    target = run.job.targets.get(target_role="expanded_model" if expanded else "exact_model")
+    target = run.job.targets.get(target_role=("expanded_model" if expanded else
+                                             "lineage_model" if observation.projection_kind == "hf-release-parent-v1"
+                                             else "exact_model"))
     endpoint = urlsplit(request.endpoint_url)
     require(endpoint.scheme == "https" and endpoint.netloc == "huggingface.co"
             and endpoint.path == f"/api/models/{target.native_identifier}"
@@ -467,9 +469,10 @@ def _integrate_acquisition_run(run_id):
     selected_search_repos = set()
     for observation in run.observations.all().order_by("pk"):
         exact = observation.projection_kind == "hf-release-exact-v1"
+        parent = observation.projection_kind == "hf-release-parent-v1"
         expanded = observation.projection_kind == "hf-release-expanded-v1"
         socials = observation.projection_kind == "hf-release-socials-v1"
-        if exact or expanded:
+        if exact or expanded or parent:
             payload, _, _ = hf_exact_observation_documents(observation)
         elif socials:
             payload, _, _ = hf_socials_observation_documents(observation)
@@ -494,7 +497,7 @@ def _integrate_acquisition_run(run_id):
             resolved_product__isnull=False, resolved_product__repo_id__isnull=True,
         ).exists()
         search_followup = False
-        if not exact and not socials and not expanded:
+        if not exact and not socials and not expanded and not parent:
             normalized = repo.casefold()
             if normalized in selected_search_repos or len(selected_search_repos) < 3:
                 selected_search_repos.add(normalized)
@@ -514,7 +517,9 @@ def _integrate_acquisition_run(run_id):
                 captured_claim = add_claim(
                     event_source.pk, claim_kind="release_context",
                     scope_key=f"hf_capture:{observation.pk}",
-                    assertion_text=(f"Captured HF publisher {repo} social links; ownership is unresolved"
+                    assertion_text=(f"Captured HF parent repository {repo}; the lineage claim remains source-reported"
+                                    if parent else
+                                    f"Captured HF publisher {repo} social links; ownership is unresolved"
                                     if socials else
                                     f"Captured HF repository {repo}; its release role is unresolved"),
                     source_excerpt=repo,
@@ -532,17 +537,38 @@ def _integrate_acquisition_run(run_id):
                         bases = [bases] if isinstance(bases, str) else bases if isinstance(bases, list) else []
                         relation = card.get("base_model_relation")
                         relation = relation if isinstance(relation, str) and len(relation) <= 64 else "unspecified"
-                        for parent in dict.fromkeys(
+                        parents = list(dict.fromkeys(
                             value for value in bases[:50] if isinstance(value, str) and REPO_ID.fullmatch(value)
-                        ):
-                            add_claim(
+                        ))
+                        if len(parents) > 5:
+                            add_claim(event_source.pk, claim_kind="release_context",
+                                      scope_key=f"hf_base_model_limit:{observation.pk}",
+                                      assertion_text=(f"The first five of at least {len(parents)} valid base-model references "
+                                                      "are eligible for targeted parent lookup"),
+                                      source_excerpt=repo, source_locator=f"https://huggingface.co/{repo}",
+                                      source_archive_id=request.archive_id,
+                                      extraction_version="hf-card-base-model-v1")
+                        for index, parent_repo in enumerate(parents):
+                            parent_claim = add_claim(
                                 event_source.pk, claim_kind="release_context",
-                                scope_key="hf_base_model:" + digest([parent, relation]),
-                                assertion_text=f"HF model card reports base model {parent}; relation {relation}",
-                                source_excerpt=parent, source_locator=f"https://huggingface.co/{repo}",
+                                scope_key="hf_base_model:" + digest([parent_repo, relation]),
+                                assertion_text=f"HF model card reports base model {parent_repo}; relation {relation}",
+                                source_excerpt=parent_repo, source_locator=f"https://huggingface.co/{repo}",
                                 source_archive_id=request.archive_id,
                                 extraction_version="hf-card-base-model-v1",
                             )
+                            if eligible and index < 5 and parent_repo.casefold() != repo.casefold():
+                                import logging
+
+                                try:
+                                    parent_job = queue_hf_lineage_parent(parent_claim.pk, observation.pk)
+                                    if parent_job is not None:
+                                        _dispatch_if_enabled(parent_job)
+                                except Exception:
+                                    totals["registration_failures"] += 1
+                                    logging.getLogger(__name__).exception(
+                                        "Parent metadata registration failed for claim %s", parent_claim.pk,
+                                    )
                 seen_dossiers.add(dossier.pk)
                 totals["dossiers"] += 1
                 if exact and eligible:
@@ -582,6 +608,8 @@ def _integrate_acquisition_run(run_id):
                 totals["products_resolved"] += _resolve_candidate_from_socials(
                     dossier, link.claim, observation, payload
                 )
+            if parent and eligible:
+                _retain_exact_hf_product(observation, payload)
             if not exact:
                 continue
             if not eligible:
@@ -760,7 +788,7 @@ def execute_hf_name_search(job_id, *, client):
         observations = list(run.observations.all())
         require(observations, "completed search checkpoint has no observations")
         for observation in observations:
-            if observation.projection_kind in {"hf-release-exact-v1", "hf-release-expanded-v1"}:
+            if observation.projection_kind in {"hf-release-exact-v1", "hf-release-expanded-v1", "hf-release-parent-v1"}:
                 hf_exact_observation_documents(observation)
             elif observation.projection_kind == "hf-release-socials-v1":
                 hf_socials_observation_documents(observation)
@@ -780,7 +808,8 @@ def execute_hf_name_search(job_id, *, client):
                           max_seconds=job.max_seconds, max_bytes=job.max_bytes,
                           max_total_bytes=job.max_bytes)
     hf.capture, hf.collection_scope = RequestCapture(claim), scope
-    exact = target.target_role == "exact_model"
+    parent = target.target_role == "lineage_model"
+    exact = target.target_role == "exact_model" or parent
     expanded = target.target_role == "expanded_model"
     socials = target.target_role == "publisher_socials"
     require(exact or expanded or socials or target.target_role == "name_search", "unsupported acquisition target")
@@ -805,6 +834,7 @@ def execute_hf_name_search(job_id, *, client):
             for position, row in enumerate(rows):
                 native_id = (row.get("org") or row["user"]) if socials else row.get("id") or row["modelId"]
                 projection = ("hf-release-socials-v1" if socials else "hf-release-expanded-v1" if expanded else
+                              "hf-release-parent-v1" if parent else
                               "hf-release-exact-v1" if exact else "hf-release-search-v1")
                 key = digest([projection, native_id.casefold(), digest(row)])
                 observation, created = models.CollectionObservation.objects.get_or_create(
@@ -827,7 +857,7 @@ def execute_hf_name_search(job_id, *, client):
                     link_request(observation, request,
                                  role="hf_socials" if socials else "hf_expanded" if expanded else "hf_exact" if exact else "hf_search",
                                  row_locator=None if exact or expanded or socials else str(position))
-                if exact:
+                if exact and not parent:
                     from core.source_metric_projection import (
                         enqueue_authorized_release_projection,
                         retain_release_projection_followup,
@@ -998,6 +1028,76 @@ def _source_bound_hf_repo(claim):
                 and source_repo_evidence(post, repo)["exact_hf_repo_link"]):
             return repo
     return None
+
+
+def queue_hf_lineage_parent(claim_id, expanded_observation_id):
+    """Reuse saved exact parent evidence or register one nonrecursive lookup."""
+    from django.db import transaction
+
+    from core import models
+    from core.collection_jobs import register_job, set_job_state
+    from core.event_dossiers import add_claim, attach_source
+    from core.hf_metadata_client import REPO_ID
+    from core.measurement_taxonomy import digest, require
+    from core.product_release_pipeline import canonical_dossier
+
+    observation = models.CollectionObservation.objects.select_related("run__job").get(pk=expanded_observation_id)
+    require(observation.projection_kind == "hf-release-expanded-v1", "expanded model capture required")
+    row, _, _ = hf_exact_observation_documents(observation)
+    claim = models.EventDossierClaim.objects.select_related("event_dossier_source").get(pk=claim_id)
+    require(claim.event_dossier_source.collection_observation_id == observation.pk
+            and claim.claim_kind_reference.code == "release_context"
+            and claim.extraction_version == "hf-card-base-model-v1", "captured base-model claim required")
+    card = row.get("cardData") if isinstance(row.get("cardData"), dict) else {}
+    bases = card.get("base_model")
+    bases = [bases] if isinstance(bases, str) else bases if isinstance(bases, list) else []
+    repo = claim.source_excerpt
+    relation = card.get("base_model_relation")
+    relation = relation if isinstance(relation, str) and len(relation) <= 64 else "unspecified"
+    require(isinstance(repo, str) and REPO_ID.fullmatch(repo) and repo in bases[:50]
+            and repo.casefold() != observation.source_identifier.casefold()
+            and claim.scope_key == "hf_base_model:" + digest([repo, relation]),
+            "parent claim differs from captured metadata")
+    dossier = canonical_dossier(claim.event_dossier_source.event_dossier_id)
+    latest = dossier.intake_decisions.order_by("-recorded_at", "-pk").first()
+    require(not latest or latest.outcome not in {"non_release", "scam"}, "excluded release")
+    product = models.Product.objects.filter(repo_id__iexact=repo).first()
+    if product is not None:
+        saved = models.CollectionObservation.objects.filter(
+            product=product, run__job__source_id="hf", run__job__operation="release_acquisition",
+            run__status="success", projection_kind__in=["hf-release-exact-v1", "hf-release-parent-v1"],
+            source_identifier__iexact=repo, status="ok",
+        ).order_by("-observed_at", "-pk").first()
+        if saved is not None:
+            hf_exact_observation_documents(saved)
+            if models.EventDossierSource.objects.filter(
+                event_dossier=dossier, collection_observation=saved,
+            ).exists():
+                return None
+            source = attach_source(dossier.pk, observation_id=saved.pk)
+            request = saved.inputs.select_related("input_request").get().input_request
+            add_claim(source.pk, claim_kind="release_context", scope_key=f"hf_parent_reused:{saved.pk}",
+                      assertion_text=f"Reused saved exact HF parent repository {repo}; lineage remains source-reported",
+                      source_excerpt=repo, source_locator=f"https://huggingface.co/{repo}",
+                      source_archive_id=request.archive_id, extraction_version="hf-release-parent-v1")
+            return None
+    key = digest(["release-hf-parent-v1", repo.casefold()])
+    with transaction.atomic():
+        job = register_job(
+            job_key="release-hf-parent:" + key, source=models.DataSource.objects.get(pk="hf"),
+            purpose="content", operation="release_acquisition", mode="manual", definition={"version": 2, "options": {}},
+            settings={"owner_kind": "source", "schedule_kind": "manual", "schedule_driver": "manual",
+                      "max_requests": 3, "max_bytes": 1048576, "max_seconds": 30, "max_items": 1},
+            targets=[{"target_key": key, "native_identifier": repo, "target_kind": "model",
+                      "target_role": "lineage_model", "resolution_state": "unresolved",
+                      "gap_reason": "source_reported_parent"}],
+        )
+        link_claim_to_job(claim.pk, job.pk)
+        if job.state == "paused" and not job.runs.exists():
+            job = set_job_state(job.pk, "ready")
+    if job.last_success_id:
+        integrate_acquisition_run(job.last_success_id)
+    return job
 
 
 def queue_hf_expanded_capture(claim_id, exact_observation_id):
