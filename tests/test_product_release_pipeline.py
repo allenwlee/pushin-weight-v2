@@ -565,6 +565,132 @@ def test_queue_saved_name_shares_one_bounded_job_without_provider_requests():
     assert not models.Product.objects.exists()
 
 
+@pytest.mark.parametrize("card_status,expected,card_body", [
+    (200, "found", b"# Student4\nTeacher: Qwen and Gemma\n"),
+    (404, "missing_or_private", b""), (302, "http_error", b""),
+    (429, "throttled", b""), (200, "malformed_text", b"\xff"),
+    (200, "response_size_cap", b"x" * 1048577),
+    (200, "request_error", b"broken-stream"),
+])
+def test_exact_model_queues_pinned_card_and_preserves_text(card_status, expected, card_body):
+    import httpx
+
+    from core.collection_capture import observation_object_documents
+    from core.product_release_acquisition import (
+        drain_due_hf_acquisitions,
+        execute_hf_name_search,
+        queue_hf_name_search,
+    )
+    from core.product_release_dossiers import record_release_report
+
+    models.DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    repo = "creator/Student4"
+    revision = "a" * 40
+    url = f"https://huggingface.co/{repo}"
+    post = models.Post.objects.create(tweet_id="card-release", text=f"We release Student4 {url}")
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": "Student4", "source_url": url},
+        release_identity="card-release", observed_name="Student4", source_url=url,
+        maturity_code="unknown", release_value=None, release_precision="unknown", extraction_version="test",
+    )
+    claim = models.EventDossierClaim.objects.get(
+        event_dossier_source__event_dossier=dossier, claim_kind_reference__code="release_report"
+    )
+    exact_job = queue_hf_name_search(claim.pk)
+    calls = []
+    def respond(request):
+        calls.append(request.url.path)
+        if request.url.path.startswith("/api/models/"):
+            return httpx.Response(200, json={"id": repo, "author": "creator", "sha": revision})
+        assert request.url.path == f"/{repo}/raw/{revision}/README.md"
+        if card_body == b"broken-stream":
+            class BrokenStream(httpx.SyncByteStream):
+                def __iter__(self):
+                    yield b"partial"
+                    raise httpx.ReadError("connection lost")
+            return httpx.Response(200, stream=BrokenStream())
+        return httpx.Response(card_status, content=card_body,
+                              headers={"location": "https://example.com/unsafe"} if card_status == 302 else {})
+    client = httpx.Client(transport=httpx.MockTransport(respond))
+    assert execute_hf_name_search(exact_job.pk, client=client)["outcome"] == "found"
+    card_job = models.CollectionJob.objects.get(targets__target_role="model_card")
+    assert card_job.targets.get().native_identifier == f"{repo}@{revision}"
+    batch = drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(card_job.pk)])
+    assert batch["provider_calls"] == 1
+    assert batch["jobs"][0]["outcome"] == expected
+    if expected == "found":
+        card = models.CollectionObservation.objects.get(projection_kind="hf-release-card-v1")
+        document, dimensions, _ = observation_object_documents(card)
+        assert document["text"] == "# Student4\nTeacher: Qwen and Gemma\n"
+        assert document["revision"] == revision and dimensions["kind"] == "model_card"
+        assert dossier.sources.filter(collection_observation=card).exists()
+        assert card.run.physical_bytes_received == len(document["text"].encode())
+        card.payload_sha256 = "0" * 64
+        with pytest.raises(ValueError, match="content changed"):
+            observation_object_documents(card)
+        repeat = drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(card_job.pk)])
+        assert repeat["provider_calls"] == 0
+    else:
+        assert not models.CollectionObservation.objects.filter(projection_kind="hf-release-card-v1").exists()
+        assert not models.Product.objects.exists()
+        if expected == "request_error":
+            card_job.refresh_from_db()
+            assert not card_job.last_attempt.attempts.get().accounting_complete
+    assert len(calls) == 2
+
+
+def test_pinned_card_recovers_after_checkpoint_without_refetch(monkeypatch):
+    from datetime import timedelta
+
+    import httpx
+    from django.utils import timezone
+
+    from core import product_release_hf_card as cards
+    from core.product_release_acquisition import (
+        execute_hf_name_search,
+        queue_hf_name_search,
+    )
+    from core.product_release_dossiers import record_release_report
+
+    models.DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    repo, revision = "creator/Student4", "a" * 40
+    url = f"https://huggingface.co/{repo}"
+    post = models.Post.objects.create(tweet_id="card-crash", text=f"We release Student4 {url}")
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": "Student4", "source_url": url},
+        release_identity="card-crash", observed_name="Student4", source_url=url,
+        maturity_code="unknown", release_value=None, release_precision="unknown", extraction_version="test",
+    )
+    claim = models.EventDossierClaim.objects.get(
+        event_dossier_source__event_dossier=dossier, claim_kind_reference__code="release_report"
+    )
+    exact = queue_hf_name_search(claim.pk)
+    calls = []
+    def respond(request):
+        calls.append(request.url.path)
+        if request.url.path.startswith("/api/models/"):
+            return httpx.Response(200, json={"id": repo, "author": "creator", "sha": revision})
+        return httpx.Response(200, content=b"# Student4\n")
+    client = httpx.Client(transport=httpx.MockTransport(respond))
+    execute_hf_name_search(exact.pk, client=client)
+    card_job = models.CollectionJob.objects.get(targets__target_role="model_card")
+    finish = cards.finish_run
+    monkeypatch.setattr(cards, "finish_run", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("crash")))
+    with pytest.raises(RuntimeError, match="crash"):
+        cards.execute_card(card_job.pk, client=client)
+    run = models.CollectionRun.objects.get(job=card_job)
+    models.CollectionRun.objects.filter(pk=run.pk).update(lease_expires_at=timezone.now() - timedelta(seconds=1))
+    monkeypatch.setattr(cards, "finish_run", finish)
+    result = cards.execute_card(card_job.pk, client=client)
+    assert result["outcome"] == "found" and result["physical_requests"] == 0
+    assert len(calls) == 2 and run.observations.filter(projection_kind="hf-release-card-v1").count() == 1
+    assert dossier.sources.filter(collection_observation__run=run).count() == 1
+
+
 def test_name_search_selects_at_most_three_exact_followups_with_retained_evidence():
     import httpx
 

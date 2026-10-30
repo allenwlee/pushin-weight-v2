@@ -89,6 +89,10 @@ def _has_legacy_fields(model, *names):
 
 def observation_object_documents(observation):
     """Return a catalog object's captured fields, preferring frozen legacy evidence."""
+    if observation.projection_kind == "hf-release-card-v1":
+        from core.product_release_hf_card import card_documents
+
+        return card_documents(observation)
     if observation.projection_kind == "hf-release-socials-v1":
         from core.product_release_acquisition import hf_socials_observation_documents
 

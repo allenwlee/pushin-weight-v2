@@ -495,6 +495,17 @@ def _integrate_acquisition_run(run_id):
                         logging.getLogger(__name__).exception(
                             "Expanded metadata registration failed for capture %s", observation.pk,
                         )
+                    try:
+                        from core.product_release_hf_card import queue_card
+
+                        card_job = queue_card(captured_claim.pk, observation.pk)
+                        if card_job is not None:
+                            _dispatch_if_enabled(card_job)
+                    except Exception:
+                        totals["registration_failures"] += 1
+                        logging.getLogger(__name__).exception(
+                            "Model-card registration failed for capture %s", observation.pk,
+                        )
                 if search_followup and eligible:
                     import logging
 
@@ -860,8 +871,14 @@ def drain_due_hf_acquisitions(*, client, limit=10, execute=False, job_ids=None):
                         and job.last_attempt_id and job.last_attempt.status == "failed"):
                     result = {"outcome": "projection_only", "physical_requests": 0}
                 else:
-                    result = (execute_github_repository(job.pk, client=client) if job.source_id == "github"
-                              else execute_hf_name_search(job.pk, client=client))
+                    if job.source_id == "github":
+                        result = execute_github_repository(job.pk, client=client)
+                    elif job.targets.filter(target_role="model_card").exists():
+                        from core.product_release_hf_card import execute_card
+
+                        result = execute_card(job.pk, client=client)
+                    else:
+                        result = execute_hf_name_search(job.pk, client=client)
             except BusyJob:
                 result = {"outcome": "busy", "physical_requests": 0}
             if job.source_id == "hf" and result["outcome"] in {"found", "projection_only"}:
