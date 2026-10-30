@@ -97,6 +97,232 @@ def test_confirmed_known_publisher_attaches_exact_repo_idempotently():
     assert PostBrandProduct.objects.count() == 1
 
 
+@pytest.mark.parametrize("mode,expected", [
+    ("official", True), ("comparison", False), ("question", False),
+    ("unofficial", False), ("ambiguous", False), ("rejected", False), ("partial", False),
+])
+def test_no_link_official_release_uses_verified_search_and_exact_capture(mode, expected):
+    from core.models import DataSource
+    from core.product_release_acquisition import (
+        execute_hf_name_search,
+        queue_hf_name_search,
+    )
+
+    brand, _org, account, post = _publisher()
+    if mode == "unofficial":
+        BrandAccount.objects.filter(account=account, brand=brand).delete()
+    post.text = ("We release Other, trained on M2" if mode == "comparison" else
+                 "Did we announce M2?" if mode == "question" else "We announce M2!")
+    post.author_handle = account.handle
+    post.save(update_fields=["text", "author_handle"])
+    DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": "M2"}, release_identity="no-link-verified",
+        observed_name="M2", source_url=None, brand=brand, maturity_code="unknown",
+        release_value=None, release_precision="unknown", extraction_version="test",
+    )
+    report = EventDossierClaim.objects.get(
+        event_dossier_source__event_dossier=dossier, claim_kind_reference__code="release_report"
+    )
+    RareTypeCategoryAssignment.objects.create(
+        post=post, brand=brand, category="llm-model", source_evidence={}, classification_version="test"
+    )
+    proposal = ProductVerificationProposal.objects.create(
+        proposal_key="f" * 64, source_post=post, source_dossier=dossier, proposed_brand=brand,
+        account=account, account_handle_snapshot=account.handle, observed_name="M2",
+        candidate_repo_id="", policy_version=POLICY_VERSION, hf_outcome="deferred",
+        review_status="rejected" if mode == "rejected" else "pending",
+    )
+    job = queue_hf_name_search(report.pk)
+    calls = []
+    def respond(request):
+        calls.append(request)
+        if request.url.path == "/api/models":
+            if mode == "partial" and request.url.params.get("cursor"):
+                return httpx.Response(200, json=[])
+            rows = [{"id": "MiniMaxAI/M2"}]
+            if mode == "ambiguous":
+                rows.append({"id": "MiniMaxAI/M-2"})
+            headers = {"link": '<https://huggingface.co/api/models?cursor=next>; rel="next"'} if mode == "partial" else {}
+            return httpx.Response(200, json=rows, headers=headers)
+        return httpx.Response(200, json={"id": "MiniMaxAI/M2", "author": "MiniMaxAI"})
+    client = _client(respond)
+    search = execute_hf_name_search(job.pk, client=client)
+    child = models_for_test_exact_job("MiniMaxAI/M2")
+    exact = execute_hf_name_search(child.pk, client=client)
+    proposal.refresh_from_db()
+    assert exact["integration"]["products_resolved"] == int(expected)
+    assert (proposal.review_status == "approved") is expected
+    assert Product.objects.count() == 1
+    if not expected:
+        assert Product.objects.get().brand_id is None
+    assert PostBrandProduct.objects.count() == int(expected)
+    if expected:
+        edge = PostBrandProduct.objects.get()
+        assert edge.source_evidence["search_observation_id"] in list(
+            EventDossierClaim.objects.filter(event_dossier_source__event_dossier=dossier,
+                event_dossier_source__collection_observation__run_id=search["run_id"])
+            .values_list("event_dossier_source__collection_observation_id", flat=True)
+        )
+        assert edge.source_evidence["exact_observation_id"] is not None
+    assert dossier.current_review_id is None
+    assert execute_hf_name_search(child.pk, client=client)["physical_requests"] == 0
+    assert len(calls) == 2 and Product.objects.count() == 1
+    if mode == "partial":
+        from core.models import CollectionJob
+
+        CollectionJob.objects.filter(pk=job.pk).update(next_retry_at=timezone.now() - timedelta(seconds=1))
+        complete = execute_hf_name_search(job.pk, client=client)
+        proposal.refresh_from_db()
+        assert complete["outcome"] == "found" and proposal.review_status == "approved"
+        assert Product.objects.count() == 1 and len(calls) == 3
+
+
+@pytest.mark.parametrize("matches,merged", [(True, False), (False, False), (False, True)])
+def test_exact_capture_does_not_duplicate_approved_x_only_product(matches, merged):
+    from core.models import CollectionObservation, DataSource
+    from core.product_release_acquisition import execute_hf_name_search, queue_hf_name_search
+
+    brand, _org, account, post = _publisher()
+    url = "https://huggingface.co/MiniMaxAI/M2"
+    post.text = f"We announce M2 {url}"
+    post.author_handle = account.handle
+    post.save(update_fields=["text", "author_handle"])
+    DataSource.objects.get_or_create(pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"})
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": "M2", "source_url": url}, release_identity="x-only-before-capture",
+        observed_name="M2", source_url=url, brand=brand, maturity_code="unknown", release_value=None,
+        release_precision="unknown", extraction_version="test",
+    )
+    first = ProductVerificationProposal.objects.create(
+        proposal_key="9" * 64, source_post=post, source_dossier=dossier, proposed_brand=brand,
+        account=account, observed_name="M2", policy_version=POLICY_VERSION, hf_outcome="deferred",
+    )
+    decide_product_proposal(proposal_id=first.pk, action="approve", reviewer="owner@example.com",
+                            reason="Approved X-only identity", brand_id=brand.pk,
+                            product_type="llm-model", catalog_mode="x_only")
+    original = Product.objects.get()
+    if merged:
+        from core.event_dossiers import create_dossier, identity_key
+        from core.product_release_pipeline import merge_dossiers
+
+        target = create_dossier(event_kind="product_release",
+                                identity_key=identity_key("test-merged", "same-release"))
+        merge_dossiers(dossier.pk, target.pk, actor="test", reason="same release")
+    RareTypeCategoryAssignment.objects.create(
+        post=post, brand=brand, category="llm-model", source_evidence={}, classification_version="test"
+    )
+    ProductVerificationProposal.objects.create(
+        proposal_key="a" * 64, source_post=post, source_dossier=dossier, proposed_brand=brand,
+        account=account, account_handle_snapshot=account.handle, observed_name="M2" if matches else "Other",
+        candidate_repo_id="MiniMaxAI/M2", policy_version=POLICY_VERSION,
+        account_evidence={"stable_account_id": account.author_id, **source_repo_evidence(post, "MiniMaxAI/M2")},
+    )
+    claim = EventDossierClaim.objects.get(event_dossier_source__event_dossier=dossier,
+                                          claim_kind_reference__code="release_report")
+    job = queue_hf_name_search(claim.pk)
+    result = execute_hf_name_search(job.pk, client=_client(
+        lambda _request: httpx.Response(200, json={"id": "MiniMaxAI/M2", "author": "MiniMaxAI"})
+    ))
+    observation = CollectionObservation.objects.get(run_id=result["run_id"])
+    original.refresh_from_db()
+    assert Product.objects.count() == 1
+    assert original.repo_id == ("MiniMaxAI/M2" if matches else None)
+    assert observation.product_id == (original.pk if matches else None)
+
+
+def models_for_test_exact_job(identifier):
+    from core.models import CollectionJob
+
+    return CollectionJob.objects.get(targets__target_role="exact_model", targets__native_identifier=identifier)
+
+
+@pytest.mark.parametrize("observed_name,official,excluded,expected", [
+    ("M2", True, False, True),
+    ("Other Student", True, False, False),
+    ("M2", False, False, False),
+    ("M2", True, True, False),
+])
+def test_captured_exact_release_metadata_reuses_known_publisher_verifier(
+    observed_name, official, excluded, expected
+):
+    from core.models import DataSource
+    from core.product_release_acquisition import (
+        execute_hf_name_search,
+        queue_hf_name_search,
+    )
+
+    brand, _org, account, post = _publisher()
+    if not official:
+        BrandAccount.objects.filter(account=account, brand=brand).delete()
+    url = "https://huggingface.co/MiniMaxAI/M2"
+    post.text = f"We announce {observed_name} {url}"
+    post.author_handle = account.handle
+    post.save(update_fields=["text", "author_handle"])
+    DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": observed_name, "source_url": url},
+        release_identity="captured-exact-verification", observed_name=observed_name,
+        source_url=url, brand=brand, maturity_code="unknown", release_value=None,
+        release_precision="unknown", extraction_version="test",
+    )
+    claim = EventDossierClaim.objects.get(
+        event_dossier_source__event_dossier=dossier, claim_kind_reference__code="release_report"
+    )
+    RareTypeCategoryAssignment.objects.create(
+        post=post, brand=brand, category="llm-model", source_evidence={}, classification_version="test"
+    )
+    proposal = ProductVerificationProposal.objects.create(
+        proposal_key="e" * 64, source_post=post, source_dossier=dossier,
+        proposed_brand=brand, account=account, account_handle_snapshot=account.handle,
+        observed_name=observed_name, candidate_repo_id="MiniMaxAI/M2", policy_version=POLICY_VERSION,
+        account_evidence={"stable_account_id": account.author_id, **source_repo_evidence(post, "MiniMaxAI/M2")},
+    )
+    job = queue_hf_name_search(claim.pk)
+    if excluded:
+        from core.product_release_pipeline import record_intake_decision
+
+        other, _, _ = record_release_report(
+            post=post, record={"model_name": "M2", "source_url": url},
+            release_identity="other-shared-job", observed_name="M2", source_url=url,
+            brand=brand, maturity_code="unknown", release_value=None,
+            release_precision="unknown", extraction_version="test",
+        )
+        other_claim = EventDossierClaim.objects.get(
+            event_dossier_source__event_dossier=other, claim_kind_reference__code="release_report"
+        )
+        assert queue_hf_name_search(other_claim.pk).pk == job.pk
+        record_intake_decision(dossier.pk, claim_id=claim.pk, outcome="scam",
+                               actor="test", reason="Documented impersonation")
+    calls = []
+    client = _client(lambda request: (calls.append(request) or httpx.Response(
+        200, json={"id": "MiniMaxAI/M2", "author": "MiniMaxAI", "likes": 7}
+    )))
+    result = execute_hf_name_search(job.pk, client=client)
+    proposal.refresh_from_db()
+    assert result["integration"]["products_resolved"] == int(expected)
+    assert (proposal.review_status == "approved") is expected
+    assert Product.objects.count() == 1
+    if not expected:
+        assert Product.objects.get().brand_id is None
+    assert PostBrandProduct.objects.count() == int(expected)
+    assert dossier.sources.filter(collection_observation__isnull=False).count() == 1
+    assert EventDossierClaim.objects.filter(
+        event_dossier_source__event_dossier=dossier, scope_key__startswith="hf_capture:"
+    ).count() == 1
+    again = execute_hf_name_search(job.pk, client=client)
+    assert again["physical_requests"] == 0 and len(calls) == 1
+    assert Product.objects.count() == 1
+    assert EventDossierClaim.objects.filter(
+        event_dossier_source__event_dossier=dossier, scope_key__startswith="hf_capture:"
+    ).count() == 1
+    assert dossier.current_review_id is None
+
+
 def test_known_publisher_hf_match_attaches_to_owner_approved_x_only_product():
     brand, _org, account, post = _publisher()
     release, _, _ = record_release_report(
@@ -338,6 +564,95 @@ def _new_publisher_proposal(*, verified_type: str = "Business"):
     proposal.source_dossier = release
     proposal.save(update_fields=["source_dossier", "updated_at"])
     return proposal
+
+
+@pytest.mark.parametrize("verified_type,handle,observed_name,category,candidate_status,approved", [
+    ("Business", "NewPublisher_AI", "Model One", True, "pending", True),
+    ("Blue", "NewPublisher_AI", "Model One", True, "pending", False),
+    ("Business", "SomeoneElse", "Model One", True, "pending", False),
+    ("Business", "NewPublisher_AI", "Different Product", True, "pending", False),
+    ("Business", "NewPublisher_AI", "Model One", False, "pending", False),
+    ("Business", "NewPublisher_AI", "Model One", True, "rejected", False),
+    ("Business", "NewPublisher_AI", "Model One", True, "needs_review", False),
+    ("Business", "NewPublisher_AI", "Model One", True, "collision", False),
+    ("Blue", "NewPublisher_AI", "Model One", True, "self_declared", True),
+    ("Blue", "NewPublisher_AI", "Model One", True, "third_party", False),
+    ("Blue", "NewPublisher_AI", "Model One", True, "quoted", False),
+    ("Blue", "NewPublisher_AI", "Model One", True, "future", False),
+    ("Blue", "SomeoneElse", "Model One", True, "self_declared", False),
+    ("Blue", "NewPublisher_AI", "Model One", True, "individual", True),
+    ("Blue", "SomeoneElse", "Model One", True, "individual", False),
+])
+def test_captured_sources_use_existing_new_publisher_policy(
+    verified_type, handle, observed_name, category, candidate_status, approved
+):
+    from core.event_dossiers import add_claim
+    from core.measurement_taxonomy import digest
+    from core.models import CollectionJob, DataSource
+    from core.product_release_acquisition import (
+        execute_hf_name_search,
+        queue_hf_name_search,
+    )
+
+    proposal = _new_publisher_proposal(verified_type=verified_type)
+    candidate = proposal.proposed_candidate
+    declared_text = {
+        "self_declared": "I released Model One at https://huggingface.co/NewPublisher-AI/Model-One",
+        "third_party": "They released Model One at https://huggingface.co/NewPublisher-AI/Model-One",
+        "quoted": 'They said "I released Model One" at https://huggingface.co/NewPublisher-AI/Model-One',
+        "future": "I will release Model One at https://huggingface.co/NewPublisher-AI/Model-One",
+        "individual": "I released Model One at https://huggingface.co/NewPublisher-AI/Model-One",
+    }
+    if candidate_status in declared_text:
+        proposal.source_post.text = declared_text[candidate_status]
+        proposal.source_post.save(update_fields=["text"])
+    if candidate_status == "collision":
+        Brand.objects.create(nickname="newpublisher_ai", display_name="Unrelated publisher")
+    candidate.verification_status = ("pending" if candidate_status in {"collision", *declared_text}
+                                     else candidate_status)
+    candidate.save(update_fields=["verification_status"])
+    if not category:
+        RareTypeCategoryAssignment.objects.filter(post=proposal.source_post).delete()
+    proposal.observed_name = observed_name
+    proposal.save(update_fields=["observed_name", "updated_at"])
+    DataSource.objects.get_or_create(pk="hf", defaults={"name": "HF", "source_type": "model_adoption"})
+    source = proposal.source_dossier.sources.get(post=proposal.source_post)
+    repo = proposal.candidate_repo_id
+    lead = add_claim(
+        source.pk, claim_kind="release_context", scope_key="hf_repo_lead:" + digest(repo.casefold()),
+        assertion_text=f"Source references {repo}", source_excerpt=proposal.source_post.text,
+        source_locator=f"https://huggingface.co/{repo}", extraction_version="test",
+    )
+    job = queue_hf_name_search(lead.pk)
+    def respond(request):
+        if request.url.path.startswith("/api/models/"):
+            return httpx.Response(200, json={"id": repo, "author": "NewPublisher-AI"})
+        if candidate_status == "individual":
+            if request.url.path.startswith("/api/organizations/"):
+                return httpx.Response(404)
+            assert request.url.path == "/api/users/NewPublisher-AI/socials"
+            return httpx.Response(200, json={"user": "NewPublisher-AI", "socialHandles": {"twitter": handle}})
+        return httpx.Response(200, json={"org": "NewPublisher-AI", "socialHandles": {"twitter": handle}})
+    client = _client(respond)
+    assert execute_hf_name_search(job.pk, client=client)["outcome"] == "found"
+    social_job = CollectionJob.objects.get(targets__target_role="publisher_socials")
+    result = execute_hf_name_search(social_job.pk, client=client)
+    assert result["physical_requests"] == (2 if candidate_status == "individual" else 1)
+    proposal.refresh_from_db()
+    assert result["integration"]["products_resolved"] == int(approved)
+    assert (proposal.review_status == "approved") == approved
+    assert Product.objects.count() == 1
+    if not approved:
+        assert Product.objects.get().brand_id is None
+    candidate.refresh_from_db()
+    assert candidate.verification_status == ("confirmed" if approved else
+                                             "pending" if candidate_status in {"collision", *declared_text}
+                                             else candidate_status)
+    assert proposal.source_dossier.sources.filter(
+        collection_observation__projection_kind="hf-release-socials-v1"
+    ).exists()
+    assert proposal.source_dossier.current_review_id is None
+    assert execute_hf_name_search(social_job.pk, client=client)["physical_requests"] == 0
 
 
 def test_new_publisher_exact_model_is_cached_then_socials_resume_without_refetch():

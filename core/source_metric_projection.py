@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 from contextlib import contextmanager
 from time import monotonic
 
@@ -41,6 +42,7 @@ PROJECTION_QUEUE_PHASE = "projection_queue"
 PROJECTION_RESULT_KIND = "numeric_projection_result"
 PROJECTION_OUTPUT_KIND = "numeric_projection_output"
 PROJECTION_RESULT_PHASE = "projection_results_v1"
+logger = logging.getLogger(__name__)
 
 
 def _empty_scope_compatibility():
@@ -63,6 +65,23 @@ def _result_parent(claim, run, contract):
     return scope
 
 
+def _eligible_evidence_owner(evidence, source):
+    job = evidence.run.job
+    return job.source_id == source and (
+        job.purpose == "catalog"
+        or source in {"hf", "github"} and job.purpose == "content"
+        and job.operation == "release_acquisition"
+        and evidence.projection_kind == f"{source}-release-exact-v1"
+    )
+
+
+def _eligible_projection_origin(job):
+    return job.purpose == "catalog" or (
+        job.purpose == "content" and job.source_id in {"hf", "github"}
+        and job.operation == "release_acquisition"
+    )
+
+
 def _retain_results(scope, selected, prepared, observations, accounting, before_values, rejections, terminal_ids):
     """One source evaluation and its actual outputs; reused rows keep their run."""
     from core.collection_capture import archive_document
@@ -74,8 +93,8 @@ def _retain_results(scope, selected, prepared, observations, accounting, before_
     terminal_ids = set(terminal_ids)
     written = created = 0
     for evidence in selected:
-        require(evidence.run.job.source_id == scope.run.job.source_id
-                and evidence.run.job.purpose == "catalog", "projection source owner changed")
+        require(_eligible_evidence_owner(evidence, scope.run.job.source_id),
+                "projection source owner changed")
         rows = outputs.get(evidence.pk, [])
         require(len(rows) <= 1, "one projection output per source capture required")
         diagnostics = [row for row in rejections if row["observation_id"] == evidence.pk]
@@ -137,6 +156,7 @@ def projection_report(run):
     items = list(scope.child_scopes.filter(scope_kind=PROJECTION_RESULT_KIND).select_related("resource_observation__run__job").only(
         "pk", "run_id", "scope_key", "phase", "outcome", "enumeration_complete", "raw_count",
         "projection_contract_id", "resource_observation_id", "resource_observation__run_id",
+        "resource_observation__projection_kind", "resource_observation__run__job__operation",
         "resource_observation__run__job_id", "resource_observation__run__job__purpose",
         "resource_observation__run__job__source_id",
     ))
@@ -170,8 +190,7 @@ def projection_report(run):
     for item in items:
         evidence = item.resource_observation
         require(item.run_id == run.pk and item.projection_contract_id == run.job.contract_id
-                and evidence is not None and evidence.run.job.purpose == "catalog"
-                and evidence.run.job.source_id == run.job.source_id
+                and evidence is not None and _eligible_evidence_owner(evidence, run.job.source_id)
                 and item.scope_key == str(evidence.pk) and item.phase == PROJECTION_RESULT_PHASE
                 and item.raw_count == 1
                 and item.outcome in {"admitted", "admitted_with_gaps", "terminal_invalid", "terminal_missing", "rejected"}
@@ -314,7 +333,7 @@ def validate_statistics_mapping(subject, row, source, taxonomy):
     if subject.subject_kind == "product":
         require(
             row.get("identifier_metadata", {}).get("role")
-            in {"dedicated_model", "family_repository"},
+            in {"dedicated_model", "dedicated_product", "family_repository"},
             "reviewed repository relation required",
         )
         require(
@@ -428,7 +447,7 @@ def configure_statistics_partitions(spec):
                 if m["source"] == "hf"
                 else m["external_identifier"]
                 for m in models[start + size :]
-                if m.get("identifier_metadata", {}).get("role") == "dedicated_model"
+                if m.get("identifier_metadata", {}).get("role") in {"dedicated_model", "dedicated_product"}
             )
         result.append(configure_source_statistics(partition))
     return result
@@ -493,8 +512,8 @@ def _evidence_documents(evidence):
 def evidence_rows(contract, source, evidence):
     """Yield supported native rows; preserve snapshot and effective clocks separately."""
     require(
-        evidence.run.job.purpose == "catalog" and evidence.run.job.source_id == source,
-        "catalog evidence source mismatch",
+        _eligible_evidence_owner(evidence, source),
+        "catalog or exact release evidence source mismatch",
     )
     require(evidence.status == "ok", "source evidence is an error")
     raw, captured_dimensions, captured_metadata = _evidence_documents(evidence)
@@ -758,7 +777,7 @@ def _adopt_projection_queue(scope):
     """Adopt old pending references once, under the origin and queue locks."""
     require(
         scope.scope_kind == "numeric_projection"
-        and scope.run.job.purpose == "catalog"
+        and _eligible_projection_origin(scope.run.job)
         and scope.projection_contract_id is not None
         and scope.scope_key == str(scope.projection_contract_id),
         "numeric projection queue identity changed",
@@ -774,6 +793,13 @@ def _adopt_projection_queue(scope):
         ).exists(),
         "numeric projection item ownership mismatch",
     )
+    if scope.run.job.purpose == "content":
+        require(
+            not _projection_items(scope).exclude(
+                resource_observation__projection_kind=f"{scope.run.job.source_id}-release-exact-v1"
+            ).exists(),
+            "release projection needs exact source captures",
+        )
     for item in _projection_items(scope).only(
         "scope_key", "resource_observation_id", "outcome", "enumeration_complete",
     ):
@@ -803,7 +829,7 @@ def enqueue_projection(claim, *, contract, evidence_ids):
     )
     with fenced_run(claim) as (_, run):
         require(
-            run.job.purpose == "catalog"
+            _eligible_projection_origin(run.job)
             and run.job.source_id in contract.source_configuration,
             "projection queue requires catalog source evidence",
         )
@@ -814,6 +840,13 @@ def enqueue_projection(claim, *, contract, evidence_ids):
             == len(ids),
             "queue evidence outside capture run",
         )
+        if run.job.purpose == "content":
+            require(
+                CollectionObservation.objects.filter(
+                    run=run, pk__in=ids, projection_kind=f"{run.job.source_id}-release-exact-v1"
+                ).count() == len(ids),
+                "release projection needs exact source captures",
+            )
         key = str(contract.pk)
         existing = run.scopes.filter(
             scope_kind="numeric_projection", scope_key=key
@@ -840,6 +873,245 @@ def enqueue_projection(claim, *, contract, evidence_ids):
             "outcome", "enumeration_complete", "execution_state", "coverage_state", "raw_count",
         ])
         return scope
+
+
+def _authorized_release_contracts(evidence):
+    """Find currently active reviewed contracts which admit an exact capture."""
+    from core.benchmark_attribution import enforce_source_collection
+    from core.models import MetricCollectionContract
+
+    source = evidence.run.job.source_id
+    require(source in {"hf", "github"} and _eligible_evidence_owner(evidence, source)
+            and evidence.run.job.operation == "release_acquisition", "exact release capture required")
+    if source == "github":
+        from core.product_release_acquisition import github_exact_observation_documents
+
+        row, _, _ = github_exact_observation_documents(evidence)
+        owner_id = row.get("owner", {}).get("id") if isinstance(row.get("owner"), dict) else None
+        if type(owner_id) is not int or owner_id <= 0:
+            return []
+        namespace = str(owner_id)
+        resource_id = evidence.source_identifier
+        identifier_scope = "repository_id"
+    else:
+        namespace = evidence.source_identifier.split("/", 1)[0]
+        resource_id = evidence.source_identifier.casefold()
+        identifier_scope = "model"
+    contracts = MetricCollectionContract.objects.filter(
+        collectionjob__source_id=source, collectionjob__purpose="metric",
+        collectionjob__authority_enabled=True, collectionjob__state="ready",
+        mappings__purpose="metric", mappings__source_id=source,
+        mappings__source_subject_kind="account", mappings__normalized_identifier=namespace.casefold(),
+    ).distinct()
+    accepted = []
+    for contract in contracts:
+        settings = contract.source_configuration.get(source, {})
+        if settings.get("eligibility_policy") != SOURCE_STATISTICS_POLICY:
+            continue
+        try:
+            enforce_source_collection(contract, source)
+            publisher = _publisher(contract, source, namespace)
+            mappings = list(contract.mappings.filter(
+                purpose="metric", source_id=source, source_subject_kind="repository",
+                identifier_scope__code=identifier_scope, normalized_identifier=resource_id,
+            ).select_related("subject__product", "publisher_account", "identifier_scope"))
+            if mappings:
+                require(len(mappings) == 1, "ambiguous repository mapping")
+                mapping = mappings[0]
+                require(mapping.subject.subject_kind == "product"
+                        and mapping.identifier_metadata.get("role") in {"dedicated_model", "dedicated_product"}
+                        and mapping.publisher_account_id == publisher.subject.account_id
+                        and (source != "hf" or (mapping.subject.product.repo_id or "").casefold()
+                             == evidence.source_identifier.casefold()), "dedicated product mapping required")
+                validate_statistics_mapping(
+                    mapping.subject,
+                    {"external_identifier": mapping.external_identifier,
+                     "source_subject_kind": mapping.source_subject_kind,
+                     "publisher_account_key": str(mapping.publisher_account_id),
+                     "identifier_metadata": mapping.identifier_metadata},
+                    source, contract.taxonomy_version,
+                )
+            else:
+                require(settings.get("native_resources", True)
+                        and resource_id not in settings.get("native_exclusions", []),
+                        "repository outside native partition")
+        except (ValueError, KeyError, TypeError):
+            continue
+        accepted.append(contract)
+    return accepted
+
+
+def enqueue_authorized_release_projection(claim, evidence):
+    """Queue exact capture under an active, reviewed publisher contract.
+
+    A dedicated reviewed mapping admits product attribution. Without one, an
+    eligible native partition retains measurements on the repository alone.
+    No contract or product mapping is guessed or created.
+    """
+    require(transaction.get_connection().in_atomic_block, "enqueue inside capture transaction")
+    contracts = _authorized_release_contracts(evidence)
+    for contract in contracts:
+        enqueue_projection(claim, contract=contract, evidence_ids=[evidence.pk])
+    return [str(contract.pk) for contract in contracts]
+
+
+def retain_release_projection_followup(evidence):
+    """Remember a saved capture until a reviewed measurement contract admits it."""
+    require(transaction.get_connection().in_atomic_block, "retain follow-up inside transaction")
+    source = evidence.run.job.source_id
+    require(source in {"hf", "github"} and _eligible_evidence_owner(evidence, source)
+            and evidence.run.job.operation == "release_acquisition", "exact release capture required")
+    # A product-mapped projection is already a durable request, even if complete.
+    # A native-only partition does not replace a later reviewed Product mapping.
+    if any(
+        _release_contract_is_dedicated(contract, evidence)
+        and CollectionScopeRun.objects.filter(
+            run_id=evidence.run_id, scope_kind=PROJECTION_ITEM_KIND,
+            resource_observation=evidence, projection_contract=contract,
+        ).exists()
+        for contract in _authorized_release_contracts(evidence)
+    ):
+        return None
+    scope, _ = CollectionScopeRun.objects.get_or_create(
+        run_id=evidence.run_id, scope_kind="release_metric_followup", scope_key=str(evidence.pk),
+        defaults={"resource_observation": evidence, "phase": "awaiting_authority",
+                  "error_code": "awaiting_reviewed_contract", "raw_count": 1,
+                  **_empty_scope_compatibility()},
+    )
+    require(scope.resource_observation_id == evidence.pk, "release follow-up identity changed")
+    if scope.outcome in {"excluded", "failed"}:
+        scope.outcome, scope.execution_state, scope.coverage_state = "pending", "pending", "pending"
+        scope.error_code, scope.retry_at, scope.enumeration_complete = "awaiting_reviewed_contract", None, False
+        scope.save(update_fields=["outcome", "execution_state", "coverage_state", "error_code",
+                                  "retry_at", "enumeration_complete"])
+    return scope
+
+
+def _release_contract_is_dedicated(contract, evidence):
+    source = evidence.run.job.source_id
+    filters = {
+        "purpose": "metric", "source_id": source, "source_subject_kind": "repository",
+        "identifier_scope__code": "model" if source == "hf" else "repository_id",
+        "normalized_identifier": evidence.source_identifier.casefold() if source == "hf" else evidence.source_identifier,
+        "identifier_metadata__role__in": ["dedicated_model", "dedicated_product"],
+        "subject__subject_kind": "product",
+    }
+    if source == "hf":
+        filters["subject__product__repo_id__iexact"] = evidence.source_identifier
+    return contract.mappings.filter(**filters).exists()
+
+
+def recover_release_projection_followups(*, limit=25, observation_ids=None):
+    """Recheck bounded saved captures after reviewed source authority changes.
+
+    Missing authority is a waiting state, never a zero-valued measurement. No
+    provider request, model call, new contract, or scheduler is created here.
+    """
+    from datetime import timedelta
+
+    from django.db import DatabaseError
+    from django.utils import timezone
+
+    from core.product_release_acquisition import _has_eligible_claim
+
+    require(type(limit) is int and 1 <= limit <= 100, "invalid follow-up budget")
+    if observation_ids is not None:
+        require(isinstance(observation_ids, (list, tuple)) and 1 <= len(observation_ids) <= 100
+                and all(type(value) is int and value > 0 for value in observation_ids),
+                "select 1..100 observation IDs")
+    now = timezone.now()
+    due = CollectionScopeRun.objects.filter(
+        Q(retry_at__isnull=True) | Q(retry_at__lte=now),
+        scope_kind="release_metric_followup", outcome="pending",
+    )
+    if observation_ids is not None:
+        due = due.filter(resource_observation_id__in=observation_ids)
+    ids = list(due.order_by("retry_at", "pk").values_list("pk", flat=True)[:limit])
+    result = {"selected": len(ids), "queued": 0, "waiting": 0, "busy": 0, "excluded": 0, "failed": 0}
+    for scope_id in ids:
+        try:
+            with transaction.atomic():
+                followup = CollectionScopeRun.objects.select_for_update(skip_locked=True, of=("self",)).filter(
+                    Q(retry_at__isnull=True) | Q(retry_at__lte=now),
+                    pk=scope_id, scope_kind="release_metric_followup", outcome="pending",
+                ).select_related("resource_observation__run__job").first()
+                if followup is None:
+                    result["busy"] += 1
+                    continue
+                evidence = followup.resource_observation
+                require(evidence is not None and evidence.run_id == followup.run_id
+                        and followup.scope_key == str(evidence.pk), "release follow-up ownership changed")
+                origin = CollectionJob.objects.select_for_update(nowait=True).get(pk=evidence.run.job_id)
+                if origin.active_run_id is not None:
+                    followup.retry_at = now + timedelta(minutes=5)
+                    followup.save(update_fields=["retry_at"])
+                    result["busy"] += 1
+                    continue
+                if not _has_eligible_claim(origin):
+                    followup.outcome, followup.execution_state = "excluded", "completed"
+                    followup.coverage_state, followup.error_code = "unavailable", "release_excluded"
+                    followup.enumeration_complete = True
+                    followup.save(update_fields=["outcome", "execution_state", "coverage_state",
+                                                "error_code", "enumeration_complete"])
+                    result["excluded"] += 1
+                    continue
+                contracts = _authorized_release_contracts(evidence)
+                if not contracts:
+                    followup.retry_at = now + timedelta(hours=6)
+                    followup.save(update_fields=["retry_at"])
+                    result["waiting"] += 1
+                    continue
+                for contract in contracts:
+                    key = str(contract.pk)
+                    queue, _ = CollectionScopeRun.objects.get_or_create(
+                        run_id=evidence.run_id, scope_kind="numeric_projection", scope_key=key,
+                        defaults={"projection_contract": contract, "phase": PROJECTION_QUEUE_PHASE,
+                                  **_empty_scope_compatibility()},
+                    )
+                    queue = CollectionScopeRun.objects.select_for_update().get(pk=queue.pk)
+                    require(queue.projection_contract_id == contract.pk, "projection contract pin changed")
+                    _adopt_projection_queue(queue)
+                    _retain_projection_items(queue, [evidence.pk])
+                    count = _projection_items(queue).filter(outcome="pending").count()
+                    queue.outcome = "pending" if count else "complete"
+                    queue.enumeration_complete = not count
+                    queue.execution_state = "pending" if count else "completed"
+                    queue.coverage_state = "pending" if count else "complete"
+                    queue.raw_count = count
+                    queue.save(update_fields=["outcome", "enumeration_complete", "execution_state",
+                                              "coverage_state", "raw_count"])
+                dedicated = any(_release_contract_is_dedicated(contract, evidence) for contract in contracts)
+                followup.outcome = "complete" if dedicated else "pending"
+                followup.execution_state = "completed" if dedicated else "pending"
+                followup.coverage_state = "complete" if dedicated else "pending"
+                followup.error_code = None if dedicated else "awaiting_product_mapping"
+                followup.retry_at = None if dedicated else now + timedelta(hours=6)
+                followup.enumeration_complete = dedicated
+                followup.save(update_fields=["outcome", "execution_state", "coverage_state", "error_code",
+                                            "retry_at", "enumeration_complete"])
+                result["queued"] += 1
+                result["waiting"] += int(not dedicated)
+        except DatabaseError as error:
+            cause = error.__cause__
+            if getattr(cause, "sqlstate", None) != "55P03" and getattr(cause, "pgcode", None) != "55P03":
+                raise
+            # A concurrent acquisition owns this source; leave the marker intact.
+            result["busy"] += 1
+        except (ValueError, KeyError, TypeError):
+            logger.exception("Invalid release measurement follow-up %s", scope_id)
+            CollectionScopeRun.objects.filter(pk=scope_id, outcome="pending").update(
+                outcome="failed", execution_state="failed", coverage_state="unavailable",
+                error_code="invalid_release_followup", retry_at=None,
+            )
+            result["failed"] += 1
+    remaining = CollectionScopeRun.objects.filter(
+        Q(retry_at__isnull=True) | Q(retry_at__lte=timezone.now()),
+        scope_kind="release_metric_followup", outcome="pending",
+    )
+    if observation_ids is not None:
+        remaining = remaining.filter(resource_observation_id__in=observation_ids)
+    result["due_remaining"] = remaining.exists()
+    return result
 
 
 def _project_evidence(
@@ -1048,10 +1320,16 @@ def replay_saved_evidence(job_id):
             scope_kind="numeric_projection", scope_key="saved-evidence"
         ).first()
         cursor = int(previous.cursor) if previous and previous.cursor else 0
+    allowed_origin = Q(run__job__purpose="catalog")
+    if job.source_id in {"hf", "github"}:
+        allowed_origin |= Q(
+            run__job__purpose="content", run__job__operation="release_acquisition",
+            projection_kind=f"{job.source_id}-release-exact-v1",
+        )
     selected = CollectionObservation.objects.filter(
         Q(run_id__in=runs) | Q(run__job_id__in=jobs),
+        allowed_origin,
         run__job__source_id=job.source_id,
-        run__job__purpose="catalog",
         pk__gt=cursor,
         source_subject_kind__in=["repository", "account", "model", "aggregate"],
         status="ok",
@@ -1059,7 +1337,7 @@ def replay_saved_evidence(job_id):
     if job.source_id == "github":
         selected = selected.filter(
             Q(source_subject_kind="account")
-            | Q(observation_kind__in=["repository", "repository_access", "release_asset"])
+            | Q(observation_kind__in=["repository", "repository_access", "release_asset", "github_release_exact"])
         )
     if job.source_id in {"openrouter", "arena"}:
         selected = selected.filter(observation_kind="publication_row")
@@ -1141,7 +1419,7 @@ def drain_pending_projections(catalog_job_id, *, budget=None, origin_claim=None)
 
     with _projection_origin(catalog_job_id, origin_claim) as origin:
         validate_job(origin)
-        require(origin.purpose == "catalog", "catalog projection origin required")
+        require(_eligible_projection_origin(origin), "supported projection origin required")
     limits = origin.budgets
     started = monotonic()
     usage = {"items": 0, "bytes": 0}

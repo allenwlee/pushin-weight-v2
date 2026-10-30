@@ -89,6 +89,34 @@ def _has_legacy_fields(model, *names):
 
 def observation_object_documents(observation):
     """Return a catalog object's captured fields, preferring frozen legacy evidence."""
+    if observation.projection_kind == "hf-release-card-v1":
+        from core.product_release_hf_card import card_documents
+
+        return card_documents(observation)
+    if observation.projection_kind == "hf-release-socials-v1":
+        from core.product_release_acquisition import hf_socials_observation_documents
+
+        return hf_socials_observation_documents(observation)
+    if observation.projection_kind == "github-release-exact-v1":
+        from core.product_release_acquisition import github_exact_observation_documents
+
+        return github_exact_observation_documents(observation)
+    if observation.projection_kind == "github-release-owner-v1":
+        from core.product_release_github_owner import owner_documents
+
+        return owner_documents(observation)
+    if observation.projection_kind in {"hf-release-exact-v1", "hf-release-expanded-v1", "hf-release-parent-v1"}:
+        from core.product_release_acquisition import hf_exact_observation_documents
+
+        return hf_exact_observation_documents(observation)
+    if observation.projection_kind == "hf-release-search-v1":
+        from core.product_release_acquisition import hf_search_observation_documents
+
+        return hf_search_observation_documents(observation)
+    if observation.projection_kind == "release-document-v1":
+        from core.product_release_documents import observation_documents
+
+        return observation_documents(observation)
     if observation.projection_kind == "github-catalog-object-v1":
         from core.github_catalog import observation_documents
 

@@ -82,8 +82,14 @@ relations:
     - event_dossiers
     - event_dossier_sources
     - event_dossier_claims
+    - event_dossier_claim_collection_jobs
     - event_dossier_reviews
     - event_dossier_review_claims
+    # Immutable release assessments and reusable discussion calculations.
+    - event_dossier_intake_decisions
+    - discussion_window_snapshots
+    - discussion_window_counts
+    - event_dossier_discussion_windows
     - product_release_details
     - personnel_change_details
     # Benchmark taxonomy and measurement evidence; never collection credentials.
@@ -256,6 +262,7 @@ relations:
     - job_source_states
     - job_source_sync_runs
     - post_enrichment_states
+    - product_release_detection_states
     - post_synthesis_daily_budgets
     - post_synthesis_demands
     - post_synthesis_rate_limit_buckets
@@ -282,6 +289,7 @@ relations:
     - twitter_list_sync_state
   optional_source_tables:
     - enrichment_budget_windows
+    - product_release_detection_states
     # Pre-0132 snapshots lack the shared job vocabulary and assignments.
     - currencies
     - salary_periods
@@ -331,8 +339,14 @@ relations:
     - event_dossiers
     - event_dossier_sources
     - event_dossier_claims
+    - event_dossier_claim_collection_jobs
     - event_dossier_reviews
     - event_dossier_review_claims
+    # Immutable release assessments and reusable discussion calculations.
+    - event_dossier_intake_decisions
+    - discussion_window_snapshots
+    - discussion_window_counts
+    - event_dossier_discussion_windows
     - product_release_details
     - personnel_change_details
     - materialization_state
@@ -513,6 +527,9 @@ relations:
     - source_identifier_namespaces_id_seq
     - event_dossier_sources_id_seq
     - event_dossier_review_claims_id_seq
+    - discussion_window_counts_id_seq
+    - event_dossier_claim_collection_jobs_id_seq
+    - event_dossier_discussion_windows_id_seq
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - source_metrics_id_seq
     - metric_observations_id_seq
@@ -647,6 +664,9 @@ relations:
     - source_identifier_namespaces_id_seq
     - event_dossier_sources_id_seq
     - event_dossier_review_claims_id_seq
+    - discussion_window_counts_id_seq
+    - event_dossier_claim_collection_jobs_id_seq
+    - event_dossier_discussion_windows_id_seq
     - original_content_sources_id_seq
     # Benchmark taxonomy and measurement evidence; never collection credentials.
     - source_metrics_id_seq
@@ -766,6 +786,7 @@ scrub:
     - job_source_states
     - job_source_sync_runs
     - post_enrichment_states
+    - product_release_detection_states
     - post_synthesis_daily_budgets
     - post_synthesis_demands
     - post_synthesis_rate_limit_buckets
@@ -797,6 +818,11 @@ scrub:
 
 validation:
   exact_count_tables:
+    - event_dossier_intake_decisions
+    - event_dossier_claim_collection_jobs
+    - discussion_window_snapshots
+    - discussion_window_counts
+    - event_dossier_discussion_windows
     - geolocations
     - geolocation_alternate_names
     - geolocation_policies

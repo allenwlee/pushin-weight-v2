@@ -1,5 +1,7 @@
 # Database schema reference
 
+The four release-study tables below are verified against schema `0206_product_release_study` on the staging candidate. The remaining inventory retains the older verification scope stated below and has known RG7 omissions; its older table/column totals are not current totals. See the [release-study reference](2026-10-29-223000-product-release-detection.md) for the complete current feature contract.
+
 The repository and permanent local test database are at `0176_rg6_projection_contract_pin` on the RG6 branch. Staging and production remain deployed through `0168_rg5_remove_superseded_storage` at `3d4d341daa52ed3d184184d5b35f27717813d381` as checked on 2026-10-25. The RG6 additions described here are local only. Runtime and retained-history proof for deployed changes is recorded in the [global schema plan](../plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md).
 
 Local branch scope: **219 physical core application tables**, **2499 physical columns**, **219 managed core models**, nine compatibility views, three native read-only benchmark views and one native materialized view. Unmanaged source projections describe restricted columns on existing tables and add no tables. The deployed 0168 scope is 215 tables and 2476 columns.
@@ -189,6 +191,8 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts). The t
 | [definition_versions](#table-definition_versions) | [Shared catalogues and performer identities](#shared-catalogues) | One immutable identity and provenance record for a versioned software or policy definition. |
 | [discourse_keys](#table-discourse_keys) | [Classification vocabularies and translated labels](#vocabularies) | One legacy pragmatic-register vocabulary key. |
 | [discourse_labels](#table-discourse_labels) | [Classification vocabularies and translated labels](#vocabularies) | One translated legacy pragmatic-register label. |
+| [discussion_window_counts](#table-discussion_window_counts) | [Event dossiers and evidence](#event-dossiers) | One category count with its actual denominator and classification definition. |
+| [discussion_window_snapshots](#table-discussion_window_snapshots) | [Event dossiers and evidence](#event-dossiers) | One calculation of a subject's stored discussion within an exact interval. |
 | [editorial_assessments](#table-editorial_assessments) | [Compatible editorial input storage and pictures](#editorial) | One fenced quarter-hour editorial or content-picture assessment, with frozen evidence and outcome. |
 | [editorial_budgets](#table-editorial_budgets) | [Compatible editorial input storage and pictures](#editorial) | One UTC day of conservative spend reservations and text/media call counts. |
 | [editorial_calls](#table-editorial_calls) | [Compatible editorial input storage and pictures](#editorial) | One reserved provider stage and its saved response or uncertain-send outcome. |
@@ -198,6 +202,8 @@ listed separately: [home_brand_time_counts](#view-home_brand_time_counts). The t
 | [employment_types](#table-employment_types) | [Job listings and official career-site collection](#jobs) | One reusable employment-arrangement classification. |
 | [event_claim_kinds](#table-event_claim_kinds) | [Event dossiers and evidence](#event-dossiers) | One allowed evidence-claim kind shared by dossier claims and scoped artifact, endpoint and host records. |
 | [event_dossier_claims](#table-event_dossier_claims) | [Event dossiers and evidence](#event-dossiers) | One extracted assertion with evidence, scope and typed time precision. |
+| [event_dossier_discussion_windows](#table-event_dossier_discussion_windows) | [Event dossiers and evidence](#event-dossiers) | One dossier's use of a shared calculation around an evidenced milestone. |
+| [event_dossier_intake_decisions](#table-event_dossier_intake_decisions) | [Event dossiers and evidence](#event-dossiers) | One evidenced intake disposition. It permits rejection of a false positive |
 | [event_dossier_review_claims](#table-event_dossier_review_claims) | [Event dossiers and evidence](#event-dossiers) | One claim disposition included in a review revision. |
 | [event_dossier_reviews](#table-event_dossier_reviews) | [Event dossiers and evidence](#event-dossiers) | One immutable dossier decision revision and evidence cutoff. |
 | [event_dossier_sources](#table-event_dossier_sources) | [Event dossiers and evidence](#event-dossiers) | One captured source attached to one dossier. |
@@ -6079,6 +6085,154 @@ and observation timestamps keep their existing meaning.
 
 **Physical triggers:**
 
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-event_dossier_intake_decisions"></a>
+
+### `event_dossier_intake_decisions` — EventDossierIntakeDecision
+
+One evidenced intake disposition. It permits rejection of a false positive
+without inventing a completed product review or confusing a non-release with a
+scam. A new observation cannot silently undo a `non_release` or `scam` decision.
+
+Model: [EventDossierIntakeDecision](../../core/models.py); integrity rules: [migration 0206](../../core/migrations/0206_product_release_study.py).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Application-generated UUID. Application default: `uuid.uuid4`; not a SQL default. |
+| `event_dossier_id` | `uuid` | No | Dossier receiving the decision. FK → [`event_dossiers`](#table-event_dossiers) (`id`); Django deletion: `PROTECT`; PostgreSQL uses a deferred foreign key with no cascading deletion. |
+| `supporting_claim_id` | `uuid` | No | Evidence claim; database guard requires the same dossier. FK → [`event_dossier_claims`](#table-event_dossier_claims) (`id`); Django deletion: `PROTECT`; PostgreSQL uses a deferred foreign key with no cascading deletion. |
+| `recorded_at` | `timestamp with time zone` | No | Application write time, defaults to now. Application default: `django.utils.timezone.now`; not a SQL default. |
+| `outcome` | `varchar(16)` | No | `pending`, `non_release`, `scam`, `superseded`. |
+| `actor` | `text` | No | Who or which deterministic method made the decision. |
+| `method_version` | `text` | No | Interpretation method. |
+| `reason` | `text` | No | Evidence-based explanation. |
+| `input_hash` | `varchar(64)` | No | Lowercase SHA-256 used for repeat detection. |
+
+`uq_ed_intake_input` makes `(event_dossier_id, input_hash)` unique.
+`ck_ed_intake_outcome`, `ck_ed_intake_hash` and `ck_ed_intake_text` enforce known
+outcomes, hash shape and nonempty decision text. `idx_ed_intake_latest` indexes
+dossier and descending recorded time. There are no nullable columns.
+
+All four study tables reject UPDATE and DELETE through `ed_frozen`. `ed_study_child` checks same-dossier claim ownership; discussion uses also check the optional review and supported anchor date. Post counts describe retained data, not collection completeness.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-discussion_window_snapshots"></a>
+
+### `discussion_window_snapshots` — DiscussionWindowSnapshot
+
+One calculation of a subject's stored discussion within an exact interval.
+The same inputs reuse the row. Corrected classifications or attribution produce
+a new row; previous figures survive. No full Post-membership list is stored.
+
+Model: [DiscussionWindowSnapshot](../../core/models.py); integrity rules: [migration 0206](../../core/migrations/0206_product_release_study.py).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `uuid` | No | Application-generated UUID. Application default: `uuid.uuid4`; not a SQL default. |
+| `subject_id` | `uuid` | No | `measurement_subjects.id`; current service supports brand subjects. FK → [`measurement_subjects`](#table-measurement_subjects) (`id`); Django deletion: `PROTECT`; PostgreSQL uses a deferred foreign key with no cascading deletion. |
+| `window_start` | `timestamp with time zone` | No | Exact half-open bounds. |
+| `window_end` | `timestamp with time zone` | No | Exact half-open bounds. |
+| `observed_at` | `timestamp with time zone` | No | Calculation time, defaults to now. Application default: `django.utils.timezone.now`; not a SQL default. |
+| `knowledge_cutoff_at` | `timestamp with time zone` | No | Time of the captured current state, no later than observation time. |
+| `method_version` | `varchar(64)` | No | `discussion-window-v1`. |
+| `history_policy` | `varchar(24)` | No | `current_definition` or `historical_inclusive`. |
+| `input_hash` | `varchar(64)` | No | Fingerprint of selected identity, time, attribution and classification inputs. |
+| `post_count` | `integer` | No | Distinct stored Posts in the interval. |
+| `account_count` | `integer` | No | Distinct identified authors over the whole interval. |
+| `count_rows` | `integer` | No | Expected number of category rows; seals calculation completeness. |
+| `coverage` | `varchar(24)` | No | `stored_only` (default) or `no_stored_posts`. Neither guarantees collection completeness. Application default: `'stored_only'`; not a SQL default. |
+| `coverage_note` | `text` | No | Historical coverage and missing-author limitations. |
+
+`uq_discussion_window_input` makes subject/bounds/method/history-policy/hash
+unique. Checks enforce end after start (`ck_discussion_window_order`), accounts
+no greater than posts (`ck_discussion_accounts`), cutoff order
+(`ck_discussion_cutoff`), hash shape (`ck_discussion_hash`), known history policy
+(`ck_discussion_policy`) and known coverage plus nonempty method/note
+(`ck_discussion_coverage`). There are no nullable columns.
+
+A deferred database trigger verifies `count_rows` at transaction completion,
+preventing incomplete snapshots and later appended categories. Readers also
+expose `window_elapsed_at_capture`; an unfinished seven-day follow-up remains
+visibly partial even when stored inputs are internally consistent.
+
+All four study tables reject UPDATE and DELETE through `ed_frozen`. The deferred `discussion_complete` trigger seals the exact category-row count at commit. Post counts describe retained data, not collection completeness.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-discussion_window_counts"></a>
+
+### `discussion_window_counts` — DiscussionWindowCount
+
+One category count with its actual denominator and classification definition.
+For example, positive sentiment under a recognized taxonomy is distinct from
+an unversioned legacy sentiment estimate.
+
+Model: [DiscussionWindowCount](../../core/models.py); integrity rules: [migration 0206](../../core/migrations/0206_product_release_study.py).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Category-row identity. PostgreSQL-generated bigint identity. |
+| `snapshot_id` | `uuid` | No | Owning `discussion_window_snapshots.id`. FK → [`discussion_window_snapshots`](#table-discussion_window_snapshots) (`id`); Django deletion: `PROTECT`; PostgreSQL uses a deferred foreign key with no cascading deletion. |
+| `population` | `varchar(16)` | No | `all`, `exact`, `legacy`, `excluded`. |
+| `dimension` | `varchar(24)` | No | `volume`, `language`, `sentiment`, `post_type`, `audience`, `geopolitics`, `classification`. |
+| `definition` | `varchar(128)` | No | Historical taxonomy or counting definition. |
+| `category` | `varchar(160)` | No | Category code under that definition. |
+| `count` | `integer` | No | Distinct posts assigned to the category. |
+| `denominator` | `integer` | No | Covered population for this dimension and definition. |
+
+`uq_discussion_category` makes snapshot/population/dimension/definition/category
+unique. Checks enforce count no greater than denominator
+(`ck_discussion_denominator`), known populations (`ck_discussion_population`),
+known dimensions (`ck_discussion_dimension`) and nonempty definition/category
+(`ck_discussion_category_text`). There are no nullable columns.
+
+The writer separates recognized versioned Stage 1, unversioned historical
+approximations and excluded states, following the existing classification
+contracts. Missing audience/geopolitical assignments do not mean neutral or
+zero; their denominators contain assigned Posts only. Multilabel counts need
+not sum to the total population. Language retains observed provider codes.
+
+All four study tables reject UPDATE and DELETE through `ed_frozen`. The deferred `discussion_complete` trigger seals the exact category-row count at commit. Post counts describe retained data, not collection completeness.
+
+[Back to table inventory](#table-inventory)
+
+<a id="table-event_dossier_discussion_windows"></a>
+
+### `event_dossier_discussion_windows` — EventDossierDiscussionWindow
+
+One dossier's use of a shared calculation around an evidenced milestone.
+Several products launched together can reference the same brand counts.
+
+Model: [EventDossierDiscussionWindow](../../core/models.py); integrity rules: [migration 0206](../../core/migrations/0206_product_release_study.py).
+
+**Primary key:** `id`.
+
+| SQL column | PostgreSQL type | NULL allowed | Meaning, relationships, and defaults |
+| --- | --- | --- | --- |
+| `id` | `bigint` | No | Association identity. PostgreSQL-generated bigint identity. |
+| `event_dossier_id` | `uuid` | No | Owning dossier. FK → [`event_dossiers`](#table-event_dossiers) (`id`); Django deletion: `PROTECT`; PostgreSQL uses a deferred foreign key with no cascading deletion. |
+| `anchor_claim_id` | `uuid` | No | Same-dossier claim with supported date precision. FK → [`event_dossier_claims`](#table-event_dossier_claims) (`id`); Django deletion: `PROTECT`; PostgreSQL uses a deferred foreign key with no cascading deletion. |
+| `review_id` | `uuid` | Yes | Optional same-dossier review used for this interpretation. FK → [`event_dossier_reviews`](#table-event_dossier_reviews) (`id`); Django deletion: `PROTECT`; PostgreSQL uses a deferred foreign key with no cascading deletion. |
+| `snapshot_id` | `uuid` | No | Reusable discussion calculation. FK → [`discussion_window_snapshots`](#table-discussion_window_snapshots) (`id`); Django deletion: `PROTECT`; PostgreSQL uses a deferred foreign key with no cascading deletion. |
+| `role` | `varchar(16)` | No | `before`, `after`, `context`. |
+| `created_at` | `timestamp with time zone` | No | Application write time, defaults to now. Application default: `django.utils.timezone.now`; not a SQL default. |
+
+`uq_ed_discussion_use` makes dossier/anchor/snapshot/role/review unique, including
+null reviews (`NULLS NOT DISTINCT`). `ck_ed_discussion_role` checks the role.
+Database guards require same-dossier claim/review ownership and a dated anchor.
+All foreign keys have their Django-generated indexes in addition to the named
+unique indexes described above.
+
+All four study tables reject UPDATE and DELETE through `ed_frozen`. `ed_study_child` checks same-dossier claim ownership; discussion uses also check the optional review and supported anchor date. Post counts describe retained data, not collection completeness.
 
 [Back to table inventory](#table-inventory)
 

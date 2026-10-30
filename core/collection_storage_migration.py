@@ -1637,7 +1637,7 @@ def project_arena_publication_batch(
                 if run.source_metadata_archive_id is not None else run.source_metadata
             )
             if not isinstance(metadata, dict):
-                raise ValueError("Arena source metadata is invalid")
+                raise TypeError("Arena source metadata is invalid")
             if "publication_dates" not in metadata:
                 continue
             native = metadata["publication_dates"]
@@ -1756,7 +1756,7 @@ def project_opencode_endpoint_batch(
                 if run.source_metadata_archive_id is not None else run.source_metadata
             )
             if not isinstance(metadata, dict):
-                raise ValueError("OpenCode source metadata is invalid")
+                raise TypeError("OpenCode source metadata is invalid")
             if "endpoint_checks" not in metadata:
                 continue
             checks = metadata["endpoint_checks"]

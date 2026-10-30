@@ -89,9 +89,9 @@
       "provenance": "RG4 existing model choices and readers; api/weights and scoped availability from approved global plan"
     },
     "shared_event_claim_kinds.csv": {
-      "rows": 4,
-      "sha256": "bfb79c8a5e76d19c4c60752bf580ff0d1547bdd1ebc7a85ff77352c8ee38e593",
-      "provenance": "RG4 dossier writer and replay test already accept repository_created; RG7 adds release_report for pending source evidence"
+      "rows": 11,
+      "sha256": "646dbbe59f8875709e3bdacc04d7a56e63770f98060a78480cb28f1b71dc3828",
+      "provenance": "RG4 dossier claims; RG7 pending release reports; product-release study adds unverified signals, distinct milestones and source-backed publisher/context claims"
     },
     "shared_release_maturities.csv": {
       "rows": 5,
