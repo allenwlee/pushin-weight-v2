@@ -97,6 +97,80 @@ def test_stored_post_replay_keeps_unknown_release_and_is_idempotent():
     assert not models.Product.objects.exists()
 
 
+@pytest.mark.parametrize("mode", ["existing_first", "generic_first", "family", "multiple", "excluded", "fraud", "version_collision", "rejected_anchor"])
+def test_single_named_announcement_reuses_source_dossier_without_merging_ambiguities(mode):
+    from core.product_release_pipeline import persist_source, record_intake_decision
+    from core.product_release_sources import stored_posts
+
+    text = ("We announce Model3 and Model4 today." if mode == "family" else
+            "We announce Model-3 today." if mode == "version_collision" else
+            "I've released OpenZero Fusion Qwen3-4B Agentic—a standalone local model.")
+    post = models.Post.objects.create(tweet_id="named-reconciliation", text=text)
+    source = stored_posts([post.pk])[0]
+    if mode == "fraud":
+        from dataclasses import replace
+        from core.product_release_intake import FraudDecision
+
+        source = replace(source, record=replace(source.record, fraud=FraudDecision(
+            kind="scam", locator="test-evidence", reason="Documented impersonation"
+        )))
+    generic = None
+    if mode in {"generic_first", "excluded"}:
+        generic = models.EventDossier.objects.get(pk=persist_source(source)["dossier_ids"][0])
+        if mode == "excluded":
+            evidence = generic.sources.get(post=post).claims.filter(
+                claim_kind_reference__code="release_signal"
+            ).first()
+            record_intake_decision(generic.pk, claim_id=evidence.pk, outcome="non_release",
+                                   actor="test", reason="Existing reviewed exclusion")
+    target = create_dossier(event_kind="product_release", identity_key=identity_key("test-target", mode))
+    linked = attach_source(target.pk, post_id=post.pk)
+    scope = "lab/model3" if mode in {"family", "version_collision"} else "openzero/openzero-fusion-qwen3-4b-agentic"
+    target_claim = add_claim(linked.pk, claim_kind="announcement", scope_key=scope,
+                             assertion_text=text, source_excerpt=text, extraction_version="test-v1")
+    review = None
+    if mode == "generic_first":
+        from django.utils import timezone
+        from core.event_dossiers import ProductReleaseInput
+        from core.product_release_pipeline import review_release
+
+        review = review_release(target.pk, release=ProductReleaseInput(observed_name="OpenZero Fusion Qwen3-4B Agentic"),
+                                claim_ids=[target_claim.pk], actor="test", reason="Existing provisional review",
+                                evidence_cutoff_at=timezone.now())
+    if mode == "rejected_anchor":
+        from django.utils import timezone
+        from core.event_dossiers import ClaimDecision, ProductReleaseInput, complete_review
+
+        complete_review(target.pk, expected_current_review_id=None, display_title="Other release",
+                        review_state="provisional", evidence_cutoff_at=timezone.now(),
+                        method_version="test", actor="test", reason="Source claim rejected",
+                        claims=[ClaimDecision(target_claim.pk, "rejected", "Not this release")],
+                        product_release=ProductReleaseInput(observed_name="Other release"))
+    if mode == "multiple":
+        other = create_dossier(event_kind="product_release", identity_key=identity_key("test-other", mode))
+        other_source = attach_source(other.pk, post_id=post.pk)
+        add_claim(other_source.pk, claim_kind="announcement", scope_key="other/model4",
+                  assertion_text=text, source_excerpt=text, extraction_version="test-v1")
+    result = persist_source(source)
+    if mode in {"existing_first", "generic_first"}:
+        assert result["dossier_ids"] == [str(target.pk)]
+        if generic:
+            generic.refresh_from_db()
+            assert generic.merged_into_id == target.pk
+        if review:
+            target.refresh_from_db()
+            assert target.current_review_id == review.pk
+        assert target.sources.get(post=post).claims.filter(claim_kind_reference__code="release_signal").exists()
+        before = models.EventDossierClaim.objects.count()
+        assert persist_source(source)["dossier_ids"] == [str(target.pk)]
+        assert models.EventDossierClaim.objects.count() == before
+    else:
+        assert result["dossier_ids"] != [str(target.pk)]
+        if generic:
+            generic.refresh_from_db()
+            assert generic.merged_into_id is None
+
+
 def test_saved_release_report_provides_search_lead_without_repository_link():
     from core.product_release_dossiers import record_release_report
     from core.product_release_pipeline import persist_source

@@ -81,6 +81,66 @@ def _known_dossiers(source):
     }
 
 
+def _named_announcement_dossier(source, candidate):
+    """Match a single explicit named release to an existing source-bound claim.
+
+    Search leads alone are not identity proof. Multi-product, future, quoted and
+    uncertain statements deliberately stay source-level candidates.
+    """
+    from core.product_release_intake import _RELEASED_NAME
+
+    if not source.post_id or candidate.disposition != "pending" or set(candidate.cautions) & {
+        "future_or_uncertain", "question", "negated", "reshare", "quoted_context"
+    }:
+        return None
+    raw = [item.text for item in source.record.texts if item.kind == "raw"]
+    if len(raw) != 1:
+        return None
+    matches = list(_RELEASED_NAME.finditer(raw[0]))
+    if len(matches) != 1:
+        return None
+    match = matches[0]
+    name = match.group("name").rstrip("-_.")
+    if not any(c.isalpha() for c in name) or not any(c.isdigit() for c in name):
+        return None
+    # A comma, conjunction or slash can introduce a second product. A dash
+    # followed by descriptive prose is common in single-product announcements.
+    if re.match(r"\s*(?:,|/|&|\band\b|\bor\b)", raw[0][match.end("name"):], re.IGNORECASE):
+        return None
+    # Preserve version punctuation: Model-3, Model3 and Model3.1 may be
+    # distinct products. Existing study scopes encode spaces as hyphens.
+    normalized = re.sub(r"\s+", "-", name.casefold())
+    generic_key = identity_key("product-release-source-v1", ":".join(source.record.identity))
+    claims = list(models.EventDossierClaim.objects.filter(
+        event_dossier_source__post_id=source.post_id,
+        event_dossier_source__event_dossier__event_kind_reference__code="product_release",
+        claim_kind_reference__code="announcement",
+    ).exclude(event_dossier_source__event_dossier__identity_key=generic_key).values_list(
+        "event_dossier_source__event_dossier_id", "scope_key", "id"
+    )[:51])
+    if len(claims) > 50:
+        return None
+    canonical = {pk: canonical_dossier(pk).pk for pk in {pk for pk, _, _ in claims}}
+    if len(set(canonical.values())) != 1:
+        return None
+    target_ids = {
+        canonical[pk] for pk, scope, _ in claims
+        if scope.rsplit("/", 1)[-1].casefold() == normalized
+    }
+    if len(target_ids) != 1:
+        return None
+    target_id = next(iter(target_ids))
+    target = models.EventDossier.objects.get(pk=target_id)
+    if target.current_review_id:
+        matching_claims = [claim_id for pk, scope, claim_id in claims
+                           if canonical[pk] == target_id and scope.rsplit("/", 1)[-1].casefold() == normalized]
+        if not models.EventDossierReviewClaim.objects.filter(
+            review_id=target.current_review_id, claim_id__in=matching_claims, disposition="accepted"
+        ).exists():
+            return None
+    return target_id, target.current_review_id
+
+
 def _observed_publisher(source, linked):
     """Retain a source's self-attribution, separately from verification."""
     if not source.post_id:
@@ -139,6 +199,28 @@ def persist_source(source: StoredSource):
             "dossier_ids": [],
         }
     dossier_ids = _known_dossiers(source)
+    if not dossier_ids:
+        match = _named_announcement_dossier(source, candidate)
+        if match:
+            matched, target_review_id = match
+            generic = models.EventDossier.objects.filter(identity_key=identity_key(
+                "product-release-source-v1", ":".join(source.record.identity)
+            )).first()
+            if generic is not None and canonical_dossier(generic.pk).pk != matched:
+                if generic.merged_into_id:
+                    matched = None
+                else:
+                    try:
+                        merge_dossiers(generic.pk, matched, actor=METHOD,
+                                       reason="Exact single-product announcement identity on the same source",
+                                       guard_unreviewed_post=source.post_id,
+                                       guard_target_review_id=target_review_id)
+                    except ValueError as error:
+                        if str(error) != "source dossier is not safe for automatic reconciliation":
+                            raise
+                        matched = None
+            if matched:
+                dossier_ids = {matched}
     if not dossier_ids:
         event = create_dossier(
             event_kind="product_release",
@@ -363,7 +445,8 @@ def _copy_claim(claim, source_id):
 
 
 @transaction.atomic
-def merge_dossiers(source_id, target_id, *, actor, reason):
+def merge_dossiers(source_id, target_id, *, actor, reason, guard_unreviewed_post=None,
+                   guard_target_review_id=None):
     # A shared advisory lock serializes merge-graph changes before row locks;
     # immutable evidence is copied by semantic identity, never moved or deleted.
     with connection.cursor() as cursor:
@@ -383,6 +466,13 @@ def merge_dossiers(source_id, target_id, *, actor, reason):
         if canonical_dossier(source.pk).pk == target.pk:
             return target
         raise ValueError("A dossier merge cannot be reassigned")
+    if guard_unreviewed_post is not None:
+        latest = source.intake_decisions.order_by("-recorded_at", "-pk").first()
+        if (target.current_review_id != guard_target_review_id
+                or source.current_review_id or source.reviews.exists()
+                or latest and latest.outcome in {"non_release", "scam"}
+                or source.sources.filter(post__isnull=False).exclude(post_id=guard_unreviewed_post).exists()):
+            raise ValueError("source dossier is not safe for automatic reconciliation")
     if source.event_kind_reference_id != target.event_kind_reference_id:
         raise ValueError("A dossier merge must preserve event kind")
     first_claim = None
