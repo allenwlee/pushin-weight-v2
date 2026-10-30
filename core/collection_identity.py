@@ -27,11 +27,13 @@ from core.models import (
 
 RELATION_ROLES = {
     "dedicated_model",
+    "dedicated_product",
     "family_repository",
     "implementation",
     "recipe",
     "agent_harness",
 }
+DEDICATED_ROLES = frozenset({"dedicated_model", "dedicated_product"})
 
 
 class MappingBusy(ValueError):
@@ -214,8 +216,8 @@ def review_catalog_mapping(
     ).exclude(subject=subject)
     if (
         competing.exists()
-        if role == "dedicated_model"
-        else competing.filter(identity_snapshot__role="dedicated_model").exists()
+        if role in DEDICATED_ROLES
+        else competing.filter(identity_snapshot__role__in=DEDICATED_ROLES).exists()
     ):
         raise MappingConflict("native dedicated identity conflict")
     snapshot = {
