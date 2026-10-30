@@ -164,6 +164,11 @@ def test_unfamiliar_publisher_link_stays_provisional_and_source_specific(
     dossier = models.EventDossier.objects.get(pk=result["dossier_ids"][0])
     claims = dossier.sources.get(post=post).claims.filter(scope_key="observed_publisher")
     assert claims.count() == int(expect_publisher)
+    milestones = dossier.sources.get(post=post).claims.filter(claim_kind_reference__code="announcement")
+    if retweet or text.startswith("OtherLab says:"):
+        assert not milestones.exists()
+    if text.startswith("Excited to announce") and not retweet and not quoted_id:
+        assert milestones.count() == 1
     if expect_publisher:
         claim = claims.get()
         publisher = claim.reported_brand_discovery_candidate

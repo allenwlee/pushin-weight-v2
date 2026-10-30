@@ -382,7 +382,9 @@ def persist_source(source: StoredSource):
             first_claim = first_claim or claim
             # Family-wide statements must be assigned explicitly to each release.
             # Saved translations/commentary never become independent dated proof.
-            if len(dossier_ids) == 1 and text and text.kind == "raw":
+            if (len(dossier_ids) == 1 and text and text.kind == "raw"
+                    and not source.record.is_reshare
+                    and "quoted_context" not in candidate.cautions):
                 for milestone in extract_milestones(
                     text.text, published_at=source.published_at
                 ):
@@ -703,6 +705,8 @@ def review_release(
                     None,
                 )
             )
+            if source.post_id and (source.post.is_retweet or source.post.quoted_status_id):
+                continue
             control = any(
                 c.scope_key == f"account:{account_id}:company:{issuer}"
                 and c.source_locator

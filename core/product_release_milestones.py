@@ -22,7 +22,8 @@ _NEGATED = re.compile(
     r"\b(?:not|never|isn't|hasn't|haven't|won't|no)\b|尚未|未发布|未發布", re.IGNORECASE
 )
 _ANNOUNCE = re.compile(
-    r"\b(?:we|I)\s+(?:(?:are|am|have|today)\s+)?(?:announc\w*|introduc\w*|unveil\w*)\b|正式发布|正式發布",
+    r"\b(?:we|I)\s+(?:(?:are|am|have|today)\s+)?(?:announc\w*|introduc\w*|unveil\w*)\b"
+    r"|\b(?:excited|pleased|proud|thrilled)\s+to\s+announce\b|正式发布|正式發布",
     re.IGNORECASE,
 )
 _RELEASE = re.compile(
@@ -76,6 +77,8 @@ def extract_milestones(
     for sentence in _SENTENCES.split(text):
         sentence = sentence.strip()
         if not sentence:
+            continue
+        if re.search(r"\b(?:says?|wrote|quot(?:e|ed))\s*:\s*[\"“]?", sentence, re.IGNORECASE):
             continue
         if _FUTURE.search(sentence):
             if _RELEASE.search(sentence) or _ANNOUNCE.search(sentence):

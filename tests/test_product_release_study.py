@@ -124,6 +124,23 @@ def test_study_confirmation_needs_controlled_announcer_and_retained_research():
         apply_study(value)
 
 
+def test_confirmation_rejects_reshared_announcement_even_for_verified_account():
+    value = packet()
+    case = value["cases"][0]
+    case["state"] = "confirmed"
+    models.Post.objects.filter(pk="study-source").update(is_retweet=True)
+    company = models.Company.objects.create(nickname="study-publisher")
+    account = models.Account.objects.get(author_id="study-announcer")
+    role = models.Role.objects.create(key="study-official")
+    models.CompanyAccount.objects.create(company=company, account=account, role=role, ownership_confirmed=True)
+    case["issuer_company_id"] = company.pk
+    doc = {"url": "https://publisher.example/about", "text": "Publisher links the account.",
+           "observed_at": value["assessed_at"]}
+    case["verification"] = {"post_id": "study-source", "entity": doc, "ownership": doc}
+    with pytest.raises(ValueError, match="verified publisher"):
+        apply_study(value)
+
+
 def test_discussion_packet_reports_source_count_and_rejects_stale_inputs():
     from core.discussion_windows import capture_window, discussion_packet
 

@@ -24,6 +24,14 @@ def test_announcement_and_access_are_separate_observed_claims():
     )
 
 
+def test_direct_announcement_gets_source_time_but_quoted_words_do_not():
+    direct = extract_milestones("Excited to announce Nanbeige4.3-33B!", published_at=POSTED)
+    announcement = next(c for c in direct if c.kind == "announcement")
+    assert announcement.effective_at == POSTED
+    quoted = extract_milestones('OtherLab says: "Excited to announce Model 3!"', published_at=POSTED)
+    assert not any(c.kind == "announcement" for c in quoted)
+
+
 def test_future_and_negated_wording_cannot_establish_availability():
     claims = extract_milestones(
         "We will release A tomorrow. Weights are not available now.",
