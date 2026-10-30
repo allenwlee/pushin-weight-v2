@@ -305,6 +305,61 @@ def test_github_repository_reference_is_retained_as_unresolved_and_reused(status
     assert not models.Product.objects.exists()
 
 
+@pytest.mark.parametrize("observed_owner,role,ownership,linked", [
+    (42, "dedicated_model", True, True), (99, "dedicated_model", True, False),
+    (42, "family_repository", True, False), (42, "dedicated_model", False, False),
+])
+def test_github_release_reuses_only_a_matching_reviewed_dedicated_product(observed_owner, role, ownership, linked):
+    import httpx
+
+    from core.collection_identity import review_github_mapping
+    from core.product_release_acquisition import (
+        execute_github_repository,
+        queue_github_repository,
+    )
+    from core.product_release_pipeline import persist_source
+    from core.product_release_sources import stored_posts
+    from tests.test_collection_identity import identities
+
+    _, account, subject, repo = identities()
+    mapping = review_github_mapping(
+        subject=subject, repo=repo, role=role, version_selector="v2" if role == "family_repository" else None,
+        evidence_url="https://github.com/publisher/family", reviewed_by="existing-review",
+    )
+    if not ownership:
+        models.BrandAccount.objects.filter(account=account).delete()
+    post = models.Post.objects.create(tweet_id="github-reviewed-product", text=(
+        "We release our model at https://github.com/publisher/family"
+    ))
+    persist_source(stored_posts([post.pk])[0])
+    lead = models.EventDossierClaim.objects.get(
+        scope_key__startswith="github_repo_lead:", event_dossier_source__post=post,
+    )
+    job = queue_github_repository(lead.pk)
+    payload = {**repo, "owner": {**repo["owner"], "id": observed_owner}}
+    calls = []
+    def respond(request):
+        calls.append(request)
+        return httpx.Response(200, json=payload)
+    client = httpx.Client(transport=httpx.MockTransport(respond))
+    first = execute_github_repository(job.pk, client=client)
+    observation = models.CollectionObservation.objects.get(run_id=first["run_id"])
+    assert observation.product_id == (subject.product.pk if linked else None)
+    assert observation.mapping_id == (mapping.pk if linked else None)
+    assert observation.mapping_sha256 == (mapping.mapping_hash if linked else None)
+    assert observation.processing_outcome == "unresolved"
+    assert not models.ProductReleaseDetail.objects.exists()
+    assert execute_github_repository(job.pk, client=client)["physical_requests"] == 0
+    assert len(calls) == 1 and models.Product.objects.count() == 1
+    if linked:
+        other = models.Product.objects.create(display_name="Other product")
+        models.CollectionObservation.objects.filter(pk=observation.pk).update(product=other)
+        with pytest.raises(ValueError, match="conflicting Product identity"):
+            execute_github_repository(job.pk, client=client)
+        observation.refresh_from_db()
+        assert observation.product_id == other.pk and observation.mapping_id == mapping.pk
+
+
 def test_github_checkpoint_recovers_without_refetch(monkeypatch):
     from datetime import timedelta
 
