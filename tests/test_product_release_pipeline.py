@@ -348,6 +348,39 @@ def test_github_registration_failure_can_be_recovered(monkeypatch):
     assert models.CollectionJob.objects.get().targets.get().native_identifier == "Example/Agent"
 
 
+def test_stale_raw_name_job_is_not_fetched_after_selector_improves(monkeypatch):
+    import httpx
+
+    from core import product_release_intake as intake
+    from core.product_release_acquisition import drain_due_hf_acquisitions
+    from core.product_release_pipeline import persist_source
+    from core.product_release_sources import stored_posts
+
+    models.DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    text = "I released OpenZero Fusion Qwen3-4B Agentic—trained on Qwen3-1.7B and Gemma4 E2B. F16 release."
+    post = models.Post.objects.create(tweet_id="stale-lead", text=text)
+    original = intake.raw_versioned_name_leads
+    start = text.index("F16")
+    monkeypatch.setattr(intake, "raw_versioned_name_leads",
+                        lambda _text: ({"term": "F16", "start": start, "end": start + 3},))
+    persist_source(stored_posts([post.pk])[0])
+    stale = models.CollectionJob.objects.get(targets__native_identifier="F16")
+    monkeypatch.setattr(intake, "raw_versioned_name_leads", original)
+    persist_source(stored_posts([post.pk])[0])
+    assert models.CollectionJob.objects.filter(
+        targets__native_identifier="OpenZero Fusion Qwen3-4B Agentic"
+    ).exists()
+    client = httpx.Client(transport=httpx.MockTransport(
+        lambda _request: (_ for _ in ()).throw(AssertionError("stale lead fetched"))
+    ))
+    result = drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(stale.pk)])
+    assert result["provider_calls"] == 0 and result["skipped_excluded"] == 1
+    assert not models.CollectionRequest.objects.exists()
+    assert models.EventDossierClaim.objects.filter(assertion_text="F16").exists()
+
+
 def test_raw_repo_lead_registration_failure_can_be_recovered(monkeypatch):
     from core import product_release_acquisition
     from core.product_release_pipeline import persist_source

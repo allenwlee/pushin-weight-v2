@@ -47,6 +47,13 @@ _VERSIONED_NAME = re.compile(
     r"(?<![\w@/])(?=[A-Za-z][A-Za-z0-9_.-]{2,79}(?![\w.-]))"
     r"(?=[A-Za-z0-9_.-]*[0-9])[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*"
 )
+_RELEASED_NAME = re.compile(
+    r"\b(?i:releas(?:e[ds]?|ing)|launch(?:ed|es|ing)?|introduc(?:e[ds]?|ing)|"
+    r"unveil(?:ed|s|ing)?|announc(?:e[ds]?|ing))\s+"
+    r"(?:(?i:our|the|new)\s+){0,2}"
+    r"(?P<name>[A-Z0-9][A-Za-z0-9_.-]*(?:[ \t]+[A-Z0-9][A-Za-z0-9_.-]*){0,5})",
+)
+_FORMAT_NAME = re.compile(r"(?:F16|F32|BF16|Q[1-9][A-Z0-9_]*)\Z", re.IGNORECASE)
 
 
 def _required(value: str, field: str) -> None:
@@ -335,8 +342,19 @@ def raw_versioned_name_leads(text: str, *, limit: int = 3) -> tuple[dict, ...]:
         return ()
     urls = [match.span() for match in _URL.finditer(text)]
     found = {}
+    named_spans = []
+    for match in _RELEASED_NAME.finditer(text):
+        term = match.group("name").rstrip("-_.")
+        if not any(char.isalpha() for char in term) or not any(char.isdigit() for char in term) or _URL.search(term):
+            continue
+        start = match.start("name")
+        end = start + len(term)
+        named_spans.append((start, end))
+        found.setdefault(term.casefold(), {
+            "term": term, "start": start, "end": end, "priority": 0, "distance": 0,
+        })
     for match in _VERSIONED_NAME.finditer(text):
-        if any(start <= match.start() < end for start, end in urls):
+        if any(start <= match.start() < end for start, end in [*urls, *named_spans]):
             continue
         term = match.group().rstrip("-_.")
         if len(term) < 3:
@@ -344,7 +362,7 @@ def raw_versioned_name_leads(text: str, *, limit: int = 3) -> tuple[dict, ...]:
         distance = min(abs(match.start() - anchor.end()) for anchor in anchors)
         found.setdefault(term.casefold(), {
             "term": term, "start": match.start(), "end": match.start() + len(term),
-            "distance": distance,
+            "priority": 2 if _FORMAT_NAME.fullmatch(term) else 1, "distance": distance,
         })
-    ranked = sorted(found.values(), key=lambda row: (row["distance"], row["start"]))[:limit]
+    ranked = sorted(found.values(), key=lambda row: (row["priority"], row["distance"], row["start"]))[:limit]
     return tuple({key: row[key] for key in ("term", "start", "end")} for row in ranked)

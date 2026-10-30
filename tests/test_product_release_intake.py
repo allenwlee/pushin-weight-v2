@@ -243,5 +243,18 @@ def test_raw_versioned_name_leads_are_bounded_source_spans_and_not_urls():
     assert not raw_versioned_name_leads("We announce 2606 rows in 2026.")
 
 
+def test_raw_lead_prefers_announced_derivative_name_over_teachers_and_formats():
+    from core.product_release_intake import raw_versioned_name_leads
+
+    text = ("I’ve released OpenZero Fusion Qwen3-4B Agentic—a standalone local model "
+            "trained using Qwen3-1.7B and Gemma4 E2B specialists. "
+            "Three verified builds: Q4_K_M, Q8_0 and F16. One working GGUF release.")
+    leads = raw_versioned_name_leads(text)
+    assert leads[0]["term"] == "OpenZero Fusion Qwen3-4B Agentic"
+    assert all(text[lead["start"]:lead["end"]] == lead["term"] for lead in leads)
+    assert not {"F16", "Q8_0", "Q4_K_M"} & {lead["term"] for lead in leads}
+    assert raw_versioned_name_leads("We announce MiniMax Music 3.0—available now.")[0]["term"] == "MiniMax Music 3.0"
+
+
 if __name__ == "__main__":
     unittest.main()

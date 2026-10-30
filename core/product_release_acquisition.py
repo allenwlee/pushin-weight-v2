@@ -623,6 +623,8 @@ def _has_eligible_claim(job):
 
     links = list(job.dossier_claim_links.select_related("claim__event_dossier_source"))
     for link in links:
+        if link.claim.scope_key.startswith("hf_name_lead:") and not _source_bound_raw_name(link.claim):
+            continue
         dossier = canonical_dossier(link.claim.event_dossier_source.event_dossier_id)
         latest = dossier.intake_decisions.order_by("-recorded_at", "-pk").first()
         if not latest or latest.outcome not in {"non_release", "scam"}:
