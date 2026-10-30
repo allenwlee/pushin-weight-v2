@@ -309,6 +309,7 @@ def flatten_label(
     prefix: str,
     path: str,
     include_long_description: bool = False,
+    post_shape: bool = False,
 ) -> tuple[dict[str, Any], set[str]]:
     """Flatten one documented highlighted-label wrapper as an atomic group."""
     wrapper = _optional_dict(value, path)
@@ -321,6 +322,28 @@ def flatten_label(
     label = _optional_dict(wrapper.get("label"), f"{path}.label")
     if label is None or not label:
         return ({field: None for field in field_names}, field_names)
+    if post_shape:
+        # Post labels have appeared with both spellings. Keep the source object
+        # untouched; long descriptions remain in the preserved raw evidence.
+        label = dict(label)
+        for source, target in (
+            ("user_label_type", "userLabelType"),
+            ("user_label_display_type", "userLabelDisplayType"),
+        ):
+            if source in label:
+                if target in label and label[target] != label[source]:
+                    raise SchemaDriftError(f"conflicting aliases at {path}.label.{target}")
+                label[target] = label.pop(source)
+        url = label.get("url")
+        if isinstance(url, dict) and "url_type" in url:
+            url = dict(url)
+            if "urlType" in url and url["urlType"] != url["url_type"]:
+                raise SchemaDriftError(f"conflicting aliases at {path}.label.url.urlType")
+            url["urlType"] = url.pop("url_type")
+            label["url"] = url
+        for key in ("long_description", "longDescription"):
+            if key in label:
+                _optional_dict(label.pop(key), f"{path}.label.{key}")
     label_keys = _LABEL_KEYS | (
         {"long_description"} if include_long_description else set()
     )

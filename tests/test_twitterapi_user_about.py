@@ -118,6 +118,49 @@ def test_complete_response_flattens_every_documented_leaf():
     assert observation.candidates["account_based_in_fetched_at"] == observed_at
 
 
+@pytest.mark.parametrize("style", ["snake", "snake_with_long_description", "camel_with_long_description"])
+def test_profile_observation_accepts_observed_affiliate_shapes(style):
+    from core.profile_snapshots import profile_observation_from_payload
+
+    label = {
+        "description": "Example company",
+        "badge": {"url": "https://example.com/badge.png"},
+        "url": {"url": "https://x.com/example", "urlType": "DeepLink"},
+        "userLabelDisplayType": "Badge",
+        "userLabelType": "BusinessLabel",
+    }
+    if style.startswith("snake"):
+        label["url"]["url_type"] = label["url"].pop("urlType")
+        label["user_label_display_type"] = label.pop("userLabelDisplayType")
+        label["user_label_type"] = label.pop("userLabelType")
+    if style == "snake_with_long_description":
+        label["long_description"] = {"text": "Automated", "entities": []}
+    elif style == "camel_with_long_description":
+        label["longDescription"] = {"text": "Automated", "entities": []}
+    raw_label = {"label": label}
+    observation = profile_observation_from_payload({
+        "author_affiliates_highlighted_label": raw_label,
+        "_author_present_fields": ["author_affiliates_highlighted_label"],
+    })
+    assert observation.profile_data["affiliate_label_description"] == "Example company"
+    assert observation.profile_data["affiliate_target_url"] == "https://x.com/example"
+    assert observation.profile_data["affiliate_label_type"] == "BusinessLabel"
+    assert observation.profile_data["affiliate_display_type"] == "Badge"
+    assert observation.raw_profile_payload["author_affiliates_highlighted_label"] == raw_label
+
+
+@pytest.mark.parametrize("label", [
+    {"userLabelType": "BusinessLabel", "user_label_type": "Other"},
+    {"description": "Example", "unknown_field": "unexpected"},
+    {"description": "Example", "long_description": "not an object"},
+])
+def test_post_label_rejects_conflicts_and_unknown_shapes(label):
+    from monitor.twitterapi.user_about import flatten_label
+
+    with pytest.raises(SchemaDriftError):
+        flatten_label({"label": label}, prefix="affiliate_label", path="post", post_shape=True)
+
+
 def test_live_probe_shape_parses_with_empty_optional_labels():
     payload = _complete_payload()
     payload["data"]["affiliates_highlighted_label"] = {}
