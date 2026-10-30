@@ -99,7 +99,7 @@ def test_confirmed_known_publisher_attaches_exact_repo_idempotently():
 
 @pytest.mark.parametrize("mode,expected", [
     ("official", True), ("comparison", False), ("question", False),
-    ("unofficial", False), ("ambiguous", False), ("rejected", False),
+    ("unofficial", False), ("ambiguous", False), ("rejected", False), ("partial", False),
 ])
 def test_no_link_official_release_uses_verified_search_and_exact_capture(mode, expected):
     from core.models import DataSource
@@ -140,10 +140,13 @@ def test_no_link_official_release_uses_verified_search_and_exact_capture(mode, e
     def respond(request):
         calls.append(request)
         if request.url.path == "/api/models":
+            if mode == "partial" and request.url.params.get("cursor"):
+                return httpx.Response(200, json=[])
             rows = [{"id": "MiniMaxAI/M2"}]
             if mode == "ambiguous":
                 rows.append({"id": "MiniMaxAI/M-2"})
-            return httpx.Response(200, json=rows)
+            headers = {"link": '<https://huggingface.co/api/models?cursor=next>; rel="next"'} if mode == "partial" else {}
+            return httpx.Response(200, json=rows, headers=headers)
         return httpx.Response(200, json={"id": "MiniMaxAI/M2", "author": "MiniMaxAI"})
     client = _client(respond)
     search = execute_hf_name_search(job.pk, client=client)
@@ -165,6 +168,14 @@ def test_no_link_official_release_uses_verified_search_and_exact_capture(mode, e
     assert dossier.current_review_id is None
     assert execute_hf_name_search(child.pk, client=client)["physical_requests"] == 0
     assert len(calls) == 2 and Product.objects.count() == int(expected)
+    if mode == "partial":
+        from core.models import CollectionJob
+
+        CollectionJob.objects.filter(pk=job.pk).update(next_retry_at=timezone.now() - timedelta(seconds=1))
+        complete = execute_hf_name_search(job.pk, client=client)
+        proposal.refresh_from_db()
+        assert complete["outcome"] == "found" and proposal.review_status == "approved"
+        assert Product.objects.count() == 1 and len(calls) == 3
 
 
 def models_for_test_exact_job(identifier):

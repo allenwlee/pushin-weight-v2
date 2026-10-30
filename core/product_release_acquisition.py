@@ -704,6 +704,7 @@ def execute_hf_name_search(job_id, *, client):
                 hf.search_models(target.native_identifier, limit=job.max_items, cursor=scope.cursor))
     outcome = response.outcome
     count = 0
+    new_observations = 0
     cursor_cycle = bool(response.next_cursor and response.next_cursor in seen_cursors)
     accepted = response.outcome in {"ok", "partial_expansion"}
     if accepted:
@@ -736,6 +737,7 @@ def execute_hf_name_search(job_id, *, client):
                         and observation.payload_sha256 == digest(row),
                         "existing search observation differs")
                 if created:
+                    new_observations += 1
                     link_request(observation, request,
                                  role="hf_socials" if socials else "hf_expanded" if expanded else "hf_exact" if exact else "hf_search",
                                  row_locator=None if exact or expanded or socials else str(position))
@@ -759,11 +761,22 @@ def execute_hf_name_search(job_id, *, client):
         run.physical_bytes_received = sum(run.attempts.values_list("actual_response_bytes", flat=True))
         run.save(update_fields=["physical_bytes_received", "updated_at"])
         total_observations = run.observations.count()
-        if outcome == "found":
-            models.CollectionScopeRun.objects.get_or_create(
+        if accepted and total_observations:
+            marker, marker_created = models.CollectionScopeRun.objects.get_or_create(
                 run=run, scope_kind="release_integration", scope_key="post_capture",
                 defaults={"phase": "release-integration-v1"},
             )
+            if new_observations and not marker_created:
+                marker = models.CollectionScopeRun.objects.select_for_update().get(pk=marker.pk)
+                marker.outcome = "pending"
+                marker.execution_state = "pending"
+                marker.coverage_state = "pending"
+                marker.retry_at = None
+                marker.raw_count = 0
+                marker.enumeration_complete = False
+                marker.error_code = None
+                marker.save(update_fields=["outcome", "execution_state", "coverage_state", "retry_at",
+                                           "raw_count", "enumeration_complete", "error_code"])
     success = outcome == "found"
     exhausted = prior_attempts + 1 >= 3 or cursor_cycle
     finish_run(
@@ -778,7 +791,7 @@ def execute_hf_name_search(job_id, *, client):
               "physical_requests": hf.requests}
     if expanded and accepted:
         result["metadata_coverage"] = response.outcome
-    if success:
+    if accepted and total_observations:
         result["integration"] = integrate_acquisition_run(run.pk)
     return result
 
@@ -815,7 +828,7 @@ def drain_due_hf_acquisitions(*, client, limit=10, execute=False, job_ids=None):
             source_id__in=["hf", "github"], operation="release_acquisition", mode="manual", state="ready",
         ).annotate(projection_pending=Exists(pending), integration_pending=Exists(pending_integration)).filter(
             Q(last_success__isnull=True) | Q(projection_pending=True) | Q(integration_pending=True),
-        ).filter(Q(next_retry_at__isnull=True) | Q(next_retry_at__lte=now))
+        ).filter(Q(next_retry_at__isnull=True) | Q(next_retry_at__lte=now) | Q(integration_pending=True))
     qs = qs.filter(Q(active_run__isnull=True) | Q(active_run__lease_expires_at__lte=now))
     if job_ids is not None:
         qs = qs.filter(pk__in=job_ids)
@@ -833,7 +846,15 @@ def drain_due_hf_acquisitions(*, client, limit=10, execute=False, job_ids=None):
                       "projection_pending": job.projection_pending}
         else:
             try:
-                if (job.projection_pending and job.last_success_id is None
+                if job.integration_pending and job.active_run_id is None:
+                    pending_scope = models.CollectionScopeRun.objects.filter(
+                        Q(retry_at__isnull=True) | Q(retry_at__lte=now),
+                        run__job=job, scope_kind="release_integration", outcome="pending",
+                    ).order_by("pk").first()
+                    result = {"outcome": "integration_only", "physical_requests": 0}
+                    if pending_scope is not None:
+                        result["integration"] = integrate_acquisition_run(pending_scope.run_id)
+                elif (job.projection_pending and job.last_success_id is None
                         and job.last_attempt_id and job.last_attempt.status == "failed"):
                     result = {"outcome": "projection_only", "physical_requests": 0}
                 else:
@@ -931,7 +952,7 @@ def queue_hf_search_hit(claim_id, search_observation_id):
 
     observation = models.CollectionObservation.objects.select_related("run__job").get(pk=search_observation_id)
     hf_search_observation_documents(observation)
-    require(observation.run.status == "success", "completed search required")
+    require(observation.run.status in {"success", "partial", "failed"}, "saved search page required")
     claim = models.EventDossierClaim.objects.select_related("event_dossier_source").get(pk=claim_id)
     require(claim.event_dossier_source.collection_observation_id == observation.pk
             and claim.scope_key == f"hf_capture:{observation.pk}", "search hit claim required")

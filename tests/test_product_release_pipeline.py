@@ -1071,6 +1071,48 @@ def test_unknown_publisher_socials_are_separate_unverified_source_evidence():
     assert len(calls) == 2
 
 
+def test_partial_search_integration_recovers_during_provider_cooldown(monkeypatch):
+    import httpx
+    from django.utils import timezone
+
+    from core import product_release_acquisition as acquisition
+    from core.product_release_dossiers import record_release_report
+
+    models.DataSource.objects.get_or_create(
+        pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
+    )
+    post = models.Post.objects.create(tweet_id="partial-recovery", text="We announce Model4")
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": "Model4"}, release_identity="partial-recovery",
+        observed_name="Model4", source_url=None, maturity_code="unknown", release_value=None,
+        release_precision="unknown", extraction_version="test",
+    )
+    claim = models.EventDossierClaim.objects.get(
+        event_dossier_source__event_dossier=dossier, claim_kind_reference__code="release_report"
+    )
+    job = acquisition.queue_hf_name_search(claim.pk)
+    calls = []
+    def respond(request):
+        calls.append(request)
+        return httpx.Response(200, json=[{"id": "lab/Model4"}], headers={
+            "link": '<https://huggingface.co/api/models?cursor=next>; rel="next"'
+        })
+    client = httpx.Client(transport=httpx.MockTransport(respond))
+    original = acquisition.integrate_acquisition_run
+    monkeypatch.setattr(acquisition, "integrate_acquisition_run",
+                        lambda _run_id: (_ for _ in ()).throw(RuntimeError("interrupted")))
+    with pytest.raises(RuntimeError, match="interrupted"):
+        acquisition.execute_hf_name_search(job.pk, client=client)
+    job.refresh_from_db()
+    assert job.last_attempt.status == "partial" and job.next_retry_at > timezone.now()
+    assert job.last_attempt.scopes.get(scope_kind="release_integration").outcome == "pending"
+    monkeypatch.setattr(acquisition, "integrate_acquisition_run", original)
+    result = acquisition.drain_due_hf_acquisitions(client=client, execute=True, job_ids=[str(job.pk)])
+    assert result["provider_calls"] == 0 and result["jobs"][0]["outcome"] == "integration_only"
+    assert models.CollectionJob.objects.filter(targets__target_role="exact_model").count() == 1
+    assert len(calls) == 1 and not models.Product.objects.exists()
+
+
 def test_search_resumes_next_page_and_deduplicates_repeated_hits():
     from datetime import timedelta
 
