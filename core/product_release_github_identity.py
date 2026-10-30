@@ -20,6 +20,7 @@ def source_names_repository(*, text, author_handle, owner_handle, repository):
             or not re.fullmatch(r"[A-Za-z0-9_]{1,15}", author_handle)
             or not re.fullmatch(r"[A-Za-z0-9_]{1,15}", owner_handle)
             or author_handle.casefold() != owner_handle.casefold()
+            or re.match(r"\s*RT\s+@", text, re.IGNORECASE)
             or repository.count("/") != 1 or _FUTURE.search(text) or _NEGATED.search(text)):
         return None
     name = repository.split("/", 1)[1]
@@ -30,13 +31,21 @@ def source_names_repository(*, text, author_handle, owner_handle, repository):
         return None
     pattern = r"[-_\s]+".join(re.escape(part) for part in parts)
     statement = re.compile(
-        r"\b(?:we|i)\s+(?:(?:have|just)\s+){0,2}"
-        r"(?:released?|launched?|introduc(?:e|ed)|announc(?:e|ed))\s+"
+        r"\b(?:(?:we(?:['’]re)?|i(?:['’]m)?)\s+(?:(?:have|just|are|am)\s+){0,2}"
+        r"(?:released?|releasing|launch(?:ed|ing)?|introduc(?:e|ed|ing)|announc(?:e|ed|ing))|"
+        r"(?:excited|pleased|proud|thrilled)\s+to\s+(?:announce|introduce|release|launch)|"
+        r"announcing|introducing|launching|releasing)\s+"
         r"(?:(?:our|the|new)\s+){0,2}" + pattern
         + r"(?![A-Za-z0-9_.-])(?!\s+(?-i:[A-Z])[A-Za-z0-9_-]*)",
         re.IGNORECASE,
     )
-    return name if statement.search(text) else None
+    match = statement.search(text)
+    if not match or "?" in text[match.end():].split("\n", 1)[0].split(".", 1)[0]:
+        return None
+    prefix = text[max(0, match.start() - 32):match.start()]
+    if re.search(r"(?:says?|wrote|quot(?:e|ed))\s*[:\"“]\s*$", prefix, re.IGNORECASE):
+        return None
+    return name
 
 
 def retain_named_repository_product(owner_observation, dossier_id):
@@ -69,7 +78,8 @@ def retain_named_repository_product(owner_observation, dossier_id):
         claim = link.claim
         source = claim.event_dossier_source
         source_repo = _source_bound_github_repo(claim) if source.post_id else None
-        if (not source_repo or canonical_dossier(source.event_dossier_id).pk != dossier_id
+        if (not source_repo or source.post.is_retweet or source.post.quoted_status_id
+                or canonical_dossier(source.event_dossier_id).pk != dossier_id
                 or source_repo.casefold() != repo["full_name"].casefold()):
             continue
         candidate = source_names_repository(

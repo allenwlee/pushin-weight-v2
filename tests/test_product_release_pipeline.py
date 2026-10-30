@@ -472,11 +472,16 @@ def test_github_owner_profile_is_captured_without_confirming_publisher(status, o
     assert not models.ProductReleaseDetail.objects.exists()
 
 
-@pytest.mark.parametrize("author,existing,expected,merged", [
-    ("example_ai", False, True, False), ("example_ai", False, True, True),
-    ("someone_else", False, False, False), ("example_ai", True, False, False),
+@pytest.mark.parametrize("author,existing,expected,merged,style", [
+    ("example_ai", False, True, False, "first_person"),
+    ("example_ai", False, True, True, "first_person"),
+    ("example_ai", False, True, False, "announcement"),
+    ("someone_else", False, False, False, "first_person"),
+    ("example_ai", True, False, False, "first_person"),
+    ("example_ai", False, False, False, "retweet"),
+    ("example_ai", False, False, False, "quoted"),
 ])
-def test_unknown_github_named_product_is_provisional_and_reused(author, existing, expected, merged):
+def test_unknown_github_named_product_is_provisional_and_reused(author, existing, expected, merged, style):
     import httpx
     from core.product_release_acquisition import execute_github_repository, queue_github_repository
     from core.product_release_github_owner import execute_owner
@@ -485,9 +490,11 @@ def test_unknown_github_named_product_is_provisional_and_reused(author, existing
 
     if existing:
         models.Product.objects.create(display_name="Example Agent", hf_type="model", repo_id="other/Example-Agent")
-    post = models.Post.objects.create(tweet_id="named-github-source", author_handle=author, text=(
-        "We released Example Agent today. https://github.com/Example/Example-Agent"
-    ))
+    quoted = models.Post.objects.create(tweet_id="quoted-github-source", text="Quoted context") if style == "quoted" else None
+    opening = "Excited to announce" if style == "announcement" else "We released"
+    post = models.Post.objects.create(tweet_id="named-github-source", author_handle=author,
+        is_retweet=style == "retweet", quoted_status_id=quoted,
+        text=f"{opening} Example Agent today. https://github.com/Example/Example-Agent")
     persist_source(stored_posts([post.pk])[0])
     lead = models.EventDossierClaim.objects.get(scope_key__startswith="github_repo_lead:")
     job = queue_github_repository(lead.pk)
