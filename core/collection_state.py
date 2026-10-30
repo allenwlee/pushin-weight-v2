@@ -814,7 +814,7 @@ def _validate_typed_projection_scope(job, kind, key, ownership, contract, observ
     require(
         (
             (job.purpose == "catalog" or job.purpose == "content"
-             and job.source_id == "hf" and job.operation == "release_acquisition")
+             and job.source_id in {"hf", "github"} and job.operation == "release_acquisition")
             and key == str(contract.pk)
             and ownership == {
                 "contract_id": str(contract.pk),
