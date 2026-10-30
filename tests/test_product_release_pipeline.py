@@ -472,6 +472,102 @@ def test_github_owner_profile_is_captured_without_confirming_publisher(status, o
     assert not models.ProductReleaseDetail.objects.exists()
 
 
+@pytest.mark.parametrize("author,existing,expected,merged", [
+    ("example_ai", False, True, False), ("example_ai", False, True, True),
+    ("someone_else", False, False, False), ("example_ai", True, False, False),
+])
+def test_unknown_github_named_product_is_provisional_and_reused(author, existing, expected, merged):
+    import httpx
+    from core.product_release_acquisition import execute_github_repository, queue_github_repository
+    from core.product_release_github_owner import execute_owner
+    from core.product_release_pipeline import persist_source
+    from core.product_release_sources import stored_posts
+
+    if existing:
+        models.Product.objects.create(display_name="Example Agent", hf_type="model", repo_id="other/Example-Agent")
+    post = models.Post.objects.create(tweet_id="named-github-source", author_handle=author, text=(
+        "We released Example Agent today. https://github.com/Example/Example-Agent"
+    ))
+    persist_source(stored_posts([post.pk])[0])
+    lead = models.EventDossierClaim.objects.get(scope_key__startswith="github_repo_lead:")
+    job = queue_github_repository(lead.pk)
+    calls = []
+    def respond(request):
+        calls.append(str(request.url))
+        if request.url.path.startswith("/repos/"):
+            return httpx.Response(200, json={"id": 123, "full_name": "Example/Example-Agent", "private": False,
+                                            "owner": {"id": 12, "login": "Example"}})
+        return httpx.Response(200, json={"id": 12, "login": "Example", "twitter_username": "example_ai"})
+    client = httpx.Client(transport=httpx.MockTransport(respond))
+    assert execute_github_repository(job.pk, client=client)["outcome"] == "found"
+    if merged:
+        from core.product_release_pipeline import merge_dossiers
+        target = create_dossier(event_kind="product_release", identity_key=identity_key("test-intake", "merged-target"))
+        merge_dossiers(lead.event_dossier_source.event_dossier_id, target.pk, actor="test", reason="same release")
+    owner_job = models.CollectionJob.objects.get(targets__target_role="publisher_profile")
+    assert execute_owner(owner_job.pk, client=client)["outcome"] == "found"
+    observation = models.CollectionObservation.objects.get(projection_kind="github-release-exact-v1")
+    observation.refresh_from_db()
+    assert bool(observation.product_id) is expected
+    assert not models.ProductReleaseDetail.objects.exists()
+    if expected:
+        product = observation.product
+        assert product.display_name == "Example-Agent" and product.repo_id is None and product.hf_type == ""
+        assert models.MeasurementSubject.objects.filter(product=product).exists()
+        assert models.EventDossierClaim.objects.filter(reported_product_id=product.pk,
+            scope_key="github_named_product:123", event_dossier_source__post=post).exists()
+        assert execute_owner(owner_job.pk, client=client)["physical_requests"] == 0
+        assert models.Product.objects.count() == 1 and models.EventDossierClaim.objects.filter(
+            scope_key="github_named_product:123").count() == 1
+        other_post = models.Post.objects.create(tweet_id="named-github-source-two", author_handle=author, text=(
+            "We released Example Agent today. https://github.com/Example/Example-Agent"
+        ))
+        persist_source(stored_posts([other_post.pk])[0])
+        other_lead = models.EventDossierClaim.objects.get(scope_key__startswith="github_repo_lead:",
+            event_dossier_source__post=other_post)
+        assert queue_github_repository(other_lead.pk).pk == job.pk
+        assert models.Product.objects.count() == 1
+        assert models.EventDossierClaim.objects.filter(scope_key="github_named_product:123",
+            reported_product_id=product.pk).count() == 2
+        from core.collection_corrections import attribution_at, correct_attribution
+
+        corrected = models.Product.objects.create(display_name="Reviewed product", hf_type="")
+        actor = models.Actor.objects.create(actor_kind="human", actor_key="product-reviewer")
+        correct_attribution(observation, product=corrected, mapping=None, reason="reviewed_identity",
+                            actor_identity=actor)
+        assert execute_owner(owner_job.pk, client=client)["physical_requests"] == 0
+        assert attribution_at(observation)["product_id"] == corrected.pk
+        assert models.EventDossierClaim.objects.filter(scope_key="github_named_product:123",
+            reported_product_id=product.pk).count() == 2
+        import threading
+        from django.db import connection
+        from core.measurement_taxonomy import digest
+        from core.product_release_pipeline import ReleaseIdentityBusy
+
+        held, unlock = threading.Event(), threading.Event()
+        key = int(digest(["catalog-native-v1", "github", "repository", "repository_id", "123"])[:15], 16)
+        def hold_identity():
+            with transaction.atomic(), connection.cursor() as cursor:
+                cursor.execute("SELECT pg_advisory_xact_lock(%s)", [key])
+                held.set()
+                assert unlock.wait(10)
+        thread = threading.Thread(target=hold_identity)
+        thread.start()
+        try:
+            assert held.wait(5)
+            with pytest.raises(ReleaseIdentityBusy):
+                execute_owner(owner_job.pk, client=client)
+        finally:
+            unlock.set()
+            thread.join(10)
+        assert not thread.is_alive()
+        assert execute_owner(owner_job.pk, client=client)["physical_requests"] == 0
+        assert attribution_at(observation)["product_id"] == corrected.pk
+    else:
+        assert not models.EventDossierClaim.objects.filter(scope_key="github_named_product:123").exists()
+    assert len(calls) == 2
+
+
 def test_github_checkpoint_recovers_without_refetch(monkeypatch):
     from datetime import timedelta
 

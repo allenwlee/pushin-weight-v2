@@ -111,6 +111,9 @@ def integrate_owner(observation):
                       assertion_text=f"GitHub profile reports X account @{handle}; source control is unresolved",
                       source_excerpt=f"@{handle}", source_locator=f"https://github.com/{row['login']}",
                       source_archive_id=request.archive_id, extraction_version="github-release-owner-v1")
+            from core.product_release_github_identity import retain_named_repository_product
+
+            retain_named_repository_product(observation, dossier.pk)
 
 
 def execute_owner(job_id, *, client):
