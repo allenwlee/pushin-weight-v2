@@ -3567,11 +3567,11 @@ class CycleRunner:
                             str(it.get("author_id") or it.get("authorId") or "")
                         ),
                     )
-                    if created:
-                        n_inserted += 1
-                    else:
-                        n_updated += 1
                     PostEnrichmentState.objects.get_or_create(post=post)
+                    if settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
+                        from core.product_release_detection_queue import enqueue_saved_post
+
+                        enqueue_saved_post(post.pk)
                     brand_ids: list[str] = list(it.get("brand_ids") or [])
                     mentions: list[MentionRow] = list(it.get("mentions") or [])
                     classifications: dict = it.get("classifications") or {}
@@ -3582,7 +3582,11 @@ class CycleRunner:
                         classifications,
                         allow_unattributed=bool(it.get("_discovery_lane")),
                     )
-                    n_attributed += n_attr
+                if created:
+                    n_inserted += 1
+                else:
+                    n_updated += 1
+                n_attributed += n_attr
                 # The timestamp is taken after the atomic block exits: this
                 # is the server-owned commit boundary, including duplicate
                 # updates. It is intentionally not Post.fetched_at.
@@ -3647,23 +3651,25 @@ class CycleRunner:
 
             result = process_enrichment_batch(self, kept_posts, **kwargs)
         if kwargs.get("repair_manifest") is None:
-            from core.product_release_pipeline import persist_collected_posts
+            from core.product_release_detection_queue import enqueue_posts
 
             source_ids = {
                 str(item["_persisted_post_id"]) for item in kept_posts
                 if item.get("_persisted_post_id")
             }
             source_ids.update(str(value) for value in (kwargs.get("post_ids") or ()))
+            source_ids.update(str(value) for value in result.get("enrichment_current_cycle_post_ids", ()))
+            source_ids.update(str(value) for value in result.get("enrichment_carryover_post_ids", ()))
             if source_ids:
                 try:
-                    result["product_release_intake"] = persist_collected_posts(source_ids)
+                    result["product_release_intake"] = enqueue_posts(source_ids)
                 except Exception:  # Keep collection healthy; replay can recover saved posts.
                     logger.exception("Post-collection release intake failed")
                     result["product_release_intake"] = {
-                        "selected": len(source_ids), "read": 0, "candidates": 0,
-                        "failed": len(source_ids),
+                        "selected": len(source_ids), "queued": 0, "missing": 0,
+                        "failed": len(source_ids), "status": "error",
                     }
-            if self.cycle_kind == "scheduled":
+            if self.cycle_kind == "scheduled" or source_ids:
                 try:
                     from core.product_release_acquisition import dispatch_due_recovery
 

@@ -151,7 +151,7 @@ GRANT MAINTAIN ON
   original_content_subject_labels, brand_discovery_candidate_token_evidence,
   brand_discovery_candidate_tokens, call_state, django_session,
   harvest_backlog_windows, job_source_states, job_source_sync_runs,
-  post_enrichment_states,
+  post_enrichment_states, product_release_detection_states,
   post_synthesis_daily_budgets, post_synthesis_demands,
   post_synthesis_rate_limit_buckets,
   post_translation_chunks,
@@ -206,7 +206,7 @@ WHERE schemaname = 'public'
     'personnel_change_types',
     'time_zones', 'languages', 'locales', 'measurement_units', 'actors',
     'definition_versions', 'service_providers', 'inference_models', 'workflow_stages',
-    'event_dossiers', 'event_dossier_sources', 'event_dossier_claims',
+    'event_dossiers', 'event_dossier_sources', 'event_dossier_claims', 'event_dossier_claim_collection_jobs',
     'event_dossier_reviews', 'event_dossier_review_claims',
     'event_dossier_intake_decisions', 'event_dossier_discussion_windows',
     'discussion_window_snapshots', 'discussion_window_counts',
@@ -260,7 +260,7 @@ WHERE schemaname = 'public'
     'release_availability_states_id_seq',
     'personnel_change_types_id_seq',
     'event_dossier_sources_id_seq', 'event_dossier_review_claims_id_seq',
-    'discussion_window_counts_id_seq', 'event_dossier_discussion_windows_id_seq',
+    'discussion_window_counts_id_seq', 'event_dossier_discussion_windows_id_seq', 'event_dossier_claim_collection_jobs_id_seq',
     'account_profile_text_translations_id_seq', 'company_labels_id_seq',
     'person_name_selections_id_seq', 'original_content_subject_labels_id_seq',
     'trend_narrative_subject_labels_id_seq',
@@ -406,6 +406,9 @@ and truncated together with `original_content_calls` and
 batch or retain a call whose owning batch was discarded. It is optional on
 sources preceding migration `0085_provider_batch_enrichment`, has no generated
 ID sequence, and receives only the maintenance grant above when present.
+`product_release_detection_states` is likewise environment-local processing
+state: it is excluded and cleared rather than copied from production. It has no
+generated sequence and is optional on sources predating its migration.
 
 The repeatable-read source census calculates the exact idempotent seed effects
 for pending migrations `core.0033_stage1c_frontier_organization_brands` and

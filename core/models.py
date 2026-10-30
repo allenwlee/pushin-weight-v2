@@ -2095,6 +2095,36 @@ class Post(models.Model):
         return self.tweet_id
 
 
+class ProductReleaseDetectionState(models.Model):
+    """One reusable detector request; requested_at is a monotonic queue generation."""
+
+    post = models.OneToOneField(
+        Post, on_delete=models.CASCADE, primary_key=True, related_name="release_detection_state",
+        db_column="post_id", to_field="tweet_id",
+    )
+    requested_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    retry_at = models.DateTimeField(null=True, blank=True)
+    error_code = models.CharField(max_length=64, blank=True, default="")
+
+    class Meta:
+        db_table = "product_release_detection_states"
+        indexes = [
+            models.Index(
+                fields=["requested_at", "post"], name="idx_release_detection_due",
+                condition=models.Q(completed_at__isnull=True) | models.Q(completed_at__lt=models.F("requested_at")),
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(attempts__lte=3), name="ck_release_detection_attempts"),
+            models.CheckConstraint(
+                condition=models.Q(completed_at__isnull=True) | models.Q(completed_at__lte=models.F("requested_at")),
+                name="ck_release_detection_clock",
+            ),
+        ]
+
+
 class PostEnrichmentState(models.Model):
     """Payload-free, replayable translation and classification state."""
 

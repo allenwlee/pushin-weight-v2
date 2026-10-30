@@ -66,9 +66,17 @@ def recover_due_product_releases() -> dict[str, object]:
     if not settings.PRODUCT_RELEASE_BACKGROUND_ENABLED:
         return {"status": "disabled", "provider_calls": 0}
     from core.product_release_acquisition import (
+        dispatch_due_recovery,
         drain_due_hf_acquisitions,
         recover_release_registrations,
     )
+    from core.product_release_detection_queue import drain_posts
+
+    try:
+        detection = drain_posts(limit=50, max_seconds=20)
+    except Exception:
+        logger.exception("Release detection recovery failed; later wake-up can retry")
+        detection = {"status": "error"}
 
     try:
         registrations = recover_release_registrations(limit=25)
@@ -78,7 +86,9 @@ def recover_due_product_releases() -> dict[str, object]:
 
     with httpx.Client(follow_redirects=False, trust_env=False) as client:
         result = drain_due_hf_acquisitions(client=client, limit=3, execute=True)
-    return {"status": "processed", "registration_recovery": registrations, **result}
+    if detection.get("due_remaining") and (detection.get("processed") or detection.get("failed")):
+        dispatch_due_recovery()
+    return {"status": "processed", "detection": detection, "registration_recovery": registrations, **result}
 
 
 @shared_task(
