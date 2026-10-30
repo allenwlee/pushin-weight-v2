@@ -392,6 +392,42 @@ def _resolve_candidate_from_socials(dossier, claim, social_observation, socials)
     return resolved
 
 
+def _retain_exact_hf_product(observation, payload):
+    """Retain the repository identity, without asserting it is the release.
+
+    The captured response has already been validated against its exact target.
+    Existing Product metadata and ownership are never overwritten by this path.
+    """
+    from django.core.exceptions import ValidationError
+    from django.db import DataError, transaction
+
+    from core import models
+    from core.product_metadata import apply_metadata
+
+    with transaction.atomic():
+        observed = models.CollectionObservation.objects.select_for_update().get(pk=observation.pk)
+        repo = observed.source_identifier
+        product, created = models.Product.objects.get_or_create(
+            repo_id=repo, defaults={"display_name": repo.split("/", 1)[1], "hf_type": "model"}
+        )
+        if observed.product_id not in (None, product.pk):
+            raise ValueError("exact repository observation has conflicting product")
+        if observed.product_id is None:
+            observed.product = product
+            observed.created_product = created
+            observed.save(update_fields=["product", "created_product", "updated_at"])
+        if created:
+            try:
+                with transaction.atomic():
+                    apply_metadata(product, payload, group="detail", observation={
+                        "id": observed.pk, "run_id": str(observed.run_id),
+                    })
+            except (ValidationError, DataError, ValueError, TypeError):
+                observed.processing_outcome = "projection_error"
+                observed.save(update_fields=["processing_outcome", "updated_at"])
+        return product
+
+
 def _integrate_acquisition_run(run_id):
     """Attach captured leads and reuse exact evidence for known-publisher identity.
 
@@ -435,6 +471,22 @@ def _integrate_acquisition_run(run_id):
             payload, _, _ = hf_search_observation_documents(observation)
         request = observation.inputs.select_related("input_request").get().input_request
         repo = observation.source_identifier
+        # An approved X-only Product may be this repository. Do not create a
+        # competing identity before the existing verification path reconciles it.
+        original_dossiers = {
+            link.claim.event_dossier_source.event_dossier_id for link in links
+        } if exact else set()
+        dossier_ids = original_dossiers | {
+            canonical_dossier(pk).pk for pk in original_dossiers
+        }
+        if dossier_ids:
+            list(models.EventDossier.objects.select_for_update().filter(
+                pk__in=dossier_ids
+            ).order_by("pk").values_list("pk", flat=True))
+        prior_x_only = exact and models.ProductVerificationProposal.objects.filter(
+            source_dossier_id__in=dossier_ids, review_status="approved",
+            resolved_product__isnull=False, resolved_product__repo_id__isnull=True,
+        ).exists()
         search_followup = False
         if not exact and not socials and not expanded:
             normalized = repo.casefold()
@@ -442,12 +494,15 @@ def _integrate_acquisition_run(run_id):
                 selected_search_repos.add(normalized)
                 search_followup = True
         seen_dossiers = set()
+        eligible_dossiers = set()
         totals["observations"] += 1
         for link in links:
             source = link.claim.event_dossier_source
             dossier = canonical_dossier(source.event_dossier_id)
             latest = dossier.intake_decisions.order_by("-recorded_at", "-pk").first()
             eligible = not latest or latest.outcome not in {"non_release", "scam"}
+            if eligible:
+                eligible_dossiers.add(dossier.pk)
             if dossier.pk not in seen_dossiers:
                 event_source = attach_source(dossier.pk, observation_id=observation.pk)
                 captured_claim = add_claim(
@@ -525,6 +580,8 @@ def _integrate_acquisition_run(run_id):
                 continue
             if not eligible:
                 continue
+            if not prior_x_only:
+                _retain_exact_hf_product(observation, payload)
             if link.claim.reported_brand_id is None:
                 import logging
 
@@ -578,6 +635,12 @@ def _integrate_acquisition_run(run_id):
                     totals["products_resolved"] += int(_finalize_known_publisher(
                         proposal.pk, token, HFMetadataResult("matched", payload)
                     ))
+        if (prior_x_only and eligible_dossiers
+                and models.ProductVerificationProposal.objects.filter(
+                    source_dossier_id__in=eligible_dossiers, review_status="approved",
+                    resolved_product__repo_id__iexact=repo,
+                ).exists()):
+            _retain_exact_hf_product(observation, payload)
     return totals
 
 

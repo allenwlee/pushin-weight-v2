@@ -155,7 +155,9 @@ def test_no_link_official_release_uses_verified_search_and_exact_capture(mode, e
     proposal.refresh_from_db()
     assert exact["integration"]["products_resolved"] == int(expected)
     assert (proposal.review_status == "approved") is expected
-    assert Product.objects.count() == int(expected)
+    assert Product.objects.count() == 1
+    if not expected:
+        assert Product.objects.get().brand_id is None
     assert PostBrandProduct.objects.count() == int(expected)
     if expected:
         edge = PostBrandProduct.objects.get()
@@ -167,7 +169,7 @@ def test_no_link_official_release_uses_verified_search_and_exact_capture(mode, e
         assert edge.source_evidence["exact_observation_id"] is not None
     assert dossier.current_review_id is None
     assert execute_hf_name_search(child.pk, client=client)["physical_requests"] == 0
-    assert len(calls) == 2 and Product.objects.count() == int(expected)
+    assert len(calls) == 2 and Product.objects.count() == 1
     if mode == "partial":
         from core.models import CollectionJob
 
@@ -176,6 +178,59 @@ def test_no_link_official_release_uses_verified_search_and_exact_capture(mode, e
         proposal.refresh_from_db()
         assert complete["outcome"] == "found" and proposal.review_status == "approved"
         assert Product.objects.count() == 1 and len(calls) == 3
+
+
+@pytest.mark.parametrize("matches,merged", [(True, False), (False, False), (False, True)])
+def test_exact_capture_does_not_duplicate_approved_x_only_product(matches, merged):
+    from core.models import CollectionObservation, DataSource
+    from core.product_release_acquisition import execute_hf_name_search, queue_hf_name_search
+
+    brand, _org, account, post = _publisher()
+    url = "https://huggingface.co/MiniMaxAI/M2"
+    post.text = f"We announce M2 {url}"
+    post.author_handle = account.handle
+    post.save(update_fields=["text", "author_handle"])
+    DataSource.objects.get_or_create(pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"})
+    dossier, _, _ = record_release_report(
+        post=post, record={"model_name": "M2", "source_url": url}, release_identity="x-only-before-capture",
+        observed_name="M2", source_url=url, brand=brand, maturity_code="unknown", release_value=None,
+        release_precision="unknown", extraction_version="test",
+    )
+    first = ProductVerificationProposal.objects.create(
+        proposal_key="9" * 64, source_post=post, source_dossier=dossier, proposed_brand=brand,
+        account=account, observed_name="M2", policy_version=POLICY_VERSION, hf_outcome="deferred",
+    )
+    decide_product_proposal(proposal_id=first.pk, action="approve", reviewer="owner@example.com",
+                            reason="Approved X-only identity", brand_id=brand.pk,
+                            product_type="llm-model", catalog_mode="x_only")
+    original = Product.objects.get()
+    if merged:
+        from core.event_dossiers import create_dossier, identity_key
+        from core.product_release_pipeline import merge_dossiers
+
+        target = create_dossier(event_kind="product_release",
+                                identity_key=identity_key("test-merged", "same-release"))
+        merge_dossiers(dossier.pk, target.pk, actor="test", reason="same release")
+    RareTypeCategoryAssignment.objects.create(
+        post=post, brand=brand, category="llm-model", source_evidence={}, classification_version="test"
+    )
+    ProductVerificationProposal.objects.create(
+        proposal_key="a" * 64, source_post=post, source_dossier=dossier, proposed_brand=brand,
+        account=account, account_handle_snapshot=account.handle, observed_name="M2" if matches else "Other",
+        candidate_repo_id="MiniMaxAI/M2", policy_version=POLICY_VERSION,
+        account_evidence={"stable_account_id": account.author_id, **source_repo_evidence(post, "MiniMaxAI/M2")},
+    )
+    claim = EventDossierClaim.objects.get(event_dossier_source__event_dossier=dossier,
+                                          claim_kind_reference__code="release_report")
+    job = queue_hf_name_search(claim.pk)
+    result = execute_hf_name_search(job.pk, client=_client(
+        lambda _request: httpx.Response(200, json={"id": "MiniMaxAI/M2", "author": "MiniMaxAI"})
+    ))
+    observation = CollectionObservation.objects.get(run_id=result["run_id"])
+    original.refresh_from_db()
+    assert Product.objects.count() == 1
+    assert original.repo_id == ("MiniMaxAI/M2" if matches else None)
+    assert observation.product_id == (original.pk if matches else None)
 
 
 def models_for_test_exact_job(identifier):
@@ -251,7 +306,9 @@ def test_captured_exact_release_metadata_reuses_known_publisher_verifier(
     proposal.refresh_from_db()
     assert result["integration"]["products_resolved"] == int(expected)
     assert (proposal.review_status == "approved") is expected
-    assert Product.objects.count() == int(expected)
+    assert Product.objects.count() == 1
+    if not expected:
+        assert Product.objects.get().brand_id is None
     assert PostBrandProduct.objects.count() == int(expected)
     assert dossier.sources.filter(collection_observation__isnull=False).count() == 1
     assert EventDossierClaim.objects.filter(
@@ -259,7 +316,7 @@ def test_captured_exact_release_metadata_reuses_known_publisher_verifier(
     ).count() == 1
     again = execute_hf_name_search(job.pk, client=client)
     assert again["physical_requests"] == 0 and len(calls) == 1
-    assert Product.objects.count() == int(expected)
+    assert Product.objects.count() == 1
     assert EventDossierClaim.objects.filter(
         event_dossier_source__event_dossier=dossier, scope_key__startswith="hf_capture:"
     ).count() == 1
@@ -584,7 +641,9 @@ def test_captured_sources_use_existing_new_publisher_policy(
     proposal.refresh_from_db()
     assert result["integration"]["products_resolved"] == int(approved)
     assert (proposal.review_status == "approved") == approved
-    assert Product.objects.count() == int(approved)
+    assert Product.objects.count() == 1
+    if not approved:
+        assert Product.objects.get().brand_id is None
     candidate.refresh_from_db()
     assert candidate.verification_status == ("confirmed" if approved else
                                              "pending" if candidate_status in {"collision", *declared_text}

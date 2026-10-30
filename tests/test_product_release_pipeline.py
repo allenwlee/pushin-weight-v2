@@ -646,7 +646,7 @@ def test_exact_model_queues_pinned_card_and_preserves_text(card_status, expected
         assert repeat["provider_calls"] == 0
     else:
         assert not models.CollectionObservation.objects.filter(projection_kind="hf-release-card-v1").exists()
-        assert not models.Product.objects.exists()
+        assert models.Product.objects.filter(repo_id=repo, brand__isnull=True).exists()
         if expected == "request_error":
             card_job.refresh_from_db()
             assert not card_job.last_attempt.attempts.get().accounting_complete
@@ -759,7 +759,9 @@ def test_name_search_selects_at_most_three_exact_followups_with_retained_evidenc
     exact_obs = models.CollectionObservation.objects.get(run_id=exact["run_id"])
     assert observation_object_documents(exact_obs)[0]["id"] == first.targets.get().native_identifier
     assert dossier.sources.filter(collection_observation=exact_obs).exists()
-    assert exact_obs.processing_outcome == "unresolved" and not models.Product.objects.exists()
+    assert exact_obs.processing_outcome == "unresolved"
+    assert exact_obs.product.repo_id == first.targets.get().native_identifier
+    assert exact_obs.product.brand_id is None and dossier.current_review_id is None
     execute_hf_name_search(job.pk, client=client)
     assert children.count() == 3 and len(calls) == 2
 
@@ -810,7 +812,8 @@ def test_failed_followup_registration_is_recovered_without_refetch(followup, mon
     assert recovered["provider_calls"] == 0 and recovered["jobs"][0]["integration"]["status"] == "complete"
     expected = "exact_model" if followup == "search_hit" else "publisher_socials"
     assert models.CollectionJob.objects.filter(targets__target_role=expected).count() == 1
-    assert len(calls) == 1 and not models.Product.objects.exists()
+    assert len(calls) == 1
+    assert models.Product.objects.count() == (1 if followup == "publisher_socials" else 0)
 
 
 def test_crash_after_capture_completion_recovers_pending_integration(monkeypatch):
@@ -1057,7 +1060,8 @@ def test_empty_search_is_retried_and_later_result_keeps_both_request_receipts():
     assert models.CollectionRequest.objects.filter(attempt__run=run).count() == 2
 
 
-def test_exact_source_repo_is_captured_after_delayed_availability_without_confirmation():
+@pytest.mark.parametrize("already_known,malformed", [(False, False), (True, False), (False, True)])
+def test_exact_source_repo_is_captured_after_delayed_availability_without_confirmation(already_known, malformed):
     from datetime import timedelta
 
     import httpx
@@ -1071,6 +1075,8 @@ def test_exact_source_repo_is_captured_after_delayed_availability_without_confir
     from core.product_release_dossiers import record_release_report
 
     url = "https://huggingface.co/unknown-lab/model-z"
+    if already_known:
+        models.Product.objects.create(repo_id="unknown-lab/model-z", display_name="Curated name", likes=99)
     post = models.Post.objects.create(tweet_id="exact-delayed", text=f"Announcing Model Z {url}")
     models.DataSource.objects.get_or_create(
         pk="hf", defaults={"name": "Hugging Face", "source_type": "model_adoption"}
@@ -1087,7 +1093,7 @@ def test_exact_source_repo_is_captured_after_delayed_availability_without_confir
     job = queue_hf_name_search(claim.pk)
     assert job.targets.get().target_role == "exact_model"
     responses = iter([httpx.Response(404), httpx.Response(200, json={
-        "id": "unknown-lab/model-z", "downloads": 17, "likes": 3,
+        "id": "unknown-lab/model-z", "downloads": "invalid" if malformed else 17, "likes": 3,
     })])
     calls = []
     def respond(request):
@@ -1100,12 +1106,22 @@ def test_exact_source_repo_is_captured_after_delayed_availability_without_confir
     second = execute_hf_name_search(job.pk, client=client)
     assert second["outcome"] == "found" and second["run_id"] == first["run_id"]
     observation = models.CollectionObservation.objects.get(run_id=second["run_id"])
-    assert observation.processing_outcome == "unresolved"
-    assert observation_object_documents(observation)[0]["downloads"] == 17
+    assert observation.processing_outcome == ("projection_error" if malformed else "unresolved")
+    assert observation_object_documents(observation)[0]["downloads"] == ("invalid" if malformed else 17)
     assert observation.observed_at is not None
     assert all(str(call.url).startswith("https://huggingface.co/api/models/unknown-lab/model-z?") for call in calls)
     assert models.CollectionRequest.objects.filter(attempt__run_id=second["run_id"]).count() == 2
-    assert not models.Product.objects.exists()
+    product = models.Product.objects.get(repo_id="unknown-lab/model-z")
+    assert observation.product_id == product.pk and observation.created_product is not already_known
+    assert product.brand_id is None and product.publisher_account_id is None
+    if already_known:
+        assert product.display_name == "Curated name" and product.likes == 99
+    elif malformed:
+        assert product.downloads is None and product.likes is None
+    else:
+        assert product.downloads == 17 and product.likes == 3
+        assert product.hf_metadata["groups"]["detail"]["observation"]["id"] == observation.pk
+    assert not models.PostBrandProduct.objects.exists()
     assert not models.ProductReleaseDetail.objects.exists()
     assert execute_hf_name_search(job.pk, client=client)["physical_requests"] == 0
     assert len(calls) == 2
@@ -1121,6 +1137,7 @@ def test_exact_source_repo_is_captured_after_delayed_availability_without_confir
     )
     assert queue_hf_name_search(other_claim.pk).pk == job.pk
     assert other.sources.filter(collection_observation=observation).exists()
+    assert models.Product.objects.filter(repo_id="unknown-lab/model-z").count() == 1
     assert len(calls) == 2
 
 
@@ -1194,7 +1211,8 @@ def test_exact_release_enqueues_expanded_metadata_and_retains_base_model_claims(
     )
     assert {row.source_excerpt for row in lineage} == {"Qwen/base", "Gemma/base"}
     assert all(row.source_archive_id == observation.inputs.get().input_request.archive_id for row in lineage)
-    assert not models.ProductRelationship.objects.exists() and not models.Product.objects.exists()
+    assert not models.ProductRelationship.objects.exists()
+    assert models.Product.objects.get(repo_id="author/derived").brand_id is None
     assert execute_hf_name_search(expanded_job.pk, client=client)["physical_requests"] == 0
     assert len(requests) == 3
 
@@ -1246,7 +1264,8 @@ def test_unknown_publisher_socials_are_separate_unverified_source_evidence():
     assert observation_object_documents(observation)[0]["socialHandles"]["twitter"] == "newlab"
     assert dossier.sources.filter(collection_observation=observation).exists()
     assert observation.processing_outcome == "unresolved"
-    assert dossier.current_review_id is None and not models.Product.objects.exists()
+    assert dossier.current_review_id is None
+    assert models.Product.objects.get(repo_id="newlab/Model").brand_id is None
     assert candidate.verification_status == "pending"
     assert execute_hf_name_search(social_job.pk, client=client)["physical_requests"] == 0
     assert len(calls) == 2
