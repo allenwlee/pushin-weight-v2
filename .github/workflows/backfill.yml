@@ -193,6 +193,7 @@ jobs:
           tests/test_call_a_role_routing.py
           tests/test_backfill_contract_recovery.py tests/test_backfill_cached_replay.py
           tests/test_backfill_direct_enrichment.py::test_defer_mode_still_defers_exhausted_posts_left_out_of_a_grant
+          tests/test_backfill_resources.py::test_staff_relevance_reserve_applies_only_to_current_policy_staff_authors
           tests/test_run_backfill_command.py::test_final_assessment_names_only_its_unverified_windows
           tests/test_run_backfill_command.py::test_unverified_campaign_assessment_exits_3_after_its_receipts_are_saved
           tests/test_run_backfill_command.py::test_unverified_phase_assessment_exits_3_after_verified_collection

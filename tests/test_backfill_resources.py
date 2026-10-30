@@ -97,3 +97,15 @@ def test_scheduled_slot_startup_grace_and_reserve(epoch, expected, monkeypatch):
 
     monkeypatch.setattr(backfill._time, "time", lambda: epoch)
     assert backfill._seconds_to_next_slot() == expected
+
+
+def test_staff_relevance_reserve_applies_only_to_current_policy_staff_authors():
+    from monitor.backfill_collection import staff_relevance_seconds
+
+    cfg = SimpleNamespace(harvest=SimpleNamespace(relevancy_timeout_seconds=30))
+    staff = {"author_scope": {"contexts": {"1": {"official_brands": [], "staff_brands": ["openai"]}}}}
+    official = {"author_scope": {"contexts": {"1": {"official_brands": ["openai"], "staff_brands": []}}}}
+    assert staff_relevance_seconds(staff, cfg, True) == 30
+    assert staff_relevance_seconds(staff, cfg, False) == 0
+    assert staff_relevance_seconds(official, cfg, True) == 0
+    assert staff_relevance_seconds({}, cfg, True) == 0

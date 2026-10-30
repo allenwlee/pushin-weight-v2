@@ -214,6 +214,45 @@ def test_too_little_lease_keeps_receipts_and_refetches_only_those_pages(http_pag
     assert not CollectionEvidenceArchive.objects.exists()
 
 
+def test_staff_relevance_reserve_keeps_late_pages_for_a_gated_refetch(http_pages, monkeypatch):  # noqa: F811
+    from monitor import backfill_collection
+
+    # A Call A staff check needs its 30 s. A page drained with less left would
+    # commit with the check failed open, so it keeps the receipt-only re-fetch.
+    monkeypatch.setattr(backfill_collection, "staff_relevance_seconds", lambda *args: 30)
+    job = staged_job(monkeypatch, 3)
+    first_wave = [threading.Barrier(3)]
+    original = PageCheckpoint.persist
+    crossed = []
+
+    def persist(self, *args, **kwargs):
+        value = original(self, *args, **kwargs)
+        if not crossed:
+            # Two received pages are still buffered when 10 s remain.
+            self.budget._deadline = self.budget._clock() + 10
+            crossed.append(self.scoped.scope_key)
+        return value
+
+    def response(params):
+        if first_wave:
+            first_wave[0].wait(timeout=20)
+        return result_for(params)
+
+    monkeypatch.setattr(PageCheckpoint, "persist", persist)
+    with http_pages(response) as state:
+        first = execute_job(job.pk, collection_options={"concurrency": 3})
+        assert len(state["requests"]) == 3 and Post.objects.count() == 1
+        assert first["prefetch"]["uncommitted_captures"] == 2
+        assert not CollectionRequest.objects.filter(transport_outcome="pending").exists()
+        monkeypatch.setattr(PageCheckpoint, "persist", original)
+        first_wave.clear()
+        second = execute_job(job.pk, collection_options={"concurrency": 3})
+    assert second["collection_drained"]
+    assert second["prefetch"]["lost_responses"] == 2
+    assert len(state["requests"]) == 5 and Post.objects.count() == 3
+    assert not CollectionEvidenceArchive.objects.exists()
+
+
 def test_slow_consumer_tapers_admission_to_pages_it_can_commit(http_pages, monkeypatch):  # noqa: F811
     from monitor import backfill_staging
 

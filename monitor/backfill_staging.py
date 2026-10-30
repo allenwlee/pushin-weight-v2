@@ -133,9 +133,11 @@ def validate_staging(scope):
 
 
 class StagingPrefetcher(Prefetcher):
-    def __init__(self, claim, job, budget, options):
+    def __init__(self, claim, job, budget, options, *, relevance_seconds=0):
         super().__init__(claim, job, budget, options)
         validate_staging(job.scope)
+        # Budget a yielded page keeps for a Call A staff relevance check.
+        self.relevance_seconds = relevance_seconds
         previous = job.last_attempt.report if job.last_attempt_id else {}
         self.retry = RetryControl.restore(previous.get("staging_retry"))
         self.retry_at = None
@@ -152,6 +154,11 @@ class StagingPrefetcher(Prefetcher):
         """Commit a yielded page and still finish the run inside the lease."""
         margin = (self.lease_expires_at - datetime.now(UTC)).total_seconds()
         return margin >= 2 * self.consume_seconds + LEASE_RESERVE_SECONDS
+
+    def _relevance_allows_page(self):
+        """A staff check on a yielded page still has its budget, when one is needed."""
+        return not self.relevance_seconds or (
+            self.budget.remaining_seconds > self.relevance_seconds + self.consume_seconds)
 
     def _save_retry(self):
         with fenced_run(self.claim) as (_, run):
@@ -308,7 +315,8 @@ class StagingPrefetcher(Prefetcher):
                         # one, while the runner's normal budgets still apply.
                         # Admission resumes as pages drain; with none buffered
                         # it stops, as at the request envelope.
-                        if not self.budget.can_start(REQUEST_SECONDS + self.consume_seconds * (len(futures) + 1)):
+                        if not self.budget.can_start(
+                                REQUEST_SECONDS + self.relevance_seconds + self.consume_seconds * (len(futures) + 1)):
                             admission_open = bool(futures)
                             break
                         busy = [value[0].pk for value in futures.values()]
@@ -371,10 +379,11 @@ class StagingPrefetcher(Prefetcher):
                         self._failed(request, result)
                         continue
                     capture = self._save(request, result)
-                    if not self._lease_allows_page():
-                        # Keep this receipt only, as before: the next run marks
-                        # it body_lost and re-fetches, rather than leaving
-                        # requests pending past the lease.
+                    if not (self._lease_allows_page() and self._relevance_allows_page()):
+                        # Keep this receipt only: the next run marks it
+                        # body_lost and re-fetches, rather than leaving
+                        # requests pending past the lease or committing a
+                        # staff candidate without its relevance check.
                         self.metrics["uncommitted_captures"] += 1
                         return
                     started = time.monotonic()

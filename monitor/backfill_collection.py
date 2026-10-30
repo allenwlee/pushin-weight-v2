@@ -659,6 +659,16 @@ def _report(job, run_id):
     return report
 
 
+def staff_relevance_seconds(scope, cfg, current_policy):
+    """Seconds a Call A staff relevance check needs, or 0 when no author can need one."""
+    if not current_policy:
+        return 0
+    contexts = (scope.get("author_scope") or {}).get("contexts") or {}
+    if not any(context.get("staff_brands") for context in contexts.values()):
+        return 0
+    return cfg.harvest.relevancy_timeout_seconds
+
+
 def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_options=None):
     from monitor.backfill_prefetch import Prefetcher, PrefetchOptions
     from monitor.cycle import CycleRunner
@@ -738,7 +748,10 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
         if use_prefetch:
             if direct_staging:
                 from monitor.backfill_staging import StagingPrefetcher
-                prefetch = StagingPrefetcher(claim, job, budget, options)
+                # Pages drained with less time than a staff check needs would
+                # commit ungated; they keep the receipt-only re-fetch instead.
+                prefetch = StagingPrefetcher(claim, job, budget, options,
+                    relevance_seconds=staff_relevance_seconds(job.scope, cfg, current_policy))
             else:
                 prefetch = Prefetcher(claim, job, budget, options)
             pages = prefetch.pages(deferred_scopes)
