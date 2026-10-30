@@ -17,6 +17,7 @@ def account(**values):
         bio="",
         description="",
         profile_bio_text="",
+        verified_type=None,
         **values,
     )
 
