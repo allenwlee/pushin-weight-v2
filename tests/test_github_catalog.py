@@ -314,6 +314,152 @@ def test_catalog_release_reuses_only_reviewed_dedicated_product(settings, role, 
     assert models.EventDossier.objects.filter(event_kind_reference__code="product_release").count() == 1
 
 
+@pytest.mark.django_db(transaction=True)
+def test_new_dedicated_review_queues_bounded_reconciliation(settings):
+    from core import models
+    from core.collection_identity import review_github_mapping
+    from core.product_release_source_queue import (
+        drain_mapping_reconciliations, drain_observations, enqueue_saved_observations,
+    )
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    job, repo = configured()
+    subject = models.MeasurementSubject.objects.get(subject_kind="product", product__repo_id="HFPublisher/Model")
+    calls = []
+    run = execute_github_catalog(job.pk, client=reader(responses(repo, calls), 30))
+    releases = list(run.observations.filter(observation_kind="releases").order_by("pk"))
+    assert len(releases) == 2
+    enqueue_saved_observations([r.pk for r in releases])
+    assert drain_observations(observation_ids=[r.pk for r in releases])["processed"] == 2
+    before = {r.pk: models.EventDossierSource.objects.get(collection_observation=r).event_dossier_id for r in releases}
+    mapping = review_github_mapping(subject=subject, repo=repo, role="dedicated_product",
+        evidence_url="https://github.com/publisher/family", reviewed_by="reviewer")
+    marker = models.CollectionScopeRun.objects.get(scope_kind="release_mapping_reconcile")
+    assert marker.outcome == "pending"
+    count = len(calls)
+    first = drain_mapping_reconciliations(page_size=1)
+    marker.refresh_from_db()
+    assert first["queued"] == 1 and first["due_remaining"] and marker.cursor == str(releases[0].pk)
+    assert drain_observations(observation_ids=[releases[0].pk])["processed"] == 1
+    second = drain_mapping_reconciliations(page_size=1)
+    marker.refresh_from_db()
+    assert second["queued"] == 1 and not second["due_remaining"] and marker.outcome == "complete"
+    assert drain_observations(observation_ids=[releases[1].pk])["processed"] == 1
+    for release in releases:
+        release.refresh_from_db()
+        assert release.product_id == subject.product.pk and release.mapping_id == mapping.pk
+        assert models.EventDossierSource.objects.get(collection_observation=release).event_dossier_id == before[release.pk]
+    assert len(calls) == count
+    review_github_mapping(subject=subject, repo=repo, role="dedicated_product",
+        evidence_url="https://github.com/publisher/family", reviewed_by="reviewer")
+    assert models.CollectionScopeRun.objects.filter(scope_kind="release_mapping_reconcile").count() == 1
+    assert drain_mapping_reconciliations()["processed"] == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_mapping_reconciliation_rollback_and_retry(settings, monkeypatch):
+    from django.db import transaction
+    from core import models, product_release_source_queue as queue
+    from core.collection_identity import review_github_mapping
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    job, repo = configured()
+    subject = models.MeasurementSubject.objects.get(subject_kind="product", product__repo_id="HFPublisher/Model")
+    run = execute_github_catalog(job.pk, client=reader(responses(repo, []), 30))
+    release = run.observations.filter(observation_kind="releases").first()
+    queue.enqueue_saved_observations([release.pk])
+    assert queue.drain_observations(observation_ids=[release.pk])["processed"] == 1
+    args = dict(subject=subject, repo=repo, role="dedicated_product",
+                evidence_url="https://github.com/publisher/family", reviewed_by="reviewer")
+    with pytest.raises(RuntimeError), transaction.atomic():
+        review_github_mapping(**args)
+        assert models.CollectionScopeRun.objects.filter(scope_kind="release_mapping_reconcile").exists()
+        raise RuntimeError("rollback review")
+    assert not models.SourceSubjectMapping.objects.exists()
+    assert not models.CollectionScopeRun.objects.filter(scope_kind="release_mapping_reconcile").exists()
+    review_github_mapping(**args)
+    marker = models.CollectionScopeRun.objects.get(scope_kind="release_mapping_reconcile")
+    original = queue.enqueue_saved_observations
+    def fail(*args, **kwargs):
+        raise RuntimeError("temporary failure")
+    monkeypatch.setattr(queue, "enqueue_saved_observations", fail)
+    assert queue.drain_mapping_reconciliations()["failed"] == 1
+    marker.refresh_from_db()
+    assert marker.cursor is None and marker.raw_count == 1 and marker.retry_at is not None
+    assert not queue.drain_mapping_reconciliations()["processed"]
+    models.CollectionScopeRun.objects.filter(pk=marker.pk).update(retry_at=timezone.now() - timedelta(seconds=1))
+    monkeypatch.setattr(queue, "enqueue_saved_observations", original)
+    assert queue.drain_mapping_reconciliations()["processed"] == 1
+    marker.refresh_from_db()
+    assert marker.outcome == "complete" and marker.raw_count == 1
+    assert queue.drain_observations(observation_ids=[release.pk])["processed"] == 1
+    release.refresh_from_db()
+    assert release.product_id == subject.product.pk
+
+
+@pytest.mark.django_db(transaction=True)
+def test_mapping_reconciliation_runs_only_when_background_enabled(settings, monkeypatch):
+    from core import models
+    from core.collection_identity import review_github_mapping
+    from core.product_release_source_queue import drain_observations, enqueue_saved_observations
+    from monitor.tasks import recover_due_product_releases
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    monkeypatch.setattr(recover_due_product_releases, "apply_async", lambda **kwargs: None)
+    job, repo = configured()
+    subject = models.MeasurementSubject.objects.get(subject_kind="product", product__repo_id="HFPublisher/Model")
+    run = execute_github_catalog(job.pk, client=reader(responses(repo, []), 30))
+    release = run.observations.filter(observation_kind="releases").first()
+    enqueue_saved_observations([release.pk])
+    assert drain_observations(observation_ids=[release.pk])["processed"] == 1
+    review_github_mapping(subject=subject, repo=repo, role="dedicated_product",
+        evidence_url="https://github.com/publisher/family", reviewed_by="reviewer")
+    assert recover_due_product_releases.run()["status"] == "disabled"
+    marker = models.CollectionScopeRun.objects.get(scope_kind="release_mapping_reconcile")
+    marker.refresh_from_db()
+    assert marker.outcome == "pending"
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = True
+    result = recover_due_product_releases.run()
+    assert result["mapping_reconciliation"]["processed"] == 1
+    marker.refresh_from_db()
+    release.refresh_from_db()
+    assert marker.outcome == "complete" and release.product_id == subject.product.pk
+
+
+@pytest.mark.django_db(transaction=True)
+def test_release_detection_waits_for_repository_review_lock(settings):
+    import threading
+    from django.db import connection, transaction
+    from core import models
+    from core.measurement_taxonomy import digest
+    from core.product_release_source_queue import drain_observations, enqueue_saved_observations
+
+    settings.PRODUCT_RELEASE_BACKGROUND_ENABLED = False
+    job, repo = configured()
+    run = execute_github_catalog(job.pk, client=reader(responses(repo, []), 30))
+    release = run.observations.filter(observation_kind="releases").first()
+    enqueue_saved_observations([release.pk])
+    held, unlock = threading.Event(), threading.Event()
+    key = int(digest(["catalog-native-v1", "github", "repository", "repository_id", str(repo["id"])])[:15], 16)
+    def hold_review_lock():
+        with transaction.atomic(), connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(%s)", [key])
+            held.set()
+            assert unlock.wait(10)
+    worker = threading.Thread(target=hold_review_lock)
+    worker.start()
+    try:
+        assert held.wait(5)
+        result = drain_observations(observation_ids=[release.pk])
+        assert result["busy"] == 1 and result["failed"] == 0 and result["due_remaining"]
+        assert not models.EventDossierSource.objects.filter(collection_observation=release).exists()
+    finally:
+        unlock.set()
+        worker.join(10)
+    assert not worker.is_alive()
+    assert drain_observations(observation_ids=[release.pk])["processed"] == 1
+
+
 @pytest.fixture
 def captured_release_assets():
     from copy import deepcopy

@@ -270,6 +270,11 @@ def _attach_github_release_repository(source, dossier_id):
     GitHubMetadataClient.repo_url(repo["full_name"])
     from core.product_release_acquisition import link_reviewed_github_product
 
+    lock_key = int(_digest(["catalog-native-v1", "github", "repository", "repository_id", str(repo["id"])])[:15], 16)
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_try_advisory_xact_lock(%s)", [lock_key])
+        if not cursor.fetchone()[0]:
+            raise ReleaseIdentityBusy("repository identity review is busy")
     repository = models.CollectionObservation.objects.select_for_update().get(pk=repository.pk)
     observation = models.CollectionObservation.objects.select_for_update().get(pk=observation.pk)
     mapping = link_reviewed_github_product(repository, repo)

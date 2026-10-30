@@ -14,6 +14,99 @@ logger = logging.getLogger(__name__)
 MAX_ATTEMPTS = 3
 
 
+def queue_reviewed_mapping(mapping):
+    """Record bounded replay work atomically with a dedicated GitHub review."""
+    if not connection.in_atomic_block:
+        raise ValueError("mapping reconciliation needs the review transaction")
+    if (mapping.source_id != "github" or mapping.purpose != "catalog"
+            or mapping.source_subject_kind != "repository"
+            or mapping.identity_snapshot.get("role") not in {"dedicated_model", "dedicated_product"}):
+        return None
+    first = models.CollectionObservation.objects.filter(
+        source_identifier=mapping.normalized_identifier, observation_kind="releases",
+        run__job__source_id="github", run__job__operation="github_catalog",
+    ).order_by("pk").first()
+    if first is None:
+        return None
+    marker, _ = models.CollectionScopeRun.objects.get_or_create(
+        run_id=first.run_id, scope_kind="release_mapping_reconcile",
+        scope_key=f"{mapping.pk}:{mapping.mapping_hash}",
+        defaults={"resource_observation": first, "phase": "mapping-reconcile-v1"},
+    )
+    if marker.phase != "mapping-reconcile-v1":
+        raise ValueError("mapping reconciliation marker conflict")
+    from core.product_release_acquisition import dispatch_due_recovery
+
+    dispatch_due_recovery()
+    return marker
+
+
+def drain_mapping_reconciliations(*, limit=25, page_size=50, max_seconds=15):
+    """Requeue finite pages of releases after review, with a durable cursor."""
+    if (type(limit) is not int or not 1 <= limit <= 100
+            or type(page_size) is not int or not 1 <= page_size <= 100
+            or not 0 < max_seconds <= 120 or connection.vendor != "postgresql"):
+        raise ValueError("invalid mapping reconciliation budget")
+    due = models.CollectionScopeRun.objects.filter(
+        scope_kind="release_mapping_reconcile", outcome="pending", raw_count__lt=MAX_ATTEMPTS,
+    ).filter(Q(retry_at__isnull=True) | Q(retry_at__lte=timezone.now()))
+    ids = list(due.order_by("retry_at", "pk").values_list("pk", flat=True)[:limit])
+    result = {"processed": 0, "queued": 0, "failed": 0, "busy": 0}
+    deadline = monotonic() + max_seconds
+    for marker_id in ids:
+        if monotonic() >= deadline:
+            break
+        try:
+            with transaction.atomic():
+                marker = due.select_for_update(skip_locked=True).filter(pk=marker_id).first()
+                if marker is None:
+                    result["busy"] += 1
+                    continue
+                with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL statement_timeout = '5s'")
+                mapping_id, mapping_hash = marker.scope_key.split(":", 1)
+                mapping = models.SourceSubjectMapping.objects.get(pk=mapping_id)
+                if (mapping.mapping_hash != mapping_hash or mapping.source_id != "github"
+                        or mapping.identity_snapshot.get("role") not in {"dedicated_model", "dedicated_product"}):
+                    raise ValueError("reviewed mapping changed")
+                after = int(marker.cursor or 0)
+                rows = list(models.CollectionObservation.objects.filter(
+                    source_identifier=mapping.normalized_identifier, observation_kind="releases",
+                    run__job__source_id="github", run__job__operation="github_catalog", pk__gt=after,
+                ).order_by("pk").values_list("pk", flat=True)[:page_size + 1])
+                page = rows[:page_size]
+                if page:
+                    selected = enqueue_saved_observations(page, reconcile=True)
+                    if any(row["outcome"] in {"missing", "ineligible", "failed"} for row in selected["observations"]):
+                        raise ValueError("review reconciliation source invalid")
+                    marker.cursor = str(page[-1])
+                done = len(rows) <= page_size
+                marker.outcome = "complete" if done else "pending"
+                marker.execution_state = "completed" if done else "pending"
+                marker.coverage_state = "complete" if done else "partial"
+                marker.enumeration_complete = done
+                marker.save(update_fields=["cursor", "outcome", "execution_state", "coverage_state", "enumeration_complete"])
+            result["processed"] += 1
+            result["queued"] += len(page)
+        except Exception:
+            logger.exception("Mapping reconciliation failed for marker %s", marker_id)
+            result["failed"] += 1
+            with transaction.atomic():
+                marker = due.select_for_update(skip_locked=True).filter(pk=marker_id).first()
+                if marker is None:
+                    continue
+                marker.raw_count += 1
+                terminal = marker.raw_count >= MAX_ATTEMPTS
+                marker.outcome = "failed" if terminal else "pending"
+                marker.execution_state = "failed" if terminal else "pending"
+                marker.coverage_state = "unavailable" if terminal else "partial"
+                marker.error_code = "mapping_reconciliation_error"
+                marker.retry_at = None if terminal else timezone.now() + timedelta(hours=6)
+                marker.save(update_fields=["raw_count", "outcome", "execution_state", "coverage_state", "error_code", "retry_at"])
+    result["due_remaining"] = due.exists()
+    return result
+
+
 def enqueue_github_release(observation, *, captured_row=None):
     """Commit one immutable observation and its detection marker together."""
     if not connection.in_atomic_block:

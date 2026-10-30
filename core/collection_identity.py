@@ -297,6 +297,7 @@ def review_catalog_mapping(
     return mapping
 
 
+@transaction.atomic
 def review_github_mapping(
     *,
     subject,
@@ -339,7 +340,7 @@ def review_github_mapping(
         account is not None and qualified_catalog_ownership(account, subject),
         "reviewed GitHub publisher ownership required",
     )
-    return review_catalog_mapping(
+    mapping = review_catalog_mapping(
         source=DataSource.objects.get(pk="github"),
         subject=subject,
         external_identifier=str(repo["id"]),
@@ -363,3 +364,7 @@ def review_github_mapping(
             "current_full_name": full_name,
         },
     )
+    from core.product_release_source_queue import queue_reviewed_mapping
+
+    queue_reviewed_mapping(mapping)
+    return mapping

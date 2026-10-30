@@ -3705,6 +3705,10 @@ class CollectionScopeRun(models.Model):
                 fields=["retry_at", "id"], name="idx_rel_source_detect_due",
                 condition=models.Q(scope_kind="release_detection", outcome="pending"),
             ),
+            models.Index(
+                fields=["retry_at", "id"], name="idx_rel_mapping_recon_due",
+                condition=models.Q(scope_kind="release_mapping_reconcile", outcome="pending"),
+            ),
         ]
         constraints = (
             models.UniqueConstraint(
@@ -9165,6 +9169,10 @@ class CollectionObservation(models.Model):
     class Meta:
         db_table = "collection_observations"
         indexes = [
+            models.Index(
+                fields=["source_identifier", "id"], name="idx_rel_repo_observation",
+                condition=models.Q(observation_kind="releases"),
+            ),
             models.Index(
                 fields=["id"],
                 condition=models.Q(legacy_archive__isnull=True),
