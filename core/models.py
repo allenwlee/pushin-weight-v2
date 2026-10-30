@@ -998,10 +998,6 @@ class Company(models.Model):
     )
     accent_color = models.TextField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
-    url = models.URLField(
-        max_length=2048, blank=True, null=True,
-        help_text="Official company homepage; leave empty until verified.",
-    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

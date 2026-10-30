@@ -1618,7 +1618,7 @@ and the [lookup guide](lookup-tables.md).
 
 ### `companies` — Company
 
-One company identity, including its official homepage and recorded headquarters location.
+One company identity, including its recorded headquarters country.
 
 Model: [Company](../../core/models.py#L988).
 
@@ -1629,7 +1629,6 @@ Model: [Company](../../core/models.py#L988).
 | `nickname` | `character varying(64)` | No | PK. Collation: `case_insensitive`. PK component. |
 | `accent_color` | `text` | Yes | Stored value. |
 | `description` | `text` | Yes | Stored value. |
-| `url` | `character varying(2048)` | Yes | Official company homepage. Optional; unknown or unverified URLs remain NULL. No uniqueness constraint: companies may share a website. |
 | `created_at` | `timestamp with time zone` | No | Set by Django on creation. Set by Django on creation. |
 | `hq_geolocation_id` | `bigint` | Yes | FK → [geolocations.id](#table-geolocations); Django deletion: `PROTECT`. PostgreSQL action is recorded in the constraint list below. Model field: `hq_geolocation`. |
 
@@ -1643,9 +1642,7 @@ None declared beyond primary keys, field uniqueness and foreign keys.
 
 None beyond the column-level keys, uniqueness, nullability, and type checks described above.
 
-Headquarters is a nullable single Geolocation reference; geographic names and hierarchy remain owned by the geography catalogue.
-
-`url` holds one canonical company homepage. Product sites and source-account profile links remain in their existing records and are not automatically copied here. Existing registration and seed writers can omit this field and preserve an already stored URL. Django URL validation applies when field/model validation is invoked; ordinary ORM saves and bulk writes do not independently verify URL syntax or company ownership. This column does not itself establish publisher verification. The column is introduced by migration `0207_company_url`; this describes the repository schema, not production coverage.
+Headquarters is a nullable single Country reference; a company cannot store several HQ countries in this field. Country spelling/labels remain owned by the geography catalogue.
 
 **Physical constraints:**
 
