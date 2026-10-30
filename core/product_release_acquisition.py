@@ -1169,11 +1169,41 @@ def integrate_github_capture(observation):
     """Attach a verified saved capture to every currently linked dossier."""
     from django.db import transaction
 
+    from core import models
+    from core.collection_identity import qualified_catalog_ownership
     from core.event_dossiers import add_claim, attach_source
     from core.product_release_pipeline import canonical_dossier
 
     with transaction.atomic():
         row, _, _ = github_exact_observation_documents(observation)
+        observation = models.CollectionObservation.objects.select_for_update().get(pk=observation.pk)
+        owner_id = row.get("owner", {}).get("id") if isinstance(row.get("owner"), dict) else None
+        if type(owner_id) is int and owner_id > 0:
+            mappings = list(models.SourceSubjectMapping.objects.filter(
+                purpose="catalog", source_id="github", source_subject_kind="repository",
+                identifier_scope__code="repository_id", normalized_identifier=str(row["id"]),
+                subject__subject_kind="product", publisher_account__data_source_id="github",
+                publisher_account__normalized_identifier=str(owner_id),
+                identity_snapshot__role="dedicated_model",
+            ).select_related("subject__product", "publisher_account")[:2])
+            if len(mappings) == 1:
+                mapping = mappings[0]
+                snapshot = mapping.identity_snapshot
+                if (mapping.reviewed_by.strip() and snapshot.get("provider") == "github"
+                        and snapshot.get("repository_id") == row["id"] and snapshot.get("owner_id") == owner_id
+                        and snapshot.get("publisher_account_key") == str(mapping.publisher_account_id)
+                        and snapshot.get("subject_id") == str(mapping.subject_id)
+                        and qualified_catalog_ownership(mapping.publisher_account, mapping.subject)):
+                    if observation.product_id not in (None, mapping.subject.product.pk):
+                        raise ValueError("GitHub observation has conflicting Product identity")
+                    if observation.mapping_id not in (None, mapping.pk):
+                        raise ValueError("GitHub observation has conflicting reviewed mapping")
+                    if observation.product_id is None or observation.mapping_id is None:
+                        observation.product = mapping.subject.product
+                        if observation.mapping_id is None:
+                            observation.mapping = mapping
+                            observation.mapping_sha256 = mapping.mapping_hash
+                        observation.save(update_fields=["product", "mapping", "mapping_sha256", "updated_at"])
         request = observation.inputs.select_related("input_request").get().input_request
         for link in observation.run.job.dossier_claim_links.select_related("claim__event_dossier_source"):
             dossier = canonical_dossier(link.claim.event_dossier_source.event_dossier_id)
