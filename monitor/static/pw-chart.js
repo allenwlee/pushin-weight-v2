@@ -1721,8 +1721,12 @@
     var requestGeneration = ++generation;
     if (activeController) activeController.abort();
     activeController = typeof AbortController === 'function' ? new AbortController() : null;
+    var timedOut = false;
     var timeout = setTimeout(function () {
-      if (activeController && requestGeneration === generation) activeController.abort();
+      if (activeController && requestGeneration === generation) {
+        timedOut = true;
+        activeController.abort();
+      }
     }, REQUEST_TIMEOUT_MS);
     var filters = filtersForEvent(event);
     var url = '/chart.html?filters=' + encodeURIComponent(JSON.stringify(filters)) +
@@ -1743,7 +1747,7 @@
       commitFragment(region, html, payload);
       return true;
     }).catch(function (error) {
-      if (requestGeneration === generation && (!error || error.name !== 'AbortError')) {
+      if (requestGeneration === generation && (timedOut || !error || error.name !== 'AbortError')) {
         showRefreshFailure(region);
         console.warn('pw-chart: refresh failed', error);
       }

@@ -145,6 +145,75 @@ def test_short_comparison_keeps_exact_rolling_boundaries(chart_context, window):
     assert payload["computed_at"] == NOW.isoformat()
 
 
+@pytest.mark.parametrize("path", ["/", "/chart.html", "/chart/"])
+@pytest.mark.parametrize("correct_history", [False, True])
+def test_seven_day_comparison_reuses_history_at_exact_partial_bucket_boundaries(
+    chart_context, path, correct_history
+):
+    from monitor.home_count_summary import read_home_counts, refresh_home_counts
+
+    client, brand = chart_context
+    anchor = NOW + timedelta(minutes=7, seconds=33, microseconds=123456)
+    start = anchor - timedelta(days=14)
+    midpoint = anchor - timedelta(days=7)
+    dates = [
+        start - timedelta(microseconds=1), start,
+        midpoint - timedelta(microseconds=1), midpoint,
+        anchor - timedelta(microseconds=1), anchor,
+    ]
+    posts = [_post(brand, f"partial-{i}", at) for i, at in enumerate(dates)]
+    assert refresh_home_counts()["status"] == "refreshed"
+    if correct_history:
+        posts[2].created_at = midpoint + timedelta(seconds=1)
+        posts[2].save(update_fields=["created_at"])
+    params = {"window": 7, "locale": "en", "timezone": "Asia/Tokyo"}
+    with (
+        patch("monitor.views._dashboard_now", return_value=anchor),
+        patch("monitor.home_count_summary.read_home_counts", wraps=read_home_counts) as reader,
+    ):
+        summary = _payload(client.get(path, params, secure=True))
+    assert any(
+        call.kwargs.get("midpoint") == midpoint for call in reader.call_args_list
+    ), "the rolling Pulse comparison must reuse saved history, not rescan fourteen days"
+    _clear_home_pulse_cache()
+    with (
+        patch("monitor.views._dashboard_now", return_value=anchor),
+        patch("monitor.home_count_summary.read_home_counts", return_value=None),
+    ):
+        exact = _payload(client.get(path, params, secure=True))
+    for key in ("days", "series", "totals", "pulse"):
+        assert summary[key] == exact[key], (path, correct_history, key)
+    entry = next(row for row in summary["pulse"]["entries"] if row["nickname"] == brand.pk)
+    assert (entry["current_count"], entry["prior_count"]) == (
+        (3, 1) if correct_history else (2, 2)
+    )
+
+
+@pytest.mark.parametrize("midpoint", [None, DAY - timedelta(days=30)])
+def test_aligned_summary_keeps_source_scan_after_publication_boundary(chart_context, midpoint):
+    from monitor.home_count_summary import read_home_counts, refresh_home_counts
+
+    _, brand = chart_context
+    _post(brand, "saved-prefix-only", DAY - timedelta(days=5))
+    assert refresh_home_counts()["status"] == "refreshed"
+    source_lower_bounds = []
+
+    def observe(execute, sql, params, many, context):
+        if "FROM home_brand_time_counts" in sql:
+            before_source_bound = sql.split("AND p.created_at >= %s", 1)[0]
+            source_lower_bounds.append(params[before_source_bound.count("%s")])
+        return execute(sql, params, many, context)
+
+    with connection.execute_wrapper(observe):
+        counts = read_home_counts(
+            start=DAY - timedelta(days=60), end=NOW, midpoint=midpoint,
+            brand_ids=[brand.pk],
+        )
+    assert counts is not None
+    assert sum(row["count"] for row in counts) == 1
+    assert source_lower_bounds == [DAY], "aligned reads must not rescan saved history"
+
+
 @pytest.mark.parametrize("locale", ["en", "zh_cn", "ja"])
 def test_real_home_and_chart_requests_do_not_rank_or_render_top_voices(
     chart_context, locale
