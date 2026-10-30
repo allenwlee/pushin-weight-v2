@@ -135,6 +135,49 @@ def test_stored_post_replay_keeps_unknown_release_and_is_idempotent():
     assert not models.Product.objects.exists()
 
 
+@pytest.mark.parametrize(
+    ("text", "retweet", "quoted_id", "expect_publisher"),
+    [
+        ("Excited to announce Nanbeige4.3-33B!", False, None, True),
+        ("We announce NewModel-3 today!", False, None, True),
+        ("Excited to announce NewModel-3!", True, None, False),
+        ("Excited to announce NewModel-3!", False, "123", False),
+        ("Will we announce NewModel-3?", False, None, False),
+        ("OtherLab announced NewModel-3 today!", False, None, False),
+        ('OtherLab says: "Excited to announce NewModel-3!', False, None, False),
+    ],
+)
+def test_unfamiliar_publisher_link_stays_provisional_and_source_specific(
+    text, retweet, quoted_id, expect_publisher
+):
+    from core.product_release_pipeline import persist_source
+    from core.product_release_sources import stored_posts
+
+    quoted = models.Post.objects.create(tweet_id=quoted_id, text="Original post") if quoted_id else None
+    post = models.Post.objects.create(
+        tweet_id="provisional-source", text=text, author_handle="newlab",
+        author_name="New Lab", is_retweet=retweet, quoted_status_id=quoted,
+    )
+    source = stored_posts([post.pk])[0]
+    result = persist_source(source)
+    assert result["disposition"] == "pending"
+    dossier = models.EventDossier.objects.get(pk=result["dossier_ids"][0])
+    claims = dossier.sources.get(post=post).claims.filter(scope_key="observed_publisher")
+    assert claims.count() == int(expect_publisher)
+    if expect_publisher:
+        claim = claims.get()
+        publisher = claim.reported_brand_discovery_candidate
+        assert publisher.observed_name == "New Lab"
+        assert publisher.verification_status == "pending"
+        assert publisher.source_post_id == post.pk
+        assert not dossier.reviews.exists()
+        persist_source(source)
+        assert claims.count() == 1
+        assert models.BrandDiscoveryCandidate.objects.filter(pk=publisher.pk).count() == 1
+    else:
+        assert not models.BrandDiscoveryCandidate.objects.exists()
+
+
 @pytest.mark.parametrize("mode", ["existing_first", "generic_first", "family", "multiple", "excluded", "fraud", "version_collision", "rejected_anchor", "reviewed_product_generic", "reviewed_product_rejected"])
 def test_single_named_announcement_reuses_source_dossier_without_merging_ambiguities(mode):
     from core.product_release_pipeline import persist_source, record_intake_decision
@@ -483,7 +526,11 @@ def test_github_owner_profile_is_captured_without_confirming_publisher(status, o
 ])
 def test_unknown_github_named_product_is_provisional_and_reused(author, existing, expected, merged, style):
     import httpx
-    from core.product_release_acquisition import execute_github_repository, queue_github_repository
+
+    from core.product_release_acquisition import (
+        execute_github_repository,
+        queue_github_repository,
+    )
     from core.product_release_github_owner import execute_owner
     from core.product_release_pipeline import persist_source
     from core.product_release_sources import stored_posts
@@ -547,7 +594,9 @@ def test_unknown_github_named_product_is_provisional_and_reused(author, existing
         assert models.EventDossierClaim.objects.filter(scope_key="github_named_product:123",
             reported_product_id=product.pk).count() == 2
         import threading
+
         from django.db import connection
+
         from core.measurement_taxonomy import digest
         from core.product_release_pipeline import ReleaseIdentityBusy
 

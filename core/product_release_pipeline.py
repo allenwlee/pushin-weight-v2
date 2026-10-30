@@ -185,23 +185,33 @@ def _named_announcement_dossier(source, candidate):
             matching_claims = [claim_id for pk, _, claim_id in claims if canonical[pk] == target_id]
     if not matching_claims:
         return None
-    if target.current_review_id:
-        if not models.EventDossierReviewClaim.objects.filter(
-            review_id=target.current_review_id, claim_id__in=matching_claims, disposition="accepted"
-        ).exists():
-            return None
+    if target.current_review_id and not models.EventDossierReviewClaim.objects.filter(
+        review_id=target.current_review_id, claim_id__in=matching_claims, disposition="accepted"
+    ).exists():
+        return None
     return target_id, target.current_review_id
 
 
-def _observed_publisher(source, linked):
+def _observed_publisher(source, linked, candidate):
     """Retain a source's self-attribution, separately from verification."""
     if not source.post_id:
         return
     post = models.Post.objects.get(pk=source.post_id)
-    if not post.author_handle or not re.search(
-        r"\b(?:we|I)(?:['’](?:ve|re|m))?\s+(?:(?:are|am|have|today|now)\s+)?(?:releas|launch|announc|introduc|publish)|我们.*(?:发布|推出)",
-        post.text or "",
-        re.IGNORECASE,
+    text = post.text or ""
+    if (candidate.disposition != "pending" or not post.author_handle
+            or post.is_retweet or post.quoted_status_id
+            or set(candidate.cautions) & {
+                "future_or_uncertain", "question", "negated", "reshare", "quoted_context"
+            }):
+        return
+    statement = re.search(
+        r"\b(?:we|I)(?:['’](?:ve|re|m))?\s+(?:(?:are|am|have|today|now)\s+)?(?:releas|launch|announc|introduc|publish)"
+        r"|\b(?:excited|pleased|proud|thrilled)\s+to\s+(?:announce|introduce|release|launch)\b"
+        r"|我们.*(?:发布|推出)", text, re.IGNORECASE,
+    )
+    if not statement or re.search(
+        r"(?:says?|wrote|quot(?:e|ed))\s*:?\s*[\"“]?\s*$",
+        text[max(0, statement.start() - 32):statement.start()], re.IGNORECASE,
     ):
         return
     brands = (
@@ -352,7 +362,7 @@ def persist_source(source: StoredSource):
         )
         if source.observation_id is not None:
             _attach_github_release_repository(source, dossier_id)
-        _observed_publisher(source, linked)
+        _observed_publisher(source, linked, candidate)
         first_claim = None
         for locator, signals in sorted(by_locator.items()):
             text = texts.get(locator)
