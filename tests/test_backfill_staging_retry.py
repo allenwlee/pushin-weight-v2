@@ -193,7 +193,7 @@ def test_permanent_http_errors_still_stop(http_pages, monkeypatch, status):  # n
     assert len(state["requests"]) == 1
 
 
-@pytest.mark.parametrize("status", [401, 403, 429, 500, 502, 503, 504])
+@pytest.mark.parametrize("status", [401, 403, 429, 500, 502, 503, 504, 520])
 def test_transient_http_response_can_recover(http_pages, monkeypatch, clock, status):  # noqa: F811
     job = staged_job(monkeypatch, 1)
     replies = iter([(status, {"error": "fixture"}), page("recovered")])

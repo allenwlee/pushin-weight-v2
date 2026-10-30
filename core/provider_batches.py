@@ -16,7 +16,7 @@ from decimal import ROUND_UP, Decimal
 from typing import Any
 
 from django.db import connection, transaction
-from django.db.models import Count, F, Q, Sum
+from django.db.models import BooleanField, Count, ExpressionWrapper, F, Q, Sum
 from django.utils import timezone
 
 from core.models import (
@@ -381,6 +381,63 @@ def conservative_reservation(body, prices):
     )
 
 
+# Accepted values of an enrichment policy's optional "spend_basis". A policy
+# without the key counts reservations only, exactly as before the option existed.
+SPEND_BASES = ("reservation", "settled")
+
+
+def counted_model_spend(calls, spend_basis=None):
+    """Return the spend a campaign's ``max_usd`` limit counts.
+
+    Each item of ``calls`` maps ``state``, ``reserved`` and ``actual``: one per
+    OriginalContentCall, or sums grouped by state and cost nullness. The
+    reservation basis counts every reservation. The settled basis counts the
+    provider-reported cost of completed calls that have one, and the
+    reservation of every other call (reserved, sent, ambiguous, failed, and
+    completed without a reported cost).
+    """
+    if spend_basis is not None and spend_basis not in SPEND_BASES:
+        raise BatchAdmissionError("enrichment_spend_basis_invalid")
+    total = Decimal(0)
+    for call in calls:
+        settled = (
+            spend_basis == "settled"
+            and call["state"] == "completed"
+            and call["actual"] is not None
+        )
+        total += call["actual"] if settled else call["reserved"]
+    return total
+
+
+def campaign_model_totals(calls, spend_basis=None):
+    """Request count and counted spend for a job's calls, in one grouped read."""
+    groups = (
+        calls.order_by()
+        .annotate(
+            cost_known=ExpressionWrapper(
+                Q(actual_usd__isnull=False), output_field=BooleanField()
+            )
+        )
+        .values("state", "cost_known")
+        .annotate(
+            count=Count("pk"), reserved=Sum("reserved_usd"), actual=Sum("actual_usd")
+        )
+    )
+    groups = list(groups)
+    return sum(g["count"] for g in groups), counted_model_spend(groups, spend_basis)
+
+
+def admit_model_request(policy, *, count, counted_usd, reservation_usd):
+    """Add one request's conservative reservation; refuse it past either limit."""
+    count += 1
+    counted_usd += reservation_usd
+    if count > int(policy["max_model_requests"]) or counted_usd > Decimal(
+        policy["max_usd"]
+    ):
+        raise BatchAdmissionError("model_campaign_allowance_exhausted")
+    return count, counted_usd
+
+
 def post_snapshot(post):
     return digest(
         {
@@ -447,8 +504,9 @@ def reserve_requests(claim, requests):
         calls = OriginalContentCall.objects.filter(
             provider_batch__source_collection_job=job
         )
-        totals = calls.aggregate(count=Count("pk"), reserved=Sum("reserved_usd"))
-        count, reserved = totals["count"], totals["reserved"] or Decimal(0)
+        # The basis is frozen with the rest of the policy on the job's first
+        # ProviderBatch; a policy without it counts reservations only.
+        count, counted = campaign_model_totals(calls, batch.policy.get("spend_basis"))
         created = []
         for request in requests:
             logical_hash, body, context = (
@@ -504,12 +562,9 @@ def reserve_requests(claim, requests):
             usd, input_bound, output_bound = conservative_reservation(
                 body, batch.policy["prices"]
             )
-            count += 1
-            reserved += usd
-            if count > int(batch.policy["max_model_requests"]) or reserved > Decimal(
-                batch.policy["max_usd"]
-            ):
-                raise BatchAdmissionError("model_campaign_allowance_exhausted")
+            count, counted = admit_model_request(
+                batch.policy, count=count, counted_usd=counted, reservation_usd=usd
+            )
             identity = digest(
                 {"job": str(job.pk), "request": logical_hash, "attempt": attempt}
             )

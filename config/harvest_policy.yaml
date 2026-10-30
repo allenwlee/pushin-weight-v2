@@ -402,6 +402,66 @@ brands:
     handles:
     - upstageai
     handle_tier: other
+  # Branch-only (ops/oai-anthropic-size-20261027): never merge to main.
+  # `paths: [none]` emits no search, so production's 8 queries render
+  # byte-identically. `tokens` lists only the context-gated aliases, because
+  # alias_context requires each alias to be a declared token. Literal
+  # attribution rows are BrandKeyword rows seeded by
+  # scripts/backfill_size_seed.py; its keyword CSV must match these rules.
+  openai:
+    paths:
+    - none
+    tokens: [Sora, Sol, Luna, Terra, Astra, o1, o3, o3-pro, o4-mini, OAI, sama, 奥特曼,
+      Whisper, Deep Research, Stargate, Atlas, Operator, Jalapeño, DevDay, Mark Chen]
+    alias_context:
+    - {alias: Sora, any_of: &openai_context [AI, model, models, llm, api, agent, coding, 模型, モデル]}
+    - {alias: Sol, any_of: *openai_context}
+    - {alias: Luna, any_of: *openai_context}
+    - {alias: Terra, any_of: *openai_context}
+    - {alias: Astra, any_of: *openai_context}
+    - {alias: o1, any_of: *openai_context}
+    - {alias: o3, any_of: *openai_context}
+    - {alias: o3-pro, any_of: *openai_context}
+    - {alias: o4-mini, any_of: *openai_context}
+    - {alias: OAI, any_of: *openai_context}
+    - {alias: sama, any_of: *openai_context}
+    - {alias: 奥特曼, any_of: *openai_context}
+    - {alias: Whisper, any_of: *openai_context}
+    - {alias: Deep Research, any_of: *openai_context}
+    - {alias: Stargate, any_of: *openai_context}
+    - {alias: Atlas, any_of: *openai_context}
+    - {alias: Operator, any_of: *openai_context}
+    - {alias: Jalapeño, any_of: *openai_context}
+    - {alias: DevDay, any_of: *openai_context}
+    - {alias: Mark Chen, any_of: *openai_context}
+    notes: >-
+      Size test only, dedicated xbackfiller database. No searches here; the
+      frozen size-test routes OAI_1-3, B_OAI and A_OAI carry the queries.
+      Context words mirror the gated OAI_3 search; `sama` is also an ordinary word.
+  anthropic:
+    paths:
+    - none
+    tokens: [Opus, Sonnet, Haiku, Fable, Mythos, Cowork, Duet, Dario, Jack Clark, Alex Albert,
+      クロード, 클로드, 克劳德, A社]
+    alias_context:
+    - {alias: Opus, any_of: &anthropic_context [AI, model, models, llm, api, agent, coding, 模型, モデル]}
+    - {alias: Sonnet, any_of: *anthropic_context}
+    - {alias: Haiku, any_of: *anthropic_context}
+    - {alias: Fable, any_of: *anthropic_context}
+    - {alias: Mythos, any_of: *anthropic_context}
+    - {alias: Cowork, any_of: *anthropic_context}
+    - {alias: Duet, any_of: *anthropic_context}
+    - {alias: Dario, any_of: *anthropic_context}
+    - {alias: Jack Clark, any_of: *anthropic_context}
+    - {alias: Alex Albert, any_of: *anthropic_context}
+    - {alias: クロード, any_of: *anthropic_context}
+    - {alias: 클로드, any_of: *anthropic_context}
+    - {alias: 克劳德, any_of: *anthropic_context}
+    - {alias: A社, any_of: *anthropic_context}
+    notes: >-
+      Size test only, dedicated xbackfiller database. No searches here; the
+      frozen size-test routes ANT_1-3, B_ANT and A_ANT carry the queries.
+      Context words mirror the gated ANT_3 search.
 co_packs:
 - - mimo
   - mistral

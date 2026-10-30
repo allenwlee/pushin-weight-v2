@@ -34,6 +34,12 @@ enabled_models:
   - sakana_ai
   - upstage
   - dots
+  # Branch-only (ops/oai-anthropic-size-20261027): the OpenAI/Anthropic size
+  # test in the dedicated xbackfiller database. Never merge to main; production
+  # tracks the 21 brands above. Both use `paths: [none]` in the harvest policy,
+  # so the 8 production searches render byte-identically.
+  - openai
+  - anthropic
 # v1.7.x Call B group split. The union of all enabled_models' brand
 # tokens from all enabled brands exceeds the 512-char X advanced-search cap
 # as the enabled brand set grows. Splitting into three semantic groups keeps each

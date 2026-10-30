@@ -1,0 +1,187 @@
+# OpenAI/Anthropic size-test keyword table: branch ops/oai-anthropic-size-20261027,
+# dedicated xbackfiller database only. Built by scripts/backfill_size_seed.py build.
+# Frozen routes: docs/analysis/2026-10-27-215214-oai-anthropic-frozen-queries.json sha256 3d2c9c17114bd3de7a7070c60e35ad14eb54236fbf2efd048f657e804c994dec.
+# context_gated rows need one of context_words in the post (config/harvest_policy.yaml alias_context).
+# Evidence spellings: read-only production queries on 2026-10-28 (render psql dpg-d9koekqjobas73fvjqng-a):
+# E1: SELECT observed_name, count(*) AS n FROM untracked_brand_promotion_evidence WHERE observed_name ~* '(open.?a|clos.?ai|chat.?g|cha.?gpt|gpt|anth|antr|athrop|claude|クロード|codex|sora|dall|altman|amodei|opus|sonnet|haiku|fable|mythos|オープン|オープンAI|앤트|오픈|챗|チャット|whisper|stargate|o3|o4|o1)' GROUP BY 1 ORDER BY 2 DESC LIMIT 400
+# E2: SELECT 'alias', a, count(*) FROM untracked_brand_promotion_evidence e, jsonb_array_elements_text(e.aliases) a WHERE a ~* '(open.?a|clos.?ai|chat.?g|cha.?gpt|gpt|anth|antr|athrop|claude|codex|sora|dall|altman|amodei|opus|sonnet|haiku|fable|mythos|オープン|앤트|오픈|챗|チャット|クロード|클로드|克劳德)' GROUP BY 1,2 UNION ALL SELECT 'handle', h, count(*) FROM untracked_brand_promotion_evidence e, jsonb_array_elements_text(e.handles) h WHERE h ~* '(openai|chatgpt|anthropic|claude|codex|sora|sama|dario)' GROUP BY 1,2 UNION ALL SELECT 'product', p, count(*) FROM untracked_brand_promotion_evidence e, jsonb_array_elements_text(e.products) p WHERE p ~* '(open.?a|chat.?g|gpt|anth|claude|codex|sora|dall|opus|sonnet|haiku|fable|mythos)' GROUP BY 1,2 ORDER BY 1, 3 DESC LIMIT 600
+# E3: SELECT 'name', observed_name, count(*) FROM brand_discovery_candidates WHERE observed_name ~* '^(open ?ai|openal|openia|closed ?ai|closeai|chat ?g[a-z]*t|cha[a-z]?gpt|anthrop|antro|anthro|athrop|authrop|claude|chatgpt|codex|sora|altman|amodei|オープン|앤트|오픈|챗|チャット|クロード|클로드|克劳德|アンソロ|アンスロ|奥特曼|阿尔特曼|人择)' GROUP BY 1,2 UNION ALL SELECT 'alias', a, count(*) FROM brand_discovery_candidates c, jsonb_array_elements_text(c.aliases) a WHERE a ~* <same> GROUP BY 1,2 UNION ALL SELECT 'handle', h, count(*) FROM brand_discovery_candidates c, jsonb_array_elements_text(c.candidate_handles) h WHERE h ~* '(openai|chatgpt|anthropic|claude|codex|sora|sama|dario)' GROUP BY 1,2 ORDER BY 1, 3 DESC LIMIT 400
+brand,pattern,is_regex,context_gated,context_words,source
+openai,OpenAI,false,false,,frozen:OAI_1
+openai,Open AI,false,false,,frozen:OAI_1
+openai,OpenAl,false,false,,frozen:OAI_1
+openai,OpenIA,false,false,,frozen:OAI_1
+openai,ClosedAI,false,false,,frozen:OAI_1
+openai,Closed AI,false,false,,frozen:OAI_1
+openai,CloseAI,false,false,,frozen:OAI_1
+openai,OpenAIDevs,false,false,,frozen:OAI_1
+openai,オープンAI,false,false,,frozen:OAI_1
+openai,오픈AI,false,false,,frozen:OAI_1
+openai,أوبن إيه آي,false,false,,frozen:OAI_1
+openai,ChatGPT,false,false,,frozen:OAI_1
+openai,Chat GPT,false,false,,frozen:OAI_1
+openai,ChatGTP,false,false,,frozen:OAI_1
+openai,chagpt,false,false,,frozen:OAI_1
+openai,chapgpt,false,false,,frozen:OAI_1
+openai,chaptgpt,false,false,,frozen:OAI_1
+openai,chtgpt,false,false,,frozen:OAI_1
+openai,ChatGPTapp,false,false,,frozen:OAI_1
+openai,チャットGPT,false,false,,frozen:OAI_1
+openai,チャッピー,false,false,,frozen:OAI_1
+openai,챗GPT,false,false,,frozen:OAI_1
+openai,챗지피티,false,false,,frozen:OAI_1
+openai,شات جي بي تي,false,false,,frozen:OAI_1
+openai,چت جی پی تی,false,false,,frozen:OAI_1
+openai,चैटजीपीटी,false,false,,frozen:OAI_1
+openai,чатгпт,false,false,,frozen:OAI_1
+openai,GPT,false,false,,frozen:OAI_2
+openai,GPTs,false,false,,frozen:OAI_2
+openai,GPT5.5,false,false,,frozen:OAI_2
+openai,GPT5.6,false,false,,frozen:OAI_2
+openai,GPT6,false,false,,frozen:OAI_2
+openai,GPT6.1,false,false,,frozen:OAI_2
+openai,GPT7,false,false,,frozen:OAI_2
+openai,GPT55,false,false,,frozen:OAI_2
+openai,GPT56,false,false,,frozen:OAI_2
+openai,GPT61,false,false,,frozen:OAI_2
+openai,GPT6Astra,false,false,,frozen:OAI_2
+openai,GPT6.1Sol,false,false,,frozen:OAI_2
+openai,GPT61Terra,false,false,,frozen:OAI_2
+openai,GPT4o,false,false,,frozen:OAI_2
+openai,gptoss,false,false,,frozen:OAI_2
+openai,gptimage,false,false,,frozen:OAI_2
+openai,Codex,false,false,,frozen:OAI_2
+openai,코덱스,false,false,,frozen:OAI_2
+openai,コーデックス,false,false,,frozen:OAI_2
+openai,Sora 2,false,false,,frozen:OAI_2
+openai,Sora2,false,false,,frozen:OAI_2
+openai,SearchGPT,false,false,,frozen:OAI_2
+openai,DALLE,false,false,,frozen:OAI_2
+openai,DALL-E,false,false,,frozen:OAI_2
+openai,DALL·E,false,false,,frozen:OAI_2
+openai,Sam Altman,false,false,,frozen:OAI_2
+openai,Altman,false,false,,frozen:OAI_2
+openai,Greg Brockman,false,false,,frozen:OAI_2
+openai,Jakub Pachocki,false,false,,frozen:OAI_2
+openai,Fidji Simo,false,false,,frozen:OAI_2
+openai,Kevin Weil,false,false,,frozen:OAI_2
+openai,Nick Turley,false,false,,frozen:OAI_2
+openai,阿尔特曼,false,false,,frozen:OAI_2
+openai,Sora,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,Sol,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,Luna,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,Terra,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,Astra,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,o1,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,o3,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,o3-pro,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,o4-mini,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,OAI,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,sama,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,奥特曼,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,Whisper,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,Deep Research,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,Stargate,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,Atlas,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,Operator,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,Jalapeño,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,DevDay,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,Mark Chen,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:OAI_3
+openai,thsottiaux,false,false,,frozen:B_OAI:handle
+openai,OpenAINewsroom,false,false,,roster:official-handle
+openai,ChatGPT Plus,false,false,,evidence:E1+E2+E3
+openai,ChatGPT Pro,false,false,,evidence:E1+E2+E3
+openai,ChatGPT Go,false,false,,evidence:E1+E2+E3
+openai,ChatGPT Codex,false,false,,evidence:E1+E2+E3
+openai,ChatGPT desktop,false,false,,evidence:E1+E2+E3
+openai,ChatGPT Luna,false,false,,evidence:E1+E2+E3
+openai,ChatGPT 6.1 Sol,false,false,,evidence:E1+E2+E3
+openai,GPT-5.6,false,false,,evidence:E1+E2
+openai,GPT-6 Astra,false,false,,evidence:E1+E2
+openai,gpt-6-astra,false,false,,evidence:E1+E2
+openai,GPT-6 Luna,false,false,,evidence:E1+E2
+openai,GPT-6-Luna,false,false,,evidence:E1+E2
+openai,GPT-6.1 Terra,false,false,,evidence:E1+E2
+openai,GPT LUNA,false,false,,evidence:E1+E2
+openai,GPT Image,false,false,,evidence:E1+E2
+openai,GPT Image 2.5,false,false,,evidence:E1+E2
+openai,GPT OSS,false,false,,evidence:E1+E2
+openai,OpenAI API,false,false,,evidence:E1+E2+E3
+openai,OpenAI SDK,false,false,,evidence:E1+E2+E3
+openai,OpenAI Agents SDK,false,false,,evidence:E1+E2+E3
+openai,OpenAI Dot,false,false,,evidence:E1+E2+E3
+openai,OpenAI ImageGen,false,false,,evidence:E1+E2+E3
+anthropic,Anthropic,false,false,,frozen:ANT_1
+anthropic,AnthropicAI,false,false,,frozen:ANT_1
+anthropic,Anthropics,false,false,,frozen:ANT_1
+anthropic,앤트로픽,false,false,,frozen:ANT_1
+anthropic,アンソロピック,false,false,,frozen:ANT_1
+anthropic,アンスロピック,false,false,,frozen:ANT_1
+anthropic,أنثروبيك,false,false,,frozen:ANT_1
+anthropic,антропик,false,false,,frozen:ANT_1
+anthropic,人择,false,false,,frozen:ANT_1
+anthropic,Antropic,false,false,,frozen:ANT_1
+anthropic,AntropicAI,false,false,,frozen:ANT_1
+anthropic,Antrophic,false,false,,frozen:ANT_1
+anthropic,Antrhopic,false,false,,frozen:ANT_1
+anthropic,Anthrophic,false,false,,frozen:ANT_1
+anthropic,Anthorpic,false,false,,frozen:ANT_1
+anthropic,Anthopic,false,false,,frozen:ANT_1
+anthropic,Authropic,false,false,,frozen:ANT_1
+anthropic,Anthoropic,false,false,,frozen:ANT_1
+anthropic,Athropic,false,false,,frozen:ANT_1
+anthropic,Claude,false,false,,frozen:ANT_1
+anthropic,ClaudeCode,false,false,,frozen:ANT_1
+anthropic,ClaudeAI,false,false,,frozen:ANT_1
+anthropic,ClaudeDevs,false,false,,frozen:ANT_1
+anthropic,ClaudeOpus,false,false,,frozen:ANT_1
+anthropic,CLAUDE.md,false,false,,frozen:ANT_1
+anthropic,Dario Amodei,false,false,,frozen:ANT_1
+anthropic,Amodei,false,false,,frozen:ANT_1
+anthropic,Jared Kaplan,false,false,,frozen:ANT_1
+anthropic,Boris Cherny,false,false,,frozen:ANT_1
+anthropic,Mike Krieger,false,false,,frozen:ANT_1
+anthropic,阿莫代,false,false,,frozen:ANT_1
+anthropic,Opus 5.5,false,false,,frozen:ANT_2
+anthropic,Opus 5,false,false,,frozen:ANT_2
+anthropic,Opus 4.8,false,false,,frozen:ANT_2
+anthropic,Opus5,false,false,,frozen:ANT_2
+anthropic,Opus55,false,false,,frozen:ANT_2
+anthropic,Fable 5,false,false,,frozen:ANT_2
+anthropic,Fable 5.1,false,false,,frozen:ANT_2
+anthropic,Fable5,false,false,,frozen:ANT_2
+anthropic,Fable51,false,false,,frozen:ANT_2
+anthropic,Sonnet 5,false,false,,frozen:ANT_2
+anthropic,Sonnet 5.5,false,false,,frozen:ANT_2
+anthropic,Haiku 5.5,false,false,,frozen:ANT_2
+anthropic,Mythos 5,false,false,,frozen:ANT_2
+anthropic,Mythos5,false,false,,frozen:ANT_2
+anthropic,Opus,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,Sonnet,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,Haiku,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,Fable,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,Mythos,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,Cowork,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,Duet,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,Dario,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,Jack Clark,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,Alex Albert,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,クロード,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,클로드,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,克劳德,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,A社,false,true,AI|model|models|llm|api|agent|coding|模型|モデル,frozen:ANT_3
+anthropic,DarioAmodei,false,false,,frozen:B_ANT:handle
+anthropic,claude_code,false,false,,roster:official-handle
+anthropic,Claude Code,false,false,,evidence:E1+E2+E3
+anthropic,claude-code,false,false,,evidence:E1+E2+E3
+anthropic,Claude Pro,false,false,,evidence:E1+E2+E3
+anthropic,Claude Opus 5.5,false,false,,evidence:E1+E2+E3
+anthropic,Claude Sonnet 5,false,false,,evidence:E1+E2+E3
+anthropic,Claude Haiku 5.5,false,false,,evidence:E1+E2+E3
+anthropic,Claude Fable 5,false,false,,evidence:E1+E2+E3
+anthropic,Claude Duet,false,false,,evidence:E1+E2+E3
+anthropic,Claude Marketplace,false,false,,evidence:E1+E2+E3
+anthropic,Claude Plugins,false,false,,evidence:E1+E2+E3
+anthropic,Anthropic Skills,false,false,,evidence:E1+E2+E3
+anthropic,Anthropic Claude,false,false,,evidence:E1+E2+E3
+anthropic,haiku-5.5,false,false,,evidence:E1+E2

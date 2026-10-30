@@ -35,6 +35,7 @@ from core.models import (
     PostEnrichmentState,
 )
 from core.provider_batches import (
+    SPEND_BASES,
     BatchAdmissionError,
     enrichment_control_status,
     own_historical_posts,
@@ -99,6 +100,120 @@ def _utc_epoch(value):
     return int(parsed.timestamp())
 
 
+ADMITTED_CALL_IDS = frozenset({"A", "B1", "B2", "B3", "C1", "C2", "C3", "C4", "RARE_EXTRA"})
+WINDOW_FIELDS = frozenset({
+    "since", "until", "call_ids", "slice_seconds", "routes", "author_list_ids", "ceilings", "spend_basis",
+})
+ROUTE_FIELDS = frozenset({"name", "host_call_id", "query", "not_include"})
+CEILING_FIELDS = frozenset({"maximum_api_requests", "max_usd", "maximum_model_requests"})
+ROUTE_NAME = re.compile(r"[A-Z][A-Z0-9_]{0,31}")
+LIST_SEARCH = re.compile(r"\(list:(\d+)\) ")
+QUERY_BOUND_TOKENS = ("since:", "until:", "since_time:", "until_time:", "since_id:", "max_id:")
+
+
+def _positive_int(value):
+    return type(value) is int and value > 0
+
+
+def _window_input(item):
+    """Return (since, until, options); options is None for a plain bounds pair."""
+    if not isinstance(item, dict):
+        since, until = item
+        return since, until, None
+    if set(item) - WINDOW_FIELDS:
+        raise ValueError("unknown_window_field")
+    if not {"since", "until"} <= set(item):
+        raise ValueError("window_bounds_required")
+    options = {key: value for key, value in item.items() if key not in {"since", "until"}}
+    if "call_ids" in options:
+        values = options["call_ids"]
+        if not (isinstance(values, list) and values and all(isinstance(v, str) for v in values)
+                and len(values) == len(set(values)) and set(values) <= ADMITTED_CALL_IDS):
+            raise ValueError("invalid_call_ids")
+    if "slice_seconds" in options and not _positive_int(options["slice_seconds"]):
+        raise ValueError("invalid_slice_seconds")
+    if "author_list_ids" in options:
+        values = options["author_list_ids"]
+        if not (isinstance(values, list) and values and all(_positive_int(v) for v in values)
+                and len(values) == len(set(values))):
+            raise ValueError("invalid_author_list_ids")
+    if "ceilings" in options:
+        ceilings = options["ceilings"]
+        if not (isinstance(ceilings, dict) and ceilings and set(ceilings) <= CEILING_FIELDS
+                and all(_positive_int(ceilings[k]) for k in ceilings if k != "max_usd")):
+            raise ValueError("invalid_ceilings")
+        if "max_usd" in ceilings:
+            try:
+                dollars = Decimal(ceilings["max_usd"]) if isinstance(ceilings["max_usd"], str) else None
+            except ArithmeticError:
+                dollars = None
+            if dollars is None or not dollars.is_finite() or dollars <= 0:
+                raise ValueError("invalid_ceilings")
+    if "spend_basis" in options and options["spend_basis"] not in SPEND_BASES:
+        raise ValueError("invalid_spend_basis")
+    if "routes" in options:
+        routes = options["routes"]
+        if not isinstance(routes, list):
+            raise ValueError("invalid_route")
+        names = set()
+        for route in routes:
+            if not isinstance(route, dict) or set(route) != ROUTE_FIELDS:
+                raise ValueError("invalid_route")
+            name = route["name"]
+            if not isinstance(name, str) or not ROUTE_NAME.fullmatch(name):
+                raise ValueError("invalid_route_name")
+            if name in ADMITTED_CALL_IDS:
+                raise ValueError("route_name_collides_with_call")
+            if name in names:
+                raise ValueError("duplicate_route_name")
+            names.add(name)
+            if not isinstance(route["host_call_id"], str) or route["host_call_id"] not in ADMITTED_CALL_IDS:
+                raise ValueError("route_host_not_planned")
+            query = route["query"]
+            if (not isinstance(query, str) or not query.strip()
+                    or any(token in query.lower() for token in QUERY_BOUND_TOKENS)):
+                raise ValueError("invalid_route_query")
+            if route["host_call_id"] == "A" and not LIST_SEARCH.match(query):
+                raise ValueError("route_list_search_required")
+            if not (isinstance(route["not_include"], list)
+                    and all(isinstance(term, str) and term.strip() for term in route["not_include"])):
+                raise ValueError("invalid_route")
+    return item["since"], item["until"], options or None
+
+
+def _expand_window_units(scope, options, lower, upper):
+    """Slice every unit and add named routes on their host calls (scope_key route:since:until)."""
+    step = options.get("slice_seconds")
+    slices = [(lower, upper)] if step is None else [(at, at + step) for at in range(lower, upper, step)]
+    routes = options.get("routes", [])
+    planned = set(scope["required_call_ids"])
+    author_scope = scope.get("author_scope", {})
+    author_lists = author_scope.get("list_ids") or [author_scope.get("list_id")]
+    for route in routes:
+        if route["host_call_id"] not in planned:
+            raise ValueError("route_host_not_planned")
+        if route["host_call_id"] == "A" and int(LIST_SEARCH.match(route["query"]).group(1)) not in author_lists:
+            raise ValueError("route_author_list_unfrozen")
+    units = list(scope["units"]) if step is None else [
+        {**unit, "scope_key": f"{unit['ownership']['call_id']}:{lo}:{hi}",
+         "ownership": {**unit["ownership"], "since_epoch": lo, "until_epoch": hi}}
+        for unit in scope["units"] for lo, hi in slices
+    ]
+    metadata = {}
+    for route in routes:
+        for lo, hi in slices:
+            key = f"{route['name']}:{lo}:{hi}"
+            units.append({"scope_key": key, "scope_kind": "x_query", "ownership": {
+                "call_id": route["host_call_id"], "query": route["query"],
+                "since_epoch": lo, "until_epoch": hi,
+            }})
+            metadata[key] = {"name": route["name"], "host_call_id": route["host_call_id"],
+                             "not_include": list(route["not_include"])}
+    scope["units"] = units
+    if metadata:
+        scope["route_metadata"] = metadata
+
+
 def manifest(
     cfg,
     *,
@@ -123,9 +238,8 @@ def manifest(
     validate_concurrency(direct_concurrency)
     deadline = deadline or timezone.now() + timedelta(hours=72)
     planned = plan_calls_for_cycle(cfg, scheduled_exclusions=True)
-    admitted = {"A", "B1", "B2", "B3", "C1", "C2", "C3", "C4", "RARE_EXTRA"}
     if not planned or not any(c.call_id == "A" for c in planned) or any(
-        c.call_id not in admitted for c in planned
+        c.call_id not in ADMITTED_CALL_IDS for c in planned
     ):
         raise ValueError("current_collection_route_missing_or_unsupported")
     queries = [(c.call_id, c.query_string) for c in planned]
@@ -137,13 +251,14 @@ def manifest(
         raise ValueError("campaign_windows_required")
     output_windows = []
     previous_upper = None
-    for index, (since, until) in enumerate(inputs, start=1):
+    for index, item in enumerate(inputs, start=1):
+        since, until, options = _window_input(item)
         lower, upper = (_utc_epoch(value) for value in (since, until))
         if lower >= upper or (previous_upper is not None and lower < previous_upper):
             raise ValueError("windows_must_be_ordered_and_nonoverlapping")
         previous_upper = upper
         if any(
-            call not in admitted
+            call not in ADMITTED_CALL_IDS
             or not isinstance(query, str)
             or not query.strip()
             or len(f"{query} since_time:{lower} until_time:{upper}") > 512
@@ -170,13 +285,29 @@ def manifest(
                     5000, math.ceil((upper - lower) / 86400 * 50000)
                 ),
             }
+        planning = {}
+        if options is not None:
+            step = options.get("slice_seconds")
+            if step is not None and (upper - lower) % step:
+                raise ValueError("invalid_slice_seconds")
+            if any(len(f"{route['query']} since_time:{lower} until_time:{upper}") > 512
+                   for route in options.get("routes", [])):
+                raise ValueError("invalid_route_query")
+            for key, value in options.get("ceilings", {}).items():
+                window[key] = str(Decimal(value)) if key == "max_usd" else value
+            if "spend_basis" in options:
+                window["spend_basis"] = options["spend_basis"]
+            planning = {key: options[key] for key in ("call_ids", "author_list_ids") if key in options}
         definition = plan_job_definition(
             cfg=cfg, since_epoch=lower, until_epoch=upper, brands=list(cfg.enabled_models),
             requests=200, model_requests=500, seconds=300,
             maximum_requests=window["maximum_api_requests"],
             maximum_models=window["maximum_model_requests"],
+            **planning,
         )
         definition["scope"]["deadline"] = deadline.isoformat()
+        if options is not None:
+            _expand_window_units(definition["scope"], options, lower, upper)
         if response_storage in {"staging", "database"}:
             definition["scope"].update(storage_scope)
         for extra_index, (call, query) in enumerate(supplemental_queries):
@@ -185,6 +316,9 @@ def manifest(
                 "ownership": {"call_id": call, "query": query,
                               "since_epoch": lower, "until_epoch": upper},
             })
+        if options is not None and len(definition["scope"]["units"]) >= window["maximum_api_requests"]:
+            # Every unit needs at least one request (scripts/backfill_month.py daily_manifest).
+            raise ValueError("window_units_exceed_request_allowance")
         window["collection_definition"] = definition
         output_windows.append(window)
     return {
@@ -590,6 +724,8 @@ def _enrich_window(job, window, *, frozen, cfg, evaluate_at_end, enrichment_conc
             deadline=deadline,
             max_model_requests=window["maximum_model_requests"],
             max_control_requests=5000,
+            # Saved July windows carry no basis and keep today's policy.
+            **({"spend_basis": window["spend_basis"]} if "spend_basis" in window else {}),
         )
     )
     progress, no_progress = None, 0

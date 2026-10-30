@@ -424,3 +424,22 @@ def test_policy_after_appendix_queries_are_exact(policy_calls):
     assert {call_id: actual[call_id] for call_id in EXPECTED_AFTER_QUERIES} == EXPECTED_AFTER_QUERIES
     assert {call_id: len(query) for call_id, query in actual.items() if call_id != "A"} == EXPECTED_AFTER_QUERY_LENGTHS
     assert all(call.query_length < 512 for call in policy_calls)
+
+
+FROZEN_SIZE_TEST_QUERIES = Path("docs/analysis/2026-10-27-215214-oai-anthropic-frozen-queries.json")
+
+
+@pytest.mark.skipif(not FROZEN_SIZE_TEST_QUERIES.exists(), reason="size-test frozen query file absent")
+def test_backfill_renders_production_baseline_byte_identical_to_frozen_size_test(settings):
+    """Regression net: the 8 production searches keep their frozen wording under the branch config."""
+    import json
+
+    from monitor.cycle import plan_calls_for_cycle
+    from x_monitor.config import load_config
+
+    cfg = load_config(Path("config.yaml"))
+    settings.X_MONITOR_CYCLE_BRAND_FILTER = ",".join(cfg.enabled_models)
+    frozen = {row["name"]: row["text"] for row in json.loads(FROZEN_SIZE_TEST_QUERIES.read_text())["baseline"]}
+    rendered = {call.call_id: call.query_string
+                for call in plan_calls_for_cycle(cfg, scheduled_exclusions=True) if call.call_id in frozen}
+    assert rendered == frozen

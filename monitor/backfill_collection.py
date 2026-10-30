@@ -94,6 +94,29 @@ def config_digest(cfg, *, version=ADAPTER_VERSION):
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
+ROUTE_METADATA_FIELDS = frozenset({"name", "host_call_id", "not_include"})
+
+
+def validate_route_metadata(metadata, units):
+    """A named route is a unit's label and exclusion list; its host owns the query."""
+    require(isinstance(metadata, dict), "route metadata object required")
+    owners = {unit.get("scope_key"): unit.get("ownership", {}) for unit in units}
+    for key, route in metadata.items():
+        require(key in owners, "route metadata names an unknown scope")
+        require(isinstance(route, dict) and set(route) == ROUTE_METADATA_FIELDS, "route metadata fields required")
+        require(isinstance(route["name"], str) and bool(route["name"]), "route name required")
+        require(route["host_call_id"] == owners[key].get("call_id"), "route host differs from its scope call")
+        require(isinstance(route["not_include"], list)
+                and all(isinstance(term, str) and term.strip() for term in route["not_include"]),
+                "route exclusions must be non-empty strings")
+
+
+def route_not_include(scope, scope_key):
+    """Return a route unit's frozen exclusions, or None for a production unit."""
+    terms = scope.get("route_metadata", {}).get(scope_key, {}).get("not_include")
+    return None if terms is None else tuple(terms)
+
+
 def validate_scope(job, cfg):
     validate_job(job)
     require((job.source_id, job.purpose, job.operation, job.mode) ==
@@ -140,6 +163,8 @@ def validate_scope(job, cfg):
         )), "scope owns query bounds")
         require(len(f"{query} since_time:{lower} until_time:{upper}") <= 512,
                 "provider query length exceeded")
+    if "route_metadata" in scope:
+        validate_route_metadata(scope["route_metadata"], units)
     for key in ("prior_api_requests", "maximum_api_requests"):
         require(type(scope.get(key)) is int and scope[key] >= 0, "cumulative request allowance required")
     require(scope["maximum_api_requests"] > 0, "positive cumulative request allowance required")
@@ -170,8 +195,47 @@ def validate_scope(job, cfg):
     return scope
 
 
+def union_author_contexts(resolved):
+    """Merge per-list (contexts, degraded) results by author ID, in list order.
+
+    Roles are unioned per author; the downstream Call A router applies official
+    precedence over staff. The first list naming an author keeps its membership
+    evidence. Duplicate degradation notes are reported once.
+    """
+    from monitor.list_membership import AuthorRoleContext
+
+    merged, degraded = {}, []
+    for contexts, notes in resolved:
+        for author, context in contexts.items():
+            first = merged.get(author)
+            merged[author] = context if first is None else AuthorRoleContext(
+                author_id=first.author_id,
+                official_brands=tuple(sorted({*first.official_brands, *context.official_brands})),
+                staff_brands=tuple(sorted({*first.staff_brands, *context.staff_brands})),
+                membership_source=first.membership_source,
+                membership_run_id=first.membership_run_id,
+                last_complete_reconciliation_at=first.last_complete_reconciliation_at,
+            )
+        degraded.extend(note for note in notes if note not in degraded)
+    return merged, degraded
+
+
+def _freeze_author_contexts(contexts):
+    frozen = {}
+    for author, context in contexts.items():
+        value = asdict(context)
+        # Call A follows all canonical author roles, independently of B/C keywords.
+        value["official_brands"] = list(value["official_brands"])
+        value["staff_brands"] = list(value["staff_brands"])
+        stamp = value["last_complete_reconciliation_at"]
+        value["last_complete_reconciliation_at"] = stamp.isoformat() if stamp else None
+        frozen[author] = value
+    return frozen
+
+
 def plan_job_definition(*, cfg, since_epoch, until_epoch, brands, requests, model_requests,
-                        seconds, maximum_requests, maximum_models, call_ids=None):
+                        seconds, maximum_requests, maximum_models, call_ids=None,
+                        author_list_ids=None):
     """Freeze current policy and observed role evidence for an arbitrary UTC range."""
     from core.models import TwitterListMembership
     from monitor.cycle import _resolve_x_monitor_list_id, plan_calls_for_cycle
@@ -194,20 +258,23 @@ def plan_job_definition(*, cfg, since_epoch, until_epoch, brands, requests, mode
                 "invalid collection route selection")
         calls = [call for call in calls if call.call_id in call_ids]
     list_id = _resolve_x_monitor_list_id(cfg)
-    authors = list(TwitterListMembership.objects.filter(list_id=list_id, active=True).values_list(
-        "account__author_id", flat=True))
-    contexts, degraded = resolve_call_a_author_contexts(
-        list_id=list_id, items=[{"author_id": author} for author in authors],
-    )
-    frozen = {}
-    for author, context in contexts.items():
-        value = asdict(context)
-        # Call A follows all canonical author roles, independently of B/C keywords.
-        value["official_brands"] = list(value["official_brands"])
-        value["staff_brands"] = list(value["staff_brands"])
-        stamp = value["last_complete_reconciliation_at"]
-        value["last_complete_reconciliation_at"] = stamp.isoformat() if stamp else None
-        frozen[author] = value
+    list_ids = [list_id]
+    if author_list_ids is not None:
+        require(isinstance(author_list_ids, list) and bool(author_list_ids)
+                and all(type(value) is int and value > 0 for value in author_list_ids)
+                and len(author_list_ids) == len(set(author_list_ids))
+                and list_id is not None and list_id not in author_list_ids,
+                "invalid author list selection")
+        list_ids = [list_id, *author_list_ids]
+    resolved = []
+    for each in list_ids:
+        authors = list(TwitterListMembership.objects.filter(list_id=each, active=True).values_list(
+            "account__author_id", flat=True))
+        resolved.append(resolve_call_a_author_contexts(
+            list_id=each, items=[{"author_id": author} for author in authors],
+        ))
+    contexts, degraded = resolved[0] if author_list_ids is None else union_author_contexts(resolved)
+    frozen = _freeze_author_contexts(contexts)
     units = [{"scope_key": call.call_id, "scope_kind": "x_query", "ownership": {
         "call_id": call.call_id, "query": call.query_string,
         "since_epoch": since_epoch, "until_epoch": until_epoch,
@@ -231,6 +298,8 @@ def plan_job_definition(*, cfg, since_epoch, until_epoch, brands, requests, mode
     }
     if call_ids is not None:
         definition["scope"]["selected_call_ids"] = [call.call_id for call in calls]
+    if author_list_ids is not None:
+        definition["scope"]["author_scope"]["list_ids"] = list_ids
     from core.collection_jobs import validate_definition
     validate_definition(source_id="x", purpose="content", operation="x_backfill", mode="historical",
                         contract_id=None, definition=definition)
@@ -761,6 +830,7 @@ def execute_job(job_id, *, read_only=False, retry_blocked=False, collection_opti
                     author_contexts=scope.get("author_scope", {}).get("contexts") if current_policy else None,
                     rare_page_writer=page.persist_rare if current_policy else None,
                     captured_pages=capture.pages() if capture is not None else None,
+                    route_not_include=route_not_include(scope, scoped.scope_key),
                 )
                 try:
                     stats = CycleRunner(cfg=cfg, cycle_kind="backfill", dry_run=False,

@@ -1,0 +1,107 @@
+{
+ "format": "pushinweight-frozen-query-set/v1",
+ "frozen_at_jst": "2026-10-27-215214",
+ "baseline_source": "production cycle job fb9114b7-e9f0-483f-bd2b-e8ecaeba7a0a search_queries, read 2026-10-27",
+ "time_window_suffix": " since_time:<start> until_time:<end>",
+ "baseline": [
+  {
+   "name": "A",
+   "text": "(list:2067062923525275922) min_faves:0 -from:xxyweb3"
+  },
+  {
+   "name": "B1",
+   "text": "((DeepSeek OR 深度求索) OR (dots3-note OR dots studio OR \"dots 3 note\" OR \"dots-3-note\" OR \"dots.3-note\" OR \"dots3 note\" OR \"dots-studio\" OR dots.ocr OR dots.tts OR dots.llm1 OR dots.vlm OR dots.mocr OR dots3 OR dots4) OR (Hunyuan OR (混元 (AI OR 模型 OR 3D OR 腾讯)) OR 腾讯混元 OR Hy3 OR Hy4 OR Hy5 OR Hy4-preview OR Hy5-preview) OR (Hailuo OR MiniMax OR (海螺 (AI OR 模型 OR H3 OR 歌曲))) OR (Qwen OR Qwen3 OR 通义千问) OR (StepFun OR 阶跃星辰)) min_faves:0 -from:xxyweb3"
+  },
+  {
+   "name": "C1",
+   "text": "((MiMo OR Xiaomi MiMo OR 小米 MiMo) OR (Mistral OR Mixtral) OR (Kimi OR Moonshot AI OR 月之暗面 OR 暗面 OR MoonshotAI) OR (Yi OR 01.AI OR 零一万物 OR Yi LLM OR Yi-VL OR Yi-Coder)) (llm OR model OR api OR agentic OR huggingface) min_faves:0 -from:xxyweb3"
+  },
+  {
+   "name": "C2",
+   "text": "((ERNIE OR 文心一言) OR (Upstage OR Solar Pro OR Solar LLM OR 업스테이지)) (llm OR model OR api OR agentic OR huggingface OR baidu OR 文心) min_faves:0 -from:xxyweb3"
+  },
+  {
+   "name": "C3",
+   "text": "(((Doubao OR ByteDance) OR (Kuaishou OR KwaiYii) OR (SenseChat OR SenseTime) OR (glm OR ChatGLM OR Zhipu OR 智谱 OR Z.ai OR GLM-4 OR GLM-5 OR GLM-6)) (llm OR model OR api OR agentic OR huggingface) OR (\"Ox Alpha\" OR OxAlpha OR ox-alpha)) min_faves:0 -from:xxyweb3"
+  },
+  {
+   "name": "C4",
+   "text": "(((Llama OR Llama 3 OR Llama 4 OR Meta Llama OR Code Llama) (llm OR model OR api OR agentic OR huggingface) OR (Meta OR Muse) (AI OR model OR models OR agent OR agents OR code OR Wonder OR Spark OR Glimmer OR research OR release OR 模型 OR 智能体 OR トークン)) OR (\"Muse Wonder\" OR \"Muse Code\" OR \"Muse Spark\" OR \"Muse Glimmer\" OR \"Muse Image\" OR \"Muse Video\" OR \"Muse Voice\")) min_faves:0 -from:xxyweb3"
+  },
+  {
+   "name": "B2",
+   "text": "(@MiniMaxAgent OR @MiniMax_AI OR @hailuo_ai OR @Ali_TongyiLab OR @Alibaba_Qwen OR @deepseek_ai OR @AntLingAGI OR @TheInclusionAI OR @ZhihuFrontier OR @robbyant_brain OR @MistralAI OR @StepFun_ai OR @stepfunai OR @TencentHunyuan OR @NVIDIAAI OR @NVIDIAAIDev OR @LG_AI_Research OR @SakanaAILabs) min_faves:0 -from:xxyweb3"
+  },
+  {
+   "name": "B3",
+   "text": "(@XiaomiMiMo OR @XiaomiMiMoDevs OR @Kimi_Moonshot OR @ErnieforDevs OR @PaddlePaddle OR @AIatMeta OR @BytePlusGlobal OR @bytedanceoss OR @doubaoai OR @01AI_Yi OR @Kling_ai OR @SenseTime_AI OR @upstageai) min_faves:0 -from:xxyweb3"
+  }
+ ],
+ "new": [
+  {
+   "name": "A_OAI",
+   "text": "(list:2067500935769895374) min_faves:0 -from:xxyweb3",
+   "not_include": []
+  },
+  {
+   "name": "OAI_1",
+   "text": "((OpenAI OR \"Open AI\" OR OpenAl OR OpenIA OR ClosedAI OR \"Closed AI\" OR CloseAI OR OpenAIDevs OR オープンAI OR 오픈AI OR \"أوبن إيه آي\") OR (ChatGPT OR \"Chat GPT\" OR ChatGTP OR chagpt OR chapgpt OR chaptgpt OR chtgpt OR ChatGPTapp OR チャットGPT OR チャッピー OR 챗GPT OR 챗지피티 OR \"شات جي بي تي\" OR \"چت جی پی تی\" OR चैटजीपीटी OR чатгпт)) min_faves:0 -from:xxyweb3",
+   "not_include": []
+  },
+  {
+   "name": "OAI_2",
+   "text": "((GPT OR GPTs OR GPT5.5 OR GPT5.6 OR GPT6 OR GPT6.1 OR GPT7 OR GPT55 OR GPT56 OR GPT61 OR GPT6Astra OR GPT6.1Sol OR GPT61Terra OR GPT4o OR gptoss OR gptimage) OR (Codex OR 코덱스 OR コーデックス OR \"Sora 2\" OR Sora2 OR SearchGPT OR DALLE OR DALL-E OR DALL·E) OR (\"Sam Altman\" OR Altman OR \"Greg Brockman\" OR \"Jakub Pachocki\" OR \"Fidji Simo\" OR \"Kevin Weil\" OR \"Nick Turley\" OR 阿尔特曼)) min_faves:0 -from:xxyweb3",
+   "not_include": [
+    "Warhammer",
+    "40k",
+    "Space Marines",
+    "Tyranids",
+    "Necrons"
+   ]
+  },
+  {
+   "name": "OAI_3",
+   "text": "((Sora OR Sol OR Luna OR Terra OR Astra OR o1 OR o3 OR o3-pro OR o4-mini OR OAI OR sama OR 奥特曼 OR Whisper OR \"Deep Research\" OR Stargate OR Atlas OR Operator OR Jalapeño OR DevDay OR \"Mark Chen\") (AI OR model OR models OR llm OR api OR agent OR coding OR 模型 OR モデル)) min_faves:0 -from:xxyweb3",
+   "not_include": [
+    "Solana",
+    "$SOL"
+   ]
+  },
+  {
+   "name": "B_OAI",
+   "text": "(@OpenAI OR @OpenAIDevs OR @ChatGPTapp OR @sama OR @thsottiaux) min_faves:0 -from:xxyweb3",
+   "not_include": []
+  },
+  {
+   "name": "A_ANT",
+   "text": "(list:2067501173402460553) min_faves:0 -from:xxyweb3",
+   "not_include": []
+  },
+  {
+   "name": "ANT_1",
+   "text": "((Anthropic OR AnthropicAI OR Anthropics OR 앤트로픽 OR アンソロピック OR アンスロピック OR أنثروبيك OR антропик OR 人择) OR (Antropic OR AntropicAI OR Antrophic OR Antrhopic OR Anthrophic OR Anthorpic OR Anthopic OR Authropic OR Anthoropic OR Athropic) OR (Claude OR ClaudeCode OR ClaudeAI OR ClaudeDevs OR ClaudeOpus OR CLAUDE.md) OR (\"Dario Amodei\" OR Amodei OR \"Jared Kaplan\" OR \"Boris Cherny\" OR \"Mike Krieger\" OR 阿莫代)) min_faves:0 -from:xxyweb3",
+   "not_include": [
+    "Monet",
+    "Debussy",
+    "Van Damme",
+    "Makélélé",
+    "Lelouch"
+   ]
+  },
+  {
+   "name": "ANT_2",
+   "text": "((\"Opus 5.5\" OR \"Opus 5\" OR \"Opus 4.8\" OR Opus5 OR Opus55) OR (\"Fable 5\" OR \"Fable 5.1\" OR Fable5 OR Fable51) OR (\"Sonnet 5\" OR \"Sonnet 5.5\" OR \"Haiku 5.5\" OR \"Mythos 5\" OR Mythos5)) min_faves:0 -from:xxyweb3",
+   "not_include": []
+  },
+  {
+   "name": "ANT_3",
+   "text": "((Opus OR Sonnet OR Haiku OR Fable OR Mythos OR Cowork OR Duet OR Dario OR \"Jack Clark\" OR \"Alex Albert\" OR クロード OR 클로드 OR 克劳德 OR A社) (AI OR model OR models OR llm OR api OR agent OR coding OR 模型 OR モデル)) min_faves:0 -from:xxyweb3",
+   "not_include": []
+  },
+  {
+   "name": "B_ANT",
+   "text": "(@AnthropicAI OR @claudeai OR @DarioAmodei OR @ClaudeDevs) min_faves:0 -from:xxyweb3",
+   "not_include": []
+  }
+ ]
+}
