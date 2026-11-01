@@ -25,14 +25,16 @@ The sequence is guardrails, budgets, classification vocabularies, provider calls
 
 This session produces documentation only. Implementation and release require a later instruction. Staging is an existing populated rehearsal resource, but its newer migration history and current occupancy must be reconciled before any future write. No production connection, database write, R2 operation, implementation, deployment or merge is authorized here.
 
+The later background run has a defined non-production endpoint: implement and rehearse all six phases, publish their branches, and prepare one production decision package. It continues through routine fixes and recoveries without asking at every phase. The “Autonomous run” section specifies its authority, five owner-wait reasons, durable checkpoints and proposed ceilings: 48 hours, 10 million metered tokens, and no application-provider spend or infrastructure purchases. Production remains separately authorized.
+
 ## Goal Capsule
 
 - **Outcome:** fewer overlapping process tables, one documented default owner for each process record meaning, and continuous-integration checks preventing new accidental duplication.
 - **Source revision:** `76834dba`, `docs/process-table-plan-20261101`, based on fetched `origin/main`; core migration files through `0205`.
 - **Authority:** plan only; optionally commit and push this document on its docs branch. Future implementation remains `delivery_target: on-request`.
-- **Execution:** independent family branches from the then-current `origin/main`; sequence dependent families after their predecessor is integrated under later authority. Do not run all migrations from this docs branch.
-- **Stop conditions:** ambiguous ownership, missing row mapping, unavailable rehearsal environment, stale deployment image, parity discrepancy, unsupported source shape, or an operation that would interrupt live collection.
-- **Readiness:** design and sequencing are actionable; the explicit environment and deferred-subscope gates below prevent treating the entire program as immediately executable.
+- **Execution:** seed a task integration branch from then-current `origin/main`; give each family its own branch and rehearsal, carrying completed predecessors through that integration branch. No merge to `main` is needed to finish the non-production run. Do not implement from this docs branch.
+- **Stop conditions:** the five exhaustive owner-wait reasons in “Autonomous run.” Other failures trigger bounded recovery, a phase hold or independent work; they do not automatically end the session.
+- **Readiness:** ready for a later implementation instruction with the stated defaults. That instruction activates the scoped non-production run contract; it does not approve production access or release.
 
 ## Product Contract
 
@@ -48,6 +50,7 @@ This session produces documentation only. Implementation and release require a l
 - R8. Reuse identified databases, object storage and services. Do not create another full local test database, fresh production restore, scheduler or service by inference.
 - R9. Characterize current caller behavior before replacement; every family includes application-level regression coverage and realistic failure/restart proof.
 - R10. Harvesting and other live collectors/workers continue throughout a future release. Use online copying, stale-row detection and bounded final delta checks; never stop collection to obtain a stable cohort.
+- R11. Run U1–U6 unattended on fuchitalee using GPT-6-Astra with xhigh reasoning, within the “Autonomous run” authority, recovery, checkpoint and ceiling contract. Batch owner decisions and continue independent work.
 
 ### Boundaries and decisions from evidence
 
@@ -126,14 +129,196 @@ The following resource identities are specific, existing resources. This table i
 | Staging execution services | `pushinweight-staging-jobs` (`crn-dain9moae00c73f7d73g`), `pushinweight-staging-web`, `pushinweight-staging-headlines`, `pushinweight-staging-synthesis`, `pushinweight-staging-enrichment`, `pushinweight-staging-harvest` | Jobs runs bounded copy/parity; web and affected worker images provide cutover proof. U2 touches synthesis/enrichment/harvest/headlines; U3 touches all classification/role readers and writers; U4 touches headlines/enrichment plus on-demand staff/official paths; U5/U6 touch harvest/enrichment/web/headlines and jobs. |
 | Existing broker | `pushinweight-staging-headlines-broker`; production counterpart `pushinweight-headlines-broker`; existing queue URLs in service environment | Only worker smoke/recovery proof. No broker flush, new broker, beat or scheduler. |
 | Production services | `pushinweight-web`, `pushinweight-jobs`, `pushinweight-headlines`, `pushinweight-synthesis`, `pushinweight-enrichment`, `pushinweight-harvest`, `pushinweight-home-counts`; existing broker above | Later release image/dependency census, following `render.yaml`. Do not reactivate legacy worker/beat. Actual services and deployed revisions must be rechecked then. |
+| Background agent runtime | fuchitalee's existing `/Users/fuchitalee/.local/bin/codex`, tmux, Python 3 and `caffeinate`; GPT-6-Astra/xhigh; existing private Codex login under `/Users/fuchitalee/.codex/`; existing Git remote authentication | All U1–U6 after a later launch. No new API key, copied auth file, hosted agent service or environment-file edit. Task-private supervisor/receipts are specified below and do not exist yet. |
 
 **Environment and credentials by phase:** U1 uses no environment file or provider key. U2–U6 local tests use the wrapper-supplied connection, not a copied repository `.env`. Runtime code currently loads repository `.env`; never source it for an audit or assume it targets local PostgreSQL. Candidate processes must receive an explicit validated target URL. Staging copies/parity use the existing staging jobs service's Render-managed `DATABASE_URL`; its role must have the required schema privileges before a future migration. The Render CLI's existing fuchitalee login was sufficient for this session's read-only staging query; no credential value was printed or copied.
 
-No provider credentials are required for migration, stored-data parity or fixture tests in any phase. Keep provider sends disabled in rehearsal and replace network adapters with deterministic test replies. Do not use `TWITTERAPI_IO_SCHEDULED_API_KEY` for probes. An owner-selected live probe would be a separate extension using `TWITTERAPI_IO_ON_DEMAND_API_KEY`, and must load the X routing skill; it is unnecessary here. Likewise no MiniMax, DeepInfra, OpenAI or Anthropic spend is required. U4 staff/official replay must not trigger X list membership or owner OAuth actions.
+No application-provider credentials are required for migration, stored-data parity or fixture tests in any phase. Disable provider sends in task-owned rehearsal processes and replace their network adapters with deterministic test replies; do not pause existing live workers to achieve that isolation. Do not use `TWITTERAPI_IO_SCHEDULED_API_KEY` for probes. An owner-selected live probe would be a separate extension using `TWITTERAPI_IO_ON_DEMAND_API_KEY`, and must load the X routing skill; it is unnecessary here. Likewise no application MiniMax, DeepInfra, OpenAI or Anthropic spend is required. The background agent uses its separately bounded existing Codex access. U4 staff/official replay must not trigger X list membership or owner OAuth actions.
 
 If media smoke checks need existing files, Render already maps `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`; the operator store is `/Users/fuchitalee/.env.secrets`, using `R2_STAGING_ACCESS_KEY_ID` / `R2_STAGING_SECRET_ACCESS_KEY` or the corresponding `R2_PRODUCTION_*` variables. Do not copy production keys into staging. No secret file needs editing for this plan. `STAGING_REFRESH_SOURCE_DATABASE_URL` and `STAGING_DATA_REFRESH_ENABLED` belong only to staging jobs; **do not invoke staging refresh** as an automatic prerequisite because it connects to production and replaces data. Reuse the present copy.
 
-**Resource gates:** identify the staging owner and current deployed SHA before rehearsal. It is ahead of this branch, so use a reconciled then-current candidate containing those migrations, not a fake ledger update or reversal. If occupied, wait/coordinate; do not create a substitute database. The staging refresh policy excludes some operational rows: zero official-company/staff rows do not establish production emptiness. U4 requires an authorized representative historical fixture or later approved production census before those paths can retire. No new resource is proposed.
+**Resource gates:** identify the staging owner and current deployed SHA before rehearsal. It is ahead of this branch, so use a reconciled then-current candidate containing those migrations, not a fake ledger update or reversal. If occupied, schedule independent work under “Autonomous run”; do not create a substitute database. The staging refresh policy excludes some operational rows: zero official-company/staff rows do not establish production emptiness. Characterized fixtures permit copy-only retirement/rehearsal of empty families, with historical coverage explicitly unproved. Production retirement requires a later approved census and representative-shape verification. No new resource is proposed.
+
+## Autonomous run
+
+This section governs R11. **Nothing is launched by writing or approving this document.** A later explicit instruction to run this plan activates the following non-production contract, subject to any narrower instruction in that launch. Preserve that instruction and this plan's hash in the first run event. Do not repeatedly request authority already granted. The selected model is **GPT-6-Astra, xhigh**, as requested; unavailable model access is an access gate, not permission to substitute another model.
+
+### Endpoint, branches and work scheduling
+
+The unattended endpoint is `copy_complete`: U1–U6 implemented and rehearsed, required checks green, every planned old table dropped **on the existing copy**, family branches pushed and their remote SHAs verified, documentation updated, and one production decision package ready. `production_complete` is a different state requiring later explicit authority and observed production evidence. Preparing that package does not require a production connection. A blocked or deliberately deferred phase is reported as such; finishing the other phases is not full completion.
+
+```mermaid
+flowchart LR
+  A[Authorized launch or resume] --> B[Reconcile durable checkpoint]
+  B --> C{Independent work remains?}
+  C -->|yes| D[Run next bounded step]
+  D --> E[Verify and append receipt]
+  E --> C
+  D -->|affected step blocked| G[Queue owner gate; select other work]
+  G --> C
+  C -->|no; all six pass| F[Copy complete; production package]
+  C -->|no; unresolved gates| H[Wait for batched owner decisions]
+```
+
+Global safety/ceiling stops interrupt this loop. An early agent exit returns to checkpoint reconciliation; it does not select either terminal state by itself.
+
+At launch, create `refactor/process-tables-integration-<run-id>` in a new linked worktree from fetched `origin/main`, leaving this docs worktree and the dirty authoritative checkout alone. Carry this plan into the implementation branch and reannotate its branch identity; there remains one selected program plan per checkout, not a new competing specification. Create the U1–U6 named family branches from the current task integration tip; after a family passes, merge it into that **task branch**, never `main`. Keep each family's commit range, migration dependencies, evidence and remote branch. Future main integration can then follow the recorded order. Resolve ordinary conflicts and migration numbering from the actual graph without asking.
+
+Default rehearsal order is U1 → U2 → U3 → U4 → U5 → U6. U4 needs U2's charge ownership; U3, U5 and U6 do not need U2 to finish source work. Reorder independent families when data, occupancy or failures justify it; log the revised dependencies and recompute cumulative counts. A family excluded because evidence disproves the merge gets an explicit deferred verdict and revised total, never a false completion. Required family scope cannot be silently abandoned merely to meet a time limit.
+
+Only one family mutates the shared staging copy at a time; local schema preparation/tests separately require the existing wrapper's exclusive lock. While either resource is occupied, continue code, fixtures, static policy checks, documentation and review on other family branches. A branch waiting for its predecessor can be prepared against that predecessor's candidate, but cannot declare rehearsal complete until the prerequisite is verified. Never let two candidates race the same migration ledger.
+
+At bootstrap, reconcile the staging ledger's newer migrations with the fetched source. Use an already integrated, compatible base when available; inspect the owning branch/docs for missing history. Do not steal another task's work, fake migration application, reverse the shared schema, or deploy the November 1 older image over it. An unresolved ownership/dependency is a phase gate under reason 1 below after read-only diagnosis; it is not a reason to stop unrelated source work.
+
+### Pre-approved actions after the explicit launch
+
+The launch approves these actions within this plan and its ceilings, with no per-phase permission request:
+
+- Create isolated worktrees and the task/family branches; edit implementation, migrations, regression tests and reference docs; commit, push non-forcibly to those branches, and integrate them into the task branch. Fetch upstream and resolve task conflicts. Do not merge or push to `main`, move another task's branch, or discard unrelated edits.
+- Make U1's scoped edits to the canonical shared schema-walkthrough skill, preserving unrelated changes and recording its owning repository/path and diff/hash. Publish that edit only to an owned task branch where such a repository exists; otherwise retain a reviewable patch and applied-file hash. An unrelated dirty skill repository is not permission to sweep its changes into a commit.
+- Run local checks/tests using the permanent shared test database wrapper. Explicitly prepare its schema while holding the exclusive lock; never let pytest silently migrate, create another full database, or restore a production dump.
+- Apply this plan's additive, copy, cutover and guarded retirement migrations to `pushinweight-staging-db` (`dpg-d9vb8ds9v7es738lepsg-a`, database `pushinweight_staging`), run bounded rehearsal jobs and test replay, and perform source-preserving corrections within the same scope.
+- Deploy exact task commits to the **existing staging services** for rehearsal after occupancy and compatibility checks. Treat this future launch as selection of staging rehearsal with `staging_transport: commit`; record that selection in the implementation plan then. Do not move the shared staging branch, apply Blueprints, change schedules/plans/autosync settings, enable paid collectors, or deploy to production. Service-specific existing credential/feature settings remain authoritative.
+- Retry and repair within the recovery table below; reduce batches, fix query plans, run scoped `ANALYZE` on changed staging tables when measurements justify it, adapt tests, reorder independent phases and reuse still-valid verification. Preserve immutable source receipts and every failed attempt.
+- Start one task-owned tmux supervisor on fuchitalee, use process-scoped `caffeinate -i`, persist checkpoints and resume the exact Codex session. This is a task process, not a new hosted service, scheduler or Ollija daemon.
+
+The six proposed permanent additions in KTD2 are the bounded design selected by a later instruction to execute this exact plan. Record that owner instruction as design authority, not as invented approval of code that does not exist yet. U1's protected approval check must authenticate the owner reference and compare the implemented declaration with that approved semantic scope. Any genuinely new process owner, new JSON column, changed retention behavior or scope expansion belongs in the owner queue. An agent-generated schema digest alone never proves approval.
+
+No production connection (even read-only), production migration/write/deploy, production restore, R2 write, new resource/purchase, paid application-provider call, live collection pause, broad process kill or change to another task's resources is pre-approved. Existing Codex authentication is for the requested agent run only; it does not grant application-provider spend. A later explicit production instruction changes the applicable authority once, and survives restarts; do not request it again for already-covered operations.
+
+### The only reasons to stop and wait for the owner
+
+These are the exhaustive **owner-wait** reasons. A gate blocks only affected steps. The entire run waits only when no independent authorized work remains, or when a global ceiling/safety stop applies.
+
+1. **Required authority or access is missing.** Examples: production access/write/deploy/main integration; an unplanned process table or JSON exception; essential credentials or an unavailable requested model; shared-resource ownership that cannot be resolved from records. Queue the exact missing scope, not a vague “confirm next step.”
+2. **Preservation cannot be established.** An unexplained count/value/hash/relationship mismatch after a committed copy, possible data loss, an unaccounted writer, or a step that would interrupt live collection. Freeze retirement and destructive work on that resource; preserve source rows and evidence. Diagnose read-only and continue independent work. An explainable, safely repaired copy discrepancy can clear its technical hold after independent parity; it does not manufacture owner approval.
+3. **The bounded recovery runbook is exhausted.** A failed rehearsal, migration, environment or required test still cannot be corrected safely after the applicable attempts below. Include the cause, attempted repairs and remaining options.
+4. **A stated ceiling is reached.** Do not raise time, token, retry, wait or spend ceilings yourself. Checkpoint, report remaining work, and request only the required extension.
+5. **The owner or controlling platform orders a stop or revokes access.** Honor the scope immediately. Preserve a checkpoint where permitted.
+
+Everything else is **decide and continue**: routine implementation choices, discovered dependency order, empty copy tables, unrelated pre-existing health failures, missing optional dashboards/trackers, ordinary test defects, recoverable migration failures, a successful commit, a green phase, or the model reaching the end of a conversational turn. Never ask “continue?” after a phase. Safe technical recovery can remove a technical hold; only an actual owner instruction can resolve an authority gate.
+
+### One progress log, checkpoints and the owner queue
+
+Use one append-only file on fuchitalee:
+
+`/Users/fuchitalee/development/pushin-weight-v2/.local/process-table-runs/<run-id>/run.jsonl`
+
+This is a task-specific private artifact under the owning host, not an edit to the main checkout's tracked files. Every record has `seq`, `time_jst` (ISO 8601 with `+09:00`), `run_id`, `phase`, `step`, `status`, `decision` and `rationale`. Add applicable `branch`, `sha`, `plan_hash`, database identity, migration/source-code hashes, cohort bounds, source/target/mapped/missing/extra counts, value/hash mismatch counts, last **committed** copy cursor, command/exit code, receipt paths/hashes, runtime/session/job IDs, retry number, elapsed time and cumulative usage. Never log secrets or raw personal/provider bodies.
+
+Use one serialized append writer with file locking and fsync at checkpoints. The supervisor appends a heartbeat every 60 seconds containing the active phase/step, child PID, last durable-progress time and usage; heartbeat alone is not progress. Append at step start/end, each committed copy batch, every decision/retry/gate and phase completion. Detailed stdout, CI reports and Codex event streams are evidence files referenced by this log, not competing status logs. A derived checkpoint cache may accelerate loading, but records its last log sequence/hash and cannot overrule the log plus actual Git/database/job state.
+
+The same file holds an owner queue: `gate_open` events identify a stable gate ID, one of the five reasons, blocked units, evidence, choices, recommendation and exact requested authority/extension. Accumulate all outstanding decisions in one generated queue view; do not create separate per-phase approval threads. Continue other work while waiting. At a natural reporting boundary or when no work remains, present the whole queue once. No Slack/email message or external tracker write is implied. A response is recorded with its exact owner-authored reference and scope; `gate_resolved` cites that response, or a demonstrable technical recovery for non-authority gates. Never infer approval from elapsed time.
+
+A transient log append failure gets one local retry; preserve the event in the running process's output and continue safe source/read-only work. Optional central logging never gates this run. Before any copy advancement, cutover or retirement, a recoverable durable checkpoint is mandatory: repair local logging or hold that database step under reason 2. Do not lose resumability merely to avoid a pause.
+
+### Per-phase checklist and machine-checkable completion
+
+Implement the following small run verifier during the later bootstrap, with fixtures for corrupted/missing receipts, stale SHAs, wrong database and false success. It must return nonzero for missing evidence; a narrative “done,” CLI exit zero or table total alone cannot pass. This is task tooling, not a new application table or service. Store commands and expected results before each phase's first mutation, so the agent cannot redefine success after a failure.
+
+For every family U2–U6, require all of these receipts:
+
+- **D0 — target and baseline:** exact approved database identity, candidate/base SHA, applied-migration graph, source relation/column/dependency inventory, same-cohort source counts and field-mapping manifest recorded. Current writers/readers in Appendix A/B are re-traced at that SHA; every touched table has a verdict and coverage state.
+- **D1 — regression net:** characterization and family tests have exit code 0, zero failures/errors and zero required skips; schema drift check and required lint/policy checks pass. Record test names, relevant source/fixture hashes and test database identity. Reuse successful unaffected tests rather than re-running everything after a documentation edit.
+- **D2 — copy parity:** terminal copy receipt exists; mapped source identities equal the frozen cohort, with zero unexplained missing/extra mappings, value/hash mismatches, duplicates or orphans. Exact grouped accounting and scheme/state checks pass. Concurrent edits below the cursor and late inserts have final-delta receipts. Target row totals can differ from source sums only under the explicit deduplication/grouping mapping.
+- **D3 — caller cutover:** the writer/reader manifest has no unresolved entry; retained compatibility entry points have tests. Relevant staging images/jobs identify the verified candidate; no active old image/job can touch retired storage. Stored-data/fixture probes prove reader and writer behavior without paid calls. Retained migration history may mention old tables; an empty grep is not the criterion.
+- **D4 — physical retirement on copy:** the planned old relations/columns are absent from PostgreSQL catalogs, retained relations remain, expected table delta matches, new constraints are validated, orphan/dependency checks are zero, and post-drop smoke/regression checks pass. A tested pre-drop rollback and post-drop forward-repair scenario have receipts; no fictitious reverse-migration data recovery.
+- **D5 — publication:** task-only branch is clean, commit/push succeeded, remote SHA equals checked SHA, required CI is green at that SHA, reference/schema/refresh-policy docs match, and the phase verdict includes rehearsal coverage and remaining production gates. All required evidence is reachable from `run.jsonl`.
+
+| Phase | Additional assertions required for `copy_complete` | Expected application-table delta |
+| --- | --- | ---: |
+| U1 | D0 source scope, D1 policy fixtures and D5 publication; all three rule locations updated, canonical shared map and exceptions match; forged/missing/stale approvals and raw-SQL/lease-column evasions fail, legitimate shared extensions/renames pass. External skill patch/hash recorded. No database mutation required. | 0 |
+| U2 | D0–D5; five old spend tables absent; SpendBudget/Charge present; rate-limit bucket retained; `budget_keys` absent; per-scope/unit reserved/accounted/confirmed balances exactly match; day+cycle charge edges preserved and settlement replay changes balances zero times. Opening balances explicitly distinguish aggregate-only history. | -3 |
+| U3 | D0–D5; 19 old vocab tables absent, generalized three retained; promotion assignment table present and old membership JSON absent; all assignments/labels/keys map exactly; raw/bulk wrong-scheme and half-NULL inserts fail. Frozen 11/75/242 catalogue totals apply only if the cohort is unchanged. | -18 |
+| U4 | D0–D5; EditorialCall and StaffProviderRequest absent, original shared call renamed, ProviderCallInput present; all 23 observed mirrored editorial calls reuse identity, adding no duplicate charge; typed operational inputs/provenance and immutable body hashes match; enumerated raw call JSON columns absent; official decision journal/decision JSON intentionally retained. Attestations create zero paid calls. | -1 |
+| U5 | D0–D5; both discovery run tables absent; old identities/counters/status/timestamps map to distinct kinds in existing CollectionRun; scope/attempt lease fencing and restart fixtures pass; no new run table. Record `synthetic_only` coverage for absent history, not “production empty.” | -2 |
+| U6 | D0–D5; Event/EventEvidence/Opportunity absent, two detail tables present; source identities/evidence hashes, 29/29/35 frozen-cohort mappings and pending states preserved where unchanged; no fabricated reviews; opportunity links and source-only/dated/conflicting-state fixtures pass; current trigger/FK validation permits new kinds and rejects invalid ones. | -1 |
+
+For empty families, characterize legal old shapes in deterministic fixtures and rehearse them on the shared local test DB; retain genuine copy counts of zero. This can establish `copy_complete` with limited historical coverage, but sets `production_eligible: false` until a later approved production census/representative mapping clears that gap. Do not block the entire copy run seeking forbidden production evidence, and do not claim that fixtures prove historical production compatibility.
+
+The run verifier computes cumulative totals from the launch baseline and actual phase order, carrying unrelated tables unchanged. With the measured 227-table staging baseline, expected endpoints are 227, 224, 206, 205, 203, 202. If another task advances the baseline, record the new inventory and carry its explained delta; never delete extra tables to restore the old number. Reordering/deferment changes the trajectory and is logged. The final result is `copy_complete` only when every selected U1–U6 receipt passes; otherwise report `partial_waiting_owner` or `ceiling_hit` with exact remaining criteria.
+
+### Retry and recovery
+
+Retry limits are ceilings per incident, not quotas. Each retry cites a changed fact or a transient-error diagnosis. Preserve failed receipts; do not reset the counter by opening another session.
+
+| Failure | Decide-and-continue recovery | Escalation boundary |
+| --- | --- | --- |
+| Test/product failure | Reproduce the smallest failing case, inspect cause, fix behavior and run affected checks; at most three cause-directed repair cycles for the same unresolved failure. Do not weaken assertions or turn required tests into skips. Pre-existing unrelated failures are recorded with baseline evidence and excluded only when the required behavior remains proved. | Third unsuccessful repair → reason 3 for that phase. |
+| Flaky CI/network | Inspect the failing job; permit two reruns of the failed job at the same SHA only for evidenced infrastructure/flakiness. Deterministic failures go through code repair. Reuse passed jobs and retry exact candidate rather than making empty commits. | Persistent required failure → reason 3; proceed with independent phases. |
+| Migration/copy failure | Read actual ledger/catalog/terminal job state. Keep committed batches, roll back only the failed transaction, repair cause, and resume from the last committed receipt with deterministic upserts. Reduce batch size, select only needed columns, split expensive steps, and inspect query plans/statistics. Three repair cycles maximum; no `--fake`, source deletion, wholesale restore or broad trigger disabling. | Unexplained loss/parity → reason 2 immediately; otherwise exhausted safe repairs → reason 3. |
+| Lock timeout/deadlock | Use `lock_timeout=5s`; roll back the current batch and retry at most three times with 5/15/30-second backoff plus jitter. Start copy writes with `statement_timeout=30s` and batches of 100; tune downward from measured cost. A justified maintenance-only step may use up to 180 seconds outside the copy transaction. Inspect blockers and let live work drain; never terminate another task's backend. | After bounded retries, hold this step and do other work. Unresolved after the two-hour resource-wait ceiling → reason 4. |
+| Memory or poor query plan | Project only needed columns, avoid repeatedly loading parent JSON, bound scanned as well as updated rows, reduce batches, use indexed key advancement; scoped staging statistics refresh is allowed. Preserve failed cohort for identical-range verification. | Three unsuccessful measured repairs → reason 3; no automatic hardware/plan upgrade. |
+| Busy staging/local test DB | Record owner and active job; release unused task locks; do source/fixture work elsewhere. Recheck at most once per minute, for two hours cumulative per resource incident. Never steal occupancy or create another DB. | Reason 4 for that resource; other work continues within global ceilings. |
+| Remote command returns early / build times out | Poll the recorded job/service ID and exact SHA; command transport failure is not proof the migration failed. Adopt still-running task-owned work; do not launch a second owner. A dependent service can retry after the migration is terminal and compatible. | Unsafe/unknown ownership → reason 1 or 2; persistent infrastructure failure → reason 3. |
+| Agent exits successfully before endpoint | Verifier checks remaining criteria. If authorized work remains, supervisor resumes the **recorded session ID** with its next step and latest log sequence; exit 0 is not completion. | Overall continuation/usage/time ceilings only. |
+| Crash/context reset/host reboot | Follow the restart procedure below. Up to three restart attempts for the same crash signature, with 10/30/60-second backoff; retain usage and attempts. A host reboot requires relaunching the task supervisor after the host is reachable; tmux alone cannot survive it. | Repeated crash → reason 3; never silently change model or lose authority/usage history. |
+
+**Restart procedure:** acquire the single-run lock; read this selected plan, latest owner instruction/queue and `run.jsonl`; verify Git branch/SHA and dirty files without resetting them; verify target identity and ledger; reconcile every nonterminal job/PID against actual occupancy. A partial “processed N” message is not a committed cursor. Recover any terminal job receipt missed by the logger, then append a reconciliation event. Resume the last proven commit boundary, safely replaying its idempotent batch if necessary. Reject changed types/source hashes rather than trusting `IF NOT EXISTS`; an existing object can still be incompatible. Resume the recorded Codex session if readable; otherwise start one replacement session with this same run ID, plan/log/authority and remaining budget. Context compaction changes none of these.
+
+### Budget, background launch and liveness
+
+Proposed defaults apply to the later explicit launch unless the owner selects others then:
+
+| Ceiling | Enforcement |
+| --- | --- |
+| 48 hours total wall time | Starts at bootstrap and includes waits/restarts. Supervisor checks elapsed time independently of model turns. |
+| 12 hours useful execution per phase | Excludes time spent doing another phase; includes that phase's repair work. Hold only that phase at its ceiling; continue others within the 48-hour total. |
+| 10,000,000 cumulative metered input + output tokens | Include cached input once, not twice. Persist usage per event/session; on resume add only new deltas, not repeated cumulative totals. This is a token ceiling, not a dollar estimate or promise about the account's billing. |
+| 24 successful-but-incomplete continuations; three crash retries per signature | A bound against unattended looping; retain counters across session replacements. |
+| Two hours cumulative wait per occupied resource; retries above | At expiry queue the affected dependency; do not spin or extend by renaming the incident. |
+| $0 application-provider spend and $0 new infrastructure purchases | No paid live probes, service upgrades, new DB/bucket/broker or account top-up. Use existing Codex login; do not switch to a separately billed API key without owner authority. |
+| Five-minute checkpoint grace after a global ceiling | No new work. Finish/roll back the bounded in-flight transaction, record remote job ownership and exit the model. Never kill a shared database backend to satisfy the timer. |
+
+Token usage is visible at completed-turn/events, so a token threshold can overshoot by the in-flight turn; report that amount and launch no further turn. No unverified “hard dollar cap” is claimed. If usage cannot be recovered, do not start another unmetered model continuation: queue reason 4 and retain the wall-clock guard. An already-running remote job is recorded and brought to a safe task-owned checkpoint where supported; otherwise report it as still running, not stopped. Do not auto-extend ceilings because progress looks promising.
+
+The following is a **future launch design**, not an installed command or an action to run in this planning session. At launch create task-private `supervise.py`, a log writer and the receipt verifier under the run directory above. This small supervisor is necessary because tmux keeps a process attached to a terminal but does not make a one-shot agent continue after it exits. Test supervisor transitions with fake child processes/receipts before giving it migration authority: early exit resumes, incomplete “done” fails, exact session ID is reused, gate with independent work continues, global ceiling prevents relaunch, usage survives restart, and two supervisors cannot own the same run.
+
+Local read-only inspection on November 1 found `/Users/fuchitalee/.local/bin/codex` version **0.166.0**, tmux **3.6a**, and the installed model catalogue entry `gpt-6-astra` supporting `xhigh`. These are installation observations, not proof of live account access. Recheck at launch, preserve the exact requested model, and record the served model/settings when the runtime exposes them. Use existing private Codex auth; never copy or print `~/.codex/auth.json`.
+
+Launch the later supervisor with `tmux new-session -d -s pw-process-tables-<run-id> -c <task-worktree>` and the session command `exec caffeinate -i python3 <run-directory>/supervise.py --plan <selected-plan> --run-log <run-directory>/run.jsonl`. Resolve placeholders and quote paths safely; this is the argument contract for the planned task-private helper, not an existing installed command. On restart, the same run-log path recovers the original run ID, deadline and counters. The supervisor invokes the following Codex argument contract, passing the generated current-scope prompt on stdin and capturing JSON events and stderr to private evidence files:
+
+```text
+codex exec -C <task-worktree>
+  -m gpt-6-astra -c model_reasoning_effort="xhigh"
+  -c approval_policy="never" -s danger-full-access
+  --json --output-last-message <attempt-result> -
+```
+
+Supply arguments as an argv array: the config argument must actually contain `model_reasoning_effort="xhigh"`, without shell quote loss. The task needs the named shared databases and external skill path; broad filesystem capability does not enlarge its authority. Retain installed instruction/policy loading; do not use bypass, ignore-rules, ephemeral or skip-repository flags. Generate the prompt from this plan, the owner launch instruction, queue and current checkpoint; do not embed a stale copy of the whole run contract in a separate instruction document.
+
+On continuation, set the subprocess working directory explicitly and use the installed CLI's `codex exec ... resume <recorded-session-id> -` form with the same model/reasoning and JSON capture. Confirm argument placement with installed help at launch. Never use `--last` on this multi-session host. Persist the `thread.started` ID before authorizing work. The final model message identifies `continue`, `copy_complete`, `waiting_owner` or `ceiling_hit`; the independent receipt verifier, remaining-work scheduler and budget ledger determine whether another turn runs.
+
+Official documentation confirms non-interactive JSON events, saved authentication and explicit-session resume; it does not provide this task-specific persistence/ceiling controller. See [Codex non-interactive mode](https://developers.openai.com/codex/noninteractive). tmux supports detached terminal sessions; it is not a reboot recovery service. See the [tmux project documentation](https://github.com/tmux/tmux/wiki).
+
+Supervisor checks run every 60 seconds. Twenty minutes without durable task progress triggers inspection of child events, pending tools and remote jobs, not automatic termination of healthy work. Cancel/restart only a proven stalled task-owned child under the retry policy, after reconciling any DB operation. A whole-host failure is outside a tmux process's durability: on return, rerun the same supervisor with the same run ID and original deadline. Do not install launchd or reboot/network-repair automation under this plan. The owner can inspect `tail -n 30 <run-directory>/run.jsonl` or `tmux attach -t pw-process-tables-<run-id>` without interrupting work.
+
+When no authorized work remains, append a terminal summary containing phases, actual table trajectory, exact branches/SHAs, coverage gaps, owner queue, time/tokens and any still-running job. Leave the worktrees and receipts intact. A waiting-owner state parks without more paid model turns; resume under the same run when authority/access arrives, unless a ceiling requires a separately granted extension. Ollija only annotates/checks plans; it does not launch, supervise or resume this process.
+
+### Lessons from RG4–RG7
+
+The evidence distinguishes avoidable repetition from real defects and legitimate safety waits. The records do **not** establish that every pause was unnecessary, nor supply a defensible total “time wasted.” Apply the concrete changes below.
+
+| Observed evidence | Effect on this run |
+| --- | --- |
+| RG4's “First staging cutover and statistics repair, October25” entry describes dependent web/headline builds timing out while migration 0150 was still working, and poor estimates on newly added columns. | Poll the actual migration job; do not start another migration because a dependent build timed out. Inspect query plans and scoped statistics, then retry only dependent checks at the same candidate. |
+| RG4 recorded staging memory pressure, expensive repeated parent JSON, a 30-second timeout even for a small update, and separate select-for-update/update repair. RG6 recorded repeated sparse-parent JSON loading and a projection fix. | Start bounded, project necessary fields, bound scanned rows, split work inside safe transactions and retry the failed cohort. These are bounded implementation repairs, not new owner decisions or automatic hardware upgrades. |
+| RG4's restart hardening found that unconditional `ALTER TABLE ... IF NOT EXISTS` still took locks, and that whole-row trigger work was too expensive. | Inspect the catalog before retrying DDL, check type/trigger compatibility, narrow invalidation and use short lock timeouts. Never fake migrations or retry identical lock-heavy DDL indefinitely. |
+| RG5's saved drain progress shows an old harvest run ending at 03:52:11 UTC on October 25, before retirement; old-image one-offs also appear in the plan. | This was a legitimate retirement dependency. Track active job revision and let it finish naturally; do other work meanwhile. A service's current image alone is insufficient. |
+| RG6 checkpoints separate terminal committed cursors from intermediate progress; the runner log says not to repeat completed unchanged ranges. The October 27 plan records reuse of sweep 2 plus a bounded final delta instead of another full sweep. | Resume only committed boundaries; preserve and reuse valid proofs, verifying changed rows/delta. Never restart the million-row history just because an agent context ended. |
+| RG6 staging page probe ran on a jobs image without web-only flags; another plan entry records importing code from the wrong editable worktree. | Verify `core.__file__`, candidate SHA and process-local settings before diagnosis. Fix process context; do not change global service settings or make an empty source commit to repair an environment mismatch. |
+| RG6 final closeout's newest-post acceptance was inconclusive because of `enrichment_budget_exhausted`, with its schema/copy evidence separately recorded. | Keep the schema acceptance set fixed. Record unrelated health/budget debt; no automatic provider spend or repeated schema sweep. A failure affecting the changed behavior remains a real required test failure. |
+| The Oct 28 harvester-gap handoff/incident review attributes missed windows to October 27 schedule holds; Blueprint sync also reset runtime hold/settings. Restoring one healthy run did not recover missed windows. | Never pause collectors or apply a Blueprint for rehearsal/cutover convenience. Copy around live writes and verify deltas. Continuity/data-loss evidence triggers reason 2; do not silently treat resumed scheduling as recovered history. |
+| RG7's ordinary kind rename conflicted with the existing kind-identity trigger; the migration used an atomic, narrowly scoped correction. | Rehearse actual triggers and constrained data, fix the exact migration and rerun affected checks. No broad “disable constraints” workaround and no routine approval request for a source-preserving tested repair. |
+| RG6 runtime notes explicitly disclaimed persistence beyond that agent/runtime lifetime; the plan also records an owner-requested ownership transfer and previously granted schema approvals. | A task-owned tmux supervisor resumes early exits from durable receipts. Carry exact authority/runtime handles across restart; do not repeat prior approvals or mislabel an owner-requested handoff as a defect. |
+| The Oct 28–29 follow-up bug-tracker session's final record says central logging is best effort and must not become a startup prerequisite. | One local task log, no mandatory external tracker/check-in. Repair local durable checkpoints before DB transitions, but missing optional integrations never stop independent work. |
+
+**Evidence locations:** use the following existing files read-only; do not reconstruct them with production queries.
+
+- `docs/plans/2026-10-09-063417-feat-g3-round2-chart-engine-plan.md`: RG4 recovery/closure entries around lines 1395–1496; RG5 closure/drain near 206–216; RG6 October 27 checkpoint/closeout near 25–56 and approved persistence decisions near 113–129; RG7 frozen decision and trigger correction near 1624–1640. Line numbers refer to the version inspected during this planning session; locate dated entries if the file moves.
+- Owning historical worktree `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/refactor/global-shared-vocabulary-20261021/.local/`: `rg6-20261026/runner-progress.md`, its referenced `runner-production-release-checkpoint.json`, `rg5-20261025/prod-cutover-drain-progress.json` and `prod-retirement-owner-progress.json`. These are existing local receipts, not permission to resume those old runs.
+- Authoritative root's `docs/brainstorms/2026-10-28-070318-rg6-harvester-gap-handoff.md` and `docs/analysis/2026-10-28-070730-rg6-harvest-gap-incident-review.md`; read there if not yet integrated into the implementation base. Leave unrelated root edits alone.
+- Existing follow-up session `/Users/fuchitalee/.codex/sessions/2026/10/28/rollout-2026-10-28T18-36-12-01a181de-025e-7b50-acd9-37a29525fe6c.jsonl`, `task_complete` record at `2026-10-29T05:56:09.457Z`, concerning best-effort central logging. This is a follow-up session, not a claimed transcript of the original RG4–RG7 runtime.
 
 ## Implementation Units
 
@@ -173,7 +358,7 @@ Switch the U2 writers/readers in Appendix A and the three inbound FK owners in A
 
 ### U3. Generalize the existing classification vocabulary
 
-**Branch:** `refactor/shared-classification-vocabularies-<date>`. Depends on U1 and lands separately after U2. Net -18.
+**Branch:** `refactor/shared-classification-vocabularies-<date>`. Depends on U1; default rehearsal order is after U2, with independent reordering allowed under “Autonomous run.” Net -18.
 
 Extend and later rename `AudienceTopicScheme/Concept/Label` to `ClassificationScheme/Concept/Label`. Reuse their three physical tables during copy. Preserve existing concept IDs and audience-topic assignment behavior. Add schemes for the nine key/label pairs and UnsanctionedFlagKey. Preserve raw keys, case-insensitive identity, every locale label, legacy key, scheme manifest and revision; never merge equal text across schemes. Do not equate taxonomy-v2 and taxonomy-v3 categories.
 
@@ -207,7 +392,7 @@ For official company, create provider-call rows only for actual paid/model attem
 
 ### U5. Fold discovery execution into shared collection runs
 
-**Branch:** `refactor/shared-discovery-runs-<date>`. Depends on U1; sequence after U4 to avoid migration-graph overlap. Net -2.
+**Branch:** `refactor/shared-discovery-runs-<date>`. Depends on U1; default rehearsal order is after U4. Independent reordering is allowed, with serialized migration ownership. Net -2.
 
 `JobDiscoveryRun` and `PersonnelDiscoveryRun` inherit the same `DiscoveryRunBase`; their only added fields are extracted-listing versus affiliation/evidence counts. Neither has rows in this staging copy. Reuse **CollectionRun** as the one run table with a constrained discovery kind; do not add a third DiscoveryRun table.
 
@@ -269,16 +454,23 @@ Apply once per family; do not repeat the entire program's checks on every interm
 
 For this planning task: this single plan is written, internally reviewed, linked to exact source/count/resource evidence, reannotated by Ollija, and delivered for review. Only this plan is eligible for a docs commit/push. No implementation or release is implied.
 
-For each future family: its named shared owner and field mapping are implemented; required schema/integration/concurrency/copy tests pass; populated-copy rehearsal and its limitations are recorded; every caller is cut over; exact final delta and catalog checks pass; the old physical storage is retired; counts and references match reality; its separately authorized delivery endpoint is observed. No family is “complete” merely because a new table exists or fixtures pass.
+For each future family, `copy_complete` requires the D0–D5 receipts and its specific assertions in “Autonomous run”: implemented mapping and caller changes, passing required tests/CI, verified copy parity, physical retirement on the copy, correct catalog/docs and a verified remote branch. Sparse historical coverage remains explicitly limited. All six passing families plus the batched production decision package finish the unattended non-production endpoint; no main merge or production connection is required. No family is complete merely because a new table exists or fixtures pass.
+
+For later `production_complete`, separately granted production access and delivery must establish the real historical cohort, safe online copy/cutover/retirement, continuing collection and observed deployed revisions. Copy completion is never relabeled production completion. The production package lists exact candidates/order, unresolved history, count expectations, rollback limits and the remaining authority; it neither claims new production counts nor executes their queries.
+
+**Document review:** this revision received sequential in-session coherence, feasibility, scope, security and adversarial review under `ce-doc-review`; the repository's Task/Subagent mapping precludes claiming independent reviewer coverage. Corrections reconcile branch sequencing, sparse-history acceptance, production authority and resumable runtime/ceilings. Confidence is sufficient for a later scoped launch; installation checks are not a live-model test and implementation/rehearsal receipts do not exist yet.
 
 ## Risks and open decisions
 
-1. **Target count:** adopt the measured -25 reduction (196 code baseline / 202 current staging baseline). The original approximate 190 target is not supported without added scope. This is a planning recommendation, not an owner-approved CI exception.
-2. **Official-company decision JSON:** this plan defers its full normalization, retaining the operational decision journal. Decide whether the later implementation brief accepts that boundary or requires a separately designed decision/citation family before U4 closes. No missing production data is assumed absent from staging zeroes.
-3. **Shared run/lease boundary:** KTD1 names collection execution/attempts as defaults while acknowledging distinct existing authored/provider owners. A universal process engine spanning all of them is outside this bounded consolidation. If literal universal storage is required now, redesign that abstraction and recalculate counts before implementing it.
-4. **Execution and release authority:** implementation is intentionally later. Before the background session starts, select which family and its delivery endpoint, and confirm occupancy of the existing staging copy. A later production census is necessary to establish production row shapes/size; it is not allowed in this session.
+The first three items are recommended execution defaults, not three mandatory new approval questions. An explicit instruction to execute this plan adopts them unless the owner changes them. They are not claimed approved in this planning session.
 
-Technical risks resolved in the design include budget precision and concurrency, already-mirrored calls, taxonomy wrong-scheme assignment, operational JSON masquerading as evidence, pending reviews, source-only events, and active writers. Remaining execution risks are environment drift, sparse rehearsal families, long copy/constraint validation and old service images. U6 and official historical retirement must stop at their stated evidence gates rather than weaken them to meet a table count.
+1. **Target count:** accept the measured -25 reduction (196 code baseline / 202 current staging baseline). Reaching approximately 190 remains a possible follow-up with additional justified scope.
+2. **Official-company decision JSON:** retain the operational decision journal and defer full decision/citation normalization. U4 closes with that declared boundary. No missing production data is assumed absent from staging zeroes.
+3. **Shared run/lease boundary:** use KTD1's shared defaults and named existing exceptions. A universal process engine spanning authored/provider/collection work is outside this consolidation.
+4. **Launch and ceilings:** the later instruction starts all U1–U6 toward `copy_complete`, with the stated 48-hour/10-million-token defaults, unless the owner narrows scope or changes ceilings. Occupancy is determined by the executor, not a routine question to the owner. No session is launched now.
+5. **Production:** later access, census, main integration and release remain a batched owner decision. Empty-copy historical gaps must be resolved for that endpoint. They do not prevent completing honest copy-only rehearsals.
+
+The design addresses budget precision/concurrency, already-mirrored calls, taxonomy wrong-scheme assignment, operational JSON masquerading as evidence, pending reviews, source-only events and active writers. Those protections still require implementation proof. Remaining execution risks are environment drift, sparse rehearsal families, long copy/constraint validation and old service images. Hold affected retirement at the five defined owner-wait conditions; continue independent work and never weaken preservation to meet a table count.
 
 ## Appendix
 
