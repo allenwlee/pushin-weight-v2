@@ -560,7 +560,7 @@ def test_release_assets_keep_typed_publisher_and_distinct_release_parents(monkey
     assert first.status == "success", run_report_document(first)
     before = list(MetricValue.objects.order_by("pk").values())
     assert len(before) == 2
-    run.observations.update(listing={}, source_metadata={}, dimensions={})
+    assert not hasattr(run.observations.first(), "listing")
     for asset in run.observations.filter(observation_kind="release_asset"):
         assert asset.inputs.get(input_role="release_asset_parent").input_observation_id == expected_parents[asset.pk]
         assert asset.resource_snapshot.publisher_account_id == publisher.pk
@@ -775,7 +775,7 @@ def test_not_modified_page_reuses_evidence_without_treating_inventory_as_empty()
     obj, repo = configured()
     initial = execute_github_catalog(obj.pk, client=reader(responses(repo, []), 20))
     assert initial.status == "success"
-    initial.scopes.update(envelopes=[])
+    assert not hasattr(initial.scopes.first(), "envelopes")
 
     def response(request):
         if (
@@ -800,7 +800,7 @@ def test_not_modified_page_reuses_evidence_without_treating_inventory_as_empty()
     assert validation.scope_run.run_id == later.pk
     assert captured.input_set_sha256 and captured.values.count() == 0
     assert validation.etag == validation.response_etag == '"page1"'
-    later.scopes.update(envelopes=[])
+    assert not hasattr(later.scopes.first(), "envelopes")
     third = execute_github_catalog(obj.pk, client=reader(response, 20))
     assert third.status == "success"
     newest = third.observations.get(observation_kind="repository")
@@ -849,7 +849,7 @@ def test_catalog_resume_rechecks_access_before_using_cached_public_inventory():
     repositories = list(first.observations.filter(observation_kind="repository"))
     assert repositories
     # Resume uses the public body and typed ownership even with no old documents.
-    first.observations.update(listing={}, dimensions={}, source_metadata={})
+    assert not hasattr(first.observations.first(), "listing")
     private[0] = True
     run = execute_github_catalog(obj.pk, client=reader(response, 20))
     assert (
@@ -886,8 +886,8 @@ def test_authenticated_draft_releases_never_enter_saved_public_evidence():
     run = execute_github_catalog(obj.pk, client=reader(response, 30))
     assert run.status == "success"
     assert run.observations.filter(observation_kind="releases").count() == 2
-    for scope in run.scopes.all():
-        assert "UNPUBLISHED_SENTINEL" not in json.dumps(scope.envelopes)
+    for scope in run.scopes.values():
+        assert "UNPUBLISHED_SENTINEL" not in json.dumps(scope, default=str)
     for row in run.observations.all():
         assert "UNPUBLISHED_SENTINEL" not in json.dumps(observation_object_documents(row)[0])
     from core.models import CollectionEvidenceArchive

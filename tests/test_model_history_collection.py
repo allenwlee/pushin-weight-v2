@@ -156,8 +156,8 @@ def test_native_hf_history_pins_revision_and_resumes_without_weight_download(
         assert checkpoint.cursor == "hf-commits-page:v1:1:50"
         assert checkpoint.enumeration_complete is False
     if typed_only_resume:
-        first.observations.update(listing={}, source_metadata={}, dimensions={})
-        first.scopes.update(envelopes=[])
+        assert not hasattr(first.observations.first(), "listing")
+        assert not hasattr(first.scopes.first(), "envelopes")
         prior = list(first.observations.exclude(observation_kind="coverage").order_by("pk").values())
     second = execute_model_history(job.pk, budget=budget(8))
     assert second.pk == first.pk and second.status == "success"
@@ -350,26 +350,18 @@ def test_github_history_uses_reviewed_native_repo_and_pinned_tree():
     assert all(o.inputs.exists() for o in run.observations.all())
     assert MetricValue.objects.count() == 0
 
-    from core.collection_capture import archive_legacy
+    from core.collection_capture import archive_legacy, observation_object_documents
     from core.model_history_collection import _existing_evidence
     from core.model_native_history import _latest_before_cutoff
 
     commits = run.observations.filter(observation_kind="commits")
     expected = max(commits.values_list("observation_key", flat=True))
     for commit in commits:
-        archive = archive_legacy({
-            "listing": commit.listing,
-            "dimensions": commit.dimensions,
-            "source_metadata": commit.source_metadata,
-            "envelopes": commit.envelopes,
-            "groups": commit.groups,
-        })
+        listing, dimensions, metadata = observation_object_documents(commit)
+        archive = archive_legacy({"listing": listing, "dimensions": dimensions, "source_metadata": metadata, "envelopes": [], "groups": {}})
         commits.filter(pk=commit.pk).update(legacy_archive=archive)
-    commits.update(listing={}, dimensions={}, source_metadata={})
     head = _latest_before_cutoff(
-        commits.select_related("resource_snapshot").defer(
-            "listing", "dimensions", "source_metadata", "envelopes", "groups",
-        ),
+        commits.select_related("resource_snapshot"),
         lambda observation: observation.resource_snapshot.committed_at,
         datetime(2026, 9, 12, tzinfo=UTC),
     )

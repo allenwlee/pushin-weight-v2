@@ -84,9 +84,10 @@ def test_real_hourly_entry_collects_reviewed_source_role_and_leaves_benchmark_fl
         stdout=StringIO(),
     )
     assert len(seen) == before
-    CollectionObservation.objects.filter(values__isnull=False).update(
-        source_metadata={}, dimensions={},
-    )
+    from core.collection_capture import archive_legacy
+
+    archive = archive_legacy({"listing": {}, "dimensions": {}, "source_metadata": {}})
+    CollectionObservation.objects.filter(values__isnull=False).update(legacy_archive=archive)
     report = StringIO()
     call_command(
         "collection_status",
@@ -183,9 +184,10 @@ def test_fair_selection_excludes_old_manual_jobs_before_limit_and_preserves_cool
 
     def execute(candidate, decision, budget):
         called.append(candidate.pk)
-        claim = claim_job(candidate.pk, now=NOW)
+        claim = claim_job(candidate.pk, now=NOW, typed=True)
         return finish_run(
-            claim, status="partial", retry_at=NOW + timedelta(hours=4), now=NOW
+            claim, status="partial", retry_at=NOW + timedelta(hours=4), now=NOW,
+            typed=True, physical_accounting_complete=True, request_count=0,
         )
 
     monkey_budget = invocation_budget(
@@ -208,8 +210,9 @@ def test_partial_continuation_does_not_wait_for_next_days_fresh_inventory_slot(
     job, _, _ = routine_job(settings)
     take_collection_authority(job.pk)
     previous = NOW - timedelta(days=1)
-    claim = claim_job(job.pk, now=previous)
-    finish_run(claim, status="partial", now=previous + timedelta(minutes=1))
+    claim = claim_job(job.pk, now=previous, typed=True)
+    finish_run(claim, status="partial", now=previous + timedelta(minutes=1), typed=True,
+               physical_accounting_complete=True, request_count=0)
     job.refresh_from_db()
     decision = due_job(job, now=NOW.replace(hour=9))
     assert decision["due"]

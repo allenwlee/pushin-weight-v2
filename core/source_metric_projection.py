@@ -1345,10 +1345,7 @@ def replay_saved_evidence(job_id):
     last_processed = cursor
     evidence_rows = selected.select_related("legacy_archive").prefetch_related(
         "run__job__numeric_contract", "numeric_selections",
-    ).only(
-        "id", "run_id", "numeric_fields_explicit",
-        "legacy_archive__body", "legacy_archive__content_sha256",
-    ).iterator(chunk_size=100)
+    ).iterator(chunk_size=1)
     for evidence in evidence_rows:
         if monotonic() >= deadline:
             complete = False
