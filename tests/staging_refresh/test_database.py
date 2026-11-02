@@ -682,7 +682,7 @@ def test_source_exact_counts_skip_absent_optional_tables(
 ) -> None:
     policy = load_policy(POLICY_PATH)
     observed: list[str] = []
-    expected = {"model_releases": 3, "posts": 12}
+    expected = {"discussion_window_snapshots": 3, "posts": 12}
 
     def fake_count(_cursor: object, table: str) -> int:
         observed.append(table)
@@ -697,7 +697,7 @@ def test_source_exact_counts_skip_absent_optional_tables(
     )
 
     assert counts == expected
-    assert observed == ["model_releases", "posts"]
+    assert observed == ["discussion_window_snapshots", "posts"]
 
 
 def test_source_exact_counts_map_pre_merge_numeric_tables(monkeypatch):
