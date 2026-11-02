@@ -202,13 +202,6 @@ def test_frozen_legacy_bootstrap_launcher_runs_only_with_its_historical_orm(
     # The historical launcher uses its deployed scheduler. Current services
     # require the expanded schema and are tested after migration below.
     importlib.import_module("monitor.management.commands.collect_benchmark_due")
-    monkeypatch.setattr(models, "MetricCollectionRun", CollectionRun)
-    monkeypatch.setattr(
-        models,
-        "MetricCollectionContract",
-        apps.get_model("core", "MetricCollectionContract"),
-    )
-
     def no_provider_request(*args, **kwargs):
         raise AssertionError("Retained bootstrap and disabled schedule need no request")
 
@@ -218,7 +211,15 @@ def test_frozen_legacy_bootstrap_launcher_runs_only_with_its_historical_orm(
         / "fixtures/collection_schema/legacy_benchmark_launcher.txt"
     ).read_text()
     script = script.replace("75c4a856-385b-429a-9b03-c7e023ea6f73", str(contract.pk))
-    exec(compile(script, "historical_legacy_benchmark_launcher.py", "exec"), {})  # noqa: S102 - frozen historical deployed payload
+    # Restore these bindings before historical_schema restores its own model
+    # aliases; the shared monkeypatch fixture is torn down in the opposite order.
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(models, "MetricCollectionRun", CollectionRun)
+        patch.setattr(
+            models, "MetricCollectionContract",
+            apps.get_model("core", "MetricCollectionContract"),
+        )
+        exec(compile(script, "historical_legacy_benchmark_launcher.py", "exec"), {})  # noqa: S102 - frozen historical deployed payload
     assert CollectionRun.objects.count() == 1
     assert CollectionRun.objects.get(pk=run.pk).observations.count() == 1
 
