@@ -9,11 +9,11 @@ ollija:
   change_id: feat-product-release-intake-20261027-2026-10-28-083502
   branch: feat/product-release-intake-20261027
   workflow: lfg
-  delivery_target: staging
+  delivery_target: production
   delivery_selected_by_user: true
   delivery_route: staged
-  delivery_route_selected_by_user: false
-  staging_transport: branch
+  delivery_route_selected_by_user: true
+  staging_transport: commit
 ---
 <!-- BEGIN OLLIJA DELIVERY GUIDE -->
 ## Ollija Delivery Guide
@@ -41,17 +41,24 @@ This worktree is inside the Ollija release worktree area. Reuse it for the whole
 ### Delivery scope
 
 - Workflow: `lfg`
-- Delivery target: `staging`
+- Delivery target: `production`
 - Owner selection recorded: `true`
 
 1. Complete implementation and the plan's verification contract.
 2. Run the configured focused checks:
    - `pytest tests/ollija`
 3. The parent workflow commits only this plan's changes, pushes the feature branch, and records the candidate SHA.
-4. Fetch the remote staging lane: `git fetch origin refs/heads/staging`.
-5. Require the unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/staging` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/staging`.
-6. Verify the remote staging ref resolves to the candidate SHA and the deployment for `pushinweight-staging-web` reports that same SHA.
-7. Run staging checks. Stop here if they fail.
+4. Inspect staging service/database occupancy. Do not interrupt another release.
+5. Use the project's deployment interface to deploy the exact candidate commit to staging without moving its branch. Account for automatic deployment races.
+6. Verify the staging service reports that candidate SHA.
+7. Run the applicable, unwaived staging checks. Diagnose a failure before retrying.
+8. Only after staging passes, fetch the remote production lane: `git fetch origin refs/heads/main`.
+9. Require the same unchanged candidate SHA to be a fast-forward of that fetched remote ref, then push the exact candidate SHA to `refs/heads/main` with the server-enforced fast-forward command `git push origin <candidate-sha>:refs/heads/main`.
+10. Verify the remote production ref resolves to the candidate SHA and the deployment for `pushinweight-web` reports that same SHA before reporting completion.
+11. After step 10 succeeds, perform worktree cleanup as the final filesystem action:
+    - From `/Users/fuchitalee/development/pushin-weight-v2`, require `/Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/product-release-intake-20261027` to remain registered, clean, unlocked, and at the verified candidate SHA. If any guard fails, retain it and report the reason.
+    - Run `git -C /Users/fuchitalee/development/pushin-weight-v2 worktree remove /Users/fuchitalee/development/pushin-weight-v2/.worktrees/feat/product-release-intake-20261027` without `--force`.
+    - Preserve the local and remote feature branches. Continue final reporting from the authoritative repository root.
 
 ### Failure handling
 
@@ -663,6 +670,8 @@ The former RG7 prerequisite is resolved, and the Planning Contract makes the sel
 The owner-requested [source-to-dossier raison-detre walkthrough](../../../../../docs/analysis/2026-10-29-144624-product-release-pr-u3-raison-detre.html) is the earlier review artifact through23 existing tables, four core write/reuse destinations and fictional column/value examples. It selected no new storage and inspected main e5edf737 plus detector/replay490a34c6. The October29 amendments in this plan now govern source admission, pending dossier reuse, unknown publishers, LLM-assisted research, significance inputs, shared TN evidence and staging validation. The earlier walkthrough's X-focused examples and open candidate-container question are superseded by those decisions. Its identity/lifecycle/writer integration cautions still apply. The review copy is explanatory evidence, not a parallel implementation plan.
 
 ## Delivery Exceptions
+
+**November 2 owner authorization:** Fix PR 74 CI without weakening or skipping tests, merge main into the feature branch, verify the final candidate on staging, rehearse and deploy to production. Use exact-commit staging because the owner prohibits touching other branches. Keep `PRODUCT_RELEASE_BACKGROUND_ENABLED` off, do not run paid models, and do not refactor the detector table. Stop for failed staging, unsafe migration/preflight, a schema redesign, or failed production smoke. Earlier staging-only restrictions below are historical and are superseded for this delivery.
 
 The owner's original explicit LFG/go instructions and October28 return to product-release work retain the implementation/commit/reviewed-PR authorization. The October29 answers select staging results plus reviewed code as the delivery endpoint, with `delivery_target: staging` and `delivery_selected_by_user: true`; use the default staged branch route and verify actual shared-environment availability before delivery. Stop before production deployment or ongoing detection activation. Do not infer production authority from the closed G2 plan or another session's release.
 

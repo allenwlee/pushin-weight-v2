@@ -10,6 +10,13 @@ from tests.test_benchmark_download_db_identity import setup_spec
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
+def install_empty_legacy_evidence(run):
+    from core.collection_capture import archive_legacy
+
+    archive = archive_legacy({"listing": {}, "dimensions": {}, "source_metadata": {}})
+    run.observations.update(legacy_archive=archive)
+
+
 @pytest.mark.parametrize("identifier", ["other", "untracked/model"])
 def test_openrouter_absence_uses_typed_day_even_for_unmapped_or_aggregate_rows(identifier):
     from core.benchmark_metric_series import metric_points
@@ -29,7 +36,7 @@ def test_openrouter_absence_uses_typed_day_even_for_unmapped_or_aggregate_rows(i
     }
     days = ["2026-10-05", "2026-10-06"]
     before, _, _ = metric_points(contract, line, days)
-    run.observations.update(dimensions={}, source_metadata={}, listing={})
+    install_empty_legacy_evidence(run)
     after, _, _ = metric_points(contract, line, days)
     assert [point["coverage"] for point in after] == ["not_reported_top50", "missing"]
     assert after == before
@@ -40,7 +47,6 @@ def test_openrouter_absence_uses_typed_day_even_for_unmapped_or_aggregate_rows(i
 def test_chart_dimensions_and_selection_survive_retired_observation_documents(source):
     from core.benchmark_metric_series import metric_points
     from core.benchmark_metric_store import persist_source
-    from core.models import CollectionObservation
     from tests.test_benchmark_download_persistence import provider_contract
 
     if source == "openrouter":
@@ -65,9 +71,7 @@ def test_chart_dimensions_and_selection_survive_retired_observation_documents(so
             "aggregation": "single", "dimensions": dimensions}
     before, _, _ = metric_points(contract, line, [day])
     assert before[0]["dimensions"] == dimensions
-    CollectionObservation.objects.filter(run=run).update(
-        dimensions={}, source_metadata={}, listing={},
-    )
+    install_empty_legacy_evidence(run)
     after, _, _ = metric_points(contract, line, [day])
     assert after == before
     from core.collection_reports import resource_statistics

@@ -82,6 +82,11 @@ def test_person_reader_separates_employment_and_keeps_profile_provenance(
     )
     from django.db import transaction
 
+    from core.account_vocabulary import snapshot_references
+    from core.models import DataSource
+
+    DataSource.objects.get_or_create(pk="x")
+
     with transaction.atomic():
         snapshot = AccountProfileSnapshot.objects.create(
             account=account,
@@ -95,8 +100,7 @@ def test_person_reader_separates_employment_and_keeps_profile_provenance(
             description="Researcher @Anthropic",
             affiliate_target_username="AnthropicAI",
             affiliate_label_description="Anthropic",
-            affiliate_label_type="BusinessLabel",
-            affiliate_display_type="Badge",
+            **snapshot_references({"affiliate_label_type": "BusinessLabel", "affiliate_display_type": "Badge"}, "x"),
             present_fields=["description"],
         )
         from core.geolocation_evidence import write_source_evidence

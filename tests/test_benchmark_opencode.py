@@ -128,7 +128,7 @@ def test_endpoint_checks_have_typed_cross_run_ready_row_links():
 
     contract = configured()
     run = persist_source(contract, "opencode", "f" * 64, read(endpoint()))
-    assert run.source_metadata == {}
+    assert not hasattr(run, "source_metadata")
     marker = CollectionObservation.objects.get(
         run=run, observation_kind="endpoint_check"
     )
@@ -145,17 +145,20 @@ def test_endpoint_checks_have_typed_cross_run_ready_row_links():
     }
     assert all(link.input_observation.source_record_date for link in links)
     assert project_opencode_endpoint_batch(verify_only=True).scanned == 1
+    saved_links = list(links.values_list("input_observation_id", "row_locator"))
     links.delete()
     with pytest.raises(ValueError, match="row link is missing"):
         project_opencode_endpoint_batch(verify_only=True)
     assert project_opencode_endpoint_batch().inserted == 0
     assert project_opencode_endpoint_batch(verify_only=True).scanned == 1
     # Old rows acquire their date only in the explicit historical copier.
-    for link in links:
-        CollectionObservation.objects.filter(pk=link.input_observation_id).update(
-            dimensions={"date": link.row_locator},
+    from core.collection_capture import archive_legacy
+
+    for observation_id, row_locator in saved_links:
+        archive = archive_legacy({"listing": {}, "dimensions": {"date": row_locator}, "source_metadata": {}})
+        CollectionObservation.objects.filter(pk=observation_id).update(
+            legacy_archive=archive, source_record_date=None,
         )
-    CollectionObservation.objects.filter(pk__in=links.values("input_observation_id")).update(source_record_date=None)
     with pytest.raises(ValueError, match="row date is not typed"):
         project_opencode_endpoint_batch(verify_only=True)
     assert project_opencode_endpoint_batch().scanned == 1
@@ -211,11 +214,16 @@ def test_endpoint_references_and_export_use_typed_dates_and_unknown_period_statu
     contract = configured()
     run = persist_source(contract, "opencode", "f" * 64, read(endpoint()))
     checks = read_document(run.source_metadata_archive)["endpoint_checks"]
-    run.observations.update(dimensions={}, listing={})
+    from tests.test_benchmark_forecast_inputs import install_legacy_evidence
+
+    install_legacy_evidence(run)
     assert record_endpoint_checks(run, checks, contract, verify_only=True) == 0
     # A missing canonical status stays unknown; an old document must not supply it.
+    from core.collection_capture import archive_legacy
+
+    archive = archive_legacy({"listing": {}, "dimensions": {}, "source_metadata": {"period_status": "partial"}})
     CollectionObservation.objects.filter(run=run, source_record_date="2026-10-07").update(
-        period_status=None, source_metadata={"period_status": "partial"},
+        period_status=None, legacy_archive=archive,
     )
     _install_typed_views()
     output = StringIO()
@@ -665,9 +673,9 @@ def test_operational_cutoff_and_raw_snapshot_export_never_include_later_poll():
         (value["dimensions"], value["source_metadata"]["period_status"])
         for value in result["values"]
     ]
-    CollectionObservation.objects.filter(run=first).update(
-        dimensions={}, source_metadata={}, listing={},
-    )
+    from tests.test_benchmark_forecast_inputs import install_legacy_evidence
+
+    install_legacy_evidence(first)
     retained = forecast_inputs(contract, cutoff)
     assert [
         (value["dimensions"], value["source_metadata"]["period_status"])

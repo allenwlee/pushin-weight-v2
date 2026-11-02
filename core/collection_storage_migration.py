@@ -1701,11 +1701,19 @@ def _project_endpoint_row_dates(checks, *, verify_only):
             if observation_id in dates and dates[observation_id] != day:
                 raise ValueError("endpoint row has conflicting date references")
             dates[observation_id] = day
-    for row in CollectionObservation.objects.filter(pk__in=dates).only(
-        "pk", "dimensions", "source_record_date",
-    ):
+    has_dimensions = any(f.name == "dimensions" for f in CollectionObservation._meta.fields)
+    fields = ["pk", "source_record_date", "dimensions" if has_dimensions else "legacy_archive"]
+    for row in CollectionObservation.objects.filter(pk__in=dates).only(*fields):
         day = dates[row.pk]
-        legacy_day = row.dimensions.get("date")
+        if has_dimensions:
+            dimensions = row.dimensions
+        elif row.legacy_archive_id:
+            from core.collection_capture import read_document
+
+            dimensions = read_document(row.legacy_archive).get("dimensions", {})
+        else:
+            dimensions = {}
+        legacy_day = dimensions.get("date")
         if legacy_day is not None and native_date(legacy_day) != day:
             raise ValueError("endpoint row date conflicts with captured evidence")
         if row.source_record_date is None and not verify_only:
@@ -1738,10 +1746,12 @@ def project_opencode_endpoint_batch(
             job__source_id="opencode",
             job__purpose="metric",
             status__in=["success", "partial"],
-        ).filter(
-            Q(source_metadata__has_key="endpoint_checks")
-            | Q(source_metadata_archive__isnull=False)
-        ).select_related("job__contract")
+        )
+        if any(f.name == "source_metadata" for f in CollectionRun._meta.fields):
+            runs = runs.filter(Q(source_metadata__has_key="endpoint_checks") | Q(source_metadata_archive__isnull=False))
+        else:
+            runs = runs.filter(source_metadata_archive__isnull=False)
+        runs = runs.select_related("job__contract")
         if after_id is not None:
             runs = runs.filter(pk__gt=after_id)
         if not verify_only:

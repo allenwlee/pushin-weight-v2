@@ -76,7 +76,7 @@ def test_metric_request_options_survive_in_typed_scope_without_implied_http_call
     assert scope.requested_end_date == date(2026, 9, 30)
     assert scope.cursor == "next-page"
     assert scope.requests.count() == 0
-    assert run.request_params == {}
+    assert not hasattr(run, "request_params")
 
 
 @pytest.mark.parametrize("replacement", ["expired", "replaced"])
@@ -93,7 +93,7 @@ def test_stale_direct_metric_cannot_publish_observations(replacement):
 
     def lose_ownership():
         run = CollectionRun.objects.get()
-        changes = {"report": {"successor": "preserve"}}
+        changes = {"error_code": "successor_preserve"}
         if replacement == "expired":
             changes["lease_expires_at"] = timezone.now() - timedelta(seconds=1)
         else:
@@ -105,7 +105,7 @@ def test_stale_direct_metric_cannot_publish_observations(replacement):
         persist_source(contract, "hf", "a" * 64, fetch=lose_ownership)
     assert not CollectionObservation.objects.exists()
     assert not MetricValue.objects.exists()
-    assert CollectionRun.objects.get().report == {"successor": "preserve"}
+    assert CollectionRun.objects.get().error_code == "successor_preserve"
 
 
 @pytest.mark.usefixtures("collection_instruction_bridge")
@@ -147,7 +147,7 @@ def test_hf_bad_counts_retain_failed_envelope_without_values(bad):
     assert run.status == "failed"
     from core.collection_capture import read_document
 
-    assert run.raw_payload is None
+    assert not hasattr(run, "raw_payload")
     assert read_document(run.payload_archive) == payload(bad)
     assert not MetricValue.objects.exists()
 

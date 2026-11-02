@@ -124,6 +124,6 @@ def test_raw_sql_cannot_insert_numeric_nan():
     _, definition, observation = measurement()
     with pytest.raises(IntegrityError), transaction.atomic(), connection.cursor() as c:
         c.execute(
-            "INSERT INTO metric_values (observation_id,source_metric_id,integer_value,temporal_status,source_timezone) VALUES (%s,%s,'NaN','unknown','unknown')",
+            "INSERT INTO metric_values (observation_id,source_metric_id,integer_value,temporal_status,source_timezone_id) VALUES (%s,%s,'NaN','unknown','unknown')",
             [observation.pk, definition.pk],
         )

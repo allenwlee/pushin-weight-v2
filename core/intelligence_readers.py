@@ -303,7 +303,8 @@ def _affiliation(row: PersonBrandAffiliation) -> dict[str, Any]:
 
 def person_intelligence(person_id) -> dict[str, Any]:
     evidence = PersonBrandAffiliationEvidence.objects.select_related(
-        "source_profile_snapshot"
+        "source_profile_snapshot__affiliate_label_type",
+        "source_profile_snapshot__affiliate_display_type",
     ).order_by("observed_at", "id")
     affiliations = (
         PersonBrandAffiliation.objects.select_related(

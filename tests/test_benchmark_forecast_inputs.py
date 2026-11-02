@@ -9,6 +9,13 @@ from tests.test_benchmark_download_persistence import configured, payload
 pytestmark = [pytest.mark.requires_postgres, pytest.mark.django_db]
 
 
+def install_legacy_evidence(run, *, dimensions=None, metadata=None):
+    from core.collection_capture import archive_legacy
+
+    archive = archive_legacy({"listing": {}, "dimensions": dimensions or {}, "source_metadata": metadata or {}})
+    run.observations.update(legacy_archive=archive)
+
+
 def test_operational_cutoff_excludes_late_import_and_later_revision():
     from core.benchmark_forecast_inputs import forecast_inputs
 
@@ -35,7 +42,7 @@ def test_typed_dataset_still_enforces_archive_restrictions_without_legacy_metada
 
     contract = configured()
     run = import_history(manifest(contract), apply=True)
-    run.observations.update(source_metadata={})
+    install_legacy_evidence(run)
     source = DataSource.objects.get(pk="hf")
     source.metadata["use_policy"]["datasets"]["cfahlgren1/hub-stats"][
         "public_forecasts"
@@ -52,7 +59,6 @@ def test_typed_dataset_still_enforces_archive_restrictions_without_legacy_metada
 def test_forecast_coordinates_survive_retired_observation_documents(source):
     from core.benchmark_forecast_inputs import forecast_inputs
     from core.measurement_taxonomy import digest
-    from core.models import CollectionObservation
     from tests.test_benchmark_download_persistence import provider_contract
 
     if source == "openrouter":
@@ -77,9 +83,7 @@ def test_forecast_coordinates_survive_retired_observation_documents(source):
     cutoff = timezone.now()
     before = forecast_inputs(contract, cutoff, use="isolated_review", isolated_review=True)
     assert before["values"] and all(row["dimensions"] == coordinates for row in before["values"])
-    CollectionObservation.objects.filter(run=run).update(
-        dimensions={}, source_metadata={}, listing={},
-    )
+    install_legacy_evidence(run)
     after = forecast_inputs(contract, cutoff, use="isolated_review", isolated_review=True)
     assert [row["dimensions"] for row in after["values"]] == [
         row["dimensions"] for row in before["values"]
@@ -102,9 +106,8 @@ def test_contract_review_after_cutoff_and_reconstruction_are_not_past_knowledge(
 
     contract = configured()
     run = persist_source(contract, "hf", "3" * 64, payload())
-    CollectionObservation.objects.filter(run=run).update(
-        source_metadata=metadata, history_reconstructed=reconstructed
-    )
+    install_legacy_evidence(run, metadata=metadata)
+    CollectionObservation.objects.filter(run=run).update(history_reconstructed=reconstructed)
     assert (
         forecast_inputs(
             contract, timezone.now(), use="isolated_review", isolated_review=True
@@ -144,10 +147,8 @@ def test_operational_hf_history_uses_typed_provenance(reconstructed):
     run = persist_source(contract, "hf", "8" * 64, payload())
     # The copied typed field owns the decision even if the retired document
     # disagrees. Unknown is not evidence of a reconstructed history.
-    run.observations.update(
-        history_reconstructed=reconstructed,
-        source_metadata={} if reconstructed else {"history_basis": "reconstructed_current_relationships"},
-    )
+    install_legacy_evidence(run, metadata={} if reconstructed else {"history_basis": "reconstructed_current_relationships"})
+    run.observations.update(history_reconstructed=reconstructed)
     rows = forecast_inputs(
         contract, timezone.now(), use="isolated_review", isolated_review=True,
     )["values"]
