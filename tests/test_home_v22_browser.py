@@ -514,6 +514,51 @@ class PublicTrackedBrandsBrowserTests(StaticLiveServerTestCase):
             PostBrand.objects.create(post=post, brand_id=nickname)
         _clear_home_pulse_cache()
 
+    def test_descending_windows_and_timeout_feedback_use_one_click(self):
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            try:
+                page = browser.new_page(viewport=VIEWPORTS["desktop"], timezone_id="Asia/Tokyo")
+                page.goto(f"{self.live_server_url}/?window=365&locale=en", wait_until="networkidle")
+                for days in (365, 30, 7):
+                    if days != 365:
+                        page.locator(f'[data-pw-window-btn="{days}"]').click()
+                    page.wait_for_function(
+                        "days => JSON.parse(document.querySelector('canvas[data-home]').dataset.home).window_days === days && Number(document.querySelector('[data-pw-pulse]').dataset.pwWindow) === days",
+                        arg=days,
+                    )
+                page.evaluate("""() => {
+                  const realFetch = window.fetch.bind(window);
+                  const realTimeout = window.setTimeout.bind(window);
+                  window.__restoreChartTimeout = () => { window.setTimeout = realTimeout; };
+                  window.__holdChart = true;
+                  window.setTimeout = (fn, ms, ...args) => realTimeout(fn, ms === 12000 ? 30 : ms, ...args);
+                  window.fetch = (input, options) => {
+                    if (window.__holdChart && new URL(String(input), location.href).pathname === '/chart.html') {
+                      return new Promise((resolve, reject) => options.signal.addEventListener('abort',
+                        () => reject(new DOMException('Request timed out', 'AbortError')), {once: true}));
+                    }
+                    return realFetch(input, options);
+                  };
+                }""")
+                page.locator('[data-pw-window-btn="30"]').click()
+                page.wait_for_function(
+                    "() => document.querySelector('[data-pw-chart]').dataset.pwRefreshFailed === 'true'",
+                    timeout=2000,
+                )
+                self.assertEqual(page.locator('canvas[data-home]').evaluate("c => JSON.parse(c.dataset.home).window_days"), 7)
+                status = page.locator('[data-pw-chart-status]')
+                self.assertTrue(status.is_visible())
+                self.assertGreater(status.bounding_box()["height"], 0)
+                page.evaluate("window.__holdChart = false; window.__restoreChartTimeout()")
+                page.locator('[data-pw-window-btn="30"]').click()
+                page.wait_for_function(
+                    "() => JSON.parse(document.querySelector('canvas[data-home]').dataset.home).window_days === 30",
+                )
+                self.assertEqual(page.locator('[data-pw-chart]').get_attribute('data-pw-refresh-failed'), 'false')
+            finally:
+                browser.close()
+
     def test_anonymous_menus_pulse_and_window_switches_use_configured_subjects(self):
         _record_current_harvest()
         with sync_playwright() as playwright:

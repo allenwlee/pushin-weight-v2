@@ -3813,7 +3813,7 @@ def _build_home_pulse_payload(
         "nickname", "display_name", "display_name_en", "display_name_zh_cn", "accent_color",
     ))
     saved = None
-    if window_days in (30, 365):
+    if window_days in (7, 30, 365):
         saved = read_home_counts(
             start=start, end=comparison_end, midpoint=midpoint,
             brand_ids=[row["nickname"] for row in rows],

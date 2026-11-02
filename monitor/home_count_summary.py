@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from django.db import DatabaseError, connection, transaction
@@ -62,16 +62,24 @@ def read_home_counts(
 
     Reuse the unchanged prefix and recount the first dirty bucket onward live.
     Return None without a usable publication/prefix, distinct from an empty result.
-    Bounds before the live UTC day must align with the materialized grain.
-    Callers validate every local chart midnight, including DST transitions.
+    Comparisons count partial first/midpoint buckets from source, keeping their
+    rolling boundaries exact. Daily chart callers validate local midnights.
     """
     if connection.vendor != "postgresql":
         return None
     day = utc_day(end)
-    if start < day and start.timestamp() % 900:
+    if midpoint is None and start < day and start.timestamp() % 900:
         return None
-    if midpoint is not None and midpoint.timestamp() % 900:
-        return None
+    first_bucket = datetime.fromtimestamp(start.timestamp() // 900 * 900, UTC)
+    saved_start = first_bucket + timedelta(minutes=15) if first_bucket < start else start
+    split_start = (
+        datetime.fromtimestamp(midpoint.timestamp() // 900 * 900, UTC)
+        if midpoint is not None else start
+    )
+    split_end = (
+        split_start + timedelta(minutes=15)
+        if midpoint is not None and split_start < midpoint else split_start
+    )
     # Writers track the earliest old/new timestamp affected by a count change.
     # Discard its entire quarter hour so saved and live rows cannot overlap.
     # Unknown/global invalidation still falls back to the exact source query.
@@ -121,6 +129,19 @@ def read_home_counts(
             else:
                 group_sql = "(bucket_start >= %s)"
                 group_params = [midpoint]
+            partial = saved_start != start or split_end != split_start
+            saved_edge_sql = ""
+            saved_edge_params = []
+            live_edge_sql = ""
+            live_edge_params = []
+            if partial:
+                saved_edge_sql = "AND NOT (bucket_start >= %s AND bucket_start < %s)"
+                saved_edge_params = [split_start, split_end]
+                live_edge_sql = (
+                    "AND (p.created_at >= %s OR p.created_at < %s "
+                    "OR (p.created_at >= %s AND p.created_at < %s))"
+                )
+                live_edge_params = [boundary, saved_start, split_start, split_end]
             # Supply a concrete date for the planner's live-tail selectivity.
             # Recheck its validity in the count statement's MVCC snapshot: an
             # earlier concurrent correction forces the exact-source fallback.
@@ -134,6 +155,7 @@ def read_home_counts(
                     FROM home_brand_time_counts, health
                     WHERE brand_id = ANY(%s::varchar[] COLLATE case_insensitive)
                     AND bucket_start >= %s AND bucket_start < %s
+                    {saved_edge_sql}
                     {flag_sql}
                     UNION ALL
                     SELECT b.nickname, p.created_at, 1::bigint
@@ -144,6 +166,7 @@ def read_home_counts(
                     LEFT JOIN posts_untracked_brand_promotions u ON u.post_id = p.tweet_id
                     WHERE b.nickname = ANY(%s::varchar[] COLLATE case_insensitive)
                     AND p.created_at >= %s AND p.created_at < %s
+                    {live_edge_sql}
                     {raw_flag_sql}
                 ), grouped AS (
                     SELECT brand_id, {group_sql} AS bucket, sum(n)::bigint AS count
@@ -156,11 +179,13 @@ def read_home_counts(
                     *health_params,
                     boundary,
                     brand_ids,
-                    start,
+                    saved_start,
                     min(boundary, end),
+                    *saved_edge_params,
                     brand_ids,
-                    max(start, boundary),
+                    start if partial else max(start, boundary),
                     end,
+                    *live_edge_params,
                     *group_params,
                 ],
             )
